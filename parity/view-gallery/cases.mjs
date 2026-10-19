@@ -33,39 +33,80 @@ const nextVersion = (version) => version.replace(/(\d+)$/, (n) => String(Number(
 const upgradeSlice = (s, patch) => ({ ...s.upgrade, ...patch });
 
 /** A release upgrade of the primary set as tC4's Source texts offers it (data/upgrade.ts
- * offerForSet): its tN and TWL pins to the next release name. The new commits are left out:
- * no view shows them, and a made-up commit would look real. */
-function primaryOffer(s) {
-  const set = s.projectPins.languageSets.primary;
-  const moved = ['translationNotes', 'translationWordsLinks'];
-  const upgrades = moved.map((slot) => {
-    const pin = set[slot];
-    return { repoPath: pin.repoPath, slots: [slot], from: pin, to: { repoPath: pin.repoPath, version: nextVersion(pin.version), flavor: pin.flavor }, publishedAt: null };
-  });
-  const current = ['translationWords', 'translationAcademy'].map((slot) => set[slot].repoPath);
+ * offerForSet over reposOfSet): each repo pinned in a slot of `moved` to its next release name,
+ * every other repo current. The new commits are left out: no view shows them, and a made-up
+ * commit would look real. */
+function primaryOffer(s, kit, moved) {
+  const upgrades = [];
+  const current = [];
+  for (const { repoPath, pin, slots } of kit.reposOfSet(s.projectPins.languageSets.primary)) {
+    if (!slots.some((slot) => moved.includes(slot))) {
+      current.push(repoPath);
+      continue;
+    }
+    upgrades.push({ repoPath, slots, from: pin, to: { repoPath: pin.repoPath, version: nextVersion(pin.version), flavor: pin.flavor }, publishedAt: null });
+  }
   return { rung: 'primary', upgrades, current };
 }
 
 /** Every repo the fallback set pins, once (data/upgrade.ts reposOfSet), all current. */
-function fallbackCurrent(s) {
-  const set = s.projectPins.languageSets.fallback;
-  const repos = [...new Set(Object.values(set).filter((p) => p?.repoPath).map((p) => p.repoPath))];
-  return { rung: 'fallback', upgrades: [], current: repos };
+function fallbackCurrent(s, kit) {
+  return { rung: 'fallback', upgrades: [], current: kit.reposOfSet(s.projectPins.languageSets.fallback).map((r) => r.repoPath) };
 }
 
-/** The confirmation of the primary set's upgrade over Source texts, as applyOffer opens it
- * (state.jsx:4583): the D36 counts are tC4's own for Titus, from the gateway change it
- * computed in the recorded state `gateway`; only the release names are written here. */
-function upgradeSetPatch(s, { state }, over = {}) {
+/** The Bible sample's decision files as tC4 reads them for a change of the pin file (state.jsx
+ * storedGatewayDecisions): each book of the project, each tool of TOOL_SLOT, in that order, a
+ * missing file left out. The baseline's mock serves the sample from these files. */
+export function storedDecisions(s, kit) {
+  if (s.project?.repoPath !== BIBLE) throw new Error(`the stored decision files are the Bible sample's, not ${s.project?.repoPath}'s`);
+  const dir = path.join(REPO, 'fixtures', 'tc4', 'sample-burrito', 'ingredients', 'checking');
+  const stored = [];
+  for (const book of s.project.bookCodes) {
+    for (const tool of Object.keys(kit.TOOL_SLOT)) {
+      const file = path.join(dir, tool, `${book}.json`);
+      if (fs.existsSync(file)) stored.push({ tool, book, file: JSON.parse(fs.readFileSync(file, 'utf8')) });
+    }
+  }
+  return stored;
+}
+
+/** The confirmation of the set offer `offer` as tC4's applyOffer opens it (state.jsx:4548-4583,
+ * planUpgradeAfterInstall and planResourcesChange, state.jsx:4425-4482). tC4's own rules give the
+ * pins after the offer (applyUpgrade) and the consequences (consequencesOfGatewayChange over the
+ * sample's stored decision files), so a row appears exactly for a check whose resource the offer
+ * moves; the plan holds a row for each affected (tool, book) not in `blocked`, as
+ * gatewayChangePlan skips a blocked one. Three things are taken, not drawn: each new release
+ * covers the books of the one it replaces (the coverage backfillCoverage would read from the
+ * installed copy); the machine holds every release a check resolves through after the offer,
+ * except where `blocked` says otherwise; and a row's carry-over counts, which need the new
+ * release's checks, are the recorded gateway change's for the same (tool, book). */
+function setPreview(s, offer, { state, kit }, blocked = []) {
   const gateway = state('gateway').gatewayPreview;
-  const offer = primaryOffer(s);
-  const preview = {
-    rung: 'primary', offer, next: s.projectPins, resourcesMd5: gateway.resourcesMd5, repoPath: s.project.repoPath,
-    consequences: gateway.consequences, plan: gateway.plan, blocked: [], carried: gateway.carried, invalidated: gateway.invalidated,
-    ...over,
-  };
+  const covered = { ...offer, upgrades: offer.upgrades.map((u) => ({ ...u, to: { ...u.to, ...(u.from.books ? { books: u.from.books } : {}) } })) };
+  const next = kit.applyUpgrade(s.projectPins, covered);
+  const { primary } = next.languageSets;
+  const consequences = kit.consequencesOfGatewayChange(storedDecisions(s, kit), { primary, fallback: next.languageSets.fallback ?? primary }, {}, 'bible');
+  const plan = consequences.affected
+    .filter((a) => !blocked.some((b) => b.tool === a.tool && b.book === a.book))
+    .map((a) => {
+      const row = gateway.plan.find((p) => p.tool === a.tool && p.book === a.book);
+      if (!row) throw new Error(`the recorded gateway change has no carry-over row for ${a.tool} ${a.book}`);
+      return row;
+    });
   return {
-    upgrade: upgradeSlice(s, { offers: { primary: offer, fallback: fallbackCurrent(s) }, textOffers: [], offersFor: s.project.repoPath, preview }),
+    rung: offer.rung, offer, next, resourcesMd5: gateway.resourcesMd5, repoPath: s.project.repoPath,
+    consequences, plan, blocked,
+    carried: plan.reduce((n, p) => n + p.carried, 0),
+    invalidated: plan.reduce((n, p) => n + p.invalidated, 0),
+  };
+}
+
+/** The confirmation of an upgrade of the primary set's `moved` slots over Source texts, with
+ * the offers behind it. */
+function upgradeSetPatch(s, ctx, { moved = ['translationNotes', 'translationWordsLinks'], blocked = [] } = {}) {
+  const offer = primaryOffer(s, ctx.kit, moved);
+  return {
+    upgrade: upgradeSlice(s, { offers: { primary: offer, fallback: fallbackCurrent(s, ctx.kit) }, textOffers: [], offersFor: s.project.repoPath, preview: setPreview(s, offer, ctx, blocked) }),
     installEpoch: s.installEpoch + 1,
   };
 }
@@ -130,13 +171,12 @@ export const CASES = [
 
   // ---- M9: the release upgrade confirmation -------------------------------------------------
   { name: 'upgrade-set', group: 'M9', state: 'sources', patch: (s, ctx) => upgradeSetPatch(s, ctx),
-    why: 'The confirmation of an upgrade of the primary set (es-419 tN and TWL to their next release) over Source texts, with the offers behind it. The mock has no newer release; the counts are tC4\'s own D36 numbers for Titus from the recorded gateway change.' },
-  { name: 'upgrade-set-harmless', group: 'M9', state: 'sources',
-    patch: (s, ctx) => upgradeSetPatch(s, ctx, { consequences: { ...ctx.state('gateway').gatewayPreview.consequences, harmless: true, decisionsAtRisk: 0, affected: [] }, plan: [], carried: 0, invalidated: 0 }),
-    why: 'The same upgrade when no decision was made against the release being left: the green headline, no rows.' },
+    why: 'The confirmation of an upgrade of the primary set (es-419 tN and TWL to their next release) over Source texts, with the offers behind it: a row for each Titus check whose resource moves, by tC4\'s own rule over the sample\'s decision files. The mock has no newer release, so the carry-over counts of the rows are borrowed from the recorded gateway change.' },
+  { name: 'upgrade-set-harmless', group: 'M9', state: 'sources', patch: (s, ctx) => upgradeSetPatch(s, ctx, { moved: ['translationAcademy'] }),
+    why: 'An upgrade of the primary set that moves only es-419 tA, which no check resolves through, so tC4\'s rule finds no decision made against the release being left: the green headline, no rows.' },
   { name: 'upgrade-set-blocked', group: 'M9', state: 'sources',
-    patch: (s, ctx) => upgradeSetPatch(s, ctx, { blocked: [{ tool: 'translationNotes', book: 'TIT' }] }),
-    why: 'The same upgrade when the new release no longer covers Titus for Translation Notes: blocked, Upgrade disabled (UpgradeSet.jsx BlockedCallout).' },
+    patch: (s, ctx) => upgradeSetPatch(s, ctx, { blocked: [{ tool: 'translationWords', book: 'TIT' }] }),
+    why: 'The upgrade of es-419 tN and TWL when the es-419 tW articles that Titus\'s new word links derive against are not on this machine, so tC4 blocks Titus for Translation Words (gatewayChangePlan, state.jsx:1007-1016, #643): no carry-over row for it, the callout, Upgrade disabled (UpgradeSet.jsx BlockedCallout). Which releases are installed is not drawn, so the blocked entry is written here.' },
   { name: 'upgrade-set-error', group: 'M9', state: 'sources',
     patch: (s, ctx) => {
       const patch = upgradeSetPatch(s, ctx);
@@ -156,14 +196,12 @@ export const CASES = [
     why: 'The confirmation of an upgrade of the Greek New Testament text (UpgradeSet.jsx TextUpgrade), with the number of Titus verses whose alignments it marks invalid, counted by tC4\'s rule over the sample\'s alignment file.' },
   { name: 'upgrade-repin', group: 'M9', state: 'guided-fix',
     patch: (s, ctx) => {
-      const gateway = ctx.state('gateway').gatewayPreview;
       const from = s.fix.pin;
       const offer = { rung: s.fix.rung, upgrades: [{ repoPath: from.repoPath, slots: ['translationWordsLinks'], from, to: { repoPath: from.repoPath, version: nextVersion(from.version), flavor: from.flavor }, publishedAt: null }], current: [], kind: 'repin' };
-      const preview = { rung: s.fix.rung, offer, next: s.projectPins, resourcesMd5: gateway.resourcesMd5, repoPath: s.project.repoPath, consequences: gateway.consequences, plan: gateway.plan, blocked: [], carried: gateway.carried, invalidated: gateway.invalidated };
       // The confirmation replaces the fix screen (state.jsx fixRepin, closeModal).
-      return { modal: null, np: null, ab: null, st: null, fix: null, im: null, sh: null, od: null, upgrade: upgradeSlice(s, { preview }), installEpoch: s.installEpoch + 1 };
+      return { modal: null, np: null, ab: null, st: null, fix: null, im: null, sh: null, od: null, upgrade: upgradeSlice(s, { preview: setPreview(s, offer, ctx) }), installEpoch: s.installEpoch + 1 };
     },
-    why: 'The guided fix\'s re-pin of the missing es-419 TWL to an installed copy of the same repository: the same confirmation, titled "Re-pin" (UpgradeSet.jsx, offer.kind repin). The mock holds no other copy, so the installed release name is written here; the counts are tC4\'s from the recorded gateway change.' },
+    why: 'The guided fix\'s re-pin of the missing es-419 TWL to an installed copy of the same repository: the same confirmation, titled "Re-pin" (UpgradeSet.jsx, offer.kind repin), with the one row tC4\'s rule gives for a move of the TWL pin alone, Titus\'s Translation Words. The mock holds no other copy, so the installed release name is written here and the row\'s carry-over counts are borrowed from the recorded gateway change.' },
 
   // ---- M10: the gateway change -------------------------------------------------------------
   { name: 'gateway-change', group: 'M10', state: 'gateway',

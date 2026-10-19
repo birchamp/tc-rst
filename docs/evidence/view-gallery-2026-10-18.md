@@ -118,3 +118,31 @@ The distinct actions of each group's traces at `mount` (no case's steps call an 
   with exactly one of mine, in any order.
 - `capture-rust.mjs` dropped case entries when it rewrote `captures.json`, and
   `measure-masks.mjs` crashed on a rectangle named after a case; both are fixed.
+
+## After the verification (2026-10-19)
+
+The verification found that `upgrade-repin` showed a Translation Notes row with work to redo for
+a re-pin that moves only the TWL pin: its consequences and plan were the recorded gateway
+change's, copied whole. The same copy made `upgrade-set-harmless` green over a move of the tN and
+TWL pins that the sample's decisions were made against, and gave the blocked entry of
+`upgrade-set-blocked` a carry-over row, which tC4 never plans for a blocked entry. Each M9 set
+preview is now computed by tC4's own rules (`patch-kit.mjs` bundles `consequencesOfGatewayChange`,
+`applyUpgrade`, `reposOfSet` and `TOOL_SLOT`); only the carry-over counts of a row are borrowed
+from the gateway change, and the design says so (APP-DESIGN §10 A7 D10, risk 17).
+
+- `upgrade-set-harmless` now moves es-419 tA alone, which no check resolves through;
+  `upgrade-set-blocked` blocks Titus for Translation Words, whose es-419 tW articles are not on
+  the machine (tC4 #643), with no carry-over row for it.
+- tC4's rule over `fixtures/tc4/sample-burrito/ingredients/checking` gives exactly the recorded
+  gateway change's consequences, so the patches read the files tC4 counted.
+- `capture.mjs` (every case, load 5.0): 23 of 23 states calibrated; the PNG and DOM files of
+  `upgrade-repin`, `upgrade-set-harmless` and `upgrade-set-blocked` changed and every other file
+  is byte-identical, `upgrade-set` and `upgrade-set-error` included (their previews differ only
+  in values no view draws: `next`, and the fallback offer's `current`). The six files went from
+  591,445 to 584,667 bytes.
+- New digests (M3's rule): PNG `e00ec8414faa2ce4041b50df06399b3b3bc1f7578e7c83c89d39fbc107615736`,
+  DOM `88f9fb9731b45910939999a4e8a24ea6ee2b1d24fa863e843bb836c1b78dc155`, traces unchanged.
+- `node --test parity/view-gallery/view-gallery.test.mjs` with `TC4_ROOT`: 19 tests, 19 passed in
+  6 min 22 s (two captures byte-identical, the first equal to the committed record); without it,
+  14 passed and 5 skipped. `cargo test -p tc-ui --test screen_record`: 43 tests.
+- Commit `baee60f`'s message says "nine planted tests"; it added eight, as the design says.

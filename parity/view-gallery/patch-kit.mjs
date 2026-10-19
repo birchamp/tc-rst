@@ -8,8 +8,12 @@ import { pathToFileURL } from 'node:url';
 import { HERE } from './node-lib.mjs';
 
 /** The kit, from the tC4 clone `tc4`: `t` (tC4's own, refusing a key its English catalog
- * lacks, so a patch never shows a raw key), `bookName`, `importRepoPath`, and the Report
- * makers `okReport`, `failedReport` and `Refusal` of tC4's journal. */
+ * lacks, so a patch never shows a raw key), `bookName`, `importRepoPath`, the Report makers
+ * `okReport`, `failedReport` and `Refusal` of tC4's journal, and what a pin change costs:
+ * `consequencesOfGatewayChange` (which stored decisions a change of the pin file moves away
+ * from, for a gateway change and a release upgrade alike), `applyUpgrade` (the pin file after
+ * one set's offer), `reposOfSet` (the repos a set offer lists, in tC4's order) and `TOOL_SLOT`
+ * (the set slot each checking tool resolves through). */
 export async function loadPatchKit(tc4) {
   const dir = path.join(HERE, '.cache', 'patch-kit');
   fs.mkdirSync(dir, { recursive: true });
@@ -20,6 +24,9 @@ export async function loadPatchKit(tc4) {
     `export { bookName } from ${from('src/data/bookNames.ts')};`,
     `export { importRepoPath } from ${from('src/data/import/shell.ts')};`,
     `export { okReport, failedReport, Refusal } from ${from('journal/report.mjs')};`,
+    `export { consequencesOfGatewayChange } from ${from('src/data/gatewayChange.ts')};`,
+    `export { applyUpgrade, reposOfSet } from ${from('src/data/upgrade.ts')};`,
+    `export { TOOL_SLOT } from ${from('src/data/resolve.ts')};`,
     '',
   ].join('\n'));
   const out = path.join(dir, 'kit.mjs');

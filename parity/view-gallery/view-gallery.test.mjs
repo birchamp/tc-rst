@@ -19,7 +19,7 @@ import { galleryGroups } from '../app/units.mjs';
 import { stateExportsSource, stateStub } from './build.mjs';
 import { CASES, caseSteps } from './cases.mjs';
 import { applyPatch, domDigestInput, encodeValue, makeActions, renumberIds, reviveValue, traceArgs } from './lib.mjs';
-import { HERE, REPO, STATES_DIR, filesUnder, joinParts, partsOf, sha256, splitParts } from './node-lib.mjs';
+import { HERE, REPO, STATES_DIR, filesUnder, joinParts, partsOf, readState, sha256, splitParts } from './node-lib.mjs';
 import { STATES } from './states.mjs';
 import { stepProblem } from './steps.mjs';
 
@@ -324,6 +324,154 @@ test('a reply file names its case and holds tc-api replies', () => {
       assert.ok('request' in r && 'reply' in r);
     }
   }
+});
+
+// ---- M9: what tC4's rule gives for each offer -----------------------------------------------
+//
+// A release upgrade or re-pin moves the pins of some slots of one set. tC4 counts a stored
+// decision file as affected when the (tool, book) resolves after the change to another pin than
+// the one its decisions were checked against (gatewayChange.ts consequencesOfGatewayChange),
+// and plans a carry-over row for each affected (tool, book) it does not block (state.jsx
+// gatewayChangePlan). In the sample every decision file was checked against the primary set's
+// current pin, so a file is affected exactly when its tool's slot moves. These tests hold the
+// M9 cases to that rule, so no case shows work to redo for a check its offer leaves alone.
+
+/** The checking tools, the set slot each resolves through (tC4 src/data/resolve.ts TOOL_SLOT,
+ * in its order) and the English name the confirmation shows (src/i18n/en.json check.tool.*). */
+const CHECK_TOOLS = [
+  { tool: 'translationWords', slot: 'translationWordsLinks', name: 'Translation Words' },
+  { tool: 'translationNotes', slot: 'translationNotes', name: 'Translation Notes' },
+];
+/** The English names tC4 gives the books the sample's decision files hold (data/bookNames.ts). */
+const ENGLISH_BOOK = { TIT: 'Titus', JON: 'Jonah' };
+const SAMPLE_CHECKING = path.join(REPO, 'fixtures', 'tc4', 'sample-burrito', 'ingredients', 'checking');
+
+/** The sample's decision files that hold decisions, in the order tC4 reads them for a pin change
+ * (state.jsx storedGatewayDecisions: each book of the project, each tool of TOOL_SLOT). */
+function sampleDecisionFiles(bookCodes) {
+  const out = [];
+  for (const book of bookCodes) {
+    for (const t of CHECK_TOOLS) {
+      const file = path.join(SAMPLE_CHECKING, t.tool, `${book}.json`);
+      if (!fs.existsSync(file)) continue;
+      const decisions = readJson(file);
+      if (decisions.decisions?.length) out.push({ ...t, book, resource: decisions.resource, decisions: decisions.decisions.length });
+    }
+  }
+  return out;
+}
+
+/** The (tool, book)s an offer of `rung` moving `movedSlots` affects, by tC4's rule; checks first
+ * that each file was checked against the set's current pin, which the rule's shortcut needs. */
+function affectedByOffer(s, rung, movedSlots, label) {
+  const set = s.projectPins.languageSets[rung];
+  const files = sampleDecisionFiles(s.project.bookCodes);
+  assert.ok(files.length > 0, 'the sample holds no decision');
+  for (const f of files) {
+    const pin = set[f.slot];
+    assert.deepEqual([f.resource.repoPath, f.resource.sha], [pin.repoPath, pin.sha], `${label}: ${f.tool}/${f.book}.json was not checked against the ${rung} set's ${f.slot} pin`);
+  }
+  return files.filter((f) => movedSlots.includes(f.slot));
+}
+
+/** The text runs under the element whose data-testid is `testid` in a DOM record, in order;
+ * null when the record has no such element. */
+function textsUnder(root, testid) {
+  const at = root.findIndex((line) => line.includes(`data-testid="${testid}"`));
+  if (at < 0) return null;
+  const indent = (line) => line.length - line.trimStart().length;
+  const texts = [];
+  for (let i = at + 1; i < root.length && indent(root[i]) > indent(root[at]); i += 1) {
+    const line = root[i].trim();
+    if (line.startsWith('"')) texts.push(line.slice(1, -1));
+  }
+  return texts;
+}
+
+test('each M9 confirmation tC4 drew shows a row exactly for the checks its offer moves', () => {
+  const setCases = [];
+  for (const c of CASES.filter((x) => x.group === 'M9')) {
+    const entry = casesFile.cases.find((e) => e.name === c.name);
+    const root = readJson(path.join(HERE, entry.dom)).root;
+    const dialog = root.find((line) => line.includes('data-testid="upgrade-confirm"'));
+    assert.ok(dialog, `${c.name}: no upgrade confirmation in ${entry.dom}`);
+    if (dialog.includes('data-kind="text"')) continue;
+    setCases.push(c.name);
+    const { s } = readState(c.state);
+    const rung = 'primary';
+    assert.match(textsUnder(root, 'upgrade-confirm')[0], /the Primary set/, `${c.name}: an offer of the primary set`);
+    const set = s.projectPins.languageSets[rung];
+    const movedRepos = textsUnder(root, 'upgrade-moves').map((move) => move.split(':')[0]);
+    const movedSlots = Object.keys(set).filter((slot) => set[slot]?.repoPath && movedRepos.includes(set[slot].repoPath.split('/').pop()));
+    assert.equal(movedSlots.length >= movedRepos.length, true, `${c.name}: a moved repo the ${rung} set does not pin`);
+    const affected = affectedByOffer(s, rung, movedSlots, c.name);
+
+    const harmless = root.some((line) => line.includes('data-harmless="1"'));
+    assert.equal(harmless, affected.length === 0, `${c.name}: harmless exactly when the offer moves no checked resource`);
+    const headline = textsUnder(root, 'upgrade-headline')[0];
+    if (!harmless) assert.ok(headline.startsWith(`${affected.reduce((n, f) => n + f.decisions, 0)} decision(s) `), `${c.name}: the headline counts the decisions of the moved checks, not "${headline}"`);
+
+    const rows = textsUnder(root, 'upgrade-plan') ?? [];
+    assert.deepEqual(rows.map((row) => row.split(/: | — /)[0]), affected.map((f) => `${ENGLISH_BOOK[f.book]} · ${f.name}`), `${c.name}: one row for each check whose resource the offer moves, in tC4's order`);
+
+    const callout = textsUnder(root, 'upgrade-blocked');
+    const blocked = affected.filter((f) => callout?.[0]?.includes(`${ENGLISH_BOOK[f.book]} (${f.name})`));
+    if (callout) assert.ok(blocked.length > 0, `${c.name}: the blocked callout names no check the offer moves`);
+    affected.forEach((f, i) => {
+      const isBlocked = blocked.includes(f);
+      assert.equal(rows[i].includes(' carried over, '), !isBlocked, `${c.name}: ${f.tool} ${f.book} has a carry-over row exactly when it is not blocked`);
+      if (isBlocked) assert.ok(rows[i].endsWith(`${f.decisions} decision(s) checked against ${f.resource.repoPath.split('/').pop()}`), `${c.name}: the blocked row "${rows[i]}"`);
+    });
+  }
+  assert.deepEqual(setCases, ['upgrade-set', 'upgrade-set-harmless', 'upgrade-set-blocked', 'upgrade-set-error', 'upgrade-repin']);
+});
+
+function kitSetup() {
+  const root = process.env.TC4_ROOT;
+  if (!root || !fs.existsSync(path.join(root, 'node_modules', '.bin', 'esbuild'))) return { skip: 'set TC4_ROOT to a tC4 clone with node_modules (parity/view-gallery/README.md, "Setup")' };
+  return {};
+}
+
+test('tC4\'s consequence rule over the sample\'s decision files gives the recorded gateway change', { skip: kitSetup().skip }, async () => {
+  const { loadPatchKit } = await import('./patch-kit.mjs');
+  const { storedDecisions } = await import('./cases.mjs');
+  const kit = await loadPatchKit(process.env.TC4_ROOT);
+  const { s } = readState('gateway');
+  const { languageSets } = s.gatewayPreview.next;
+  const computed = kit.consequencesOfGatewayChange(storedDecisions(s, kit), { primary: languageSets.primary, fallback: languageSets.fallback ?? languageSets.primary }, {}, 'bible');
+  assert.deepEqual(computed, s.gatewayPreview.consequences, 'the decision files the M9 patches read are not the ones tC4 counted');
+});
+
+test('each M9 set preview has a consequence and a plan row exactly for the checks its offer moves', { skip: kitSetup().skip }, async () => {
+  const { loadPatchKit } = await import('./patch-kit.mjs');
+  const { caseData } = await import('./cases.mjs');
+  const kit = await loadPatchKit(process.env.TC4_ROOT);
+  const readS = (name) => readState(name).s;
+  let checked = 0;
+  for (const c of CASES.filter((x) => x.group === 'M9')) {
+    const { s } = caseData(c, readState(c.state), readS, kit);
+    const preview = s.upgrade.preview;
+    if (preview.kind === 'text') continue;
+    checked += 1;
+    const recorded = readState(c.state).s;
+    const movedSlots = preview.offer.upgrades.flatMap((u) => u.slots);
+    const affected = affectedByOffer(recorded, preview.rung, movedSlots, c.name);
+    const key = (x) => `${x.tool}/${x.book}`;
+    assert.deepEqual(preview.consequences.affected.map(key), affected.map(key), `${c.name}: a consequence exactly for each check whose resource the offer moves`);
+    for (const [i, a] of preview.consequences.affected.entries()) {
+      assert.equal(a.decisions, affected[i].decisions, `${c.name}: ${key(a)}'s decisions`);
+      assert.deepEqual(a.checkedAgainst, { repoPath: affected[i].resource.repoPath, version: affected[i].resource.version, sha: affected[i].resource.sha });
+    }
+    assert.equal(preview.consequences.decisionsAtRisk, affected.reduce((n, f) => n + f.decisions, 0), `${c.name}: decisions at risk`);
+    assert.equal(preview.consequences.harmless, affected.length === 0, `${c.name}: harmless`);
+    const blocked = new Set(preview.blocked.map(key));
+    for (const b of blocked) assert.ok(affected.some((f) => key(f) === b), `${c.name}: blocked ${b} is no check the offer moves`);
+    assert.deepEqual(preview.plan.map(key), affected.map(key).filter((k) => !blocked.has(k)), `${c.name}: a plan row for each moved check not blocked`);
+    assert.equal(preview.carried, preview.plan.reduce((n, p) => n + p.carried, 0), `${c.name}: carried is the plan's`);
+    assert.equal(preview.invalidated, preview.plan.reduce((n, p) => n + p.invalidated, 0), `${c.name}: invalidated is the plan's`);
+    if (s.upgrade.offers) assert.deepEqual(preview.offer, s.upgrade.offers[preview.rung], `${c.name}: the confirmation is of the offer behind it`);
+  }
+  assert.equal(checked, 5);
 });
 
 // ---- with a tC4 clone and a browser -----------------------------------------------------------
