@@ -49,6 +49,10 @@ const offOnChoose = (n) => el('div', {
 });
 const offWhileOpen = select({ label: 'Book', options: bookOptions(false), value: 'RUT', searchPlaceholder: 'Search books', disabled: cell('off'), onChange: set('picked', '0.target.value') });
 const OFF_WHILE_OPEN = [focus('[role="combobox"]'), key('ArrowDown'), click('[role="option"]:nth-child(2)')];
+/* The same click dispatched by script: nothing the capture-phase switch-off changes is drawn
+   before the row's own listener runs, so only the Select's check of `disabled` at the choice
+   keeps the value (the close-on-disable alone does not reach it in time). */
+const OFF_IN_ONE_SCRIPT = [...OFF_WHILE_OPEN.slice(0, 2), { ...click('[role="option"]:nth-child(2)'), script: true }];
 
 export default [
   ...group('Checkbox', { frame: { width: 64, height: 60 } }, [
@@ -168,6 +172,8 @@ export default [
       note: 'tC4 #552: the Select turns off as a row is clicked in its open list. tC4 takes the choice; the port closes the list and takes none (residuals.json).' }],
     ['disabled-while-open-label', offWhileOpen, { frame: { height: 500 }, cells: { off: false, picked: 'none' }, wrap: offOnChoose, steps: [...OFF_WHILE_OPEN, { ...click('label'), force: true }],
       note: 'The same, then a press on the label of the field that is now off: the list stays closed and nothing is chosen.' }],
+    ['disabled-while-open-script', offWhileOpen, { frame: { height: 500 }, cells: { off: false, picked: 'none' }, wrap: offOnChoose, steps: OFF_IN_ONE_SCRIPT,
+      note: 'The same row click, dispatched by script, so the Select turns off and the row is chosen in one script with no microtask between: the list has not closed yet when the row sees the click. tC4 takes the choice; the port takes none (residuals.json).' }],
   ]),
 
   ...group('SuggestField', { frame: { width: 340, height: 100 } }, [

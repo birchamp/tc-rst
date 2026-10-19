@@ -8,7 +8,7 @@ cases from `gallery-spec.json` and compares its images with `screens/`.
   **`d310bf304cfee784f4ca45dee474a3faf0d5616e`** (version `4.0.0-rc.1`, clean tree). The gallery
   imports `src/ds/index.js` and `src/ds/styles.css` from that checkout through a Vite alias. It
   copies nothing and changes nothing there.
-- Output: **753 cases**, 753 PNGs in `screens/<Component>/<state>.png`: 716 component cases for
+- Output: **754 cases**, 754 PNGs in `screens/<Component>/<state>.png`: 717 component cases for
   the 53 components that the 52 files in `src/ds/components` export (`Radio.jsx` exports `Radio`
   and `RadioGroup`), plus 37 token cases. 6.7 MB in total.
 - Contract: `gallery-spec.json` lists every case with its component, state, source file, frame,
@@ -138,17 +138,23 @@ that keeps the focus in the field). After every step it compares the frame's DOM
 still the nodes they were (each element is numbered once, in document order, when it first
 appears). It writes `scenario-report.json` and takes `--only` with scenario names.
 
-Result at this commit (tC4 d310bf3, dev build): 751 of 753 cases at 0 mismatched pixels, and
-every one of their `screens-rust/` files is byte-identical to its `screens/` file. 751 of 753
-cases have the same DOM. The other two are the declared difference of tC4 #552
-(`Select/disabled-while-open` and `Select/disabled-while-open-label`, `residuals.json`): they
-differ in the caption alone, 186 pixels and one DOM line, "Chosen: EST" in tC4 and "Chosen: none"
-in the port. 53 of 53 scenarios (277 steps) are the same after every step. The 719 cases that
+Result at this commit (tC4 d310bf3, dev build): 751 of 754 cases at 0 mismatched pixels, and
+every one of their `screens-rust/` files is byte-identical to its `screens/` file. 751 of 754
+cases have the same DOM. The other three are the declared difference of tC4 #552
+(`Select/disabled-while-open`, `Select/disabled-while-open-label` and
+`Select/disabled-while-open-script`, `residuals.json`): they differ in the caption alone, 186
+pixels and one DOM line, "Chosen: EST" in tC4 and "Chosen: none" in the port. A mouse click lets
+the page settle between the click's listeners, so the port's close-on-disable has closed the list
+before the row sees the click; the `-script` case dispatches the same click by script, in one task
+with the switch-off, so only the port's check of `disabled` when a choice arrives keeps the value.
+The `-label` case pins the label-press edge: a press on the label of a Select that is now off
+neither opens the list nor chooses. The browser gives a disabled button no activation from its
+label, on both sides, so no change to the #552 fix shows in it. 53 of 53 scenarios (277 steps) are the same after every step. The 719 cases that
 existed at d494a9d draw the same tC4 screens at d310bf3: the only design-system change in
 between is a `::selection` rule for `[data-words="target"]`, which only `Tokens/selection` shows.
 Both galleries are captured on the same machine, so the machine-dependent rendering under
 "Skipped, and what to know" (fallback glyphs, monospace, Nastaliq) affects both sides alike. Both
-sides of the two #552 cases were captured on the owner's Linux PC (Chromium 141, build 1194), the
+sides of the three #552 cases were captured on the owner's Linux PC (Chromium 141, build 1194), the
 rest on the machine named above; that run had `TC4_ROOT` point at
 `/home/bot/unfoldingword/translationcore4`, so `gallery-spec.json`'s `source.repo` names that
 checkout (the same commit).
@@ -171,10 +177,10 @@ Each case in `gallery-spec.json`:
 | `frame` | `width`, `height`, `padding` (16 unless stated) and `background` (`#F7FAFC`, which is `--surface-app`). |
 | `document` | `lang` and `dir` of `<html>`. 53 cases use the Arabic interface (`ar`, `rtl`), as tC4 sets it. |
 | `props` | The exact props of the component under test, as JSON. |
-| `render` | Only on 73 cases that place the component in something: a row, an Ocean ground, a centring box. It is the whole tree. Without it the tree is the component with `props`. |
-| `steps` | Interactions before the screenshot (116 cases): `focus` (Tab until the target has keyboard focus), `hover`, `press` (button held), `click` (with `force`, without waiting for the target to be enabled, which Playwright judges for a label by its control), `key`, `type`, `select` (the text from the start of `target` to the end of `to`, set by script). A target is a CSS selector inside the frame. |
-| `needs` | `callbacks`: props that hold a callback (258 cases). `elements`: props that hold elements, such as `children`, `footer`, `trigger`, `center` or a `title` (200 cases). |
-| `cells` | Only on 21 cases that own state, as a screen does: the first value of each cell. A prop `{ "$cell": name }` reads a cell, `{ "$if": name, … }` picks a value by one, and a callback `{ "$fn": "set", "cell": name, "from": path }` writes one. A Toggle that turns on, a RadioGroup that changes, a Table row selected by Enter, Table rows and suggestions that change while they are drawn (rows re-sorted under the focused row among them), a Progress ring that moves, a Modal that closes, and the props tC4's d310bf3 screens change on a drawn component (a sync button that turns busy, a Previous/Next pill that reaches the end, a dialog that loses its ✕ while it works, tabs, book tiles and header exits that an editing card turns off, a Select turned off while its list is open) are drawn by the component, not by a new case. A callback that the component itself turns off, Modal's `onClose` (`closable`), AppHeader's `onBrandClick` and `onProjectClick` (`exits_off`) and Layer's `onDismiss` (a signal), reaches the port as the screen passes it, without a check of the cell, so only the component's own switch keeps it from running, as on a screen. |
+| `render` | Only on 74 cases that place the component in something: a row, an Ocean ground, a centring box. It is the whole tree. Without it the tree is the component with `props`. |
+| `steps` | Interactions before the screenshot (117 cases): `focus` (Tab until the target has keyboard focus), `hover`, `press` (button held), `click` (with `force`, without waiting for the target to be enabled, which Playwright judges for a label by its control; with `script`, by the target's `click()` in one script, so no microtask runs between the click's listeners), `key`, `type`, `select` (the text from the start of `target` to the end of `to`, set by script). A target is a CSS selector inside the frame. |
+| `needs` | `callbacks`: props that hold a callback (259 cases). `elements`: props that hold elements, such as `children`, `footer`, `trigger`, `center` or a `title` (200 cases). |
+| `cells` | Only on 22 cases that own state, as a screen does: the first value of each cell. A prop `{ "$cell": name }` reads a cell, `{ "$if": name, … }` picks a value by one, and a callback `{ "$fn": "set", "cell": name, "from": path }` writes one. A Toggle that turns on, a RadioGroup that changes, a Table row selected by Enter, Table rows and suggestions that change while they are drawn (rows re-sorted under the focused row among them), a Progress ring that moves, a Modal that closes, and the props tC4's d310bf3 screens change on a drawn component (a sync button that turns busy, a Previous/Next pill that reaches the end, a dialog that loses its ✕ while it works, tabs, book tiles and header exits that an editing card turns off, a Select turned off while its list is open) are drawn by the component, not by a new case. A callback that the component itself turns off, Modal's `onClose` (`closable`), AppHeader's `onBrandClick` and `onProjectClick` (`exits_off`) and Layer's `onDismiss` (a signal), reaches the port as the screen passes it, without a check of the cell, so only the component's own switch keeps it from running, as on a screen. |
 | `isolate` | The case opens a layer, has steps or sets the document language. The browsing index loads it in an iframe. |
 | `note` | Present where a case needs explaining. |
 
@@ -240,7 +246,7 @@ a project from Door43 empty, filled, with a name error, refused and busy
 | OptionCard | forms/OptionCard.jsx | 14 |
 | Radio, RadioGroup | forms/Radio.jsx | 8, 7 |
 | SearchField | forms/SearchField.jsx | 6 |
-| Select | forms/Select.jsx | 21 |
+| Select | forms/Select.jsx | 22 |
 | SuggestField | forms/SuggestField.jsx | 7 |
 | TextArea | forms/TextArea.jsx | 10 |
 | TextField | forms/TextField.jsx | 12 |

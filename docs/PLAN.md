@@ -76,8 +76,9 @@ owner is told of each:
   Pankosmia's rescan drops, so a project's own pictures would never show.
 - A Select that turns disabled while its list is open closes the list, and a choice made then
   changes nothing (#552). tC4 4.0 keeps the list open, and a row click still changes the value.
-  The gallery's two `Select/disabled-while-open` cases differ from tC4 on purpose
-  (`parity/ds-gallery/residuals.json`).
+  The gallery's three `Select/disabled-while-open` cases differ from tC4 on purpose
+  (`parity/ds-gallery/residuals.json`); the `-script` one chooses the row in the same task as the
+  switch-off, before the list can close.
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

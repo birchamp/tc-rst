@@ -19,7 +19,7 @@
       "focus": "Press Tab until the first element inside the frame that matches `target` has the focus. Keyboard focus is what makes :focus-visible match.",
       "hover": "Move the pointer to the centre of the first element inside the frame that matches `target`.",
       "press": "Move the pointer to the centre of the target and press the primary button without releasing it (:active).",
-      "click": "Click the centre of the target. With `force`, click it without waiting for it to be enabled: Playwright takes a label's control as the element that must be enabled, and a case may press the label of a field that is off.",
+      "click": "Click the centre of the target. With `force`, click it without waiting for it to be enabled: Playwright takes a label's control as the element that must be enabled, and a case may press the label of a field that is off. With `script`, call the target's click() by script instead: every listener then runs inside that one script, with no microtask between them, so what an earlier listener changes is not yet drawn when the target's own listener runs.",
       "key": "Press `key` on the focused element.",
       "type": "Type `text` into the focused element, one key at a time.",
       "select": "Select the text from the start of the first element inside the frame that matches `target` to the end of the first that matches `to` (`target` when absent), by script, as one range."
@@ -158,7 +158,7 @@
     {
       "name": "Select",
       "file": "components/forms/Select.jsx",
-      "cases": 21
+      "cases": 22
     },
     {
       "name": "SuggestField",
@@ -8843,6 +8843,230 @@
       },
       "isolate": true,
       "note": "The same, then a press on the label of the field that is now off: the list stays closed and nothing is chosen."
+    },
+    {
+      "id": "Select/disabled-while-open-script",
+      "component": "Select",
+      "state": "disabled-while-open-script",
+      "file": "components/forms/Select.jsx",
+      "frame": {
+        "width": 340,
+        "height": 500,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "label": "Book",
+        "options": [
+          {
+            "value": "RUT",
+            "label": "Ruth",
+            "code": "RUT"
+          },
+          {
+            "value": "EST",
+            "label": "Esther",
+            "code": "EST"
+          },
+          {
+            "value": "JON",
+            "label": "Jonah",
+            "code": "JON"
+          },
+          {
+            "value": "MIC",
+            "label": "Micah",
+            "code": "MIC"
+          },
+          {
+            "value": "MAT",
+            "label": "Matthew",
+            "code": "MAT"
+          },
+          {
+            "value": "MRK",
+            "label": "Mark",
+            "code": "MRK"
+          },
+          {
+            "value": "LUK",
+            "label": "Luke",
+            "code": "LUK"
+          },
+          {
+            "value": "JHN",
+            "label": "John",
+            "code": "JHN"
+          },
+          {
+            "value": "GAL",
+            "label": "Galatians",
+            "code": "GAL"
+          },
+          {
+            "value": "TIT",
+            "label": "Titus",
+            "code": "TIT"
+          },
+          {
+            "value": "PHM",
+            "label": "Philemon",
+            "code": "PHM"
+          },
+          {
+            "value": "JUD",
+            "label": "Jude",
+            "code": "JUD"
+          }
+        ],
+        "value": "RUT",
+        "onChange": {
+          "$fn": "set",
+          "cell": "picked",
+          "from": "0.target.value"
+        },
+        "searchPlaceholder": "Search books",
+        "disabled": {
+          "$cell": "off"
+        }
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "onClickCapture": {
+            "$fn": "set",
+            "cell": "off",
+            "value": true
+          },
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": 8
+          },
+          "children": [
+            {
+              "$el": "Select",
+              "props": {
+                "label": "Book",
+                "options": [
+                  {
+                    "value": "RUT",
+                    "label": "Ruth",
+                    "code": "RUT"
+                  },
+                  {
+                    "value": "EST",
+                    "label": "Esther",
+                    "code": "EST"
+                  },
+                  {
+                    "value": "JON",
+                    "label": "Jonah",
+                    "code": "JON"
+                  },
+                  {
+                    "value": "MIC",
+                    "label": "Micah",
+                    "code": "MIC"
+                  },
+                  {
+                    "value": "MAT",
+                    "label": "Matthew",
+                    "code": "MAT"
+                  },
+                  {
+                    "value": "MRK",
+                    "label": "Mark",
+                    "code": "MRK"
+                  },
+                  {
+                    "value": "LUK",
+                    "label": "Luke",
+                    "code": "LUK"
+                  },
+                  {
+                    "value": "JHN",
+                    "label": "John",
+                    "code": "JHN"
+                  },
+                  {
+                    "value": "GAL",
+                    "label": "Galatians",
+                    "code": "GAL"
+                  },
+                  {
+                    "value": "TIT",
+                    "label": "Titus",
+                    "code": "TIT"
+                  },
+                  {
+                    "value": "PHM",
+                    "label": "Philemon",
+                    "code": "PHM"
+                  },
+                  {
+                    "value": "JUD",
+                    "label": "Jude",
+                    "code": "JUD"
+                  }
+                ],
+                "value": "RUT",
+                "onChange": {
+                  "$fn": "set",
+                  "cell": "picked",
+                  "from": "0.target.value"
+                },
+                "searchPlaceholder": "Search books",
+                "disabled": {
+                  "$cell": "off"
+                }
+              }
+            },
+            {
+              "$el": "Text",
+              "props": {
+                "role": "caption",
+                "children": [
+                  "Chosen: ",
+                  {
+                    "$cell": "picked"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "cells": {
+        "off": false,
+        "picked": "none"
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "[role=\"combobox\"]"
+        },
+        {
+          "do": "key",
+          "key": "ArrowDown"
+        },
+        {
+          "do": "click",
+          "target": "[role=\"option\"]:nth-child(2)",
+          "script": true
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": true,
+      "note": "The same row click, dispatched by script, so the Select turns off and the row is chosen in one script with no microtask between: the list has not closed yet when the row sees the click. tC4 takes the choice; the port takes none (residuals.json)."
     },
     {
       "id": "SuggestField/value",

@@ -249,6 +249,9 @@ const ISSUE_CASES: &[(&str, &str)] = &[
     // Row 13, tC4 #552: a Select turned off while its list is open, then its label pressed.
     ("Select/disabled-while-open", "en"),
     ("Select/disabled-while-open-label", "en"),
+    // The same click dispatched by script, in one task with the switch-off: only the Select's
+    // own check of `disabled` at the choice keeps the value.
+    ("Select/disabled-while-open-script", "en"),
 ];
 
 #[test]

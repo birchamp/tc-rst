@@ -35,7 +35,7 @@ const PROTOCOL = {
     focus: 'Press Tab until the first element inside the frame that matches `target` has the focus. Keyboard focus is what makes :focus-visible match.',
     hover: 'Move the pointer to the centre of the first element inside the frame that matches `target`.',
     press: 'Move the pointer to the centre of the target and press the primary button without releasing it (:active).',
-    click: 'Click the centre of the target. With `force`, click it without waiting for it to be enabled: Playwright takes a label\'s control as the element that must be enabled, and a case may press the label of a field that is off.',
+    click: 'Click the centre of the target. With `force`, click it without waiting for it to be enabled: Playwright takes a label\'s control as the element that must be enabled, and a case may press the label of a field that is off. With `script`, call the target\'s click() by script instead: every listener then runs inside that one script, with no microtask between them, so what an earlier listener changes is not yet drawn when the target\'s own listener runs.',
     key: 'Press `key` on the focused element.',
     type: 'Type `text` into the focused element, one key at a time.',
     select: 'Select the text from the start of the first element inside the frame that matches `target` to the end of the first that matches `to` (`target` when absent), by script, as one range.',

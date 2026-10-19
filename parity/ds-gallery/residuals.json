@@ -26,5 +26,19 @@
         "port": "\"Chosen: none\""
       }
     ]
+  },
+  "Select/disabled-while-open-script": {
+    "ruling": "#552",
+    "layers": [
+      "pixels",
+      "dom"
+    ],
+    "why": "tC4 #552 (still open at 9ad4d5c): the row click of Select/disabled-while-open, dispatched by script, so the switch-off and the choice run in one script with no microtask between and the list has not closed when the row sees the click. tC4's row click still calls onChange, so its caption reads EST. The port's Select checks disabled when a choice arrives and takes none, so its caption reads none; its close-on-disable alone would not stop this choice. Declared difference (AGENTS.md, Matching tC4; docs/PLAN.md).",
+    "dom": [
+      {
+        "tc4": "\"Chosen: EST\"",
+        "port": "\"Chosen: none\""
+      }
+    ]
   }
 }
