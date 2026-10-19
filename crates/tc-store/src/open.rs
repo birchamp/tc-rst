@@ -630,7 +630,6 @@ fn open_inner(
         prerendered_seq: 0,
         reasons: BTreeMap::new(),
         values_told: None,
-        open_intent: None,
         opening: false,
         git,
         device,
@@ -641,12 +640,10 @@ fn open_inner(
         wrote_group: false,
         pending_record: BTreeMap::new(),
         shown_by_path: BTreeMap::new(),
-        heads_unwritten: BTreeMap::new(),
-        metadata_heads_written: None,
-        metadata_heads_due: false,
+        bases: BTreeMap::new(),
+        heads_cache: BTreeMap::new(),
         pending_carried: BTreeMap::new(),
         deferred_paths: Vec::new(),
-        unclassified: std::collections::BTreeSet::new(),
         waiting: BTreeMap::new(),
         collecting: false,
         found: Vec::new(),
@@ -789,16 +786,16 @@ fn record_found(project: &mut Project, writer: &mut Writer) -> Result<(), StoreE
     for found in std::mem::take(&mut writer.found) {
         let md5 = Md5::of(&found.bytes);
         writer.fold = project.fold.clone();
-        let (examined, copy) = writer.examine(&found.rel, &found.bytes, found.force_unknown)?;
+        let (examined, copy) = writer.examine(&found.rel, &found.bytes, &found.base)?;
         match examined {
             Examined::Plan(plan, derived) => {
                 let outcome = project.record_outside(&found.rel, md5, *plan, derived);
                 writer.recorded(found.rel, md5, copy, outcome, &found.bytes);
             }
-            Examined::Nothing => writer.accept(&found.rel, md5, &found.bytes)?,
+            Examined::Nothing => writer.accept(&found.rel, md5, &found.bytes, None)?,
             Examined::Undecodable { reason } => {
                 writer.undecodable(&found.rel, &copy, &reason);
-                writer.accept(&found.rel, md5, &found.bytes)?;
+                writer.accept(&found.rel, md5, &found.bytes, None)?;
             }
         }
     }
@@ -1482,7 +1479,7 @@ pub(crate) fn unsettled(manifest: &Manifest) -> Vec<String> {
     manifest
         .paths
         .iter()
-        .filter(|(_, e)| !e.settled && e.held.is_none() && e.oid.is_none())
+        .filter(|(_, e)| e.oid.is_none() && e.placement().is_some_and(|p| !p.settled))
         .map(|(p, _)| p.clone())
         .collect()
 }

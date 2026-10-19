@@ -14,12 +14,15 @@
 use crate::error::StoreError;
 use crate::handle::Msg;
 use crate::layout;
-use crate::manifest::{Entry, HeadsFile};
+use crate::ledger::{self, Event};
+use crate::manifest::{Entry, HeadsRecord, heads_records, key_text};
 use crate::materialize::is_text_path;
 use crate::writer::{Recorded, Writer};
 use tc_journal::change::ExternalSource;
 use tc_journal::fold::{DerivedFile, Notice};
-use tc_journal::outside::{Base, BaseRecord, Decoded, OutsideFile, OutsidePlan, fields_not_shown};
+use tc_journal::outside::{
+    Base as PlanBase, BaseRecord, Decoded, OutsideFile, OutsidePlan, fields_not_shown,
+};
 use tc_journal::{ChangeId, FrameNo, Md5, Record, RecordKey, RepoPath, StoryNo};
 
 /// The path of `conflicts.json`, which only the app writes.
@@ -42,44 +45,51 @@ pub(crate) enum Examined {
 pub(crate) struct Found {
     pub rel: String,
     pub bytes: Vec<u8>,
-    pub force_unknown: bool,
+    pub base: ledger::Base,
 }
 
 impl Writer {
-    /// The heads file of `rel`, read as the base of an outside edit; unknown when there is
-    /// none or it does not read (§6.2).
-    fn read_base(&self, rel: &str) -> Base {
-        self.counters.add(&self.counters.heads_read, 1);
-        let Some(file) = self.heads_of(rel) else {
-            // With no manifest entry either, `.tc/` is gone (a folder copied away): what the
-            // last commit of this app holds says what the file was made from (§6.2).
-            if !self.manifest.paths.contains_key(rel) {
-                return self.head_base(rel);
-            }
-            return Base::Unknown;
+    /// The base of an outside edit the ledger chose (§6.2): the heads of a placement, each
+    /// record's heads cut to the changes the fold holds applied; what HEAD's packs hold; or
+    /// none. Unknown when the ledger keeps no heads of the placement.
+    fn read_base(&mut self, rel: &str, base: &ledger::Base) -> PlanBase {
+        let md5 = match base {
+            ledger::Base::Placed(md5) => md5,
+            // `.tc/` is gone (a folder copied away): what the last commit of this app holds
+            // says what the file was made from.
+            ledger::Base::Head => return self.head_base(rel),
+            ledger::Base::Unknown => return PlanBase::Unknown,
         };
-        let mut records = Vec::with_capacity(file.records.len());
-        for record in file.records {
+        let Some(file) = self.heads_of(rel) else {
+            return PlanBase::Unknown;
+        };
+        let Some(placed) = file.get(md5) else {
+            return PlanBase::Unknown;
+        };
+        let current = self.current_heads(rel);
+        let mut records = Vec::with_capacity(placed.len());
+        for record in placed.iter().cloned() {
             let key = tc_journal::json::parse(record.key.as_bytes())
                 .ok()
                 .and_then(|j| tc_journal::canon::decode_key(&j).ok());
             let Some(key) = key else {
-                return Base::Unknown;
+                return PlanBase::Unknown;
             };
             let named = record.heads.len();
             let heads: Vec<ChangeId> = record
                 .heads
                 .into_iter()
                 .map(ChangeId::from_bytes)
-                .filter(|id| self.fold.holds(id))
+                .filter(|id| self.shows_held(id, &current))
                 .collect();
-            // A head no journal file holds any more (a pending file lost it): the bytes may
-            // show it, so the record is compared with what the fold holds, not skipped by a
-            // digest of a version the project no longer has (§6.2).
+            // A head the fold does not hold applied and readable (a journal file lost it, its
+            // batch lost a member): the bytes may show it, so the record is compared with what
+            // the fold shows, not skipped by a digest of a version the project cannot show
+            // (§6.2).
             let shown = (heads.len() == named).then_some(record.shown).flatten();
             records.push(BaseRecord { key, heads, shown });
         }
-        Base::Heads(records)
+        PlanBase::Heads(records)
     }
 
     /// The base of an edit of a file whose heads file and manifest entry are lost (§6.2): when
@@ -87,23 +97,23 @@ impl Writer {
     /// holds (a change another pack holds, or only a pending file, is newer than the file the
     /// person started from, so the edit conflicts with it and replaces nothing). A file HEAD
     /// does not have was made since: every record is new. No usable HEAD: unknown.
-    fn head_base(&self, rel: &str) -> Base {
+    fn head_base(&self, rel: &str) -> PlanBase {
         let Some(git) = &self.git else {
-            return Base::Unknown;
+            return PlanBase::Unknown;
         };
         let Ok(Some(head)) = git.head() else {
-            return Base::Unknown;
+            return PlanBase::Unknown;
         };
         if !head.app_commit {
-            return Base::Unknown;
+            return PlanBase::Unknown;
         }
         match git.read_path(head.commit, rel) {
             Ok(Some(_)) => {}
-            Ok(None) => return Base::Heads(Vec::new()),
-            Err(_) => return Base::Unknown,
+            Ok(None) => return PlanBase::Heads(Vec::new()),
+            Err(_) => return PlanBase::Unknown,
         }
         let Ok(packs) = git.subtree_entries(head.tree, tc_journal::pack::PACKS_DIR) else {
-            return Base::Unknown;
+            return PlanBase::Unknown;
         };
         let names: std::collections::BTreeSet<[u8; 16]> = packs
             .keys()
@@ -123,7 +133,7 @@ impl Writer {
                 .map(|(k, _)| k)
                 .collect()
         } else {
-            return Base::Unknown;
+            return PlanBase::Unknown;
         };
         let mut records = Vec::with_capacity(keys.len());
         for key in keys {
@@ -155,7 +165,7 @@ impl Writer {
                 shown: None,
             });
         }
-        Base::Heads(records)
+        PlanBase::Heads(records)
     }
 
     /// Decodes a story file: the records its parts stand for, with the parts that equal what
@@ -294,16 +304,16 @@ impl Writer {
     }
 
     /// X1 to X3 for a changed file: the byte copy, the decoding and the comparison with what
-    /// the app wrote. `force_unknown`: record every change without parents (the person took
-    /// the file in, or it changed again while held, §6.2). Returns the copy's path too.
+    /// the app wrote, against the base the ledger chose (with no base, every change is
+    /// recorded without parents). Returns the copy's path too.
     pub(crate) fn examine(
         &mut self,
         rel: &str,
         bytes: &[u8],
-        force_unknown: bool,
+        base: &ledger::Base,
     ) -> Result<(Examined, String), StoreError> {
         let copy = self.copy_external(rel, bytes)?;
-        let examined = self.examine_copied(rel, bytes, force_unknown);
+        let examined = self.examine_copied(rel, bytes, base);
         Ok((examined, copy))
     }
 
@@ -312,7 +322,7 @@ impl Writer {
         &mut self,
         rel: &str,
         bytes: &[u8],
-        force_unknown: bool,
+        base: &ledger::Base,
     ) -> Examined {
         let undecodable = |reason: &str| Examined::Undecodable {
             reason: reason.to_owned(),
@@ -340,11 +350,9 @@ impl Writer {
             Ok(decoded) => decoded,
             Err(reason) => return Examined::Undecodable { reason },
         };
-        let base = if force_unknown {
-            Base::Unknown
-        } else {
-            self.read_base(rel)
-        };
+        let force_unknown = *base == ledger::Base::Unknown;
+        let chosen = base.clone();
+        let base = self.read_base(rel, base);
         self.counters.add(&self.counters.outside_decodes, 1);
         let mut plan = self.fold.plan_outside_edit(
             &outside,
@@ -375,6 +383,7 @@ impl Writer {
         }
         self.shown_by_path
             .insert(rel.to_owned(), std::mem::take(&mut decoded.digests));
+        self.bases.insert(rel.to_owned(), chosen);
         Examined::Plan(Box::new(plan), decoded.derived_fields)
     }
 
@@ -418,28 +427,50 @@ impl Writer {
         }
     }
 
-    /// Takes the bytes found at `rel` as the ones the app saw there (D7): its entry has their
-    /// md5 and no scope, no hold and no blob, so the next materialization compares them as
-    /// the app's own and writes the file again from the project (X6).
-    pub(crate) fn accept(&mut self, rel: &str, md5: Md5, bytes: &[u8]) -> Result<(), StoreError> {
-        let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
-        let entry = self
-            .manifest
-            .paths
-            .entry(rel.to_owned())
-            .or_insert_with(|| Entry::of(String::new(), 0, 0, false));
-        entry.md5 = md5.to_hex();
-        entry.size = meta.map_or(bytes.len() as u64, |m| m.len);
-        entry.mtime_ns = meta.map_or(0, |m| m.mtime_ns);
-        entry.settled = false;
-        entry.scope = None;
-        entry.held = None;
-        entry.blob = None;
-        entry.nfc = is_text_path(rel)
-            .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(bytes)));
-        self.manifest.ahead.remove(rel);
-        self.manifest_changed = true;
+    /// Takes the bytes found at `rel` as the ones the app saw there (D7): their heads are
+    /// written (`records`, else the fold's), then the ledger places them, with no scope and no
+    /// blob, so the next materialization finds them the app's own and writes the file again
+    /// from the project (X6). Heads that cannot be written leave the ledger as it was: the
+    /// bytes are examined again, and a batch that reconciles them already records nothing.
+    pub(crate) fn accept(
+        &mut self,
+        rel: &str,
+        md5: Md5,
+        bytes: &[u8],
+        records: Option<Vec<HeadsRecord>>,
+    ) -> Result<(), StoreError> {
+        let records = match (records, DerivedFile::from_path(rel)) {
+            (Some(records), _) => records,
+            (None, Some(file)) => {
+                heads_records(&self.placed_heads(self.fold.file_heads(&file)), &[])
+            }
+            (None, None) => Vec::new(),
+        };
+        let dir = self.folder.path(layout::HEADS);
+        let written = crate::atomic::atomic_create_dirs(&*self.vfs, &dir).and_then(|()| {
+            self.put_heads(rel, &md5.to_hex(), records, crate::atomic::SyncDir::Now)
+        });
         self.shared.remove_notices_of(rel);
+        if written.is_ok() {
+            let size = self
+                .vfs
+                .metadata(&self.folder.path(rel))
+                .map_or(bytes.len() as u64, |m| m.len);
+            self.note(
+                rel,
+                Event::Recorded {
+                    md5: md5.to_hex(),
+                    size,
+                },
+            );
+            if let Some(entry) = self.manifest.paths.get_mut(rel) {
+                entry.scope = None;
+                entry.blob = None;
+                entry.nfc = is_text_path(rel)
+                    .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(bytes)));
+            }
+            self.manifest_changed = true;
+        }
         if let Some(file) = DerivedFile::from_path(rel) {
             self.dirty.add_file(file);
         } else if rel == layout::METADATA {
@@ -448,33 +479,32 @@ impl Writer {
         self.write_manifest()
     }
 
-    /// A derived file whose bytes are none the app wrote and that is not clean by stat (§6.2
-    /// table): examined, and either recorded through the actor or accepted at once.
-    /// While the open classifies (`Writer::collecting`), the path is only noted: the open
-    /// records it before it ends.
+    /// Bytes the ledger keeps (§6.2 table): examined against `base`, and either recorded
+    /// through the actor or accepted at once. While the open classifies
+    /// (`Writer::collecting`), the path is only noted: the open records it before it ends.
     pub(crate) fn found_outside(
         &mut self,
         rel: &str,
         bytes: &[u8],
-        force_unknown: bool,
+        base: ledger::Base,
     ) -> Result<(), StoreError> {
         if rel == CONFLICTS {
             return self.restore_fixed(rel, bytes);
         }
         if DerivedFile::from_path(rel).is_none() && rel != layout::METADATA {
             // A carried file is no record of the project; its edits wait for the person (§11.4).
-            return self.hold(rel, bytes, false);
+            return self.hold(rel, bytes, ledger::HeldCause::Edit);
         }
         if self.collecting {
             self.found.push(Found {
                 rel: rel.to_owned(),
                 bytes: bytes.to_vec(),
-                force_unknown,
+                base,
             });
             return Ok(());
         }
         let md5 = Md5::of(bytes);
-        let (examined, copy) = self.examine(rel, bytes, force_unknown)?;
+        let (examined, copy) = self.examine(rel, bytes, &base)?;
         match examined {
             Examined::Plan(plan, derived) => {
                 self.shared
@@ -494,10 +524,10 @@ impl Writer {
                 }
                 Ok(())
             }
-            Examined::Nothing => self.accept(rel, md5, bytes),
+            Examined::Nothing => self.accept(rel, md5, bytes, None),
             Examined::Undecodable { reason } => {
                 self.undecodable(rel, &copy, &reason);
-                self.accept(rel, md5, bytes)
+                self.accept(rel, md5, bytes, None)
             }
         }
     }
@@ -512,7 +542,7 @@ impl Writer {
         reply: crate::handle::Resolver<Result<crate::reply::TakenIn, StoreError>>,
     ) -> Result<(), StoreError> {
         let md5 = Md5::of(bytes);
-        let (examined, copy) = self.examine(rel, bytes, true)?;
+        let (examined, copy) = self.examine(rel, bytes, &ledger::Base::Unknown)?;
         match examined {
             Examined::Plan(plan, derived) => {
                 self.pending_record
@@ -534,13 +564,13 @@ impl Writer {
                 Ok(())
             }
             Examined::Nothing => {
-                self.accept(rel, md5, bytes)?;
+                self.accept(rel, md5, bytes, None)?;
                 reply.resolve(Ok(crate::reply::TakenIn::default()));
                 self.finish_looking()
             }
             Examined::Undecodable { reason } => {
                 self.undecodable(rel, &copy, &reason);
-                self.accept(rel, md5, bytes)?;
+                self.accept(rel, md5, bytes, None)?;
                 reply.resolve(Ok(crate::reply::TakenIn::default()));
                 self.finish_looking()
             }
@@ -578,7 +608,7 @@ impl Writer {
             );
         }
         if rel == CONFLICTS {
-            return self.accept(rel, Md5::of(bytes), bytes);
+            return self.accept(rel, Md5::of(bytes), bytes, None);
         }
         let good = self.fixed_bytes(rel);
         let (dir, name) = self.folder.dir_and_name(rel);
@@ -587,10 +617,10 @@ impl Writer {
         let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
         self.manifest.paths.insert(
             rel.to_owned(),
-            Entry::of(
+            Entry::placed(
                 Md5::of(&good).to_hex(),
                 good.len() as u64,
-                meta.map_or(0, |m| m.mtime_ns),
+                meta.map(|m| m.mtime_ns),
                 false,
             ),
         );
@@ -622,9 +652,9 @@ impl Writer {
 
     /// X2 for `metadata.json`: the fields of an edit that are records are sent to the actor
     /// to be recorded. The file is written over at once, so nothing is accepted for it.
-    pub(crate) fn record_metadata_edit(&mut self, bytes: &[u8], copy: String) {
+    pub(crate) fn record_metadata_edit(&mut self, bytes: &[u8], copy: String, base: ledger::Base) {
         let md5 = Md5::of(bytes);
-        match self.examine_copied(layout::METADATA, bytes, false) {
+        match self.examine_copied(layout::METADATA, bytes, &base) {
             Examined::Plan(plan, derived) => {
                 let _ = self.actor.send(Msg::RecordOutside {
                     rel: layout::METADATA.to_owned(),
@@ -639,36 +669,64 @@ impl Writer {
         }
     }
 
-    /// D7: the heads file of `rel` after an outside edit was recorded. The bytes in the folder
-    /// are the person's, and may stay there for as long as a program keeps the file open
-    /// (Paratext on Windows) while that program saves them again; its next save starts from
-    /// these bytes, so the base it is compared with names the changes recorded for them, not
-    /// the version the app wrote. A record the batch left alone keeps the base it had; the
-    /// digests are those of the bytes found. Best effort: a heads file that cannot be written
-    /// leaves the next edit to conflict, never to replace.
-    fn write_edited_heads(
+    /// D7: the heads of the bytes of `rel` an outside edit was recorded from. The bytes in the
+    /// folder are the person's, and may stay there for as long as a program keeps the file
+    /// open (Paratext on Windows) while that program saves them again; its next save starts
+    /// from these bytes, so the base it is compared with names the changes recorded for them,
+    /// not the version the app wrote. A record the batch changed stands for its new change; a
+    /// record it left alone keeps the base it was compared with when the fold holds that base
+    /// applied, else the fold's heads, which the comparison found the bytes to show. The
+    /// digests are those of the bytes found.
+    fn edited_heads(
         &mut self,
         rel: &str,
+        base: &ledger::Base,
         changed: &[(RecordKey, ChangeId)],
         shown: Vec<(RecordKey, tc_journal::outside::ShownDigest)>,
-    ) {
-        use crate::manifest::HeadsRecord;
-        let Some(file) = DerivedFile::from_path(rel) else {
-            return;
-        };
+    ) -> Option<Vec<HeadsRecord>> {
+        let file = DerivedFile::from_path(rel)?;
         let outside = OutsideFile::Derived(file.clone());
-        let key_text = |key: &RecordKey| {
-            tc_journal::canon::encode_key(key)
-                .map(|j| j.to_canonical_string())
-                .unwrap_or_default()
-        };
-        let mut records: std::collections::BTreeMap<String, HeadsRecord> = self
-            .heads_of(rel)
-            .unwrap_or_else(|| HeadsFile::of(&self.fold.file_heads(&file), &[]))
-            .records
-            .into_iter()
-            .map(|r| (r.key.clone(), r))
+        let fold_heads: std::collections::BTreeMap<String, Vec<[u8; 32]>> = self
+            .placed_heads(self.fold.file_heads(&file))
+            .iter()
+            .map(|(key, ids)| (key_text(key), ids.iter().map(|id| *id.as_bytes()).collect()))
             .collect();
+        let base_records: Vec<HeadsRecord> = match base {
+            ledger::Base::Placed(md5) => self
+                .heads_of(rel)
+                .and_then(|h| h.get(md5).map(<[HeadsRecord]>::to_vec))
+                .unwrap_or_default(),
+            ledger::Base::Head | ledger::Base::Unknown => Vec::new(),
+        };
+        let current = self.current_heads(rel);
+        let mut records: std::collections::BTreeMap<String, HeadsRecord> = fold_heads
+            .iter()
+            .map(|(key, heads)| {
+                (
+                    key.clone(),
+                    HeadsRecord {
+                        key: key.clone(),
+                        heads: heads.clone(),
+                        shown: None,
+                    },
+                )
+            })
+            .collect();
+        for record in base_records {
+            let applied = record
+                .heads
+                .iter()
+                .all(|id| self.shows_held(&ChangeId::from_bytes(*id), &current));
+            if applied {
+                records.insert(
+                    record.key.clone(),
+                    HeadsRecord {
+                        shown: None,
+                        ..record
+                    },
+                );
+            }
+        }
         for (key, id) in changed.iter().filter(|(key, _)| outside.shows(key)) {
             let text = key_text(key);
             records
@@ -691,16 +749,7 @@ impl Writer {
                 })
                 .shown = Some(digest);
         }
-        let heads = HeadsFile {
-            records: records.into_values().collect(),
-        };
-        let dir = self.folder.path(layout::HEADS);
-        if crate::atomic::atomic_create_dirs(&*self.vfs, &dir).is_ok() {
-            let _ = self.put_heads(rel, heads, crate::atomic::SyncDir::Now);
-        } else {
-            self.heads_unwritten.insert(rel.to_owned(), heads);
-            self.manifest_changed |= self.manifest.heads_due.insert(rel.to_owned());
-        }
+        Some(records.into_values().collect())
     }
 
     /// The writer's handling of what the actor answered to a plan (D7). `bytes` are the ones
@@ -716,7 +765,9 @@ impl Writer {
         self.pending_record.remove(&rel);
         let carried = self.pending_carried.remove(&rel);
         let shown = self.shown_by_path.remove(&rel).unwrap_or_default();
+        let base = self.bases.remove(&rel).unwrap_or(ledger::Base::Unknown);
         self.answer_taken_in(&rel, &outcome);
+        let mut edited: Option<Vec<HeadsRecord>> = None;
         match outcome {
             Recorded::Done {
                 batch,
@@ -728,7 +779,7 @@ impl Writer {
                 heads,
             } => {
                 if carried.is_none() {
-                    self.write_edited_heads(&rel, &heads, shown);
+                    edited = self.edited_heads(&rel, &base, &heads, shown);
                 }
                 if let Ok(path) = RepoPath::parse_source(&rel) {
                     if let Some(batch) = batch {
@@ -796,6 +847,6 @@ impl Writer {
             self.accept_carried(&rel, seen, size, oid);
             return;
         }
-        let _ = self.accept(&rel, seen, bytes);
+        let _ = self.accept(&rel, seen, bytes, edited);
     }
 }

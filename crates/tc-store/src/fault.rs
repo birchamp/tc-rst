@@ -91,6 +91,9 @@ struct Faults {
     kill_before: Option<u64>,
     /// Stops the writer at the write point right after the next rename onto this path.
     kill_after_rename: Option<PathBuf>,
+    /// Fails the write point right after the next rename onto this path, and the writer goes
+    /// on.
+    fail_after_rename: Option<(PathBuf, io::ErrorKind)>,
     torn: bool,
     dead: bool,
     /// The write point that just stopped the writer was a write to tear.
@@ -441,6 +444,15 @@ impl Model {
             self.faults.kill_after_rename = None;
             self.faults.kill_before = Some(index + 1);
         }
+        if kind == OpKind::Rename
+            && let Some((after, error)) = self.faults.fail_after_rename.take()
+        {
+            if after == path {
+                self.faults.fail_op.insert(index + 1, error);
+            } else {
+                self.faults.fail_after_rename = Some((after, error));
+            }
+        }
         self.log.push(Op {
             index,
             kind,
@@ -635,6 +647,12 @@ impl FaultFs {
     /// rename reaches the disk, nothing after it does.
     pub fn kill_after_rename(&self, path: &Path) {
         self.model().faults.kill_after_rename = Some(path.to_owned());
+    }
+
+    /// Fails the write point right after the next rename onto `path` with `kind`; the writer
+    /// goes on (a full disk right after the rename).
+    pub fn fail_after_rename(&self, path: &Path, kind: io::ErrorKind) {
+        self.model().faults.fail_after_rename = Some((path.to_owned(), kind));
     }
 
     /// Disarms [`FaultFs::kill_before`] and [`FaultFs::kill_after_rename`] when they did not

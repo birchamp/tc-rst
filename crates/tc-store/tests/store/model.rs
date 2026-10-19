@@ -8,16 +8,19 @@
 //! book file, an edit of `metadata.json`, a version of either put back). The no-loss invariant:
 //!
 //! - every save is a version of its record in History (readable), unless the damage the run did
-//!   took every copy of it (a journal line cut away, and no file in the folder showing it); a
+//!   took every copy of it (a journal line cut away, and no file in the folder showing it; for a
+//!   save of the session that runs, the session holds it until its next seal, and a kill before
+//!   that takes it unless a file still shows it); a
 //!   member of a batch that lost another member waits for the rest (§7.4) and counts as kept,
-//!   unless a file in the folder showed it when the damage happened: those bytes are then the
-//!   record of it, and the app must record them, not write the file over without it;
+//!   unless a file in the folder showed it when the open read the journal: those bytes are then
+//!   the record of it, and the app must record them, not write the file over without it;
 //! - every put is in the folder still, is what the project would write there, or is copied to
 //!   `.tc/external/` (§11.1 X1); a put the person overwrote before the app looked is retired.
 //!
-//! While a session runs, a save may also be shown only by a file in the folder (a journal file
-//! another program cut in place leaves the session unable to read it; the next open reads the
-//! journal again). After an open and its first job, and at the end of a run, it may not.
+//! While a session runs, a save may also be only in a file in the folder (a journal file another
+//! program cut in place leaves the session unable to read it; the next open reads the journal
+//! again, and restores a pack HEAD holds). After an open and its first job, and at the end of a
+//! run, it may not.
 //!
 //! The steps: saves, materializations and checkpoints, each of which can be killed before any of
 //! its write points (with or without a power cut); a kill right after the rename of a file;
@@ -136,7 +139,7 @@ struct Save {
     target: Target,
     session: u32,
     fate: Fate,
-    /// A file in the folder showed it when damage happened.
+    /// A file in the folder showed it when the last open read the journal.
     shown: bool,
 }
 
@@ -163,6 +166,8 @@ pub struct Run {
     placed: BTreeMap<&'static str, Vec<u8>>,
     /// Whether the kill armed is a power cut.
     power_cut: bool,
+    /// The files another program holds.
+    locked: std::collections::BTreeSet<&'static str>,
     log: Vec<String>,
 }
 
@@ -201,6 +206,7 @@ impl Run {
             versions: BTreeMap::new(),
             placed: BTreeMap::new(),
             power_cut: false,
+            locked: std::collections::BTreeSet::new(),
             log: Vec::new(),
         };
         run.see_versions(true);
@@ -228,6 +234,13 @@ impl Run {
     fn open(&mut self) -> Result<(), String> {
         if self.handle.is_some() {
             return Ok(());
+        }
+        // What the folder shows of each save when the open reads the journal: a save the
+        // journal lost, or holds only in a batch that lost a member, is the app's to take from
+        // a file that shows it.
+        let shown: Vec<bool> = self.saves.iter().map(|s| self.in_files(&s.text)).collect();
+        for (save, shown) in self.saves.iter_mut().zip(shown) {
+            save.shown = shown;
         }
         loop {
             let rig = self.rig.as_ref().expect("a rig");
@@ -262,12 +275,15 @@ impl Run {
             drop(handle);
         }
         self.rig = None;
-        for save in &mut self.saves {
+        self.rig = Some(Self::rig_on(fs));
+        // What only the dead session held is gone, unless a file in the folder still shows it.
+        let kept: Vec<bool> = self.saves.iter().map(|s| self.on_disk(&s.text)).collect();
+        for (save, kept) in self.saves.iter_mut().zip(kept) {
             if save.fate == Fate::InMemory {
-                save.fate = Fate::Destroyed;
+                save.fate = if kept { Fate::Kept } else { Fate::Destroyed };
             }
         }
-        self.rig = Some(Self::rig_on(fs));
+        self.relock();
         self.log.push(format!("crashed (power cut: {power_cut})"));
     }
 
@@ -395,6 +411,11 @@ impl Run {
                         save.fate = Fate::Kept;
                     }
                 }
+                // The process ends; the next one sees the files as they are, and the files
+                // other programs hold stay held.
+                let fs = self.fs().crash(false);
+                self.rig = Some(Self::rig_on(fs));
+                self.relock();
                 self.log.push("closed".into());
                 return Ok(());
             }
@@ -408,7 +429,21 @@ impl Run {
         self.check(false)
     }
 
+    /// The files other programs hold, held again on a new process's filesystem.
+    fn relock(&self) {
+        let fs = self.fs();
+        for rel in &self.locked {
+            fs.set_unreadable(&self.path(rel), true);
+            fs.set_busy(&self.path(rel), true);
+        }
+    }
+
     fn lock(&mut self, file: File, on: bool) -> Result<(), String> {
+        if on {
+            self.locked.insert(file.rel());
+        } else {
+            self.locked.remove(file.rel());
+        }
         let fs = self.fs();
         let path = self.path(file.rel());
         fs.set_unreadable(&path, on);
@@ -443,11 +478,14 @@ impl Run {
             }
         }
         fs.advance(Duration::from_millis(1500));
-        if told && self.handle.is_some() {
-            fs.put(&path, &bytes, None);
-        } else {
-            fs.put_unseen(&path, &bytes, None);
-        }
+        let tell = told && self.handle.is_some();
+        self.by_another_program(|| {
+            if tell {
+                fs.put(&path, &bytes, None);
+            } else {
+                fs.put_unseen(&path, &bytes, None);
+            }
+        });
         self.puts.push(Put {
             rel,
             bytes,
@@ -569,31 +607,75 @@ impl Run {
             let start = ends[kept_lines - 1];
             start + (ends[kept_lines] - start) / 2
         };
-        let before: Vec<bool> = self.saves.iter().map(|s| self.on_disk(&s.text)).collect();
-        let shown: Vec<bool> = self.saves.iter().map(|s| self.in_files(&s.text)).collect();
-        if self.handle.is_some() {
-            fs.cut_in_place(&path, len);
-        } else {
-            fs.put_unseen(&path, &bytes[..len], None);
-        }
         let open = self.handle.is_some();
-        let after: Vec<bool> = self.saves.iter().map(|s| self.on_disk(&s.text)).collect();
-        for (i, save) in self.saves.iter_mut().enumerate() {
-            save.shown |= shown[i];
-            if save.fate == Fate::Kept && before[i] && !after[i] {
-                save.fate = if open && save.session == self.session {
-                    Fate::InMemory
-                } else {
-                    Fate::Destroyed
-                };
+        self.by_another_program(|| {
+            if open {
+                fs.cut_in_place(&path, len);
+            } else {
+                fs.put_unseen(&path, &bytes[..len], None);
             }
-        }
+        });
         self.log.push(format!(
             "cut {} to {len} of {} bytes",
             path.display(),
             bytes.len()
         ));
         if open { self.check(false) } else { Ok(()) }
+    }
+
+    /// Another program does `f` to the folder: a save whose every copy on disk it takes is
+    /// destroyed (or held only by the session that saved it, which must write it again), and
+    /// a save no file in the folder shows any more is no longer the app's to take from one.
+    fn by_another_program(&mut self, f: impl FnOnce()) {
+        let before: Vec<bool> = self.saves.iter().map(|s| self.on_disk(&s.text)).collect();
+        let journal_before: Vec<bool> = self
+            .saves
+            .iter()
+            .map(|s| self.in_journal(&s.text))
+            .collect();
+        f();
+        let after: Vec<bool> = self.saves.iter().map(|s| self.on_disk(&s.text)).collect();
+        let journal_after: Vec<bool> = self
+            .saves
+            .iter()
+            .map(|s| self.in_journal(&s.text))
+            .collect();
+        let shown: Vec<bool> = self.saves.iter().map(|s| self.in_files(&s.text)).collect();
+        let open = self.handle.is_some();
+        let session = self.session;
+        for (i, save) in self.saves.iter_mut().enumerate() {
+            save.shown &= shown[i];
+            if save.fate != Fate::Kept {
+                continue;
+            }
+            if open && save.session == session {
+                // The session that saved it holds it, and writes it again at its next seal
+                // (§5.11 K1); until then it may write over a file that shows it.
+                if journal_before[i] && !journal_after[i] {
+                    save.fate = Fate::InMemory;
+                }
+            } else if before[i] && !after[i] {
+                save.fate = Fate::Destroyed;
+            }
+        }
+    }
+
+    /// Whether a verified line of a journal file holds `text`, or a pack of HEAD's tree the app
+    /// restores.
+    fn in_journal(&self, text: &str) -> bool {
+        let fs = self.fs();
+        let project = project_of(&fs, &self.folder);
+        let in_files = files(&fs, &self.folder).into_iter().any(|(rel, bytes)| {
+            let entries = if rel.starts_with(".tc/pending/") {
+                tc_journal::pending::read_pending(&bytes, project).entries
+            } else if rel.starts_with("ingredients/tc/changes/") && !rel.contains(".~") {
+                tc_journal::pack::read_pack(&rel, &bytes, project).entries
+            } else {
+                return false;
+            };
+            entries.iter().any(|e| contains(e.raw(), text))
+        });
+        in_files || self.in_git(text)
     }
 
     /// Whether a file in the folder holds `text`: a verified line of a journal file (a pack
@@ -651,13 +733,6 @@ impl Run {
         [USFM, META]
             .iter()
             .any(|rel| fs.peek(&self.path(rel)).is_some_and(|b| contains(&b, text)))
-    }
-
-    fn in_external(&self, bytes: &[u8]) -> bool {
-        self.fs()
-            .files_under(&self.path(".tc/external"))
-            .values()
-            .any(|b| b == bytes)
     }
 
     fn text_in_external(&self, text: &str) -> bool {
@@ -725,7 +800,7 @@ impl Run {
 
     /// The no-loss invariant (see the module documentation). `settled`: an open and its first
     /// job are done, so a save shown only by a file in the folder is not kept.
-    fn check(&self, settled: bool) -> Result<(), String> {
+    fn check(&mut self, settled: bool) -> Result<(), String> {
         if self.handle.is_none() {
             return Ok(());
         }
@@ -740,7 +815,9 @@ impl Run {
             if !save.shown && self.waiting(save) {
                 continue;
             }
-            if !settled && self.in_files(&save.text) {
+            // While a session runs, a copy in the folder the next open reads (a journal line,
+            // a pack HEAD holds, a file showing it) is not lost yet.
+            if !settled && self.on_disk(&save.text) {
                 continue;
             }
             if save.fate == Fate::InMemory && !settled {
@@ -766,13 +843,40 @@ impl Run {
             .snapshot()
             .fold()
             .render(&DerivedFile::Usfm(TIT));
-        for put in &self.puts {
+        let external: Vec<Vec<u8>> = fs
+            .files_under(&self.path(".tc/external"))
+            .into_values()
+            .collect();
+        let name = match self
+            .handle()
+            .snapshot()
+            .fold()
+            .projected(&RecordKey::ProjectMeta(MetaField::Name))
+        {
+            Some(Record::ProjectMeta {
+                value: Some(value), ..
+            }) => format!("{value:?}"),
+            _ => String::new(),
+        };
+        let folder = self.folder.clone();
+        let current_metadata = |bytes: &[u8]| describes_the_folder(&fs, &folder, bytes, &name);
+        for put in &mut self.puts {
             if put.retired {
                 continue;
             }
-            let on_disk = fs.peek(&self.path(put.rel)).as_deref() == Some(put.bytes.as_slice());
-            let projected = put.rel == USFM && projection.as_deref() == Some(put.bytes.as_slice());
-            if on_disk || projected || self.in_external(&put.bytes) {
+            let on_disk =
+                fs.peek(&self.folder.join(put.rel)).as_deref() == Some(put.bytes.as_slice());
+            let projected = match put.rel {
+                USFM => projection.as_deref() == Some(put.bytes.as_slice()),
+                _ => current_metadata(&put.bytes),
+            };
+            if projected {
+                // What the project would write there: nothing in the bytes is the app's to
+                // keep apart from the project, now or later.
+                put.retired = true;
+                continue;
+            }
+            if on_disk || external.contains(&put.bytes) {
                 continue;
             }
             lost.push(format!(
@@ -848,8 +952,16 @@ impl Run {
                 kill: None,
             })?;
         }
+        // Every program lets go of the files in the end.
+        let fs = self.fs();
+        for rel in std::mem::take(&mut self.locked) {
+            fs.set_unreadable(&self.path(rel), false);
+            fs.set_busy(&self.path(rel), false);
+        }
         self.log.push("the last open".into());
         self.open()?;
+        // The last look is not killed.
+        self.fs().disarm();
         let _ = self.handle().leave(Leave::Book(TIT)).wait();
         self.handle().wait_idle();
         self.check(true)?;
@@ -876,6 +988,34 @@ impl Drop for Run {
     fn drop(&mut self) {
         drop(self.handle.take());
     }
+}
+
+/// Whether `metadata.json` bytes are what the project writes now: they list every ingredient
+/// with the md5 of the bytes in the folder, every ingredient file the folder holds, and the
+/// project's name (`name`, as the fold shows it).
+fn describes_the_folder(fs: &FaultFs, folder: &std::path::Path, bytes: &[u8], name: &str) -> bool {
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return false;
+    };
+    let Some(listed) = json["ingredients"].as_object() else {
+        return false;
+    };
+    let on_disk: BTreeMap<String, Vec<u8>> = files(fs, folder)
+        .into_iter()
+        .filter(|(rel, _)| rel.starts_with("ingredients/") && !rel.contains(".~"))
+        .collect();
+    if listed.len() != on_disk.len() {
+        return false;
+    }
+    let same_files = listed.iter().all(|(rel, entry)| {
+        on_disk.get(rel).is_some_and(|bytes| {
+            entry["checksum"]["md5"].as_str() == Some(tc_journal::Md5::of(bytes).to_hex().as_str())
+        })
+    });
+    let shown = json["identification"]["name"]["en"]
+        .as_str()
+        .unwrap_or_default();
+    same_files && !shown.is_empty() && name.contains(&format!("{shown:?}"))
 }
 
 /// `text` with the words of verse 1:v replaced by `words`.
@@ -948,7 +1088,6 @@ fn histories(cases: u32, steps: usize) {
 /// §16.1: random histories of saves, materializations and checkpoints killed at any write
 /// point, outside edits and reverts, cut journal files and restarts lose no work.
 #[test]
-#[ignore = "fails on the classification by clues; the placement ledger fixes it"]
 fn random_histories_lose_no_work() {
     histories(200, 12);
 }
@@ -985,7 +1124,6 @@ fn assert_kept(steps: &[Step]) {
 /// A pending file holding one section save (one batch of two changes), cut at a line while the
 /// app is closed after a crash: the book file shows both changes, and they are kept.
 #[test]
-#[ignore = "fails on the classification by clues; the placement ledger fixes it"]
 fn a_batch_cut_at_a_line_while_closed_is_kept_from_the_book_file() {
     assert_kept(&[
         act(Act::Section(1)),
@@ -1003,7 +1141,6 @@ fn a_batch_cut_at_a_line_while_closed_is_kept_from_the_book_file() {
 /// The same batch cut inside a line: the change salvaged from the file waits for the member
 /// the file lost, and the book file that shows both is the record of both.
 #[test]
-#[ignore = "fails on the classification by clues; the placement ledger fixes it"]
 fn a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file() {
     assert_kept(&[
         act(Act::Section(1)),
@@ -1021,7 +1158,6 @@ fn a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file() {
 /// A pending file the open read is cut in place: the value of a verse's head can no longer be
 /// read, and the next job must not write the book without the verse.
 #[test]
-#[ignore = "fails on the classification by clues; the placement ledger fixes it"]
 fn a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent() {
     assert_kept(&[
         act(Act::Save(1)),
@@ -1042,7 +1178,6 @@ fn a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent() {
 /// Two writes of the book file killed after their renames, in two sessions, and a revert to
 /// the bytes of the first while the app is closed: the revert is the person's, and is kept.
 #[test]
-#[ignore = "fails on the classification by clues; the placement ledger fixes it"]
 fn a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept() {
     assert_kept(&[
         act(Act::Save(1)),
@@ -1073,7 +1208,6 @@ fn a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept() {
 /// `metadata.json` written by a group killed after its rename, and put back by another program
 /// while the app is closed: the revert is the person's, and is kept.
 #[test]
-#[ignore = "fails on the classification by clues; the placement ledger fixes it"]
 fn a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept() {
     assert_kept(&[
         act(Act::Name),

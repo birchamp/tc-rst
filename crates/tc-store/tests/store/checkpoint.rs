@@ -1282,13 +1282,13 @@ fn a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_r
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// §5.11 K1, §6.2: the seal that leaves a pending file unsealed because a save is lost from it
-/// marks the files that show the save in the manifest, so the next open records them even when
-/// their heads file cannot say so (here it describes the bytes before the save, as after a write
-/// of the heads file that failed). Once recorded, the mark goes: a later open records nothing
-/// again.
+/// §6.2: a save lost from its pending file, and the heads file of the book file that shows it
+/// put back by another program as it was before the save, so the ledger keeps no heads of the
+/// bytes in the folder: the next open cannot say the fold holds what they show, so it records
+/// them (a copy kept), never writing the book over without the save. Once recorded, a later
+/// open records nothing again.
 #[test]
-fn a_book_file_a_seal_marked_is_recorded_even_when_its_heads_file_lags() {
+fn a_book_file_whose_heads_were_put_back_is_recorded_not_written_over() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
@@ -1311,9 +1311,6 @@ fn a_book_file_a_seal_marked_is_recorded_even_when_its_heads_file_lags() {
         "{report:?}"
     );
     handle.close().unwrap();
-    let manifest =
-        String::from_utf8(rig.fs.peek(&folder.join(".tc/materialized.json")).unwrap()).unwrap();
-    assert!(manifest.contains("aheadOfJournal"), "{manifest}");
     rig.fs.put_unseen(&heads, &older, None);
     let handle = open(&rig, &folder);
     assert_the_book_file_gave_the_save_back(&rig, &folder, &handle, "saved before a crash");
@@ -1322,9 +1319,6 @@ fn a_book_file_a_seal_marked_is_recorded_even_when_its_heads_file_lags() {
         Some("saved before a crash")
     );
     handle.close().unwrap();
-    let manifest =
-        String::from_utf8(rig.fs.peek(&folder.join(".tc/materialized.json")).unwrap()).unwrap();
-    assert!(!manifest.contains("aheadOfJournal"), "{manifest}");
     let handle = open(&rig, &folder);
     assert_eq!(recorded_edits_of_titus(&handle), Vec::new());
     assert_eq!(

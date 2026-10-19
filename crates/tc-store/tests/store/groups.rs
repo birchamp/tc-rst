@@ -537,8 +537,8 @@ fn verse_text_conflicts(handle: &ProjectHandle) -> usize {
 }
 
 /// A project with 1:1 saved twice, the second save not yet written to `TIT.usfm`, and the
-/// number of the write point (counted from the next `leave`) at which the heads file of
-/// `TIT.usfm` is first created: the write point right after the file itself was renamed.
+/// number of the write point (counted from the next `leave`) right after `TIT.usfm` was
+/// renamed into place.
 fn fail_after_the_rename() -> (Rig, std::path::PathBuf, ProjectHandle, u64) {
     let (rig, folder) = titus();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
@@ -564,12 +564,7 @@ fn fail_after_the_rename() -> (Rig, std::path::PathBuf, ProjectHandle, u64) {
         .iter()
         .position(|op| op.kind == OpKind::Rename && op.path == usfm)
         .expect("TIT.usfm is renamed into place");
-    let heads = folder.join(".tc/heads");
-    let k = log[renamed..]
-        .iter()
-        .find(|op| op.kind == OpKind::Create && op.path.starts_with(&heads))
-        .map(|op| op.index - start)
-        .expect("its heads file follows");
+    let k = log[renamed].index + 1 - start;
     drop(probed);
     drop(probe_rig);
     save_verse(&handle, 1, 1, "second save").unwrap();
@@ -643,18 +638,15 @@ fn a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// The writer's own retry may find the file already equal to the projection, and then the
-/// heads file still describes the bytes before the stopped group: it is written again, so a
-/// later outside edit of the verse the file shows has the right base (§11.1 X3). The memory of
-/// the session would supply that base for as long as it lives, so the edit is made after a
-/// restart, which finds only what the retry wrote.
+/// The writer's own retry may find the file already equal to the projection: the ledger
+/// names those bytes, whose heads it wrote before the rename (§5.10 M3), so a later outside
+/// edit of the verse the file shows has the right base (§11.1 X3), also after a restart, which
+/// finds only what the folder holds.
 #[test]
 fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
     let (rig, folder, handle, k) = fail_after_the_rename();
-    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
     rig.fs.fail_op(k, std::io::ErrorKind::StorageFull);
     assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
-    let stale = rig.fs.peek(&heads);
     // The retry timer converges the file without a new save: the manifest then names the bytes
     // that are in the file, and the heads file in the folder is the one they stand for.
     let usfm = folder.join("ingredients/TIT.usfm");
@@ -663,9 +655,6 @@ fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
         rig.fs
             .peek(&folder.join(".tc/materialized.json"))
             .is_some_and(|m| String::from_utf8_lossy(&m).contains(&on_disk))
-    });
-    wait_for("the retry to write the heads file", || {
-        rig.fs.peek(&heads) != stale
     });
     handle.close().unwrap();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
@@ -749,9 +738,9 @@ fn a_retry_after_a_stopped_group_does_not_write_over_an_outside_revert() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// The same for `metadata.json`, which a group renames last: when the group stops at its heads
-/// file (it changed with a project detail saved in the same group), the bytes before are no
-/// longer the app's own either.
+/// The same for `metadata.json`, which a group renames last: when the group stops right after
+/// its rename (it changed with a project detail saved in the same group), the bytes before are
+/// no longer the app's own either.
 #[test]
 fn an_outside_revert_of_metadata_json_after_a_stopped_group_is_an_edit() {
     let (rig, folder, handle, _k) = fail_after_the_rename();
@@ -768,14 +757,14 @@ fn an_outside_revert_of_metadata_json_after_a_stopped_group_is_an_edit() {
         .unwrap();
     let meta = folder.join("metadata.json");
     let before = rig.fs.peek(&meta).unwrap();
-    let heads = folder.join(tc_store::layout::heads_file("metadata.json"));
-    rig.fs.set_busy(&heads, true);
+    rig.fs
+        .fail_after_rename(&meta, std::io::ErrorKind::StorageFull);
     assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
     let after = rig.fs.peek(&meta).unwrap();
     assert_ne!(before, after, "metadata.json was renamed into place");
     assert!(String::from_utf8_lossy(&after).contains("Titus, second name"));
     rig.fs.put_unseen(&meta, &before, None);
-    // The look finds the old bytes; the group it then tries fails at the heads file again.
+    // The look finds the old bytes.
     let _ = handle.focus().wait();
     let told = handle
         .notices()
@@ -784,17 +773,17 @@ fn an_outside_revert_of_metadata_json_after_a_stopped_group_is_an_edit() {
         .count();
     assert_eq!(told, 1, "the old bytes were taken for the app's own");
     assert_eq!(external_copies_of(&rig, &folder, &before).len(), 1);
-    rig.fs.set_busy(&heads, false);
     handle.leave(Leave::Book(TIT)).wait().unwrap();
     handle.wait_idle();
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// A retry of a group that stopped at the heads file of `metadata.json` writes that file: the
-/// bytes of `metadata.json` are the projection's already, and the retry is not "nothing to do".
+/// §5.10 M3: the heads of new bytes are written before the ledger names them and before their
+/// rename. While the heads file of `metadata.json` cannot be written, `metadata.json` keeps the
+/// bytes the ledger names; the retry once it can writes both.
 #[test]
-fn a_retry_after_metadata_json_was_renamed_writes_its_heads_file() {
+fn metadata_json_is_not_renamed_before_its_heads_are_written() {
     let (rig, folder, handle, _k) = fail_after_the_rename();
     let name = tc_journal::RecordKey::ProjectMeta(tc_journal::MetaField::Name);
     handle
@@ -808,10 +797,17 @@ fn a_retry_after_metadata_json_was_renamed_writes_its_heads_file() {
         .wait()
         .unwrap();
     let heads = folder.join(tc_store::layout::heads_file("metadata.json"));
+    let meta = folder.join("metadata.json");
     let before = rig.fs.peek(&heads);
+    let meta_before = rig.fs.peek(&meta);
     rig.fs.set_busy(&heads, true);
     assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
     assert_eq!(rig.fs.peek(&heads), before, "the write was refused");
+    assert_eq!(
+        rig.fs.peek(&meta),
+        meta_before,
+        "no rename without its heads"
+    );
     rig.fs.set_busy(&heads, false);
     handle.leave(Leave::Book(TIT)).wait().unwrap();
     handle.wait_idle();
@@ -838,7 +834,9 @@ fn the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote() {
     handle.leave(Leave::Book(TIT)).wait().unwrap();
     let manifest = rig.fs.peek(&folder.join(".tc/materialized.json")).unwrap();
     let manifest: serde_json::Value = serde_json::from_slice(&manifest).unwrap();
-    let listed = manifest["paths"]["metadata.json"]["md5"].as_str().unwrap();
+    let listed = manifest["paths"]["metadata.json"]["placed"]["md5"]
+        .as_str()
+        .unwrap();
     let real = tc_journal::Md5::of(&rig.fs.peek(&folder.join("metadata.json")).unwrap()).to_hex();
     assert_eq!(listed, real);
     let looked = handle.focus().wait().unwrap();
@@ -893,87 +891,6 @@ fn an_outside_edit_of_the_bytes_a_stopped_group_left_continues_them() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// The same while the heads file keeps failing (a program holds `.tc/heads/…`): every try of
-/// the writer fails at the heads file, and the edits made meanwhile are still the person's
-/// continuation of the app's save.
-#[test]
-fn edits_made_while_the_heads_file_cannot_be_written_make_no_conflict() {
-    let (rig, folder, handle, _k) = fail_after_the_rename();
-    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
-    rig.fs.set_busy(&heads, true);
-    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
-    mend_outside(&rig, &folder);
-    handle.focus().wait().unwrap();
-    handle.wait_idle();
-    assert_eq!(outside_edit_notices(&handle), vec![(1, false)]);
-    assert_eq!(verse_text_conflicts(&handle), 0);
-    // The program saves again, from what the person made.
-    let usfm = folder.join("ingredients/TIT.usfm");
-    let again = String::from_utf8(rig.fs.peek(&usfm).unwrap())
-        .unwrap()
-        .replace("mended outside", "mended outside twice");
-    rig.fs.put_unseen(&usfm, again.as_bytes(), None);
-    handle.focus().wait().unwrap();
-    handle.wait_idle();
-    assert_eq!(verse_text_conflicts(&handle), 0);
-    assert_eq!(
-        words_of(&handle, &verse(1, 1)),
-        "second save, mended outside twice"
-    );
-    rig.fs.set_busy(&heads, false);
-    handle.leave(Leave::Book(TIT)).wait().unwrap();
-    handle.wait_idle();
-    assert_eq!(verse_text_conflicts(&handle), 0);
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-}
-
-/// §5.10: while the heads file of a file the stopped group renamed cannot be written, the
-/// file is never taken as "unchanged, nothing to do", also once its entry has settled by stat:
-/// each retry reads it, finds it equal to the projection and tries the heads file again, so
-/// a restart finds the heads file that goes with the bytes and the person's edit of the verse
-/// continues the app's save.
-#[test]
-fn a_file_with_an_unwritten_heads_file_is_not_taken_as_unchanged_when_its_entry_settles() {
-    let (rig, folder, handle, _k) = fail_after_the_rename();
-    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
-    rig.fs.set_busy(&heads, true);
-    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
-    // Time passes, and a look at the folder that finds a file touched (same bytes, new time)
-    // writes the manifest, which is the time stamp a read settles an entry by (§6.2).
-    let project = folder.join(tc_store::layout::PROJECT_JSON);
-    let bytes = rig.fs.peek(&project).unwrap();
-    rig.fs.advance(Duration::from_secs(10));
-    rig.fs.put_unseen(&project, &bytes, None);
-    // A look at the folder tries the stopped group again, which fails at the heads file again.
-    assert!(handle.focus().wait().is_err());
-    // This look settles the renamed file's entry: its size and time are the entry's.
-    assert!(handle.focus().wait().is_err());
-    let read_before = handle.counters().derived_read;
-    wait_for("the retry to read the renamed file again", || {
-        handle.counters().derived_read > read_before
-    });
-    assert!(
-        !blocked_notices(&handle).is_empty(),
-        "the heads file is still not written, and the person is still told"
-    );
-    rig.fs.set_busy(&heads, false);
-    wait_for("the heads file to be written", || {
-        blocked_notices(&handle).is_empty()
-    });
-    handle.close().unwrap();
-    // A restart: the person's program saves the verse again, from the bytes the app wrote.
-    let reopened = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    reopened.wait_idle();
-    mend_outside(&rig, &folder);
-    reopened.focus().wait().unwrap();
-    reopened.wait_idle();
-    assert_eq!(outside_edit_notices(&reopened), vec![(1, false)]);
-    assert_eq!(verse_text_conflicts(&reopened), 0);
-    reopened.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-}
-
 /// §5.10: the process is killed between the rename of `TIT.usfm` and the write of its heads
 /// file. The open after the restart finds the file equal to its projection while the heads
 /// file still describes the bytes before, and writes the heads file again: an outside edit made
@@ -1015,15 +932,21 @@ fn a_crash_after_a_rename_leaves_no_stale_heads_file_for_a_later_edit() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// §5.10: the heads file of `TIT.usfm` cannot be written until after the close (a program
-/// holds it). The manifest says the heads file lags, so the next open writes it once it can:
-/// an outside edit made in a later session continues the app's save.
+/// §5.10 M3: the heads file of `TIT.usfm` cannot be written until after the close (a program
+/// holds it), so the file is not written over meanwhile (no rename without its heads); the next
+/// open writes both once it can, and an outside edit made in a later session continues the
+/// app's save.
 #[test]
 fn a_close_while_the_heads_file_is_held_leaves_no_stale_heads_file_for_a_later_edit() {
     let (rig, folder, handle, _k) = fail_after_the_rename();
     let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
+    let usfm = folder.join("ingredients/TIT.usfm");
     rig.fs.set_busy(&heads, true);
-    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    assert!(
+        !String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("second save"),
+        "renamed before its heads were written"
+    );
     let _ = handle.close();
     rig.fs.set_busy(&heads, false);
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();

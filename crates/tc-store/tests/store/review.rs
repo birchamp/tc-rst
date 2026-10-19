@@ -659,10 +659,18 @@ fn a_held_files_notice_comes_back_after_a_restart() {
     // Restore from the project: the file follows the project again, the hold and its
     // notice end, and the person's version stays in its copy.
     handle.restore_held("ingredients/TIT.usfm").wait().unwrap();
+    handle.wait_idle();
     let restored = String::from_utf8(rig.fs.peek(&usfm).unwrap()).unwrap();
     assert!(restored.contains("to Titus"));
     assert_ne!(restored.as_bytes(), edited.as_slice());
     assert!(hold_notices(&handle).is_empty());
+    assert!(
+        !notices(&handle)
+            .iter()
+            .any(|n| matches!(n.notice, Notice::OutsideEditRecorded { .. })),
+        "the damaged bytes the person gave up are not recorded: {:?}",
+        notices(&handle)
+    );
     handle.close().unwrap();
     let handle = open(&rig, &folder);
     assert!(hold_notices(&handle).is_empty(), "the hold ended for good");

@@ -48,10 +48,6 @@ pub struct SealReport {
     /// They stay as they are and the snapshot shows their changes while no pack holds them, so
     /// the checkpoint makes no commit (§5.13 C3); the next checkpoint reads them again.
     pub unsealed: Vec<String>,
-    /// The changes of those files that neither the file nor the fold's bytes hold any more:
-    /// the files the app wrote from them are their only copy (§6.2), and the writer marks
-    /// those files so (`Manifest::ahead`).
-    pub lost: Vec<ChangeId>,
 }
 
 /// Pending files one step of the seal's K4 removes (each is an unlink; the folder is flushed
@@ -320,11 +316,9 @@ impl Project {
                 .filter(|id| !ids.contains(id))
                 .collect();
             if !lost.is_empty() {
+                // The derived files that show a change the fold can no longer read are kept by
+                // the ledger, which asks the fold for every version they show (§6.2).
                 let Some(again) = self.lines_in_memory(&lost) else {
-                    let gone = lost
-                        .iter()
-                        .filter(|id| self.lines_in_memory(&[**id]).is_none());
-                    run.report.lost.extend(gone);
                     let reason = if bytes.is_none() {
                         "another program removed it"
                     } else {

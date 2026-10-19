@@ -512,17 +512,22 @@ fn loss_obs_template_edit_recorded() {
 // The heads file as the base, and what an outside edit costs
 // ---------------------------------------------------------------------------------------
 
-/// S1's heads file held no digests: the edit is recorded just the same, and the cost is the
-/// book's, by design (every record is compared).
+/// A heads file whose records hold no digests (as S1's did): the edit is recorded just the
+/// same, and the cost is the book's, by design (every record is compared).
 #[test]
 fn a_heads_file_without_digests_still_records_an_outside_edit() {
     let (rig, folder) = saved_and_closed();
     let heads = folder.join(".tc/heads/ingredients%2FTIT.usfm.bin");
     let mut file = tc_store::manifest::HeadsFile::parse(&rig.fs.peek(&heads).unwrap()).unwrap();
-    assert!(file.records.iter().any(|r| r.shown.is_some()));
-    for record in &mut file.records {
-        record.shown = None;
+    let records = file
+        .placements
+        .iter_mut()
+        .flat_map(|p| p.records.iter_mut());
+    let mut digests = 0;
+    for record in records {
+        digests += usize::from(record.shown.take().is_some());
     }
+    assert!(digests > 0);
     rig.fs.put(&heads, &file.to_bytes(), None);
     let edited = set_verse(
         &rig.fs.peek(&usfm_path(&folder)).unwrap(),
@@ -667,11 +672,13 @@ fn a_watcher_event_for_three_changed_verses_costs_what_they_changed() {
         });
         handle.wait_idle();
         let cost = handle.counters().since(&before);
-        // The file the watcher told is read to examine it. What the writer then reads and
-        // writes is the rewrite of the book from the project, which the 3 s timer of the
-        // batch may repeat when the machine is slow: only the examination is counted.
+        // The file the watcher told is read to examine it, with its heads. What the writer then
+        // reads and writes is the rewrite of the book's files from the project (each file the
+        // ledger is asked about has its heads read once in the session), which the 3 s timer
+        // of the batch may repeat when the machine is slow: the counts are the same for both
+        // corpora (below).
         assert!(cost.derived_read >= 1, "{cost:?}");
-        assert_eq!(cost.heads_read, 1, "{cost:?}");
+        assert!(cost.heads_read >= 1, "{cost:?}");
         assert_eq!(cost.outside_decodes, 1, "{cost:?}");
         assert_eq!(cost.outside_keys_examined, 3, "{cost:?}");
         let changes: Vec<u32> = handle

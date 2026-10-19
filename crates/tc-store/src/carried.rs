@@ -96,7 +96,7 @@ impl Writer {
             }
             Err(_) => return Ok(()),
         };
-        let held = entry.as_ref().and_then(|e| e.held.clone());
+        let held = entry.as_ref().and_then(|e| e.held().cloned());
         if held.is_none() && self.clean_by_stat(rel) {
             return Ok(());
         }
@@ -119,7 +119,11 @@ impl Writer {
         if held.as_ref().is_some_and(|h| h.md5 == md5.to_hex()) {
             return Ok(());
         }
-        if held.is_none() && entry.as_ref().is_some_and(|e| e.md5 == md5.to_hex()) {
+        if held.is_none()
+            && entry
+                .as_ref()
+                .is_some_and(|e| e.md5() == Some(md5.to_hex().as_str()))
+        {
             self.take_stat_of(rel, meta.len, meta.mtime_ns);
             return Ok(());
         }
@@ -229,15 +233,17 @@ impl Writer {
 
     /// The size and time of an entry whose bytes the read found to be the entry's.
     fn take_stat_of(&mut self, rel: &str, len: u64, mtime: i64) {
-        let settles = self.settles(mtime);
-        if let Some(e) = self.manifest.paths.get_mut(rel)
-            && (e.size != len || e.mtime_ns != mtime || e.settled != settles)
-        {
-            e.size = len;
-            e.mtime_ns = mtime;
-            e.settled = settles;
-            self.manifest_changed = true;
-        }
+        let settled = self.settles(mtime);
+        self.note(
+            rel,
+            crate::ledger::Event::Stat {
+                stat: crate::ledger::Stat {
+                    size: len,
+                    mtime_ns: mtime,
+                },
+                settled,
+            },
+        );
     }
 
     /// A carried path's entry: the bytes the app holds there, with their blob, placed or found
@@ -255,13 +261,13 @@ impl Writer {
         let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
         let mtime = meta.map_or(0, |m| m.mtime_ns);
         let settled = meta.is_some() && self.settles(mtime);
-        let mut entry = Entry::of(md5.to_hex(), size, mtime, settled);
+        let mut entry = Entry::placed(md5.to_hex(), size, meta.map(|m| m.mtime_ns), settled);
         entry.oid = Some(oid.to_hex());
         let listed_differently = self
             .manifest
             .paths
             .get(rel)
-            .is_none_or(|e| e.md5 != entry.md5 || e.size != size || e.oid != entry.oid);
+            .is_none_or(|e| e.listed() != entry.listed() || e.oid != entry.oid);
         self.manifest.paths.insert(rel.to_owned(), entry);
         self.manifest_changed = true;
         self.shared.remove_notices_of(rel);
@@ -424,7 +430,7 @@ impl Writer {
             }
             let entry = self.manifest.paths.get(&placement.path).cloned();
             let current = entry.as_ref().is_some_and(|e| {
-                e.oid.as_deref() == Some(placement.oid.to_hex().as_str()) && e.held.is_none()
+                e.oid.as_deref() == Some(placement.oid.to_hex().as_str()) && e.held().is_none()
             });
             if current && self.clean_by_stat(&placement.path) {
                 continue;
@@ -456,10 +462,13 @@ impl Writer {
                     self.set_carried_entry(&p.path, md5, size, p.oid, self.seq);
                     return Ok(());
                 }
-                if entry.as_ref().is_some_and(|e| e.held.is_some()) {
+                if entry.as_ref().is_some_and(|e| e.held().is_some()) {
                     return Ok(());
                 }
-                if !entry.as_ref().is_some_and(|e| e.md5 == md5.to_hex()) {
+                if !entry
+                    .as_ref()
+                    .is_some_and(|e| e.md5() == Some(md5.to_hex().as_str()))
+                {
                     // Bytes the app did not place: the person's (I8).
                     let mut found = FocusReport::default();
                     self.look_at_carried_file(&p.path, &mut found)?;

@@ -529,11 +529,14 @@ impl Writer {
             .map(|(p, e)| (p.clone(), e.clone()))
             .collect();
         for (path, entry) in entries {
-            if entry.held.is_some() || stale.contains(&path) {
-                from_snapshot.insert(path);
-                continue;
-            }
-            let Some(md5) = Md5::parse(&entry.md5) else {
+            // Bytes the ledger knows placed there; a hold, a write under way or a path a
+            // newer snapshot wrote comes from the snapshot.
+            let placed = entry
+                .placement()
+                .filter(|_| !stale.contains(&path))
+                .cloned();
+            let Some((md5, size)) = placed.and_then(|p| Md5::parse(&p.md5).map(|m| (m, p.size)))
+            else {
                 from_snapshot.insert(path);
                 continue;
             };
@@ -547,7 +550,7 @@ impl Writer {
                         oid,
                         mode: MODE_BLOB,
                         md5,
-                        size: entry.size,
+                        size,
                         nfc: entry.nfc,
                     },
                 );

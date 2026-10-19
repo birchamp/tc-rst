@@ -2,29 +2,26 @@
 //! wrote at each derived or carried path, and the md5 each pack is listed with in
 //! `metadata.json`. An open tests each path against its entry before it reads the file.
 //!
-//! `.tc/materialize.intent.json` names the writes of a materialization while it runs (§5.10
-//! M3), and `.tc/heads/<escaped path>.bin` the heads each written file stands for.
+//! Each path's entry is the placement ledger's record of it (`crate::ledger`): who wrote the
+//! bytes there. `.tc/heads/<escaped path>.bin` holds the heads each placement it names stands
+//! for.
 
+use crate::ledger::{Held, Placement, State};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use tc_journal::format::DERIVATIONS_V0;
 use tc_journal::{ChangeId, FORMAT_MINOR, RecordKey};
 
-/// What the app last wrote at a path.
+/// The ledger's record of a path (§6.2): its [`State`], and what the app keeps about the bytes
+/// it placed there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Entry {
-    pub md5: String,
-    pub size: u64,
-    pub mtime_ns: i64,
-    /// The bytes were read back after their timestamp tick was over (§6.2).
-    pub settled: bool,
+    #[serde(flatten)]
+    pub state: State,
     /// The scope digest the bytes were projected from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
-    /// Bytes the app holds at the path without writing over them (§6.2).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub held: Option<Held>,
     /// A carried file's git blob id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oid: Option<String>,
@@ -38,39 +35,56 @@ pub struct Entry {
     pub blob: Option<String>,
 }
 
-/// Bytes held at a path (§6.2): what they are, why they are held, and where their copy is,
-/// so the notice of the hold comes back with its own words after a restart.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Held {
-    pub md5: String,
-    pub cause: HeldCause,
-    /// The byte copy in `.tc/external/`, relative to the project folder.
-    pub copy: String,
-}
-
-/// Why a path is held (§6.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum HeldCause {
-    /// A program changed the file, or the app cannot tell: `OutsideEditHeld`.
-    Edit,
-    /// The file changed although its size and time did not: `StorageDamage`.
-    Damage,
-}
-
 impl Entry {
-    /// An entry for bytes the app has just read or written at a path, settled or not.
-    pub fn of(md5: String, size: u64, mtime_ns: i64, settled: bool) -> Self {
+    pub fn new(state: State) -> Self {
         Self {
-            md5,
-            size,
-            mtime_ns,
-            settled,
+            state,
             scope: None,
-            held: None,
             oid: None,
             nfc: None,
             blob: None,
+        }
+    }
+
+    /// An entry for bytes the app has just placed or found its own.
+    pub fn placed(md5: String, size: u64, mtime_ns: Option<i64>, settled: bool) -> Self {
+        Self::new(State::Placed {
+            placed: Placement {
+                md5,
+                size,
+                mtime_ns,
+                settled,
+            },
+        })
+    }
+
+    /// The bytes the app placed there and knows to be there.
+    pub fn placement(&self) -> Option<&Placement> {
+        match &self.state {
+            State::Placed { placed } => Some(placed),
+            _ => None,
+        }
+    }
+
+    /// The md5 of the bytes the app placed there and knows to be there.
+    pub fn md5(&self) -> Option<&str> {
+        self.placement().map(|p| p.md5.as_str())
+    }
+
+    pub fn held(&self) -> Option<&Held> {
+        match &self.state {
+            State::Held { held } => Some(held),
+            _ => None,
+        }
+    }
+
+    /// What the ledger says the folder holds there: the bytes placed or held, with their size.
+    /// `None` while a write is under way or nothing is known.
+    pub fn listed(&self) -> Option<(&str, u64)> {
+        match &self.state {
+            State::Placed { placed } => Some((&placed.md5, placed.size)),
+            State::Held { held } => Some((&held.md5, held.size)),
+            State::Writing { .. } | State::Unknown => None,
         }
     }
 }
@@ -94,25 +108,6 @@ pub struct Manifest {
     pub derivations: BTreeMap<String, u64>,
     pub paths: BTreeMap<String, Entry>,
     pub packs: BTreeMap<String, PackEntry>,
-    /// Paths whose heads file a write could not put on disk: it describes older bytes than
-    /// the ones the path holds, so the next look at the path writes it again, after a restart
-    /// too (§5.10).
-    #[serde(
-        rename = "headsDue",
-        default,
-        skip_serializing_if = "BTreeSet::is_empty"
-    )]
-    pub heads_due: BTreeSet<String>,
-    /// Paths whose bytes show changes a seal found in no journal file and not in the fold's
-    /// bytes either (§5.11 K1): those bytes are the only copy of that work, so the next look at
-    /// the path records them as an outside edit instead of writing them over as the app's own
-    /// stale bytes (§6.2), after a restart too.
-    #[serde(
-        rename = "aheadOfJournal",
-        default,
-        skip_serializing_if = "BTreeSet::is_empty"
-    )]
-    pub ahead: BTreeSet<String>,
 }
 
 impl Default for Manifest {
@@ -122,8 +117,6 @@ impl Default for Manifest {
             derivations: current_derivations(),
             paths: BTreeMap::new(),
             packs: BTreeMap::new(),
-            heads_due: BTreeSet::new(),
-            ahead: BTreeSet::new(),
         }
     }
 }
@@ -152,120 +145,25 @@ impl Manifest {
     }
 }
 
-/// `.tc/materialize.intent.json` (§5.10 M3).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Intent {
-    pub writes: Vec<IntentWrite>,
-    pub removes: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IntentWrite {
-    pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub old_md5: Option<String>,
-    pub new_md5: String,
-}
-
-impl Intent {
-    pub fn parse(bytes: &[u8]) -> Option<Self> {
-        serde_json::from_slice(bytes).ok()
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        serde_json::to_vec(self).unwrap_or_default()
-    }
-
-    /// The old and new md5 the intent names for `path`, if any.
-    pub fn md5s_of(&self, path: &str) -> Vec<&str> {
-        self.writes
-            .iter()
-            .filter(|w| w.path == path)
-            .flat_map(|w| w.old_md5.as_deref().into_iter().chain([w.new_md5.as_str()]))
-            .collect()
-    }
-
-    /// The new md5 of each write the intent names for `path`: bytes a rename put there.
-    pub fn new_md5s_of(&self, path: &str) -> Vec<&str> {
-        self.writes
-            .iter()
-            .filter(|w| w.path == path)
-            .map(|w| w.new_md5.as_str())
-            .collect()
-    }
-
-    /// The old md5 of each write the intent names for `path`: bytes a rename replaced, unless
-    /// it never reached the disk.
-    pub fn old_md5s_of(&self, path: &str) -> Vec<&str> {
-        self.writes
-            .iter()
-            .filter(|w| w.path == path)
-            .filter_map(|w| w.old_md5.as_deref())
-            .collect()
-    }
-
-    pub fn names(&self, path: &str) -> bool {
-        self.writes.iter().any(|w| w.path == path) || self.removes.iter().any(|r| r == path)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.writes.is_empty() && self.removes.is_empty()
-    }
-
-    /// Everything either intent names. A path named twice keeps every md5 it was named with,
-    /// since any of them may be on disk (a write that stopped, then a retry of it).
-    pub fn merged(&self, other: &Self) -> Self {
-        let mut out = self.clone();
-        for write in &other.writes {
-            if !out.writes.contains(write) {
-                out.writes.push(write.clone());
-            }
-        }
-        for remove in &other.removes {
-            if !out.removes.contains(remove) {
-                out.removes.push(remove.clone());
-            }
-        }
-        out
-    }
-
-    /// Names `new_md5` and nothing else for `path`: the write went through, so no earlier
-    /// bytes of the path are on disk (§5.10).
-    pub fn narrow_to(&mut self, path: &str, new_md5: &str) {
-        self.writes.retain(|w| w.path != path);
-        self.writes.push(IntentWrite {
-            path: path.to_owned(),
-            old_md5: None,
-            new_md5: new_md5.to_owned(),
-        });
-    }
-
-    /// What the intent names about the paths `done` says are not settled yet.
-    pub fn remaining(&self, done: impl Fn(&str) -> bool) -> Self {
-        Self {
-            writes: self
-                .writes
-                .iter()
-                .filter(|w| !done(&w.path))
-                .cloned()
-                .collect(),
-            removes: self.removes.iter().filter(|r| !done(r)).cloned().collect(),
-        }
-    }
-}
-
-/// A heads file (§3.6): for every record a derived file was built from, the heads its
-/// written bytes stand for by the token rule (§2.7), and, for a book's USFM, a digest of how
-/// the written file shows the record (§11.1 X3, D10), so reconciling an outside edit looks at
-/// the records whose digest changed and no others. Postcard behind a magic prefix; the
-/// format without digests (unit S1's) still parses.
+/// A heads file (§3.6): for each placement the ledger names at a path, by the md5 of its bytes,
+/// the heads of every record the bytes were built from by the token rule (§2.7) and, for a
+/// book's USFM, a digest of how the bytes show each record (§11.1 X3, D10), so reconciling an
+/// outside edit looks at the records whose digest changed and no others. It is written before
+/// the ledger names the bytes (§5.10 M3), so a placement the ledger names always has its heads
+/// here. Postcard behind a magic prefix.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HeadsFile {
+    pub placements: Vec<PlacedHeads>,
+}
+
+/// The heads of one placement.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlacedHeads {
+    pub md5: String,
     pub records: Vec<HeadsRecord>,
 }
 
-/// One record of a heads file.
+/// One record of a placement.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HeadsRecord {
     /// The record's canonical key.
@@ -275,59 +173,64 @@ pub struct HeadsRecord {
     pub shown: Option<[u8; 16]>,
 }
 
-/// The format without digests.
-#[derive(Deserialize)]
-struct HeadsFileV1 {
-    records: Vec<(String, Vec<[u8; 32]>)>,
+/// Marks a heads file keyed by placement.
+const HEADS_MAGIC: &[u8; 4] = b"TCH\x03";
+
+/// The records of a heads file for the heads a file was built from and its digests.
+pub fn heads_records(
+    heads: &[(RecordKey, Vec<ChangeId>)],
+    digests: &[(RecordKey, tc_journal::outside::ShownDigest)],
+) -> Vec<HeadsRecord> {
+    let shown: std::collections::HashMap<&RecordKey, &[u8; 16]> =
+        digests.iter().map(|(k, d)| (k, d)).collect();
+    heads
+        .iter()
+        .map(|(key, ids)| HeadsRecord {
+            key: key_text(key),
+            heads: ids.iter().map(|id| *id.as_bytes()).collect(),
+            shown: shown.get(key).map(|d| **d),
+        })
+        .collect()
 }
 
-/// Marks a heads file that keeps digests.
-const HEADS_MAGIC: &[u8; 4] = b"TCH\x02";
+/// A record key as a heads file names it.
+pub fn key_text(key: &RecordKey) -> String {
+    tc_journal::canon::encode_key(key)
+        .map(|j| j.to_canonical_string())
+        .unwrap_or_default()
+}
 
 impl HeadsFile {
-    pub fn of(
-        heads: &[(RecordKey, Vec<ChangeId>)],
-        digests: &[(RecordKey, tc_journal::outside::ShownDigest)],
-    ) -> Self {
-        let shown: std::collections::HashMap<&RecordKey, &[u8; 16]> =
-            digests.iter().map(|(k, d)| (k, d)).collect();
-        Self {
-            records: heads
-                .iter()
-                .map(|(key, ids)| HeadsRecord {
-                    key: tc_journal::canon::encode_key(key)
-                        .map(|j| j.to_canonical_string())
-                        .unwrap_or_default(),
-                    heads: ids.iter().map(|id| *id.as_bytes()).collect(),
-                    shown: shown.get(key).map(|d| **d),
-                })
-                .collect(),
-        }
+    /// The heads of the placement of bytes `md5`.
+    pub fn get(&self, md5: &str) -> Option<&[HeadsRecord]> {
+        self.placements
+            .iter()
+            .find(|p| p.md5 == md5)
+            .map(|p| p.records.as_slice())
+    }
+
+    /// This file with the heads of `md5` set, keeping only the placements `keep` names.
+    pub fn with(mut self, md5: &str, records: Vec<HeadsRecord>, keep: &[&str]) -> Self {
+        self.placements
+            .retain(|p| p.md5 != md5 && keep.contains(&p.md5.as_str()));
+        self.placements.push(PlacedHeads {
+            md5: md5.to_owned(),
+            records,
+        });
+        self
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = HEADS_MAGIC.to_vec();
-        out.extend(postcard::to_allocvec(&self.records).unwrap_or_default());
+        out.extend(postcard::to_allocvec(&self.placements).unwrap_or_default());
         out
     }
 
+    /// The heads file in `bytes`; `None` when it is not one (a file of an earlier format names
+    /// no placement, so the ledger keeps no heads for it).
     pub fn parse(bytes: &[u8]) -> Option<Self> {
-        if let Some(rest) = bytes.strip_prefix(HEADS_MAGIC.as_slice())
-            && let Ok(records) = postcard::from_bytes(rest)
-        {
-            return Some(Self { records });
-        }
-        let old: HeadsFileV1 = postcard::from_bytes(bytes).ok()?;
-        Some(Self {
-            records: old
-                .records
-                .into_iter()
-                .map(|(key, heads)| HeadsRecord {
-                    key,
-                    heads,
-                    shown: None,
-                })
-                .collect(),
-        })
+        let rest = bytes.strip_prefix(HEADS_MAGIC.as_slice())?;
+        let placements = postcard::from_bytes(rest).ok()?;
+        Some(Self { placements })
     }
 }

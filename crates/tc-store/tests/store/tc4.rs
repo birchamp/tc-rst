@@ -186,7 +186,7 @@ fn a_reopen_after_packs_and_stale_files_materializes_forward_and_records_no_outs
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     save_verse(&handle, 2, 1, "speak what fits sound teaching").unwrap();
     // A checkpoint whose seal ran and whose materialization did not: kill before the
-    // first write of the materialization, found by its intent file.
+    // first write of the materialization, the heads of the first file it writes (§5.10 M3).
     handle.wait_idle();
     let probe = rig.fs.copy();
     let probe_rig = rig_as(probe.clone(), APP, "host-1");
@@ -204,7 +204,7 @@ fn a_reopen_after_packs_and_stale_files_materializes_forward_and_records_no_outs
     let intent = probe
         .log()
         .iter()
-        .find(|op| op.path.to_string_lossy().contains("materialize.intent"))
+        .find(|op| op.path.to_string_lossy().contains(".tc/heads"))
         .map(|op| op.index - start)
         .unwrap();
     drop(probe_handle);

@@ -1,41 +1,347 @@
-//! O9 (`docs/STORAGE.md` §6.2): the classification of every derived path against the
-//! manifest, and O14's results. They run on the writer, which owns the manifest, with the
-//! fold the open ends with (the open) or the newest snapshot (a check's results).
+//! The writer's side of the placement ledger (`docs/STORAGE.md` §6.2): it gathers the facts of a
+//! path (a read, a stat, the fold's answer), asks [`ledger::next`] what to do, keeps the state
+//! it returns and performs the actions. O9 classifies every derived path with it, and O14's
+//! results go through it again. Nothing here decides who wrote a file.
 
-use crate::atomic::{SyncDir, atomic_create_dirs, atomic_remove};
+use crate::atomic::{SyncDir, atomic_create_dirs};
 use crate::error::StoreError;
-use crate::layout::{HEADS, INTENT, METADATA};
-use crate::manifest::{Entry, Intent};
-use crate::materialize::Projected;
+use crate::layout::{HEADS, METADATA};
+use crate::ledger::{
+    self, Action, Disk, Event, Facts, HeldCause, Projection, Stat, State, WaitFor,
+};
+use crate::manifest::Entry;
+use crate::materialize::{FIXED, Projected, is_text_path};
 use crate::open::CheckResult;
 use crate::progress::{Phase, Tracker};
-use crate::vfs::is_not_found;
+use crate::vfs::{FileMeta, is_not_found};
 use crate::writer::Writer;
 use std::collections::{BTreeMap, BTreeSet};
-use tc_journal::fold::{DerivedFile, Notice};
-use tc_journal::{Md5, RepoPath};
+use tc_journal::fold::{Blocked, DerivedFile, Notice};
+use tc_journal::{ChangeId, Md5, RepoPath};
 
 fn md5_hex(bytes: &[u8]) -> String {
     Md5::of(bytes).to_hex()
 }
 
-/// What bytes found at a derived path are to the app (§6.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Found {
-    /// The app's own: what its entry names, or the bytes of a write its intent names, whether
-    /// or not the write's rename reached the disk.
-    Ours,
-    /// The bytes a write the intent names replaced, put back by a program after the app's last
-    /// write: the file's size and time are not its entry's. Either the rename went through and
-    /// a program reverted it (a cloud client restoring a version) or a program wrote the same
-    /// old bytes again; the bytes cannot tell which, so they are an edit with no base, which a
-    /// revert is (§11.1 X3), and at worst a conflict the person settles, never a loss.
-    Reverted,
-    /// None the app wrote.
-    Other,
+/// What performing a read's decision left the caller to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Next {
+    /// Write the projection over the bytes.
+    Write,
+    /// Remove the file.
+    Remove,
+    /// The bytes are what the project writes: only the entry changes.
+    Converged,
+    /// The bytes were copied and handed to the actor to be recorded (§11.1).
+    Recorded,
+    /// The bytes were copied and are held (§6.2).
+    Held,
+    /// Nothing to do now (the path left the projection and its file is gone, a newer fold
+    /// placed it).
+    Done,
+    /// Left as it is for now, and tried again.
+    Blocked(Blocked),
 }
 
 impl Writer {
+    /// The ledger's state of `rel`.
+    pub(crate) fn state_of(&self, rel: &str) -> State {
+        self.manifest
+            .paths
+            .get(rel)
+            .map_or(State::Unknown, |e| e.state.clone())
+    }
+
+    fn set_state(&mut self, rel: &str, state: State) {
+        match (self.manifest.paths.get_mut(rel), state) {
+            (Some(_), State::Unknown) => {
+                self.manifest.paths.remove(rel);
+                self.manifest_changed = true;
+            }
+            (Some(entry), state) => {
+                if entry.state != state {
+                    entry.state = state;
+                    self.manifest_changed = true;
+                }
+            }
+            (None, State::Unknown) => {}
+            (None, state) => {
+                self.manifest
+                    .paths
+                    .insert(rel.to_owned(), Entry::new(state));
+                self.manifest_changed = true;
+            }
+        }
+    }
+
+    /// Hands `event` at `rel` to the ledger, keeps the state it returns, and returns what to
+    /// do.
+    pub(crate) fn apply(&mut self, rel: &str, event: Event, facts: &Facts) -> Vec<Action> {
+        let state = self.state_of(rel);
+        let (next, actions) = ledger::next(&state, &event, facts);
+        if !matches!(next, State::Held { .. }) && matches!(state, State::Held { .. }) {
+            // The hold ended: its notice goes, its copy stays.
+            self.shared.remove_notices_of(rel);
+        }
+        self.set_state(rel, next);
+        actions
+    }
+
+    /// An event that needs no facts (a write's steps, a stat, a recording).
+    pub(crate) fn note(&mut self, rel: &str, event: Event) {
+        let facts = Facts::look(None, false);
+        let _ = self.apply(rel, event, &facts);
+    }
+
+    /// Whether the fold holds what the bytes `md5` at `rel` show (§6.2): every change the
+    /// ledger's heads of them name, applied (its batch complete or released, §7.4), and
+    /// readable unless it is still a head the projection reads (whose readability is the
+    /// projection's own fact). `None` when the ledger keeps no heads for them. A file that is
+    /// no fold's projection (a fixed or carried file) shows no record.
+    pub(crate) fn holds(&mut self, rel: &str, md5: &str) -> Option<bool> {
+        if rel != METADATA && DerivedFile::from_path(rel).is_none() {
+            return Some(true);
+        }
+        let heads = self.heads_of(rel)?;
+        let records = heads.get(md5)?;
+        let current = self.current_heads(rel);
+        Some(records.iter().all(|record| {
+            record
+                .heads
+                .iter()
+                .all(|id| self.shows_held(&ChangeId::from_bytes(*id), &current))
+        }))
+    }
+
+    /// Every head of every record the projection of `rel` reads.
+    pub(crate) fn current_heads(&self, rel: &str) -> std::collections::HashSet<ChangeId> {
+        let keys: Vec<tc_journal::RecordKey> = if rel == METADATA {
+            self.fold
+                .metadata_heads()
+                .into_iter()
+                .map(|(k, _)| k)
+                .collect()
+        } else if let Some(file) = DerivedFile::from_path(rel) {
+            self.fold
+                .file_heads(&file)
+                .into_iter()
+                .map(|(k, _)| k)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        keys.iter().flat_map(|key| self.fold.heads(key)).collect()
+    }
+
+    /// Whether the fold holds change `id` applied and can give its value: a head the
+    /// projection reads (`current`) is read by the projection itself; any other version is
+    /// read here (a journal file cut while open leaves the fold unable to).
+    pub(crate) fn shows_held(
+        &self,
+        id: &ChangeId,
+        current: &std::collections::HashSet<ChangeId>,
+    ) -> bool {
+        self.fold.change(id).is_some_and(|view| view.folded)
+            && (current.contains(id) || self.fold.raw(id).is_some())
+    }
+
+    /// Whether the file's size and time, `meta`, are the ones the ledger keeps for the bytes
+    /// the state stands on. Never on a network drive (§6.2).
+    pub(crate) fn same_stat(&self, state: &State, meta: Option<FileMeta>) -> bool {
+        if self.network {
+            return false;
+        }
+        let Some(meta) = meta else {
+            return false;
+        };
+        let kept = match state {
+            State::Placed { placed } => placed.stat(),
+            State::Writing { old: Some(old), .. } => old.stat(),
+            State::Held { held } => held.mtime_ns.map(|mtime_ns| Stat {
+                size: held.size,
+                mtime_ns,
+            }),
+            State::Writing { old: None, .. } | State::Unknown => None,
+        };
+        kept.is_some_and(|s| s.size == meta.len && s.mtime_ns == meta.mtime_ns)
+    }
+
+    /// Whether `rel` is clean by stat (§6.2): the bytes placed are settled, the file is there
+    /// with their size and time, and the drive is not a network drive. Its bytes are then
+    /// taken to be the placed ones without a read.
+    pub(crate) fn clean_by_stat(&self, rel: &str) -> bool {
+        let state = self.state_of(rel);
+        let State::Placed { placed } = &state else {
+            return false;
+        };
+        placed.settled && self.same_stat(&state, self.vfs.metadata(&self.folder.path(rel)).ok())
+    }
+
+    /// Whether a read that began after the newest time stamp settles bytes whose file has
+    /// this mtime (§6.2).
+    pub(crate) fn settles(&self, mtime_ns: i64) -> bool {
+        !self.network && self.stamp_ns >= mtime_ns.saturating_add(2_000_000_000)
+    }
+
+    /// The facts of a read of `rel` that found `disk`.
+    pub(crate) fn facts_of(
+        &mut self,
+        rel: &str,
+        disk: &Disk,
+        projection: Projection,
+        heads_readable: bool,
+    ) -> Facts {
+        let state = self.state_of(rel);
+        // Bytes that are the projection are converged whatever they show (the table's first
+        // row), so the ledger's heads of them are not read.
+        let converged = |md5: &str| {
+            heads_readable && matches!(&projection, Projection::Bytes { md5: e } if e == md5)
+        };
+        let holds = match disk {
+            Disk::Bytes { md5 } if !converged(md5) => self.holds(rel, md5),
+            Disk::Bytes { .. } | Disk::Missing | Disk::Unreadable => None,
+        };
+        let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
+        Facts {
+            projection,
+            heads_readable,
+            holds,
+            same_stat: self.same_stat(&state, meta),
+            newer_fold: self.written_from_newer_fold(rel),
+        }
+    }
+
+    /// A read of `rel` that found `bytes` (or no file), decided and performed. `projection`:
+    /// what the project writes there, with whether every head it read could be read.
+    pub(crate) fn decide_read(
+        &mut self,
+        rel: &str,
+        bytes: Option<&[u8]>,
+        projection: Projection,
+        heads_readable: bool,
+    ) -> Result<Next, StoreError> {
+        let disk = match bytes {
+            Some(bytes) => Disk::Bytes {
+                md5: self.hash(bytes),
+            },
+            None => Disk::Missing,
+        };
+        let facts = self.facts_of(rel, &disk, projection, heads_readable);
+        let actions = self.apply(rel, Event::Read(disk), &facts);
+        self.perform(rel, bytes, actions)
+    }
+
+    /// Performs the actions of a read's decision.
+    pub(crate) fn perform(
+        &mut self,
+        rel: &str,
+        bytes: Option<&[u8]>,
+        actions: Vec<Action>,
+    ) -> Result<Next, StoreError> {
+        let mut next = Next::Done;
+        for action in actions {
+            next = match action {
+                Action::Write => Next::Write,
+                Action::Remove => Next::Remove,
+                Action::Rebuild { told } => {
+                    if told && let Ok(path) = RepoPath::parse(rel) {
+                        self.notice(Notice::MissingFileRebuilt { path }, None);
+                    }
+                    Next::Write
+                }
+                Action::Refresh => {
+                    if let Some(bytes) = bytes {
+                        self.take_stat(rel, bytes);
+                    }
+                    Next::Converged
+                }
+                Action::Record(base) => {
+                    if let Some(bytes) = bytes {
+                        self.found_outside(rel, bytes, base)?;
+                    }
+                    Next::Recorded
+                }
+                Action::Hold(cause) => {
+                    if let Some(bytes) = bytes {
+                        self.hold(rel, bytes, cause)?;
+                    }
+                    Next::Held
+                }
+                Action::Wait(WaitFor::FileUnreadable) => Next::Blocked(Blocked::FileUnreadable),
+                Action::Wait(WaitFor::ValuesUnreadable) => {
+                    Next::Blocked(Blocked::ValuesUnreadable {
+                        records: u32::try_from(self.fold.unreadable_records().len())
+                            .unwrap_or(u32::MAX)
+                            .max(1),
+                    })
+                }
+                Action::Wait(WaitFor::NewerFold) | Action::Forget => Next::Done,
+            };
+        }
+        Ok(next)
+    }
+
+    /// The file's size and time after a read found the bytes the ledger says are there; they
+    /// settle when the read began 2 s or more after the time (§6.2).
+    fn take_stat(&mut self, rel: &str, bytes: &[u8]) {
+        let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
+        let stat = Stat {
+            size: meta.map_or(bytes.len() as u64, |m| m.len),
+            mtime_ns: meta.map_or(0, |m| m.mtime_ns),
+        };
+        let settled = meta.is_some() && self.settles(stat.mtime_ns);
+        self.note(rel, Event::Stat { stat, settled });
+        // `metadata.json` declares the normalization of the text it lists.
+        if is_text_path(rel)
+            && let Some(entry) = self.manifest.paths.get_mut(rel)
+        {
+            let nfc = Some(unicode_normalization::is_nfc(&String::from_utf8_lossy(
+                bytes,
+            )));
+            if entry.nfc != nfc {
+                entry.nfc = nfc;
+                self.manifest_changed = true;
+            }
+        }
+    }
+
+    /// Holds `rel` (§6.2): a copy of its bytes in `.tc/external/`, the file left as it is, the
+    /// ledger's state held, and a notice. Holding a path again replaces its notice with one
+    /// for the new bytes; both copies stay.
+    pub(crate) fn hold(
+        &mut self,
+        rel: &str,
+        bytes: &[u8],
+        cause: HeldCause,
+    ) -> Result<(), StoreError> {
+        let copy = self.copy_external(rel, bytes)?;
+        let stat = self
+            .vfs
+            .metadata(&self.folder.path(rel))
+            .ok()
+            .map(|m| Stat {
+                size: m.len,
+                mtime_ns: m.mtime_ns,
+            });
+        self.note(
+            rel,
+            Event::Kept {
+                md5: md5_hex(bytes),
+                cause,
+                copy: copy.clone(),
+                stat,
+            },
+        );
+        if let Some(entry) = self.manifest.paths.get_mut(rel) {
+            entry.nfc = is_text_path(rel)
+                .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(bytes)));
+        }
+        self.write_manifest()?;
+        self.shared.remove_notices_of(rel);
+        self.hold_notice(rel, cause, copy);
+        Ok(())
+    }
+
     /// O9 (§6.2): classifies every derived path, reading and projecting only what may have
     /// changed, and marks what to write. Returns the paths taken as converged without being
     /// read, for the storage check (O14).
@@ -43,78 +349,71 @@ impl Writer {
         let files = self.fold.derived_files();
         tracker.phase(Phase::Checking, files.len() as u64 + 1, 0);
         let digests = self.fold.scope_digests(&files);
-        let intent = self
-            .vfs
-            .read(&self.folder.path(INTENT))
-            .ok()
-            .and_then(|b| Intent::parse(&b));
         let versions = self.manifest.versions_current();
         let mut unread: Vec<String> = Vec::new();
         let mut to_project: Vec<(String, DerivedFile, Option<Vec<u8>>)> = Vec::new();
         let projected: BTreeSet<String> = files.iter().map(DerivedFile::path).collect();
         for (file, digest) in files.iter().zip(&digests) {
             let rel = file.path();
-            let named = intent.as_ref().is_some_and(|i| i.names(&rel));
             let entry = self.manifest.paths.get(&rel).cloned();
-            let same_scope = versions
-                && entry
-                    .as_ref()
-                    .is_some_and(|e| e.scope.as_deref() == Some(digest.to_hex().as_str()));
-            // A heads file that lags is written again from the projection (§5.10).
-            let heads_lag = self.heads_lag(&rel);
-            if same_scope && !named && !heads_lag && self.clean_by_stat(&rel) {
+            // The projection of a path whose scope and versions are unchanged is the bytes
+            // the app placed there (I1).
+            let placed_projection = entry
+                .as_ref()
+                .filter(|e| versions && e.scope.as_deref() == Some(digest.to_hex().as_str()))
+                .and_then(|e| e.md5().map(str::to_owned));
+            if placed_projection.is_some() && self.clean_by_stat(&rel) {
                 unread.push(rel);
                 tracker.add(1, 0);
                 continue;
             }
-            let disk = match self.read_derived(&rel) {
-                Ok(disk) => disk,
-                Err(reason) => {
+            match self.read_disk(&rel) {
+                crate::materialize::Disk::Unreadable => {
                     // A file another program holds, or a placeholder: neither damaged nor
                     // gone. Nothing is written over it, and it is tried again (§4.4, §6.1).
-                    self.unreadable_derived(&rel, file, reason);
-                    tracker.add(1, 0);
-                    continue;
+                    self.unreadable_derived(&rel, file);
                 }
-            };
-            match (&disk, &entry) {
-                (Some(bytes), Some(entry))
-                    if same_scope
-                        && !heads_lag
-                        && entry.held.is_none()
-                        && md5_hex(bytes) == entry.md5 =>
+                crate::materialize::Disk::Bytes(bytes)
+                    if placed_projection
+                        .as_deref()
+                        .is_some_and(|m| *m == md5_hex(&bytes)) =>
                 {
-                    // Read, not projected: the bytes are the app's own.
-                    let md5 = entry.md5.clone();
-                    self.refresh_entry(&rel, &md5, bytes.len() as u64, None, None);
+                    // Read, not projected: the bytes are the projection.
+                    let md5 = md5_hex(&bytes);
+                    self.counters.add(&self.counters.derived_read, 1);
+                    let had = entry.clone();
+                    let next =
+                        self.decide_read(&rel, Some(&bytes), Projection::Bytes { md5 }, true)?;
+                    self.after_classified(&rel, file, next, &bytes, None, had);
                 }
-                _ => to_project.push((rel, file.clone(), disk)),
+                crate::materialize::Disk::Bytes(bytes) => {
+                    self.counters.add(&self.counters.derived_read, 1);
+                    to_project.push((rel, file.clone(), Some(bytes)));
+                }
+                crate::materialize::Disk::Missing => to_project.push((rel, file.clone(), None)),
             }
             tracker.add(1, 0);
         }
-        // Paths only the manifest lists: a removal that stopped before M7, or files to go.
+        // Paths only the ledger lists: a removal that stopped before M7, or files to go.
         let listed: Vec<String> = self
             .manifest
             .paths
-            .keys()
-            .filter(|p| {
+            .iter()
+            .filter(|(p, e)| {
                 !projected.contains(*p)
                     && p.as_str() != METADATA
-                    && !crate::materialize::FIXED.contains(&p.as_str())
+                    && !FIXED.contains(&p.as_str())
+                    && e.oid.is_none()
             })
-            .cloned()
+            .map(|(p, _)| p.clone())
             .collect();
         for rel in listed {
-            let entry = self.manifest.paths.get(&rel).cloned();
-            if entry.as_ref().is_some_and(|e| e.oid.is_some()) {
-                continue;
-            }
             match self.vfs.metadata(&self.folder.path(&rel)) {
                 Err(e) if is_not_found(&e) => {
-                    self.manifest.paths.remove(&rel);
-                    self.manifest_changed = true;
+                    let facts = self.facts_of(&rel, &Disk::Missing, Projection::Absent, true);
+                    let _ = self.apply(&rel, Event::Read(Disk::Missing), &facts);
                 }
-                // Still on disk: the materialization removes it (M0, X).
+                // Still on disk: the materialization looks at it and removes it (M0, X).
                 _ => self.dirty.metadata = true,
             }
         }
@@ -123,305 +422,110 @@ impl Writer {
                 to_project.iter().map(|(_, f, _)| f.clone()).collect();
             let mut rendered = self.render_files(&wanted);
             for (rel, file, disk) in to_project {
-                let Some(new) = rendered.remove(&rel) else {
+                let Some((new, readable)) = rendered.remove(&rel) else {
                     continue;
                 };
-                self.classify_one(&rel, &file, disk.as_deref(), &new, intent.as_ref())?;
-                if self.dirty.files.contains(&file) {
-                    self.prerendered.insert(rel, new);
-                }
+                let projection = Projection::Bytes {
+                    md5: md5_hex(&new.bytes),
+                };
+                let had = self.manifest.paths.get(&rel).cloned();
+                let next = self.decide_read(&rel, disk.as_deref(), projection, readable)?;
+                let bytes = disk.unwrap_or_default();
+                self.after_classified(&rel, &file, next, &bytes, Some(new), had);
             }
         }
-        // metadata.json: converged when its entry is clean by stat and lists what it would.
+        // metadata.json: converged when the bytes placed are clean by stat and list what it
+        // would. Any other state is read and decided when it is written (M6).
         let scope = self.metadata_scope();
-        let metadata_ok = versions
-            && self
-                .manifest
-                .paths
-                .get(METADATA)
-                .is_some_and(|e| e.scope.as_deref() == Some(scope.as_str()))
-            && !intent.as_ref().is_some_and(|i| i.names(METADATA))
-            && (self.clean_by_stat(METADATA) || self.metadata_matches_entry());
+        let metadata_ok =
+            versions
+                && self.manifest.paths.get(METADATA).is_some_and(|e| {
+                    e.scope.as_deref() == Some(scope.as_str()) && e.md5().is_some()
+                })
+                && (self.clean_by_stat(METADATA) || self.metadata_matches_entry());
         if !metadata_ok {
             self.dirty.metadata = true;
-            // Its bytes are read and compared when it is written (M6), which asks then what
-            // is asked here of every other path (§6.2).
-            self.unclassified.insert(METADATA.to_owned());
         }
         tracker.add(1, 0);
-        if intent.is_some() && self.dirty.is_empty() {
-            atomic_remove(&*self.vfs, &self.folder.path(INTENT), SyncDir::Now)?;
-            self.open_intent = None;
-        } else {
-            self.open_intent = intent;
-        }
         self.renew_hold_notices();
         Ok(unread)
     }
 
-    /// What bytes of md5 `d` at `rel` are to the app, with `intent` the intent a stopped write
-    /// left (§6.2). The intent's old bytes (and the entry's, which a stopped write's M7 never
-    /// replaced) are the app's only while the file is as the entry says it left it: a rename
-    /// changes its size and time, and so does a program that writes it.
-    pub(crate) fn found_at(&self, rel: &str, d: &str, intent: Option<&Intent>) -> Found {
-        let entry = self.manifest.paths.get(rel);
-        let entry_md5 = entry.is_some_and(|e| e.md5 == d);
-        let Some(intent) = intent.filter(|i| !i.new_md5s_of(rel).is_empty()) else {
-            return if entry_md5 { Found::Ours } else { Found::Other };
-        };
-        if intent.new_md5s_of(rel).contains(&d) {
-            return Found::Ours;
-        }
-        if !entry_md5 && !intent.old_md5s_of(rel).contains(&d) {
-            return Found::Other;
-        }
-        let untouched = entry.is_some_and(|e| {
-            self.vfs
-                .metadata(&self.folder.path(rel))
-                .is_ok_and(|m| m.len == e.size && m.mtime_ns == e.mtime_ns)
-        });
-        if untouched {
-            Found::Ours
-        } else {
-            Found::Reverted
-        }
-    }
-
-    /// Whether the bytes the app wrote at `rel` show changes no journal file holds any more
-    /// (§6.2): a seal found such changes and marked the path (§5.11 K1), or the heads file the
-    /// bytes stand for names a change the fold does not hold (a pending file another program
-    /// removed or cut short before a crash). Those bytes are the only copy of that work.
-    pub(crate) fn shows_lost_changes(&self, rel: &str) -> bool {
-        if self.manifest.ahead.contains(rel) {
-            return true;
-        }
-        self.counters.add(&self.counters.heads_read, 1);
-        self.heads_of(rel).is_some_and(|heads| {
-            heads.records.iter().any(|record| {
-                record
-                    .heads
-                    .iter()
-                    .any(|id| !self.fold.holds(&tc_journal::ChangeId::from_bytes(*id)))
-            })
-        })
-    }
-
-    /// K1 found changes that neither their pending file nor the fold's bytes hold (§5.11): the
-    /// derived files the fold shows them in are the only copy of that work. The manifest marks
-    /// them at once, so the next open records their bytes instead of taking them for the app's
-    /// own stale bytes, even when their heads file does not name the changes (§6.2).
-    pub(crate) fn mark_ahead(&mut self, lost: &[tc_journal::ChangeId]) {
-        // The records whose head a lost change is: the files that read them showed it, when
-        // its value could still be read. (The token rule's heads leave out a head whose value
-        // cannot be read, so the records' heads are asked.)
-        let keys: BTreeSet<tc_journal::RecordKey> = lost
-            .iter()
-            .filter_map(|id| self.fold.change(id))
-            .filter(|view| self.fold.heads(&view.key).contains(&view.id))
-            .map(|view| view.key)
-            .collect();
-        if keys.is_empty() {
-            return;
-        }
-        let names = |heads: &[(tc_journal::RecordKey, Vec<tc_journal::ChangeId>)]| {
-            heads.iter().any(|(key, _)| keys.contains(key))
-        };
-        let mut marked: Vec<String> = self
-            .fold
-            .derived_files()
-            .iter()
-            .filter(|file| names(&self.fold.file_heads(file)))
-            .map(DerivedFile::path)
-            .collect();
-        if names(&self.fold.metadata_heads()) {
-            marked.push(METADATA.to_owned());
-        }
-        let mut changed = false;
-        for path in marked {
-            changed |= self.manifest.ahead.insert(path);
-        }
-        if changed {
-            self.manifest_changed = true;
-            let _ = self.write_manifest();
-        }
-    }
-
-    /// The bytes of a derived file: `None` when it is gone, the reason when it cannot be
-    /// read now.
-    fn read_derived(&self, rel: &str) -> Result<Option<Vec<u8>>, String> {
-        let path = self.folder.path(rel);
-        match self.vfs.read(&path) {
-            Ok(bytes) => {
-                self.counters.add(&self.counters.derived_read, 1);
-                Ok(Some(bytes))
+    /// What a classified path needs next: a write is marked (with its projection kept for the
+    /// job), converged bytes get their scope, and their heads when the ledger did not name
+    /// them with that scope before (`had`), and a blocked path is marked to be tried again.
+    fn after_classified(
+        &mut self,
+        rel: &str,
+        file: &DerivedFile,
+        next: Next,
+        disk: &[u8],
+        new: Option<Projected>,
+        had: Option<Entry>,
+    ) {
+        match next {
+            Next::Write | Next::Remove | Next::Blocked(_) => {
+                self.dirty.files.insert(file.clone());
+                if let Some(new) = new {
+                    self.prerendered.insert(rel.to_owned(), new);
+                }
             }
-            Err(e) if is_not_found(&e) => Ok(None),
-            Err(e) => Err(StoreError::io("read", &path, e).to_string()),
+            Next::Converged => {
+                let scope = self.fold.scope_digest(file).to_hex();
+                let md5 = md5_hex(disk);
+                let named = had.as_ref().is_some_and(|e| {
+                    e.md5() == Some(md5.as_str()) && e.scope.as_deref() == Some(scope.as_str())
+                });
+                if let Some(entry) = self.manifest.paths.get_mut(rel)
+                    && entry.scope.as_deref() != Some(scope.as_str())
+                {
+                    entry.scope = Some(scope);
+                    self.manifest_changed = true;
+                }
+                if !named {
+                    // Bytes the ledger did not name with these heads (another program wrote
+                    // the projection, a write stopped after its rename, the heads moved with
+                    // the same bytes): their heads are the fold's, so a later edit of them
+                    // has its base (§11.1 D7). Best effort.
+                    let digests = new.map(|n| n.digests).unwrap_or_default();
+                    let dir = self.folder.path(HEADS);
+                    let _ = atomic_create_dirs(&*self.vfs, &dir)
+                        .and_then(|()| self.write_heads(rel, &md5, file, &digests, SyncDir::Now));
+                }
+            }
+            Next::Recorded | Next::Held | Next::Done => {}
         }
     }
 
     /// A derived file the open could not read: the person is told (`FileUnreadable`), the
     /// file is left as it is, and the path stays dirty, so the next materialization reads it
-    /// again (M1) and writes it when it can.
-    fn unreadable_derived(&mut self, rel: &str, file: &DerivedFile, reason: String) {
+    /// again (M1) and decides it there.
+    fn unreadable_derived(&mut self, rel: &str, file: &DerivedFile) {
         self.dirty.files.insert(file.clone());
-        self.unclassified.insert(rel.to_owned());
         self.notice(
             Notice::FileUnreadable {
                 path: rel.into(),
-                reason: reason.as_str().into(),
+                reason: "another program has it open, or it is not on this computer yet".into(),
             },
             None,
         );
     }
 
-    /// Whether `metadata.json` holds what the manifest says the app wrote. A file that
-    /// cannot be read now is not known to, so `metadata.json` is written again.
+    /// Whether `metadata.json` holds what the ledger says the app placed. A file that cannot
+    /// be read now is not known to, so `metadata.json` is written again.
     fn metadata_matches_entry(&self) -> bool {
-        let Some(entry) = self.manifest.paths.get(METADATA) else {
+        let Some(md5) = self.manifest.paths.get(METADATA).and_then(|e| e.md5()) else {
             return false;
         };
-        matches!(self.read_derived(METADATA), Ok(Some(bytes)) if md5_hex(&bytes) == entry.md5)
+        matches!(self.read_disk(METADATA), crate::materialize::Disk::Bytes(bytes) if md5_hex(&bytes) == md5)
     }
 
-    /// Takes a path's md5, size and mtime again after a read found bytes the projection
-    /// gives; the entry settles when the read began at least 2 s after its mtime (§6.2).
-    /// `scope` replaces the entry's digest, and `nfc` its normalization, when given.
-    fn refresh_entry(
-        &mut self,
-        rel: &str,
-        md5: &str,
-        size: u64,
-        scope: Option<String>,
-        nfc: Option<bool>,
-    ) {
-        let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
-        let stamp = self.stamp_ns;
-        let network = self.network;
-        if let Some(entry) = self.manifest.paths.get_mut(rel) {
-            let mtime = meta.map_or(entry.mtime_ns, |m| m.mtime_ns);
-            let settled = !network && stamp >= mtime.saturating_add(2_000_000_000);
-            let changed = entry.md5 != md5
-                || entry.size != size
-                || entry.mtime_ns != mtime
-                || entry.settled != settled
-                || entry.held.is_some()
-                || (scope.is_some() && entry.scope != scope)
-                || (nfc.is_some() && entry.nfc != nfc);
-            entry.md5 = md5.to_owned();
-            entry.size = size;
-            entry.mtime_ns = mtime;
-            entry.settled = settled;
-            let was_held = entry.held.take().is_some();
-            if scope.is_some() {
-                entry.scope = scope;
-            }
-            if nfc.is_some() {
-                entry.nfc = nfc;
-            }
-            self.manifest_changed |= changed;
-            if was_held {
-                self.shared.remove_notices_of(rel);
-            }
-        }
-    }
-
-    /// The table of §6.2 for one path whose projection is `new`.
-    fn classify_one(
-        &mut self,
-        rel: &str,
-        file: &DerivedFile,
-        disk: Option<&[u8]>,
-        new: &Projected,
-        intent: Option<&Intent>,
-    ) -> Result<(), StoreError> {
-        let e = md5_hex(&new.bytes);
-        let entry = self.manifest.paths.get(rel).cloned();
-        let Some(disk) = disk else {
-            // Missing: rebuilt, never read as a deletion (I11). A deletion ends a hold too,
-            // which M0 does for the path it writes (§5.10).
-            self.dirty.files.insert(file.clone());
-            if entry.is_some()
-                && let Ok(path) = RepoPath::parse(rel)
-            {
-                self.notice(Notice::MissingFileRebuilt { path }, None);
-            }
-            return Ok(());
-        };
-        let d = md5_hex(disk);
-        if d == e {
-            let scope = self.fold.scope_digest(file).to_hex();
-            // The heads file describes the bytes the entry names (or older ones, when a write
-            // could not put it on disk), and the bytes are the projection's: after a stop
-            // between a rename and its heads file, before a restart too, it is written again,
-            // so a later outside edit has the right base (§5.10, §11.1 D7). One that cannot be
-            // written now is tried again later.
-            let stale = self.heads_lag(rel)
-                || intent.is_some_and(|i| i.names(rel))
-                || entry
-                    .as_ref()
-                    .is_none_or(|en| en.md5 != d || en.scope.as_deref() != Some(scope.as_str()));
-            if stale {
-                let dir = self.folder.path(HEADS);
-                let _ = atomic_create_dirs(&*self.vfs, &dir)
-                    .and_then(|()| self.write_heads(rel, file, &new.digests, SyncDir::Now));
-            }
-            // `metadata.json` declares the normalization of the text it lists, so an entry
-            // made from a read keeps what the read found.
-            let nfc = crate::materialize::is_text_path(rel)
-                .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(disk)));
-            match self.manifest.paths.contains_key(rel) {
-                true => self.refresh_entry(rel, &d, disk.len() as u64, Some(scope), nfc),
-                false => {
-                    let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
-                    self.manifest.paths.insert(
-                        rel.to_owned(),
-                        Entry {
-                            scope: Some(scope),
-                            nfc,
-                            ..Entry::of(d, disk.len() as u64, meta.map_or(0, |m| m.mtime_ns), false)
-                        },
-                    );
-                    self.manifest_changed = true;
-                }
-            }
-            return Ok(());
-        }
-        let found = self.found_at(rel, &d, intent);
-        if let Some(held) = entry.as_ref().and_then(|en| en.held.as_ref()) {
-            if held.md5 == d {
-                // A hold of an edit that an earlier version of the app could only keep is
-                // recorded now (§6.2); one of storage damage stays until the person chooses.
-                if held.cause == crate::manifest::HeldCause::Edit {
-                    return self.found_outside(rel, disk, false);
-                }
-                return Ok(());
-            }
-            // Changed again outside the app: recorded with no base (§6.2); the hold ends.
-            return self.found_outside(rel, disk, true);
-        }
-        match found {
-            Found::Ours => {
-                if self.shows_lost_changes(rel) {
-                    // The app wrote these bytes, but they show changes no journal file holds
-                    // any more: they are the only copy of that work, recorded, never written
-                    // over.
-                    return self.found_outside(rel, disk, false);
-                }
-                self.dirty.files.insert(file.clone());
-                return Ok(());
-            }
-            Found::Reverted => return self.found_outside(rel, disk, true),
-            Found::Other => {}
-        }
-        if self.clean_by_stat(rel) {
-            return self.hold(rel, disk, true);
-        }
-        self.found_outside(rel, disk, false)
-    }
-
-    /// Renders `files`, a book's files together, with the digests of a USFM file's records.
-    fn render_files(&self, files: &BTreeSet<DerivedFile>) -> BTreeMap<String, Projected> {
+    /// Renders `files`, a book's files together, with the digests of a USFM file's records,
+    /// and whether every value the rendering read could be read.
+    pub(crate) fn render_files(
+        &self,
+        files: &BTreeSet<DerivedFile>,
+    ) -> BTreeMap<String, (Projected, bool)> {
         let mut out = BTreeMap::new();
         let mut books = BTreeSet::new();
         for file in files {
@@ -430,29 +534,40 @@ impl Writer {
                     books.insert(book);
                 }
                 None => {
+                    let before = self.fold.values_unreadable();
                     if let Some(projected) = self.fold.render_with_digests(file) {
                         self.counters.add(&self.counters.projected, 1);
+                        let readable = self.fold.values_unreadable() == before;
                         out.insert(
                             file.path(),
-                            Projected {
-                                bytes: projected.bytes,
-                                digests: projected.digests,
-                            },
+                            (
+                                Projected {
+                                    bytes: projected.bytes,
+                                    digests: projected.digests,
+                                },
+                                readable,
+                            ),
                         );
                     }
                 }
             }
         }
         for book in books {
-            for projected in self.fold.render_book_with_digests(book) {
+            let before = self.fold.values_unreadable();
+            let rendered = self.fold.render_book_with_digests(book);
+            let readable = self.fold.values_unreadable() == before;
+            for projected in rendered {
                 if files.contains(&projected.file) {
                     self.counters.add(&self.counters.projected, 1);
                     out.insert(
                         projected.file.path(),
-                        Projected {
-                            bytes: projected.bytes,
-                            digests: projected.digests,
-                        },
+                        (
+                            Projected {
+                                bytes: projected.bytes,
+                                digests: projected.digests,
+                            },
+                            readable,
+                        ),
                     );
                 }
             }
@@ -460,28 +575,33 @@ impl Writer {
         out
     }
 
-    /// O14 results (§6.1): equal bytes settle an entry once its tick is over; different
-    /// bytes are classified again on the actor, where nothing can change them meanwhile.
+    /// O14 results (§6.1): equal bytes settle a placement once its tick is over; different
+    /// bytes are decided again on the writer, where nothing can change them meanwhile.
     pub(crate) fn apply_check(&mut self, results: Vec<CheckResult>) -> Result<(), StoreError> {
         for result in results {
             let Some(entry) = self.manifest.paths.get(&result.rel).cloned() else {
                 continue;
             };
-            if entry.held.is_some() {
+            let Some(placed) = entry.placement().cloned() else {
                 continue;
-            }
+            };
             match &result.md5 {
-                Some(md5) if *md5 == entry.md5 => {
+                Some(md5) if *md5 == placed.md5 => {
                     let settled = !self.network
-                        && entry.size == result.size
-                        && entry.mtime_ns == result.mtime_ns
+                        && placed.size == result.size
+                        && placed.mtime_ns == Some(result.mtime_ns)
                         && result.stamp_ns >= result.mtime_ns.saturating_add(2_000_000_000);
-                    if settled
-                        && !entry.settled
-                        && let Some(e) = self.manifest.paths.get_mut(&result.rel)
-                    {
-                        e.settled = true;
-                        self.manifest_changed = true;
+                    if settled && !placed.settled {
+                        self.note(
+                            &result.rel,
+                            Event::Stat {
+                                stat: Stat {
+                                    size: result.size,
+                                    mtime_ns: result.mtime_ns,
+                                },
+                                settled: true,
+                            },
+                        );
                     }
                 }
                 Some(_) => {
@@ -491,19 +611,18 @@ impl Writer {
                     else {
                         continue;
                     };
-                    let Ok(disk) = self.read_derived(&result.rel) else {
+                    let crate::materialize::Disk::Bytes(disk) = self.read_disk(&result.rel) else {
                         continue;
                     };
-                    let rendered = self.render_files(&BTreeSet::from([file.clone()]));
-                    if let Some(new) = rendered.get(&result.rel) {
-                        let intent = self.open_intent.clone();
-                        self.classify_one(
-                            &result.rel,
-                            &file,
-                            disk.as_deref(),
-                            new,
-                            intent.as_ref(),
-                        )?;
+                    let mut rendered = self.render_files(&BTreeSet::from([file.clone()]));
+                    if let Some((new, readable)) = rendered.remove(&result.rel) {
+                        let projection = Projection::Bytes {
+                            md5: md5_hex(&new.bytes),
+                        };
+                        let had = Some(entry.clone());
+                        let next =
+                            self.decide_read(&result.rel, Some(&disk), projection, readable)?;
+                        self.after_classified(&result.rel, &file, next, &disk, Some(new), had);
                     }
                 }
                 None => {}

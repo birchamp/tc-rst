@@ -6,13 +6,14 @@
 //! app's (the entry's, so only its stat is taken again) or an outside edit, which is examined
 //! and recorded by [`Writer::found_outside`] like any other.
 
+use crate::classify::Next;
 use crate::error::StoreError;
 use crate::layout;
+use crate::ledger::{self, Projection, State};
 use crate::materialize::{Disk, FIXED};
 use crate::reply::{FocusReport, TakenIn};
 use crate::writer::{Recorded, Writer};
-use tc_journal::Md5;
-use tc_journal::fold::{DerivedFile, Notice};
+use tc_journal::fold::DerivedFile;
 
 /// Where `rel` stands: a derived file of the project, `metadata.json`, a fixed file, or
 /// something else (a carried file, a book file the project does not show).
@@ -120,7 +121,7 @@ impl Writer {
         // written by the first job.
         for placement in self.fold.carried_files() {
             let current = self.manifest.paths.get(&placement.path).is_some_and(|e| {
-                e.oid.as_deref() == Some(placement.oid.to_hex().as_str()) && e.held.is_none()
+                e.oid.as_deref() == Some(placement.oid.to_hex().as_str()) && e.held().is_none()
             });
             if !current {
                 self.dirty.carried = true;
@@ -138,13 +139,15 @@ impl Writer {
         self.look_for_new_files(None, &mut report)
     }
 
-    /// One path of the manifest, or a derived, fixed or `metadata.json` path.
+    /// One path of the ledger, or a derived, fixed or `metadata.json` path: read unless clean
+    /// by stat (or held with the hold's size and time), and decided by the ledger (§6.2). A
+    /// look does not project, so it writes nothing itself: what it marks, the job after it
+    /// writes.
     fn look_at(&mut self, rel: &str, report: &mut FocusReport) -> Result<(), StoreError> {
         if self.pending_record.contains_key(rel) || self.busy.contains_key(rel) {
             return Ok(());
         }
         let kind = kind_of(rel);
-        let entry = self.manifest.paths.get(rel).cloned();
         if kind == Kind::Other {
             // A carried file (§11.4), or a file the project knows nothing about.
             return self.look_at_carried_file(rel, report);
@@ -154,20 +157,16 @@ impl Writer {
             Ok(meta) => meta,
             Err(e) if crate::vfs::is_not_found(&e) => {
                 // A deletion is no edit (I11): the file is written again, and a hold ends.
-                if entry.is_some() {
-                    self.end_hold(rel);
-                    if let Some(file) = DerivedFile::from_path(rel) {
-                        if self.fold.projects_file(&file) {
-                            if let Ok(path) = tc_journal::RepoPath::parse(rel) {
-                                self.notice(Notice::MissingFileRebuilt { path }, None);
-                            }
-                            self.dirty.add_file(file);
-                        } else {
-                            self.manifest.paths.remove(rel);
-                            self.manifest_changed = true;
+                if self.manifest.paths.contains_key(rel) {
+                    let projection = match DerivedFile::from_path(rel) {
+                        Some(file) if !self.fold.projects_file(&file) => Projection::Absent,
+                        _ => Projection::NotAsked,
+                    };
+                    if self.decide_read(rel, None, projection, true)? == Next::Write {
+                        match DerivedFile::from_path(rel) {
+                            Some(file) => self.dirty.add_file(file),
+                            None => self.dirty.metadata = true,
                         }
-                    } else if kind == Kind::Metadata {
-                        self.dirty.metadata = true;
                     }
                 }
                 return Ok(());
@@ -177,8 +176,9 @@ impl Writer {
         if meta.kind != crate::vfs::EntryKind::File {
             return Ok(());
         }
-        let held = entry.as_ref().and_then(|e| e.held.clone());
-        if held.is_none() && self.clean_by_stat(rel) {
+        let state = self.state_of(rel);
+        let held_as_is = matches!(state, State::Held { .. }) && self.same_stat(&state, Some(meta));
+        if held_as_is || self.clean_by_stat(rel) {
             return Ok(());
         }
         let disk = match self.read_disk(rel) {
@@ -186,71 +186,48 @@ impl Writer {
             Disk::Missing | Disk::Unreadable => return Ok(()),
         };
         report.read += 1;
-        let md5 = Md5::of(&disk);
-        if let Some(held) = &held {
-            if held.md5 == md5.to_hex() {
-                return Ok(());
-            }
-            // Saved again while held: the app's version is gone, so no base (§6.2).
-            self.found_outside(rel, &disk, true)?;
-            report.found.push(rel.to_owned());
-            return Ok(());
-        }
-        if entry.as_ref().is_some_and(|e| e.md5 == md5.to_hex()) {
-            self.take_stat(rel, &entry, meta.len, meta.mtime_ns);
-            return Ok(());
-        }
-        if self
-            .open_intent
-            .as_ref()
-            .is_some_and(|i| i.md5s_of(rel).contains(&md5.to_hex().as_str()))
-        {
-            // The bytes of a write of this app that stopped before its entry was updated: not
-            // an edit. The write is tried again.
-            match DerivedFile::from_path(rel) {
-                Some(file) => self.dirty.add_file(file),
-                None => self.dirty.metadata = true,
-            }
-            return Ok(());
-        }
         match kind {
-            Kind::Metadata => {
-                if self.keep_edited_metadata(&disk)? {
+            Kind::Derived => {
+                if matches!(
+                    self.decide_read(rel, Some(&disk), Projection::NotAsked, true)?,
+                    Next::Recorded | Next::Held
+                ) {
                     report.found.push(rel.to_owned());
                 }
             }
-            Kind::Fixed => {
-                self.restore_fixed(rel, &disk)?;
-                report.found.push(rel.to_owned());
-            }
-            Kind::Derived => {
-                // A file that equals what the project would write is no edit.
-                self.found_outside(rel, &disk, false)?;
-                report.found.push(rel.to_owned());
+            Kind::Metadata | Kind::Fixed => {
+                let md5 = ledger::Disk::Bytes {
+                    md5: self.hash(&disk),
+                };
+                let facts = self.facts_of(rel, &md5, Projection::NotAsked, true);
+                let actions = self.apply(rel, ledger::Event::Read(md5), &facts);
+                for action in actions {
+                    match action {
+                        // `metadata.json` is written over at once after a copy; a fixed file
+                        // is never recorded, only restored after a copy (§3.5).
+                        ledger::Action::Record(base) if kind == Kind::Metadata => {
+                            if self.keep_edited_metadata(&disk, base)? {
+                                report.found.push(rel.to_owned());
+                            }
+                        }
+                        ledger::Action::Hold(_) if kind == Kind::Metadata => {
+                            if self.keep_edited_metadata(&disk, ledger::Base::Unknown)? {
+                                report.found.push(rel.to_owned());
+                            }
+                        }
+                        ledger::Action::Record(_) | ledger::Action::Hold(_) => {
+                            self.restore_fixed(rel, &disk)?;
+                            report.found.push(rel.to_owned());
+                        }
+                        other => {
+                            self.perform(rel, Some(&disk), vec![other])?;
+                        }
+                    }
+                }
             }
             Kind::Other => {}
         }
         Ok(())
-    }
-
-    /// The size and time of an entry whose bytes the read found to be the entry's.
-    fn take_stat(
-        &mut self,
-        rel: &str,
-        entry: &Option<crate::manifest::Entry>,
-        len: u64,
-        mtime: i64,
-    ) {
-        let settles = self.settles(mtime);
-        if let Some(e) = self.manifest.paths.get_mut(rel)
-            && (e.size != len || e.mtime_ns != mtime || e.settled != settles)
-        {
-            e.size = len;
-            e.mtime_ns = mtime;
-            e.settled = settles;
-            self.manifest_changed = true;
-        }
-        let _ = entry;
     }
 
     /// Files of the folder the manifest does not know: the ones that cannot be ingredients
@@ -290,8 +267,12 @@ impl Writer {
             Kind::Derived => {
                 if let Disk::Bytes(bytes) = self.read_disk(rel) {
                     report.read += 1;
-                    self.found_outside(rel, &bytes, false)?;
-                    report.found.push(rel.to_owned());
+                    if matches!(
+                        self.decide_read(rel, Some(&bytes), Projection::NotAsked, true)?,
+                        Next::Recorded | Next::Held
+                    ) {
+                        report.found.push(rel.to_owned());
+                    }
                 }
             }
             Kind::Other if self.collecting => self.deferred_paths.push(rel.to_owned()),
@@ -320,7 +301,7 @@ impl Writer {
             .manifest
             .paths
             .get(rel)
-            .and_then(|e| e.held.as_ref().map(|h| h.cause));
+            .and_then(|e| e.held().map(|h| h.cause));
         if held.is_none() {
             reply.resolve(Ok(TakenIn::default()));
             return;

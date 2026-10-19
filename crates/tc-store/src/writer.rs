@@ -21,7 +21,7 @@ use crate::handle::{
 };
 use crate::hooks::Point;
 use crate::layout::Folder;
-use crate::manifest::{Intent, Manifest};
+use crate::manifest::Manifest;
 use crate::materialize::Busy;
 use crate::open::CheckResult;
 use crate::project::Dirty;
@@ -193,10 +193,6 @@ pub(crate) struct Writer {
     pub reasons: BTreeMap<String, Blocked>,
     /// The count of unreadable values the person was last told of.
     pub values_told: Option<u32>,
-    /// The intent a stopped materialization left (§5.10 M3): the md5s it names stand for the
-    /// app's own bytes until a group of this session ends cleanly. A path whose rename this
-    /// session saw go through names its new md5 only.
-    pub open_intent: Option<Intent>,
     /// The open's first job runs: a long one shows progress.
     pub opening: bool,
     /// The writer's own handle on the project's repository: blobs, trees and commit objects.
@@ -223,25 +219,16 @@ pub(crate) struct Writer {
     /// the actor answers.
     pub shown_by_path:
         BTreeMap<String, Vec<(tc_journal::RecordKey, tc_journal::outside::ShownDigest)>>,
-    /// The heads file a path should have and the folder lacks: a write of the bytes (or the
-    /// recording of an outside edit) went through, and the heads file that stands for them
-    /// could not be written. The bytes in the folder stand for these heads, so an outside edit
-    /// of them is compared with these, not with the file on disk, which describes the bytes
-    /// before (§5.10, §11.1 D7). Gone when the file is written, or the path removed.
-    pub heads_unwritten: BTreeMap<String, crate::manifest::HeadsFile>,
-    /// The bytes of `metadata.json`'s heads file as this writer last wrote them.
-    pub metadata_heads_written: Option<Vec<u8>>,
-    /// `metadata.json` was renamed into place and its heads file was not written after it: a
-    /// retry writes both again (§5.10).
-    pub metadata_heads_due: bool,
+    /// The base each file examined and sent to the actor was compared with, kept until the
+    /// actor answers: the heads of the bytes it recorded start from it (§11.1 D7).
+    pub bases: BTreeMap<String, crate::ledger::Base>,
+    /// The heads file of each path as this session last wrote or read it (§3.6).
+    pub heads_cache: BTreeMap<String, crate::manifest::HeadsFile>,
     /// Carried files handed to the actor to be recorded, with the blob and size they were
     /// stored as, until the actor answers (§11.4).
     pub pending_carried: BTreeMap<String, (tc_journal::GitOid, u64)>,
     /// Paths the open found that need a read, looked at once the actor runs (§6.1 O9).
     pub deferred_paths: Vec<String>,
-    /// Derived paths O9 could not read: the first compare-and-swap that reads one asks what the
-    /// open would have asked, whether its bytes show changes no journal file holds (§6.2).
-    pub unclassified: BTreeSet<String>,
     /// Who asked for a held file to be taken in, answered when the batch is durable.
     pub waiting: BTreeMap<String, Resolver<Result<crate::reply::TakenIn, StoreError>>>,
     /// The open classifies: a changed path is collected, and the open records it itself.
@@ -318,11 +305,6 @@ impl Writer {
             self.begin_exact(&snapshot, packs, complete);
         } else {
             self.begin(&snapshot, packs, complete);
-        }
-        if let Some(Ok(sealed)) = checkpoint.as_ref().map(|c| &c.sealed)
-            && !sealed.lost.is_empty()
-        {
-            self.mark_ahead(&sealed.lost);
         }
         self.packs_missing = missing;
         self.dirty.absorb(dirty);
@@ -443,8 +425,7 @@ impl Writer {
         // the notice comes back at the next open (§6.2): dismissing it hides it for this
         // session and keeps the copy.
         let held = self.manifest.paths.values().any(|e| {
-            e.held
-                .as_ref()
+            e.held()
                 .is_some_and(|h| Some(&h.copy) == notice.copy.as_ref())
         });
         if held {
@@ -474,17 +455,18 @@ impl Writer {
         let Some(file) = DerivedFile::from_path(rel).filter(|f| self.fold.projects_file(f)) else {
             return Ok(());
         };
-        let held = self
-            .manifest
-            .paths
-            .get(rel)
-            .and_then(|e| e.held.as_ref().map(|h| h.md5.clone()));
-        if let Some(held) = held {
-            self.end_hold(rel);
-            if let Some(entry) = self.manifest.paths.get_mut(rel) {
-                entry.md5 = held;
-            }
+        // The held bytes become the app's to write over; their copy stays. They stand for
+        // nothing the project lacks (the person gave them up), so their heads are the fold's.
+        if let Some(held) = self.manifest.paths.get(rel).and_then(|e| e.held()).cloned() {
+            let records = crate::manifest::heads_records(
+                &self.placed_heads(self.fold.file_heads(&file)),
+                &[],
+            );
+            let dir = self.folder.path(crate::layout::HEADS);
+            crate::atomic::atomic_create_dirs(&*self.vfs, &dir)?;
+            self.put_heads(rel, &held.md5, records, SyncDir::Now)?;
         }
+        self.note(rel, crate::ledger::Event::Restore);
         self.dirty.files.insert(file);
         self.materialize_now()
     }
@@ -719,7 +701,6 @@ mod tests {
             prerendered_seq: 0,
             reasons: BTreeMap::new(),
             values_told: None,
-            open_intent: None,
             opening: false,
             git: None,
             device: DeviceId::local([9; 15]),
@@ -730,12 +711,10 @@ mod tests {
             wrote_group: false,
             pending_record: BTreeMap::new(),
             shown_by_path: BTreeMap::new(),
-            heads_unwritten: BTreeMap::new(),
-            metadata_heads_written: None,
-            metadata_heads_due: false,
+            bases: BTreeMap::new(),
+            heads_cache: BTreeMap::new(),
             pending_carried: BTreeMap::new(),
             deferred_paths: Vec::new(),
-            unclassified: BTreeSet::new(),
             waiting: BTreeMap::new(),
             collecting: false,
             found: Vec::new(),
