@@ -212,6 +212,103 @@ async fn a_command_is_announced_with_its_origin() {
     );
 }
 
+/// D1, AD37: the relay settles every reply whether or not anyone awaits it. A submit whose
+/// future is dropped unpolled (an HTTP caller that went away) is stored, its batch is still
+/// announced as its request's, and the events after it are not held back.
+#[tokio::test]
+async fn a_submit_nobody_awaits_is_stored_and_announced_as_its_request() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    let mut events = handle.subscribe();
+    let key = tit(1, 8);
+    drop(
+        handle.submit(
+            StoreCommand::save_verse(token(handle.as_ref(), &key), "nobody waits".to_owned())
+                .requested_by(rid(7)),
+        ),
+    );
+    let next = save(handle.as_ref(), &tit(1, 9), "the next save")
+        .await
+        .unwrap();
+    let got = committed_until(&mut events, next.seq).await;
+    assert_eq!(
+        got.into_iter()
+            .map(|(_, _, cause)| cause)
+            .collect::<Vec<_>>(),
+        vec![
+            StoreCause::Command {
+                origin: Origin::Request(rid(7))
+            },
+            StoreCause::Command {
+                origin: Origin::Server
+            },
+        ]
+    );
+    assert_eq!(
+        words_of(&handle.snapshot(), &key).as_deref(),
+        Some("nobody waits")
+    );
+    handle.close().await.unwrap();
+    let reopened = world.open(&world.bible);
+    assert_eq!(
+        words_of(&reopened.snapshot(), &key).as_deref(),
+        Some("nobody waits"),
+        "on disk"
+    );
+}
+
+/// D1, AD37: a save the actor still holds when the handle closes is answered as saved, and
+/// its batch is announced as its request's before the event channel ends: the relay waits for
+/// every reply already queued before it stops. The reopened project holds it.
+#[tokio::test]
+async fn a_save_held_at_the_close_is_kept_and_announced_as_its_request() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    let mut events = handle.subscribe();
+    let key = tit(1, 10);
+    world.hooks.hold(Point::BeforeDurablePending);
+    let saving = handle.submit(
+        StoreCommand::save_verse(token(handle.as_ref(), &key), "held at the close".to_owned())
+            .requested_by(rid(8)),
+    );
+    let hooks = world.hooks.clone();
+    tokio::task::spawn_blocking(move || hooks.wait_reached(Point::BeforeDurablePending, 1))
+        .await
+        .unwrap();
+    // The close takes the store and the relay at once; it finishes on a thread of its own.
+    let closing = handle.clone().close();
+    world.hooks.release(Point::BeforeDurablePending);
+    let reply = saving.await.unwrap();
+    assert_eq!(reply.stored, Stored::Durable);
+
+    let mut batches = Vec::new();
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(10), events.recv())
+            .await
+            .expect("the channel ends with the close");
+        match event {
+            Some(StoreEvent::Committed { seq, cause, .. }) => batches.push((seq, cause)),
+            Some(_) => {}
+            None => break,
+        }
+    }
+    assert_eq!(
+        batches,
+        vec![(
+            reply.seq,
+            StoreCause::Command {
+                origin: Origin::Request(rid(8))
+            }
+        )]
+    );
+    closing.await.unwrap();
+    let reopened = world.open(&world.bible);
+    assert_eq!(
+        words_of(&reopened.snapshot(), &key).as_deref(),
+        Some("held at the close")
+    );
+}
+
 /// "The channel ends when the handle closes": every subscriber's channel ends with the close,
 /// and a subscription after it ends at once.
 #[tokio::test]

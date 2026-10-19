@@ -1042,7 +1042,11 @@ carries each batch's `Delta`; `ProjectHandle::counters` is R14; `StoreReply.seq`
 `StoreEvent::Notice` are R16. `crates/tc-app/src/backend/store.rs` adds what the store cannot
 know: who asked for a command, since `Committed` names the batch's changes and is sent before the
 reply resolves, so a relay thread records each reply's changes with the command's `Origin` and the
-events thread waits for that record before it passes a `Committed` on; a close and a drop of
+events thread waits for that record before it passes a `Committed` on (a batch with changes that
+no submit asked for, such as S2's outside edits and E1a's intakes, must not wait for a record:
+the events thread passes it on as `StoreCause::System` as soon as no submit is in flight or the
+relay has settled a reply the actor gave after it, so it waits at most for the actor's next reply;
+E1a maps an intake to `Intake` once tc-store's `Committed` names its devices); a close and a drop of
 tc-store's handle, which wait for the actor, on a thread of their own; a listing that reports a
 folder it cannot list instead of hiding it and leaves out tc-store's staging folders; and an open
 by the exact name the listing holds. Every fold step S1 makes after an open is a command's or a

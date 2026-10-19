@@ -12,7 +12,8 @@
 //!   reply in the order the actor takes the commands and records which request wrote which
 //!   change, whether or not anyone still awaits the reply; the events thread waits for that
 //!   record before it passes a command's `Committed` on, so a person's own save is announced
-//!   as their request's (AD37).
+//!   as their request's (AD37). A batch no submit asked for is passed on as the store's own
+//!   as soon as it cannot be a submit's (`Origins::take`).
 //! - **Nothing blocks a tokio worker.** tc-store's close and drop wait for the actor's
 //!   background work and its join; both run on a thread of their own.
 //! - **The listing hides no folder** and opens only the exact names it lists.
@@ -427,13 +428,45 @@ struct Origins {
 struct OriginState {
     /// By a batch's first change.
     by_change: HashMap<ChangeId, Origin>,
+    /// Submits handed to the actor whose reply is not settled yet.
+    in_flight: usize,
+    /// The highest `seq` of a reply the relay settled. Only the relay raises it, because only
+    /// the relay settles replies in the order the actor gave them.
+    relay_seq: u64,
     /// The relay has stopped: every reply it will ever see is recorded.
     relay_gone: bool,
 }
 
+/// Who settled a reply: the relay, which takes the replies in the order the actor gives
+/// them, or the submit itself, whose reply was there at once (a draft) or after the relay
+/// was gone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettledBy {
+    Relay,
+    Submit,
+}
+
 impl Origins {
-    fn record(&self, change: ChangeId, origin: Origin) {
-        lock(&self.state).by_change.insert(change, origin);
+    /// A submit is about to reach the actor. Counted before it does, so its batch's event
+    /// never finds it neither recorded nor counted.
+    fn begin(&self) {
+        lock(&self.state).in_flight += 1;
+    }
+
+    /// A submit's reply is settled: a stored batch's origin is recorded and the submit is no
+    /// longer in flight, both under one lock.
+    fn settled(&self, reply: Option<&tc_store::StoreReply>, origin: &Origin, by: SettledBy) {
+        let mut state = lock(&self.state);
+        if let Some(reply) = reply {
+            if let Some(first) = reply.changes.first() {
+                state.by_change.insert(*first, origin.clone());
+            }
+            if by == SettledBy::Relay {
+                state.relay_seq = state.relay_seq.max(reply.seq);
+            }
+        }
+        state.in_flight = state.in_flight.saturating_sub(1);
+        drop(state);
         self.changed.notify_all();
     }
 
@@ -442,19 +475,27 @@ impl Origins {
         self.changed.notify_all();
     }
 
-    /// Who asked for the batch whose first change is `change`. The store sends a command's
-    /// `Committed` just before it resolves that command's reply, and every earlier reply is
-    /// resolved already (one actor, in order), so the wait is bounded by the actor's next
-    /// step. A batch no reply names (none, while every batch S1 folds after the open is a
-    /// command's or a second writer's) is the server's.
-    fn take(&self, change: &ChangeId) -> Origin {
+    /// Who asked for the batch whose first change is `change` and whose snapshot is `seq`;
+    /// `None` when no submit of the seam's did. The store sends a command's `Committed` just
+    /// before it resolves that command's reply, so the record may come a moment after the
+    /// event; the wait for it ends as soon as the batch cannot be a submit's:
+    ///
+    /// - no submit is in flight (each is counted before it reaches the actor and settled
+    ///   under the same lock as its record), or
+    /// - the relay settled a reply with this `seq` or a later one: the actor gave that reply
+    ///   after this batch, and the relay settles in the actor's order, so a submit that wrote
+    ///   this batch would have been recorded first.
+    ///
+    /// So a batch the store folds on its own (S2's outside edits, E1a's intakes) never holds
+    /// the project's events back for longer than the next reply the actor gives.
+    fn take(&self, change: &ChangeId, seq: u64) -> Option<Origin> {
         let mut state = lock(&self.state);
         loop {
             if let Some(origin) = state.by_change.remove(change) {
-                return origin;
+                return Some(origin);
             }
-            if state.relay_gone {
-                return Origin::Server;
+            if state.in_flight == 0 || state.relay_seq >= seq || state.relay_gone {
+                return None;
             }
             state = self
                 .changed
@@ -539,14 +580,16 @@ impl StoreHandle {
             return Box::pin(async { Err(CommandError::Closed) });
         };
         // Under the relay's lock, so the relay waits for the replies in the order the actor
-        // takes the commands.
+        // takes the commands, and a reply settled here is recorded before a later command
+        // can reach the actor.
         let relay = lock(&self.relay);
+        self.origins.begin();
         let pending = handle.submit(command);
         if pending.is_ready() {
             // A draft, which the store answers at once beside the actor (R22), must never
             // wait in the relay behind a long command; nor need any reply already there.
+            let answer = settle(pending.wait(), &origin, &self.origins, SettledBy::Submit);
             drop(relay);
-            let answer = settle(pending.wait(), &origin, &self.origins);
             return Box::pin(async move { answer });
         }
         let (tx, rx) = oneshot::channel();
@@ -567,7 +610,7 @@ impl StoreHandle {
             let origins = self.origins.clone();
             return Box::pin(async move {
                 let result = job.pending.await;
-                settle(result, &job.origin, &origins)
+                settle(result, &job.origin, &origins, SettledBy::Submit)
             });
         }
         Box::pin(async move { rx.await.unwrap_or(Err(CommandError::Closed)) })
@@ -579,26 +622,33 @@ fn settle(
     result: Result<tc_store::StoreReply, tc_store::CommandError>,
     origin: &Origin,
     origins: &Origins,
+    by: SettledBy,
 ) -> Answer {
+    origins.settled(result.as_ref().ok(), origin, by);
     match result {
-        Ok(stored) => {
-            if let Some(first) = stored.changes.first() {
-                origins.record(*first, origin.clone());
-            }
-            Ok(reply(stored))
-        }
+        Ok(stored) => Ok(reply(stored)),
         Err(error) => Err(command_error(error)),
+    }
+}
+
+/// Tells the events thread that the relay has stopped, however it stops: a relay that
+/// panicked must not leave the events thread waiting for a record that never comes.
+struct RelayGone<'a>(&'a Origins);
+
+impl Drop for RelayGone<'_> {
+    fn drop(&mut self) {
+        self.0.relay_gone();
     }
 }
 
 /// The relay: every reply, in the actor's order, whether or not anyone still awaits it (an
 /// HTTP caller that went away). It needs no runtime: a oneshot sends from any thread.
 fn relay_loop(jobs: &mpsc::Receiver<Job>, origins: &Origins) {
+    let _gone = RelayGone(origins);
     for job in jobs {
-        let answer = settle(job.pending.wait(), &job.origin, origins);
+        let answer = settle(job.pending.wait(), &job.origin, origins, SettledBy::Relay);
         let _ = job.reply.send(answer);
     }
-    origins.relay_gone();
 }
 
 /// The events thread: the store's events as the seam's, each command's batch with its
@@ -615,13 +665,13 @@ fn events_loop(
                 delta,
                 changes,
             } => {
-                let cause = match changes.first() {
-                    Some(first) => StoreCause::Command {
-                        origin: origins.take(first),
-                    },
-                    // S1's only batch with no command is a second writer's fold, which also
-                    // sends a notice and a mode; the pump names each record's writer from
-                    // the snapshot.
+                let cause = match changes.first().and_then(|first| origins.take(first, seq)) {
+                    Some(origin) => StoreCause::Command { origin },
+                    // No submit of the seam's asked for the batch. It is a second writer's
+                    // fold, which has no change list and also sends a notice and a mode (the
+                    // pump names each record's writer from the snapshot), or a batch the
+                    // store folded on its own (S2's outside edits; E1a maps its intakes to
+                    // `Intake` once tc-store names their devices).
                     None => StoreCause::System,
                 };
                 StoreEvent::Committed { seq, delta, cause }
@@ -1058,6 +1108,227 @@ mod tests {
         ProgressSink::new(Phase::Open(OpenPhase::ReadingChanges))
     }
 
+    fn rid(n: u8) -> tc_api::ids::RequestId {
+        tc_api::ids::RequestId::from_bytes([n; 16])
+    }
+
+    fn current_thread() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+    }
+
+    /// The opened `titus` behind the seam's handle.
+    fn open_titus(backend: &StoreBackend) -> Arc<StoreHandle> {
+        let handle = StoreHandle::start(
+            backend
+                .store
+                .open(
+                    &backend.projects.join("titus"),
+                    &tc_store::OpenOptions::default(),
+                )
+                .unwrap(),
+        )
+        .unwrap();
+        handle.wait_idle();
+        handle
+    }
+
+    /// A save of Titus 1:`v` through tc-store's own handle, as S2's outside edits and E1a's
+    /// intakes will fold a batch: no submit of the seam's asks for it.
+    fn save_outside_the_seam(handle: &StoreHandle, v: u16, words: &str) -> StorePending {
+        let inner = handle.inner();
+        let inner = inner.as_ref().unwrap();
+        inner.submit(Command::SaveVerse {
+            shown: inner.snapshot().token(&verse(v), None).unwrap(),
+            words: words.to_owned(),
+        })
+    }
+
+    /// The `(seq, cause)` of the next `n` batches a subscriber gets, each within 5 s.
+    async fn next_batches(
+        events: &mut UnboundedReceiver<StoreEvent>,
+        n: usize,
+    ) -> Vec<(u64, StoreCause)> {
+        let mut out = Vec::new();
+        while out.len() < n {
+            let event = tokio::time::timeout(Duration::from_secs(5), events.recv())
+                .await
+                .expect("the event comes within 5 s")
+                .expect("the channel is open");
+            if let StoreEvent::Committed { seq, cause, .. } = event {
+                out.push((seq, cause));
+            }
+        }
+        out
+    }
+
+    /// A batch no submit of the seam's asked for (S2's outside edits, E1a's intakes) is
+    /// passed on as the store's own at once, and never holds back the events after it: the
+    /// person's next save is still announced as theirs.
+    #[test]
+    fn a_batch_no_submit_asked_for_never_holds_the_events_back() {
+        let fs = FaultFs::new();
+        let backend = backend_with_titus(&fs, Arc::default());
+        let handle = open_titus(&backend);
+        let mut events = handle.subscribe();
+        let runtime = current_thread();
+        let outside = save_outside_the_seam(&handle, 1, "folded by the store").wait();
+        let outside = outside.unwrap();
+        let own = runtime
+            .block_on(
+                handle.submit(
+                    StoreCommand::save_verse(
+                        handle.snapshot().mint(&verse(2), None).unwrap(),
+                        "the person's".to_owned(),
+                    )
+                    .requested_by(rid(7)),
+                ),
+            )
+            .unwrap();
+        assert_eq!(
+            runtime.block_on(next_batches(&mut events, 2)),
+            vec![
+                (outside.seq, StoreCause::System),
+                (
+                    own.seq,
+                    StoreCause::Command {
+                        origin: Origin::Request(rid(7))
+                    }
+                ),
+            ]
+        );
+        runtime.block_on(handle.close()).unwrap();
+    }
+
+    /// The same batch while a submit waits behind it in the actor: the events thread waits
+    /// for that submit's reply, which the actor gives after the batch, and then passes both
+    /// on, each with its own cause.
+    #[test]
+    fn a_batch_no_submit_asked_for_waits_at_most_for_the_next_reply() {
+        let fs = FaultFs::new();
+        let hooks: Arc<tc_store::Hooks> = Arc::default();
+        let backend = backend_with_titus(&fs, hooks.clone());
+        let handle = open_titus(&backend);
+        let mut events = handle.subscribe();
+        let runtime = current_thread();
+        hooks.hold(tc_store::Point::BeforeDurablePending);
+        let outside = save_outside_the_seam(&handle, 1, "folded by the store");
+        hooks.wait_reached(tc_store::Point::BeforeDurablePending, 1);
+        let own = handle.submit(
+            StoreCommand::save_verse(
+                handle.snapshot().mint(&verse(2), None).unwrap(),
+                "queued behind it".to_owned(),
+            )
+            .requested_by(rid(8)),
+        );
+        hooks.release(tc_store::Point::BeforeDurablePending);
+        let outside = outside.wait().unwrap();
+        let own = runtime.block_on(own).unwrap();
+        assert!(outside.seq < own.seq);
+        assert_eq!(
+            runtime.block_on(next_batches(&mut events, 2)),
+            vec![
+                (outside.seq, StoreCause::System),
+                (
+                    own.seq,
+                    StoreCause::Command {
+                        origin: Origin::Request(rid(8))
+                    }
+                ),
+            ]
+        );
+        runtime.block_on(handle.close()).unwrap();
+    }
+
+    fn written(change: ChangeId, seq: u64) -> tc_store::StoreReply {
+        tc_store::StoreReply {
+            tokens: Vec::new(),
+            new_conflicts: Vec::new(),
+            stored: tc_store::Stored::Durable,
+            seq,
+            changes: vec![change],
+            skipped: Vec::new(),
+        }
+    }
+
+    /// `Origins::take` on a thread of its own, so a take that waits forever fails the test
+    /// instead of hanging it.
+    fn take_on_a_thread(
+        origins: &Arc<Origins>,
+        change: ChangeId,
+        seq: u64,
+    ) -> std::sync::mpsc::Receiver<Option<Origin>> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let origins = origins.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(origins.take(&change, seq));
+        });
+        rx
+    }
+
+    const AT_ONCE: Duration = Duration::from_secs(5);
+    const A_WHILE: Duration = Duration::from_millis(50);
+
+    /// `Origins::take` waits for the record of a batch while a submit may have written it,
+    /// and stops waiting the moment the batch cannot be a submit's: nothing in flight, or a
+    /// later reply settled by the relay, which takes the replies in the actor's order.
+    #[test]
+    fn origins_wait_only_while_the_batch_may_be_a_submits() {
+        let (mine, outside, later) = (
+            ChangeId::of(b"mine"),
+            ChangeId::of(b"outside"),
+            ChangeId::of(b"later"),
+        );
+        let request = Origin::Request(rid(9));
+
+        let origins = Arc::new(Origins::default());
+        assert_eq!(
+            take_on_a_thread(&origins, outside, 1).recv_timeout(AT_ONCE),
+            Ok(None),
+            "nothing in flight"
+        );
+
+        // One submit in flight: the event of its batch waits for its record.
+        origins.begin();
+        let taken = take_on_a_thread(&origins, mine, 2);
+        assert!(
+            taken.recv_timeout(A_WHILE).is_err(),
+            "waits while the submit is in flight"
+        );
+        origins.settled(Some(&written(mine, 2)), &request, SettledBy::Relay);
+        assert_eq!(taken.recv_timeout(AT_ONCE), Ok(Some(request.clone())));
+
+        // Two more in flight, and the relay settles a reply the actor gave after batch 3: a
+        // batch 3 no record names is no submit's, though one submit is still in flight.
+        origins.begin();
+        origins.begin();
+        origins.settled(Some(&written(later, 4)), &request, SettledBy::Relay);
+        assert_eq!(
+            take_on_a_thread(&origins, outside, 3).recv_timeout(AT_ONCE),
+            Ok(None)
+        );
+        assert_eq!(
+            take_on_a_thread(&origins, later, 4).recv_timeout(AT_ONCE),
+            Ok(Some(request.clone()))
+        );
+
+        // A reply settled by its submit (a draft, answered beside the actor) proves nothing
+        // about the actor's order: batch 6 may still be the submit's that is in flight.
+        let drafted = Arc::new(Origins::default());
+        drafted.begin();
+        drafted.begin();
+        drafted.settled(Some(&written(later, 7)), &request, SettledBy::Submit);
+        let taken = take_on_a_thread(&drafted, mine, 6);
+        assert!(
+            taken.recv_timeout(A_WHILE).is_err(),
+            "a submit's own settle does not end the wait"
+        );
+        drafted.settled(Some(&written(mine, 6)), &request, SettledBy::Relay);
+        assert_eq!(taken.recv_timeout(AT_ONCE), Ok(Some(request)));
+    }
+
     /// AD3, R19: a review token in a save cannot be built through the seam (two
     /// `compile_fail` doctests on `StoreCommand`), so the raw command goes the way every
     /// submit goes after `into_parts`, and the actor refuses it; the wire reports it as a
@@ -1119,7 +1390,9 @@ mod tests {
     }
 
     /// Trap 4: tc-store's drop waits for a checkpoint and the actor's join; the seam's handle
-    /// hands it to a thread, so dropping the last handle never blocks its thread.
+    /// hands it to a thread, so dropping the last handle never blocks its thread. The drop
+    /// runs on a thread of the test's own, and the hold is released before the verdict, so a
+    /// drop that blocks fails the test instead of hanging it.
     #[test]
     fn a_handle_dropped_without_close_never_blocks_its_thread() {
         let fs = FaultFs::new();
@@ -1132,21 +1405,17 @@ mod tests {
         hooks.hold(tc_store::Point::BeforeCheckpoint);
         let checkpoint = handle.checkpoint(CheckpointReason::Other("held".into()));
         hooks.wait_reached(tc_store::Point::BeforeCheckpoint, 1);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_time()
-            .build()
-            .unwrap();
         let (tx, rx) = std::sync::mpsc::channel();
-        runtime.block_on(async move {
-            drop(handle);
+        let dropper = std::thread::spawn(move || {
+            // As a tokio worker would drop it.
+            current_thread().block_on(async move { drop(handle) });
             let _ = tx.send(());
         });
-        assert!(
-            rx.recv_timeout(Duration::from_secs(1)).is_ok(),
-            "the drop returned while the checkpoint is held"
-        );
+        let returned = rx.recv_timeout(Duration::from_secs(1)).is_ok();
         hooks.release(tc_store::Point::BeforeCheckpoint);
-        let outcome = runtime.block_on(checkpoint);
+        dropper.join().unwrap();
+        assert!(returned, "the drop returned while the checkpoint is held");
+        let outcome = current_thread().block_on(checkpoint);
         assert_eq!(outcome, CheckpointOutcome::Unchanged);
     }
 }
