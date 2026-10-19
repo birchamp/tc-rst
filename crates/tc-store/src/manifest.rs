@@ -168,6 +168,40 @@ impl Intent {
     pub fn names(&self, path: &str) -> bool {
         self.writes.iter().any(|w| w.path == path) || self.removes.iter().any(|r| r == path)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.writes.is_empty() && self.removes.is_empty()
+    }
+
+    /// Everything either intent names. A path named twice keeps every md5 it was named with,
+    /// since any of them may be on disk (a write that stopped, then a retry of it).
+    pub fn merged(&self, other: &Self) -> Self {
+        let mut out = self.clone();
+        for write in &other.writes {
+            if !out.writes.contains(write) {
+                out.writes.push(write.clone());
+            }
+        }
+        for remove in &other.removes {
+            if !out.removes.contains(remove) {
+                out.removes.push(remove.clone());
+            }
+        }
+        out
+    }
+
+    /// What the intent names about the paths `done` says are not settled yet.
+    pub fn remaining(&self, done: impl Fn(&str) -> bool) -> Self {
+        Self {
+            writes: self
+                .writes
+                .iter()
+                .filter(|w| !done(&w.path))
+                .cloned()
+                .collect(),
+            removes: self.removes.iter().filter(|r| !done(r)).cloned().collect(),
+        }
+    }
 }
 
 /// A heads file (§3.6): for every record a derived file was built from, the heads its

@@ -64,6 +64,15 @@ enum Wrote {
     Refused,
 }
 
+/// A file M1 found already equal to the projection: only its entry changes, and its heads
+/// file when that does not describe the bytes (a write that stopped after its rename).
+struct Converged {
+    file: DerivedFile,
+    md5: String,
+    nfc: bool,
+    digests: Vec<(RecordKey, tc_journal::outside::ShownDigest)>,
+}
+
 /// What one materialization did.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MaterializeReport {
@@ -506,12 +515,13 @@ impl Writer {
         if let Some((tracker, reporter)) = tracker {
             reporter.finish(&tracker);
         }
-        if failed.is_none() && self.open_intent.take().is_some() {
-            // The intent a stopped materialization left is finished: every group is done.
-            let intent = self.folder.path(INTENT);
-            if self.vfs.metadata(&intent).is_ok() {
-                atomic_remove(&*self.vfs, &intent, SyncDir::Now)?;
-            }
+        if failed.is_none()
+            && let Some(left) = self.open_intent.clone()
+        {
+            // The intent a stopped write left is finished: every group is done, but for the
+            // paths that are still refused, whose bytes may be the ones it names.
+            let refused: BTreeSet<&str> = report.blocked.iter().map(String::as_str).collect();
+            self.settle_intent(left.remaining(|path| !refused.contains(path)))?;
         }
         self.retry_blocked(&report, &processed);
         self.shared.emit(crate::handle::StoreEvent::Materialized {
@@ -709,7 +719,7 @@ impl Writer {
         let mut seen: BTreeMap<String, Option<FileMeta>> = BTreeMap::new();
         // Paths whose bytes are the new ones: read (`converged`), or taken from a clean
         // entry without a read (`unread`). Only their entries change.
-        let mut converged: BTreeMap<String, (DerivedFile, String, bool)> = BTreeMap::new();
+        let mut converged: BTreeMap<String, Converged> = BTreeMap::new();
         let mut unread: Vec<DerivedFile> = Vec::new();
         for (path, r) in rendered {
             processed.insert(path.clone());
@@ -755,7 +765,15 @@ impl Writer {
                     let ours = entry.as_ref().map(|e| e.md5.as_str());
                     if d == new {
                         let nfc = is_text(&r.file).then(|| is_nfc(&String::from_utf8_lossy(&disk)));
-                        converged.insert(path, (r.file, d, nfc.unwrap_or(true)));
+                        converged.insert(
+                            path,
+                            Converged {
+                                file: r.file,
+                                md5: d,
+                                nfc: nfc.unwrap_or(true),
+                                digests: r.digests,
+                            },
+                        );
                     } else if ours == Some(d.as_str())
                         || intent_now.md5s_of(&path).contains(&d.as_str())
                     {
@@ -827,7 +845,15 @@ impl Writer {
         let metadata_current = self.metadata_is_current(&metadata_md5);
         if writes.is_empty() && removing.is_empty() && metadata_current {
             // Nothing to write: only entries (scope digests, settled marks) may change.
+            let mut done: BTreeSet<String> = converged.keys().cloned().collect();
+            done.extend(unread.iter().map(DerivedFile::path));
+            done.extend(gone.iter().cloned());
+            done.insert(METADATA.to_owned());
             self.finish_entries(Vec::new(), converged, unread, &gone, &[], None)?;
+            if self.open_intent.is_some() {
+                let left = intent_now.remaining(|path| !done.contains(path));
+                self.settle_intent(left)?;
+            }
             return Ok(());
         }
         // M3: the intent.
@@ -845,16 +871,20 @@ impl Writer {
             new_md5: metadata_md5.clone(),
         });
         intent.removes = removing.clone();
+        // Whatever an earlier write left (a stopped group, an open's intent) stays named: its
+        // bytes may be on disk until a group has written the path (§5.10).
+        let named = intent_now.merged(&intent);
         let tc = self.folder.path(TC);
         atomic_create_dirs(&*self.vfs, &tc)?;
         atomic_write(
             &*self.vfs,
             &tc,
             "materialize.intent.json",
-            &intent.to_bytes(),
+            &named.to_bytes(),
             SyncDir::Now,
         )
         .map_err(|e| e.into_inner())?;
+        self.open_intent = Some(named);
         // M4: the files and their heads files, each folder flushed once (M5).
         let heads_dir = self.folder.path(HEADS);
         atomic_create_dirs(&*self.vfs, &heads_dir)?;
@@ -901,17 +931,7 @@ impl Writer {
                     continue;
                 }
             }
-            let heads = HeadsFile::of(&self.fold.file_heads(&r.file), &r.digests);
-            let heads_name = layout::heads_file(&path);
-            let heads_name = heads_name.rsplit('/').next().unwrap_or_default();
-            atomic_write(
-                &*self.vfs,
-                &heads_dir,
-                heads_name,
-                &heads.to_bytes(),
-                SyncDir::Deferred(&mut dirs),
-            )
-            .map_err(|e| e.into_inner())?;
+            self.write_heads(&path, &r.file, &r.digests, SyncDir::Deferred(&mut dirs))?;
             let nfc = is_text(&r.file).then(|| is_nfc(&String::from_utf8_lossy(&r.bytes)));
             self.counters.add(&self.counters.derived_written, 1);
             written.push((
@@ -973,10 +993,64 @@ impl Writer {
         }
         // M7: the manifest.
         let metadata_entry = metadata_written.then_some((metadata, metadata_md5));
+        let mut done: BTreeSet<String> = written.iter().map(|w| w.0.clone()).collect();
+        done.extend(converged.keys().cloned());
+        done.extend(unread.iter().map(DerivedFile::path));
+        done.extend(removing.iter().chain(&gone).cloned());
+        if metadata_entry.is_some() {
+            done.insert(METADATA.to_owned());
+        }
         self.finish_entries(written, converged, unread, &gone, &removing, metadata_entry)?;
-        // M8.
-        atomic_remove(&*self.vfs, &self.folder.path(INTENT), SyncDir::Now)?;
-        self.open_intent = None;
+        // M8: what this group named is settled; what an earlier write left unsettled stays.
+        self.settle_intent(intent_now.remaining(|path| !done.contains(path)))?;
+        Ok(())
+    }
+
+    /// The heads file of a derived file written (or found equal) from the fold in use: for
+    /// every record the file was built from, the heads its bytes stand for and how it shows
+    /// the record (§3.6). Its directory exists.
+    fn write_heads(
+        &self,
+        rel: &str,
+        file: &DerivedFile,
+        digests: &[(RecordKey, tc_journal::outside::ShownDigest)],
+        sync: SyncDir<'_>,
+    ) -> Result<(), StoreError> {
+        let heads = HeadsFile::of(&self.fold.file_heads(file), digests);
+        let name = layout::heads_file(rel);
+        let name = name.rsplit('/').next().unwrap_or_default();
+        atomic_write(
+            &*self.vfs,
+            &self.folder.path(HEADS),
+            name,
+            &heads.to_bytes(),
+            sync,
+        )
+        .map_err(|e| e.into_inner())
+    }
+
+    /// M8: the intent file names `left`, or goes when nothing is left. The md5s of a path
+    /// whose write stopped, or that another program still refuses, stay the app's own until
+    /// a group has written it, so the next try does not take the app's bytes for an outside
+    /// edit (§6.2).
+    pub(crate) fn settle_intent(&mut self, left: Intent) -> Result<(), StoreError> {
+        let path = self.folder.path(INTENT);
+        if left.is_empty() {
+            self.open_intent = None;
+            return match atomic_remove(&*self.vfs, &path, SyncDir::Now) {
+                Err(e) if e.io_error().is_some_and(is_not_found) => Ok(()),
+                other => other,
+            };
+        }
+        atomic_write(
+            &*self.vfs,
+            &self.folder.path(TC),
+            "materialize.intent.json",
+            &left.to_bytes(),
+            SyncDir::Now,
+        )
+        .map_err(|e| e.into_inner())?;
+        self.open_intent = Some(left);
         Ok(())
     }
 
@@ -1001,7 +1075,7 @@ impl Writer {
     fn finish_entries(
         &mut self,
         written: Vec<(String, DerivedFile, Md5, u64, Option<bool>, String)>,
-        converged: BTreeMap<String, (DerivedFile, String, bool)>,
+        converged: BTreeMap<String, Converged>,
         unread: Vec<DerivedFile>,
         gone: &[String],
         removed: &[String],
@@ -1009,7 +1083,7 @@ impl Writer {
     ) -> Result<(), StoreError> {
         let settle_by = self.stamp_ns;
         let mut files: Vec<DerivedFile> = Vec::new();
-        files.extend(converged.values().map(|(f, _, _)| f.clone()));
+        files.extend(converged.values().map(|c| c.file.clone()));
         files.extend(unread.iter().cloned());
         let digests = self.fold.scope_digests(&files);
         for (path, _, md5, size, nfc, scope) in written {
@@ -1025,8 +1099,28 @@ impl Writer {
             self.manifest_changed = true;
         }
         let mut digests = digests.into_iter();
-        for (path, (_, md5, nfc)) in converged {
+        for (path, found) in converged {
+            let Converged {
+                file,
+                md5,
+                nfc,
+                digests: shown,
+            } = found;
             let digest = digests.next().map(|d| d.to_hex());
+            // The file holds the projection, but the heads file describes the bytes the entry
+            // names: after a write that stopped between its rename and its heads file, or a
+            // projection that changed with the same bytes, it is stale, and a later edit
+            // would be compared with a base the file was never made from (§11.1 D7).
+            let stale = self
+                .manifest
+                .paths
+                .get(&path)
+                .is_none_or(|e| e.md5 != md5 || e.scope != digest);
+            if stale {
+                let dir = self.folder.path(HEADS);
+                atomic_create_dirs(&*self.vfs, &dir)?;
+                self.write_heads(&path, &file, &shown, SyncDir::Now)?;
+            }
             let meta = self.vfs.metadata(&self.folder.path(&path)).ok();
             let size = meta.map_or(0, |m| m.len);
             let mtime = meta.map_or(0, |m| m.mtime_ns);

@@ -500,3 +500,171 @@ fn a_held_derived_file_does_not_stall_the_book() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+// ---------------------------------------------------------------------------------------
+// §5.10, §6.2: a group that stopped after its rename
+// ---------------------------------------------------------------------------------------
+
+fn outside_edit_notices(handle: &ProjectHandle) -> Vec<(u32, bool)> {
+    handle
+        .notices()
+        .into_iter()
+        .filter_map(|n| match n.notice {
+            Notice::OutsideEditRecorded {
+                path,
+                changes,
+                unknown_base,
+                ..
+            } if path.as_str() == "ingredients/TIT.usfm" => Some((changes, unknown_base)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn verse_text_conflicts(handle: &ProjectHandle) -> usize {
+    handle
+        .snapshot()
+        .fold()
+        .conflicts()
+        .filter(|c| {
+            matches!(
+                c.kind,
+                tc_journal::fold::ConflictKind::VerseText
+                    | tc_journal::fold::ConflictKind::VerseStructure
+            )
+        })
+        .count()
+}
+
+/// A project with 1:1 saved twice, the second save not yet written to `TIT.usfm`, and the
+/// number of the write point (counted from the next `leave`) at which the heads file of
+/// `TIT.usfm` is first created: the write point right after the file itself was renamed.
+fn fail_after_the_rename() -> (Rig, std::path::PathBuf, ProjectHandle, u64) {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    save_verse(&handle, 1, 1, "first save").unwrap();
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    handle.wait_idle();
+    // The same steps on a copy tell which write point that is.
+    let probe = rig.fs.copy();
+    let probe_rig = rig_as(probe.clone(), APP, "host-1");
+    let probed = probe_rig
+        .store
+        .open(&folder, &OpenOptions::default())
+        .unwrap();
+    probed.wait_idle();
+    save_verse(&probed, 1, 1, "second save").unwrap();
+    probe.clear_log();
+    let start = probe.ops();
+    probed.leave(Leave::Book(TIT)).wait().unwrap();
+    let log = probe.log();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let renamed = log
+        .iter()
+        .position(|op| op.kind == OpKind::Rename && op.path == usfm)
+        .expect("TIT.usfm is renamed into place");
+    let heads = folder.join(".tc/heads");
+    let k = log[renamed..]
+        .iter()
+        .find(|op| op.kind == OpKind::Create && op.path.starts_with(&heads))
+        .map(|op| op.index - start)
+        .expect("its heads file follows");
+    drop(probed);
+    drop(probe_rig);
+    save_verse(&handle, 1, 1, "second save").unwrap();
+    (rig, folder, handle, k)
+}
+
+/// The bytes of a group that stopped after its rename are the app's own (§6.2): the next group
+/// does not take them for an outside edit, and a later save of the same verse is no conflict
+/// with the one before it.
+#[test]
+fn a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    rig.fs.fail_op(k, std::io::ErrorKind::StorageFull);
+    let failed = handle.leave(Leave::Book(TIT)).wait();
+    assert!(failed.is_err(), "the group stopped: {failed:?}");
+    assert!(
+        String::from_utf8_lossy(&rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap())
+            .contains("second save"),
+        "the rename happened"
+    );
+    save_verse(&handle, 1, 1, "third save").unwrap();
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        outside_edit_notices(&handle),
+        Vec::<(u32, bool)>::new(),
+        "the app's own bytes were taken for an outside edit"
+    );
+    assert_eq!(
+        verse_text_conflicts(&handle),
+        0,
+        "a conflict with its own save"
+    );
+    assert_eq!(words_of(&handle, &verse(1, 1)), "third save");
+    assert!(
+        String::from_utf8_lossy(&rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap())
+            .contains("third save")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The same stop, but a newer save is made and the window gets focus before the group is
+/// tried again: a look at the file finds the app's own bytes, which are none an outside
+/// program wrote.
+#[test]
+fn a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    rig.fs.fail_op(k, std::io::ErrorKind::StorageFull);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    save_verse(&handle, 1, 1, "third save").unwrap();
+    let looked = handle.focus().wait().unwrap();
+    assert!(looked.found.is_empty(), "{looked:?}");
+    handle.wait_idle();
+    assert_eq!(outside_edit_notices(&handle), Vec::<(u32, bool)>::new());
+    assert_eq!(verse_text_conflicts(&handle), 0);
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    assert_eq!(words_of(&handle, &verse(1, 1)), "third save");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The writer's own retry may find the file already equal to the projection, and then the
+/// heads file still describes the bytes before the stopped group: it is written again, so a
+/// later outside edit of the verse the file shows has the right base (§11.1 X3).
+#[test]
+fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    rig.fs.fail_op(k, std::io::ErrorKind::StorageFull);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    // The retry timer converges the file without a new save: the manifest then names the bytes
+    // that are in the file.
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let on_disk = tc_journal::Md5::of(&rig.fs.peek(&usfm).unwrap()).to_hex();
+    wait_for("the retry to settle the file", || {
+        rig.fs
+            .peek(&folder.join(".tc/materialized.json"))
+            .is_some_and(|m| String::from_utf8_lossy(&m).contains(&on_disk))
+    });
+    let edited = String::from_utf8(rig.fs.peek(&usfm).unwrap())
+        .unwrap()
+        .replace("second save", "second save, mended outside");
+    rig.fs.put_unseen(&usfm, edited.as_bytes(), None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        outside_edit_notices(&handle),
+        vec![(1, false)],
+        "recorded with the base the file shows"
+    );
+    assert_eq!(verse_text_conflicts(&handle), 0);
+    assert_eq!(
+        words_of(&handle, &verse(1, 1)),
+        "second save, mended outside"
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}

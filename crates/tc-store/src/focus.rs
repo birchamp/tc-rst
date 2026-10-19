@@ -200,6 +200,19 @@ impl Writer {
             self.take_stat(rel, &entry, meta.len, meta.mtime_ns);
             return Ok(());
         }
+        if self
+            .open_intent
+            .as_ref()
+            .is_some_and(|i| i.md5s_of(rel).contains(&md5.to_hex().as_str()))
+        {
+            // The bytes of a write of this app that stopped before its entry was updated: not
+            // an edit. The write is tried again.
+            match DerivedFile::from_path(rel) {
+                Some(file) => self.dirty.add_file(file),
+                None => self.dirty.metadata = true,
+            }
+            return Ok(());
+        }
         match kind {
             Kind::Metadata => {
                 if self.keep_edited_metadata(&disk)? {

@@ -360,7 +360,14 @@ impl Writer {
                     };
                     let rendered = self.render_files(&BTreeSet::from([file.clone()]));
                     if let Some(new) = rendered.get(&result.rel) {
-                        self.classify_one(&result.rel, &file, disk.as_deref(), &new.bytes, None)?;
+                        let intent = self.open_intent.clone();
+                        self.classify_one(
+                            &result.rel,
+                            &file,
+                            disk.as_deref(),
+                            &new.bytes,
+                            intent.as_ref(),
+                        )?;
                     }
                 }
                 None => {}
