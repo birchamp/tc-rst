@@ -16,8 +16,9 @@ the record the gate in `cargo test` checks (docs/APP-DESIGN.md §7). The tC4 sid
 | `env-rust.mjs` | `tc4 serve --test-hooks` on empty folders under `target/`: the token header, `test/reset`, `test/quiet`, the event stream left out of the wait, every other origin aborted |
 | `capture-rust.mjs` | captures Rust screens into `screens/`, `dom/` and `captures.json` |
 | `behaviour.mjs` | records a sequence of steps from a baseline screen on either side (layer 4) |
-| `measure-masks.mjs` | measures each mask's rectangle on tC4 |
+| `measure-masks.mjs` | measures each mask's rectangle on tC4's baseline screens |
 | `state.mjs` | builds the scenarios' state from this repository's copies of tC4's fixtures |
+| `units.mjs` | the units of §10 and the gallery groups of §7.4, read from docs/APP-DESIGN.md |
 
 ## Capturing
 
@@ -36,7 +37,21 @@ git diff parity/app/report.json                  # review every row that changed
 `--unit` is the unit of §10 that captures. `--layers dom` is a DOM-first capture: a screen whose
 DOM unit comes before its pixels unit (§7.6), compared within its `scopes.json` scope until the
 pixels unit captures it whole. `--backend memory+scripted` marks a screen captured on scripted
-job outcomes. Playwright comes from `parity/tc4-baseline/node_modules` (`npm ci` there).
+job outcomes. `--case <names>` captures gallery cases instead (below). Playwright comes from
+`parity/tc4-baseline/node_modules` (`npm ci` there).
+
+## Gallery cases
+
+Many states have no baseline screen. `parity/view-gallery` draws them with tC4's own views over
+states recorded from real tC4 (APP-DESIGN §7.4, its README), and `cases.json` lists each case:
+its group of §7.4, its scenario, the units that capture its DOM and its pixels, the scope a
+DOM-first case compares, and the sha256 of its tC4 screenshot, DOM and action trace. Each case is
+a row of `report.json` (`kind: case`), `unported` until its units capture it; a case has no
+meaning layer, and its pixels compare only with a Rust capture of the machine in `cases.json`.
+A unit captures a case with `node parity/app/capture-rust.mjs --unit <unit> --case <names>
+[--layers dom]`, through the case's `rust` route in `parity/view-gallery/cases.mjs`, or, for a
+case that is its state as tC4 drew it on a route of the driver alone, that route and the case's
+steps.
 
 ## The gate
 
@@ -66,10 +81,10 @@ mask or scope not found). Nothing excuses a failed row.
 | `behaviour/` | `behaviour.mjs --env rust` only (tC4's: `parity/tc4-baseline/behaviour/`, `--env tc4`) |
 | `report.json`, `diffs/` | `UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record` only |
 | `units.json` | each unit adds its own id in the branch that builds it |
-| `masks.json` | by hand, each mask with the ruling it cites (`build`, or a `Q<n>` that docs/PLAN.md lists as a difference on purpose) and its reason; rectangles by `measure-masks.mjs`. A unit whose rebuilt element differs from tC4's sets the mask's `rust` target |
+| `masks.json` | by hand, each mask with the ruling it cites (`build`, or a `Q<n>` that docs/PLAN.md lists as a difference on purpose) and its reason; rectangles by `measure-masks.mjs` on baseline screens and by `parity/view-gallery/capture.mjs` on gallery cases. A unit whose rebuilt element differs from tC4's sets the mask's `rust` target |
 | `residuals.json` | by hand: a reason for every `differs` row, with exactly the layers it differs in (`pixels`, `dom`, `meaning`, `behaviour`), and the differences no row shows |
 | `scopes.json` | by hand, only for DOM-first screens |
-| `cases.json` | unit A7, for the tC4 view-state gallery |
+| `cases.json` | `parity/view-gallery/capture.mjs` only |
 
 ## What a unit that captures must do
 
@@ -94,4 +109,6 @@ The DOM and meaning layers compare on any machine.
 
 `node --test parity/app/observe.test.mjs parity/app/env-rust.test.mjs` (CI runs both; the
 browser tests of `env-rust.test.mjs` run with `TC4_BIN=target/debug/tc4
-TC4_UI=target/tc-ui-app`), and `cargo test -p tc-ui --test screen_record`.
+TC4_UI=target/tc-ui-app`), `node --test parity/view-gallery/view-gallery.test.mjs` (CI runs its
+record checks; its browser tests run with `TC4_ROOT`), and
+`cargo test -p tc-ui --test screen_record`.

@@ -1,0 +1,20 @@
+{
+  "case": "align-unavailable-missing",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "openAlign",
+      "args": []
+    },
+    {
+      "at": "mount",
+      "name": "loadAlignIndex",
+      "args": []
+    },
+    {
+      "at": "mount",
+      "name": "runPreflight",
+      "args": []
+    }
+  ]
+}

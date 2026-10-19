@@ -1,5 +1,5 @@
 {
-  "about": "What the four layers of APP-DESIGN §7.3 find for every baseline screen (manifest order) and gallery case: pixels, the DOM, what the DOM shows (meaning) and behaviour, between tC4's record (parity/tc4-baseline) and the Rust app's captures (captures.json). crates/tc-ui/tests/screen_record.rs computes it from the committed files and fails when this file differs; UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record rewrites it. Status: same, declared (every difference inside a mask of masks.json), differs (explained in residuals.json), unported (`missing` names the unit that captures each layer), failed (nothing excuses it).",
+  "about": "What the four layers of APP-DESIGN §7.3 find for every baseline screen (manifest order) and then every case of the tC4 view-state gallery (cases.json order, APP-DESIGN §7.4): pixels, the DOM, what the DOM shows (meaning) and behaviour, between tC4's record (parity/tc4-baseline for a screen, parity/view-gallery for a case) and the Rust app's captures (captures.json). A case has no meaning layer. crates/tc-ui/tests/screen_record.rs computes it from the committed files and fails when this file differs; UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record rewrites it. Status: same, declared (every difference inside a mask of masks.json), differs (explained in residuals.json), unported (`missing` names the unit that captures each layer), failed (nothing excuses it).",
   "baseline": {
     "tc4Commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e",
     "machine": {
@@ -13,11 +13,11 @@
   },
   "rust": null,
   "totals": {
-    "rows": 62,
+    "rows": 130,
     "same": 0,
     "declared": 0,
     "differs": 0,
-    "unported": 62,
+    "unported": 130,
     "failed": 0
   },
   "rows": [
@@ -763,6 +763,754 @@
         "pixels": "B10",
         "dom": "B10",
         "meaning": "B10"
+      }
+    },
+    {
+      "name": "conflict-review",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B11",
+        "dom": "B11"
+      }
+    },
+    {
+      "name": "conflict-review-selected",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B11",
+        "dom": "B11"
+      }
+    },
+    {
+      "name": "conflict-review-mine",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B11",
+        "dom": "B11"
+      }
+    },
+    {
+      "name": "cc-obs",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B8",
+        "dom": "B8"
+      }
+    },
+    {
+      "name": "cc-obs-wrapped",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B8",
+        "dom": "B8"
+      }
+    },
+    {
+      "name": "open-progress-journal",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B3",
+        "dom": "B3"
+      }
+    },
+    {
+      "name": "open-progress-state",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B3",
+        "dom": "B3"
+      }
+    },
+    {
+      "name": "open-progress-prepare",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B3",
+        "dom": "B3"
+      }
+    },
+    {
+      "name": "upgrade-set",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "upgrade-set-harmless",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "upgrade-set-blocked",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "upgrade-set-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "upgrade-text",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "upgrade-repin",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "gateway-change",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "gateway-change-busy",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "gateway-change-blocked",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "gateway-change-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "gateway-change-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C8",
+        "dom": "C8"
+      }
+    },
+    {
+      "name": "section-empty-confirm",
+      "kind": "case",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B4b",
+        "dom": "B4b"
+      }
+    },
+    {
+      "name": "license",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "A5"
+      }
+    },
+    {
+      "name": "net-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "A8"
+      }
+    },
+    {
+      "name": "share-progress-preparing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "E1b",
+        "dom": "E1b"
+      }
+    },
+    {
+      "name": "share-progress-create",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "E1b",
+        "dom": "E1b"
+      }
+    },
+    {
+      "name": "share-progress-push",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "E1b",
+        "dom": "E1b"
+      }
+    },
+    {
+      "name": "share-done",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "E1b",
+        "dom": "E1b"
+      }
+    },
+    {
+      "name": "import-files",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "import-review-usfm",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "import-review-tc3",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "import-working",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "import-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "add-book-pick",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C6",
+        "dom": "C6"
+      }
+    },
+    {
+      "name": "add-book-pick-multi",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C6",
+        "dom": "C6"
+      }
+    },
+    {
+      "name": "add-book-usfm",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C6",
+        "dom": "C6"
+      }
+    },
+    {
+      "name": "add-book-usfm-files",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "C6",
+        "dom": "C6"
+      }
+    },
+    {
+      "name": "feedback-sending",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-sent",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-offline",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-timeout",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-refused",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-not-configured",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-no-desktop",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "signin-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9b",
+        "dom": "A8"
+      }
+    },
+    {
+      "name": "check-empty-none",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "check-empty-all-dropped",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "check-empty-missing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "check-empty-versification-unavailable",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "check-empty-versification-unknown",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "check-deriving",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "check-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "check-rail-empty",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "check-picker-no-items",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a"
+      }
+    },
+    {
+      "name": "align-unavailable-undrafted",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "align-unavailable-unpinned",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "align-unavailable-missing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "align-unavailable-versification-unavailable",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "align-unavailable-no-counterpart",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "align-unavailable-versification-unknown",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "align-unavailable-unreadable",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "align-loading",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "align-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6"
+      }
+    },
+    {
+      "name": "home-loading",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2"
+      }
+    },
+    {
+      "name": "home-empty",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2"
+      }
+    },
+    {
+      "name": "home-list-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2"
+      }
+    },
+    {
+      "name": "home-open-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2"
+      }
+    },
+    {
+      "name": "home-checkpoint-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2"
+      }
+    },
+    {
+      "name": "home-resume",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2"
+      }
+    },
+    {
+      "name": "import-toast",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
       }
     }
   ]

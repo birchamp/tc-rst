@@ -13,6 +13,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { recordSequence } from './behaviour.mjs';
+import { caseRoute, mergeCaptures } from './capture-rust.mjs';
 import { REPO, newRequestId, notYet, rustTracks, startRustEnv } from './env-rust.mjs';
 import { CHROMIUM_ARGS, captureScreen, settle, trackRequests } from './observe.mjs';
 import { designUnits } from './units.mjs';
@@ -44,6 +45,39 @@ test('the units of the design are read from its section 10', () => {
   const doc = ['## 9. Before', '| A99 not here |', '## 10. Work breakdown', '| Unit | Scope |', '|---|---|',
     '| A6b Parity harness | x |', '| G0 Electronite spike | y |', '| B1a seed | z |', 'text', '## 11. Risks', '| C9 after |'].join('\n');
   assert.deepEqual([...designUnits(doc)], ['A6b', 'G0', 'B1a']);
+});
+
+test('a screens-only rerun keeps the case entries, and a case rerun keeps the screens', () => {
+  const screens = [{ name: 'home' }, { name: 'about' }];
+  const cases = [{ name: 'home-empty' }, { name: 'license' }];
+  const previous = [
+    { name: 'about', kind: 'screen', by: 'A5' },
+    { name: 'license', kind: 'case', by: 'A5' },
+  ];
+  assert.deepEqual(
+    mergeCaptures(previous, [{ name: 'home', kind: 'screen', by: 'B2' }], screens, cases).map((e) => `${e.kind}:${e.name}:${e.by}`),
+    ['screen:home:B2', 'screen:about:A5', 'case:license:A5'],
+  );
+  assert.deepEqual(
+    mergeCaptures(previous, [{ name: 'license', kind: 'case', by: 'B2' }, { name: 'home-empty', kind: 'case', by: 'B2' }], screens, cases).map((e) => `${e.kind}:${e.name}:${e.by}`),
+    ['screen:about:A5', 'case:home-empty:B2', 'case:license:B2'],
+  );
+  // A case and a screen of one name are two entries (the gate refuses such a case anyway).
+  assert.equal(mergeCaptures([{ name: 'home', kind: 'screen' }], [{ name: 'home', kind: 'case' }], screens, [{ name: 'home' }]).length, 2);
+});
+
+test('a case takes its rust route, or its state\'s route when it is that state as tC4 drew it', async () => {
+  const route = async () => {};
+  const rust = async () => {};
+  const portable = { portable: true, route };
+  assert.equal(caseRoute({ rust }, { portable: false, route }), rust);
+  assert.equal(caseRoute({}, { portable: false, route }), null, 'a route that writes into the project is not the Rust app\'s');
+  assert.equal(caseRoute({ patch: () => ({}) }, portable), null, 'a patched case is a state the route does not reach');
+  assert.equal(caseRoute({ returns: { x: { value: 1 } } }, portable), null);
+  const steps = [];
+  const run = caseRoute({ steps: [] }, { portable: true, route: async (app) => steps.push(['route', app.page]) });
+  await run({ page: 'the page' }, null);
+  assert.deepEqual(steps, [['route', 'the page']]);
 });
 
 // ---- with tc4 and a browser ----------------------------------------------------------------
