@@ -28,7 +28,7 @@ const choose = (label) => [{ click: '[data-testid="language-select"]' }, { click
  * { move: [x, y] }, { key: 'Enter' } or { type: 'jo' }; `wait` is how long to let the page move
  * before the snapshot (350 ms unless given: the panel motion takes 240).
  *
- * Unit A5's two (APP-DESIGN 10). No step moves the focus out of the menu or the dialog into
+ * Unit A5's three (APP-DESIGN 10). No step moves the focus out of the menu or the dialog into
  * Home's content (Tab, a click outside): Home is the stand-in on the Rust side until B2, so the
  * focus line would differ for a reason that is not the menu's. B2 adds Tab to the keyboard
  * sequence.
@@ -65,6 +65,27 @@ export const SEQUENCES = [
       ...reopenLanguage,
       ...choose('Español (Latinoamérica)'),
       { mouse: [5, 400] },
+    ],
+  },
+  {
+    // A controlled text box keeps its DOM in step with what is typed: React writes an input's
+    // `value` attribute and a textarea's text (its defaultValue) at every update. The Message
+    // box is the design system's TextArea, Name and Email its TextField. Send without the
+    // desktop bridge says so, and Cancel and Report a problem keep the text.
+    name: 'feedback-typing',
+    screen: 'feedback',
+    steps: [
+      { click: '[data-testid="feedback-message"]' },
+      { type: 'hello' },
+      { click: '#fb-name' },
+      { type: 'Ana' },
+      { click: '[data-testid="feedback-send"]' },
+      { click: '[data-testid="feedback-cancel"]' },
+      { click: '[data-testid="account-menu"]' },
+      { click: '[data-testid="account-report"]' },
+      { click: '[data-testid="feedback-message"]' },
+      { key: 'Control+End' },
+      { type: ' again' },
     ],
   },
 ];

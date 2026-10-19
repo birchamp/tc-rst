@@ -209,22 +209,27 @@ fn form(
             })
         }
     };
-    let result = {
+    // A memo, so a keystroke, which changes the report but not its result, keeps the callout's
+    // node as React keeps it.
+    let not_sent = {
         let fb = fb.clone();
-        move || {
-            let why = fb.with(|fb| match fb.as_ref().and_then(|f| f.result) {
+        Memo::new(move |_| {
+            fb.with(|fb| match fb.as_ref().and_then(|f| f.result) {
                 Some(FeedbackResult::NotSent(why)) => Some(why),
                 Some(FeedbackResult::Sent) | None => None,
-            })?;
-            Some(view! {
-                <Callout
-                    tone=CalloutTone::Warn
-                    attrs=Attrs::from([("role", "alert"), ("data-testid", "feedback-result"), ("data-result", reason_name(why))])
-                >
-                    {move || format!("{} {}", t(keys::feedback::NOT_SENT, &[]), t_dyn(why.key(), &[], None))}
-                </Callout>
             })
-        }
+        })
+    };
+    let result = move || {
+        let why = not_sent.get()?;
+        Some(view! {
+            <Callout
+                tone=CalloutTone::Warn
+                attrs=Attrs::from([("role", "alert"), ("data-testid", "feedback-result"), ("data-result", reason_name(why))])
+            >
+                {move || format!("{} {}", t(keys::feedback::NOT_SENT, &[]), t_dyn(why.key(), &[], None))}
+            </Callout>
+        })
     };
     let pre = crate::css! {
         "margin": "6px 0 0",

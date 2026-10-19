@@ -406,7 +406,15 @@
           "feedback-attachment"
         ],
         "firstDiffs": []
-      }
+      },
+      "behaviour": [
+        {
+          "sequence": "feedback-typing",
+          "steps": 12,
+          "same": true,
+          "firstDiff": null
+        }
+      ]
     },
     {
       "name": "new-obs",
