@@ -19,6 +19,7 @@ mod saves;
 mod shell;
 mod state;
 mod stream;
+mod translate;
 pub mod understand;
 mod view_error;
 
@@ -514,6 +515,8 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     if probe {
         probe::register(&saves);
     }
+    #[cfg(feature = "test-hooks")]
+    translate::register(&saves);
     saves.restore(&hello);
     saves.guard_close();
     let runtime = Runtime::new(api, cache, state, saves.clone(), Rc::clone(busy));

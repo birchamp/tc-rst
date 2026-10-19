@@ -35,5 +35,7 @@
   "syncResult.error.readOnly": "This project is open read-only, so it cannot sync.",
   "syncResult.error.tc4TeamRepository": "This project is shared by translationCore 4, so the sync stopped. Nothing changed. Move the team to the new translationCore first.",
   "syncResult.receivedKept": "Your teammates' changes were received and kept.",
+  "translate.changedWhileTyping": "{name} changed this verse while you were typing. Your text will be kept as a second version.",
+  "translate.changedWhileTypingUnnamed": "This verse was changed while you were typing. Your text will be kept as a second version.",
   "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed."
 }

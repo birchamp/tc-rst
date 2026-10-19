@@ -255,6 +255,17 @@ fn resource_keys() -> Vec<tc_api::query::QueryKey> {
     ]
 }
 
+impl CachedQuery for tc_api::editor::Chapters {
+    /// Translate's text: any change in the book (B4a).
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, vec![tc_api::query::QueryKey::Book(self.book)])
+    }
+
+    fn view(ok: &Self::Ok) -> Option<tc_api::ids::ViewSeq> {
+        Some(ok.view)
+    }
+}
+
 impl CachedQuery for tc_api::editor::Sources {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         project_read(&self.at, resource_keys())

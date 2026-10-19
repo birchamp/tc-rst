@@ -98,6 +98,8 @@ struct Inner {
     timer: Cell<Option<i32>>,
     tick: RefCell<Option<Closure<dyn FnMut()>>>,
     indicator: ArcRwSignal<Indicator>,
+    /// Counts the machine's runs, so a view can follow what it reads with `notice` or `state`.
+    changes: ArcRwSignal<u64>,
     can_close: Cell<Option<bool>>,
     hooks: RefCell<Vec<(GateHookId, GateHook)>>,
     next_hook: Cell<u64>,
@@ -142,6 +144,7 @@ impl Saves {
                     commit_error: false,
                     retry: indicator::Retry::Save,
                 }),
+                changes: ArcRwSignal::new(0),
                 can_close: Cell::new(None),
                 hooks: RefCell::new(Vec::new()),
                 next_hook: Cell::new(0),
@@ -295,6 +298,11 @@ impl Saves {
 
     pub fn indicator(&self) -> ArcRwSignal<Indicator> {
         self.0.indicator.clone()
+    }
+
+    /// Changes after every run of the machine: a view that reads a field's `notice` tracks it.
+    pub fn changes(&self) -> ArcRwSignal<u64> {
+        self.0.changes.clone()
     }
 
     /// Everything saved, aligners included; a failed checkpoint does not count (6.5).
@@ -673,6 +681,7 @@ impl Saves {
         let aligns = self.align_saves();
         let shown = indicator::indicator(worst, &aligns, self.checkpoint_failed(), &failed);
         self.0.indicator.try_set(shown);
+        self.0.changes.try_update(|n| *n = n.wrapping_add(1));
         let clean = indicator::all_clean(worst, &aligns);
         if self.0.can_close.replace(Some(clean)) != Some(clean) {
             if bridge::has_bridge() {

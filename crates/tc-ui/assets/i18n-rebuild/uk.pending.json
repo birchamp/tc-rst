@@ -34,5 +34,7 @@
   "syncResult.error.readOnly",
   "syncResult.error.tc4TeamRepository",
   "syncResult.receivedKept",
+  "translate.changedWhileTyping",
+  "translate.changedWhileTypingUnnamed",
   "upload.notWritten"
 ]

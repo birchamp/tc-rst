@@ -7,6 +7,8 @@
 
 pub mod account_menu;
 pub mod book_rail;
+pub mod conflict_markers;
+pub mod draft_chrome;
 pub mod help_panel;
 pub mod helps_panel;
 pub mod home;
@@ -15,6 +17,7 @@ pub mod open_progress;
 pub mod panel_icons;
 pub mod rail_chrome;
 pub mod source_verse;
+pub mod translate;
 pub mod understand;
 
 use std::cell::{Cell, RefCell};
