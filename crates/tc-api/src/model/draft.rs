@@ -23,8 +23,12 @@
 //!   offered entries (written before the reply), and only then do the buffer slots go, each
 //!   only while it still holds that text. *Keep* and *Discard* then touch one entry by its
 //!   number, never the field's other texts or the page's typing since.
-//! - **A slot goes only while it holds the text it was offered with**, in the buffer and in the
-//!   mirror alike ([`Action::Settle`]): newer typing in the same slot stays.
+//! - **A slot goes only while it holds the text it was offered with**, or in the buffer an older
+//!   one of its run ([`Action::Settle`]): newer typing in the same slot stays, and the page
+//!   writes its own text again into what the settling freed.
+//! - **A run's stored draft is judged by that run's buffer**, once: it goes behind the run's
+//!   newer entry of the field, or, behind the shell's mirror, when the run has none (it ended
+//!   clean); otherwise the offer's own entry takes it over.
 //! - **The page's own fields are never offered**: a field this run's save machine holds saves
 //!   itself, so the page leaves it out of what it sends (§6.6, `buffered_lines`).
 
