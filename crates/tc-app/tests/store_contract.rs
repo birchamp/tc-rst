@@ -19,6 +19,8 @@ mod counting_store;
 mod store_cases;
 #[path = "support/store_world.rs"]
 mod store_world;
+#[path = "store_contract/through_app.rs"]
+mod through_app;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
