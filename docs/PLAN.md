@@ -111,6 +111,18 @@ owner is told of each:
   (`parity/ds-gallery/residuals.json`); the `-script` one chooses the row in the same task as the
   switch-off, before the list can close.
 
+The owner's answers of 2026-10-19 (`docs/TC4-DELTA-2026-10-19.md` §5) and the rebuild's own
+rule that no one's work disappears without a word add these (unit B2):
+
+- Home lists every folder that holds a project's files but cannot be opened, with its name
+  and the reason, and offers nothing to press. tC4 4.0 leaves such a folder off Home.
+- Choosing a language whose Door43 code a Scripture Burrito cannot hold (such as
+  `acm-x-lebarabic`) fills the Code box with a code it can hold that keeps every letter
+  (`acm-x-lebarabi-c`), and one sentence says so. tC4 4.0 stores "Undetermined" (#582, Q35).
+- A book tile counts a verse as drafted when it has words, whatever line they are on. tC4 4.0
+  reads a verse only up to its first paragraph marker, so a poem verse whose words are on
+  `\q` lines counts as not drafted there (#572).
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

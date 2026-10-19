@@ -1,0 +1,146 @@
+{
+  "path": "home/list",
+  "kind": "query",
+  "net": null,
+  "request": {},
+  "reply": {
+    "type": "ok",
+    "value": {
+      "cards": [
+        {
+          "project": "sample_burrito_obs",
+          "name": "Historias",
+          "tag": {
+            "type": "unknown"
+          },
+          "dir": "rtl",
+          "kind": "stories",
+          "door43": {
+            "type": "local"
+          },
+          "books": {
+            "type": "known",
+            "value": []
+          },
+          "stories": {
+            "drafted": {
+              "type": "known",
+              "value": 1
+            },
+            "stories": [
+              {
+                "story": 1,
+                "title": "La Creación",
+                "drafted": {
+                  "type": "known",
+                  "value": 13
+                }
+              },
+              {
+                "story": 2,
+                "title": "",
+                "drafted": {
+                  "type": "unknown"
+                }
+              }
+            ],
+            "recent": [
+              {
+                "story": 1,
+                "at": 1792378282100
+              }
+            ]
+          },
+          "conflicts": {
+            "type": "unknown"
+          }
+        },
+        {
+          "project": "sample_burrito",
+          "name": "Español Biblia",
+          "tag": {
+            "type": "known",
+            "value": "es-419"
+          },
+          "dir": "ltr",
+          "kind": "bible",
+          "door43": {
+            "type": "shared",
+            "value": {
+              "place": {
+                "owner": "jdoe",
+                "name": "es-419_tit_text_reg",
+                "server": "qa.door43.org"
+              }
+            }
+          },
+          "books": {
+            "type": "known",
+            "value": [
+              {
+                "book": "TIT",
+                "drafted": {
+                  "type": "known",
+                  "value": 11
+                },
+                "conflicts": 1
+              },
+              {
+                "book": "JON",
+                "drafted": {
+                  "type": "unknown"
+                },
+                "conflicts": 0
+              }
+            ]
+          },
+          "stories": null,
+          "conflicts": {
+            "type": "known",
+            "value": 1
+          }
+        }
+      ],
+      "unusable": [
+        {
+          "name": "broken",
+          "reason": {
+            "type": "noProjectFile"
+          }
+        },
+        {
+          "name": "damaged",
+          "reason": {
+            "type": "projectFileDamaged",
+            "value": {
+              "reason": "projectId is not a UUID"
+            }
+          }
+        }
+      ],
+      "resume": {
+        "project": "sample_burrito",
+        "place": {
+          "type": "book",
+          "value": {
+            "book": "TIT",
+            "chapter": 1,
+            "verse": "1"
+          }
+        },
+        "mode": "draft",
+        "tool": null,
+        "snippet": "Pablo, siervo de Dios"
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

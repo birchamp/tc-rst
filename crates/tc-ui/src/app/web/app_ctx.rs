@@ -16,7 +16,8 @@ use send_wrapper::SendWrapper;
 use tc_api::ApiError;
 use tc_api::account::{CancelSignIn, HelpLink, ProfileLink, Resume, SignOut, WebUrl};
 use tc_api::feedback::Compose;
-use tc_api::ids::{LocaleId, ReportId};
+use tc_api::home::{HomeCard, LanguageSuggestion};
+use tc_api::ids::{LocaleId, ProjectRef, ReportId};
 use tc_api::net::Set as NetSet;
 use tc_api::prefs::SetLocale;
 use tc_api::refusal::FeedbackRefusal;
@@ -27,19 +28,50 @@ use super::{Runtime, ServerState, bridge, js};
 use crate::app::account::{SignInFlow, SignInForm, SignInNext};
 use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
+use crate::app::forms::{AddBookForm, AddBookStep, ImportForm, ImportKind, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
 use crate::app::save::indicator::Retry;
 use crate::app::shell::{CurrentProject, Editing, View};
 use crate::i18n::show_locale;
 
 /// The dialogs `s.modal` names (tC4 `tC4:src/state.jsx:476`). The units that port the others
-/// add theirs: AddProject, NewBible, NewObs, AddBook, Import (B2, C6, F1), OpenFromDoor43,
-/// Share (B9b, E1b), ProjectSettings, SourceTexts (B9a), GuidedFix (B5a).
+/// add theirs: OpenFromDoor43, Share (B9b, E1b), ProjectSettings, SourceTexts (B9a), GuidedFix
+/// (B5a).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialog {
     Feedback,
     /// The Door43 sign-in step (M12), which unit A8 draws.
     SignIn,
+    /// "+ Add a project" (M1).
+    AddProject,
+    /// New Bible (M2); its form is `np`.
+    NewProject,
+    /// New Open Bible Stories (M3); its form is `np`.
+    NewObs,
+    /// Add a book (M4); its form is `ab`.
+    AddBook,
+    /// Import (M5); its form is `im`.
+    Import,
+}
+
+/// A banner on Home: its text, and the "Ask for help" it offers (tC4 #378).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HomeBanner {
+    pub text: String,
+    pub help: Option<HelpRequest>,
+}
+
+/// Where a Home tile opens its project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenTarget {
+    Book(tc_core::BookId),
+    Story(tc_api::ids::StoryNo),
+}
+
+/// The toast an import leaves on Home (F1 sets it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportToast {
+    pub message: String,
 }
 
 /// The layers over the screens (6.7). Units add the gateway and upgrade previews (C8), the
@@ -64,6 +96,22 @@ pub struct AppState {
     pub sign_in: ArcRwSignal<SignInFlow>,
     /// The message of the screen that could not be shown (S15).
     pub view_error: ArcRwSignal<Option<String>>,
+    /// New Bible's and New Open Bible Stories' form (tC4 `np`).
+    pub np: ArcRwSignal<Option<NewProjectForm>>,
+    /// Add a book's form (tC4 `ab`).
+    pub ab: ArcRwSignal<Option<AddBookForm>>,
+    /// Import's form (tC4 `im`).
+    pub im: ArcRwSignal<Option<ImportForm>>,
+    /// A refused open, on Home (tC4 `bookError`; B3 sets it).
+    pub book_error: ArcRwSignal<Option<HomeBanner>>,
+    /// The checkpoint of the project just left failed (tC4 `commitError`; D1 sets it).
+    pub commit_error: ArcRwSignal<Option<HomeBanner>>,
+    /// The project a sync runs for (tC4 `syncing`; B10 sets it).
+    pub syncing: ArcRwSignal<Option<ProjectRef>>,
+    /// The toast of a finished import (F1 sets it).
+    pub import_toast: ArcRwSignal<Option<ImportToast>>,
+    /// The project an import of this page made: its card carries "Imported" (F1 sets it).
+    pub imported_repo: ArcRwSignal<Option<ProjectRef>>,
     /// `/ui/<build>/`, where the logo and the catalogs are.
     pub base: Arc<str>,
     /// What the server holds: the internet switch, the account, the saved language, the
@@ -90,6 +138,14 @@ impl AppState {
             fb: ArcRwSignal::new(None),
             sign_in: ArcRwSignal::new(SignInFlow::Idle),
             view_error: ArcRwSignal::new(view_error),
+            np: ArcRwSignal::new(None),
+            ab: ArcRwSignal::new(None),
+            im: ArcRwSignal::new(None),
+            book_error: ArcRwSignal::new(None),
+            commit_error: ArcRwSignal::new(None),
+            syncing: ArcRwSignal::new(None),
+            import_toast: ArcRwSignal::new(None),
+            imported_repo: ArcRwSignal::new(None),
             base: Arc::from(base),
             server,
         }
@@ -320,6 +376,8 @@ impl Actions {
             Pending::SignIn { flow } => self.send_sign_in(flow),
             Pending::CheckSignIn => self.check_now(),
             Pending::Profile => self.profile_now(),
+            // B9b runs the share after its question; B10 the sync.
+            Pending::Share(_) | Pending::Sync(_) => {}
         }
     }
 
@@ -337,7 +395,9 @@ impl Actions {
             Pending::Link(..)
             | Pending::SignIn { .. }
             | Pending::CheckSignIn
-            | Pending::Profile => {}
+            | Pending::Profile
+            | Pending::Share(_)
+            | Pending::Sync(_) => {}
         }
     }
 
@@ -532,6 +592,151 @@ impl Actions {
             Retry::Checkpoint => {}
             Retry::Story | Retry::Note | Retry::Save => self.0.runtime.saves().retry(),
         }
+    }
+
+    // ---- Home and its dialogs (B2) ----------------------------------------------------------
+
+    /// Home's read again: the Retry of a failed listing (tC4 `refreshProjects`).
+    pub fn refresh_projects(&self) {
+        self.0.runtime.cache().refresh(&tc_api::home::List {});
+    }
+
+    /// "+ Add a project" (tC4 `openAddProject`): the chooser, in place of any dialog.
+    pub fn open_add_project(&self) {
+        let s = self.s();
+        s.np.try_set(None);
+        s.im.try_set(None);
+        s.layers.dialog.try_set(Some(Dialog::AddProject));
+    }
+
+    /// New Bible (tC4 `openNewProject`): the versification list first, then the dialog, which
+    /// offers `eng` alone and says so when the list could not be read.
+    pub fn open_new_project(&self) {
+        let this = self.clone();
+        spawn_local(async move {
+            let names = this
+                .0
+                .runtime
+                .api()
+                .call(&tc_api::home::Versifications {})
+                .await
+                .map(|view| view.names)
+                .map_err(|error| error.to_string());
+            let s = this.s();
+            s.np.try_set(Some(NewProjectForm::bible(names)));
+            s.layers.dialog.try_set(Some(Dialog::NewProject));
+        });
+    }
+
+    /// New Open Bible Stories (tC4 `openNewObs`).
+    pub fn open_new_obs(&self) {
+        let s = self.s();
+        s.np.try_set(Some(NewProjectForm::stories()));
+        s.layers.dialog.try_set(Some(Dialog::NewObs));
+    }
+
+    /// Import, at its kind step (tC4 `openImport`).
+    pub fn open_import(&self) {
+        let s = self.s();
+        s.im.try_set(Some(ImportForm::open()));
+        s.layers.dialog.try_set(Some(Dialog::Import));
+    }
+
+    /// Add a book, at its method step (tC4 `openAddBook`).
+    pub fn open_add_book(&self, card: &HomeCard) {
+        let s = self.s();
+        s.np.try_set(None);
+        s.ab.try_set(Some(AddBookForm::open(card)));
+        s.layers.dialog.try_set(Some(Dialog::AddBook));
+    }
+
+    pub fn patch_np(&self, patch: impl FnOnce(&mut NewProjectForm)) {
+        self.s().np.try_update(|np| {
+            if let Some(np) = np {
+                patch(np);
+            }
+        });
+    }
+
+    pub fn patch_ab(&self, patch: impl FnOnce(&mut AddBookForm)) {
+        self.s().ab.try_update(|ab| {
+            if let Some(ab) = ab {
+                patch(ab);
+            }
+        });
+    }
+
+    pub fn patch_im(&self, patch: impl FnOnce(&mut ImportForm)) {
+        self.s().im.try_update(|im| {
+            if let Some(im) = im {
+                patch(im);
+            }
+        });
+    }
+
+    /// Cancel, Close, the ✕ and Escape of Home's dialogs (tC4 `closeModal`). B9b adds the end
+    /// of a share flow.
+    pub fn close_modal(&self) {
+        let s = self.s();
+        s.layers.dialog.try_set(None);
+        s.np.try_set(None);
+        s.ab.try_set(None);
+        s.im.try_set(None);
+    }
+
+    /// The languages that match `query` (`home/languages`, ranked on the server, offline).
+    pub async fn languages(&self, query: String) -> Result<Vec<LanguageSuggestion>, CallError> {
+        let view = self
+            .0
+            .runtime
+            .api()
+            .call(&tc_api::home::Languages { query })
+            .await?;
+        Ok(view.suggestions)
+    }
+
+    /// A card's Share button (tC4 `shareProject` and `syncProject`): the internet question
+    /// first. A shared project syncs (PLAN Q2); a press while a sync runs does nothing.
+    pub fn share_project(&self, card: &HomeCard) {
+        if self.s().syncing.get_untracked().is_some() {
+            return;
+        }
+        let project = card.project.clone();
+        self.internet_task(match card.door43 {
+            tc_api::home::Door43Card::Shared { .. } => Pending::Sync(project),
+            tc_api::home::Door43Card::Local => Pending::Share(project),
+        });
+    }
+
+    /// A book tile or a story tile: B3 opens the project there.
+    pub fn open_project_at(&self, _project: ProjectRef, _target: OpenTarget) {}
+
+    /// The Resume card: B3 opens the project at the record's place, mode and tool.
+    pub fn resume(&self, _resume: &tc_api::home::LastEditView) {}
+
+    /// A card's Settings: B9a opens the project's settings from Home.
+    pub fn open_settings(&self, _card: &HomeCard) {}
+
+    /// A card's conflict chip: B11 opens the project's conflict review.
+    pub fn open_project_conflicts(&self, _project: ProjectRef) {}
+
+    /// New Bible's Create: C6.
+    pub fn create_bible(&self) {}
+
+    /// New Open Bible Stories' Create: C6.
+    pub fn create_obs(&self) {}
+
+    /// Add a book's method step: C6 draws the pick and USFM steps it leads to.
+    pub fn ab_choose(&self, _step: AddBookStep) {}
+
+    /// Import's kind step: F1 draws the files step it leads to.
+    pub fn import_pick_kind(&self, _kind: ImportKind) {}
+
+    /// "Open a project from Door43": B9b.
+    pub fn open_door43_dialog(&self) {}
+
+    pub fn dismiss_import_toast(&self) {
+        self.s().import_toast.try_set(None);
     }
 
     // ---- the Door43 account (A8) ------------------------------------------------------------

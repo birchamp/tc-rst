@@ -11,8 +11,8 @@ use tc_api::event::CheckpointOutcome;
 use tc_api::ids::ProjectRef;
 use tc_app::backend::{
     BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
-    ProjectFacts, ProjectHandle, ProjectStore, ReviewToken, Snapshot, StoreCommand, StoreCounters,
-    StoreError, StoreEvent, StoreReply,
+    ProjectFacts, ProjectHandle, ProjectPeek, ProjectStore, ReviewToken, Snapshot, StoreCommand,
+    StoreCounters, StoreError, StoreEvent, StoreReply, SummaryFiles, SummaryWatch,
 };
 use tc_app::jobs::ProgressSink;
 use tc_journal::token::TokenError;
@@ -106,6 +106,19 @@ impl<S: ProjectStore> CountingStore<S> {
 impl<S: ProjectStore> ProjectStore for CountingStore<S> {
     fn list(&self) -> Result<Listing, StoreError> {
         self.inner.list()
+    }
+
+    fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError> {
+        self.inner.peek(folder)
+    }
+
+    fn summary_files(
+        &self,
+        folder: &ProjectRef,
+        books: &[tc_journal::BookId],
+        watch: &SummaryWatch,
+    ) -> Result<SummaryFiles, StoreError> {
+        self.inner.summary_files(folder, books, watch)
     }
 
     fn open(
@@ -222,6 +235,19 @@ pub struct SharedStore(pub Arc<dyn ProjectStore>);
 impl ProjectStore for SharedStore {
     fn list(&self) -> Result<Listing, StoreError> {
         self.0.list()
+    }
+
+    fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError> {
+        self.0.peek(folder)
+    }
+
+    fn summary_files(
+        &self,
+        folder: &ProjectRef,
+        books: &[tc_journal::BookId],
+        watch: &SummaryWatch,
+    ) -> Result<SummaryFiles, StoreError> {
+        self.0.summary_files(folder, books, watch)
     }
 
     fn open(

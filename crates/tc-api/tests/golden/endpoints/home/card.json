@@ -1,0 +1,65 @@
+{
+  "path": "home/card",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "project": "sample_burrito"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "project": "sample_burrito",
+      "name": "Español Biblia",
+      "tag": {
+        "type": "known",
+        "value": "es-419"
+      },
+      "dir": "ltr",
+      "kind": "bible",
+      "door43": {
+        "type": "shared",
+        "value": {
+          "place": {
+            "owner": "jdoe",
+            "name": "es-419_tit_text_reg",
+            "server": "qa.door43.org"
+          }
+        }
+      },
+      "books": {
+        "type": "known",
+        "value": [
+          {
+            "book": "TIT",
+            "drafted": {
+              "type": "known",
+              "value": 11
+            },
+            "conflicts": 1
+          },
+          {
+            "book": "JON",
+            "drafted": {
+              "type": "unknown"
+            },
+            "conflicts": 0
+          }
+        ]
+      },
+      "stories": null,
+      "conflicts": {
+        "type": "known",
+        "value": 1
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

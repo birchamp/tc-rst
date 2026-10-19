@@ -515,28 +515,39 @@ pub struct ProjectEntry {
 /// `.tc/materialized.json`, which a seal, a consolidation or an intake rewrites (it records the
 /// md5 of every pack it lists). One listing and one stat at any history: the packs are not
 /// listed, since they are nested by sealer and month and their number grows with the history.
+/// A folder with no manifest (copied or received without `.tc/`, which Door43 and Git leave
+/// out) is stamped by the files its summary reads as well, or every such copy would share one
+/// stamp, whatever it holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SummaryStamp([u8; 32]);
 
 impl SummaryStamp {
-    /// SHA-256 over a domain tag, each name followed by a zero byte, then `1` with the manifest's
-    /// size and mtime (little-endian), or `0` when there is no manifest.
-    pub fn of(pending: &[String], manifest: Option<(u64, i64)>) -> Self {
+    /// SHA-256 over a domain tag, the number of names, each name followed by a zero byte, then
+    /// each file's path followed by a zero byte and `1` with its size and mtime (little-endian),
+    /// or `0` when it is missing.
+    pub fn of(pending: &[String], files: &[(String, Option<(u64, i64)>)]) -> Self {
         let mut names: Vec<&String> = pending.iter().collect();
         names.sort();
+        let mut files: Vec<_> = files.iter().collect();
+        files.sort();
         let mut context = ring::digest::Context::new(&ring::digest::SHA256);
         context.update(b"tc4-summary-stamp\0");
+        context.update(&(names.len() as u64).to_le_bytes());
         for name in names {
             context.update(name.as_bytes());
             context.update(b"\0");
         }
-        match manifest {
-            Some((len, mtime)) => {
-                context.update(&[1]);
-                context.update(&len.to_le_bytes());
-                context.update(&mtime.to_le_bytes());
+        for (path, file) in files {
+            context.update(path.as_bytes());
+            context.update(b"\0");
+            match file {
+                Some((len, mtime)) => {
+                    context.update(&[1]);
+                    context.update(&len.to_le_bytes());
+                    context.update(&mtime.to_le_bytes());
+                }
+                None => context.update(&[0]),
             }
-            None => context.update(&[0]),
         }
         let mut out = [0u8; 32];
         out.copy_from_slice(context.finish().as_ref());
@@ -579,7 +590,122 @@ pub struct Listing {
 pub struct UnusableFolder {
     /// The folder's name, with any byte that is not UTF-8 replaced.
     pub name: String,
-    pub reason: String,
+    pub reason: UnusableReason,
+}
+
+/// Why a folder that holds a project's files cannot be opened. Home says it in words
+/// (`home.unusable.*`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnusableReason {
+    /// `ingredients/tc/project.json` is missing: this may be a translationCore 4.0 project to
+    /// import, or a project whose `project.json` was deleted.
+    NoProjectFile,
+    /// `project.json` is there but could not be read.
+    ProjectFileUnreadable(String),
+    /// `project.json` is one the store's open refuses.
+    ProjectFileDamaged(String),
+    /// A link to a folder elsewhere: tc-store reads no link as project data, and its checks of
+    /// a folder (the lock, the drive, the cloud client) would be about the link, not the
+    /// folder the work is in.
+    Link,
+    /// A name tc-api cannot carry.
+    NameNotAllowed,
+    /// A name that is not valid Unicode.
+    NameNotText,
+}
+
+impl UnusableReason {
+    pub fn to_api(&self) -> tc_api::home::UnusableReason {
+        use tc_api::home::UnusableReason as Api;
+        match self {
+            Self::NoProjectFile => Api::NoProjectFile,
+            Self::ProjectFileUnreadable(reason) => Api::ProjectFileUnreadable {
+                reason: reason.clone(),
+            },
+            Self::ProjectFileDamaged(reason) => Api::ProjectFileDamaged {
+                reason: reason.clone(),
+            },
+            Self::Link => Api::Link,
+            Self::NameNotAllowed => Api::NameNotAllowed,
+            Self::NameNotText => Api::NameNotText,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// What Home reads of a project (B2)
+// ---------------------------------------------------------------------------------------
+
+/// Where a shared project lives on Door43: the `origin` of its remote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Door43Remote {
+    pub host: String,
+    pub owner: String,
+    pub repo: String,
+}
+
+impl Door43Remote {
+    /// `https://<host>/<owner>/<repo>`, with or without `.git`.
+    pub fn parse_url(url: &str) -> Option<Self> {
+        let rest = url.strip_prefix("https://")?;
+        let rest = rest.strip_suffix(".git").unwrap_or(rest);
+        match rest.split('/').collect::<Vec<_>>().as_slice() {
+            [host, owner, repo] if !host.is_empty() && !owner.is_empty() && !repo.is_empty() => {
+                Some(Self {
+                    host: (*host).to_owned(),
+                    owner: (*owner).to_owned(),
+                    repo: (*repo).to_owned(),
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+/// What a card's frame needs of a project, read without a lock and without a fold.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectPeek {
+    /// `metadata.json` as a document (the store's file, or the memory backend's fields in its
+    /// shape); `Err` says why it could not be read. The card reads its facts from it
+    /// (`crate::home::card_facts`).
+    pub metadata: Result<serde_json::Value, String>,
+    pub remote: Option<Door43Remote>,
+    /// `None` when the saves could not be looked at (another program holds `.tc/pending` or
+    /// `.tc/materialized.json`): no summary is then the card's, and its counts show "—".
+    pub stamp: Option<SummaryStamp>,
+}
+
+/// The derived files a summary is made of, read without a lock and without a fold.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SummaryFiles {
+    /// Each asked book's USFM text, or why it could not be read.
+    pub books: Vec<(BookId, Result<String, String>)>,
+    /// A story project's stories: the listing, then each story's text.
+    pub stories: Option<Result<Vec<StoryText>, String>>,
+    /// `ingredients/tc/conflicts.json`; `None` when there is none, which is no conflict.
+    pub conflicts: Result<Option<Vec<u8>>, String>,
+    /// A story project's `ingredients/checking/resources.json`, for the gateway's titles.
+    pub resources: Option<Result<Vec<u8>, String>>,
+}
+
+/// A story's number and its text, or why it could not be read.
+pub type StoryText = (u8, Result<String, String>);
+
+impl Default for SummaryFiles {
+    fn default() -> Self {
+        Self {
+            books: Vec::new(),
+            stories: None,
+            conflicts: Ok(None),
+            resources: None,
+        }
+    }
+}
+
+/// What a summary's read checks and counts.
+pub struct SummaryWatch {
+    pub cancel: crate::jobs::CancelToken,
+    pub counters: Arc<crate::counters::AppCounters>,
 }
 
 /// Why a project did not open (STORAGE §6.1).
@@ -605,6 +731,10 @@ pub enum OpenFailure {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StoreError {
+    /// The folder is no project of the projects folder (any more): it went away, or lost its
+    /// `project.json`, since it was listed.
+    #[error("not a project")]
+    NotAProject,
     #[error("{0}")]
     Other(String),
 }
@@ -622,6 +752,21 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// The projects this store holds, and the folders that hold a project's files but cannot
     /// be opened as one. No lock, no fold.
     fn list(&self) -> Result<Listing, StoreError>;
+
+    /// What `folder`'s Home card shows besides its summary: `metadata.json`, the Door43 remote
+    /// and the summary's stamp. No lock, no fold. Blocking. `NotAProject` when the folder went
+    /// away since it was listed.
+    fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError>;
+
+    /// What a summary of `folder` is made of: the derived files (tc-store), or the same files
+    /// rendered from the fold (memory). No lock. Blocking: the `HomeSummary` job calls it,
+    /// and it stops at `watch.cancel` between files.
+    fn summary_files(
+        &self,
+        folder: &ProjectRef,
+        books: &[BookId],
+        watch: &SummaryWatch,
+    ) -> Result<SummaryFiles, StoreError>;
 
     /// Opens `folder`. Blocking: called on the blocking pool. A second open of a folder whose
     /// handle is live is `LockHeld` (STORAGE §6.1 O1), which the session registry exists to

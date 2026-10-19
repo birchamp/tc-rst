@@ -1,0 +1,25 @@
+{
+  "path": "home/versifications",
+  "kind": "query",
+  "net": null,
+  "request": {},
+  "reply": {
+    "type": "ok",
+    "value": {
+      "names": [
+        "eng",
+        "org",
+        "lxx"
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

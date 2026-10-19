@@ -30,7 +30,10 @@ use super::memory::teammates::Teammates;
 use super::scenario::{ScenarioError, ScenarioReport, ScenarioState};
 use super::seed::{StateSeed, fixture_project_id, tc4_state_seed};
 use super::store::StoreBackend;
-use super::{Listing, OpenFailure, ProjectHandle, ProjectStore, StoreError};
+use super::{
+    Listing, OpenFailure, ProjectHandle, ProjectPeek, ProjectStore, StoreError, SummaryFiles,
+    SummaryWatch,
+};
 use crate::jobs::ProgressSink;
 
 /// The prefix of tc-store's staging folders (its private `STAGING`).
@@ -364,6 +367,19 @@ fn write_project(backend: &StoreBackend, project: &WrittenProject) -> Result<(),
 impl ProjectStore for ScenarioStore {
     fn list(&self) -> Result<Listing, StoreError> {
         self.backend.list()
+    }
+
+    fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError> {
+        self.backend.peek(folder)
+    }
+
+    fn summary_files(
+        &self,
+        folder: &ProjectRef,
+        books: &[tc_journal::BookId],
+        watch: &SummaryWatch,
+    ) -> Result<SummaryFiles, StoreError> {
+        self.backend.summary_files(folder, books, watch)
     }
 
     fn open(

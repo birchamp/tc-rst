@@ -16,14 +16,18 @@ pub mod clock;
 pub mod config;
 pub mod counters;
 pub mod dispatch;
+pub mod drafted;
 pub mod events;
 pub mod feedback;
 pub mod flows;
 pub mod folders;
 mod handlers;
+pub mod home;
 #[cfg(feature = "test-hooks")]
 pub mod hooks;
 pub mod jobs;
+mod js;
+pub mod language_search;
 pub mod prefs;
 pub mod replies;
 pub mod reports;

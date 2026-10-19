@@ -42,8 +42,8 @@ use tc_api::ids::{ConflictRef, RecordRef, ViewSeq};
 use tc_api::shown::{PersonLabel, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, FieldDraft, FieldLog, FieldLogView, FieldStore, Hold,
-    HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, MAX_ECHO, Quiet, QuietView,
-    Release, Reset, SaveVerse, StoredDraft, StoredText, TokenBase,
+    HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, MAX_ECHO, Quiet,
+    QuietView, Release, Reset, SaveVerse, StoredDraft, StoredText, TokenBase,
 };
 use tc_api::write::{Ack, ConflictBrief, SavedValue, Stored, TokenUpdate};
 use tc_api::{ALL, ApiError, NotSaved, Shown, ShownToken};
@@ -895,6 +895,8 @@ impl Handle<Reset> for App {
                 crate::reports::facts(serde_json::json!({"reason": error.to_string()})),
             ));
         }
+        // A launch computes every Home summary again.
+        self.inner.home.reset();
         // A launch starts with no kept replies, so a request id may be used again.
         self.inner.replies.forget_settled();
         // The account as a launch finds it, on a computer whose keychain works and holds
@@ -908,6 +910,58 @@ impl Handle<Reset> for App {
         self.inner.reports.clear();
         self.inner.prefs.reset().await;
         self.set_internet(false);
+        Ok(())
+    }
+}
+
+impl Handle<LastEdit> for App {
+    /// Records a Resume record and the project's last use through the calls a save makes
+    /// (C2), waits until they are written, then tells Home the projects changed (B2 D12).
+    async fn handle(&self, req: LastEdit) -> Result<(), ApiError> {
+        self.hooks()?;
+        let folder = req.project.clone();
+        let entry = self
+            .inner
+            .sessions
+            .store()
+            .list()
+            .ok()
+            .and_then(|listing| listing.projects.into_iter().find(|e| e.folder == folder))
+            .ok_or_else(|| ApiError::BadRequest {
+                field: "project".to_owned(),
+                reason: "no such project".to_owned(),
+            })?;
+        let unit = match req.place {
+            tc_api::home::ResumePlace::Book {
+                book,
+                chapter,
+                verse,
+            } => crate::prefs::EditUnit::Book {
+                book,
+                chapter,
+                verse,
+            },
+            tc_api::home::ResumePlace::Story { story, frame } => {
+                crate::prefs::EditUnit::Story { story, frame }
+            }
+        };
+        let prefs = &self.inner.prefs;
+        prefs.record_last_used(folder.clone(), req.at);
+        prefs.record_last_edit(
+            wire::scope::project_id(entry.id),
+            crate::prefs::LastEdit {
+                project: folder,
+                unit,
+                mode: req.mode,
+                tool: None,
+                snippet: req.snippet,
+                at: req.at,
+            },
+        );
+        prefs.flush().await;
+        self.inner
+            .bus
+            .publish(tc_api::event::Event::ProjectsChanged);
         Ok(())
     }
 }

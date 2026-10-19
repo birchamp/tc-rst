@@ -197,12 +197,9 @@ async fn a_link_to_a_project_elsewhere_is_listed_as_unusable() {
     assert!(listing.projects.is_empty(), "{:?}", listing.projects);
     let unusable: Vec<&str> = listing.unusable.iter().map(|u| u.name.as_str()).collect();
     assert_eq!(unusable, ["linked"]);
-    assert!(
-        listing.unusable[0]
-            .reason
-            .contains("link to a folder elsewhere"),
-        "{}",
-        listing.unusable[0].reason
+    assert_eq!(
+        listing.unusable[0].reason,
+        tc_app::backend::UnusableReason::Link
     );
     assert!(matches!(
         store.open(&folder("linked"), open_progress()),

@@ -89,7 +89,11 @@ fn a_scenario_read_from_disk_equals_the_one_assembled_in_memory() {
 
 /// The OBS sample fails B1a's check with the 53 mismatches the storage team owns
 /// (`docs/evidence/state-seed-check-2026-10-18.md`). This test changes the day they fix them:
-/// then the OBS project loads, and Home shows both cards (B2).
+/// then the OBS project loads, and Home shows both cards (B2). That day, recapture B2's rows
+/// (`node parity/app/capture-rust.mjs --unit B2 --only home,add-project,new-bible,new-obs,import,add-book,account-menu,app-language,help,about,feedback`
+/// and `--case license,net-failed,home-empty,home-list-error,home-resume --layers pixels,dom`,
+/// then `UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record`) and remove their residuals,
+/// which explain the missing card (B2 D11).
 #[test]
 fn every_scenario_loads_its_bible_project_and_refuses_its_obs_project() {
     for name in SCENARIOS {
@@ -131,6 +135,7 @@ fn only_the_shared_scenario_names_a_door43_remote() {
             .collect();
         let shared = |repo: &str| {
             (name == "shared").then(|| Door43Remote {
+                host: "git.door43.org".to_owned(),
                 owner: "facilitator-zq".to_owned(),
                 repo: repo.to_owned(),
             })
@@ -151,6 +156,7 @@ fn only_the_shared_scenario_names_a_door43_remote() {
     assert_eq!(
         backend.project(&folder("sample_burrito")).unwrap().remote,
         Some(Door43Remote {
+            host: "git.door43.org".to_owned(),
             owner: "facilitator-zq".to_owned(),
             repo: "sample_burrito".to_owned()
         })

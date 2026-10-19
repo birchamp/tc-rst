@@ -142,7 +142,7 @@ impl Scale {
 
 /// An app on temporary folders (never the person's own projects folder) over the corpus
 /// `project` (memory) or a copy of `on_disk` (store), which counts its own work.
-async fn scale(
+pub async fn scale(
     backing: Backing,
     project: &MemoryProject,
     on_disk: &tc_store::fault::FaultFs,

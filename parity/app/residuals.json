@@ -24,7 +24,157 @@
       "why": "tC4 composes the Feedback attachment in the page at once, so its Send never waits. The rebuild's server composes it (`feedback/compose`, A5 D8), and Send stays off until the attachment is shown, so nothing is sent that the dialog did not show (`tc_ui::app::feedback::can_send`). A compose that fails says so in the attachment box in the shown language (`feedback.attachmentFailed`), and opening the report again keeps the typed text and composes again (journey `a compose that fails keeps Send off and says so; the next opening keeps the text and composes again`; test `a_kept_report_whose_compose_failed_composes_again_with_its_text`). No baseline screen shows it: tC4 has no compose to wait for or to fail.",
       "cites": "AGENTS.md \"Matching tC4\"; A5 D8",
       "until": null
+    },
+    {
+      "id": "poem-verse-drafted",
+      "why": "A book tile's drafted percentage counts a verse as drafted when its words, trimmed, are neither empty nor ___ (tc_app::drafted, tC4 #572's span rule). tC4 reads a verse's body only up to its first paragraph marker, so a poem verse whose words are on \\q lines is undrafted there and drafted here (test a_poem_verse_with_words_counts_as_drafted). No baseline verse is such a verse.",
+      "cites": "AGENTS.md \"Matching tC4\"; B2 D3",
+      "until": null
+    },
+    {
+      "id": "unusable-folders",
+      "why": "Home lists every folder that holds a project's files but cannot be opened, by name, with the reason in words and no button (B2 D9; APP-DESIGN §4.5), where tC4's listing leaves it off; while one shows, \"No projects yet\" is not drawn. No scenario holds such a folder, so no row shows it (journey an_unusable_folder_shows_its_name_and_reason_and_opens_nothing; test unusable_folders_are_listed_with_their_reason).",
+      "cites": "AGENTS.md \"Matching tC4\"; APP-DESIGN §4.5, Q-9; B2 D9",
+      "until": null
+    },
+    {
+      "id": "language-code-offer",
+      "why": "Choosing a language whose Door43 code a Scripture Burrito cannot hold (about 470, such as acm-x-lebarabic) fills the Code box with a code it can hold that keeps every letter (acm-x-lebarabi-c) and says so in one sentence; when none can be made the box stays empty and the sentence says why. tC4 fills the Door43 code and stores \"Undetermined\" (#582). No baseline screen chooses a language.",
+      "cites": "owner's answer to Q35 (TC4-DELTA-2026-10-19 §5); B2 step 1",
+      "until": null
     }
   ],
-  "rows": {}
+  "rows": {
+    "about": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "account-menu": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning",
+        "behaviour"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "add-book": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "add-project": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "app-language": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning",
+        "behaviour"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "feedback": {
+      "layers": [
+        "pixels",
+        "dom",
+        "behaviour"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "help": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "home": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "home-list-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The banner's diagnosis after \"The project could not be opened.\": tC4 prints its fetch's error (`TypeError: Failed to fetch`, the gallery's patch), and the capture makes the rebuild's server answer the listing with an error, which the banner prints as the rebuild's error text (`internal error`). The banner, its Retry and the absence of \"No projects yet\" are tC4's; the pixels differ only along the shorter text.",
+      "until": null
+    },
+    "home-resume": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "import": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "license": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "net-failed": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "new-bible": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    },
+    "new-obs": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
+      "until": null
+    }
+  }
 }

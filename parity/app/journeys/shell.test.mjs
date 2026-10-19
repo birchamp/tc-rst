@@ -92,9 +92,9 @@ browserTest('a_panic_reload_keeps_the_top_bar_and_back_to_home_gates', async () 
     // boot.js reloads once; the App shows the callout in place of the screen, with the top bar.
     await page.getByTestId('view-error').waitFor({ timeout: 20_000 });
     assert.equal(await page.getByTestId('account-menu').count(), 1, 'the top bar stays');
-    assert.equal(await page.getByTestId('runtime-ready').count(), 0, 'the screen is not drawn');
+    assert.equal(await page.getByTestId('add-project').count(), 0, 'the screen is not drawn');
     await page.getByTestId('view-error-home').click();
-    await page.getByTestId('runtime-ready').waitFor();
+    await page.getByTestId('add-project').waitFor();
     assert.equal(await page.getByTestId('view-error').count(), 0);
     assert.equal(await page.evaluate(() => sessionStorage.getItem('tc4.crash.v1')), null, 'the crash marker is gone');
   }, { probe: true });
@@ -130,7 +130,7 @@ browserTest('the_language_switch_keeps_typed_text: a preview, Cancel and Apply l
   }, { probe: true });
 });
 
-browserTest('boot_adds_no_request: one hello, the nine catalogs and the stream', async () => {
+browserTest('boot_adds_no_request: one hello, the nine catalogs, the stream and Home\'s reads', async () => {
   await withApp(async ({ page, env }) => {
     const requests = recordRequests(page);
     await page.goto('about:blank');
@@ -139,7 +139,13 @@ browserTest('boot_adds_no_request: one hello, the nine catalogs and the stream',
     await page.waitForFunction(() => window.__tcIdle === true);
     await sleep(500);
     const paths = requests.all.map((r) => new URL(r.url).pathname);
-    assert.deepEqual(paths.filter((p) => p.startsWith('/api/')).sort(), ['/api/v1/app/hello', '/api/v1/events'].sort());
+    // Besides hello and the stream, only Home's reads: the list, and each card's own (once at
+    // its mount, once more when its summary is ready; B2 D1).
+    const api = paths.filter((p) => p.startsWith('/api/'));
+    const count = (p) => api.filter((a) => a === p).length;
+    assert.deepEqual([count('/api/v1/app/hello'), count('/api/v1/events'), count('/api/v1/home/list')], [1, 1, 1], api.join(' '));
+    assert.ok(count('/api/v1/home/card') <= 2, api.join(' '));
+    assert.deepEqual(api.filter((p) => !['/api/v1/app/hello', '/api/v1/events', '/api/v1/home/list', '/api/v1/home/card'].includes(p)), []);
     assert.equal(paths.filter((p) => /\/i18n\/[^/]+\.json$/.test(p)).length, 9);
     assert.equal(paths.filter((p) => p.startsWith('/help/')).length, 0, 'help loads only when it opens');
   });

@@ -334,8 +334,32 @@ function recordThrown(error) {
   results.push({ name: `threw: ${String(error?.message ?? error).split('\n')[0]}`, ok: false, ...(at ? { detail: at.trim() } : {}) });
 }
 
-const READY = '[data-testid=runtime-ready]';
+// Home is drawn (B2 D14: Home replaced A4a's stand-in, whose test ids moved here).
+const READY = '[data-testid=add-project]';
 const text = (page, testid) => page.textContent(`[data-testid=${testid}]`);
+/** Home's title, a text in the shown language (it has no test id, as in tC4). */
+const TITLE = 'main h1';
+const title = (page) => page.textContent(TITLE);
+/** The account button says whether the internet is on (A5). */
+const internet = (on) => `[data-testid=account-menu][data-internet=${on ? 'on' : 'off'}]`;
+/** The names of the languages in the App language dialog's list. */
+const LABEL = {
+  en: 'English', 'es-419': 'Español (Latinoamérica)', fr: 'Français', hi: 'हिन्दी', 'pt-BR': 'Português (Brasil)',
+  id: 'Bahasa Indonesia', uk: 'Українська', ru: 'Русский', vi: 'Tiếng Việt', ar: 'العربية',
+};
+
+/** Opens the App language dialog from the account menu. */
+async function openLanguage(page) {
+  await page.click('[data-testid=account-menu]');
+  await page.click('[data-testid=account-language]');
+  await page.waitForSelector('[data-testid=language-select]');
+}
+
+/** Previews `id` in the open App language dialog: the app shows it, nothing is saved. */
+async function preview(page, id) {
+  await page.click('[data-testid=language-select]');
+  await page.getByRole('listbox').getByRole('option', { name: LABEL[id], exact: true }).click();
+}
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function caseA(page, log, server) {
@@ -369,7 +393,7 @@ async function caseA(page, log, server) {
     headers.map((h) => h && { token: h['x-tc-token'] === server.token, api: h['x-tc-api'] }),
   );
 
-  check('A: the sample line is the English text', (await text(page, 'runtime-sample')) === catalog('en')['account.language']);
+  check('A: Home\'s title is the English text', (await title(page)) === catalog('en')['home.yourProjects']);
   check('A: no page error', log.errors.length === 0, log.errors);
   const bad = log.console.filter((m) => m.type === 'error' || /\[i18n\] missing key/.test(m.text));
   check('A: no console error and no missing key', bad.length === 0, bad);
@@ -388,15 +412,19 @@ async function caseA(page, log, server) {
 }
 
 async function caseB(page, log) {
-  const handle = await page.$('[data-testid=runtime-sample]');
+  // The switch is the App language dialog's preview, which changes the shown language and
+  // saves nothing; Cancel then shows the saved one again.
+  const handle = await page.$(TITLE);
+  await openLanguage(page);
+  await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
   const before = log.requests.length;
-  await page.selectOption('[data-testid=runtime-locale]', 'ar');
+  await preview(page, 'ar');
   await page.waitForFunction(() => document.documentElement.lang === 'ar', null, { timeout: 5000 });
   const ar = await page.evaluate(() => ({ lang: document.documentElement.lang, dir: document.documentElement.dir }));
   check('B: <html lang dir> is ar, rtl', ar.lang === 'ar' && ar.dir === 'rtl', ar);
-  await page.waitForFunction((want) => document.querySelector('[data-testid=runtime-sample]')?.textContent === want, catalog('ar')['account.language'], { timeout: 5000 });
-  check('B: the sample is Arabic', true);
-  check('B: the sample node was not remounted', await handle.evaluate((node) => node.isConnected));
+  await page.waitForFunction(([sel, want]) => document.querySelector(sel)?.textContent === want, [TITLE, catalog('ar')['home.yourProjects']], { timeout: 5000 });
+  check('B: Home\'s title is Arabic', true);
+  check('B: Home\'s title was not remounted', await handle.evaluate((node) => node.isConnected));
   await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
   await sleep(400); // a request the switch caused would have been made by now
   const since = log.requests.slice(before);
@@ -405,24 +433,26 @@ async function caseB(page, log) {
   const fonts = since.filter((r) => r.type === 'font').map((r) => r.path);
 
   const mid = log.requests.length;
-  await page.selectOption('[data-testid=runtime-locale]', 'en');
+  await preview(page, 'en');
   await page.waitForFunction(() => document.documentElement.lang === 'en' && document.documentElement.dir === 'ltr', null, { timeout: 5000 });
-  await page.waitForFunction((want) => document.querySelector('[data-testid=runtime-sample]')?.textContent === want, catalog('en')['account.language'], { timeout: 5000 });
+  await page.waitForFunction(([sel, want]) => document.querySelector(sel)?.textContent === want, [TITLE, catalog('en')['home.yourProjects']], { timeout: 5000 });
   check('B: back to en: English and ltr', true);
-  check('B: the sample node was still not remounted', await handle.evaluate((node) => node.isConnected));
+  check('B: Home\'s title was still not remounted', await handle.evaluate((node) => node.isConnected));
   await sleep(300);
   const back = log.requests.slice(mid).filter((r) => APP_REQUEST_TYPES.has(r.type));
   check('B: the switch back sent no request', back.length === 0, back.map((r) => `${r.type} ${r.path}`));
+  await page.click('[data-testid=language-cancel]');
+  await page.waitForSelector('[data-testid=language-dialog]', { state: 'detached', timeout: 5000 });
   return { fontRequestsOnFirstArabic: fonts };
 }
 
 async function caseC(page, log, server) {
   const before = log.requests.length;
   await server.command('net/set', { on: true });
-  await page.waitForSelector('[data-testid=runtime-internet][data-on=true]', { timeout: 2000 });
+  await page.waitForSelector(internet(true), { timeout: 2000 });
   check('C: net/set on reaches the page', true);
   await server.command('net/set', { on: false });
-  await page.waitForSelector('[data-testid=runtime-internet][data-on=false]', { timeout: 2000 });
+  await page.waitForSelector(internet(false), { timeout: 2000 });
   check('C: net/set off reaches the page', true);
   await sleep(200);
   const asked = log.requests.slice(before).filter((r) => APP_REQUEST_TYPES.has(r.type));
@@ -446,7 +476,7 @@ async function caseH(browser, server) {
     await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
     // Frames the stream carries before the cut, so that `after` is above 0 when it reconnects.
     await server.command('net/set', { on: true });
-    await page.waitForSelector('[data-testid=runtime-internet][data-on=true]', { timeout: 2000 });
+    await page.waitForSelector(internet(true), { timeout: 2000 });
     const events = () => log.requests.filter((r) => r.path.startsWith('/api/v1/events'));
     check('H: the page holds the stream through the proxy', events().length === 1 && proxy.streams.size === 1, events().length);
 
@@ -454,7 +484,7 @@ async function caseH(browser, server) {
     check('H: the proxy cuts the open stream', proxy.cutStreams() === 1);
     // While the stream is down the switch changes; the page cannot hear it.
     await server.command('net/set', { on: false });
-    await page.waitForSelector('[data-testid=runtime-internet][data-on=false]', { timeout: 15000 });
+    await page.waitForSelector(internet(false), { timeout: 15000 });
     check('H: a change made while the stream was down reaches the page', true);
     const again = events().slice(before);
     const afters = again.map((r) => Number(new URL(r.url).searchParams.get('after')));
@@ -465,7 +495,7 @@ async function caseH(browser, server) {
     await sleep(300);
     const cut = proxy.cutStreams();
     await server.command('net/set', { on: true });
-    await page.waitForSelector('[data-testid=runtime-internet][data-on=true]', { timeout: 15000 });
+    await page.waitForSelector(internet(true), { timeout: 15000 });
     check('H: a second cut is survived the same way', cut === 1);
     await server.command('net/set', { on: false });
     await context.close();
@@ -507,7 +537,7 @@ async function caseD(browser, server) {
     const first = state.order.indexOf('root-child');
     check('D: lang and dir are ar and rtl', state.lang === 'ar' && state.dir === 'rtl', state);
     check('D: lang and dir were set before the root mounted', first > 0 && state.order.slice(0, first).includes('lang') && state.order.slice(0, first).includes('dir'), state.order);
-    check('D: the sample is Arabic', (await text(page, 'runtime-sample')) === catalog('ar')['account.language']);
+    check('D: Home\'s title is Arabic', (await title(page)) === catalog('ar')['home.yourProjects']);
     check('D: no page error', log.errors.length === 0, log.errors);
     await context.close();
   } finally {
@@ -740,7 +770,7 @@ async function caseK(browser, server) {
     const settle = () => page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
 
     check('K: the proxy holds the page\'s stream', inject(frames.internetOn) === 1);
-    await page.waitForSelector('[data-testid=runtime-internet][data-on=true]', { timeout: 5000 });
+    await page.waitForSelector(internet(true), { timeout: 5000 });
     check('K: an injected frame reaches the page', true);
 
     inject(jobEvent('jobRunning', 4242));
@@ -773,8 +803,8 @@ async function caseK(browser, server) {
     inject(jobEvent('jobRunning', 4244));
     await page.waitForFunction(() => window.__tcIdle === false, null, { timeout: 5000 });
     inject(frames.alignSaving);
-    // The held counts sit on an empty <p>, which is never visible: wait for it in the DOM.
-    await page.waitForSelector('[data-testid=runtime-held][data-align-saves="1"]', { state: 'attached', timeout: 5000 });
+    // The held counts are `window.__tcHeld` (B2 D14).
+    await page.waitForFunction(() => window.__tcHeld?.alignSaves === 1, null, { timeout: 5000 });
     check('K: an aligner\'s save state reaches the page', true);
     const beforeRestart = log.requests.length;
     // Every write of the navigation snapshot, from here on.
@@ -789,7 +819,10 @@ async function caseK(browser, server) {
     inject(frames.internetOn, { instance: 'cd'.repeat(16), seq: 1 });
     await settle();
     check('K: a frame of another server run forgets the jobs, and asks for none', calls(log, 'jobs/get').length === 2, calls(log, 'jobs/get').length);
-    await page.waitForSelector('[data-testid=runtime-held][data-align-saves="0"][data-jobs="0"][data-checkpoints="0"][data-blocked="0"]', { state: 'attached', timeout: 5000 });
+    await page.waitForFunction(() => {
+      const held = window.__tcHeld;
+      return held && held.alignSaves === 0 && held.jobs === 0 && held.checkpoints === 0 && held.blocked === 0;
+    }, null, { timeout: 5000 });
     check('K: and the aligner save states, which only events carry and the old run numbered', true);
     // A5 D15: the App goes Home at once, with no gate, and the navigation snapshot names the
     // new run, so a reload never takes the old run's place for this one.
@@ -797,7 +830,9 @@ async function caseK(browser, server) {
     // back: a write that names the injected run shows the restart was taken.)
     const navWrites = await page.evaluate(() => window.__navWrites);
     check('K: after a restart the navigation snapshot names the new run and Home', navWrites.some((nav) => nav.instance === 'cd'.repeat(16) && nav.view === 'home' && nav.project === null), navWrites);
-    const after = log.requests.slice(beforeRestart).map((r) => r.path).filter((p) => p !== '/api/v1/events' && p !== '/api/v1/app/hello');
+    // Home's reads are read again in the new run (B2); they are queries, not writes.
+    const reads = new Set(['/api/v1/events', '/api/v1/app/hello', '/api/v1/home/list', '/api/v1/home/card']);
+    const after = log.requests.slice(beforeRestart).map((r) => r.path).filter((p) => !reads.has(p));
     check('K: the restart sends no write', after.length === 0, after);
     check('K: no page error', log.errors.length === 0, log.errors);
     await context.close();
@@ -921,23 +956,36 @@ async function measureBoot(browser, server) {
 }
 
 /**
- * `count` switches of the language, alternating ar and en, in one page. Each is timed in the
- * page twice from the dispatch of the select's `change`: to the moment the sample line's text
- * changes (a MutationObserver sees the change as it happens), which is what the update costs,
+ * `count` switches of the language, alternating ar and en, in one page, previewed in the App
+ * language dialog (B2 D14). Each is timed in the page twice from the press on the language's
+ * option in the dialog's open list: to the moment Home's title changes (a MutationObserver sees the change as it happens), which is what the update costs,
  * and to the first animation frame after that, which is what a person waits for and which
  * rounds up to the display's frame. Long tasks (over 50 ms, the Long Tasks API) are listed.
  * Two switches first, that are not timed, load the Arabic face of the fonts; the first one's
  * time is reported apart.
  */
 async function measureSwitches(page, count) {
-  return page.evaluate(async (count) => {
-    const select = document.querySelector('[data-testid=runtime-locale]');
-    const sample = document.querySelector('[data-testid=runtime-sample]');
+  await openLanguage(page);
+  return page.evaluate(async ({ count, label, titleSel }) => {
+    const select = document.querySelector('[data-testid=language-select]');
+    const sample = document.querySelector(titleSel);
     const longTasks = [];
     const watcher = new PerformanceObserver((list) => list.getEntries().forEach((e) => longTasks.push(Math.round(e.duration))));
     watcher.observe({ entryTypes: ['longtask'] });
-    const switchTo = (locale) =>
-      new Promise((resolve) => {
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    // The dialog's list opens first, untimed; the switch is the press on the option.
+    const option = async (locale) => {
+      select.click();
+      for (let i = 0; i < 20; i++) {
+        const found = [...document.querySelectorAll('[role=listbox] [role=option]')].find((o) => o.textContent.trim() === label[locale]);
+        if (found) return found;
+        await frame();
+      }
+      throw new Error(`no option ${label[locale]}`);
+    };
+    const switchTo = async (locale) => {
+      const target = await option(locale);
+      return new Promise((resolve) => {
         let changed = 0;
         const observer = new MutationObserver(() => {
           observer.disconnect();
@@ -946,9 +994,9 @@ async function measureSwitches(page, count) {
         });
         observer.observe(sample, { childList: true, characterData: true, subtree: true });
         const started = performance.now();
-        select.value = locale;
-        select.dispatchEvent(new Event('change', { bubbles: true }));
+        target.click();
       });
+    };
     const cold = await switchTo('ar');
     await switchTo('en');
     longTasks.length = 0; // the cold pair is not part of the measurement
@@ -957,7 +1005,7 @@ async function measureSwitches(page, count) {
     await new Promise((resolve) => setTimeout(resolve, 100)); // long tasks are reported late
     watcher.disconnect();
     return { cold, times, longTasks };
-  }, count);
+  }, { count, label: LABEL, titleSel: TITLE });
 }
 
 async function measure() {

@@ -1228,7 +1228,7 @@
     },
     {
       "name": "home-loading",
-      "group": "home",
+      "group": "home-held",
       "state": "home",
       "scenario": "sample",
       "locale": "en",
@@ -1242,8 +1242,8 @@
       "domSha256": "8c027b627a66278061a8521635d7ae2f083cb92fd5cd74f01232ff3f1a176691",
       "actions": "actions/home-loading.json",
       "actionsSha256": "288c7b05f71a7398352043d833032cca0a0f2dbde1cd5350b240463ff128a041",
-      "domUnit": "B2",
-      "pixelsUnit": "B2",
+      "domUnit": "B3",
+      "pixelsUnit": "B3",
       "scope": null
     },
     {
@@ -1289,7 +1289,7 @@
     },
     {
       "name": "home-open-error",
-      "group": "home",
+      "group": "home-open",
       "state": "home-open-error",
       "scenario": "sample",
       "locale": "en",
@@ -1301,13 +1301,13 @@
       "domSha256": "ab6d6047fc809622d5d945e827ff8b1e969c82b4f6acc83c73ee339964b783f9",
       "actions": "actions/home-open-error.json",
       "actionsSha256": "6192ad6cc4699426eac3617b99ec1d36e43088991d5e1d1d7ddaefc652270470",
-      "domUnit": "B2",
-      "pixelsUnit": "B2",
+      "domUnit": "B3",
+      "pixelsUnit": "B3",
       "scope": null
     },
     {
       "name": "home-checkpoint-error",
-      "group": "home",
+      "group": "home-checkpoint",
       "state": "home",
       "scenario": "sample",
       "locale": "en",
@@ -1323,8 +1323,8 @@
       "domSha256": "5adb42cbd508fcd62e86a3b2485041220b442d8dbca174e19ec0066ebabbd254",
       "actions": "actions/home-checkpoint-error.json",
       "actionsSha256": "ffbcb1f32e4d0b6df9bf2eba084f77d5b2685143855e32a871122b58e26d0a1c",
-      "domUnit": "B2",
-      "pixelsUnit": "B2",
+      "domUnit": "D1",
+      "pixelsUnit": "D1",
       "scope": null
     },
     {
