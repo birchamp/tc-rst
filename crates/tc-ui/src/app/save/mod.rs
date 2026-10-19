@@ -33,7 +33,7 @@ use std::collections::BTreeMap;
 
 use tc_api::API_VERSION;
 use tc_api::app::OpenSession;
-use tc_api::buffer::{BufferEntry, BufferKey, SentSave};
+use tc_api::buffer::{BufferEntry, BufferKey, FieldKind, SentSave};
 use tc_api::event::SessionMode;
 use tc_api::ids::{Epoch, RequestId, Scope, ServerInstance, ViewSeq, WallMs};
 use tc_api::shown::PersonLabel;
@@ -1134,6 +1134,15 @@ impl SaveMachine {
             })
             .max()
             .unwrap_or(Worst::Saved)
+    }
+
+    /// The kinds of the fields whose save failed, for the indicator's Retry.
+    pub fn failed_kinds(&self) -> Vec<FieldKind> {
+        self.fields
+            .iter()
+            .filter(|(_, field)| matches!(field.state, FieldSave::Failed(_)))
+            .map(|(key, _)| key.field.kind)
+            .collect()
     }
 
     /// The disk warnings of fields saved with one.

@@ -1,8 +1,7 @@
-//! The page's root until unit A5 replaces it with the port of tC4's `App.jsx`: a sample line
-//! in the shown language, the picker of the ten languages, and the internet switch's state.
-//!
-//! It is the only way the smoke can change the language before A5 exists, and it uses no
-//! path of its own: the picker calls `show_locale`, as the language dialog will.
+//! Home's content until unit B2 ports `Home.jsx` (A5 D5): a sample line in the shown language,
+//! the picker of the ten languages, and the internet switch's state. A4a's smoke and A6b's
+//! environment tests read its test ids; B2 replaces it and moves them onto Home and the App
+//! language dialog. The picker calls `show_locale`, as the language dialog's preview does.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -14,7 +13,7 @@ use crate::i18n::{LOCALES, keys, show_locale, shown_locale, t};
 
 /// A sample of the shown language, the language picker and the internet state.
 #[component]
-pub(super) fn StandIn() -> impl IntoView {
+pub(super) fn HomeStandIn() -> impl IntoView {
     let internet = use_runtime().map(|runtime| runtime.state().internet.clone());
     let on_change = move |event: leptos::ev::Event| {
         if let Ok(locale) = LocaleId::parse(&event_target_value(&event)) {

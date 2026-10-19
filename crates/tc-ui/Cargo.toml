@@ -13,7 +13,8 @@ crate-type = ["cdylib", "rlib"]
 # The design-system gallery: renders every case of parity/ds-gallery/gallery-spec.json.
 gallery = ["dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
 # The application's runtime and page (APP-DESIGN section 6): the API client, the event stream,
-# the query cache, the server state and the language. Until unit A5 it mounts a stand-in root.
+# the query cache, the server state and the language. It mounts the port of tC4's `App.jsx`;
+# Home is A4a's stand-in until B2.
 app = ["dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
 # The no-loss probe page (APP-DESIGN 6.5-6.8, unit A4b): two test fields saved through tc-api's
 # test service, and the panic triggers the recovery tests need. Never in a release build:

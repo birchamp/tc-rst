@@ -8,10 +8,15 @@ mod app {
     mod cache;
     mod client;
     mod effects;
+    mod feedback;
+    mod indicator;
+    mod internet;
+    mod language;
     mod recovery;
     mod save;
     pub mod save_kit;
     mod save_props;
     mod save_refresh;
+    mod shell;
     mod sse;
 }

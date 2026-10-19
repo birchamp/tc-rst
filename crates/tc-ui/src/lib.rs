@@ -10,7 +10,7 @@
 //!
 //! [`app`] is the application's runtime: the API client, the event stream, the query cache and
 //! the server state. Its decisions are pure and tested on the host; its browser glue is behind
-//! the `app` feature.
+//! the `app` feature. `views` (with `app`) are tC4's views, drawn over `use_app()`.
 //!
 //! The components only run in a browser, so they compile for `wasm32` only. The pure parts
 //! (inline-style building, keyword enums, layout arithmetic, string rules, keyed lists, the
@@ -31,3 +31,6 @@ pub mod ds;
 
 #[cfg(all(target_arch = "wasm32", feature = "gallery"))]
 pub mod gallery;
+
+#[cfg(all(target_arch = "wasm32", feature = "app"))]
+pub mod views;

@@ -776,11 +776,29 @@ async function caseK(browser, server) {
     // The held counts sit on an empty <p>, which is never visible: wait for it in the DOM.
     await page.waitForSelector('[data-testid=runtime-held][data-align-saves="1"]', { state: 'attached', timeout: 5000 });
     check('K: an aligner\'s save state reaches the page', true);
+    const beforeRestart = log.requests.length;
+    // Every write of the navigation snapshot, from here on.
+    await page.evaluate(() => {
+      window.__navWrites = [];
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'tc4.nav.v1') window.__navWrites.push(JSON.parse(value));
+        return set.call(this, key, value);
+      };
+    });
     inject(frames.internetOn, { instance: 'cd'.repeat(16), seq: 1 });
     await settle();
     check('K: a frame of another server run forgets the jobs, and asks for none', calls(log, 'jobs/get').length === 2, calls(log, 'jobs/get').length);
     await page.waitForSelector('[data-testid=runtime-held][data-align-saves="0"][data-jobs="0"][data-checkpoints="0"][data-blocked="0"]', { state: 'attached', timeout: 5000 });
     check('K: and the aligner save states, which only events carry and the old run numbered', true);
+    // A5 D15: the App goes Home at once, with no gate, and the navigation snapshot names the
+    // new run, so a reload never takes the old run's place for this one.
+    // (The `hello` the page then reads names the real server's run, so the snapshot follows it
+    // back: a write that names the injected run shows the restart was taken.)
+    const navWrites = await page.evaluate(() => window.__navWrites);
+    check('K: after a restart the navigation snapshot names the new run and Home', navWrites.some((nav) => nav.instance === 'cd'.repeat(16) && nav.view === 'home' && nav.project === null), navWrites);
+    const after = log.requests.slice(beforeRestart).map((r) => r.path).filter((p) => p !== '/api/v1/events' && p !== '/api/v1/app/hello');
+    check('K: the restart sends no write', after.length === 0, after);
     check('K: no page error', log.errors.length === 0, log.errors);
     await context.close();
   } finally {
