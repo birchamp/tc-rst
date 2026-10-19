@@ -16,6 +16,9 @@
 //!   goes stale the day an owner publishes.
 //! - `literal`: the literal Bible's name when it is not `<lang>_ult` or `<lang>_glt`
 //!   (BSOJ publishes `ar_avd`).
+//!
+//! One entry differs from tC4 on purpose: ur-deva reads left to right and is named in
+//! Devanagari (tC4 #701).
 
 use std::fmt;
 
@@ -42,6 +45,9 @@ pub struct Gateway {
     pub name: &'static str,
     /// The language's own name, which every screen shows first (D94).
     pub autonym: &'static str,
+    /// The direction of the language's script, which its helps read in. Where the installed
+    /// helps' own manifest states a direction, a helps pane prefers it
+    /// (`tc_helps::metadata::ResourceIdentity::direction`; unit B3, tC4 #701).
     pub direction: Direction,
     pub has_twl: bool,
     pub has_bible: bool,
@@ -119,6 +125,8 @@ pub const GATEWAYS: [Gateway; 18] = [
         has_simplified: false,
         ..gl("ml", "Door43-Catalog", "Malayalam", "മലയാളം", Direction::Ltr)
     },
+    // tC4 lists ur-deva as right to left and names it اردو, in Arabic script. Devanagari reads
+    // left to right, and the language's name in it is उर्दू (tC4 #701; docs/PLAN.md).
     Gateway {
         has_twl: false,
         has_simplified: false,
@@ -126,8 +134,8 @@ pub const GATEWAYS: [Gateway; 18] = [
             "ur-deva",
             "Door43-Catalog",
             "Urdu (Devanagari)",
-            "اردو",
-            Direction::Rtl,
+            "उर्दू",
+            Direction::Ltr,
         )
     },
 ];
@@ -416,6 +424,95 @@ mod tests {
         );
         assert_eq!(display_name("es-419"), "Español (Latinoamérica)");
         assert_eq!(display_name("xx"), "xx");
+    }
+
+    /// A letter of a right-to-left script: Hebrew, Arabic, Syriac, Thaana, N'Ko and the
+    /// supplements and presentation forms of these (Unicode bidi classes R and AL).
+    fn is_rtl_letter(c: char) -> bool {
+        matches!(
+            c as u32,
+            0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF | 0x10800..=0x10FFF | 0x1E800..=0x1EFFF
+        )
+    }
+
+    /// The BCP 47 script subtag of a tag (`deva` in `ur-deva`), when it names one.
+    fn script_subtag(tag: &str) -> Option<&str> {
+        tag.split('-')
+            .skip(1)
+            .find(|s| s.len() == 4 && s.chars().all(|c| c.is_ascii_alphabetic()))
+    }
+
+    /// Whether `c` belongs to `script`; `None` for a script this table does not know, so an
+    /// entry with a new script subtag must add its script here.
+    fn in_script(script: &str, c: char) -> Option<bool> {
+        let cp = c as u32;
+        Some(match script.to_ascii_lowercase().as_str() {
+            "deva" => matches!(cp, 0x0900..=0x097F | 0xA8E0..=0xA8FF),
+            "arab" => matches!(
+                cp,
+                0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF
+            ),
+            "latn" => c.is_ascii_alphabetic() || matches!(cp, 0x00C0..=0x024F),
+            _ => return None,
+        })
+    }
+
+    #[test]
+    fn ur_deva_helps_read_left_to_right_and_are_named_in_devanagari() {
+        let ur = find("ur-deva", "Door43-Catalog").unwrap();
+        assert_eq!(ur.direction, Direction::Ltr);
+        assert_eq!(ur.autonym, "\u{909}\u{930}\u{94d}\u{926}\u{942}");
+        assert_eq!(ur.autonym, "उर्दू");
+        assert_eq!(display_name("ur-deva"), "उर्दू");
+    }
+
+    #[test]
+    fn every_gateway_reads_in_the_direction_of_its_script() {
+        for g in &GATEWAYS {
+            let letters: Vec<char> = g.autonym.chars().filter(|c| c.is_alphabetic()).collect();
+            assert!(
+                !letters.is_empty(),
+                "{}: no letters in {}",
+                g.key(),
+                g.autonym
+            );
+            let rtl = letters.iter().filter(|c| is_rtl_letter(**c)).count();
+            assert!(
+                rtl == 0 || rtl == letters.len(),
+                "{}: {} mixes directions",
+                g.key(),
+                g.autonym
+            );
+            let script = if rtl > 0 {
+                Direction::Rtl
+            } else {
+                Direction::Ltr
+            };
+            assert_eq!(
+                g.direction,
+                script,
+                "{}: {} is written in a {script:?} script",
+                g.key(),
+                g.autonym
+            );
+            if let Some(tag) = script_subtag(g.language) {
+                for c in &letters {
+                    assert_eq!(
+                        in_script(tag, *c),
+                        Some(true),
+                        "{}: the tag names {tag}, the autonym {} has {c}",
+                        g.key(),
+                        g.autonym
+                    );
+                }
+            }
+        }
+        let rtl: Vec<String> = GATEWAYS
+            .iter()
+            .filter(|g| g.direction == Direction::Rtl)
+            .map(|g| g.key().to_string())
+            .collect();
+        assert_eq!(rtl, ["fa::fa_gl", "ar::BSOJ"]);
     }
 
     #[test]

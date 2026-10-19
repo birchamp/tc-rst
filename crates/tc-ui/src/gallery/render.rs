@@ -5,6 +5,7 @@
 //!   `{ "$asset": "public/assets/x.png" }` a file of the tC4 checkout, served by the gallery
 //!   `{ "$cell": "picked" }`               the text of one of the case's cells, kept current
 //!   `{ "$if": "busy", "then": …, "else": … }`  one value or the other by a cell, kept current
+//!   `onClickCapture` on an HTML element: a `{ "$fn": … }` called in the click's capture phase
 //!
 //! Everything else is plain JSON.
 
@@ -95,6 +96,9 @@ pub fn node(v: &Value) -> AnyView {
 fn html(tag: &str, p: Props) -> AnyView {
     let style = p.css("style");
     let children = p.tree("children");
+    // The capture phase runs before the component under test sees the click, so a case can
+    // turn a control off with the very click that reaches it (tC4 #552).
+    let on_click_capture = p.handler::<leptos::ev::MouseEvent>("onClickCapture");
     let mut attrs = p.rest();
     if !style.is_empty() {
         attrs.set("style", style.to_style());
@@ -140,10 +144,14 @@ fn html(tag: &str, p: Props) -> AnyView {
             ) {
                 warn(&format!("gallery: unexpected tag {other}"));
             }
-            element(other.to_string())
-                .add_any_attr(spread(&attrs))
-                .child(kids)
-                .into_any()
+            let el = element(other.to_string()).add_any_attr(spread(&attrs));
+            match on_click_capture {
+                Some(cb) => el
+                    .on(leptos::ev::capture(leptos::ev::click), move |e| cb.run(e))
+                    .child(kids)
+                    .into_any(),
+                None => el.child(kids).into_any(),
+            }
         }
     }
 }
