@@ -9,6 +9,7 @@ pub mod account_menu;
 pub mod help_panel;
 pub mod home;
 pub mod modals;
+pub mod sync_result;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
