@@ -19,7 +19,9 @@ use std::sync::{Arc, OnceLock};
 use common::{eng, fixture, tw_articles};
 use proptest::prelude::*;
 use tc_check::carry::{StoredDecision, plan_counted};
-use tc_check::change::{Unit, consequences_counted};
+use tc_check::change::{
+    ResourceUnit, Unit, consequences_by_resource_counted, consequences_counted,
+};
 use tc_check::derive::{CheckList, notes_for_book, word_links_for_book};
 use tc_check::rail::{Filter, GroupLabel, RailGroup, SortMode, groups_counted, progress};
 use tc_check::session::{Session, open};
@@ -558,6 +560,43 @@ fn counting_consequences_visits_each_decision_once() {
             "{name}: every decision is counted once, somewhere"
         );
         assert!(local_calls.get() <= 2 * with_decisions);
+
+        // The same counts from the resources the fold keeps beside the decisions, which
+        // are read without decoding any of them.
+        let before = fold.counters();
+        let resources: Vec<(ToolId, BookId, Vec<std::sync::Arc<ResourceRef>>)> = stored
+            .iter()
+            .map(|(tool, book, _)| {
+                (
+                    *tool,
+                    *book,
+                    fold.decision_resources(*tool, Collection::Book(*book)),
+                )
+            })
+            .collect();
+        let read = fold.counters().since(&before);
+        assert!(
+            read.values_decoded <= (total / 100) as u64,
+            "{name}: {} values decoded for {total} decisions",
+            read.values_decoded
+        );
+        assert_eq!(read.values_read, 0, "{name}");
+        let by_resource: Vec<ResourceUnit<'_>> = resources
+            .iter()
+            .map(|(tool, book, resources)| ResourceUnit {
+                tool: *tool,
+                collection: Collection::Book(*book),
+                resources,
+            })
+            .collect();
+        let mut lean = Work::default();
+        let from_resources =
+            consequences_by_resource_counted(&current, &next, &by_resource, |_| None, &mut lean);
+        assert_eq!(
+            from_resources, out,
+            "{name}: the same numbers from the resources alone"
+        );
+        assert_eq!(lean.decisions_visited, total, "{name}");
     }
 }
 

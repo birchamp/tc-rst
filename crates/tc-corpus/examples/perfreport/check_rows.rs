@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::time::Instant;
 use tc_check::carry::{self, StoredDecision};
-use tc_check::change::{self, Unit};
+use tc_check::change;
 use tc_check::derive::{BookSpec, CheckList, notes_for_book, word_links_for_book};
 use tc_check::item::{Category, CheckItem, NoteCategory};
 use tc_check::rail::{self, Filter, SortMode};
@@ -473,38 +473,60 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
     let fold = snapshot.fold();
     let mut rows = Vec::new();
 
-    let started = Instant::now();
-    let units = gather(fold);
-    let gathered = ms(started);
-    let decisions: usize = units.iter().map(|(_, _, d)| d.len()).sum();
-
+    // What an upgrade counts: the resource each decision of every (tool, book) was made
+    // against, read from the fold, and the numbers the ladders make of them. Both parts are
+    // timed, five times.
     let current = ladder(fold);
     let next = next_ladder(&current);
-    let as_units: Vec<Unit<'_>> = units
-        .iter()
-        .map(|(tool, book, decisions)| Unit {
-            tool: *tool,
-            collection: Collection::Book(*book),
-            decisions,
-        })
-        .collect();
     let mut times = Vec::new();
+    let (mut gathering, mut counting) = (0.0, 0.0);
     let mut at_risk = 0;
+    let (mut units_found, mut decisions_found) = (0, 0);
     for _ in 0..5 {
         let started = Instant::now();
-        let out = change::consequences(&current, &next, &as_units, |_| None);
+        let mut resources: Vec<(ToolId, BookId, Vec<std::sync::Arc<ResourceRef>>)> = Vec::new();
+        for ordinal in 1..=66u8 {
+            let Some(book) = BookId::from_ordinal(ordinal) else {
+                continue;
+            };
+            for tool in [TN, TW] {
+                let found = fold.decision_resources(tool, Collection::Book(book));
+                if !found.is_empty() {
+                    resources.push((tool, book, found));
+                }
+            }
+        }
+        gathering = ms(started);
+        let as_units: Vec<change::ResourceUnit<'_>> = resources
+            .iter()
+            .map(|(tool, book, resources)| change::ResourceUnit {
+                tool: *tool,
+                collection: Collection::Book(*book),
+                resources,
+            })
+            .collect();
+        let counted = Instant::now();
+        let out = change::consequences_by_resource(&current, &next, &as_units, |_| None);
+        counting = ms(counted);
         times.push(ms(started));
         at_risk = out.at_risk();
+        units_found = resources.len();
+        decisions_found = resources.iter().map(|(_, _, r)| r.len()).sum::<usize>();
     }
     rows.push(Measured::new(
         "check.consequences",
         times,
         format!(
-            "{} units, {decisions} decisions, {at_risk} at risk; gathering the decisions from the \
-             fold took {gathered:.0} ms",
-            units.len()
+            "{units_found} units, {decisions_found} decisions, {at_risk} at risk; the last run read \
+             the decisions' resources in {gathering:.0} ms and counted in {counting:.1} ms"
         ),
     ));
+
+    // The carry-over's decisions: whole, as the plan carries them.
+    let started = Instant::now();
+    let units = gather(fold);
+    let gathered = ms(started);
+    let decisions: usize = units.iter().map(|(_, _, d)| d.len()).sum();
 
     // The carry-over: the corpus's rows are the lists of the new release (2% of the rows
     // gone and 2% of the quotes changed), the fold's decisions what is carried.
@@ -580,7 +602,10 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
     rows.push(Measured::new(
         "check.carry_bible",
         per_pass,
-        format!("{} units, {decisions} decisions, 5 passes", lists.len()),
+        format!(
+            "{} units, {decisions} decisions, 5 passes; the decisions were read from the fold in {gathered:.0} ms",
+            lists.len()
+        ),
     ));
     rows
 }

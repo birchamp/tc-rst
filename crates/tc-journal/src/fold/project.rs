@@ -7,7 +7,7 @@
 use super::attach::{self, ShownVerse, runs};
 use super::books::rewound_batches;
 use super::merge::{ancestors_or_self, record_arc, record_of};
-use super::meta::{ChangeIdx, Form, KeyIdx, VerseShape};
+use super::meta::{ChangeIdx, Form, KeyIdx, Shape, VerseShape};
 use super::state::{FoldState, Projected};
 use super::{Conflict, ConflictKind, Counter};
 use crate::alignment::AlignedRun;
@@ -19,7 +19,7 @@ use crate::keys::{CheckKey, CheckTarget, PinGroup, RecordKey, ResourcesLevel, To
 use crate::pins::{Answer, Collection};
 use crate::record::{
     AlignmentGroup, AlignmentValue, CarriedValue, ChapterFront, CheckValue, CommentTarget,
-    DecisionRecord, LayoutItem, Record, SourceWord, TargetWord, VerseValue,
+    DecisionRecord, LayoutItem, Record, ResourceRef, SourceWord, TargetWord, VerseValue,
 };
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1210,6 +1210,59 @@ impl FoldState {
         let mut out: Vec<ProjectedDecision> = parts.into_iter().flatten().collect();
         out.sort_by(|a, b| a.key.cmp(&b.key));
         out
+    }
+
+    /// The resource each decision of `tool` on `collection` was made against, in key order:
+    /// what an upgrade or a change of gateway language counts the decisions it would put at
+    /// risk by (D23a, D30.2). The fold keeps a decision's resource beside its change, so
+    /// nothing is read or decoded; a decision in conflict, whose projection merges several
+    /// changes, is read.
+    pub fn decision_resources(
+        &self,
+        tool: ToolId,
+        collection: Collection,
+    ) -> Vec<Arc<ResourceRef>> {
+        let keys: Vec<KeyIdx> = match collection {
+            Collection::Book(book) => {
+                if !self.book(book).projects() {
+                    return Vec::new();
+                }
+                self.books
+                    .get(&book)
+                    .map(|b| b.keys.to_vec())
+                    .unwrap_or_default()
+            }
+            Collection::Stories => self.story_attached().collect(),
+        };
+        let mut found: Vec<(&CheckKey, Arc<ResourceRef>)> = Vec::new();
+        for k in keys {
+            let entry = self.entry(k);
+            let RecordKey::Check(check) = &entry.key else {
+                continue;
+            };
+            if check.tool != tool || check.target.collection() != collection {
+                continue;
+            }
+            let resource = match &entry.projected {
+                Projected::Nothing => None,
+                Projected::Change(c) => match self.shape(*c) {
+                    Shape::Decision { resource, .. } => Some(resource),
+                    _ => None,
+                },
+                Projected::Merged(record) => match &**record {
+                    Record::Check {
+                        value: CheckValue::Decision(decision),
+                        ..
+                    } => Some(Arc::new(decision.resource.clone())),
+                    _ => None,
+                },
+            };
+            if let Some(resource) = resource {
+                found.push((check, resource));
+            }
+        }
+        found.sort_by(|a, b| a.0.cmp(b.0));
+        found.into_iter().map(|(_, resource)| resource).collect()
     }
 
     /// The text of frame `frame` of `story` as the project holds it: the frame's record,

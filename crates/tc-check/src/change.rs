@@ -16,6 +16,8 @@
 //! Both sides resolve with the journal's ladder ([`Ladder::answer`]) and compare resources
 //! as the fold does ([`ResourceRef::same_resource`]).
 
+use std::sync::Arc;
+
 use tc_journal::pins::{Coverage, Ladder, Unrecorded};
 use tc_journal::record::ResourceRef;
 
@@ -79,6 +81,17 @@ impl Consequences {
     }
 }
 
+/// A (tool, collection)'s decisions as a count of an upgrade reads them: only the resource
+/// each was made against, which the fold keeps beside the change
+/// ([`tc_journal::fold::FoldState::decision_resources`]) and so reads without decoding a
+/// decision.
+#[derive(Debug, Clone, Copy)]
+pub struct ResourceUnit<'a> {
+    pub tool: ToolId,
+    pub collection: Collection,
+    pub resources: &'a [Arc<ResourceRef>],
+}
+
 /// Counts what changing the pins from `current` to `next` would cost. `local` gives the
 /// books an installed copy of a pin holds, for pins that record none.
 pub fn consequences(
@@ -100,26 +113,81 @@ pub fn consequences_counted(
     local: impl Fn(&ResourceRef) -> Option<Coverage>,
     work: &mut Work,
 ) -> Consequences {
+    let views: Vec<(ToolId, Collection, &[StoredDecision])> = units
+        .iter()
+        .map(|u| (u.tool, u.collection, u.decisions))
+        .collect();
+    count(
+        current,
+        next,
+        &views,
+        |d: &StoredDecision| &d.decision.resource,
+        local,
+        work,
+    )
+}
+
+/// [`consequences`] over the resources the decisions were made against alone: the same
+/// numbers, without a stored decision to build for each of the 215,000 checks of a Bible.
+pub fn consequences_by_resource(
+    current: &dyn Ladder,
+    next: &dyn Ladder,
+    units: &[ResourceUnit<'_>],
+    local: impl Fn(&ResourceRef) -> Option<Coverage>,
+) -> Consequences {
+    consequences_by_resource_counted(current, next, units, local, &mut Work::default())
+}
+
+/// [`consequences_by_resource`], adding what it touched to `work`.
+pub fn consequences_by_resource_counted(
+    current: &dyn Ladder,
+    next: &dyn Ladder,
+    units: &[ResourceUnit<'_>],
+    local: impl Fn(&ResourceRef) -> Option<Coverage>,
+    work: &mut Work,
+) -> Consequences {
+    let views: Vec<(ToolId, Collection, &[Arc<ResourceRef>])> = units
+        .iter()
+        .map(|u| (u.tool, u.collection, u.resources))
+        .collect();
+    count(
+        current,
+        next,
+        &views,
+        |r: &Arc<ResourceRef>| &**r,
+        local,
+        work,
+    )
+}
+
+/// The count over units of any decisions, given the resource of one.
+fn count<D>(
+    current: &dyn Ladder,
+    next: &dyn Ladder,
+    units: &[(ToolId, Collection, &[D])],
+    resource_of: impl Fn(&D) -> &ResourceRef,
+    local: impl Fn(&ResourceRef) -> Option<Coverage>,
+    work: &mut Work,
+) -> Consequences {
     let mut out = Consequences::default();
     let mut answered = 0usize;
-    let mut resolve = |pins: &dyn Ladder, unit: &Unit<'_>| {
+    let mut resolve = |pins: &dyn Ladder, tool: ToolId, collection: Collection| {
         answered += 1;
-        pins.answer(unit.tool, unit.collection, Unrecorded::Installed(&local))
+        pins.answer(tool, collection, Unrecorded::Installed(&local))
             .and_then(|a| a.resource().cloned())
     };
-    for unit in units {
-        if unit.decisions.is_empty() {
+    for &(tool, collection, decisions) in units {
+        if decisions.is_empty() {
             continue;
         }
-        let before = resolve(current, unit);
-        let after = resolve(next, unit);
-        let holds = |d: &StoredDecision, on: Option<&ResourceRef>| {
-            on.is_some_and(|r| r.same_resource(&d.decision.resource))
-        };
+        let before = resolve(current, tool, collection);
+        let after = resolve(next, tool, collection);
+        let holds =
+            |d: &D, on: Option<&ResourceRef>| on.is_some_and(|r| r.same_resource(resource_of(d)));
         // One look at each decision: it holds now, or it holds after the change, or it
         // holds on neither side.
         let (mut holding, mut revived) = (0usize, 0usize);
-        for d in unit.decisions {
+        for d in decisions {
             work.decisions_visited += 1;
             if holds(d, before.as_ref()) {
                 holding += 1;
@@ -128,15 +196,15 @@ pub fn consequences_counted(
             }
         }
         out.revived += revived;
-        out.detached += unit.decisions.len() - holding - revived;
+        out.detached += decisions.len() - holding - revived;
         let moves_away = match (&before, &after) {
             (Some(b), Some(a)) => !b.same_resource(a),
             (b, a) => b.is_some() != a.is_some(),
         };
         match before {
             Some(checked_against) if holding > 0 && moves_away => out.affected.push(Affected {
-                tool: unit.tool,
-                collection: unit.collection,
+                tool,
+                collection,
                 checked_against,
                 decisions: holding,
                 blocked: after.is_none(),

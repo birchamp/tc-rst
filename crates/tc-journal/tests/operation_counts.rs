@@ -633,6 +633,34 @@ fn a_tools_decisions_read_only_its_own_records() {
     }
 }
 
+/// The resource of each decision comes from what the fold keeps beside the change: the same
+/// resources, in the same order, as the decisions themselves carry, with nothing decoded for
+/// the decisions that have a single head. An upgrade counts the decisions it would put at risk
+/// by them.
+#[test]
+fn decision_resources_are_read_without_decoding_decisions() {
+    for (name, state) in [("Psalms", psalms()), ("larger", larger())] {
+        for tool in [ToolId::TranslationNotes, ToolId::TranslationWords] {
+            let fold = fork(state);
+            let collection = Collection::Book(PSALMS);
+            let before = fold.counters();
+            let resources = fold.decision_resources(tool, collection);
+            let read = fold.counters().since(&before);
+            let decisions = fold.decisions(tool, collection);
+            assert_eq!(resources.len(), decisions.len(), "{name} {tool:?}");
+            for (resource, decision) in resources.iter().zip(&decisions) {
+                assert_eq!(**resource, decision.record.resource, "{name} {tool:?}");
+            }
+            assert!(
+                read.values_decoded <= (decisions.len() / 100) as u64,
+                "{name} {tool:?}: {} values decoded for {} decisions",
+                read.values_decoded,
+                decisions.len()
+            );
+        }
+    }
+}
+
 /// The history axis alone: the same save on the same records, in a project that has had
 /// three more years of work, 4,000 more changes in Psalms and 500 of them on the saved verse
 /// itself (a chain of 500 ancestors). The ten-times corpus mixes history with books and
