@@ -47,6 +47,10 @@ use tc_api::prefs::{
     SetLocale,
 };
 use tc_api::refusal::Message;
+use tc_api::session::{
+    BufferSlot, CopyProject, DiscardDraft, DraftKind, DraftOffer, Drafts, Keep, KeepDraft,
+    KeptDraft, OfferedDrafts, OtherComputerClosed, ProjectCopy, Settles, StoredDraftId,
+};
 use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
@@ -532,6 +536,150 @@ impl Example for Ack {
     }
 }
 
+fn offered_key() -> BufferKey {
+    BufferKey {
+        project: ProjectRef::parse("kr_ulb").unwrap(),
+        id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
+        field: FieldKey {
+            kind: FieldKind::Verse,
+            place: FieldPlace::parse("TIT 1:4").unwrap(),
+        },
+    }
+}
+
+impl Example for Drafts {
+    fn example() -> Self {
+        let entry = BufferEntry {
+            api: 1,
+            instance: ServerInstance::from_bytes([0xab; 16]),
+            base: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+            text: "To Titus, a true son".into(),
+            sent: None,
+            at: WallMs(1_760_000_000_123),
+            draft: None,
+        };
+        Drafts {
+            at: scope(),
+            buffered: vec![
+                serde_json::to_string(&BufferLine::Changed {
+                    key: offered_key(),
+                    entry,
+                })
+                .unwrap(),
+            ],
+        }
+    }
+}
+
+impl Example for OfferedDrafts {
+    fn example() -> Self {
+        let slot = BufferSlot {
+            key: offered_key(),
+            instance: ServerInstance::from_bytes([0xab; 16]),
+            text: "To Titus, a true son".into(),
+        };
+        OfferedDrafts {
+            offers: vec![
+                DraftOffer {
+                    kind: DraftKind::Words,
+                    place: FieldPlace::parse("TIT 1:4").unwrap(),
+                    text: "To Titus, a true son".into(),
+                    keep: Keep::Save,
+                    shown: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+                    settles: Settles {
+                        stored: vec![StoredDraftId(1)],
+                        buffered: vec![slot.clone()],
+                    },
+                },
+                DraftOffer {
+                    kind: DraftKind::Section,
+                    place: FieldPlace::parse("TIT 1:5").unwrap(),
+                    text: "{\"tokens\":[],\"buffer\":\"For this reason\"}".into(),
+                    keep: Keep::CopyText,
+                    shown: Vec::new(),
+                    settles: Settles {
+                        stored: vec![StoredDraftId(2)],
+                        buffered: Vec::new(),
+                    },
+                },
+                DraftOffer {
+                    kind: DraftKind::CheckComment,
+                    place: FieldPlace::parse("TIT 1:6").unwrap(),
+                    text: "check the word for elder".into(),
+                    keep: Keep::AsVersion,
+                    shown: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+                    settles: Settles::default(),
+                },
+            ],
+            saved: vec![BufferSlot {
+                text: "Paul, a servant of God".into(),
+                ..slot
+            }],
+        }
+    }
+}
+
+impl Example for KeepDraft {
+    fn example() -> Self {
+        KeepDraft {
+            at: scope(),
+            request: request(30),
+            kind: DraftKind::Words,
+            shown: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+            text: "To Titus, a true son".into(),
+            discard: vec![StoredDraftId(1)],
+        }
+    }
+}
+
+impl Example for KeptDraft {
+    fn example() -> Self {
+        let ack = ack();
+        KeptDraft {
+            view: ack.view,
+            stored: Stored::Written,
+            new_conflicts: ack.new_conflicts,
+        }
+    }
+}
+
+impl Example for DiscardDraft {
+    fn example() -> Self {
+        DiscardDraft {
+            at: scope(),
+            request: request(31),
+            stored: vec![StoredDraftId(1), StoredDraftId(2)],
+        }
+    }
+}
+
+impl Example for CopyProject {
+    fn example() -> Self {
+        CopyProject {
+            at: scope(),
+            request: request(32),
+        }
+    }
+}
+
+impl Example for ProjectCopy {
+    fn example() -> Self {
+        ProjectCopy {
+            project: ProjectRef::parse("kr_ulb - Copy").unwrap(),
+            id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
+        }
+    }
+}
+
+impl Example for OtherComputerClosed {
+    fn example() -> Self {
+        OtherComputerClosed {
+            at: scope(),
+            request: request(33),
+        }
+    }
+}
+
 impl Example for FieldLog {
     fn example() -> Self {
         FieldLog {
@@ -739,6 +887,10 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
+            "session/copy",
+            "session/discardDraft",
+            "session/keepDraft",
+            "session/otherComputerClosed",
             "test/saveVerse",
         ])
     );

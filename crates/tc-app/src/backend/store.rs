@@ -45,10 +45,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
 
 use super::{
-    BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
-    Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published, ReviewToken,
-    Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
-    SummaryStamp, UnusableFolder,
+    BoxFuture, CheckpointReason, CommandError, CopyFailure, EditToken, Listing, OfferedDraft,
+    OpenFailure, Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published,
+    ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent,
+    StoreReply, Stored, SummaryStamp, UnusableFolder,
 };
 use crate::clock::Clock;
 use crate::jobs::ProgressSink;
@@ -119,6 +119,9 @@ pub struct StoreBackend {
     projects: PathBuf,
     vfs: Arc<dyn tc_store::Vfs>,
     hooks: Arc<tc_store::Hooks>,
+    /// Folders whose lock the person said names a computer that is closed (C1b): the next
+    /// open of each takes the lock.
+    trusted: Mutex<std::collections::BTreeSet<ProjectRef>>,
 }
 
 impl std::fmt::Debug for StoreBackend {
@@ -144,6 +147,7 @@ impl StoreBackend {
             projects,
             vfs,
             hooks,
+            trusted: Mutex::default(),
         })
     }
 
@@ -363,9 +367,9 @@ impl ProjectStore for StoreBackend {
         let path = self.listed(folder)?;
         let options = tc_store::OpenOptions {
             progress: forward_open(progress),
-            // C1b lets the person say that the computer the lock names is closed; until then
-            // such a project opens read-only.
-            other_computer_closed: false,
+            // Once: a later open meets the lock afresh, since another computer may open the
+            // project again meanwhile.
+            other_computer_closed: lock(&self.trusted).remove(folder),
             creation_pins: creation_pins(),
         };
         let handle = self.store.open(&path, &options).map_err(open_failure)?;
@@ -373,6 +377,21 @@ impl ProjectStore for StoreBackend {
             reason: format!("the project could not be served: {reason}"),
         })?;
         Ok(handle)
+    }
+
+    fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
+        let from = self
+            .listed(folder)
+            .map_err(|_| CopyFailure::Failed(format!("{folder} is not in the projects folder")))?;
+        match self.store.copy_project(&from, name.as_str()) {
+            Ok(_) => Ok(()),
+            Err(tc_store::CreateError::NameExists(_)) => Err(CopyFailure::NameExists),
+            Err(error) => Err(CopyFailure::Failed(error.to_string())),
+        }
+    }
+
+    fn trust_lock(&self, folder: &ProjectRef) {
+        lock(&self.trusted).insert(folder.clone());
     }
 
     /// Projects on disk have no seed to go back to: a parity scenario's store
@@ -1033,6 +1052,12 @@ impl ProjectHandle for StoreHandle {
             .as_ref()
             .map(|handle| handle.offered_drafts().into_iter().map(offered).collect())
             .unwrap_or_default()
+    }
+
+    fn discard_draft(&self, id: u64) {
+        if let Some(handle) = self.inner().as_ref() {
+            handle.discard_draft(id);
+        }
     }
 
     /// Holds the handle's read lock while it waits, so a close meanwhile waits too: a test's

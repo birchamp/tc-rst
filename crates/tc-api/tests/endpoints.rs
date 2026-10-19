@@ -1,4 +1,5 @@
-//! The endpoint list (APP-DESIGN §3.3, §3.9): one row per endpoint, the phase-0 set.
+//! The endpoint list (APP-DESIGN §3.3, §3.9): one row per endpoint, the phase-0 set and the
+//! rows each later unit adds.
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -7,7 +8,8 @@ use std::collections::BTreeSet;
 use tc_api::{ALL, Endpoint, Kind, NetKind};
 
 /// The endpoints of phase 0 (APP-DESIGN §3.9 and §10): those of the app, prefs, net, jobs,
-/// account and feedback services that units A2 to A9 serve, and the test hooks they use.
+/// account and feedback services that units A2 to A9 serve, and the test hooks they use; then
+/// the rows of later units: C1b's draft offer and copy.
 const PHASE_0: &[&str] = &[
     "app/hello",
     "app/quit",
@@ -28,6 +30,11 @@ const PHASE_0: &[&str] = &[
     "account/profileLink",
     "account/helpLink",
     "feedback/compose",
+    "session/drafts",
+    "session/keepDraft",
+    "session/discardDraft",
+    "session/copy",
+    "session/otherComputerClosed",
     "test/quiet",
     "test/echo",
     "test/crash",

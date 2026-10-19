@@ -1,0 +1,98 @@
+{
+  "path": "session/drafts",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "buffered": [
+      "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"kr_ulb\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"To Titus, a true son\",\"sent\":null,\"at\":1760000000123,\"draft\":null}}}"
+    ]
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "offers": [
+        {
+          "kind": "words",
+          "place": "TIT 1:4",
+          "text": "To Titus, a true son",
+          "keep": "save",
+          "shown": [
+            "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+          ],
+          "settles": {
+            "stored": [
+              1
+            ],
+            "buffered": [
+              {
+                "key": {
+                  "project": "kr_ulb",
+                  "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+                  "field": {
+                    "kind": "verse",
+                    "place": "TIT 1:4"
+                  }
+                },
+                "instance": "abababababababababababababababab",
+                "text": "To Titus, a true son"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "section",
+          "place": "TIT 1:5",
+          "text": "{\"tokens\":[],\"buffer\":\"For this reason\"}",
+          "keep": "copyText",
+          "shown": [],
+          "settles": {
+            "stored": [
+              2
+            ],
+            "buffered": []
+          }
+        },
+        {
+          "kind": "checkComment",
+          "place": "TIT 1:6",
+          "text": "check the word for elder",
+          "keep": "asVersion",
+          "shown": [
+            "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+          ],
+          "settles": {
+            "stored": [],
+            "buffered": []
+          }
+        }
+      ],
+      "saved": [
+        {
+          "key": {
+            "project": "kr_ulb",
+            "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+            "field": {
+              "kind": "verse",
+              "place": "TIT 1:4"
+            }
+          },
+          "instance": "abababababababababababababababab",
+          "text": "Paul, a servant of God"
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -13,6 +13,7 @@ mod app {
     mod indicator;
     mod internet;
     mod language;
+    mod offer;
     mod recovery;
     mod save;
     pub mod save_kit;

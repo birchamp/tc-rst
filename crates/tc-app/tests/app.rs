@@ -20,6 +20,7 @@ mod app {
     mod app_start;
     pub mod common;
     mod dispatch;
+    mod drafts;
     mod events;
     mod feedback;
     mod field_store;

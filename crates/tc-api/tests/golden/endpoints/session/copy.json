@@ -1,0 +1,28 @@
+{
+  "path": "session/copy",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "20202020202020202020202020202020"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "project": "kr_ulb - Copy",
+      "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

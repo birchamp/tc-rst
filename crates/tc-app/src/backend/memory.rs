@@ -26,9 +26,9 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use super::seed::StateSeed;
 use super::{
-    BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
-    ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published, ReviewToken, Snapshot,
-    StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
+    BoxFuture, CheckpointReason, CommandError, CopyFailure, EditToken, Listing, OfferedDraft,
+    OpenFailure, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published, ReviewToken,
+    Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
 };
 use crate::jobs::ProgressSink;
 
@@ -386,6 +386,16 @@ impl ProjectStore for MemoryBackend {
         Ok(Arc::new(MemoryHandle { state, open }))
     }
 
+    /// A memory project has no folder to copy.
+    fn copy(&self, _folder: &ProjectRef, _name: &ProjectRef) -> Result<(), CopyFailure> {
+        Err(CopyFailure::Failed(
+            "the memory backend copies no project".to_owned(),
+        ))
+    }
+
+    /// A memory project has no lock file.
+    fn trust_lock(&self, _folder: &ProjectRef) {}
+
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError> {
         let projects = lock(&self.projects);
@@ -568,6 +578,8 @@ impl ProjectHandle for MemoryHandle {
     fn offered_drafts(&self) -> Vec<OfferedDraft> {
         Vec::new()
     }
+
+    fn discard_draft(&self, _id: u64) {}
 
     /// Nothing runs in the background.
     #[cfg(feature = "test-hooks")]
