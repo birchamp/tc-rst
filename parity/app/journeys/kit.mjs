@@ -59,13 +59,15 @@ export const LOCALES = [...fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 's
 export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
 
 /**
- * A browser, a `tc4` and a page, Home loaded in `locale` (the probe page with `probe`), then
+ * A browser, a `tc4` and a page, Home loaded in `locale` (the probe page with `probe`; with
+ * `seed(folder)`, tc-store over a projects folder it fills instead of the sample scenario), then
  * `body({ env, page, context, errors, allow })`. `init(context, env)` runs before the page
  * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass.
  */
-export async function withApp(body, { locale = 'en', probe = false, init } = {}) {
+export async function withApp(body, { locale = 'en', probe = false, init, seed } = {}) {
   const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });
-  const env = await startRustEnv({ scenario: 'sample', tc4: setup.tc4, ui: probe ? setup.hooks : setup.ui });
+  const scenario = seed ? 'store' : 'sample';
+  const env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe ? setup.hooks : setup.ui });
   try {
     const context = await browser.newContext(env.contextOptions);
     await env.prepare(context);

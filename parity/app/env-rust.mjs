@@ -22,6 +22,8 @@ export const PROJECTS = {
   sample: { [BIBLE]: 'sample_burrito', [OBS]: 'sample_burrito_obs' },
   'en-pins': { [BIBLE]: 'sample_burrito', [OBS]: 'sample_burrito_obs' },
   shared: { [BIBLE]: 'sample_burrito', [OBS]: 'sample_burrito_obs' },
+  // No scenario: tc-store over a projects folder the caller fills.
+  store: {},
 };
 
 /** The requests a shot waits for: the API and pictures, never the event stream, which stays
@@ -113,16 +115,19 @@ function apiCall(base, token, endpoint, body) {
  * Every run gets its own app-data and projects folders under `runDir` (in target/, never the
  * person's own folders: without `--projects`, tc4 uses `~/translationCore4/projects`).
  */
-export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
+export async function startRustEnv({ scenario, tc4, ui, seed, runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
   if (!PROJECTS[scenario]) throw new Error(`no scenario ${scenario}; the scenarios are ${Object.keys(PROJECTS).join(', ')}`);
   const dir = path.join(runDir, scenario);
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(path.join(dir, 'appdata'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'projects'), { recursive: true });
+  // `store`: tc-store over a projects folder `seed(folder)` fills, with no scenario (B2's
+  // journey of a folder that cannot be opened).
+  if (scenario === 'store') seed?.(path.join(dir, 'projects'));
   // stdin stays open: a closed stdin makes tc4 quit.
   const child = spawn(path.resolve(tc4), [
     'serve', '--app-data', path.join(dir, 'appdata'), '--projects', path.join(dir, 'projects'), '--ui', path.resolve(ui),
-    '--door43', DEAD_DOOR43, '--test-hooks', ...scenarioArgs(scenario, dir),
+    '--door43', DEAD_DOOR43, '--test-hooks', ...(scenario === 'store' ? [] : scenarioArgs(scenario, dir)),
   ], { stdio: ['pipe', 'pipe', 'inherit'] });
   const lines = readline.createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));

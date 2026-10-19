@@ -388,3 +388,64 @@ browserTest('j. (no-project half) Arabic interface text is painted in the bundle
     assert.deepEqual(env.refused(), []);
   });
 });
+
+// ---- the Home halves (B2) -----------------------------------------------------------------
+
+browserTest('a. (Home half) each preview changes Home\'s heading, section label, Add a project, Share, Settings and the card\'s line in place; Cancel restores English', async () => {
+  await withApp(async ({ page }) => {
+    await page.getByTestId('project-sample_burrito').waitFor();
+    const want = (id, key) => catalog(id)[key] ?? catalog('en')[key];
+    const nodes = [await page.$('main h1'), await page.$('main h2'), await page.$('[data-testid="add-project"]'), await page.$('[data-testid="project-summary"]')];
+    await openLanguage(page);
+    for (const { id } of LOCALES.filter((l) => l.id !== 'en')) {
+      await choose(page, id);
+      await until(`Home in ${id}`, async () => (await page.textContent('main h1')) === want(id, 'home.yourProjects'));
+      assert.equal(await page.textContent('main h2'), want(id, 'home.projects'), `${id}: section label`);
+      assert.equal(await page.getByTestId('add-project').textContent(), `+ ${want(id, 'home.addProject')}`, `${id}: Add a project`);
+      assert.equal(await page.getByTestId('share-sample_burrito').textContent(), want(id, 'home.share'), `${id}: Share`);
+      const settings = page.locator('[data-testid="project-sample_burrito"] button', { hasText: want(id, 'home.settings') });
+      assert.equal(await settings.count(), 1, `${id}: Settings`);
+      const line = await page.getByTestId('project-summary').textContent();
+      assert.ok(line.includes(want(id, 'home.inProgress').replace('{n}', '2')), `${id}: the card's line: ${line}`);
+    }
+    for (const node of nodes) assert.ok(await node.evaluate((n) => n.isConnected), 'no Home node was drawn again');
+    await cancel(page).click();
+    await closed(page);
+    await until('Home in English', async () => (await page.textContent('main h1')) === catalog('en')['home.yourProjects']);
+  });
+});
+
+browserTest('g. (Home half) the section label keeps the English tracking in every language but Hindi and Arabic, where it is 0', async () => {
+  await withApp(async ({ page, env }) => {
+    await page.getByTestId('add-project').waitFor();
+    const en = await letterSpacing(page.locator('main h2'));
+    assert.ok(en > 0, 'English tracks the section label');
+    for (const id of ['fr', 'ru', 'hi', 'ar']) {
+      await env.load(page, { locale: id });
+      await page.getByTestId('add-project').waitFor();
+      const seen = await letterSpacing(page.locator('main h2'));
+      if (id === 'hi' || id === 'ar') assert.equal(seen, 0, id);
+      else assert.equal(seen, en, `${id} keeps English's tracking`);
+    }
+  });
+});
+
+browserTest('h. (Home half) Home in Arabic reads right to left: the card\'s header is mirrored, Settings left of Share', async () => {
+  await withApp(async ({ page }) => {
+    const card = page.getByTestId('project-sample_burrito');
+    await card.waitFor();
+    const order = async () => {
+      const share = await page.getByTestId('share-sample_burrito').boundingBox();
+      const settings = await card.locator('button', { hasText: /Settings|الإعدادات/ }).boundingBox();
+      return share.x < settings.x ? 'share-first' : 'settings-first';
+    };
+    assert.equal(await order(), 'share-first');
+    await openLanguage(page);
+    await choose(page, 'ar');
+    await until('rtl', async () => (await directions(page)).root === 'rtl');
+    assert.equal(await order(), 'settings-first', 'Settings is left of Share');
+    await cancel(page).click();
+    await closed(page);
+    assert.equal(await order(), 'share-first');
+  });
+});
