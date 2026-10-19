@@ -282,15 +282,67 @@ fn any_skipped_marker_between_words_keeps_its_space() {
     assert_eq!(shown_text_v1("a\\f + \\ft n\\f*\u{a0}b"), "a\u{a0}b");
 }
 
-/// The drafts on which the rebuild keeps a space that tC4 (PR #800 included) drops: a marker
-/// other than a note, a cross reference or a figure between "siervo" and "de".
-const HIDDEN: &[&str] = &[
-    "hidden-va",
-    "hidden-vp",
-    "hidden-ca",
-    "hidden-rq",
-    "hidden-cat",
-    "hidden-ts",
+/// A marker the shown text leaves out right before a letter keeps the words on either side
+/// apart, as the export splits them, though usfm-js keeps no character after its end marker:
+/// a space is put back between two characters that would read as one word or number, and
+/// nothing between a word and punctuation (a declared difference: tC4, PR #800 too, shows
+/// "siervode", which the export cannot weave, #796).
+#[test]
+fn a_skipped_marker_right_before_a_letter_leaves_a_space() {
+    for (content, shown) in [
+        (
+            "Pablo, siervo\\f + \\ft o esclavo\\f*de Dios.",
+            "Pablo, siervo de Dios.",
+        ),
+        ("a\\fig x|src=\"y\"\\fig*b", "a b"),
+        ("Je\\ts\\*sus", "Je sus"),
+        ("año 12\\f + \\ft n\\f*3", "año 12 3"),
+        ("siervo\\f + \\ft o\\f*, de", "siervo, de"),
+        ("siervo,\\f + \\ft o\\f*de", "siervo,de"),
+        ("siervo\\f + \\ft o\\f*\\x - \\xt R\\x*de", "siervo de"),
+    ] {
+        assert_eq!(shown_text_v1(content), shown, "{content}");
+    }
+}
+
+/// Words of a character span after a span nested in it are shown, in file order (a declared
+/// difference: tC4 shows only the outer span's text before the nested span, so it hides
+/// "Lord your God" from Check and the Align bank while the export counts those words).
+#[test]
+fn words_after_a_nested_character_span_show() {
+    for (content, shown) in [
+        (
+            "Jesus said, \\wj Worship the \\+nd Lord\\+nd* your God\\wj* and the end.",
+            "Jesus said, Worship the Lord your God and the end.",
+        ),
+        (
+            "\\wj a \\+nd b \\+add c\\+add* d\\+nd* e\\wj* f",
+            "a b c d e f",
+        ),
+        ("x \\qs Selah \\+nd x\\+nd* y\\qs*", "x Selah x y"),
+        ("the \\add a \\+nd b\\+nd* c\\add* d", "the a b c d"),
+    ] {
+        assert_eq!(shown_text_v1(content), shown, "{content}");
+    }
+}
+
+/// The verses on which the rebuild keeps words apart that tC4 (PR #800 included) joins, with
+/// tC4's joined text and the rebuild's: a marker other than a note, a cross reference or a
+/// figure between "siervo" and "de", and notes that usfm-js misreads inside an alignment run,
+/// where it keeps no character after the note.
+const SPACED: &[(&str, &str, &str)] = &[
+    ("hidden-va 1:1", "siervode", "siervo de"),
+    ("hidden-vp 1:1", "siervode", "siervo de"),
+    ("hidden-ca 1:1", "siervode", "siervo de"),
+    ("hidden-rq 1:1", "siervode", "siervo de"),
+    ("hidden-cat 1:1", "siervode", "siervo de"),
+    ("hidden-ts 1:1", "siervode", "siervo de"),
+    ("aligned-notes 1:1", "onetwo", "one two"),
+    (
+        "bundle/en/en_ult_v91.sb.zip en_ult/ingredients/2SA.usfm 23:8",
+        "spearagainst",
+        "spear against",
+    ),
 ];
 
 /// Compares the shown text of every case of a vector file in the format of
@@ -324,16 +376,17 @@ fn check_vectors(file: &serde_json::Value) -> (usize, usize) {
         for case in cases {
             let key = key(case);
             let shown = shown_text_v1(&ours[&key]);
+            let spaced = SPACED
+                .iter()
+                .find(|(at, ..)| *at == format!("{book} {key}"));
             match (case["text"].as_str(), case["md5"].as_str()) {
-                (Some(theirs), None) if HIDDEN.contains(book) => {
-                    texts += 1;
-                    if shown == theirs || shown != theirs.replacen("siervode", "siervo de", 1) {
-                        wrong.push(format!("{book} {key}: {shown:?} against tC4's {theirs:?}"));
-                    }
-                }
                 (Some(theirs), None) => {
                     texts += 1;
-                    if shown != theirs {
+                    let expected = spaced.map_or_else(
+                        || theirs.to_owned(),
+                        |(_, joined, apart)| theirs.replacen(joined, apart, 1),
+                    );
+                    if shown != expected || spaced.is_some() && shown == theirs {
                         wrong.push(format!("{book} {key}: {shown:?} against tC4's {theirs:?}"));
                     }
                 }
@@ -355,7 +408,7 @@ fn check_vectors(file: &serde_json::Value) -> (usize, usize) {
 /// `tools/gen-shown-text-vectors.mjs` with tC4's own `verseText` at PR #800's head 5dcd147:
 /// tC4's aligned fixtures, drafts with notes and other markers between words, and the md5 of
 /// every verse of the ULT and UST v91 Genesis and Psalms. The codec finds the verses usfm-js
-/// finds. The one difference is the declared one ([`HIDDEN`]). `main`, tC4 main's text where
+/// finds. The differences are the declared ones ([`SPACED`]). `main`, tC4 main's text where
 /// it differs, holds exactly the drafts where PR #800's space is the only change.
 #[test]
 fn the_shown_text_is_what_tc4_reads() {

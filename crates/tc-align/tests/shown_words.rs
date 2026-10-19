@@ -196,15 +196,11 @@ fn imported_mat_5_22_opens_with_all_44_links() {
     }
 }
 
-/// TC4-ISSUES row 5: a footnote right after "siervo". The bank holds "siervo" and "de", the
-/// export's words, so a value that places every word weaves (before, the bank held
-/// "siervode" and the weave failed with `TargetWordNotFound`, dropping the verse's alignment
-/// from the export).
-#[test]
-fn a_footnote_right_after_a_word_banks_both_words_and_weaves() {
-    let plain = "Pablo, siervo\\f + \\ft o esclavo\\f* de Dios.";
+/// Checks that the bank of `plain` is the export's word list, and that a value placing every
+/// bank word weaves and reads back; returns the woven verse.
+fn banks_the_export_words_and_weaves(plain: &str) -> String {
     let verse = TargetVerse::new(plain);
-    assert_eq!(Some(triples(verse.words())), export_words(plain));
+    assert_eq!(Some(triples(verse.words())), export_words(plain), "{plain}");
     let card = |(n, word): (usize, &TargetWord)| AlignmentGroup {
         top_words: vec![SourceWord {
             word: format!("λ{n}"),
@@ -231,16 +227,43 @@ fn a_footnote_right_after_a_word_banks_both_words_and_weaves() {
         extra: JsonMap::new(),
     };
     let woven = tc_align::usfm::weave_verse(plain, &value).unwrap();
-    assert!(woven.contains("\\f + \\ft o esclavo\\f*"), "{woven}");
-    assert!(
-        woven.contains("\\w siervo|x-occurrence=\"1\" x-occurrences=\"1\"\\w*"),
-        "{woven}"
-    );
-    assert!(
-        woven.contains("\\w de|x-occurrence=\"1\" x-occurrences=\"1\"\\w*"),
-        "{woven}"
-    );
     assert_eq!(tc_usfm::parse_aligned(&woven).unwrap().plain, plain);
+    woven
+}
+
+/// TC4-ISSUES row 5: a footnote right after "siervo", with or without a space after it. The
+/// bank holds "siervo" and "de", the export's words, so a value that places every word
+/// weaves (before, the bank held "siervode" and the weave failed with `TargetWordNotFound`,
+/// dropping the verse's alignment from the export).
+#[test]
+fn a_footnote_right_after_a_word_banks_both_words_and_weaves() {
+    for plain in [
+        "Pablo, siervo\\f + \\ft o esclavo\\f* de Dios.",
+        "Pablo, siervo\\f + \\ft o esclavo\\f*de Dios.",
+        "a\\fig x|src=\"y\"\\fig*b",
+    ] {
+        let woven = banks_the_export_words_and_weaves(plain);
+        if plain.starts_with("Pablo") {
+            assert!(woven.contains("\\f + \\ft o esclavo\\f*"), "{woven}");
+            for word in ["siervo", "de"] {
+                let marked = format!("\\w {word}|x-occurrence=\"1\" x-occurrences=\"1\"\\w*");
+                assert!(woven.contains(&marked), "{woven}");
+            }
+        }
+    }
+}
+
+/// Words of a character span after a span nested in it are banked, so the export can weave
+/// them (before, "Lord your God" was hidden from the bank and the weave failed with
+/// `TargetWordNotFound("the", 1, 2)` on the second verse).
+#[test]
+fn words_after_a_nested_character_span_bank_and_weave() {
+    for plain in [
+        "Jesus said, \\wj Worship the \\+nd Lord\\+nd* your God\\wj* and the end.",
+        "the \\wj said \\+add the\\+add* go\\wj* the end",
+    ] {
+        banks_the_export_words_and_weaves(plain);
+    }
 }
 
 /// The aligner's bank ([`TargetVerse`]) is the export's word list for every verse of the

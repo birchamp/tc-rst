@@ -3,11 +3,15 @@
 Unit FIX-text changed `tc_usfm::shown_text_v1`, the text Translate, Check, the Align bank, the
 print model and the store's verse-save reflow read, to a port of tC4's `verseText` at 9ad4d5c
 (#782: words under `\zaln` at any depth) with tC4 PR #800's space after a note between two words
-(#795), widened to every marker the walk leaves out (a declared difference, `docs/PLAN.md`).
-Nothing hashed changed: `plain_text_v1` and every fold output are byte-identical.
+(#795), widened to every marker the walk leaves out, to a space where usfm-js keeps none after
+the marker and the words would join, and to the words after a character span nested in another
+(declared differences, `docs/PLAN.md`). Nothing hashed changed: `plain_text_v1` and every fold
+output are byte-identical.
 
 - Branch `app-ftext`, measured at `335ae8e` (the walk is unchanged since `667eac2`). "Before" is
   the same tree with `crates/tc-usfm/src/derivations/mod.rs` of `8d3690f` (the code of `c1bfa78`).
+  The census and the parity run were taken again after the review fixes (the space where no
+  `nextChar` is kept, the nested spans); only ULT 2SA 23:8 moved, as noted below.
 - Machine: the owner's Linux PC (`docs/evidence/linux-machine-2026-10-18.md`), shared with other
   agents' builds; load average 17 to 23 during the timings.
 - Data: `bundle/en/en_ult_v91.sb.zip` and `en_ust_v91.sb.zip`, each verse cut by
@@ -26,12 +30,12 @@ import keeps the markup. "Bank is not export": on the split plain text, the show
 | | ULT before | ULT after | UST before | UST after |
 |---|---:|---:|---:|---:|
 | verses | 23,900 | 23,900 | 23,823 | 23,823 |
-| lose `\w` words | 10,514 | 1 | 19,787 | 2 |
+| lose `\w` words | 10,514 | 0 | 19,787 | 2 |
 | differ from split | 10,502 | 0 | 19,752 | 1 |
 | Genesis: lose words | 633 of 1,533 | 0 | 1,305 of 1,533 | 0 |
 | Psalms: lose words | 236 of 2,461 | 0 | 1,346 of 2,456 | 0 |
 | kept as written | 269 | 269 | 261 | 261 |
-| kept as written and lose words | 68 | 1 | 229 | 2 |
+| kept as written and lose words | 68 | 0 | 229 | 2 |
 | split refused | 4 | 4 | 39 | 39 |
 | bank is not export | 49 | 0 | 2 | 1 |
 
@@ -45,11 +49,12 @@ PRO 1:27, 2:7, 4:26, 8:24, 22:20, 23:26; REV 8:13; ROM 5:1, 13:11), and the UST'
 
 After, what is left is what tC4 does too:
 
-- ULT 2SA 23:8 ("spearagainst") and UST 2SA 23:8 ("HeonceHe", "killed800"): an unbalanced
-  `\zaln-e\*`, which usfm-js misreads, so the separator lands in the `content` of an object it
-  makes of the end marker. UST 1KI 10:12 splits "such" into the aligned words "s" and "uch",
-  shown as "such". The import cannot split any of the three, so they stay as written, and tC4
-  #794's fix keeps them out of the aligner.
+- UST 2SA 23:8 ("HeonceHe", "killed800"): alignment markup usfm-js misreads. UST 1KI 10:12
+  splits "such" into the aligned words "s" and "uch", shown as "such". The import cannot split
+  either, so they stay as written, and tC4 #794's fix keeps them out of the aligner. ULT 2SA
+  23:8 ("spearagainst" in tC4, an unbalanced `\zaln-e\*` that usfm-js makes an object of, with
+  the line break after it) lost a word until the review fixes; the space put back where no
+  `nextChar` is kept now keeps "spear against" apart.
 - UST EXO 15:21: its aligned form shows "Sing to Yahweh … enemies." (the words stand beside a
   `\qm1` object, a marker usfm-js 3.4.3 does not know), but in the split plain text they are the
   `\qm1` object's `content`, which tC4's `verseText` hides while the export counts them. Its 12
@@ -78,8 +83,9 @@ split as the import splits it, opened against the UGNT v0.34 verse.
 of both archives (47,723 verses), and `the_shown_text_is_what_tc4_reads_on_a_dump` (ignored, with
 `TC_USFM_SHOWN_TEXT_DUMP`) compares `shown_text_v1` of the codec's cut with it:
 
-- against tC4 PR #800's head `5dcd1472f9a3dec36bbc2f4e811c40d1387e7068`: **0 of 47,723 differ**,
-  so the rebuild's wider separator rule changes no published verse;
+- against tC4 PR #800's head `5dcd1472f9a3dec36bbc2f4e811c40d1387e7068`: **1 of 47,723 differs**,
+  ULT 2SA 23:8 as written, "spear against" where tC4 shows "spearagainst" (declared in the
+  test's list); the wider separator rule and the nested spans change no other published verse;
 - against tC4 main `9ad4d5c506466819e5b10f255bbb4a36d394e498`: 93 differ, each a verse where main
   joins two words across a note ("judgesthe", "myselfin" …).
 
@@ -96,6 +102,15 @@ vectors hold six of them). The rebuild lets every skipped object offer it.
 `woven_verses_show_the_words_of_their_plain_text` (`crates/tc-usfm/tests/properties.rs`) passes
 30,000 cases with the rebuild's rule and fails at once with PR #800's alone (minimal case
 `a\va 2\va* a`).
+
+The first review found two holes, both fixed: a marker followed by a letter with no space
+(`siervo\f + \ft o esclavo\f*de`, `a\fig …\fig*b`, `Je\ts\*sus`) still joined, because usfm-js
+keeps a `nextChar` only for a space or a line break; and the words of a character span after a
+span nested in it (`\wj Worship the \+nd Lord\+nd* your God\wj*`) were hidden, as tC4 hides
+them. The walk now puts a space back where the characters on either side would read as one word
+or number, and walks the children of a span with text. The property's generator holds both
+cases now; with them it passes 5,000 cases and fails at once on the walk before the fixes
+(minimal case `a\fig a|src="b"\fig*a`).
 
 ## Cost
 

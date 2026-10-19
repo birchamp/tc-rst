@@ -71,7 +71,13 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
 - A footnote, cross reference, figure or any other marker the shown text leaves out (`\va`,
   `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …) between two words keeps the space after it, so the
   words never join and can be checked, aligned and exported. tC4's open PR #800 does this for
-  notes, cross references and figures only (C46).
+  notes, cross references and figures only (C46). Where the marker is followed by a letter
+  with no space (`siervo\f + \ft o esclavo\f*de`), the shown text puts a space between the
+  two words, as the export splits them; tC4 shows "siervode".
+- The words of a character span after a span nested in it show in Translate, Check, Align and
+  print: `\wj Worship the \+nd Lord\+nd* your God\wj*` shows "Worship the Lord your God",
+  where tC4 shows "Worship the " and hides from Check and the Align bank words the export
+  counts (#796).
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

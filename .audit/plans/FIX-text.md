@@ -642,7 +642,12 @@ For `docs/STORAGE.md` on the storage branch (and its copy on main, line ~2761):
   between two characters that are not whitespace, the character usfm-js keeps after its end
   marker (`nextChar`) is put back, so the words on either side never join (tC4 PR #800 does this
   for notes, cross references and figures; the rebuild for every object the walk leaves out, a
-  declared difference). The walk has no depth limit; where usfm-js or the walk throws (a
+  declared difference). Where usfm-js keeps no `nextChar` (the end marker is followed by
+  anything but a space or a line break) and the characters on either side would read as one
+  word or number to tC4's tokenizer, a space is put back (a declared difference: tC4 shows
+  "siervode"). The children of an object with a text are walked after its text, so the words
+  of a character span after a span nested in it are shown (a declared difference: tC4 hides
+  them). The walk has no depth limit; where usfm-js or the walk throws (a
   `children` that is neither a list nor a string, a text that is not a string, an object inside
   itself), the value is the content trimmed. So a Psalm's superscription, its `\qs` Selah, also
   when aligned inside `\qs … \qs*`, and every word of a nested alignment (Genesis 1:1 'the
@@ -688,3 +693,15 @@ Plan path; commits; the numbers of F9 as re-measured; the declared differences t
 (rule G; #782 ahead of the reference, Q32); the design-text fixes of §7; the STORAGE-DELTA notes of
 §8; the findings of F6 with the recommendation; the two inaccuracies of the task text (§6 trap
 12); the items of §9 not handled and why.
+
+---
+
+## 11. Review round 1 (2026-10-19)
+
+Two majors, fixed in `shown.rs` with regression tests that fail on the walk before the fix:
+words joined across a skipped marker followed by a letter with no space (usfm-js keeps no
+`nextChar`), and the words of a character span after a nested span were hidden (rule 4 did not
+walk children). The four minors (a tC4-saved joined word losing its link at reflow, paragraph
+markers right after a word, hidden-text markers such as `\ndx`, PLAN rulings the parity parser
+cannot cite) were left for the merge lane's minors list. The half-done merge of `tc4fix` was
+aborted; `claude/focused-ride-5uzj7p` (a52bc0c) was merged instead, cleanly.

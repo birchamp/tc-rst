@@ -91,13 +91,17 @@ Found by FIX-text (2026-10-19), as tC4 has them, reported and not changed
   Four verses of the fixtures and the bundle have such text, and the bank/export check names
   them. Recommendation: an owner decision in a follow-up unit on showing that text, a
   declared difference on two screens.
-- **Words that still join** in text that still holds alignment markup: where a note stands
-  inside an alignment run right before `\zaln-e\*`, and around an unbalanced `\zaln-e\*` (ULT
-  2SA 23:8 "spearagainst", UST 2SA 23:8 "HeonceHe" and "killed800"): usfm-js misreads the
-  markup and the separator lands in the `content` of an object it makes of the end marker. tC4
-  (PR #800 included) does the same. UST 1KI 10:12, whose markup splits "such" into the aligned
-  words "s" and "uch", shows "such". None is in Genesis or Psalms; the import cannot split
-  these three verses, so it keeps them as written, and #794 keeps them out of the aligner.
+- **Words that still join** in text that still holds alignment markup, where usfm-js misreads
+  it (UST 2SA 23:8 "HeonceHe" and "killed800"). tC4 (PR #800 included) does the same. UST 1KI
+  10:12, whose markup splits "such" into the aligned words "s" and "uch", shows "such". Neither
+  is in Genesis or Psalms; the import cannot split them, so it keeps them as written, and #794
+  keeps them out of the aligner. ULT 2SA 23:8 ("spearagainst" in tC4) and a note inside an
+  alignment run no longer join: a space is put back where a left-out object stands between two
+  letters with no space kept after it.
+- **Words after a nested character span** (`\wj Worship the \+nd Lord\+nd* your God\wj*`):
+  tC4's `verseText` shows only "Worship the ", so Check and the Align bank miss words the export
+  counts, and a bank without them cannot be woven (#796). Fixed in the rebuild as a declared
+  difference (`docs/PLAN.md`); no ULT or UST v91 verse has one.
 - **A stray end marker** (`a\nd* b` with no `\nd`) hides the text after it, which usfm-js keeps
   as the marker's `content`. tC4 does the same.
 

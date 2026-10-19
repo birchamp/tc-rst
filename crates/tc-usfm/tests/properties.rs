@@ -481,8 +481,8 @@ fn plain_verse(line_breaks: bool) -> impl Strategy<Value = String> {
 }
 
 /// A plain verse whose words may have a note, a cross reference, a figure or another marker
-/// the shown text leaves out right after them, with or without a space before the next word.
-/// A `\nd` span is always closed: text after a stray `\nd*` is hidden from the shown text,
+/// the shown text leaves out right after them, with or without a space before the next word,
+/// or a character span with a span nested in it. A `\nd` span is always closed: text after a stray `\nd*` is hidden from the shown text,
 /// as in tC4, and so are `\li` items and `\qm` lines, which this verse never holds.
 fn note_verse() -> impl Strategy<Value = String> {
     let word = proptest::sample::select(WORDS);
@@ -498,7 +498,12 @@ fn note_verse() -> impl Strategy<Value = String> {
             "” ",
             " \\f + \\ft note\\f* ",
             "\\f + \\ft note\\f* ",
+            "\\f + \\ft note\\f*",
             "\\f + \\ft note\\f*,",
+            "\\fig a|src=\"b\"\\fig*",
+            "\\ts\\*",
+            " \\wj dijo \\+nd Señor\\+nd* tu Dios\\wj* ",
+            " \\add a \\+nd b \\+add c\\+add* d\\+nd* e\\add* ",
             "\\f + \\ft a\\f*\\f + \\ft b\\f* ",
             "\\x - \\xt Rom 1:1\\x* ",
             "\\fig a|src=\"b\"\\fig* ",
