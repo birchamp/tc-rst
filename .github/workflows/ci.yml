@@ -4,11 +4,16 @@ permissions:
 on:
   push:
   pull_request:
+  # The long property tests, nightly.
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   rust:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +33,7 @@ jobs:
   # docs/PLAN.md must agree, and the mock server must answer the sync transport as the platform
   # does. Node built-ins only, so no install step.
   parity-baseline:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,3 +41,16 @@ jobs:
         with:
           node-version: 22
       - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs
+
+  # The long variant of the project store's model-based property test (docs/STORAGE.md §16.1):
+  # 5,000 random histories of saves, kills, damaged journal files and outside edits checked
+  # against the no-loss invariant. `cargo test` runs 200 of them on every push.
+  store-model-nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p tc-store --test store model::random_histories_lose_no_work_long -- --ignored --exact
