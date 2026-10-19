@@ -510,7 +510,8 @@ pub struct ProjectEntry {
 
 /// What the projects folder holds: the projects, and every folder that holds a project's
 /// `ingredients/tc/project.json` but cannot be listed as one. Home shows the second kind with
-/// its reason, so no folder that holds someone's work is left off it (AD12, B2).
+/// its reason, so no folder that holds someone's work is left off it (AD12, B2): a declared
+/// difference from tC4, whose listing hides such a folder (APP-DESIGN §4.5).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Listing {
     /// By folder name.
@@ -520,7 +521,7 @@ pub struct Listing {
 }
 
 /// A folder with `ingredients/tc/project.json` that cannot be listed as a project: a name
-/// tc-api cannot carry, or a `project.json` that does not read.
+/// tc-api cannot carry, or a `project.json` the store's open would refuse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnusableFolder {
     /// The folder's name, with any byte that is not UTF-8 replaced.

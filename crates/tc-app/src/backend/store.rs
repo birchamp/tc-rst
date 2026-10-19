@@ -456,7 +456,7 @@ enum SettledBy {
 
 impl Origins {
     /// A submit is about to reach the actor. Counted before it does, so its batch's event
-    /// never finds it neither recorded nor counted.
+    /// always finds it either recorded or still counted.
     fn begin(&self) {
         lock(&self.state).in_flight += 1;
     }

@@ -85,8 +85,24 @@ equality on every counter that counts files).
   `test-hooks`) fails in tc-store: `clippy::default_constructed_unit_structs` at
   `crates/tc-store/src/store.rs:175` (`Arc::new(Hooks::default())`, where `Hooks` is a unit
   struct without the feature). The workspace's own clippy run builds tc-store with `test-hooks`
-  (its tests turn it on), so CI does not see it; a build of tc-app alone does. C0 did not change
-  tc-store.
+  (its tests turn it on), so the workspace step does not see it; CI's two steps without test
+  hooks (`cargo clippy -p tc-app --lib`, `cargo clippy -p tc-server -p tc4 --lib --bins`) do,
+  since C0 makes tc-app depend on tc-store. *(After the first verification: C0 changed that one
+  line to `Arc::default()`, the same value with and without the feature, and the same in
+  tc-app's `StoreBackend::on_disk`, which the tc-store error had hidden; the storage branch
+  should take the same line.)*
 - No other finding: the projection of records written through `ApplyUpgrade` gives the sample's
   Titus and Jonah back byte for byte (`chapter_view_equals_seed_usfm` on the store), and every
   contract case passes.
+
+## After the first verification
+
+The events thread now counts the submits in flight and the highest seq the relay settled
+(`Origins`), one more lock of a mutex per submit. Two runs of the same bench on the fixed code
+(load average 3.0 to 3.6; the second with the folders swapped): M7 through the seam 0.118 /
+0.163 ms and 0.137 / 0.243 ms, against tc-store awaited on the runtime 0.111 / 0.156 ms and
+0.128 / 0.291 ms, so the adapter adds 0.007 to 0.009 ms to the median, as before. M6's p95 on
+the seam was 1.8 s and 1.5 s in these runs. Three more runs with each close printed (15
+closes a path) showed one slow close on each path, 1.35 s on the seam and 1.59 s on tc-store's
+own, and 450 to 790 ms for every other close on both; the code before the fix gave 590 and
+717 ms in two runs. So the slow close is the disk's now and then, not the adapter's.
