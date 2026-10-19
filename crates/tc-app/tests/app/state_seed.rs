@@ -676,6 +676,33 @@ fn an_unknown_field_in_a_record_is_kept() {
 }
 
 #[test]
+fn a_decision_without_a_timestamp_takes_the_project_s_time_and_is_declared() {
+    let files = with_json(sample_files(BIBLE), TW, |doc| {
+        for d in doc["decisions"].as_array_mut().unwrap() {
+            d.as_object_mut().unwrap().remove("modifiedTimestamp");
+        }
+    });
+    let meta: Value = serde_json::from_slice(&get(&files, "metadata.json")).unwrap();
+    let created = meta["meta"]["dateCreated"].as_str().unwrap().to_owned();
+    assert_eq!(created, "2026-07-02T12:00:00.000Z");
+    let seed = seed(BIBLE, files).unwrap();
+    let tw = projected_decisions(&seed, ToolId::TranslationWords);
+    for check in ["a9p2", "t1g7"] {
+        assert_eq!(tw[check]["modifiedTimestamp"], created.as_str(), "{check}");
+        assert_eq!(decision(&seed, check).1, 1_782_993_600_000, "{check}");
+    }
+    let mut declared = bible_declared();
+    for check in ["a9p2", "t1g7"] {
+        declared.push(DeclaredDifference::TimestampAdded {
+            path: TW.into(),
+            check: format!("translationWords TIT 1:1 {check} #1"),
+            projected: format!("\"{created}\""),
+        });
+    }
+    assert_eq!(seed.report.declared, declared);
+}
+
+#[test]
 fn backups_dot_files_and_git_history_are_listed_not_imported() {
     let mut files = sample_files(BIBLE);
     files.push(("ingredients/TIT.usfm.bak".into(), b"\\id TIT old".to_vec()));

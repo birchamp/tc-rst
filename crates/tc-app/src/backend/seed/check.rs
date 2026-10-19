@@ -978,9 +978,9 @@ pub(crate) fn decision_differences(
         );
     }
     differ("status", Some(&status(source)), Some(&status(projected)));
+    let other = projected.get("modifiedTimestamp");
     if let Some(stamp) = source.get("modifiedTimestamp") {
         let instant = |v: Option<&Value>| v.and_then(Value::as_str).and_then(parse_utc_millis);
-        let other = projected.get("modifiedTimestamp");
         match (instant(Some(stamp)), instant(other)) {
             (Some(a), Some(b)) if a == b => {
                 if Some(stamp) != other {
@@ -994,6 +994,12 @@ pub(crate) fn decision_differences(
             }
             _ => differ("modifiedTimestamp", Some(stamp), other),
         }
+    } else if other.is_some() {
+        declared.push(DeclaredDifference::TimestampAdded {
+            path: path.to_owned(),
+            check: name.to_owned(),
+            projected: shown(other),
+        });
     }
     let (edits_source, edits_projected) =
         (flag(source, "verseEdits"), flag(projected, "verseEdits"));

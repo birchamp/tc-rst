@@ -273,6 +273,12 @@ Declared differences from tC4 4.0 (AGENTS.md, "Matching tC4"):
   §5.3 is the only definition, and the added `translationWordsLinks` is the bundled `en_twl`
   pin with its flavor (tC4 requires a flavor of every pin).
 - `verseEdits` is not carried: the format computes it, and no tC4 4.0 view reads it.
+- A decision with no `modifiedTimestamp` is written with the time its change carries,
+  `meta.dateCreated` or else 2020-01-01T00:00:00.000Z (S-3), and the report declares it
+  (`TimestampAdded`). tC4 4.0 writes such a decision back without one and reads it as changed
+  at the moment it reads it (`normalizeDecision`, `src/data/httpStore.ts:307`), a time that
+  moves at every read and that no change can hold. No tC4 4.0 screen shows the time. None of
+  the scenarios' decisions lacks one.
 - The check compares tC4's reading of each record, where tC4's compares whole documents; the
   rebuild writes computed flags (`status`, `done`, `invalid`) explicitly, with the same meaning
   for every tC4 reader.

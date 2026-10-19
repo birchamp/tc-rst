@@ -24,7 +24,8 @@
 //! `verseEdits` is recomputed from the hash §13.2 takes from the current verse; a decision
 //! file's `summary` (a cache tC4 itself drops) is dropped; `resources.json` gains an empty
 //! `resources` or `languageSets` member; a `schemaVersion: 1` `resources.json` is migrated;
-//! a timestamp is rewritten in tC4's own form.
+//! a timestamp is rewritten in tC4's own form; a decision with no `modifiedTimestamp` is
+//! written with the time its change carries.
 //!
 //! The fixture backend loads this seed (B1b); unit I's importer replaces it once
 //! `memory_seed_equals_tc_import_seed` passes (AD7).
@@ -424,6 +425,14 @@ pub enum DeclaredDifference {
         source: String,
         projected: String,
     },
+    /// A decision with no `modifiedTimestamp` is written with the time its change carries:
+    /// `meta.dateCreated`, else tC4's seed floor. tC4 reads such a decision as changed at
+    /// the moment it reads it (`normalizeDecision`), a time no change can hold.
+    TimestampAdded {
+        path: String,
+        check: String,
+        projected: String,
+    },
 }
 
 impl fmt::Display for DeclaredDifference {
@@ -452,6 +461,14 @@ impl fmt::Display for DeclaredDifference {
                 source,
                 projected,
             } => write!(f, "{path} {check}: {source} is written {projected}"),
+            Self::TimestampAdded {
+                path,
+                check,
+                projected,
+            } => write!(
+                f,
+                "{path} {check}: no modifiedTimestamp, so {projected} is written"
+            ),
         }
     }
 }

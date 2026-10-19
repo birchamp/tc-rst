@@ -491,6 +491,31 @@ fn decision_reading_applies_tc4_defaults() {
     );
     assert_eq!(differences, vec![]);
     assert_eq!(declared.len(), 2, "{declared:?}");
+    // A time the source does not have is declared, never silent.
+    let (differences, declared) = decision_differences(
+        path,
+        "x",
+        &object(with(&|m| {
+            m.remove("modifiedTimestamp");
+        })),
+        &object(base.clone()),
+    );
+    assert_eq!(differences, vec![]);
+    assert_eq!(
+        declared,
+        [DeclaredDifference::TimestampAdded {
+            path: path.into(),
+            check: "x".into(),
+            projected: "\"2026-07-02T15:02:11.000Z\"".into(),
+        }]
+    );
+    let none = with(&|m| {
+        m.remove("modifiedTimestamp");
+    });
+    assert_eq!(
+        decision_differences(path, "x", &object(none.clone()), &object(none)),
+        (vec![], vec![])
+    );
 }
 
 #[test]
