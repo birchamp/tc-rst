@@ -95,3 +95,169 @@ fn a_scaled_corpus_has_more_books_devices_and_history() {
         .all(|b| matches!(b.verses[0].origin, Origin::Sampled(_)));
     assert!(sampled, "books other than Psalms are labelled as sampled");
 }
+
+// ---------------------------------------------------------------------------------------
+// Unit P: reserved chapters and the day-by-day timeline
+// ---------------------------------------------------------------------------------------
+
+/// `Spec::reserved` and the timeline change nothing of the corpus an existing spec makes:
+/// the values below were recorded from the generator before they existed.
+#[test]
+fn generate_is_unchanged() {
+    let full = Corpus::generate(&Spec::psalms(1)).expect("builds");
+    assert_eq!(full.journal.stats.changes, 47_326);
+    assert_eq!(full.journal.packs.len(), 131);
+    assert_eq!(
+        full.journal
+            .packs
+            .iter()
+            .map(|p| p.bytes.len())
+            .sum::<usize>(),
+        48_249_253
+    );
+    assert_eq!(
+        full.journal.packs[0].id.to_string(),
+        "234fb861be3acee6f8e9ab21334c09d007c043742edb01956248be34e1409daf"
+    );
+    let short = Corpus::generate(&Spec::psalms(1).with_history(60, 0.2)).expect("builds");
+    assert_eq!(short.journal.stats.changes, 11_553);
+    assert_eq!(short.journal.packs.len(), 59);
+    assert_eq!(
+        short.journal.packs[0].id.to_string(),
+        "972ed7c51fd9d3b9803d63fdd2630c6a11c1ada5a9258b9b278b4639e00f180e"
+    );
+}
+
+/// A reserved chapter is seeded with its book and the team never works on it again: its
+/// verses hold only the seed, and no alignment, decision or comment targets it.
+#[test]
+fn reserved_chapters_hold_only_their_seed() {
+    use tc_journal::{Cause, RecordKey};
+    let spec = Spec::psalms(1)
+        .with_history(60, 0.2)
+        .with_reserved(vec![(tc_core::BookId::Psalms, 119)]);
+    let corpus = Corpus::generate(&spec).expect("builds");
+    let mut seeded = 0;
+    for line in corpus.journal.lines() {
+        let Some(change) = line.as_change() else {
+            continue;
+        };
+        let body = change.body();
+        let key = body.record.key();
+        let in_119 = match &key {
+            RecordKey::Verse(b, c, _) | RecordKey::Alignment(b, c, _) => {
+                *b == tc_core::BookId::Psalms && c.get() == 119
+            }
+            RecordKey::Check(check) => matches!(
+                &check.target,
+                tc_journal::CheckTarget::Verse { book, chapter, .. }
+                    if *book == tc_core::BookId::Psalms && chapter.number() == Some(119)
+            ),
+            RecordKey::Comment(_) => matches!(
+                &body.record,
+                tc_journal::Record::Comment { value, .. }
+                    if matches!(&value.target, tc_journal::record::CommentTarget::Verse { book, chapter, .. }
+                        if *book == tc_core::BookId::Psalms && chapter.get() == 119)
+            ),
+            _ => false,
+        };
+        if in_119 {
+            assert!(
+                matches!(key, RecordKey::Verse(..)) && matches!(body.cause, Cause::Seed),
+                "the team changed a reserved chapter: {key:?} by {:?}",
+                body.cause
+            );
+            seeded += 1;
+        }
+    }
+    assert_eq!(seeded, 176, "the 176 verses of Psalm 119 are seeded");
+    // The rest of the corpus is still worked on.
+    assert!(corpus.journal.stats.changes > 5_000);
+}
+
+#[test]
+fn the_timeline_ends_with_the_changes_of_the_corpus() {
+    use tc_corpus::timeline::Schedule;
+    let spec = Spec::psalms(1).with_history(60, 0.2);
+    let corpus = Corpus::generate(&spec).expect("builds");
+    let want: BTreeSet<_> = corpus.journal.lines().iter().map(|l| l.id()).collect();
+    let project = corpus.journal.project;
+    let mut held: std::collections::BTreeMap<String, Vec<u8>> = Default::default();
+    let mut days = 0;
+    let mut last = 0;
+    let stats = Corpus::timeline(&spec, &Schedule::default(), &mut |day| {
+        for path in &day.remove {
+            assert!(held.remove(path).is_some(), "{path} was not held");
+        }
+        for pack in &day.add {
+            held.insert(pack.path.clone(), pack.bytes.clone());
+        }
+        days += 1;
+        last = day.changes;
+        Ok(())
+    })
+    .expect("the timeline runs");
+    assert_eq!(stats.changes, corpus.journal.stats.changes);
+    assert!(days >= 40, "{days} working days");
+    let mut got = BTreeSet::new();
+    for (path, bytes) in &held {
+        let read = read_pack(path, bytes, project);
+        assert_eq!(read.status, PackStatus::Valid, "{path}");
+        got.extend(read.entries.iter().map(|e| e.id()));
+    }
+    assert_eq!(
+        got, want,
+        "every change, once, in the packs held at the end"
+    );
+    let counted: usize = held
+        .iter()
+        .map(|(path, bytes)| read_pack(path, bytes, project).entries.len())
+        .sum();
+    assert_eq!(
+        last, counted,
+        "the day's count is the changes in the packs held"
+    );
+}
+
+#[test]
+fn the_folder_never_holds_a_redundant_pack() {
+    use std::collections::BTreeMap;
+    use tc_corpus::timeline::Schedule;
+    let spec = Spec::psalms(1).with_history(90, 0.3);
+    let project = Corpus::generate(&spec).expect("builds").journal.project;
+    let mut held: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    let mut merged_somewhere = false;
+    Corpus::timeline(&spec, &Schedule::default(), &mut |day| {
+        for path in &day.remove {
+            held.remove(path);
+        }
+        for pack in &day.add {
+            held.insert(pack.path.clone(), pack.bytes.clone());
+        }
+        let reads: Vec<(String, tc_journal::pack::PackRead)> = held
+            .iter()
+            .map(|(p, b)| (p.clone(), read_pack(p, b, project)))
+            .collect();
+        for (path, read) in &reads {
+            let header = read.header.as_ref().expect("a header");
+            if !header.replaces.is_empty() {
+                merged_somewhere = true;
+            }
+            let own = read.path.expect("a pack path").sealer;
+            for replaced in &header.replaces {
+                assert!(
+                    reads.iter().all(|(other, r)| {
+                        r.path
+                            .is_none_or(|p| p.name != *replaced || p.sealer == own)
+                            && !(r.path.is_some_and(|p| p.name == *replaced) && other != path)
+                    }),
+                    "day {}: {path} replaces a pack that is still held, or another sealer's",
+                    day.day
+                );
+            }
+        }
+        Ok(())
+    })
+    .expect("the timeline runs");
+    assert!(merged_somewhere, "the team merged packs");
+}

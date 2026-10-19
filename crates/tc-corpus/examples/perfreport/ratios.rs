@@ -51,6 +51,17 @@ impl Ratios {
         }
     }
 
+    /// The ratios in `path`, or none when no file is named (this machine's own figures).
+    pub fn read_or_identity(path: Option<&Path>) -> Self {
+        match path {
+            Some(path) => Self::read(path).unwrap_or_else(|e| {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }),
+            None => Self::identity("no ratios given: this machine's figures"),
+        }
+    }
+
     pub fn read(path: &Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let json: serde_json::Value =

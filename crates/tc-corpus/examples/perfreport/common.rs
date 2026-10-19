@@ -18,8 +18,16 @@ use tc_store::{
 /// The reading threads of a store: the reference laptop has 4 cores.
 pub const STORE_THREADS: usize = 4;
 
+/// The project the cases open: `bible`, or the one `PERFREPORT_PROJECT` names (the growth
+/// figure compares two projects of different history).
 pub fn project_folder(dir: &Path) -> PathBuf {
-    dir.join("projects").join("bible")
+    let name = std::env::var("PERFREPORT_PROJECT").unwrap_or_else(|_| "bible".into());
+    dir.join("projects").join(name)
+}
+
+/// The folder of the project called `name`.
+pub fn project_folder_named(dir: &Path, name: &str) -> PathBuf {
+    dir.join("projects").join(name)
 }
 
 /// A store over `dir/app` and `dir/projects`, the file watcher on with its real debounce.
@@ -290,12 +298,23 @@ pub fn merge(into: &mut Vec<Measured>, more: Vec<Measured>) {
 /// Runs this binary again as `child <case> <dir> <args...>` and returns its rows, passing
 /// everything else the child prints on to this process's output.
 pub fn run_child(case: &str, dir: &Path, args: &[&str]) -> Result<Vec<Measured>, String> {
+    run_child_env(case, dir, args, &[])
+}
+
+/// [`run_child`] with environment variables set for the child only.
+pub fn run_child_env(
+    case: &str,
+    dir: &Path,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Result<Vec<Measured>, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let output = std::process::Command::new(exe)
         .arg("child")
         .arg(case)
         .arg(dir)
         .args(args)
+        .envs(envs.iter().copied())
         .output()
         .map_err(|e| e.to_string())?;
     let text = String::from_utf8_lossy(&output.stdout);

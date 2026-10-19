@@ -561,16 +561,23 @@ impl<'a> Sim<'a> {
             let part_of = |chapter: u16| {
                 (usize::from(chapter).saturating_sub(1) * devices / chapters).min(devices - 1)
             };
+            let reserved = |chapter: u16| self.spec.reserved.contains(&(book.book, chapter));
             let mut parts: Vec<Part> = (0..devices).map(|_| Part::default()).collect();
             for (i, v) in book.verses.iter().enumerate() {
-                parts[part_of(v.chapter)].texts.push(i);
+                if !reserved(v.chapter) {
+                    parts[part_of(v.chapter)].texts.push(i);
+                }
             }
             for (i, a) in book.alignments.iter().enumerate() {
-                parts[part_of(a.chapter)].alignments.push(i);
+                if !reserved(a.chapter) {
+                    parts[part_of(a.chapter)].alignments.push(i);
+                }
             }
             for (i, c) in book.checks.iter().enumerate() {
                 let chapter = c.verse_number().map_or(1, |(chapter, _)| chapter);
-                parts[part_of(chapter)].checks.push(i);
+                if !reserved(chapter) {
+                    parts[part_of(chapter)].checks.push(i);
+                }
             }
             for part in &mut parts {
                 let verses: usize = part
@@ -1403,19 +1410,7 @@ impl<'a> Sim<'a> {
     }
 
     fn check_key(row: &CheckRow) -> Result<CheckKey, CorpusError> {
-        Ok(CheckKey {
-            tool: match row.tool {
-                CheckTool::TranslationNotes => ToolId::TranslationNotes,
-                CheckTool::TranslationWords => ToolId::TranslationWords,
-            },
-            check_id: CheckId::parse(&row.id).map_err(|e| err(e.to_string()))?,
-            target: CheckTarget::Verse {
-                book: row.book,
-                chapter: RefPart::parse(&row.chapter).map_err(|e| err(e.to_string()))?,
-                verse: RefPart::parse(&row.verse).map_err(|e| err(e.to_string()))?,
-            },
-            occurrence: row.occurrence,
-        })
+        check_key(row)
     }
 
     fn context(row: &CheckRow) -> JsonMap {
@@ -1800,4 +1795,21 @@ fn shuffle<T>(rng: &mut Rng, items: &mut [T]) {
         let j = rng.index(i + 1);
         items.swap(i, j);
     }
+}
+
+/// The journal key of a check row: tC4's decision identity.
+pub fn check_key(row: &CheckRow) -> Result<CheckKey, CorpusError> {
+    Ok(CheckKey {
+        tool: match row.tool {
+            CheckTool::TranslationNotes => ToolId::TranslationNotes,
+            CheckTool::TranslationWords => ToolId::TranslationWords,
+        },
+        check_id: CheckId::parse(&row.id).map_err(|e| err(e.to_string()))?,
+        target: CheckTarget::Verse {
+            book: row.book,
+            chapter: RefPart::parse(&row.chapter).map_err(|e| err(e.to_string()))?,
+            verse: RefPart::parse(&row.verse).map_err(|e| err(e.to_string()))?,
+        },
+        occurrence: row.occurrence,
+    })
 }

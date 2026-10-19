@@ -27,7 +27,9 @@ pub use domain::{
     AlignmentInput, BookInput, CheckRow, CheckTool, Domain, GroupInput, Origin, OriginalText,
     SourceWordInput, TargetWordInput, VerseInput,
 };
-pub use history::{Journal, PackFile, Stats};
+pub mod timeline;
+
+pub use history::{Journal, PackFile, Stats, check_key};
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -78,6 +80,11 @@ pub struct Spec {
     pub resolve_rate: f64,
     /// The chance that a device exchanges with the team at the end of a working day.
     pub sync_rate: f64,
+    /// Chapters the team seeds with their book and never works on again: no verse save,
+    /// alignment, decision or comment targets them, so a computer outside the team can edit
+    /// them without ever conflicting (the three-year run of unit P). Empty for every spec but
+    /// that one; it changes nothing else of the corpus.
+    pub reserved: Vec<(BookId, u16)>,
 }
 
 impl Spec {
@@ -98,7 +105,14 @@ impl Spec {
             concurrent_rate: 0.004,
             resolve_rate: 0.7,
             sync_rate: 0.8,
+            reserved: Vec::new(),
         }
+    }
+
+    /// The same corpus with `chapters` reserved: seeded with their book, never worked on.
+    pub fn with_reserved(mut self, chapters: Vec<(BookId, u16)>) -> Self {
+        self.reserved = chapters;
+        self
     }
 
     /// The Psalms corpus: Psalms from `fixtures/scale/psa/`, three devices, three years.

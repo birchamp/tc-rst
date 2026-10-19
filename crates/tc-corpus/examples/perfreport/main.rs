@@ -20,6 +20,7 @@
 
 mod common;
 mod machine;
+mod memory;
 mod r9;
 mod ratios;
 mod rows;
@@ -47,6 +48,8 @@ fn main() {
         "run" => run(&dir, &flags, false),
         "ci" => run(&dir, &flags, true),
         "r9" => r9_command(&dir, &flags),
+        "memory" => memory_command(&dir, &flags),
+        "growth" => growth_command(&dir, &flags),
         "child" => {
             // `child CASE DIR`: the case is the second word, the folder the third.
             let case = args[1].clone();
@@ -135,6 +138,8 @@ fn child(case: &str, dir: &Path, flags: &Flags) -> Vec<Measured> {
         "r9-consolidation" => r9::consolidation(dir),
         "r9-upgrade" => r9::upgrade(dir),
         "r9-j8" => r9::j8(dir),
+        "memory-nocache" => memory::nocache(dir),
+        "memory-app" => memory::app_case(dir),
         other => {
             eprintln!("unknown case {other}");
             std::process::exit(2);
@@ -309,7 +314,83 @@ fn r9_command(dir: &Path, flags: &Flags) -> i32 {
             Err(e) => eprintln!("{e}"),
         }
     }
-    let ratios = Ratios::identity("this machine's figures");
     let _ = collect;
+    let ratios = Ratios::read_or_identity(flags.ratios.as_deref());
     report(dir, &measured, &ratios, false, flags)
+}
+
+/// Both heaps: glibc's default (what a Linux user has) and one arena (`MALLOC_ARENA_MAX=1`,
+/// the figure the laptop's allocator is compared with: the review measured it at 0.97 to 1.07
+/// of the one-heap figure).
+const HEAPS: [(&str, Option<&str>); 2] = [("one heap", Some("1")), ("default heap", None)];
+
+fn memory_rows(dir: &Path, project: &str) -> Vec<Measured> {
+    let mut rows = Vec::new();
+    for (_, arenas) in HEAPS {
+        let mut envs: Vec<(&str, &str)> = vec![("PERFREPORT_PROJECT", project)];
+        if let Some(n) = arenas {
+            envs.push(("MALLOC_ARENA_MAX", n));
+        }
+        for case in ["memory-nocache", "memory-app"] {
+            match common::run_child_env(case, dir, &[], &envs) {
+                Ok(more) => merge(&mut rows, more),
+                Err(e) => eprintln!("{e}"),
+            }
+        }
+    }
+    rows
+}
+
+fn memory_command(dir: &Path, flags: &Flags) -> i32 {
+    println!("{}", machine::machine_line());
+    let rows = memory_rows(dir, "bible");
+    let ratios = Ratios::read_or_identity(flags.ratios.as_deref());
+    report(dir, &rows, &ratios, false, flags)
+}
+
+/// M3: steady memory of the whole Bible at today's history and at twice it (what
+/// `Spec::whole_bible(1).with_history(750, 2.0)` makes: about 1.2 million changes), per added
+/// change.
+fn growth_command(dir: &Path, flags: &Flags) -> i32 {
+    println!("{}", machine::machine_line());
+    let twice = common::project_folder_named(dir, "bible-2x");
+    if !twice.join(".tc").exists() {
+        store_rows::setup(
+            dir,
+            &tc_corpus::Spec::whole_bible(1).with_history(750, 2.0),
+            "bible-2x",
+        );
+    }
+    let one = memory_rows(dir, "bible");
+    let two = memory_rows(dir, "bible-2x");
+    let mut rows = one.clone();
+    for (label, suffix) in [("one heap", ""), ("default heap", "_default_heap")] {
+        let steady = |rows: &[Measured]| {
+            rows.iter()
+                .find(|m| m.id == format!("mem.steady{suffix}"))
+                .and_then(|m| m.samples.first().copied())
+        };
+        let changes = |rows: &[Measured]| {
+            rows.iter()
+                .filter(|m| m.id == "mem.changes")
+                .map(|m| m.samples[0])
+                .fold(0.0, f64::max)
+        };
+        let (Some(a), Some(b)) = (steady(&one), steady(&two)) else {
+            continue;
+        };
+        let added = changes(&two) - changes(&one);
+        let bytes = (b - a) * 1024.0 * 1024.0 / added.max(1.0);
+        rows.push(Measured::new(
+            &format!("mem.growth{suffix}"),
+            vec![bytes],
+            format!(
+                "{label}: {a:.0} MiB at {:.0} changes, {b:.0} MiB at {:.0}: {bytes:.0} bytes for each of the {added:.0} added changes",
+                changes(&one),
+                changes(&two)
+            ),
+        ));
+    }
+    let ratios = Ratios::read_or_identity(flags.ratios.as_deref());
+    report(dir, &rows, &ratios, false, flags)
 }
