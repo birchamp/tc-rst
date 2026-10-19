@@ -58,14 +58,27 @@ pub fn SourceTexts() -> impl IntoView {
         let src = src.clone();
         Memo::new(move |_| src.with(|src| src.gateway.clone()))
     };
-    let footer: Option<ChildrenFn> = {
+    // tC4 gives step 1 no footer at all (`footer={g ? … : null}`), so a change of step draws
+    // the dialog again.
+    let step2 = Memo::new(move |_| gateway.with(Option::is_some));
+    (move || sources_modal(&actions, &src, gateway, step2.get())).into_any()
+}
+
+fn sources_modal(
+    actions: &Actions,
+    src: &ArcRwSignal<SourcesForm>,
+    gateway: Memo<Option<GatewayPackage>>,
+    step2: bool,
+) -> AnyView {
+    let footer: Option<ChildrenFn> = step2.then(|| {
         let (actions, src) = (actions.clone(), src.clone());
-        Some(Arc::new(move || {
-            gateway
-                .get()
-                .map_or_else(|| ().into_any(), |g| footer(&actions, &src, &g).into_any())
-        }))
-    };
+        Arc::new(move || {
+            gateway.with_untracked(|g| {
+                g.as_ref()
+                    .map_or_else(|| ().into_any(), |g| footer(&actions, &src, g).into_any())
+            })
+        }) as ChildrenFn
+    });
     let children: ChildrenFn = {
         let (actions, src) = (actions.clone(), src.clone());
         Arc::new(move || {
