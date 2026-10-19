@@ -1,12 +1,24 @@
 //! The scale corpus of PERFORMANCE.md: tc-corpus Psalms and the corpus ten times larger, each
-//! generated and folded once per test binary, as tc-journal's own count tests fold them.
+//! generated and folded once per test binary, as tc-journal's own count tests fold them, and
+//! each written once to tc-store's in-memory file system as tc-store's own count tests write
+//! it (C1a, §8.1: the rows run on the store too).
 
-use std::sync::OnceLock;
+use std::path::Path;
+use std::sync::{Arc, OnceLock};
 
 use tc_app::backend::memory::MemoryProject;
 use tc_corpus::{Corpus, Spec};
 use tc_journal::BookId;
 use tc_journal::fold::{ChapterKeys, FoldInput, FoldState, ProjectKind, Resolved};
+use tc_journal::format::FormatDoc;
+use tc_store::fault::FaultFs;
+use tc_store::layout::{GITATTRIBUTES_BYTES, GITIGNORE_BYTES};
+use tc_store::{FakePlatform, OpenOptions};
+
+use crate::store_world::{APP, PROJECTS, assert_valid_burrito, backend_over};
+
+/// The corpus project's folder name, on both backends.
+pub const FOLDER: &str = "psalms";
 
 pub const PSALMS: BookId = BookId::Psalms;
 
@@ -73,5 +85,88 @@ pub fn corpora() -> &'static Corpora {
             larger,
             chapter,
         }
+    })
+}
+
+/// The corpora on disk: each a file system holding the corpus project at
+/// `/projects/psalms`, opened once (which materializes every file), sealed and consolidated by
+/// a checkpoint, and closed. Each scale takes a copy.
+pub struct StoreCorpora {
+    pub psalms: FaultFs,
+    pub larger: FaultFs,
+}
+
+/// tc-store's `put_corpus` (`crates/tc-store/tests/store/corpus.rs`): the corpus's packs and
+/// pending files, the fixed files, and `.tc/device.json`, so the corpus's device 0 is the
+/// folder's device.
+fn put_corpus(store: &tc_store::Store, fs: &FaultFs, folder: &Path, corpus: &Corpus) {
+    let journal = &corpus.journal;
+    let project = serde_json::json!({
+        "schemaVersion": 1,
+        "projectId": journal.project.to_string(),
+        "kind": "bible",
+        "created": "2026-10-17T00:00:00.000Z",
+    });
+    let put = |rel: &str, bytes: &[u8]| {
+        let path = rel
+            .split('/')
+            .fold(folder.to_owned(), |p, part| p.join(part));
+        fs.put(&path, bytes, None);
+    };
+    put(
+        "ingredients/tc/project.json",
+        project.to_string().as_bytes(),
+    );
+    put(
+        "ingredients/tc/format.json",
+        &FormatDoc::current().to_bytes(),
+    );
+    put(".gitignore", GITIGNORE_BYTES);
+    put(".gitattributes", GITATTRIBUTES_BYTES);
+    for pack in &journal.packs {
+        put(&pack.path, &pack.bytes);
+    }
+    for pending in &journal.pending {
+        put(&format!(".tc/pending/{}", pending.name), &pending.bytes);
+    }
+    let print = tc_store::device::fingerprint(
+        store.app_data().secret(),
+        &FakePlatform::default().machine,
+        &folder.to_string_lossy(),
+    );
+    let device = serde_json::json!({
+        "device": journal.devices[0].to_string(),
+        "fingerprint": print.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+        "created": "2026-10-17T00:00:00.000Z",
+    });
+    put(".tc/device.json", device.to_string().as_bytes());
+}
+
+fn on_disk(spec: &Spec) -> FaultFs {
+    let corpus = Corpus::generate(spec).expect("the corpus builds");
+    let fs = FaultFs::new();
+    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let folder = Path::new(PROJECTS).join(FOLDER);
+    put_corpus(backend.store(), &fs, &folder, &corpus);
+    let handle = backend
+        .store()
+        .open(&folder, &OpenOptions::default())
+        .unwrap();
+    assert!(matches!(handle.facts().mode, tc_store::Mode::Writable));
+    handle
+        .checkpoint(tc_store::CheckpointReason::AfterImport)
+        .wait()
+        .unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    assert_valid_burrito(&fs, &folder);
+    fs.crash(false)
+}
+
+pub fn store_corpora() -> &'static StoreCorpora {
+    static CORPORA: OnceLock<StoreCorpora> = OnceLock::new();
+    CORPORA.get_or_init(|| StoreCorpora {
+        psalms: on_disk(&Spec::psalms(1)),
+        larger: on_disk(&Spec::scaled(1, 10)),
     })
 }
