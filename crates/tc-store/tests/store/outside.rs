@@ -303,6 +303,17 @@ fn a_whitespace_only_rewrite_records_nothing() {
     assert!(recorded(&handle).is_empty(), "{:?}", handle.notices());
     assert_eq!(handle.counters().outside_keys_examined, 0);
     assert!(rig.fs.peek(&usfm_path(&folder)) == Some(original));
+    // The person is told the file was rewritten and its line endings kept.
+    let told: Vec<u32> = handle
+        .notices()
+        .into_iter()
+        .filter_map(|n| match n.notice {
+            Notice::WhitespaceOnlyEdit { path, keys } if path.as_str() == USFM => Some(keys),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(told.len(), 1, "{:?}", handle.notices());
+    assert!(told[0] > 0);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
@@ -1329,9 +1340,15 @@ mod conserves {
         Undecodable { garbage: bool },
         /// A teammate's change of the verse reaches the folder while the file is edited.
         Race { verse: u16, text: u8 },
+        /// A program changes the status of a decision in a sidecar.
+        Sidecar,
+        /// A text editor renames the project in `metadata.json`.
+        Metadata { text: u8 },
+        /// A program changes a link in an Open Bible Stories template.
+        Story,
     }
 
-    const KINDS: usize = 9;
+    const KINDS: usize = 12;
 
     fn kind(op: &Op) -> usize {
         match op {
@@ -1344,6 +1361,9 @@ mod conserves {
             Op::AddBook => 6,
             Op::Undecodable { .. } => 7,
             Op::Race { .. } => 8,
+            Op::Sidecar => 9,
+            Op::Metadata { .. } => 10,
+            Op::Story => 11,
         }
     }
 
@@ -1351,7 +1371,7 @@ mod conserves {
     #[derive(Default)]
     pub struct Census {
         executed: [AtomicU32; KINDS],
-        checked: [AtomicU32; 6],
+        checked: [AtomicU32; 11],
     }
     const CONFLICT_LISTED: usize = 0;
     const KNOWN_BASE_RECORDED: usize = 1;
@@ -1359,6 +1379,11 @@ mod conserves {
     const BOOK_ADDED: usize = 3;
     const COPY_KEPT: usize = 4;
     const OVER_FIFTY: usize = 5;
+    const REVERT_UNKNOWN: usize = 6;
+    const DELETE_UNKNOWN: usize = 7;
+    const SIDECAR_RECORDED: usize = 8;
+    const METADATA_RECORDED: usize = 9;
+    const STORY_RECORDED: usize = 10;
 
     fn op() -> impl Strategy<Value = Op> {
         let verse = 1u16..=6;
@@ -1372,7 +1397,10 @@ mod conserves {
             2 => Just(Op::Whitespace),
             2 => Just(Op::AddBook),
             2 => any::<bool>().prop_map(|garbage| Op::Undecodable { garbage }),
-            3 => (verse, text).prop_map(|(verse, text)| Op::Race { verse, text }),
+            3 => (verse, text.clone()).prop_map(|(verse, text)| Op::Race { verse, text }),
+            2 => Just(Op::Sidecar),
+            2 => text.prop_map(|text| Op::Metadata { text }),
+            2 => Just(Op::Story),
         ]
     }
 
@@ -1432,6 +1460,112 @@ mod conserves {
         }
     }
 
+    /// A program changes the status of a decision in a sidecar: the edit is one change, the
+    /// bytes found are kept whole, and the file shows the decision the project holds.
+    fn sidecar_edit(rig: &Rig, folder: &Path) {
+        let text = String::from_utf8(rig.fs.peek(&folder.join(super::TN)).unwrap()).unwrap();
+        let (from, to) = if text.contains("\"userStatus\":\"valid\"") {
+            ("valid", "todo")
+        } else {
+            ("todo", "valid")
+        };
+        let edited = super::replaced(
+            rig,
+            folder,
+            super::TN,
+            &format!("\"userStatus\":\"{from}\""),
+            &format!("\"userStatus\":\"{to}\""),
+        );
+        let handle = open(rig, folder);
+        assert_eq!(
+            super::recorded_for(&handle, super::TN).len(),
+            1,
+            "{:?}",
+            handle.notices()
+        );
+        let copies = copies_of(&handle, super::TN);
+        assert!(
+            copies
+                .iter()
+                .any(|copy| rig.fs.peek(&folder.join(copy)).as_deref() == Some(edited.as_slice())),
+            "the bytes found are kept: {copies:?}"
+        );
+        // A decision put back as it was is a conflict that leaves the project's own status
+        // shown; any other edit is shown.
+        let written = String::from_utf8(rig.fs.peek(&folder.join(super::TN)).unwrap()).unwrap();
+        assert!(
+            written.contains("\"userStatus\":\"todo\"")
+                || written.contains("\"userStatus\":\"valid\""),
+            "{written}"
+        );
+        handle.wait_idle();
+        assert_valid_burrito(&rig.fs, folder);
+        handle.close().unwrap();
+    }
+
+    /// A program changes a link in the template of a story: the story records it, and the file
+    /// shows it.
+    fn story_edit(rig: &Rig, folder: &Path) {
+        let rel = "ingredients/content/01.md";
+        let text = String::from_utf8(rig.fs.peek(&folder.join(rel)).unwrap()).unwrap();
+        let (from, to) = if text.contains("obs-en-01-02-new.jpg") {
+            ("obs-en-01-02-new.jpg", "obs-en-01-02.jpg")
+        } else {
+            ("obs-en-01-02.jpg", "obs-en-01-02-new.jpg")
+        };
+        let edited = super::replaced(rig, folder, rel, from, to);
+        let handle = open(rig, folder);
+        assert_eq!(
+            super::recorded_for(&handle, rel).len(),
+            1,
+            "{:?}",
+            handle.notices()
+        );
+        let copies = copies_of(&handle, rel);
+        assert!(
+            copies
+                .iter()
+                .any(|copy| rig.fs.peek(&folder.join(copy)).as_deref() == Some(edited.as_slice())),
+            "the bytes found are kept: {copies:?}"
+        );
+        // A link put back as it was is a conflict that leaves the project's own link shown;
+        // any other edit is shown.
+        if to.ends_with("-new.jpg") {
+            assert!(
+                rig.fs.peek(&folder.join(rel)).as_deref() == Some(edited.as_slice()),
+                "the story shows its edit"
+            );
+        }
+        handle.wait_idle();
+        assert_valid_burrito(&rig.fs, folder);
+        handle.close().unwrap();
+    }
+
+    /// A text editor renames the project in `metadata.json`: the name is recorded and the file
+    /// shows it.
+    fn rename_in_metadata(rig: &Rig, folder: &Path, name: &str) {
+        let rel = "metadata.json";
+        let bytes = rig.fs.peek(&folder.join(rel)).unwrap();
+        let mut doc: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        doc["identification"]["name"]["en"] = serde_json::Value::String(name.to_owned());
+        rig.fs.put(
+            &folder.join(rel),
+            &serde_json::to_vec_pretty(&doc).unwrap(),
+            None,
+        );
+        let handle = open(rig, folder);
+        assert!(
+            !super::recorded_for(&handle, rel).is_empty(),
+            "{:?}",
+            handle.notices()
+        );
+        let written = String::from_utf8(rig.fs.peek(&folder.join(rel)).unwrap()).unwrap();
+        assert!(written.contains(name), "{written}");
+        handle.wait_idle();
+        assert_valid_burrito(&rig.fs, folder);
+        handle.close().unwrap();
+    }
+
     pub fn run_case(ops: &[Op], census: &Census) {
         let (rig, folder) = titus();
         let handle = open(&rig, &folder);
@@ -1456,8 +1590,43 @@ mod conserves {
         .unwrap();
         let jonah = set_verse(&jonah, 1, 1, "God spoke to Jonah");
         let mut device_n = 20u8;
+        // A project with decisions and one of Open Bible Stories, made when an edit needs them.
+        let mut rich: Option<(Rig, PathBuf)> = None;
+        let mut stories: Option<(Rig, PathBuf)> = None;
+        let mut renamed = 0u32;
         for op in ops {
             census.executed[kind(op)].fetch_add(1, Ordering::Relaxed);
+            match op {
+                Op::Sidecar => {
+                    let (rig, folder) = rich.get_or_insert_with(|| {
+                        let (fs, folder) = crate::commands::rich();
+                        let (rig, handle) = crate::commands::open(&fs, &folder);
+                        handle.close().unwrap();
+                        (rig, folder)
+                    });
+                    sidecar_edit(rig, folder);
+                    census.checked[SIDECAR_RECORDED].fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+                Op::Story => {
+                    let (rig, folder) = stories.get_or_insert_with(|| {
+                        let (fs, folder) = crate::commands::stories();
+                        let (rig, handle) = crate::commands::open(&fs, &folder);
+                        handle.close().unwrap();
+                        (rig, folder)
+                    });
+                    story_edit(rig, folder);
+                    census.checked[STORY_RECORDED].fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+                Op::Metadata { text } => {
+                    renamed += 1;
+                    rename_in_metadata(&rig, &folder, &format!("renamed outside {text} {renamed}"));
+                    census.checked[METADATA_RECORDED].fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+                _ => {}
+            }
             // The project as the last session left it.
             let handle = open(&rig, &folder);
             let before_fold = handle.snapshot().fold().clone();
@@ -1473,7 +1642,8 @@ mod conserves {
             let mut teammate_ids: BTreeSet<ChangeId> = BTreeSet::new();
             let mut put = Vec::new();
             match op {
-                Op::Save { .. } => {}
+                // Handled above: these edit another project, or another file of this one.
+                Op::Save { .. } | Op::Sidecar | Op::Metadata { .. } | Op::Story => {}
                 Op::Edit { verse, text } | Op::Race { verse, text } => {
                     if let Op::Race { .. } = op {
                         device_n += 1;
@@ -1593,6 +1763,49 @@ mod conserves {
                     census.checked[CONFLICT_LISTED].fetch_add(1, Ordering::Relaxed);
                 }
             }
+            // A destructive edit (a verse dropped) or a reverting one (the file put back as it
+            // was) of text the person held is recorded with no parents: the file's version is
+            // a conflict and never replaces the text (§11.1 X3).
+            let held_text = |key: &RecordKey| match key {
+                RecordKey::Verse(_, c, v) => {
+                    c.get() == 1
+                        && before_text.get(&v.get()).is_some_and(|w| {
+                            w.as_deref().is_some_and(|w| w != "___" && !w.is_empty())
+                        })
+                }
+                _ => false,
+            };
+            let destructive: Vec<&(ChangeId, bool, Vec<ChangeId>, Record)> = externals
+                .iter()
+                .filter(|(_, _, _, record)| held_text(&record.key()))
+                .collect();
+            if let Op::Revert | Op::Delete { .. } = op {
+                for (id, unknown, parents, record) in &destructive {
+                    assert!(
+                        *unknown && parents.is_empty(),
+                        "{op:?}: {id:?} is a known-base edit"
+                    );
+                    let key = record.key();
+                    if fold.projected(&key).as_ref() != Some(record) {
+                        let conflict = fold
+                            .conflicts()
+                            .find(|cf| cf.key == key)
+                            .unwrap_or_else(|| panic!("{op:?}: no conflict on {key:?}"));
+                        assert_ne!(
+                            conflict.provisional, *id,
+                            "{op:?}: the file's text is provisional"
+                        );
+                    }
+                }
+                if !destructive.is_empty() {
+                    let claim = if matches!(op, Op::Revert) {
+                        REVERT_UNKNOWN
+                    } else {
+                        DELETE_UNKNOWN
+                    };
+                    census.checked[claim].fetch_add(1, Ordering::Relaxed);
+                }
+            }
             match op {
                 Op::Edit { .. }
                     if !externals.is_empty()
@@ -1644,6 +1857,27 @@ mod conserves {
         }
     }
 
+    /// One of each kind of edit, with the destructive ones after edits they destroy.
+    pub fn every_kind() -> Vec<Op> {
+        vec![
+            Op::Edit { verse: 2, text: 1 },
+            Op::Delete { verse: 3 },
+            Op::Whitespace,
+            Op::AddBook,
+            Op::Undecodable { garbage: true },
+            Op::Undecodable { garbage: false },
+            Op::Many,
+            Op::Race { verse: 4, text: 2 },
+            Op::Revert,
+            Op::Save { verse: 1, text: 3 },
+            Op::Sidecar,
+            Op::Sidecar,
+            Op::Metadata { text: 1 },
+            Op::Story,
+            Op::Story,
+        ]
+    }
+
     pub fn census(census: &Census) {
         let executed: Vec<u32> = census
             .executed
@@ -1684,6 +1918,10 @@ mod conserves {
         if let Err(e) = result {
             panic!("{e}");
         }
+        // The random cases may miss a class by chance (a revert that follows an edit of its
+        // own); one run of every kind in a project makes sure each is reached and checked,
+        // by the same code.
+        run_case(&every_kind(), &counted);
         census(&counted);
     }
 }
@@ -1697,21 +1935,9 @@ fn outside_edit_reconcile_conserves() {
 #[test]
 fn every_kind_of_outside_edit_in_one_project_conserves() {
     let counted = conserves::Census::default();
-    conserves::run_case(
-        &[
-            conserves::Op::Edit { verse: 2, text: 1 },
-            conserves::Op::Delete { verse: 3 },
-            conserves::Op::Whitespace,
-            conserves::Op::AddBook,
-            conserves::Op::Undecodable { garbage: true },
-            conserves::Op::Undecodable { garbage: false },
-            conserves::Op::Many,
-            conserves::Op::Race { verse: 4, text: 2 },
-            conserves::Op::Revert,
-            conserves::Op::Save { verse: 1, text: 3 },
-        ],
-        &counted,
-    );
+    conserves::run_case(&conserves::every_kind(), &counted);
+    // Every class of edit was reached and every claim about it was checked.
+    conserves::census(&counted);
 }
 
 // ---------------------------------------------------------------------------------------
