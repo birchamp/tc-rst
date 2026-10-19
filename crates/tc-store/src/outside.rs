@@ -691,6 +691,7 @@ impl Writer {
             let _ = self.put_heads(rel, heads, crate::atomic::SyncDir::Now);
         } else {
             self.heads_unwritten.insert(rel.to_owned(), heads);
+            self.manifest_changed |= self.manifest.heads_due.insert(rel.to_owned());
         }
     }
 

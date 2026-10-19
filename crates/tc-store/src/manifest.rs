@@ -6,7 +6,7 @@
 //! M3), and `.tc/heads/<escaped path>.bin` the heads each written file stands for.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use tc_journal::format::DERIVATIONS_V0;
 use tc_journal::{ChangeId, FORMAT_MINOR, RecordKey};
 
@@ -94,6 +94,15 @@ pub struct Manifest {
     pub derivations: BTreeMap<String, u64>,
     pub paths: BTreeMap<String, Entry>,
     pub packs: BTreeMap<String, PackEntry>,
+    /// Paths whose heads file a write could not put on disk: it describes older bytes than
+    /// the ones the path holds, so the next look at the path writes it again, after a restart
+    /// too (§5.10).
+    #[serde(
+        rename = "headsDue",
+        default,
+        skip_serializing_if = "BTreeSet::is_empty"
+    )]
+    pub heads_due: BTreeSet<String>,
 }
 
 impl Default for Manifest {
@@ -103,6 +112,7 @@ impl Default for Manifest {
             derivations: current_derivations(),
             paths: BTreeMap::new(),
             packs: BTreeMap::new(),
+            heads_due: BTreeSet::new(),
         }
     }
 }

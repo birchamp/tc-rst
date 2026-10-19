@@ -2,9 +2,9 @@
 //! manifest, and O14's results. They run on the writer, which owns the manifest, with the
 //! fold the open ends with (the open) or the newest snapshot (a check's results).
 
-use crate::atomic::{SyncDir, atomic_remove};
+use crate::atomic::{SyncDir, atomic_create_dirs, atomic_remove};
 use crate::error::StoreError;
-use crate::layout::{INTENT, METADATA};
+use crate::layout::{HEADS, INTENT, METADATA};
 use crate::manifest::{Entry, Intent};
 use crate::materialize::Projected;
 use crate::open::CheckResult;
@@ -44,7 +44,9 @@ impl Writer {
                 && entry
                     .as_ref()
                     .is_some_and(|e| e.scope.as_deref() == Some(digest.to_hex().as_str()));
-            if same_scope && !named && self.clean_by_stat(&rel) {
+            // A heads file that lags is written again from the projection (§5.10).
+            let heads_lag = self.heads_lag(&rel);
+            if same_scope && !named && !heads_lag && self.clean_by_stat(&rel) {
                 unread.push(rel);
                 tracker.add(1, 0);
                 continue;
@@ -61,7 +63,10 @@ impl Writer {
             };
             match (&disk, &entry) {
                 (Some(bytes), Some(entry))
-                    if same_scope && entry.held.is_none() && md5_hex(bytes) == entry.md5 =>
+                    if same_scope
+                        && !heads_lag
+                        && entry.held.is_none()
+                        && md5_hex(bytes) == entry.md5 =>
                 {
                     // Read, not projected: the bytes are the app's own.
                     let md5 = entry.md5.clone();
@@ -105,7 +110,7 @@ impl Writer {
                 let Some(new) = rendered.remove(&rel) else {
                     continue;
                 };
-                self.classify_one(&rel, &file, disk.as_deref(), &new.bytes, intent.as_ref())?;
+                self.classify_one(&rel, &file, disk.as_deref(), &new, intent.as_ref())?;
                 if self.dirty.files.contains(&file) {
                     self.prerendered.insert(rel, new);
                 }
@@ -220,10 +225,10 @@ impl Writer {
         rel: &str,
         file: &DerivedFile,
         disk: Option<&[u8]>,
-        new: &[u8],
+        new: &Projected,
         intent: Option<&Intent>,
     ) -> Result<(), StoreError> {
-        let e = md5_hex(new);
+        let e = md5_hex(&new.bytes);
         let entry = self.manifest.paths.get(rel).cloned();
         let Some(disk) = disk else {
             // Missing: rebuilt, never read as a deletion (I11). A deletion ends a hold too,
@@ -239,6 +244,21 @@ impl Writer {
         let d = md5_hex(disk);
         if d == e {
             let scope = self.fold.scope_digest(file).to_hex();
+            // The heads file describes the bytes the entry names (or older ones, when a write
+            // could not put it on disk), and the bytes are the projection's: after a stop
+            // between a rename and its heads file, before a restart too, it is written again,
+            // so a later outside edit has the right base (§5.10, §11.1 D7). One that cannot be
+            // written now is tried again later.
+            let stale = self.heads_lag(rel)
+                || intent.is_some_and(|i| i.names(rel))
+                || entry
+                    .as_ref()
+                    .is_none_or(|en| en.md5 != d || en.scope.as_deref() != Some(scope.as_str()));
+            if stale {
+                let dir = self.folder.path(HEADS);
+                let _ = atomic_create_dirs(&*self.vfs, &dir)
+                    .and_then(|()| self.write_heads(rel, file, &new.digests, SyncDir::Now));
+            }
             // `metadata.json` declares the normalization of the text it lists, so an entry
             // made from a read keeps what the read found.
             let nfc = crate::materialize::is_text_path(rel)
@@ -365,7 +385,7 @@ impl Writer {
                             &result.rel,
                             &file,
                             disk.as_deref(),
-                            &new.bytes,
+                            new,
                             intent.as_ref(),
                         )?;
                     }

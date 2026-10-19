@@ -772,7 +772,7 @@ impl Writer {
             if let Some(e) = &entry
                 && e.md5 == r.md5.to_hex()
                 && self.clean_by_stat(&path)
-                && !self.heads_unwritten.contains_key(&path)
+                && !self.heads_lag(&path)
             {
                 unread.push(r.file);
                 continue;
@@ -991,6 +991,7 @@ impl Writer {
                 SyncDir::Deferred(&mut dirs),
             )?;
             self.heads_unwritten.remove(path);
+            self.manifest_changed |= self.manifest.heads_due.remove(path);
             let heads = self.folder.path(&layout::heads_file(path));
             if self.vfs.metadata(&heads).is_ok() {
                 atomic_remove(&*self.vfs, &heads, SyncDir::Deferred(&mut dirs))?;
@@ -1076,7 +1077,7 @@ impl Writer {
     /// The heads file of a derived file written (or found equal) from the fold in use: for
     /// every record the file was built from, the heads its bytes stand for and how it shows
     /// the record (§3.6). Its directory exists.
-    fn write_heads(
+    pub(crate) fn write_heads(
         &mut self,
         rel: &str,
         file: &DerivedFile,
@@ -1110,13 +1111,21 @@ impl Writer {
         match written {
             Ok(()) => {
                 self.heads_unwritten.remove(rel);
+                self.manifest_changed |= self.manifest.heads_due.remove(rel);
                 Ok(())
             }
             Err(e) => {
                 self.heads_unwritten.insert(rel.to_owned(), heads);
+                self.manifest_changed |= self.manifest.heads_due.insert(rel.to_owned());
                 Err(e)
             }
         }
+    }
+
+    /// The heads file of `rel` describes older bytes than the path holds: a write could not
+    /// put it on disk, in this session or before a restart.
+    pub(crate) fn heads_lag(&self, rel: &str) -> bool {
+        self.heads_unwritten.contains_key(rel) || self.manifest.heads_due.contains(rel)
     }
 
     /// The heads file of `rel` as it should be: the one a write could not put on disk, else the
@@ -1218,7 +1227,7 @@ impl Writer {
             // names: after a write that stopped between its rename and its heads file, or a
             // projection that changed with the same bytes, it is stale, and a later edit
             // would be compared with a base the file was never made from (§11.1 D7).
-            let stale = self.heads_unwritten.contains_key(&path)
+            let stale = self.heads_lag(&path)
                 || self
                     .manifest
                     .paths

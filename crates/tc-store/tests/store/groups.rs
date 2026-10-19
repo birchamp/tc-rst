@@ -968,3 +968,110 @@ fn a_file_with_an_unwritten_heads_file_is_not_taken_as_unchanged_when_its_entry_
     reopened.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// §5.10: the process is killed between the rename of `TIT.usfm` and the write of its heads
+/// file. The open after the restart finds the file equal to its projection while the heads
+/// file still describes the bytes before, and writes the heads file again: an outside edit made
+/// much later, in a session that knows nothing of the stop, continues the app's save.
+#[test]
+fn a_crash_after_a_rename_leaves_no_stale_heads_file_for_a_later_edit() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    rig.fs.kill_before(k, false);
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    assert!(rig.fs.is_dead(), "killed at the heads file");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    assert!(
+        String::from_utf8_lossy(&rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap())
+            .contains("second save"),
+        "the rename happened"
+    );
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    rig.fs.advance(Duration::from_secs(10));
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    mend_outside(&rig, &folder);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        outside_edit_notices(&handle),
+        vec![(1, false)],
+        "recorded with the base the file shows"
+    );
+    assert_eq!(verse_text_conflicts(&handle), 0);
+    assert_eq!(
+        words_of(&handle, &verse(1, 1)),
+        "second save, mended outside"
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// §5.10: the heads file of `TIT.usfm` cannot be written until after the close (a program
+/// holds it). The manifest says the heads file lags, so the next open writes it once it can:
+/// an outside edit made in a later session continues the app's save.
+#[test]
+fn a_close_while_the_heads_file_is_held_leaves_no_stale_heads_file_for_a_later_edit() {
+    let (rig, folder, handle, _k) = fail_after_the_rename();
+    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
+    rig.fs.set_busy(&heads, true);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    let _ = handle.close();
+    rig.fs.set_busy(&heads, false);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    rig.fs.advance(Duration::from_secs(10));
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    mend_outside(&rig, &folder);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        outside_edit_notices(&handle),
+        vec![(1, false)],
+        "recorded with the base the file shows"
+    );
+    assert_eq!(verse_text_conflicts(&handle), 0);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The same crash, and the heads file is held when the open after the restart would write it
+/// again: the manifest keeps that it lags (the entry itself now names the bytes and the scope
+/// of the file), so a later open writes it once it can, and a later outside edit continues the
+/// app's save.
+#[test]
+fn a_heads_file_the_open_could_not_write_is_written_by_a_later_open() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    rig.fs.kill_before(k, false);
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    assert!(rig.fs.is_dead(), "killed at the heads file");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
+    rig.fs.set_busy(&heads, true);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    rig.fs.advance(Duration::from_secs(10));
+    let _ = handle.close();
+    rig.fs.set_busy(&heads, false);
+    // The entry settles at this open; the heads file is written at the first that can.
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    rig.fs.advance(Duration::from_secs(10));
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    mend_outside(&rig, &folder);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(outside_edit_notices(&handle), vec![(1, false)]);
+    assert_eq!(verse_text_conflicts(&handle), 0);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
