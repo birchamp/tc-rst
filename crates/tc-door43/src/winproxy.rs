@@ -5,14 +5,14 @@
 //! `proxy-watch` makes the WinHTTP calls (`WinHttpGetIEProxyConfigForCurrentUser`, then
 //! `WinHttpGetProxyForUrlEx`). This workspace forbids `unsafe` (AGENTS.md), and that crate is
 //! the one published crate that asks WinHTTP for the whole lookup through a safe API, with a
-//! time limit on each call. It is pinned to one version (Cargo.toml says how to upgrade it).
-//! The survey of the alternatives and the audit of its Windows code are in
-//! `docs/evidence/windows-build-2026-10-17.md`, hazard 6.
+//! time limit on each call. It is pinned to one version (the workspace Cargo.toml says how to
+//! upgrade it). The survey of the alternatives, the audit of its Windows code and the
+//! conditions this module meets are in `docs/evidence/proxy-watch-audit-2026-10-19.md`.
 
 use std::time::Duration;
 
 use proxy_watch::pac::WinHttpPacResolver;
-use proxy_watch::{ProxyConfig, ProxyConfigSource, ProxyMode, ProxyStep};
+use proxy_watch::{Error, ProxyConfig, ProxyConfigSource, ProxyMode, ProxyStep};
 use url::Url;
 
 use crate::http::{ProxyAnswer, ProxyFinder};
@@ -46,47 +46,48 @@ impl WinHttpFinder {
         }
     }
 
-    /// A finder that runs the PAC script at `script` and reads neither the user's settings nor
-    /// the environment, so a test can serve a script on this computer. WinHTTP refuses a
-    /// `file:` URL; serve the script over http.
+    /// A finder that runs the PAC script at `script` instead of reading the user's settings,
+    /// so a test can serve a script on this computer. The `*_PROXY` variables still come
+    /// first. WinHTTP refuses a `file:` URL; serve the script over http.
     pub fn with_pac_script(script: Url) -> Self {
         Self {
             settings: Settings::PacScript(script),
         }
     }
 
-    fn settings(&self) -> Option<ProxyConfig> {
-        match &self.settings {
-            Settings::CurrentUser => {
-                if PROXY_VARIABLES
-                    .iter()
-                    .any(|name| std::env::var_os(name).is_some_and(|v| !v.is_empty()))
-                {
-                    return None;
-                }
-                proxy_watch::read().ok()
+    fn lookup(&self, origin: &Url) -> Result<Vec<ProxyStep>, Error> {
+        let settings = match &self.settings {
+            Settings::CurrentUser => proxy_watch::read()?,
+            Settings::PacScript(url) => {
+                ProxyConfig::from_source(ProxyConfigSource::Registry, ProxyMode::pac(url.clone()))
             }
-            Settings::PacScript(url) => Some(ProxyConfig::from_source(
-                ProxyConfigSource::Registry,
-                ProxyMode::pac(url.clone()),
-            )),
-        }
+        };
+        // A resolver of its own for every lookup: WinHTTP remembers a failed WPAD search for
+        // the life of a session, and the computer may have joined another network since.
+        WinHttpPacResolver::with_timeout(LOOKUP_LIMIT)?
+            .with_wpad(true)
+            .resolve_config(&settings, origin)
     }
 }
 
 impl ProxyFinder for WinHttpFinder {
     fn proxy_for(&self, origin: &Url) -> Option<ProxyAnswer> {
-        let settings = self.settings()?;
-        // A resolver of its own for every lookup: WinHTTP remembers a failed WPAD search for
-        // the life of a session, and the computer may have joined another network since.
-        let resolver = WinHttpPacResolver::with_timeout(LOOKUP_LIMIT)
-            .ok()?
-            .with_wpad(true);
-        // Any failure (no PAC script could be fetched or run, the limit passed) is no answer,
-        // so the system's manual proxy setting decides, or the request goes directly, as in
-        // Edge. The error is not logged: its PAC URL can carry a user name and password.
-        let steps = resolver.resolve_config(&settings, origin).ok()?;
-        answer(&steps)
+        if PROXY_VARIABLES
+            .iter()
+            .any(|name| std::env::var_os(name).is_some_and(|v| !v.is_empty()))
+        {
+            return None;
+        }
+        match self.lookup(origin) {
+            Ok(steps) => answer(&steps),
+            // No script could be fetched or run, or the limit passed: no answer, so the
+            // system's manual proxy setting decides, or the request goes directly, as in
+            // Edge. Going directly here would pass over that manual proxy.
+            Err(error) => {
+                log_no_answer(&error);
+                None
+            }
+        }
     }
 }
 
@@ -98,6 +99,29 @@ fn answer(steps: &[ProxyStep]) -> Option<ProxyAnswer> {
         ProxyStep::Direct => Some(ProxyAnswer::Direct),
         _ => step.to_url().map(ProxyAnswer::Through),
     })
+}
+
+/// Logs the kind of a failed lookup and the system's error code, and nothing else: the
+/// error's message can carry the PAC script's URL, and with it a user name and password.
+fn log_no_answer(error: &Error) {
+    let kind = match error {
+        Error::Io { .. } => "io",
+        Error::PacTimeout { .. } => "pac-timeout",
+        Error::PacEvaluation { .. } => "pac-evaluation",
+        Error::PacInvalidResult { .. } => "pac-invalid-result",
+        Error::PacNotSupported { .. } => "pac-not-supported",
+        Error::InvalidProxyUrl { .. } => "invalid-proxy-url",
+        _ => "other",
+    };
+    let os_error = match error {
+        Error::Io { source, .. } => source.raw_os_error(),
+        _ => None,
+    };
+    tracing::info!(
+        kind,
+        os_error,
+        "windows proxy lookup failed: the manual proxy setting decides"
+    );
 }
 
 #[cfg(test)]
@@ -128,7 +152,9 @@ mod tests {
         let steps = [ProxyStep::Socks4(endpoint("socks4://s.test:1080"))];
         assert_eq!(
             answer(&steps),
-            Some(ProxyAnswer::Through("socks4://s.test:1080".parse().unwrap()))
+            Some(ProxyAnswer::Through(
+                "socks4://s.test:1080".parse().unwrap()
+            ))
         );
     }
 }

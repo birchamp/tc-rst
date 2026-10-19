@@ -367,7 +367,9 @@ mod tests {
         assert_eq!(finder.asked(), ["https://a.test", "https://b.test"]);
         assert_eq!(
             found_for(&http, "https://a.test/x"),
-            Some(ProxyAnswer::Through("http://proxy.test:8080".parse().unwrap()))
+            Some(ProxyAnswer::Through(
+                "http://proxy.test:8080".parse().unwrap()
+            ))
         );
         assert_eq!(found_for(&http, "https://b.test/x"), None);
     }
@@ -476,7 +478,9 @@ mod tests {
         fn proxy_for(&self, _: &Url) -> Option<ProxyAnswer> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let _ = self.release.lock().unwrap().recv();
-            Some(ProxyAnswer::Through("http://late.test:8080".parse().unwrap()))
+            Some(ProxyAnswer::Through(
+                "http://late.test:8080".parse().unwrap(),
+            ))
         }
     }
 
@@ -498,8 +502,16 @@ mod tests {
         let http = with_limit(http, Duration::from_millis(200));
         let started = std::time::Instant::now();
         http.client().await.unwrap();
-        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
-        assert_eq!(found_for(&http, "https://a.test/x"), None, "the system's settings serve it");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            found_for(&http, "https://a.test/x"),
+            None,
+            "the system's settings serve it"
+        );
         http.client().await.unwrap();
         assert_eq!(finder.calls.load(Ordering::SeqCst), 1, "not asked again");
     }

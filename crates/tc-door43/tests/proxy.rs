@@ -23,8 +23,12 @@ struct Always {
 
 impl Always {
     fn named(proxy: &FakeProxy) -> Arc<Self> {
+        Self::at(&proxy.url())
+    }
+
+    fn at(proxy: &str) -> Arc<Self> {
         Arc::new(Self {
-            proxy: proxy.url().parse().unwrap(),
+            proxy: proxy.parse().unwrap(),
             asked: Mutex::default(),
         })
     }
@@ -133,6 +137,23 @@ async fn a_server_on_this_computer_never_sees_a_proxy() {
         .unwrap();
     assert!(finder.asked().is_empty());
     assert!(proxy.requests().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_socks_proxy_gets_a_socks4_handshake() {
+    // A PAC script on Windows can name one (`SOCKS host:port`), which WinHTTP gives as SOCKS4.
+    let proxy = FakeProxy::start().await.unwrap();
+    let finder = Always::at(&proxy.url().replace("http://", "socks4://"));
+    let switch = InternetSwitch::new();
+    switch.turn_on();
+    // An address, not a name: a SOCKS4 client looks a name up itself, and nothing here may
+    // ask DNS. 192.0.2.1 is a documentation address that nothing ever reaches.
+    let error = ask(&client("https://192.0.2.1", &switch, &finder)).await;
+    assert!(
+        matches!(error, Door43Error::Unreachable { .. }),
+        "{error:?}"
+    );
+    assert_eq!(proxy.requests(), ["SOCKS4 CONNECT 192.0.2.1:443"]);
 }
 
 /// Names no proxy for any origin, as a finder does when the system has none for it.

@@ -64,8 +64,6 @@ pub use download::{DownloadTo, DownloadWatch, DownloadedZip, Unwatched};
 pub use error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 pub use git_tree::ObjectId;
 pub use http::{Http, HttpSpec, ProxyAnswer, ProxyFinder, system_proxy_finder};
-#[cfg(windows)]
-pub use winproxy::WinHttpFinder;
 pub use internet::{InternetSwitch, Offline};
 pub use listing::{Listing, Skipped};
 pub use names::{
@@ -80,3 +78,5 @@ pub use repos::{
 pub use secret::{Credentials, OneTimeCode, Password, Session, Token};
 pub use unpack::{FileMode, NameProblem, UnpackedFile, check_names};
 pub use verify::{VerifiedArchive, VerifiedSbExport, verify_archive, verify_sb_export};
+#[cfg(windows)]
+pub use winproxy::WinHttpFinder;
