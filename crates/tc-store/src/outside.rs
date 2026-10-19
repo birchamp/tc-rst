@@ -340,7 +340,7 @@ impl Writer {
             self.read_base(rel)
         };
         self.counters.add(&self.counters.outside_decodes, 1);
-        let plan = self.fold.plan_outside_edit(
+        let mut plan = self.fold.plan_outside_edit(
             &outside,
             &decoded,
             &base,
@@ -355,6 +355,15 @@ impl Writer {
             u64::from(plan.keys_examined),
         );
         if plan.changes.is_empty() {
+            // The digests of a book's records compare after line ends and blanks at line ends
+            // are normalized, so a file that differs from the app's bytes in nothing else has
+            // no key looked at and none counted: it is one rewrite of the whole file (X3).
+            if plan.whitespace_only == 0
+                && plan.keys_examined == 0
+                && matches!(outside, OutsideFile::Derived(DerivedFile::Usfm(_)))
+            {
+                plan.whitespace_only = u32::try_from(decoded.digests.len()).unwrap_or(u32::MAX);
+            }
             self.notices_of_plan(rel, &plan, &decoded);
             return Examined::Nothing;
         }
