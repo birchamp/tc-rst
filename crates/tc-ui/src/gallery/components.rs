@@ -316,6 +316,7 @@ fn action(p: Props) -> AnyView {
         style: p.css_signal("style"),
         children: p.children("children"),
         attrs: p.rest(),
+        live_attrs: Vec::new(),
     })
     .into_any()
 }

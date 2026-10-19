@@ -1,8 +1,11 @@
 //! The no-loss probe (feature `test-hooks` only, never in a release build): two test fields
 //! saved through `test/fieldStore`, so `app/no-loss.mjs` can prove the save machine, the draft
 //! buffer, `boot.js`'s recovery, the navigation gate and the close guard in Chromium before any
-//! screen with a real save exists. The page mounts it in place of the root when its address
-//! asks `?probe=fields`.
+//! screen with a real save exists. The page mounts it outside the App when its address asks
+//! `?probe=fields`, so the App's way Home after a restart never unmounts its fields. It also
+//! draws the real save indicator (X2) over the probe's saves, and opens the real App language
+//! dialog over its fields, so the browser tests can prove that a language switch keeps typed
+//! text.
 //!
 //! Test triggers, read only here: `sessionStorage["tc4.test.panicOnInput"] = "1"` makes the next
 //! input handler panic before it tells the machine, and `sessionStorage["tc4.test.panicAtBoot"]
@@ -23,7 +26,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, spawn_local};
 
 use super::saves::{FieldWriter, LocalBoxFuture, Saves};
-use super::{js, panic, use_runtime};
+use super::{SaveIndicatorView, js, panic, use_app, use_runtime};
 use crate::app::client::{CallError, Transport};
 use crate::app::save::indicator::Worst;
 use crate::app::save::{FieldSave, FieldScope, Pair, Source};
@@ -208,6 +211,33 @@ pub(super) fn Probe() -> impl IntoView {
     let left = ArcRwSignal::new(false);
     let left_for_view = left.clone();
     let restarted = use_runtime().map(|runtime| runtime.state().restarted.clone());
+    let x2 = {
+        let indicator = saves.indicator();
+        let saves = SendWrapper::new(saves.clone());
+        view! {
+            <div data-testid="probe-x2" data-on="dark">
+                <SaveIndicatorView
+                    indicator=Signal::derive(move || indicator.get())
+                    on_retry=Callback::new(move |_| saves.retry())
+                />
+            </div>
+        }
+    };
+    let language = RwSignal::new(false);
+    let ctx = use_app();
+    let language_dialog = move || {
+        let ctx = ctx.clone()?;
+        language.get().then(|| {
+            let applied = ctx.s.server.saved_locale.get_untracked();
+            view! {
+                <crate::views::account_menu::AppLanguageDialog
+                    applied=applied
+                    actions=ctx.actions.clone()
+                    on_close=Callback::new(move |()| language.set(false))
+                />
+            }
+        })
+    };
     let saves_for_retry = SendWrapper::new(saves.clone());
     let saves_for_leave = SendWrapper::new(saves.clone());
     let retry = move |_| saves_for_retry.retry();
@@ -236,6 +266,9 @@ pub(super) fn Probe() -> impl IntoView {
             <Show when=move || restarted.as_ref().is_some_and(|r| r.get())>
                 <p data-testid="probe-restarted">"restarted"</p>
             </Show>
+            {x2}
+            <button data-testid="probe-language" on:click=move |_| language.set(true)>"Language"</button>
+            {language_dialog}
         </div>
     }
     .into_any()

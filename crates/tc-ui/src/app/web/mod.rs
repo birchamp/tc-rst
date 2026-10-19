@@ -8,14 +8,16 @@
 //! which is sound because a browser runs the UI on one thread; and nothing panics.
 
 mod api;
-mod bridge;
-mod js;
+pub mod app_ctx;
+pub(crate) mod bridge;
+mod home_stand_in;
+pub(crate) mod js;
 mod panic;
 #[cfg(feature = "test-hooks")]
 mod probe;
 mod query;
-mod root;
 mod saves;
+mod shell;
 mod state;
 mod stream;
 mod view_error;
@@ -35,14 +37,17 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
 
 pub use api::Api;
+pub use app_ctx::{Actions, AppCtx, AppState, Dialog, Layers, use_app};
 pub use panic::set_context;
 pub use query::QueryCache;
 pub use saves::{FieldWriter, GateHook, GateHookId, LocalBoxFuture, Saves, WriteCap};
+pub use shell::SaveIndicatorView;
 pub use state::ServerState;
 pub use view_error::ViewError;
 
 use crate::app::boot::{
-    BuildAction, Fate, RELOADED_FOR_KEY, TOKEN_KEY, build_action, stop_reason, token_from,
+    BuildAction, Fate, RELOADED_FOR_KEY, StartupAction, TOKEN_KEY, build_action, startup_action,
+    stop_reason, token_from,
 };
 use crate::app::cache::CachedQuery;
 use crate::app::client::CallError;
@@ -437,6 +442,8 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     let token =
         token_from(&fragment, kept.as_deref()).ok_or("this window was opened without its key")?;
     js::session_set(TOKEN_KEY, token.as_str());
+    // The first-launch window reads its key from its address, as the shell opens it.
+    let prepare = format!("/prepare.html#t={}", token.as_str());
     let api = Api::new(token, Rc::clone(busy));
 
     let catalogs = fetch_catalogs(&api, base);
@@ -461,6 +468,13 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
         js::session_remove(RELOADED_FOR_KEY);
     } else {
         carry_out(action);
+        return Ok(());
+    }
+    // The first launch is still preparing the resources, or it failed: the first-launch window
+    // shows the count or the failure, and comes back at `Ready` (5.3, D14). Nothing has mounted.
+    if startup_action(&hello.startup) == StartupAction::Prepare {
+        FATE.with(|fate| fate.borrow_mut().stop());
+        let _ = window.location().replace(&prepare);
         return Ok(());
     }
 
@@ -519,10 +533,29 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
         EventReader::new(hello.instance),
     ));
 
+    // Where a reload in the same launch returns to (6.6, D16). After a panic the view comes
+    // back too, and the boundary shows the callout in place of its screen (AD22).
+    let (view, project) = crate::app::shell::restore(
+        js::session_get(crate::app::shell::NAV_KEY).as_deref(),
+        &hello,
+    );
+    let s = AppState::new(
+        base,
+        runtime.state().clone(),
+        view,
+        project,
+        after.as_ref().map(|marker| marker.message.clone()),
+    );
+    let ctx = AppCtx {
+        actions: Actions::new(runtime.clone(), s.clone()),
+        s,
+    };
+
     let root = root_element().ok_or("the page has no #root")?;
     let provided = SendWrapper::new(runtime);
     let app = leptos::mount::mount_to(root, move || {
         provide_context(provided.clone());
+        app_ctx::provide_app(ctx.clone());
         // The static callout's words follow the shown language (6.8).
         leptos::prelude::Effect::new(move |_| {
             let (lang, dir) = i18n::html_lang_dir(i18n::shown_locale());
@@ -533,7 +566,7 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
                 home: t(keys::app::BACK_TO_HOME, &[]),
             });
         });
-        view! { <Root after=after.clone() probe=probe /> }
+        page(after.clone(), probe)
     });
     // Kept, not forgotten: the boot error replaces the app when a session meets a server of
     // another build, and dropping the handle is what takes the app off the page.
@@ -542,11 +575,22 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     Ok(())
 }
 
-/// The page: tC4's view-error callout in place of the screen that panicked, until "Back to
-/// Home", which saves what can be saved first (AD22); then the root, or the no-loss probe in a
-/// test build that asks for it.
+/// The page: the port of tC4's `App.jsx`, or, in a test build that asks for it, the no-loss
+/// probe outside the App, so a restart's way Home never unmounts its fields (D15).
+fn page(after: Option<CrashMarker>, probe: bool) -> AnyView {
+    #[cfg(feature = "test-hooks")]
+    if probe {
+        return view! { <ProbeRoot after=after /> }.into_any();
+    }
+    let _ = (after, probe);
+    view! { <shell::App /> }.into_any()
+}
+
+/// The probe page as A4b left it: tC4's view-error callout in place of the probe after a
+/// panic, until "Back to Home", which saves what can be saved first (AD22); then the probe.
+#[cfg(feature = "test-hooks")]
 #[component]
-fn Root(after: Option<CrashMarker>, probe: bool) -> impl IntoView {
+fn ProbeRoot(after: Option<CrashMarker>) -> impl IntoView {
     let failed = ArcRwSignal::new(after.map(|marker| marker.message));
     let saves = use_runtime().map(|runtime| SendWrapper::new(runtime.saves().clone()));
     let home = {
@@ -566,17 +610,8 @@ fn Root(after: Option<CrashMarker>, probe: bool) -> impl IntoView {
     };
     move || match failed.get() {
         Some(message) => view! { <ViewError message=message on_home=home /> }.into_any(),
-        None => root_view(probe),
+        None => view! { <probe::Probe /> }.into_any(),
     }
-}
-
-fn root_view(probe: bool) -> AnyView {
-    #[cfg(feature = "test-hooks")]
-    if probe {
-        return view! { <probe::Probe /> }.into_any();
-    }
-    let _ = probe;
-    view! { <root::StandIn /> }.into_any()
 }
 
 fn root_element() -> Option<web_sys::HtmlElement> {
