@@ -111,6 +111,20 @@ pub(crate) fn kill_everywhere_full(
     action: &dyn Fn(&ProjectHandle) -> Outcome,
     check: &dyn Fn(&ProjectHandle, &FaultFs, Outcome),
 ) -> u64 {
+    kill_everywhere_between(base, folder, setup, action, &|_| {}, check)
+}
+
+/// [`kill_everywhere_full`] where `between` changes the files the crash left before the open
+/// that follows (a teammate's file arrives, a cloud client syncs): the reopened fold is then
+/// not the one the killed action worked from.
+pub(crate) fn kill_everywhere_between(
+    base: &FaultFs,
+    folder: &Path,
+    setup: &dyn Fn(&FaultFs, &ProjectHandle),
+    action: &dyn Fn(&ProjectHandle) -> Outcome,
+    between: &dyn Fn(&FaultFs),
+    check: &dyn Fn(&ProjectHandle, &FaultFs, Outcome),
+) -> u64 {
     let mut points = 0;
     for model in [PowerLoss::KeepSyncedNames, PowerLoss::Strict] {
         for torn in [false, true] {
@@ -134,6 +148,7 @@ pub(crate) fn kill_everywhere_full(
                 };
                 for &power_cut in cuts {
                     let after = fs.crash(power_cut);
+                    between(&after);
                     let (rig2, reopened) = reopen_checked(after, folder);
                     check(&reopened, &rig2.fs, row_outcome(outcome, model, power_cut));
                     let held = ids_on_disk(&rig2.fs, folder);
@@ -414,6 +429,79 @@ fn crash_materialize_rewrites_forward() {
         // The derived file holds what the fold projects after the open.
         handle.wait_idle();
     });
+}
+
+/// §6.2 row `d in {o, n}`, §16.7: the intent tells the bytes of the app's own interrupted write
+/// from an outside edit when the fold the open ends with is not the one the killed job worked
+/// from. A teammate changed the verse the job was writing before the next open: the file the
+/// job left holds the verse as the job projected it, which neither the manifest nor the new
+/// projection names, and only the intent says it is the app's own. Read as an edit it would
+/// be recorded and make a conflict between the app's text and the teammate's.
+#[test]
+fn crash_materialize_intent_tells_its_bytes_from_an_outside_edit() {
+    use std::sync::Mutex;
+    use tc_journal::fold::{ConflictKind, Notice};
+    use tc_journal::record::VerseValue;
+    use tc_journal::{BookId, ChangeId, ChapterNo, DeviceId, VerseNo};
+    let (base, folder) = base_titus();
+    let written: Mutex<Option<ChangeId>> = Mutex::new(None);
+    let points = kill_everywhere_between(
+        &base,
+        &folder,
+        &|_, handle| {
+            let reply = save_verse(handle, 1, 2, "B, written by the killed job").unwrap();
+            *written.lock().unwrap() = Some(reply.changes[0]);
+        },
+        &|handle| {
+            let _ = handle.leave(tc_store::Leave::Book(TIT)).wait();
+            Outcome::NotSaved
+        },
+        &|fs| {
+            let parent = written.lock().unwrap().expect("the job's save");
+            let record = Record::Verse {
+                book: BookId::Titus,
+                chapter: ChapterNo::new(1).unwrap(),
+                verse: VerseNo::new(2).unwrap(),
+                value: VerseValue::Text {
+                    marker: tc_journal::record::MarkerWs::canonical(),
+                    words: "C, a teammate's later words".into(),
+                    layout: "\n".into(),
+                    last: VerseNo::new(2).unwrap(),
+                    from: None,
+                },
+            };
+            crate::commands::teammate_batch(
+                fs,
+                &folder,
+                DeviceId::local([7; 15]),
+                1,
+                vec![(record, vec![parent])],
+            );
+        },
+        &|handle, _, _| {
+            handle.wait_idle();
+            let edits: Vec<_> = handle
+                .notices()
+                .into_iter()
+                .filter(|n| matches!(n.notice, Notice::OutsideEditRecorded { .. }))
+                .collect();
+            assert!(
+                edits.is_empty(),
+                "the app's own bytes were recorded: {edits:?}"
+            );
+            let conflicts = handle
+                .snapshot()
+                .fold()
+                .conflicts_of(ConflictKind::VerseText)
+                .count();
+            assert_eq!(conflicts, 0, "a conflict with the app's own text");
+            assert_eq!(
+                words(handle, 1, 2).as_deref(),
+                Some("C, a teammate's later words")
+            );
+        },
+    );
+    assert!(points > 20, "{points} kill points");
 }
 
 #[test]
