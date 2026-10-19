@@ -22,12 +22,15 @@ pub struct HelpRequest {
     pub report: Option<ReportId>,
 }
 
-/// The attachment the server composes (`feedback/compose`).
+/// The attachment the server composes (`feedback/compose`). tC4 composes it on the spot, so
+/// its Send never waits; here Send waits for it (see [`can_send`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Attachment {
     Loading,
     Ready(String),
-    /// The compose failed; the dialog shows why, and Send stays off.
+    /// The compose failed, for this reason (the call's error, in English). The dialog says so in
+    /// the shown language and Send stays off; the next opening of the report composes again,
+    /// with the typed text kept.
     Failed(String),
 }
 
@@ -70,13 +73,22 @@ pub fn keeps_report(kept: Option<&FeedbackForm>, help: &HelpRequest) -> bool {
 pub enum Opened {
     /// The kept report, as it is.
     Reopen,
-    /// A new report, whose attachment the server composes now.
+    /// A report whose attachment the server composes now: a new one, or the kept one when its
+    /// compose failed.
     New(FeedbackForm),
 }
 
+/// A kept report whose attachment failed reopens with its text and a new compose, so the person
+/// gets a report they can send by opening it again.
 pub fn ask_for_help(kept: Option<&FeedbackForm>, help: &HelpRequest) -> Opened {
-    if keeps_report(kept, help) {
-        return Opened::Reopen;
+    if let Some(fb) = kept.filter(|_| keeps_report(kept, help)) {
+        return match fb.attachment {
+            Attachment::Failed(_) => Opened::New(FeedbackForm {
+                attachment: Attachment::Loading,
+                ..fb.clone()
+            }),
+            Attachment::Loading | Attachment::Ready(_) => Opened::Reopen,
+        };
     }
     Opened::New(FeedbackForm {
         refusal: Some(refusal_key(help)),

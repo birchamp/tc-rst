@@ -62,6 +62,36 @@ fn an_unsent_report_of_the_same_refusal_reopens() {
     assert!(keeps_report(Some(&kept), &help("open.locked")));
 }
 
+#[test]
+fn a_kept_report_whose_compose_failed_composes_again_with_its_text() {
+    let mut kept = opened(None, &help("open.locked"));
+    kept.message.push_str(" More.");
+    kept.name = "Ana".to_owned();
+    kept.attachment = Attachment::Failed("the app's server answered 500".to_owned());
+    assert!(!can_send(&kept));
+    let again = opened(Some(&kept), &help("open.locked"));
+    assert_eq!(again.attachment, Attachment::Loading);
+    assert_eq!(
+        FeedbackForm {
+            attachment: kept.attachment.clone(),
+            ..again
+        },
+        kept,
+        "everything else is kept"
+    );
+    // Still composing: the dialog shows the report as it is, and the compose on its way lands.
+    kept.attachment = Attachment::Loading;
+    assert_eq!(
+        ask_for_help(Some(&kept), &help("open.locked")),
+        Opened::Reopen
+    );
+    // Report a problem composes again whenever it reopens typed text.
+    let mut typed = general("It crashed");
+    typed.attachment = Attachment::Failed("no server".to_owned());
+    assert_eq!(report_problem(Some(&typed)).attachment, Attachment::Loading);
+    assert_eq!(report_problem(Some(&typed)).message, "It crashed");
+}
+
 fn general(message: &str) -> FeedbackForm {
     let mut form = report_problem(None);
     form.message = message.to_owned();

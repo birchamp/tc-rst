@@ -5,7 +5,13 @@
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/feedback.test.mjs
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { REPO } from '../env-rust.mjs';
 import { LOCALES, browserTest, catalog, openMenu, recordRequests, sleep, until, withApp } from './kit.mjs';
+
+/** The rebuild's own English text (crates/tc-ui/assets/i18n-rebuild). */
+const rebuildEn = JSON.parse(fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'i18n-rebuild', 'en.json'), 'utf8'));
 
 const dialog = (page) => page.getByTestId('feedback');
 const message = (page) => page.getByTestId('feedback-message');
@@ -166,6 +172,33 @@ browserTest('d, e, f. with the shell: Send asks first; Not now sends nothing; Tu
     assert.equal(await message(page).inputValue(), '');
     assert.equal(await result(page).count(), 0);
   }, { init: (context) => shell.install(context) });
+});
+
+// A rebuild rule (APP-DESIGN A5 D8): Send waits for the attachment the server composes, where
+// tC4 composes it on the spot. A compose that fails says so in the dialog, and opening the report
+// again keeps what was typed and composes again.
+browserTest('a compose that fails keeps Send off and says so; the next opening keeps the text and composes again', async () => {
+  await withApp(async ({ page, allow }) => {
+    allow(/status of 500/);
+    let failing = true;
+    await page.route('**/api/v1/feedback/compose', (route) => (failing
+      ? route.fulfill({ status: 500, contentType: 'text/plain', body: 'compose failed' })
+      : route.fallback()));
+    await openMenu(page);
+    await page.getByTestId('account-report').click();
+    await dialog(page).waitFor();
+    const said = rebuildEn['feedback.attachmentFailed'].replace('{reason}', "the app's server answered 500");
+    await until('the failure in the attachment box', async () => (await attachment(page).textContent()) === said);
+    await message(page).fill('Typed before the failure was seen.');
+    assert.equal(await send(page).isDisabled(), true, 'Send stays off without the attachment');
+    await page.getByTestId('feedback-cancel').click();
+    await until('closed', async () => (await dialog(page).count()) === 0);
+    failing = false;
+    await openReport(page);
+    assert.equal(await message(page).inputValue(), 'Typed before the failure was seen.');
+    assert.equal(await send(page).isEnabled(), true, 'Send is on with the attachment shown');
+    await page.getByTestId('feedback-cancel').click();
+  });
 });
 
 browserTest('feedback_report_is_never_written_to_disk: no storage item and no request but the shell carries what was typed', async () => {

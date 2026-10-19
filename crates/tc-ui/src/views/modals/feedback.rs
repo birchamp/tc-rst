@@ -201,7 +201,10 @@ fn form(
         let fb = fb.clone();
         move || {
             fb.with(|fb| match fb.as_ref().map(|f| &f.attachment) {
-                Some(Attachment::Ready(text)) | Some(Attachment::Failed(text)) => text.clone(),
+                Some(Attachment::Ready(text)) => text.clone(),
+                Some(Attachment::Failed(reason)) => {
+                    t(keys::feedback::ATTACHMENT_FAILED, &[("reason", reason)])
+                }
                 Some(Attachment::Loading) | None => String::new(),
             })
         }
