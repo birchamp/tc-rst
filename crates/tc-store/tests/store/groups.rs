@@ -651,16 +651,21 @@ fn a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit() {
 #[test]
 fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
     let (rig, folder, handle, k) = fail_after_the_rename();
+    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
     rig.fs.fail_op(k, std::io::ErrorKind::StorageFull);
     assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    let stale = rig.fs.peek(&heads);
     // The retry timer converges the file without a new save: the manifest then names the bytes
-    // that are in the file.
+    // that are in the file, and the heads file in the folder is the one they stand for.
     let usfm = folder.join("ingredients/TIT.usfm");
     let on_disk = tc_journal::Md5::of(&rig.fs.peek(&usfm).unwrap()).to_hex();
     wait_for("the retry to settle the file", || {
         rig.fs
             .peek(&folder.join(".tc/materialized.json"))
             .is_some_and(|m| String::from_utf8_lossy(&m).contains(&on_disk))
+    });
+    wait_for("the retry to write the heads file", || {
+        rig.fs.peek(&heads) != stale
     });
     handle.close().unwrap();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
