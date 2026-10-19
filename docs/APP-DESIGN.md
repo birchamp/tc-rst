@@ -1061,6 +1061,17 @@ case is named after the rule it protects.
 | `read_only_refuses_every_command_and_writes_nothing` | store | STORAGE:1893-1899 |
 | `drafts_offered_after_reopen` | store | STORAGE:1750-1759 |
 
+*(B1b: `crates/tc-app/tests/store_contract.rs` runs the "both" cases on the memory backend as
+`store_contract!(memory, crate::memory_fixture)`, with one more token-kind case,
+`edit_token_text_is_refused_as_a_review_token`, the mirror of `review_token_text_is_refused_as_an_edit_token`,
+and `opens_of_one_folder_share_one_session` as two functions, `…_screen_first` and `…_side_first`.
+A fixture gives the store, the sample Bible project, its USFM bytes, a record two teammates
+changed, and a project of another id (a token minted under another project's key is one of the
+forgeries). `tests/support/counting_store.rs` wraps any backend to count opens, checkpoints and
+closes and to hold an open or a checkpoint, so C0's `store_contract!(store, crate::store_fixture)`
+reuses it. The two `compile_fail` doctests on `StoreCommand` and wire's
+`a_relabelled_review_token_is_bad_token` are the rest of the token-kind proof.)*
+
 ### 4.3 Sessions, epochs and the request guard
 
 - `SessionRegistry` maps a `ProjectRef` to one `ProjectSession`. Each session counts its users:

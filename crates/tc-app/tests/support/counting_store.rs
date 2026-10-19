@@ -201,3 +201,26 @@ impl ProjectHandle for CountingHandle {
         self.inner.clone().close()
     }
 }
+
+/// A store behind an `Arc`, as a contract fixture hands it over, so a [`CountingStore`] can
+/// wrap any backend.
+pub struct SharedStore(pub Arc<dyn ProjectStore>);
+
+impl ProjectStore for SharedStore {
+    fn list(&self) -> Result<Vec<ProjectEntry>, StoreError> {
+        self.0.list()
+    }
+
+    fn open(
+        &self,
+        folder: &ProjectRef,
+        progress: ProgressSink,
+    ) -> Result<Arc<dyn ProjectHandle>, OpenFailure> {
+        self.0.open(folder, progress)
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn reset(&self) -> Result<(), StoreError> {
+        self.0.reset()
+    }
+}
