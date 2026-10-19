@@ -51,6 +51,147 @@ pub fn display_text(body: &str) -> String {
     normalize_whitespace(&raw)
 }
 
+/// One piece of a verse as a source pane shows it: a word, with the alignment group that
+/// holds it, or the text between words (tC4's `tokenizeVerse`, `src/data/sourceHighlight.ts`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DisplayToken {
+    pub text: String,
+    /// A `\w` word; any other piece is text between words.
+    pub word: bool,
+    /// The index in [`DisplayVerse::groups`] of the innermost `\zaln-s` around the word.
+    pub group: Option<usize>,
+}
+
+/// An original-language word a `\zaln-s` names: its `x-content` and `x-occurrence`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DisplaySource {
+    pub content: String,
+    pub occurrence: u32,
+}
+
+/// A verse as display tokens and the alignment groups its words point at. Each group holds
+/// the original words of its `\zaln-s` and of every milestone around it, outermost first.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DisplayVerse {
+    pub tokens: Vec<DisplayToken>,
+    pub groups: Vec<Vec<DisplaySource>>,
+}
+
+/// The pieces of a verse body that [`display_text`] reads, as tokens: joined and with their
+/// whitespace normalized they are [`display_text`] of the body. A paragraph marker is a
+/// one-space text piece. A milestone whose attributes cannot be read opens a group with no
+/// source word, so its words still show and light nothing.
+pub fn display_tokens(body: &str) -> DisplayVerse {
+    let doc = Document::parse(body);
+    let mut walk = TokenWalk::default();
+    let mut flow = Flow::default();
+    walk.collect(doc.nodes(), &mut flow);
+    walk.verse
+}
+
+#[derive(Default)]
+struct TokenWalk {
+    verse: DisplayVerse,
+    open: Vec<usize>,
+}
+
+impl TokenWalk {
+    fn text(&mut self, text: &str) {
+        self.verse.tokens.push(DisplayToken {
+            text: text.to_owned(),
+            word: false,
+            group: None,
+        });
+    }
+
+    fn collect(&mut self, nodes: &[Node<'_>], flow: &mut Flow) {
+        for node in nodes {
+            match node {
+                Node::Text(text) if flow.is_verse_text() => self.text(text),
+                Node::Marker(marker) => {
+                    if !marker.is_closing() && marker.class().is_paragraph_level() {
+                        self.text(" ");
+                    }
+                    *flow = flow.after(marker);
+                }
+                Node::Milestone(milestone) if milestone.name() == "zaln-s" => {
+                    let mut sources = self
+                        .open
+                        .last()
+                        .and_then(|g| self.verse.groups.get(*g))
+                        .cloned()
+                        .unwrap_or_default();
+                    let attribute = |key| {
+                        milestone
+                            .attributes
+                            .as_ref()
+                            .and_then(|a| a.get(key).ok().flatten())
+                    };
+                    if let Some(content) = attribute("x-content") {
+                        sources.push(DisplaySource {
+                            content: content.to_owned(),
+                            occurrence: attribute("x-occurrence")
+                                .and_then(|o| o.parse().ok())
+                                .unwrap_or(0),
+                        });
+                    }
+                    self.verse.groups.push(sources);
+                    self.open.push(self.verse.groups.len() - 1);
+                }
+                Node::Milestone(milestone) if milestone.name() == "zaln-e" => {
+                    self.open.pop();
+                }
+                Node::Span(span) if flow.is_verse_text() && span.name() == "w" => {
+                    let mut text = String::new();
+                    for child in &span.children {
+                        if let Node::Text(t) = child {
+                            text.push_str(t);
+                        }
+                    }
+                    self.verse.tokens.push(DisplayToken {
+                        text,
+                        word: true,
+                        group: self.open.last().copied(),
+                    });
+                }
+                Node::Span(span)
+                    if flow.is_verse_text() && !markers::is_non_text_span(span.name()) =>
+                {
+                    self.collect(&span.children, flow);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// The paragraph-level markers of a verse body that stand before its first text and after
+/// its last, by name, in order.
+pub fn edge_markers(body: &str) -> (Vec<&str>, Vec<&str>) {
+    let doc = Document::parse(body);
+    let mut before = Vec::new();
+    let mut after = Vec::new();
+    let mut seen_text = false;
+    for node in doc.nodes() {
+        match node {
+            Node::Marker(marker) if !marker.is_closing() && marker.class().is_paragraph_level() => {
+                if seen_text {
+                    after.push(marker.name());
+                } else {
+                    before.push(marker.name());
+                }
+            }
+            Node::Text(text) if text.trim().is_empty() => {}
+            Node::Bom(_) | Node::Stray(_) | Node::Milestone(_) | Node::Marker(_) => {}
+            Node::Text(_) | Node::Span(_) => {
+                seen_text = true;
+                after.clear();
+            }
+        }
+    }
+    (before, after)
+}
+
 /// What the reader sees of a verse, in order: stretches of text, and breaks where a
 /// paragraph-level marker stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,6 +302,44 @@ fn is_layout_space(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn display_tokens_are_the_display_text_with_each_word_in_its_group() {
+        let body = "\\zaln-s |x-strong=\"G39720\" x-content=\"Παῦλος\" x-occurrence=\"1\"\\*\\w Paul|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*, a \\f + \\ft note\\f*\n\\q2 \\zaln-s |x-content=\"δοῦλος\" x-occurrence=\"1\"\\*\\zaln-s |x-content=\"Θεοῦ\" x-occurrence=\"2\"\\*\\w servant\\w*\\zaln-e\\*\\zaln-e\\* \\w now\\w*";
+        let verse = display_tokens(body);
+        let joined: String = verse.tokens.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(normalize_whitespace(&joined), display_text(body));
+        let words: Vec<(&str, Option<usize>)> = verse
+            .tokens
+            .iter()
+            .filter(|t| t.word)
+            .map(|t| (t.text.as_str(), t.group))
+            .collect();
+        assert_eq!(
+            words,
+            vec![("Paul", Some(0)), ("servant", Some(2)), ("now", None)]
+        );
+        let names: Vec<Vec<&str>> = verse
+            .groups
+            .iter()
+            .map(|g| g.iter().map(|s| s.content.as_str()).collect())
+            .collect();
+        assert_eq!(
+            names,
+            vec![vec!["Παῦλος"], vec!["δοῦλος"], vec!["δοῦλος", "Θεοῦ"]]
+        );
+        assert_eq!(verse.groups[2][1].occurrence, 2);
+    }
+
+    #[test]
+    fn edge_markers_are_the_paragraph_markers_around_the_text() {
+        assert_eq!(
+            edge_markers("\\q2 text\n\\q1 more\n\\p\n"),
+            (vec!["q2"], vec!["p"])
+        );
+        assert_eq!(edge_markers("text"), (vec![], vec![]));
+        assert_eq!(edge_markers("\\p \\q1\n"), (vec!["p", "q1"], vec![]));
+    }
 
     #[test]
     fn notes_attributes_and_headings_are_not_verse_text() {

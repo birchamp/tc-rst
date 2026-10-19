@@ -33,7 +33,9 @@ pub mod replies;
 pub mod reports;
 mod seed;
 pub mod session;
+pub mod sources;
 mod startup;
+mod understand;
 pub mod wire;
 
 pub use app::{Answer, App, AppDeps, CallFailure, FilesChoice, StartError, StoreChoice, Then};

@@ -1,0 +1,26 @@
+{
+  "path": "session/open",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e",
+    "project": "sample_burrito",
+    "unit": {
+      "type": "book",
+      "value": "TIT"
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": 10
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

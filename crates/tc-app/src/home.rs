@@ -343,7 +343,7 @@ pub fn card(
     }
 }
 
-fn api_kind(kind: tc_journal::fold::ProjectKind) -> ProjectKind {
+pub(crate) fn api_kind(kind: tc_journal::fold::ProjectKind) -> ProjectKind {
     match kind {
         tc_journal::fold::ProjectKind::Bible => ProjectKind::Bible,
         tc_journal::fold::ProjectKind::Stories => ProjectKind::Stories,
@@ -469,6 +469,16 @@ impl SummaryCache {
                 }
             }
             _ => Lookup::Missing,
+        }
+    }
+
+    /// The last summary of `folder` this launch computed or read, whatever its stamp: the
+    /// book rail shows it for the books that are not open, as tC4's rail shows the progress
+    /// Home loaded (`progressByProject`).
+    pub(crate) fn last_known(&self, folder: &ProjectRef) -> Option<Arc<Summary>> {
+        match lock(&self.state).kept.get(folder) {
+            Some((_, _, Kept::Ready(summary))) => Some(summary.clone()),
+            _ => None,
         }
     }
 

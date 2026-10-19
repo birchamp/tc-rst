@@ -21,6 +21,8 @@ tc-api = { path = "../tc-api", features = ["server"] }
 tc-core = { path = "../tc-core" }
 tc-burrito = { path = "../tc-burrito" }
 tc-door43 = { path = "../tc-door43" }
+# The helps the Understand screen shows: blocks and highlights (B3).
+tc-helps = { path = "../tc-helps" }
 tc-journal = { path = "../tc-journal" }
 tc-obs = { path = "../tc-obs" }
 tc-resources = { path = "../tc-resources" }

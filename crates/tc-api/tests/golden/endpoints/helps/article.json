@@ -1,0 +1,66 @@
+{
+  "path": "helps/article",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT",
+    "link": {
+      "type": "words",
+      "value": {
+        "category": "kt",
+        "slug": "god"
+      }
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "type": "found",
+      "value": {
+        "title": "God",
+        "blocks": [
+          {
+            "kind": "h",
+            "quote": 0,
+            "spans": [
+              {
+                "text": "Definition:",
+                "bold": true
+              },
+              {
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "li",
+            "quote": 1,
+            "spans": [
+              {
+                "text": "God",
+                "bold": true
+              },
+              {
+                "text": " created the universe."
+              }
+            ]
+          }
+        ],
+        "dir": "ltr"
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

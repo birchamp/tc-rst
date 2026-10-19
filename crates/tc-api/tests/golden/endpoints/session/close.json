@@ -1,0 +1,25 @@
+{
+  "path": "session/close",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

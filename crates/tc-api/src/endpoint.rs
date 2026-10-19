@@ -154,6 +154,7 @@ scoped!(
     crate::prefs::SetDraftUnit,
     crate::prefs::SetAlignSuggestions,
     crate::prefs::RecordPlace,
+    crate::session::Close,
 );
 unscoped!(
     crate::app::Quit,
@@ -165,6 +166,7 @@ unscoped!(
     crate::account::CancelSignIn,
     crate::account::Resume,
     crate::account::SignOut,
+    crate::session::Open,
 );
 #[cfg(feature = "test-hooks")]
 scoped!(crate::test::SaveVerse);

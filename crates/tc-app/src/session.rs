@@ -70,6 +70,8 @@ pub struct ProjectSession {
     counters: Arc<AppCounters>,
     /// The newest store sequence this session's events have told the UI about.
     view: AtomicU64,
+    /// The books whose resources this open has read (B3).
+    books: crate::understand::BookCache,
 }
 
 impl ProjectSession {
@@ -88,6 +90,10 @@ impl ProjectSession {
     /// The newest snapshot, with its reads counted.
     pub fn read(&self) -> CountingSnapshot {
         CountingSnapshot::new(self.handle.snapshot(), self.counters.clone())
+    }
+
+    pub(crate) fn books(&self) -> &crate::understand::BookCache {
+        &self.books
     }
 
     pub fn view(&self) -> ViewSeq {
@@ -578,6 +584,7 @@ impl SessionRegistry {
             replies: ReplyCache::new(ReplyCache::FINISHED),
             counters: self.inner.counters.clone(),
             view: AtomicU64::new(first.seq()),
+            books: Default::default(),
         });
         // Subscribed before the slot is open, so no step of the store is missed.
         let events = handle.subscribe();

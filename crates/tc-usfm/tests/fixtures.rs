@@ -552,3 +552,31 @@ fn tokenizer_matches_the_reference_library() {
         assert_eq!(actual, expected, "{}: {text:?}", case["source"]);
     }
 }
+
+#[test]
+fn display_tokens_give_the_display_text_of_every_fixture_verse() {
+    // The source panes show `display_text` and light words by their index in
+    // `display_tokens`, so the two must be the same text in every verse.
+    let mut verses = 0;
+    let mut aligned = 0;
+    for (path, text) in all_usfm() {
+        let book = Book::parse(&text);
+        for verse in book.verses() {
+            let tokens = tc_usfm::display_tokens(verse.body());
+            let joined: String = tokens.tokens.iter().map(|t| t.text.as_str()).collect();
+            assert_eq!(
+                tc_usfm::text::normalize_whitespace(&joined),
+                tc_usfm::display_text(verse.body()),
+                "{} {}",
+                path.display(),
+                verse.label()
+            );
+            verses += 1;
+            aligned += usize::from(tokens.tokens.iter().any(|t| t.group.is_some()));
+        }
+    }
+    assert!(
+        verses > 1_000 && aligned > 100,
+        "{verses} verses, {aligned} aligned"
+    );
+}

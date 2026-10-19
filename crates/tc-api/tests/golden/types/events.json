@@ -33,6 +33,46 @@
     }
   },
   {
+    "type": "job",
+    "value": {
+      "id": 10,
+      "kind": "open",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "opened",
+          "value": {
+            "session": {
+              "at": {
+                "project": "sample_burrito",
+                "epoch": 4
+              },
+              "id": "0a1b2c3d-0000-4000-8000-000000000001",
+              "mode": {
+                "type": "writable"
+              },
+              "role": "screen"
+            },
+            "name": "Equipo Ejemplo — Tito y Jonás",
+            "tag": "es-419",
+            "dir": "ltr",
+            "kind": "bible",
+            "books": [
+              "JON",
+              "TIT"
+            ],
+            "draftUnit": "section",
+            "place": {
+              "mode": "read",
+              "chapter": 2
+            }
+          }
+        }
+      }
+    }
+  },
+  {
     "type": "projectsChanged"
   },
   {

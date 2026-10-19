@@ -34,6 +34,13 @@ const PHASE_0: &[&str] = &[
     "home/card",
     "home/versifications",
     "home/languages",
+    // B3: open and Understand.
+    "session/open",
+    "session/close",
+    "editor/book",
+    "editor/sources",
+    "helps/passage",
+    "helps/article",
     "test/quiet",
     "test/echo",
     "test/crash",

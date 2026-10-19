@@ -39,11 +39,12 @@ mod app {
     mod replies;
     mod reports;
     mod save_machine;
-    mod scenario;
+    pub mod scenario;
     mod seed;
     mod sessions;
     pub mod state_seed;
     mod store;
     mod store_scenario;
+    mod understand;
     mod wire;
 }

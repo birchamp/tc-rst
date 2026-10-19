@@ -1,0 +1,78 @@
+{
+  "path": "editor/sources",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT",
+    "chapter": 1
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "panes": [
+        {
+          "id": "ult",
+          "dir": "ltr",
+          "text": {
+            "type": "ready",
+            "value": {
+              "sections": [
+                1,
+                4
+              ],
+              "verses": [
+                {
+                  "key": "1",
+                  "text": "Paul, a servant of God",
+                  "tokens": [
+                    "Paul",
+                    ", ",
+                    "a",
+                    " ",
+                    "servant",
+                    " ",
+                    "of",
+                    " ",
+                    "God"
+                  ],
+                  "lead": null,
+                  "before": 0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "ust",
+          "dir": "ltr",
+          "text": {
+            "type": "notInstalled"
+          }
+        },
+        {
+          "id": "glt",
+          "dir": "rtl",
+          "text": {
+            "type": "error",
+            "value": {
+              "reason": "the book could not be read"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
