@@ -232,6 +232,16 @@ const STEPS: &[Step] = &[
         ci: true,
     },
     Step {
+        case: "align-edit",
+        repeat: 1,
+        ci: true,
+    },
+    Step {
+        case: "align-suggest",
+        repeat: 1,
+        ci: true,
+    },
+    Step {
         case: "res-seed",
         repeat: 1,
         ci: true,
