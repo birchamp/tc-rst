@@ -246,6 +246,8 @@ pub struct DomMask {
     pub id: String,
     pub tc4: TargetSpec,
     pub rust: TargetSpec,
+    /// The rebuild has no such element yet (`Mask::rust_absent`).
+    pub rust_absent: bool,
 }
 
 /// One side, normalized: the lines compared and each mask's part (None: not on this side).
@@ -504,7 +506,8 @@ pub fn line_diffs(tc4: &[String], rust: &[String], limit: usize) -> Vec<String> 
 }
 
 /// Compares the two sides. A mask must be found on both sides, except under a scope, where a
-/// mask found on neither side lies outside the part compared.
+/// mask found on neither side lies outside the part compared, and except a mask whose element
+/// the rebuild does not draw yet, which must then be found on tC4's side only.
 pub fn compare(
     tc4: Side<'_>,
     rust: Side<'_>,
@@ -533,6 +536,13 @@ pub fn compare(
     for (i, mask) in masks.iter().enumerate() {
         match (&a.parts[i], &b.parts[i]) {
             (None, None) if scope.is_some() => {}
+            (Some(_), None) if mask.rust_absent => parts_equal = false,
+            (Some(_), Some(_)) if mask.rust_absent => {
+                return Err(DomError::Mask(format!(
+                    "mask {}: the {} DOM of {screen} has its element {:?} now: remove its `rustAbsent`",
+                    mask.id, rust.name, mask.rust
+                )));
+            }
             (Some(x), Some(y)) => {
                 if x != y {
                     parts_equal = false;

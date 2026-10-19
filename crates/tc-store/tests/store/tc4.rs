@@ -244,11 +244,14 @@ fn a_held_draft_write_never_delays_a_save() {
     hooks.hold(Point::BeforeDraftWrite);
     let shown = handle.mint(&verse(1, 1), None).unwrap();
     handle
-        .submit(Command::Draft(Draft {
-            field: DraftField::Words,
-            shown: vec![shown],
-            text: "typing".into(),
-        }))
+        .submit(Command::Draft {
+            draft: Draft {
+                field: DraftField::Words,
+                shown: vec![shown],
+                text: "typing".into(),
+            },
+            at: tc_journal::WallTime(0),
+        })
         .wait()
         .unwrap();
     hooks.wait_reached(Point::BeforeDraftWrite, 1);

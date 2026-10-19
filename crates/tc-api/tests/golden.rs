@@ -29,7 +29,7 @@ use tc_api::check::{
     Category, CheckListRef, CheckPlace, CheckUnit, Dot, NoteCategory, RailRow, RailRowPatch,
     RowFlags, Tool,
 };
-use tc_api::door43::{OpenDoor43, ProjectName, RepoSource};
+use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
     Book, BookView, ChapterText, Chapters, ChaptersView, CommentView, FrameRow, PaneChapter,
     PaneText, PaneVerse, RailBook, RowSource, SourceFrame, SourcePane, Sources, SourcesView,
@@ -55,7 +55,7 @@ use tc_api::ids::{
     ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId, ViewSeq, WallMs,
 };
 use tc_api::jobs::{
-    Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress,
+    Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
 };
 use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_api::net::{NetView, Set, State as NetState};
@@ -64,12 +64,22 @@ use tc_api::prefs::{
     SetLocale,
 };
 use tc_api::refusal::Message;
-use tc_api::session::{Close, KeptPlace, Open, OpenUnit, OpenedProject};
+use tc_api::resources::{
+    Catalog, CatalogView, Download, FromInstalls, GatewayPackage, GatewayRef, PackageRole,
+    PackageRow, Seen, SourceGateway, Sources as SourceTexts, SourcesView as SourceTextsView,
+};
+use tc_api::session::{
+    BufferSlot, Close, CopyProject, DiscardDraft, DraftKind, DraftOffer, Drafts, Keep, KeepDraft,
+    KeptDraft, KeptPlace, OfferedDrafts, Open, OpenUnit, OpenedProject, OtherComputerClosed,
+    ProjectCopy, Settles, StoredDraftId,
+};
+use tc_api::settings::{CurrentGateway, GatewayCard, SettingsView, ViewFromHome};
 use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
-    QuietView, Release, Reset, SaveVerse, StoredDraft, StoredText, TokenBase,
+    QuietView, Release, Reset, SaveVerse, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
+    TeammatesEdit, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -483,6 +493,127 @@ impl Example for OpenDoor43 {
     }
 }
 
+impl Example for SyncProject {
+    fn example() -> Self {
+        SyncProject {
+            request: request(21),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for ViewFromHome {
+    fn example() -> Self {
+        ViewFromHome {
+            project: ProjectRef::parse("es-419_tit_equipo").unwrap(),
+        }
+    }
+}
+
+fn spanish() -> GatewayRef {
+    GatewayRef {
+        language: "es-419".into(),
+        owner: "es-419_gl".into(),
+    }
+}
+
+fn english_package() -> GatewayPackage {
+    GatewayPackage {
+        gateway: GatewayRef {
+            language: "en".into(),
+            owner: "unfoldingWord".into(),
+        },
+        name: "English".into(),
+        autonym: "English".into(),
+        direction: Direction::Ltr,
+        seen: Seen {
+            tn: "v89".into(),
+            tw: "v89".into(),
+            ta: "v89".into(),
+        },
+    }
+}
+
+impl Example for SettingsView {
+    fn example() -> Self {
+        SettingsView {
+            language_name: "Español".into(),
+            direction: Direction::Ltr,
+            font: Some("Charis SIL".into()),
+            gateway: GatewayCard {
+                current: Some(CurrentGateway {
+                    gateway: spanish(),
+                    autonym: "Español (Latinoamérica)".into(),
+                }),
+                options: FromInstalls::Listed(vec![english_package()]),
+            },
+        }
+    }
+}
+
+impl Example for SourceTexts {
+    fn example() -> Self {
+        SourceTexts { at: scope() }
+    }
+}
+
+impl Example for SourceTextsView {
+    fn example() -> Self {
+        SourceTextsView {
+            gateways: vec![SourceGateway {
+                package: english_package(),
+                installed: 1,
+            }],
+            current: Some(spanish()),
+            checkable: FromInstalls::Failed {
+                reason: "resources/dcs: permission denied".into(),
+            },
+            pinned: true,
+        }
+    }
+}
+
+impl Example for Catalog {
+    fn example() -> Self {
+        Catalog {
+            at: scope(),
+            gateway: spanish(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for CatalogView {
+    fn example() -> Self {
+        CatalogView {
+            rows: vec![
+                PackageRow {
+                    role: PackageRole::Text,
+                    repo: "es-419_glt".into(),
+                    desc: "Texto Puente Literal".into(),
+                },
+                PackageRow {
+                    role: PackageRole::WordLinks,
+                    repo: "es-419_twl".into(),
+                    desc: "Enlaces de palabras".into(),
+                },
+            ],
+        }
+    }
+}
+
+impl Example for Download {
+    fn example() -> Self {
+        Download {
+            request: request(21),
+            at: scope(),
+            gateway: spanish(),
+            book: BookId::Titus,
+            repos: vec!["es-419_glt".into(), "es-419_tn".into()],
+        }
+    }
+}
+
 impl Example for LinkView {
     fn example() -> Self {
         LinkView {
@@ -601,6 +732,153 @@ impl Example for SaveVerse {
 impl Example for Ack {
     fn example() -> Self {
         ack()
+    }
+}
+
+fn offered_key() -> BufferKey {
+    BufferKey {
+        project: ProjectRef::parse("kr_ulb").unwrap(),
+        id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
+        field: FieldKey {
+            kind: FieldKind::Verse,
+            place: FieldPlace::parse("TIT 1:4").unwrap(),
+        },
+    }
+}
+
+impl Example for Drafts {
+    fn example() -> Self {
+        let entry = BufferEntry {
+            api: 1,
+            instance: ServerInstance::from_bytes([0xab; 16]),
+            base: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+            text: "To Titus, a true son".into(),
+            sent: None,
+            at: WallMs(1_760_000_000_123),
+            draft: None,
+        };
+        Drafts {
+            at: scope(),
+            request: request(90),
+            mirror: true,
+            buffered: vec![
+                serde_json::to_string(&BufferLine::Changed {
+                    key: offered_key(),
+                    entry,
+                })
+                .unwrap(),
+            ],
+        }
+    }
+}
+
+impl Example for OfferedDrafts {
+    fn example() -> Self {
+        let slot = BufferSlot {
+            key: offered_key(),
+            instance: ServerInstance::from_bytes([0xab; 16]),
+            text: "To Titus, a true son".into(),
+            at: WallMs(1_760_000_000_123),
+        };
+        OfferedDrafts {
+            offers: vec![
+                DraftOffer {
+                    kind: DraftKind::Words,
+                    place: FieldPlace::parse("TIT 1:4").unwrap(),
+                    text: "To Titus, a true son".into(),
+                    keep: Keep::Save,
+                    shown: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+                    settles: Settles {
+                        stored: vec![StoredDraftId(1)],
+                        buffered: vec![slot.clone()],
+                    },
+                },
+                DraftOffer {
+                    kind: DraftKind::Section,
+                    place: FieldPlace::parse("TIT 1:5").unwrap(),
+                    text: "{\"tokens\":[],\"buffer\":\"For this reason\"}".into(),
+                    keep: Keep::CopyText,
+                    shown: Vec::new(),
+                    settles: Settles {
+                        stored: vec![StoredDraftId(2)],
+                        buffered: Vec::new(),
+                    },
+                },
+                DraftOffer {
+                    kind: DraftKind::CheckComment,
+                    place: FieldPlace::parse("TIT 1:6").unwrap(),
+                    text: "check the word for elder".into(),
+                    keep: Keep::AsVersion,
+                    shown: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+                    settles: Settles::default(),
+                },
+            ],
+            settle: vec![BufferSlot {
+                text: "Paul, a servant of God".into(),
+                ..slot
+            }],
+        }
+    }
+}
+
+impl Example for KeepDraft {
+    fn example() -> Self {
+        KeepDraft {
+            at: scope(),
+            request: request(30),
+            kind: DraftKind::Words,
+            shown: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+            text: "To Titus, a true son".into(),
+            discard: vec![StoredDraftId(1)],
+        }
+    }
+}
+
+impl Example for KeptDraft {
+    fn example() -> Self {
+        let ack = ack();
+        KeptDraft {
+            view: ack.view,
+            stored: Stored::Written,
+            new_conflicts: ack.new_conflicts,
+        }
+    }
+}
+
+impl Example for DiscardDraft {
+    fn example() -> Self {
+        DiscardDraft {
+            at: scope(),
+            request: request(31),
+            stored: vec![StoredDraftId(1), StoredDraftId(2)],
+        }
+    }
+}
+
+impl Example for CopyProject {
+    fn example() -> Self {
+        CopyProject {
+            at: scope(),
+            request: request(32),
+        }
+    }
+}
+
+impl Example for ProjectCopy {
+    fn example() -> Self {
+        ProjectCopy {
+            project: ProjectRef::parse("kr_ulb - Copy").unwrap(),
+            id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
+        }
+    }
+}
+
+impl Example for OtherComputerClosed {
+    fn example() -> Self {
+        OtherComputerClosed {
+            at: scope(),
+            request: request(33),
+        }
     }
 }
 
@@ -1209,6 +1487,26 @@ impl Example for ArticleView {
     }
 }
 
+impl Example for Script {
+    fn example() -> Self {
+        Script {
+            request: request(22),
+            next: Scripted::Sync {
+                project: ProjectRef::parse("sample_burrito").unwrap(),
+                outcome: ScriptedSync::Synced {
+                    teammates: Some(TeammatesEdit {
+                        book: BookId::Titus,
+                        chapter: 1,
+                        verse: 1,
+                        texts: vec!["Pablo, siervo".into(), "Pablo, esclavo".into()],
+                    }),
+                    restored: 0,
+                },
+            },
+        }
+    }
+}
+
 fn golden_dir() -> PathBuf {
     common::crate_dir().join("tests/golden")
 }
@@ -1343,7 +1641,13 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
+            "resources/download",
             "session/close",
+            "session/copy",
+            "session/discardDraft",
+            "session/drafts",
+            "session/keepDraft",
+            "session/otherComputerClosed",
             "test/saveVerse",
         ])
     );
@@ -1526,6 +1830,29 @@ fn events() -> Vec<Event> {
             project: Some(ProjectRef::parse("sample_burrito").unwrap()),
             state: JobState::Done(JobOutcome::Opened(Box::new(opened()))),
         }),
+        Event::Job(JobView {
+            id: JobId::new(11),
+            kind: JobKind::Sync,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Synced(SyncResultView {
+                received: 2,
+                from: vec![
+                    PersonLabel {
+                        who: Who::Teammate(1),
+                        computer: None,
+                    },
+                    PersonLabel {
+                        who: Who::Username("maria".into()),
+                        computer: None,
+                    },
+                ],
+                kept_newest: 0,
+                verse_conflicts: 1,
+                alignments: 0,
+                restored: 0,
+                missing_pins: 5,
+            })),
+        }),
         Event::ProjectsChanged,
         Event::HomeCard {
             project: ProjectRef::parse("kr_ulb").unwrap(),
@@ -1649,7 +1976,8 @@ fn buffer() -> Value {
         "lines": wire_samples(&[
             BufferLine::Changed { key: verse.clone(), entry: saving },
             BufferLine::Changed { key: comment.clone(), entry: typed },
-            BufferLine::Removed { key: verse, instance: ServerInstance::from_bytes([0xab; 16]) },
+            BufferLine::Removed { key: verse.clone(), instance: ServerInstance::from_bytes([0xab; 16]), text: None },
+            BufferLine::Removed { key: verse, instance: ServerInstance::from_bytes([0xab; 16]), text: Some("Paul, a servant".into()) },
         ]),
     })
 }

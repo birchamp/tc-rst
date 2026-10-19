@@ -130,7 +130,7 @@ the rebuild fixed it or does as tC4 does:
 | #553 | Keep the alignments of an aligned USFM file on import or Add a book | unit todo | I, C6 | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` | Both paths call `split_aligned`. A verse it refuses keeps its text, is counted, and falls under #794. Compare in NFC (#793) and per verse with x-ref (#409). |
 | #793 | Suggestions: Hebrew source words in two Unicode forms | rebuild bug | tc-align; B6 | `memory_trained_on_nfc_records_suggests_for_raw_source_words` | See §1 row 8. |
 | #792 | A span made while an alignment save waits leaves orphan records | not applicable | tc-store; B6 | scratch `zz792_late_alignment_save_after_join` (passed) | No book-wide buffer. A late save after a join is kept and offered at the joined run ("Use as a starting point"). |
-| #791 | Tell a translator when a teammate aligned the same verse differently | unit todo | B10, E1a, B11 | J26 step `two_actors_align_one_verse_and_the_row_and_review_show_it` | Storage keeps both as a conflict. The sync result lists book, chapter, verse and teammate (D108); B11 shows the "2 versions" marker in Align. |
+| #791 | Tell a translator when a teammate aligned the same verse differently | unit todo | E1a, B11 | J26 step `two_actors_align_one_verse_and_the_row_and_review_show_it` | Storage keeps both as a conflict. B10 built the sync result's note "1 verse has two alignments to review." with Review (`a_verse_with_two_alignments_is_named_and_offers_review`, `the_toast_counts_verse_conflicts_alignments_and_the_rest_apart`); the per-verse rows of D108 (book, chapter, verse and teammate) wait for tC4 to ship them; B11 shows the "2 versions" marker in Align. |
 | #790 | Stored source cards are never compared with the pinned verse | rebuild bug | tc-align; B6 | `the_sample_opens_with_all_17_ugnt_words` | See §1 row 9. |
 | #789 | A link moves to another copy of a repeated word | rebuild bug | tc-align, tc-store | `deleting_an_earlier_copy_keeps_the_link_on_its_physical_word` | See §1 row 10 and Q30. |
 | #788 | A card click places a word that a suggestion moved | covered | tc-align; B6 | `only_the_shown_selection_is_placed_and_the_cards_look_armed_only_while_it_is_not_empty` | B6 draws the armed look and accepts drops from `is_armed` and `selection()` only. |
@@ -251,12 +251,12 @@ the rebuild fixed it or does as tC4 does:
 | #528 | Each release in its own folder | covered | tc-resources | `c29_an_upgraded_bundle_copies_only_its_new_install` | None. |
 | #504 | Bundle the latest English releases | covered | tc-resources | `fetched_lock.rs` (8 tests) | None. |
 | #580 | Invalid stays Invalid after a language change and back | covered | tc-check | `a_change_back_to_the_resource_a_decision_was_made_against_revives_it` | A decision invalidated only by the change becomes valid again; tC4 brings it back as To do (STORAGE §7.7 difference). |
-| #579 | Name a gateway language the same way everywhere | unit todo | B9a, C8 | `gateway_change_dialog_names_both_languages_by_autonym` | Use the autonym, never the code, including both buttons. |
+| #579 | Name a gateway language the same way everywhere | unit todo | C8 (B9a done) | `gateway_change_dialog_names_both_languages_by_autonym` | Use the autonym, never the code, including both buttons. B9a: Project settings and Get source texts name a package by its autonym (`settings_from_home_show_the_sample_as_tc4_does`, journey `source-texts`). |
 | #621 | Superscript verse numbers in the simplified tab | covered | B3 | `simplified_tab_verse_numbers_are_superscript` | Done by B3 (§3). |
 | #619 | Quotes and bold in helps | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | As in §3, with #628's differences. |
 | #601 | Sticky article header | covered | B3 | `article_close_button_visible_after_scroll` | Done by B3 (§3). |
 | #602 | Resize the helps panel | covered | B3, B4a | `helps_panel_width_follows_the_divider_drag` | As in §3. |
-| #606 | Third-party licenses in About, offline | unit todo | A5, B9a, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). |
+| #606 | Third-party licenses in About, offline | unit todo | A5, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). B9a: nothing in the app installs an Aquifer resource yet (APP-DESIGN §4.6), so the attribution goes with the unit that first installs one. |
 | #532 | Show a verse's new draft on return to the check | unit todo | B5b, C4 | `check_shows_new_draft_after_switching_back` | Read the verse again on return or when the book text arrives. |
 | #42 | Keyboard pass on the Check pages | unit todo | B5a, B5b | port of `check-keyboard.spec.ts` and `checkKeyboard.test.tsx` | Include the focus-rule table and #769's heading stops. |
 | #513 | Resuming into tN stalls | unit todo | B5a | `resume_and_tab_click_open_the_tool_once` | One open session that settles. |
@@ -264,7 +264,7 @@ the rebuild fixed it or does as tC4 does:
 | #722 | Verse button missing after the UGNT upgrade | unit todo | C8, B6 | J12 `ugnt_upgrade_marks_1_1_invalid_in_align` | The pin moves only after the download. |
 | #766 | A project with no pins gets the creation pins | unit todo | I, F1, E1b, C1a | `open_writes_creation_pins_only_when_none_exist` | Build now, as a declared difference, until the reference includes #766. |
 | #763 | Help shows rc.1 pages | reference change | A5 | help case b `help_home_shows_no_rc1_build_text_offline` | Vendor tc-website dbb7cd0 when the reference moves. |
-| #641 | The checking language row never finishes loading | not applicable | B9a | B9a settings-contract test | One server read; no client-side lost update. |
+| #641 | The checking language row never finishes loading | covered | B9a | `a_reply_for_another_projects_settings_changes_nothing`; `settings_from_home_show_the_sample_as_tc4_does` | One server read, `settings/viewFromHome`; a reply lands only on its own project's form. |
 | #583 | Three journey tests fail on main | not applicable | — | — | tC4 test fixes. |
 | #615 | Understand journey after Resume | not applicable | — | — | tC4 journey order. |
 | #700 | Cache the bundle in packaging CI | not applicable | — | — | tC4 CI. |
@@ -282,16 +282,16 @@ the rebuild fixed it or does as tC4 does:
 | #748 | Door43 journey uses committed journals | not applicable | E1b | — | tC4 rig. Seed the fake from a committed project. |
 | #747 | Keep backup files out of syncs | unit todo | S2, X | `a_file_that_cannot_be_an_ingredient_is_moved_out_and_kept` (add `TIT.usfm.bak`, a `~` file and a `.tmp`), plus a checkpoint tree assertion | Today's test passes even with the `.bak` rule deleted. `scan.rs` keeps `.bak` out, not `checkpoint.rs`. X: a `.bak` from Door43 stays a foreign entry. |
 | #746 | Test that startup recovery runs before projects open | covered | tc-store (S1); C1a | `an_import_started_while_the_start_cleanup_runs_keeps_its_staging_folder_and_finishes` | C1a moves tc-app onto the store and creates, imports and joins only through `Store`. |
-| #724 | Sync button follow-ups | unit todo | B10, E1a, B9b, E1b, A1 | `failed_open_keeps_the_sync_toast_links`; `io_reason_renders_without_the_path` | Item 6 is in code today (`refusal.rs:409-428` passes raw text). Q36. The team-access line shows for every project, OBS included. |
+| #724 | Sync button follow-ups | unit todo | E1a, B9b, E1b, A1, B3, B11 | `failed_open_keeps_the_sync_toast_links` (B3, B11); `io_reason_renders_without_the_path` | Item 6 is fixed by B10 under Q36: one fixed sentence, no reason (`io_reason_renders_without_the_path`). The toast's Review and Download leave it in place; the open each starts (B11's review, B3's open) closes it once open, so a failed open keeps its links. The team-access line shows for every project, OBS included. |
 | #710 | Record Door43's 403 reply | rebuild bug | tc-door43-fake, tc-door43; X | `a_push_without_write_access_is_no_write_access_and_makes_no_branch` | See §1 row 14; fixed by its merge later on 2026-10-19. |
 | #707 | An import during start-up recovery rolled back | covered | tc-store (S1); I | `an_import_started_while_the_start_cleanup_runs_keeps_its_staging_folder_and_finishes` | I builds every import through `Store::staging` and `Store::place`. |
 | #705 | Audio between translators | unit todo | X, E2 | `a_teammates_audio_file_arrives_byte_for_byte`; `loss_carried_file_two_versions_both_kept` | Carried files; two versions both kept; a missing blob never refuses the commit. |
 | #725 | A Door43 copy collision keeps the project | covered | tc-store (S1); X, E1b | `a_collision_at_the_rename_keeps_the_destination_byte_for_byte` | Join through staging and place; check the name case-insensitively before the internet question. |
 | #723 | Discard an empty sync recovery copy | not applicable | X | X `an_empty_remote_tree_removes_nothing_local` | No scratch copy or apply marker in the rebuild. |
 | #681 | The three-translator journey | unit todo | X, E1a | library J26 `three_devices_converge_with_byte_identical_derived_files` | Plus the check-conflict step after C7b. |
-| #680 | Show each teammate's Door43 name | unit todo | X, A8, B10, B11 | `username_written_once_after_first_successful_fetch`; `no_email_or_token_in_any_change` | One label function for toast and review. |
+| #680 | Show each teammate's Door43 name | unit todo | X, A8, B11 | `username_written_once_after_first_successful_fetch`; `no_email_or_token_in_any_change` | One label function for toast and review: the server names each person by the fold's label (`tc_app::wire::scope::person_label`) and the UI writes it with `tc_ui::app::sync::person_label` (B10, `one_label_for_a_person`), which B11's review uses too. |
 | #679 | Review conflicting verses one by one | unit todo | B11, C7a | J18 `keep_this_version_resolves_with_review_tokens` | The Resolve command exists and is tested. |
-| #678 | The Sync with Door43 button and result | unit todo | B10, E1a | `no_door43_request_at_launch_or_60_s_idle` | Port the toast; a closed-set test of every refusal. |
+| #678 | The Sync with Door43 button and result | unit todo | E1a | `no_door43_request_at_launch_or_60_s_idle` | B10 ported the toast and the button's question and sign-in on scripted outcomes, with a closed-set test of every refusal (`every_sync_refusal_shows_its_own_sentence_never_door43s_words_or_a_path`; journey `sync-button`, which also finds no Door43 request at launch or after 5 s idle). E1a runs the real sync. |
 | #677 | Open a project from Door43 on another computer | unit todo | X, E1b | `open_from_door43_equals_main`; `open_name_in_use_refused_before_request`; `open_private_repo_signs_in_and_retries` | Salvage a damaged pack (Q4); write creation pins when none (#766). |
 | #676 | Sync shell with crash recovery | unit todo | X | `push_is_never_forced`; `non_fast_forward_retries_six_times_within_30_s_then_busy`; `crash_at_every_sync_step_converges_on_retry` | Six retries, not three (DELTA-10-16 Q11). |
 | #675 | Sync core: combine and rebuild | unit todo | X | `door43_ingest_deterministic`; `a_damaged_remote_pack_is_salvaged_and_listed` | The fold half is built and tested. |
@@ -307,7 +307,7 @@ the rebuild fixed it or does as tC4 does:
 | #27 | Merge concurrent edits | covered | tc-journal, tc-store | `merge_bookmark_and_status`; `a_stale_token_makes_a_conflict_never_a_revert` | None. |
 | #24 | Team sync round 1 epic | unit todo | X, E1a | one named test per tC4 guarantee in `docs/evidence/sync-<date>.md` | Put the tC4 G-id in each test or its comment. |
 | #802 | Refuse a book save over newer text | covered | tc-store, A4b | `loss_f5_stale_buffer_never_reverts` | A4b adds a two-tab Playwright case. |
-| #791 | Tell a translator about a teammate's alignment | reference change | B10, E1a | `two_different_alignments_of_one_verse_are_listed_once` | Port D108's rows when tC4 ships them, worded as "a verse with two alignments to review". |
+| #791 | Tell a translator about a teammate's alignment | reference change | B10, E1a | `two_different_alignments_of_one_verse_are_listed_once` | Port D108's rows when tC4 ships them, worded as "a verse with two alignments to review". Until then the toast counts such verses in one note (B10; PLAN, a declared difference). |
 | #767 | Import creates an empty book | rebuild bug | tc-store; C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent` | See §1 row 17. The rebuild never refuses a book for its size. |
 | 5fefba8 (D104) | tC4 journal pieces up to 8 MiB | reference change | I | `tc4_project_with_a_6_8_mib_book_add_segment_imports_whole` | Port the validator with 8 MiB. |
 | #553 | Keep an aligned USFM file's alignments | unit todo | I, C6 | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` | One function for both paths; coordinate with #794. |
@@ -323,7 +323,7 @@ the rebuild fixed it or does as tC4 does:
 | #536 | Flaky "nothing auto-committed" journey | not applicable | D1 | D1 `a_save_makes_no_commit` | tC4 journey race. |
 | #501 | Opening Check changes `resources.json` | covered | tc-journal; C8 | `projection_ignores_installed_resources` | C8 ports J12's "pins never move without the accept". |
 | #506 | QA server label on the card | unit todo | B2 | `debug_card_names_qa_server` | No top-bar label. |
-| #120 | Development builds use QA for account and write calls | unit todo | A8, B9a, B9b | `debug_build_downloads_resources_from_production` | Only account and write calls use the QA server. |
+| #120 | Development builds use QA for account and write calls | unit todo | A8, B9b (B9a done) | `a_development_build_downloads_resources_from_production` | Only account and write calls use the QA server. B9a: Get source texts reads and downloads from production when the account server is QA (`tc_app::resources::resources_server`). |
 | #708 | An ops-log record stays open | covered | tc-store | same test as #707 | Duplicate of #707. |
 | #372 | First share to Door43 (J11) | unit todo | E1b, A8, B9b | J11 port | Never force a push. |
 | #373 | Publish and import journeys | unit todo | D2, F1, I | J7, J9 and J23 ports | Validate every export and import against SB 1.0. |
@@ -466,7 +466,9 @@ Follow-ups the fix units left (2026-10-19):
 - **B3:** cross-book statement (#121); verse-only statement (#118); book percentage and
   tooltip (#572, #603); new project lands in Understand (#507); helps rendering (#619, #621,
   #628); divider and sticky header (#602, #234, #601); helps direction from the gateway
-  (#650, #657); resume shows no clickable picker (#518, with B5a).
+  (#650, #657); resume shows no clickable picker (#518, with B5a); the sync toast's Download
+  opens the project (B9a its Source texts) and closes the toast once open, and a failed open
+  keeps it (#724).
 - **B4a:** the verse box shows all of `words` (#786); the source pane follows the verse
   mapping (#131); verse-only statement (#118); "Draft section" pill (#728); reuse the divider
   (#602); right-to-left and IME cases (#29, #657).
@@ -480,15 +482,19 @@ Follow-ups the fix units left (2026-10-19):
   placement (#568); x-ref per verse (#409); marking row (#726); invalid after a UGNT upgrade
   (#722); the inline-markup guard (#553); right-to-left case (#29).
 - **B7:** a story project opens at story 1 (#507).
-- **B9a:** autonyms (#579); Aquifer attribution (#606); downloads always from production
-  (#120).
+- **B9a:** autonyms (#579); downloads always from production (#120); one settings read
+  (#641). The Aquifer attribution (#606) and Q34's Portuguese Bible (#720) wait for a unit that
+  installs an Aquifer resource (APP-DESIGN §4.6).
 - **B9b:** QA only for account and write calls (#120); J11 steps up to the check step (#372).
   The team-access line for every project (#724) is on the share's done step, which is E1b's
   (APP-DESIGN B9b D4).
-- **B10:** rows for verses with two alignments (#791); toast links survive a failed open
-  (#724); one label function (#680); the toast (#678).
-- **B11:** "2 versions" in Align (#791); labels (#680); the Text tab (#679); History (#78);
-  review tabs (#25).
+- **B10:** built: the toast (#678), one label function (#680), Q36's fixed sentence (#724 item
+  6), and verses with two alignments counted on the toast (#791). Left: D108's per-verse rows
+  when tC4 ships them (#791), and the closing of the toast once the open its Review or Download
+  starts is open (B3, B11; #724).
+- **B11:** "2 versions" in Align (#791); labels (#680, `tc_ui::app::sync::person_label`); the
+  Text tab (#679); History (#78); review tabs (#25); the sync toast's Review closes the toast once
+  the review is open, and a failed open keeps it (#724).
 - **C1a:** creation pins at first open (#766).
 - **C2:** a save replaces `words` only (#786); Resume banner after a span save (#576).
 - **C4:** re-read the draft on return (#532).

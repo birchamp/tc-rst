@@ -65,7 +65,7 @@ export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
  * A browser, a `tc4` and a page, Home loaded in `locale` (the probe page with `probe`; with
  * `seed(folder)`, tc-store over a projects folder it fills instead of the sample scenario), then
  * `body({ env, page, context, errors, allow })`; `scenario` names another parity scenario
- * (`en-pins`, B3). `init(context, env)` runs before the page
+ * (`en-pins` for B3, `shared` for B10). `init(context, env)` runs before the page
  * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass. With
  * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`). With `hooks`, the page is the
  * test build's (`TC4_UI_HOOKS`), whose verse card saves through `test/saveVerse` (B4a).

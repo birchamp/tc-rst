@@ -21,6 +21,7 @@ mod app {
     pub mod common;
     mod dispatch;
     mod drafted;
+    mod drafts;
     mod events;
     mod feedback;
     mod field_store;
@@ -43,9 +44,11 @@ mod app {
     mod seed;
     mod sessions;
     mod share;
+    mod sources;
     pub mod state_seed;
     mod store;
     mod store_scenario;
+    mod sync;
     mod translate;
     mod understand;
     mod wire;

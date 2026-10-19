@@ -63,8 +63,28 @@ pub fn ack(
             (tokens, words.unwrap_or(nfc))
         }
     };
+    let new_conflicts = new_conflicts(reply, read, &record, me)?;
+    Ok(Ack {
+        view: view(reply.seq),
+        stored: stored_as,
+        tokens,
+        new_conflicts,
+        saved: vec![SavedValue { record, text }],
+        rows: Vec::new(),
+        disk_warning,
+    })
+}
+
+/// The conflicts a batch made, each with who the person's text now stands beside. `record`
+/// names a conflict the snapshot no longer holds.
+pub fn new_conflicts(
+    reply: &StoreReply,
+    read: &CountingSnapshot,
+    record: &tc_api::ids::RecordRef,
+    me: DeviceId,
+) -> Result<Vec<ConflictBrief>, WireError> {
     let labels = read.person_labels(me);
-    let new_conflicts = reply
+    reply
         .new_conflicts
         .iter()
         .map(|id| {
@@ -87,16 +107,7 @@ pub fn ack(
                 by,
             })
         })
-        .collect::<Result<Vec<_>, WireError>>()?;
-    Ok(Ack {
-        view: view(reply.seq),
-        stored: stored_as,
-        tokens,
-        new_conflicts,
-        saved: vec![SavedValue { record, text }],
-        rows: Vec::new(),
-        disk_warning,
-    })
+        .collect()
 }
 
 /// Who the person's save now conflicts with: the writer of the conflict's first head that

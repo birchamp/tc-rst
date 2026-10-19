@@ -17,6 +17,7 @@ mod probe;
 mod query;
 mod saves;
 mod shell;
+mod sources;
 mod state;
 mod stream;
 mod translate;

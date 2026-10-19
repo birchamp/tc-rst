@@ -22,6 +22,18 @@ pub struct OpenDoor43 {
     pub name: ProjectName,
 }
 
+/// `door43/sync`: one sync of a shared project with its Door43 repository, the press of its
+/// card's "Sync with Door43" (tC4 `syncRun`, #678). Only this press syncs: nothing syncs at
+/// launch or while idle. The job ends with `JobOutcome::Synced`, or fails with
+/// `Refused(Sync(..))`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncProject {
+    pub request: RequestId,
+    pub project: ProjectRef,
+}
+
 /// A repository on the app's Door43 server: `owner/name`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]

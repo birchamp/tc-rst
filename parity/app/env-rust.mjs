@@ -46,12 +46,11 @@ export async function rustHomeReady(page, call) {
   for (const card of home.cards) await page.getByTestId(`project-${card.project}`).waitFor();
 }
 
-/** A Door43 step the Rust environment cannot take yet. */
-export function notYet(step, unit) {
-  return async () => {
-    throw new Error(`${step} needs the fake Door43 in the Rust environment, which unit ${unit} adds (APP-DESIGN §7.1)`);
-  };
-}
+/** The two teammates' versions of Titus 1:1, as tC4's `teammatesChangeOneVerse` writes them. */
+const TEAMMATE_TEXTS = ['Pablo, versión del compañero 1.', 'Pablo, versión del compañero 2.'];
+
+/** A sync that completes: nothing received and nothing sent again, unless `parts` says so. */
+const synced = (parts = {}) => ({ type: 'synced', value: { teammates: null, restored: 0, ...parts } });
 
 /** Builds `scenario`'s state into `<dir>/state` from this repository's copies of tC4's fixtures,
  * the same bytes the tC4 environment starts from (APP-DESIGN 7.2), and answers the flags that
@@ -228,6 +227,11 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
   }
   const refused = new Set();
   const projects = PROJECTS[scenario];
+  const scriptSync = (repo, outcome) => {
+    const project = projects[repo];
+    if (!project) throw new Error(`the ${scenario} scenario has no project for ${repo}`);
+    return call('test/script', { request: newRequestId(), next: { type: 'sync', value: { project, outcome } } });
+  };
 
   return {
     scenario,
@@ -279,10 +283,23 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
       if (!folder) throw new Error(`the ${scenario} scenario has no project for ${repo}`);
       return folder;
     },
-    pushToDoor43: notYet('pushToDoor43', 'B9b'),
-    dropNextClone: notYet('dropNextClone', 'E1a'),
-    teammatesChangeOneVerse: notYet('teammatesChangeOneVerse', 'B10'),
-    loseFromDoor43: notYet('loseFromDoor43', 'B10'),
+    // Door43 until unit X (APP-DESIGN AD6, B10): each step sets how the next sync of the
+    // project ends, as what Door43 then holds would end it, through `test/script`.
+    journalAtFirstOpen: false,
+    pushToDoor43: (repo) => scriptSync(repo, synced()),
+    dropNextClone: (repo) => scriptSync(repo, { type: 'failed', value: { type: 'beforeIntake', value: { type: 'unreachable' } } }),
+    teammatesChangeOneVerse: async (repo) => {
+      await scriptSync(repo, synced({ teammates: { book: 'TIT', chapter: 1, verse: 1, texts: TEAMMATE_TEXTS } }));
+      return TEAMMATE_TEXTS.map((_, i) => `teammate-${i + 1}`);
+    },
+    loseFromDoor43: (repo, segment) => {
+      if (!/^teammate-\d+$/.test(segment)) throw new Error(`${segment} is not a teammate's change of teammatesChangeOneVerse`);
+      return scriptSync(repo, synced({ restored: 1 }));
+    },
+    door43Lacks: () => call('test/script', {
+      request: newRequestId(),
+      next: { type: 'openDoor43Fails', value: { type: 'beforeIntake', value: { type: 'remoteMissing' } } },
+    }),
     refused: () => [...refused],
     /** What `hello` says of the build, and the folder of the UI build the page loads. */
     async build() {

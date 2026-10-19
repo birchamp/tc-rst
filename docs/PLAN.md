@@ -119,8 +119,9 @@ owner is told of each:
 
 - Urdu in Devanagari script (`ur-deva`) reads left to right and is named उर्दू (#701). tC4 4.0's
   registry says right to left and names it اردو in Arabic script, so its helps would read
-  backwards. The Source texts screen draws that row in Devanagari; B9a masks it with a mask that
-  cites `#701` (APP-DESIGN §7.5).
+  backwards. The Source texts screen draws that row in Devanagari; B9a explains it with a residual
+  of `source-texts` that cites `#701` (APP-DESIGN §7.5): the row lies below the dialog's visible
+  part, where no mask can cover it.
 - A story project's own pictures are found by their path below `ingredients/`, outside
   `checking/`, `tc/` and `content/` (#549). tC4 4.0 takes only an ingredient with the role
   `x-obsimages`, which the rebuild's `metadata.json` does not write for a carried file and
@@ -142,6 +143,16 @@ rule that no one's work disappears without a word add these (unit B2):
 - A book tile counts a verse as drafted when it has words, whatever line they are on. tC4 4.0
   reads a verse only up to its first paragraph marker, so a poem verse whose words are on
   `\q` lines counts as not drafted there (#572).
+
+And these (unit B10):
+
+- After a sync, the result names the verses that teammates aligned differently ("1 verse has
+  two alignments to review."), and Review opens them. tC4 4.0 keeps the newest alignment and
+  counts it among the conflicts that kept the newest version, so a teammate's alignment can
+  disappear unannounced (#791).
+- A sync that stops for a reason no sentence names says so in one fixed sentence. Door43's
+  words and the reason, which can name a file on the translator's computer, stay in the
+  problem report. tC4 4.0 shows "The sync stopped: {reason}" (#724, Q36).
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

@@ -215,7 +215,7 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
         Command::ReleaseBatch { batch } => release_batch(ctx, *batch)?,
         Command::Dismiss { shown } => dismiss(ctx, shown)?,
         Command::KeepDraft { draft, section } => keep_draft(ctx, draft, section)?,
-        Command::Draft(_) => Vec::new(),
+        Command::Draft { .. } => Vec::new(),
     };
     Ok(Plan {
         changes,

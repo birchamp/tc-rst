@@ -55,6 +55,17 @@ pub struct Gateway {
     pub has_simplified: bool,
     /// The literal Bible's repository when it is not `<lang>_ult` or `<lang>_glt`.
     pub literal: Option<&'static str>,
+    /// The releases of the owner's notes, words and academy that tC4 saw when it built the
+    /// list, which Get source texts shows under each package (`seen`).
+    pub seen: Seen,
+}
+
+/// The releases of a package's notes, words and academy, as tC4's registry records them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Seen {
+    pub tn: &'static str,
+    pub tw: &'static str,
+    pub ta: &'static str,
 }
 
 const fn gl(
@@ -63,6 +74,7 @@ const fn gl(
     name: &'static str,
     autonym: &'static str,
     direction: Direction,
+    (tn, tw, ta): (&'static str, &'static str, &'static str),
 ) -> Gateway {
     Gateway {
         language,
@@ -75,6 +87,7 @@ const fn gl(
         has_tq: true,
         has_simplified: true,
         literal: None,
+        seen: Seen { tn, tw, ta },
     }
 }
 
@@ -82,28 +95,71 @@ const BCS: &str = "translationCore-Create-BCS";
 
 /// tC4's registry (`gateways.ts`), in its order.
 pub const GATEWAYS: [Gateway; 18] = [
-    gl("en", "unfoldingWord", "English", "English", Direction::Ltr),
+    gl(
+        "en",
+        "unfoldingWord",
+        "English",
+        "English",
+        Direction::Ltr,
+        ("v89", "v89", "v89"),
+    ),
     gl(
         "es-419",
         "es-419_gl",
         "Spanish (Latin American)",
         "Español (Latinoamérica)",
         Direction::Ltr,
+        ("v66", "v37", "v4"),
     ),
     Gateway {
         has_bible: false,
         has_simplified: false,
-        ..gl("fr", "Xenizo", "French", "Français", Direction::Ltr)
+        ..gl(
+            "fr",
+            "Xenizo",
+            "French",
+            "Français",
+            Direction::Ltr,
+            ("v2.0", "v2.0", "v2.0"),
+        )
     },
-    gl("fr", "MVHS", "French", "Français", Direction::Ltr),
+    gl(
+        "fr",
+        "MVHS",
+        "French",
+        "Français",
+        Direction::Ltr,
+        ("v0.0.2", "v0.0.1", "v0.0.2"),
+    ),
     Gateway {
         has_simplified: false,
-        ..gl("ru", "ru_gl", "Russian", "Русский", Direction::Ltr)
+        ..gl(
+            "ru",
+            "ru_gl",
+            "Russian",
+            "Русский",
+            Direction::Ltr,
+            ("v60.1", "v14.2", "v13.3"),
+        )
     },
-    gl("fa", "fa_gl", "Persian", "فارسی", Direction::Rtl),
+    gl(
+        "fa",
+        "fa_gl",
+        "Persian",
+        "فارسی",
+        Direction::Rtl,
+        ("v9", "v9", "v7.8"),
+    ),
     Gateway {
         literal: Some("ar_avd"),
-        ..gl("ar", "BSOJ", "Arabic", "العربية", Direction::Rtl)
+        ..gl(
+            "ar",
+            "BSOJ",
+            "Arabic",
+            "العربية",
+            Direction::Rtl,
+            ("v6.1", "v5", "v3"),
+        )
     },
     gl(
         "id",
@@ -111,19 +167,76 @@ pub const GATEWAYS: [Gateway; 18] = [
         "Indonesian",
         "Bahasa Indonesia",
         Direction::Ltr,
+        ("v25", "v26", "v30"),
     ),
-    gl("hi", BCS, "Hindi", "हिन्दी", Direction::Ltr),
-    gl("bn", BCS, "Bengali", "বাংলা", Direction::Ltr),
-    gl("gu", BCS, "Gujarati", "ગુજરાતી", Direction::Ltr),
-    gl("kn", BCS, "Kannada", "ಕನ್ನಡ", Direction::Ltr),
-    gl("mr", BCS, "Marathi", "मराठी", Direction::Ltr),
-    gl("ne", BCS, "Nepali", "नेपाली", Direction::Ltr),
-    gl("or", BCS, "Odia", "ଓଡ଼ିଆ", Direction::Ltr),
-    gl("te", BCS, "Telugu", "తెలుగు", Direction::Ltr),
+    gl(
+        "hi",
+        BCS,
+        "Hindi",
+        "हिन्दी",
+        Direction::Ltr,
+        ("v9", "v8", "v7"),
+    ),
+    gl(
+        "bn",
+        BCS,
+        "Bengali",
+        "বাংলা",
+        Direction::Ltr,
+        ("v6", "v4", "v5.0"),
+    ),
+    gl(
+        "gu",
+        BCS,
+        "Gujarati",
+        "ગુજરાતી",
+        Direction::Ltr,
+        ("v6", "v4", "v4"),
+    ),
+    gl(
+        "kn",
+        BCS,
+        "Kannada",
+        "ಕನ್ನಡ",
+        Direction::Ltr,
+        ("v6", "v4", "v4"),
+    ),
+    gl(
+        "mr",
+        BCS,
+        "Marathi",
+        "मराठी",
+        Direction::Ltr,
+        ("v6", "v4", "v4"),
+    ),
+    gl(
+        "ne",
+        BCS,
+        "Nepali",
+        "नेपाली",
+        Direction::Ltr,
+        ("v7", "v5", "v5"),
+    ),
+    gl("or", BCS, "Odia", "ଓଡ଼ିଆ", Direction::Ltr, ("v5", "v4", "v4")),
+    gl(
+        "te",
+        BCS,
+        "Telugu",
+        "తెలుగు",
+        Direction::Ltr,
+        ("v6", "v4", "v4"),
+    ),
     Gateway {
         has_twl: false,
         has_simplified: false,
-        ..gl("ml", "Door43-Catalog", "Malayalam", "മലയാളം", Direction::Ltr)
+        ..gl(
+            "ml",
+            "Door43-Catalog",
+            "Malayalam",
+            "മലയാളം",
+            Direction::Ltr,
+            ("v14.2", "v8.2", "v10.3"),
+        )
     },
     // tC4 lists ur-deva as right to left and names it اردو, in Arabic script. Devanagari reads
     // left to right, and the language's name in it is उर्दू (tC4 #701; docs/PLAN.md).
@@ -136,6 +249,7 @@ pub const GATEWAYS: [Gateway; 18] = [
             "Urdu (Devanagari)",
             "उर्दू",
             Direction::Ltr,
+            ("v14.1", "v8.3", "v10.1"),
         )
     },
 ];

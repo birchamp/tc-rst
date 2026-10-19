@@ -207,6 +207,52 @@ impl ReviewToken {
     }
 }
 
+/// The token of an offered draft's record, read back from the UI (C1b): an edit token this
+/// project's key signed, or one it can no longer check (a new installation secret, a folder
+/// copied from another computer), which still names its record and heads. Only *Keep* takes
+/// it, and the store treats an unverified one as no base (R20), so it never stands in for an
+/// edit token.
+#[derive(Clone, PartialEq, Eq)]
+pub struct DraftToken(ShownToken);
+
+impl fmt::Debug for DraftToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("DraftToken(..)")
+    }
+}
+
+impl DraftToken {
+    /// Reads a draft's token: the MAC first, as an edit token; a token whose MAC fails is read
+    /// unverified. Any other fault (not a token, a review token) is refused.
+    pub fn parse(
+        handle: &dyn ProjectHandle,
+        wire: &tc_api::ShownToken,
+    ) -> Result<(Self, bool), TokenError> {
+        match handle.parse_edit(wire) {
+            Ok(token) => Ok((Self(token.0), true)),
+            Err(TokenError::BadMac) => {
+                let token = of_kind(ShownToken::parse_unverified(wire.body())?, TokenKind::Edit)?;
+                Ok((Self(token), false))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn key(&self) -> &RecordKey {
+        self.0.key()
+    }
+
+    pub fn heads(&self) -> &[ChangeId] {
+        self.0.heads()
+    }
+}
+
+impl From<EditToken> for DraftToken {
+    fn from(token: EditToken) -> Self {
+        Self(token.0)
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // Commands and replies
 // ---------------------------------------------------------------------------------------
@@ -308,19 +354,49 @@ impl StoreCommand {
     }
 
     /// `Draft` (STORAGE §5.14): unsaved editor text with the tokens of what the editor
-    /// displayed. The store keeps it beside the actor (R22), so it writes no change and never
-    /// waits behind a command.
-    pub fn draft(field: DraftField, shown: Vec<EditToken>, text: String) -> Self {
+    /// displayed, and `at`, the page's clock at the text's last keystroke (its buffer entry's
+    /// `at`, APP-DESIGN §6.6). The store keeps it beside the actor (R22), so it writes no
+    /// change and never waits behind a command.
+    pub fn draft(
+        field: DraftField,
+        shown: Vec<EditToken>,
+        text: String,
+        at: tc_journal::WallTime,
+    ) -> Self {
         let listed = shown
             .iter()
             .map(|t| (t.key().clone(), t.heads().to_vec()))
             .collect();
         Self::new(
-            Command::Draft(Draft {
-                field,
-                shown: shown.into_iter().map(|t| t.0).collect(),
-                text,
-            }),
+            Command::Draft {
+                draft: Draft {
+                    field,
+                    shown: shown.into_iter().map(|t| t.0).collect(),
+                    text,
+                },
+                at,
+            },
+            listed,
+        )
+    }
+
+    /// `KeepDraft` (STORAGE §5.14, C1b): a draft offered at open, saved as its field's save
+    /// with its tokens, so a record changed since becomes a conflict. A token that no longer
+    /// verifies is no base: the store writes the text with no parents (R20).
+    pub fn keep_draft(field: DraftField, shown: Vec<DraftToken>, text: String) -> Self {
+        let listed = shown
+            .iter()
+            .map(|t| (t.0.key().clone(), t.0.heads().to_vec()))
+            .collect();
+        Self::new(
+            Command::KeepDraft {
+                draft: Draft {
+                    field,
+                    shown: shown.into_iter().map(|t| t.0).collect(),
+                    text,
+                },
+                section: Vec::new(),
+            },
             listed,
         )
     }
@@ -462,27 +538,42 @@ pub struct OfferedDraft {
     /// The store's number for it, for C1b's keep and discard.
     pub id: u64,
     pub field: DraftField,
+    /// The server run whose page typed it, when the store recorded one.
+    pub run: Option<tc_api::ids::ServerInstance>,
     pub text: String,
     /// Every token verifies under this installation's key. Otherwise the offer shows the
     /// text alone, and Keep writes it with no parents, as a conflict (R20, §6.6).
     pub verified: bool,
     pub at: tc_journal::WallTime,
-    #[expect(
-        dead_code,
-        reason = "C1b's keep_draft hands it back to the store as `KeepDraft`"
-    )]
     draft: Draft,
 }
 
 impl OfferedDraft {
+    /// The records the draft's editor displayed, the first one being the field's own.
+    pub fn keys(&self) -> impl Iterator<Item = &RecordKey> {
+        self.draft.shown.iter().map(ShownToken::key)
+    }
+
+    /// The draft's tokens as the UI holds tokens, verified or not: what *Keep* sends back
+    /// (C1b). A token tc-api cannot carry is an error, never a panic.
+    pub fn wire_tokens(&self) -> Result<Vec<tc_api::ShownToken>, TokenTextError> {
+        self.draft
+            .shown
+            .iter()
+            .map(|t| tc_api::ShownToken::from_body(&t.to_text()))
+            .collect()
+    }
+
     pub(in crate::backend) fn new(
         id: u64,
+        run: Option<tc_api::ids::ServerInstance>,
         verified: bool,
         at: tc_journal::WallTime,
         draft: Draft,
     ) -> Self {
         Self {
             id,
+            run,
             field: draft.field.clone(),
             text: draft.text.clone(),
             verified,
@@ -733,6 +824,19 @@ pub enum OpenFailure {
     Unavailable,
 }
 
+/// Why a copy was not made (tc-store `CreateError`). Nothing of it is left.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CopyFailure {
+    #[error("a folder with that name exists")]
+    NameExists,
+    /// The projects folder itself is on a drive that cannot keep a project safe, or a cloud
+    /// client copies it: a copy there would open read-only for the same reason (C1b).
+    #[error("the projects folder cannot keep a copy safe: {0:?}")]
+    Unsafe(ReadOnlyReason),
+    #[error("{0}")]
+    Failed(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StoreError {
     /// The folder is no project of the projects folder (any more): it went away, or lost its
@@ -772,6 +876,16 @@ pub trait ProjectStore: Send + Sync + 'static {
         watch: &SummaryWatch,
     ) -> Result<SummaryFiles, StoreError>;
 
+    /// One derived file of `folder` as the project holds it, read without a lock and without a
+    /// fold: the store's file, or the memory backend's rendering of it. `Ok(None)` when the
+    /// project has no such file. Blocking. Project settings opened from Home read their values
+    /// this way (AD14).
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError>;
+
     /// Opens `folder`. Blocking: called on the blocking pool. A second open of a folder whose
     /// handle is live is `LockHeld` (STORAGE §6.1 O1), which the session registry exists to
     /// never meet. `progress` takes the store's own reports (AD8).
@@ -781,9 +895,36 @@ pub trait ProjectStore: Send + Sync + 'static {
         progress: ProgressSink,
     ) -> Result<Arc<dyn ProjectHandle>, OpenFailure>;
 
+    /// Copies `folder`, every save and its `drafts.json` included, to a new folder `name` in
+    /// the projects folder: the copy offer of a read-only project (STORAGE §5.0, R7). Blocking.
+    fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure>;
+
+    /// The person said that the computer `folder`'s lock names is closed (STORAGE §5.0): the
+    /// next open of `folder` takes the lock and opens writable, where it would otherwise open
+    /// read-only with `OpenOnAnotherComputer`.
+    fn trust_lock(&self, folder: &ProjectRef);
+
+    /// Names this server run (§6.6): each open's drafts record it, and a draft of this run is
+    /// its page's own typing, never offered to it.
+    fn name_run(&self, run: tc_api::ids::ServerInstance);
+
     /// `test/reset`: every project back to its seed. The registry closes every session first.
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError>;
+
+    /// Teammates' versions of the verse `key` of `folder`, each by a teammate of its own, all
+    /// from the verse's current version, written into the project as a sync's intake would
+    /// (B10's scripted sync): the changes' ids. A store with no teammates refuses.
+    #[cfg(feature = "test-hooks")]
+    fn teammates_edit_verse(
+        &self,
+        folder: &ProjectRef,
+        key: &tc_journal::RecordKey,
+        texts: &[&str],
+    ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
+        let _ = (folder, key, texts);
+        Err(StoreError::Other("this store has no teammates".to_owned()))
+    }
 
     /// tc-store's hold points, which `test/hold` arms beside the app's own (C1a); `None` for a
     /// store that has none.
@@ -822,6 +963,23 @@ pub trait ProjectHandle: Send + Sync {
 
     /// Drafts from an earlier session that differ from what their records hold (O12).
     fn offered_drafts(&self) -> Vec<OfferedDraft>;
+
+    /// *Discard* of an offered draft: its entry leaves `drafts.json` (STORAGE §5.14), written
+    /// before this returns. Whether the file holds the change.
+    fn discard_draft(&self, id: u64) -> bool;
+
+    /// Takes an unsaved text in as an offered draft of `drafts.json` (APP-DESIGN §6.6),
+    /// written before this returns its number; the same text of the field already offered
+    /// keeps its own. `None` when it could not be written (a read-only project, a disk that
+    /// refuses): the text stays where it was.
+    fn offer_draft(
+        &self,
+        field: DraftField,
+        shown: Vec<DraftToken>,
+        text: String,
+        verified: bool,
+        at: tc_journal::WallTime,
+    ) -> Option<u64>;
 
     /// Blocks until the store's queue is empty and its background work is done: a test
     /// calls it before it counts.

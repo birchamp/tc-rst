@@ -1,0 +1,55 @@
+{
+  "path": "resources/sources",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "gateways": [
+        {
+          "package": {
+            "gateway": {
+              "language": "en",
+              "owner": "unfoldingWord"
+            },
+            "name": "English",
+            "autonym": "English",
+            "direction": "ltr",
+            "seen": {
+              "tn": "v89",
+              "tw": "v89",
+              "ta": "v89"
+            }
+          },
+          "installed": 1
+        }
+      ],
+      "current": {
+        "language": "es-419",
+        "owner": "es-419_gl"
+      },
+      "checkable": {
+        "type": "failed",
+        "value": {
+          "reason": "resources/dcs: permission denied"
+        }
+      },
+      "pinned": true
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

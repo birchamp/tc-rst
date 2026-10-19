@@ -8,7 +8,8 @@ use std::collections::BTreeSet;
 use tc_api::{ALL, Endpoint, Kind, NetKind};
 
 /// The endpoints of phase 0 (APP-DESIGN §3.9 and §10): those of the app, prefs, net, jobs,
-/// account and feedback services that units A2 to A9 serve, and the test hooks they use.
+/// account and feedback services that units A2 to A9 serve, and the test hooks they use; then
+/// the rows of later units: C1b's draft offer and copy.
 const PHASE_0: &[&str] = &[
     "app/hello",
     "app/quit",
@@ -29,6 +30,11 @@ const PHASE_0: &[&str] = &[
     "account/profileLink",
     "account/helpLink",
     "feedback/compose",
+    "session/drafts",
+    "session/keepDraft",
+    "session/discardDraft",
+    "session/copy",
+    "session/otherComputerClosed",
     // B2: Home and its dialogs.
     "home/list",
     "home/card",
@@ -47,6 +53,13 @@ const PHASE_0: &[&str] = &[
     "account/repoLink",
     "account/orgs",
     "door43/open",
+    // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
+    "door43/sync",
+    // B9a: Project settings from Home, and Get source texts with its downloads.
+    "settings/viewFromHome",
+    "resources/sources",
+    "resources/catalog",
+    "resources/download",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -59,6 +72,7 @@ const PHASE_0: &[&str] = &[
     "test/keychain",
     "test/reset",
     "test/lastEdit",
+    "test/script",
 ];
 
 #[test]
@@ -93,7 +107,7 @@ fn every_path_is_service_slash_name() {
 #[test]
 fn the_list_and_the_impls_agree() {
     use tc_api::account::{HelpLink, Orgs, ProfileLink, RepoLink, Resume, SignIn};
-    use tc_api::door43::OpenDoor43;
+    use tc_api::door43::{OpenDoor43, SyncProject};
     assert_eq!(<SignIn as Endpoint>::NET, Some(NetKind::SignIn));
     assert_eq!(<Resume as Endpoint>::NET, Some(NetKind::CheckSignIn));
     assert_eq!(<ProfileLink as Endpoint>::NET, Some(NetKind::Profile));
@@ -102,6 +116,16 @@ fn the_list_and_the_impls_agree() {
     assert_eq!(<Orgs as Endpoint>::NET, Some(NetKind::Share));
     assert_eq!(<OpenDoor43 as Endpoint>::NET, Some(NetKind::Open));
     assert_eq!(<OpenDoor43 as Endpoint>::KIND, Kind::StartJob);
+    assert_eq!(<SyncProject as Endpoint>::NET, Some(NetKind::Sync));
+    assert_eq!(<SyncProject as Endpoint>::KIND, Kind::StartJob);
+    assert_eq!(
+        <tc_api::resources::Download as Endpoint>::NET,
+        Some(NetKind::Sources)
+    );
+    assert_eq!(
+        <tc_api::resources::Download as Endpoint>::KIND,
+        Kind::StartJob
+    );
     assert_eq!(<tc_api::app::Hello as Endpoint>::KIND, Kind::Query);
     for endpoint in ALL {
         let asks = endpoint.net.is_some();
@@ -114,6 +138,9 @@ fn the_list_and_the_impls_agree() {
                 | "account/repoLink"
                 | "account/orgs"
                 | "door43/open"
+                | "door43/sync"
+                | "resources/catalog"
+                | "resources/download"
         );
         assert_eq!(
             asks, expected,

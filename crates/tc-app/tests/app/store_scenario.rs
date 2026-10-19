@@ -297,6 +297,24 @@ async fn a_reset_rewrites_no_project_nobody_opened() {
     t.app.quit().await;
 }
 
+/// The `shared` scenario's Bible project is shared on Door43 on the store as in tC4's mock, so
+/// its Home card offers "Sync with Door43" (B10's screens); the other scenarios' are not.
+#[test]
+fn a_shared_scenarios_project_keeps_its_door43_remote_on_the_store() {
+    for name in ["sample", "en-pins", "shared"] {
+        let fs = FaultFs::new();
+        let (store, _) = scenario_on(&fs, name);
+        let remote = store.peek(&folder(SAMPLE)).unwrap().remote;
+        let shared = (name == "shared").then(|| tc_app::backend::Door43Remote {
+            host: "git.door43.org".to_owned(),
+            owner: "facilitator-zq".to_owned(),
+            repo: SAMPLE.to_owned(),
+        });
+        assert_eq!(remote, shared, "{name}");
+        assert_valid_burrito(&fs, &sample_path());
+    }
+}
+
 #[test]
 fn teammates_written_into_a_closed_project_stand_as_a_conflict() {
     let fs = FaultFs::new();

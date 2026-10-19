@@ -259,11 +259,14 @@ fn crash_draft_write_never_affects_saves() {
     let action = |handle: &ProjectHandle| {
         let shown = handle.mint(&verse(1, 5), None).unwrap();
         handle
-            .submit(Command::Draft(Draft {
-                field: DraftField::Words,
-                shown: vec![shown],
-                text: "draft text".into(),
-            }))
+            .submit(Command::Draft {
+                draft: Draft {
+                    field: DraftField::Words,
+                    shown: vec![shown],
+                    text: "draft text".into(),
+                },
+                at: tc_journal::WallTime(0),
+            })
             .wait()
             .unwrap();
         handle.wait_idle();

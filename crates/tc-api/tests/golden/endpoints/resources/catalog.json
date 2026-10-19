@@ -1,0 +1,40 @@
+{
+  "path": "resources/catalog",
+  "kind": "query",
+  "net": "sources",
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "gateway": {
+      "language": "es-419",
+      "owner": "es-419_gl"
+    },
+    "book": "TIT"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "rows": [
+        {
+          "role": "text",
+          "repo": "es-419_glt",
+          "desc": "Texto Puente Literal"
+        },
+        {
+          "role": "wordLinks",
+          "repo": "es-419_twl",
+          "desc": "Enlaces de palabras"
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "sources"
+    }
+  }
+}

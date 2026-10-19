@@ -17,7 +17,7 @@ use tc_api::ApiError;
 use tc_api::account::{
     CancelSignIn, HelpLink, Orgs, ProfileLink, RepoLink, Resume, SignOut, WebUrl,
 };
-use tc_api::door43::OpenDoor43;
+use tc_api::door43::{OpenDoor43, SyncProject};
 use tc_api::feedback::Compose;
 use tc_api::home::{HomeCard, LanguageSuggestion};
 use tc_api::ids::{LocaleId, ProjectRef, ReportId};
@@ -39,10 +39,11 @@ use crate::app::open_door43::OpenForm;
 use crate::app::save::indicator::Retry;
 use crate::app::share::{ShareForm, ShareProject, ShareStep, Target};
 use crate::app::shell::{CurrentProject, Editing, View};
+use crate::app::sync::{SyncEnd, SyncToast};
 use crate::i18n::show_locale;
 
 /// The dialogs `s.modal` names (tC4 `tC4:src/state.jsx:476`). The units that port the others
-/// add theirs: ProjectSettings, SourceTexts (B9a), GuidedFix (B5a).
+/// add theirs: GuidedFix (B5a).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialog {
     Feedback,
@@ -62,6 +63,10 @@ pub enum Dialog {
     OpenDoor43,
     /// Share on Door43; its form is `sh`.
     Share,
+    /// Project settings (M7); its form is `st`.
+    Settings,
+    /// Get source texts (M8); its form is `src`.
+    Sources,
 }
 
 /// A banner on Home: its text, and the "Ask for help" it offers (tC4 #378).
@@ -116,12 +121,19 @@ pub struct AppState {
     pub sh: ArcRwSignal<Option<ShareForm>>,
     /// Open a project from Door43's form (tC4 `od`, B9b).
     pub od: ArcRwSignal<Option<OpenForm>>,
+    /// Project settings' form (tC4 `st`, B9a).
+    pub st: ArcRwSignal<Option<crate::app::sources::SettingsForm>>,
+    /// Get source texts' form (tC4 `src`, B9a), kept across the dialog's openings as tC4
+    /// keeps it.
+    pub src: ArcRwSignal<crate::app::sources::SourcesForm>,
     /// A refused open, on Home (tC4 `bookError`; B3 sets it).
     pub book_error: ArcRwSignal<Option<HomeBanner>>,
     /// The checkpoint of the project just left failed (tC4 `commitError`; D1 sets it).
     pub commit_error: ArcRwSignal<Option<HomeBanner>>,
-    /// The project a sync runs for (tC4 `syncing`; B10 sets it).
+    /// The project a sync runs for (tC4 `syncing`).
     pub syncing: ArcRwSignal<Option<ProjectRef>>,
+    /// The result of the last sync, which Home shows (tC4 `syncResult`). Never stored.
+    pub sync_result: ArcRwSignal<Option<SyncToast>>,
     /// The toast of a finished import (F1 sets it).
     pub import_toast: ArcRwSignal<Option<ImportToast>>,
     /// The project an import of this page made: its card carries "Imported" (F1 sets it).
@@ -160,9 +172,12 @@ impl AppState {
             im: ArcRwSignal::new(None),
             sh: ArcRwSignal::new(None),
             od: ArcRwSignal::new(None),
+            st: ArcRwSignal::new(None),
+            src: ArcRwSignal::new(crate::app::sources::SourcesForm::default()),
             book_error: ArcRwSignal::new(None),
             commit_error: ArcRwSignal::new(None),
             syncing: ArcRwSignal::new(None),
+            sync_result: ArcRwSignal::new(None),
             import_toast: ArcRwSignal::new(None),
             imported_repo: ArcRwSignal::new(None),
             u: super::understand::UnderstandState::new(
@@ -413,8 +428,9 @@ impl Actions {
             Pending::Profile => self.profile_now(),
             Pending::Share(project) => self.share_now(*project),
             Pending::OpenDoor43 => self.open_door43_now(),
-            // B10 runs the sync after its question.
-            Pending::Sync(_) => {}
+            Pending::Sync(project) => self.sync_now(project),
+            Pending::Catalog => self.catalog_now(),
+            Pending::Download => self.download_now(),
         }
     }
 
@@ -436,8 +452,10 @@ impl Actions {
                     }
                 });
             }
+            Pending::Catalog => self.catalog_dropped(),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
-            Pending::Link(..)
+            Pending::Download
+            | Pending::Link(..)
             | Pending::SignIn { .. }
             | Pending::CheckSignIn
             | Pending::Profile
@@ -448,7 +466,7 @@ impl Actions {
 
     /// The server refused with `NeedsInternet`: the switch went off after the question
     /// (AD25). Ask once more; a second refusal for the same step drops it.
-    fn ask_again(&self, then: Pending) {
+    pub(super) fn ask_again(&self, then: Pending) {
         let asked = self.0.reasked.replace(true);
         let step = self
             .s()
@@ -732,6 +750,7 @@ impl Actions {
         s.im.try_set(None);
         s.sh.try_set(None);
         s.od.try_set(None);
+        s.st.try_set(None);
         self.0.share_flows.set(self.0.share_flows.get() + 1);
     }
 
@@ -757,9 +776,6 @@ impl Actions {
             tc_api::home::Door43Card::Local => Pending::Share(Box::new(ShareProject::of(card))),
         });
     }
-
-    /// A card's Settings: B9a opens the project's settings from Home.
-    pub fn open_settings(&self, _card: &HomeCard) {}
 
     /// A card's conflict chip: B11 opens the project's conflict review.
     pub fn open_project_conflicts(&self, _project: ProjectRef) {}
@@ -917,6 +933,64 @@ impl Actions {
     pub fn dismiss_import_toast(&self) {
         self.s().import_toast.try_set(None);
     }
+
+    // ---- Sync with Door43 (B10; the sync itself is E1a's) ------------------------------------
+
+    /// tC4's `syncRun` after the question: one sync of `project`, its result on Home. Without a
+    /// sign-in the sign-in step comes first, and the sync runs after it.
+    fn sync_now(&self, project: ProjectRef) {
+        let s = self.s();
+        if s.syncing.get_untracked().is_some() {
+            return;
+        }
+        s.syncing.try_set(Some(project.clone()));
+        s.sync_result.try_set(None);
+        let this = self.clone();
+        spawn_local(async move {
+            let request = SyncProject {
+                request: js::random_request_id(),
+                project: project.clone(),
+            };
+            let ended = match this.0.runtime.api().call(&request).await {
+                Ok(job) => this.job_end(job).await,
+                Err(CallError::Api(error)) => Err(error),
+                Err(other) => Err(ApiError::BadRequest {
+                    field: "door43/sync".into(),
+                    reason: other.to_string(),
+                }),
+            };
+            // The button comes back whatever the sync did.
+            this.s().syncing.try_set(None);
+            let end = match ended {
+                Err(ApiError::NeedsInternet(_)) => return this.ask_again(Pending::Sync(project)),
+                Err(ApiError::NeedsSignIn(_)) => {
+                    return this.needs_sign_in(Pending::Sync(project));
+                }
+                Ok(JobOutcome::Synced(view)) => SyncEnd::Synced(view),
+                Ok(_) => SyncEnd::Failed(ApiError::Unavailable(tc_api::error::Feature::Sync)),
+                Err(error) => SyncEnd::Failed(error),
+            };
+            this.s()
+                .sync_result
+                .try_set(Some(SyncToast { project, end }));
+        });
+    }
+
+    pub fn dismiss_sync_result(&self) {
+        self.s().sync_result.try_set(None);
+    }
+
+    /// The toast's Review: B11 opens the synced project's conflict review. The toast stays
+    /// until the review is open, so a failed open keeps its links (tC4 #724).
+    pub fn sync_review(&self) {
+        if let Some(toast) = self.s().sync_result.get_untracked() {
+            self.open_project_conflicts(toast.project);
+        }
+    }
+
+    /// The toast's Download (D88 point 6): B3 opens the project and B9a its Source texts,
+    /// which offer the missing versions; the toast stays until they are open (tC4 #724).
+    pub fn sync_download(&self) {}
 
     // ---- Share on Door43 (B9b; the run is E1b's) --------------------------------------------
 
