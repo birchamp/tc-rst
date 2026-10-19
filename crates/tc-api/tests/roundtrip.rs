@@ -189,6 +189,7 @@ fn every_shared_type_round_trips() {
             // the phase-0 services
             AccountView,
             KeepState,
+            KeychainState,
             AccountNotice,
             ResumeOutcome,
             ResumeView,
@@ -215,6 +216,9 @@ fn every_shared_type_round_trips() {
             EchoView,
             EchoWord,
             TokenBase,
+            KeychainMode,
+            KeychainHolds,
+            KeychainView,
             StoredDraft,
             // the draft buffer
             BufferKey,

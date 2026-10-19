@@ -1,0 +1,55 @@
+{
+  "ui": "/home/bot/tc-rst/.claude/worktrees/p0-a8/target/tc-ui-app-release",
+  "runs": 20,
+  "machine": {
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700",
+    "vcpus": 20,
+    "sha_ni": true,
+    "avx512f": false,
+    "load": [
+      135.07,
+      166.58,
+      135.48
+    ]
+  },
+  "requests": {
+    "openMenuAndStep": [],
+    "signIn": [
+      "GET /api/v1/user",
+      "GET /api/v1/users/{user}/tokens",
+      "POST /api/v1/users/{user}/tokens"
+    ],
+    "signOut": [],
+    "signInReplacing": [
+      "GET /api/v1/user",
+      "GET /api/v1/users/{user}/tokens",
+      "GET /api/v1/users/{user}/tokens",
+      "DELETE /api/v1/users/{user}/tokens/{id}",
+      "POST /api/v1/users/{user}/tokens"
+    ],
+    "resume": [
+      "GET /api/v1/user"
+    ]
+  },
+  "signIn": {
+    "runs": 20,
+    "median": 27.4,
+    "p95": 76.5,
+    "max": 96
+  },
+  "openStep": {
+    "dom": {
+      "runs": 20,
+      "median": 16.5,
+      "p95": 36.3,
+      "max": 51.4
+    },
+    "frame": {
+      "runs": 20,
+      "median": 18.9,
+      "p95": 38.6,
+      "max": 57
+    }
+  },
+  "wasmBytes": 2282096
+}

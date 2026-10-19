@@ -14,7 +14,7 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 use tc_api::ApiError;
-use tc_api::account::{HelpLink, WebUrl};
+use tc_api::account::{CancelSignIn, HelpLink, ProfileLink, Resume, SignOut, WebUrl};
 use tc_api::feedback::Compose;
 use tc_api::ids::{LocaleId, ReportId};
 use tc_api::net::Set as NetSet;
@@ -24,6 +24,7 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
 
 use super::{Runtime, ServerState, bridge, js};
+use crate::app::account::{SignInFlow, SignInForm, SignInNext};
 use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
@@ -58,6 +59,9 @@ pub struct AppState {
     pub layers: Layers,
     /// The Feedback report, kept in memory only (A5 D11).
     pub fb: ArcRwSignal<Option<FeedbackForm>>,
+    /// The Door43 sign-in step (M12, tC4's `si`), kept in memory only: its fields are not
+    /// save fields, so the password never reaches the draft buffer or page storage (A8).
+    pub sign_in: ArcRwSignal<SignInFlow>,
     /// The message of the screen that could not be shown (S15).
     pub view_error: ArcRwSignal<Option<String>>,
     /// `/ui/<build>/`, where the logo and the catalogs are.
@@ -84,6 +88,7 @@ impl AppState {
                 internet: ArcRwSignal::new(InternetFlow::Idle),
             },
             fb: ArcRwSignal::new(None),
+            sign_in: ArcRwSignal::new(SignInFlow::Idle),
             view_error: ArcRwSignal::new(view_error),
             base: Arc::from(base),
             server,
@@ -121,6 +126,8 @@ struct Inner {
     reasked: Cell<bool>,
     /// The `net/set` requests, one at a time.
     switch: Cell<SwitchRequests>,
+    /// Counts the openings of the sign-in step, so a reply lands only in the one it came from.
+    sign_in_flows: Cell<u64>,
 }
 
 /// tC4's `actions`, the ones the shell owns. Cheap to clone. The wrapper lets views capture
@@ -137,6 +144,7 @@ impl Actions {
             compose: Cell::new(0),
             reasked: Cell::new(false),
             switch: Cell::new(SwitchRequests::default()),
+            sign_in_flows: Cell::new(0),
         })))
     }
 
@@ -246,7 +254,9 @@ impl Actions {
                 Some(view.on)
             }
             Err(error) => {
-                console_error(&format!("tc4: net/set: {error}"));
+                // The person is told ("tC4 could not use the internet"); a console error would
+                // also be a page error to the capture and the journeys.
+                console_warn(&format!("tc4: net/set: {error}"));
                 None
             }
         }
@@ -307,6 +317,9 @@ impl Actions {
         match then {
             Pending::Feedback => self.send_now(),
             Pending::Link(kind, url) => self.open_link(kind, url),
+            Pending::SignIn { flow } => self.send_sign_in(flow),
+            Pending::CheckSignIn => self.check_now(),
+            Pending::Profile => self.profile_now(),
         }
     }
 
@@ -320,8 +333,25 @@ impl Actions {
                 });
                 self.0.sending.set(false);
             }
-            Pending::Link(..) => {}
+            // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
+            Pending::Link(..)
+            | Pending::SignIn { .. }
+            | Pending::CheckSignIn
+            | Pending::Profile => {}
         }
+    }
+
+    /// The server refused with `NeedsInternet`: the switch went off after the question
+    /// (AD25). Ask once more; a second refusal for the same step drops it.
+    fn ask_again(&self, then: Pending) {
+        let asked = self.0.reasked.replace(true);
+        let step = self
+            .s()
+            .layers
+            .internet
+            .try_update(|flow| flow.needs_internet(then, asked))
+            .unwrap_or(NetStep::Nothing);
+        self.carry_out(step);
     }
 
     /// A page of another site that the person chose (tC4 `openDoor43Page`): an internet task
@@ -338,16 +368,7 @@ impl Actions {
             match this.0.runtime.api().call(&request).await {
                 Ok(link) => bridge::open_external(link.url.as_str()),
                 Err(CallError::Api(ApiError::NeedsInternet(_))) => {
-                    // The switch went off after the question (AD25): ask once more.
-                    let asked = this.0.reasked.replace(true);
-                    let then = Pending::Link(kind, url);
-                    let step = this
-                        .s()
-                        .layers
-                        .internet
-                        .try_update(|flow| flow.needs_internet(then, asked))
-                        .unwrap_or(NetStep::Nothing);
-                    this.carry_out(step);
+                    this.ask_again(Pending::Link(kind, url));
                 }
                 Err(error) => console_error(&format!("tc4: a help link did not open: {error}")),
             }
@@ -513,21 +534,178 @@ impl Actions {
         }
     }
 
-    // ---- Door43 account rows that unit A8 builds (D9) ---------------------------------------
+    // ---- the Door43 account (A8) ------------------------------------------------------------
 
-    /// "Sign in to Door43": the sign-in step, which A8 draws.
+    /// "Sign in to Door43" in the account menu: the sign-in step, a task of its own.
     pub fn open_sign_in(&self) {
+        self.open_sign_in_for(None);
+    }
+
+    /// A step that met `NeedsSignIn` (the flow units): the sign-in step, then that step again
+    /// once signed in (6.7).
+    pub fn needs_sign_in(&self, then: Pending) {
+        self.open_sign_in_for(Some(then));
+    }
+
+    fn open_sign_in_for(&self, then: Option<Pending>) {
+        let flow = self.0.sign_in_flows.get() + 1;
+        self.0.sign_in_flows.set(flow);
+        self.s().sign_in.try_update(|step| step.open(flow, then));
         self.s().layers.dialog.try_set(Some(Dialog::SignIn));
     }
 
-    /// "Check which Door43 account is saved": A8's `account/resume`.
-    pub fn check_saved_sign_in(&self) {}
+    /// A change in one of the step's fields.
+    pub fn patch_sign_in(&self, change: impl FnOnce(&mut SignInForm)) {
+        self.s().sign_in.try_update(|step| step.edit(change));
+    }
 
-    /// "Open my page on Door43": A8's `account/profileLink` behind the question.
-    pub fn open_profile(&self) {}
+    /// Sign in (tC4's `submitSignIn`): asks the internet question while the switch is off,
+    /// then sends. Nothing while a sign-in is on its way.
+    pub fn submit_sign_in(&self) {
+        let flow = self
+            .s()
+            .sign_in
+            .with_untracked(|step| (!step.busy()).then(|| step.flow()).flatten());
+        if let Some(flow) = flow {
+            self.internet_task(Pending::SignIn { flow });
+        }
+    }
 
-    /// "Sign out of Door43": A8's `account/signOut`.
-    pub fn sign_out(&self) {}
+    fn send_sign_in(&self, flow: u64) {
+        let keychain = self.s().server.account.with_untracked(|a| a.keychain);
+        let request = js::random_request_id();
+        let Some(req) = self
+            .s()
+            .sign_in
+            .try_update(|step| step.send(flow, request, keychain))
+            .flatten()
+        else {
+            return;
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            let reply = this.0.runtime.api().call(&req).await;
+            if let Ok(view) = &reply
+                && view.user.is_some()
+                && this.s().sign_in.with_untracked(|step| step.flow()) == Some(flow)
+            {
+                this.s().server.account.try_set(view.clone());
+            }
+            let next = this
+                .s()
+                .sign_in
+                .try_update(|step| step.answered(flow, request, reply))
+                .unwrap_or(SignInNext::Nothing);
+            match next {
+                SignInNext::SignedIn(then) => {
+                    this.s().layers.dialog.try_update(|dialog| {
+                        if *dialog == Some(Dialog::SignIn) {
+                            *dialog = None;
+                        }
+                    });
+                    if let Some(then) = then {
+                        this.internet_task(then);
+                    }
+                }
+                SignInNext::AskAgain(then) => this.ask_again(then),
+                SignInNext::Nothing => {}
+            }
+        });
+    }
+
+    /// Cancel, Escape, the ✕ and the scrim: the step closes at once, and a sign-in on its way
+    /// is cancelled on the server, which then signs nobody in whenever the cancel arrives.
+    pub fn cancel_sign_in(&self) {
+        let sending = self.s().sign_in.try_update(SignInFlow::cancel).flatten();
+        self.s().layers.dialog.try_update(|dialog| {
+            if *dialog == Some(Dialog::SignIn) {
+                *dialog = None;
+            }
+        });
+        if let Some(sign_in) = sending {
+            let this = self.clone();
+            spawn_local(async move {
+                let request = CancelSignIn {
+                    request: js::random_request_id(),
+                    sign_in,
+                };
+                if let Err(error) = this.0.runtime.api().call(&request).await {
+                    console_warn(&format!(
+                        "tc4: the cancel of a sign-in did not arrive: {error}"
+                    ));
+                }
+            });
+        }
+    }
+
+    /// "Sign-in saved on this computer": Door43 checks the kept token, after the question
+    /// (tC4's `checkSavedSignIn`).
+    pub fn check_saved_sign_in(&self) {
+        self.internet_task(Pending::CheckSignIn);
+    }
+
+    fn check_now(&self) {
+        let this = self.clone();
+        spawn_local(async move {
+            let request = Resume {
+                request: js::random_request_id(),
+            };
+            match this.0.runtime.api().call(&request).await {
+                Ok(resumed) => {
+                    this.s().server.account.try_set(resumed.account);
+                }
+                Err(CallError::Api(ApiError::NeedsInternet(_))) => {
+                    this.ask_again(Pending::CheckSignIn);
+                }
+                Err(error) => {
+                    console_warn(&format!("tc4: the saved sign-in was not checked: {error}"))
+                }
+            }
+        });
+    }
+
+    /// "Open my page on Door43": the server gives the address, after the question; the system
+    /// browser opens it.
+    pub fn open_profile(&self) {
+        self.internet_task(Pending::Profile);
+    }
+
+    fn profile_now(&self) {
+        let this = self.clone();
+        spawn_local(async move {
+            match this.0.runtime.api().call(&ProfileLink {}).await {
+                Ok(link) => bridge::open_external(link.url.as_str()),
+                Err(CallError::Api(ApiError::NeedsInternet(_))) => {
+                    this.ask_again(Pending::Profile);
+                }
+                Err(CallError::Api(ApiError::NeedsSignIn(_))) => {
+                    this.needs_sign_in(Pending::Profile);
+                }
+                Err(error) => console_warn(&format!("tc4: the Door43 page did not open: {error}")),
+            }
+        });
+    }
+
+    /// "Sign out of Door43": the token leaves memory and the keychain; nothing is sent to
+    /// Door43.
+    pub fn sign_out(&self) {
+        let this = self.clone();
+        spawn_local(async move {
+            let request = SignOut {
+                request: js::random_request_id(),
+            };
+            match this.0.runtime.api().call(&request).await {
+                Ok(account) => {
+                    this.s().server.account.try_set(account);
+                }
+                Err(error) => console_warn(&format!("tc4: sign-out: {error}")),
+            }
+        });
+    }
+}
+
+fn console_warn(message: &str) {
+    web_sys::console::warn_1(&JsValue::from_str(message));
 }
 
 fn console_error(message: &str) {

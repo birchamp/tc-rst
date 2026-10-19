@@ -13,7 +13,7 @@ the record the gate in `cargo test` checks (docs/APP-DESIGN.md §7). The tC4 sid
 | `driver.mjs` | the steps a person takes, over an environment (`AppEnv`) |
 | `observe.mjs` | the capture rules: the browser, request tracking, `settle`, the screenshot, `observe` (what the DOM shows), `domSnapshot`, `machineFingerprint`, `measureTargets` |
 | `env-tc4.mjs` | tC4 against the Node mock of the Pankosmia API |
-| `env-rust.mjs` | `tc4 serve --test-hooks --scenario <state>` on empty folders under `target/`: the scenario's state built by `state.mjs` and held by the memory backend (B1b), the token header, `test/reset`, `test/quiet`, the event stream left out of the wait, every other origin aborted |
+| `env-rust.mjs` | `tc4 serve --test-hooks --scenario <state>` on empty folders under `target/`: the scenario's state built by `state.mjs`, its projects written into the run's projects folder and opened through the store (C1a; `backend: 'memory'` passes `--backend memory`, B1b's memory backend), the token header, `test/reset`, `test/quiet`, the event stream left out of the wait, every other origin aborted |
 | `capture-rust.mjs` | captures Rust screens into `screens/`, `dom/` and `captures.json` |
 | `behaviour.mjs` | records a sequence of steps from a baseline screen on either side (layer 4) |
 | `measure-masks.mjs` | measures each mask's rectangle on tC4's baseline screens |
@@ -36,9 +36,24 @@ git diff parity/app/report.json                  # review every row that changed
 
 `--unit` is the unit of §10 that captures. `--layers dom` is a DOM-first capture: a screen whose
 DOM unit comes before its pixels unit (§7.6), compared within its `scopes.json` scope until the
-pixels unit captures it whole. `--backend memory+scripted` marks a screen captured on scripted
-job outcomes. `--case <names>` captures gallery cases instead (below). Playwright comes from
+pixels unit captures it whole. Screens are captured on the store, the default since C1a: the
+gate fails a capture on `--backend memory` once C1a has landed (APP-DESIGN §7.5).
+`--backend memory+scripted` marks a screen captured on scripted job outcomes (on the memory
+backend, until its recapture unit lands). `--case <names>` captures gallery cases instead
+(below). Playwright comes from
 `parity/tc4-baseline/node_modules` (`npm ci` there).
+
+Door43 stays on this machine. Without a fake, `tc4 serve` is pointed at a port nothing listens
+on. A screen or case that signs in needs the fake Door43 (A8): `cargo build -p tc-door43-fake`,
+and `capture-rust.mjs` starts `target/debug/tc-door43-fake` for each scenario when it is there
+(`--door43-fake <bin>` names another). `startDoor43Fake` in `env-rust.mjs` starts it and answers
+its control port (the requests Door43 received, faults, held requests, tokens); the journeys get
+it with `withApp(body, { door43: true })` and `TC4_DOOR43_FAKE`.
+
+A screen whose dialog the Rust app reaches another way until its unit builds the trigger has a
+`rust` route in `screens.mjs` (A8: `share-signin` opens from the account menu until B9b's
+Share card opens it). `capture-rust.mjs` takes it only for a capture that claims no pixels
+(`screenRoute`): the pixels come the tC4 way, and the unit that captures them deletes the route.
 
 ## Gallery cases
 
@@ -109,6 +124,6 @@ The DOM and meaning layers compare on any machine.
 
 `node --test parity/app/observe.test.mjs parity/app/env-rust.test.mjs` (CI runs both; the
 browser tests of `env-rust.test.mjs` run with `TC4_BIN=target/debug/tc4
-TC4_UI=target/tc-ui-app`), `node --test parity/view-gallery/view-gallery.test.mjs` (CI runs its
+TC4_UI=target/tc-ui-app`, and the fake Door43's with `TC4_DOOR43_FAKE`), `node --test parity/view-gallery/view-gallery.test.mjs` (CI runs its
 record checks; its browser tests run with `TC4_ROOT`), and
 `cargo test -p tc-ui --test screen_record`.

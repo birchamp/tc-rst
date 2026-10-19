@@ -21,17 +21,17 @@
       }
     },
     "build": {
-      "ui": "71e4a7c9e82fb4cb",
+      "ui": "819d225a3c3bfded",
       "commit": "dev",
       "api": 1
     }
   },
   "totals": {
     "rows": 130,
-    "same": 4,
-    "declared": 2,
+    "same": 5,
+    "declared": 4,
     "differs": 0,
-    "unported": 124,
+    "unported": 121,
     "failed": 0
   },
   "rows": [
@@ -223,7 +223,7 @@
       "status": "unported",
       "missing": {
         "pixels": "B9b",
-        "dom": "A8",
+        "dom": "B9b",
         "meaning": "B9b"
       }
     },
@@ -232,11 +232,26 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
+      "status": "declared",
       "missing": {
         "pixels": "B9b",
-        "dom": "A8",
         "meaning": "B9b"
+      },
+      "by": "C1a",
+      "backend": "store",
+      "dom": {
+        "tc4Sha256": "50ce0b62fdbbba09090d0cd2a1723dd2279a4be58558ac618f686ca847fa25c5",
+        "rustSha256": "4920efdd5acd141e756d0284e019346efd06b18affe1229fb5e757a1997c3e20",
+        "scope": {
+          "attr": "role",
+          "value": "dialog",
+          "which": "last"
+        },
+        "same": false,
+        "declared": [
+          "signin-server"
+        ],
+        "firstDiffs": []
       }
     },
     {
@@ -273,11 +288,11 @@
         "pixels": "B2",
         "meaning": "B2"
       },
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "dom": {
         "tc4Sha256": "4100164bf99c99ea1c5c5e261cacef98d26a8fc198dad8351b783aa41643080f",
-        "rustSha256": "0103f8f43b98d492a5b044084b9bdc6c360b0a99347a5863d395bdb072fa8ff5",
+        "rustSha256": "cf4f38f259a9927a20be7ef890a6ce9521804328053ce62748a22cd6df7ac567",
         "scope": {
           "attr": "data-testid",
           "value": "account-menu-panel",
@@ -306,11 +321,11 @@
         "pixels": "B2",
         "meaning": "B2"
       },
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "dom": {
         "tc4Sha256": "7523ea5a6320acccf059e220730146e28d3f4b58081cdc47403d233f43b22d6a",
-        "rustSha256": "11b36d460f298f998b05da7793f5b26e6802fb0b5ca4341eb7fc287f16d4bb9b",
+        "rustSha256": "77ce7b1373922cc5973e30f94fa55eeab2be141b670b6b7f603312b2e47ad3e8",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -339,11 +354,11 @@
         "pixels": "B2",
         "meaning": "B2"
       },
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "dom": {
         "tc4Sha256": "70cbde356b4399aa75d1e10c76ba6a789330f0de89438413045c6f4c97496751",
-        "rustSha256": "026b481b7e214d2387c4ffdbc54f4534f829de2c5acc155694c0a86394f5ef4a",
+        "rustSha256": "3403581a2650c3866f98bcf1bcfc90d8470d4d0e0dfbc92d4accbecf53064ef4",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -364,11 +379,11 @@
         "pixels": "B2",
         "meaning": "B2"
       },
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "dom": {
         "tc4Sha256": "bdb34c05fd77d1f129490346b90f5003a6a97eb81aa58c06e5208b3117d0768b",
-        "rustSha256": "5e929b3f56697b62fd05f6a43a76b69af83a7676fc7ddfb6a524c4d9dc9186d7",
+        "rustSha256": "062fdc4fb95096ec45adfcb357e48fc816134ecdb914cdfe1bb2a0480bd6de57",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -391,11 +406,11 @@
         "pixels": "B2",
         "meaning": "B2"
       },
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "dom": {
         "tc4Sha256": "cde6f3aacb3ae32801aaa5594a359e29b68b51ba39957506142d26270cf8582f",
-        "rustSha256": "8d8210dfc1b7c6db1a4d378027e8a37fe1c837ee3c984f5a8a45ff80cf09d014",
+        "rustSha256": "2be5aab1319db9c7392c911eaffaef52a91db086c845871492ff28894f5a9a97",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -520,7 +535,7 @@
       "status": "unported",
       "missing": {
         "pixels": "B9b",
-        "dom": "A8",
+        "dom": "B9b",
         "meaning": "B9b"
       }
     },
@@ -1101,11 +1116,11 @@
       "missing": {
         "pixels": "B2"
       },
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "dom": {
         "tc4Sha256": "72a64f4130c5e29edf7a05a147b1ac44a825d61fe1150836d73807b406a85dff",
-        "rustSha256": "41cdd8ac9b12b0bfac5fdc227f3490ac803096a9d76671c3e98d1c390cf61930",
+        "rustSha256": "2218560ee9cded6f0ff8ff9b31a547eaa22bc4b1d6cdddd0abb7a76bd67c8802",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -1121,10 +1136,23 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
+      "status": "same",
       "missing": {
-        "pixels": "B2",
-        "dom": "A8"
+        "pixels": "B2"
+      },
+      "by": "C1a",
+      "backend": "store",
+      "dom": {
+        "tc4Sha256": "d6c89f7dea144f3e136cd1ea30f4ac4e35865a6c3bfbf51520fa9db7519ae643",
+        "rustSha256": "6b744235dfec824bea5a6ce9d6c6aaa74c251d5efa2715159f91e86faadb1e77",
+        "scope": {
+          "attr": "role",
+          "value": "dialog",
+          "which": "last"
+        },
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -1352,10 +1380,25 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
+      "status": "declared",
       "missing": {
-        "pixels": "B9b",
-        "dom": "A8"
+        "pixels": "B9b"
+      },
+      "by": "C1a",
+      "backend": "store",
+      "dom": {
+        "tc4Sha256": "5bfbedea38b54a0cbd8081d83700fb43b98be3d6310fff7f20485d1c23b7b55f",
+        "rustSha256": "a75105df29c3da7d97019b07d0267220b09591f74b544f209600fff184f0884e",
+        "scope": {
+          "attr": "role",
+          "value": "dialog",
+          "which": "last"
+        },
+        "same": false,
+        "declared": [
+          "signin-server"
+        ],
+        "firstDiffs": []
       }
     },
     {

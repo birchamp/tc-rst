@@ -898,7 +898,8 @@ fn select(p: Props) -> AnyView {
         id: p.str("id"),
         value: p.str_signal("value"),
         on_change: handler(&p, "onChange"),
-        disabled: MaybeProp::from(p.bool("disabled")),
+        // A screen turns a Select off while it is drawn (tC4 #552), so the prop follows its cell.
+        disabled: p.flag_signal("disabled").into(),
         search_placeholder: p.str("searchPlaceholder").map(Signal::from),
         no_matches_label: p.str("noMatchesLabel").map(Signal::from),
         clear_label: p.str("clearLabel").map(Signal::from),

@@ -36,6 +36,8 @@ pub mod memory;
 #[cfg(feature = "fixture-backend")]
 pub mod scenario;
 #[cfg(feature = "fixture-backend")]
+pub mod scenario_store;
+#[cfg(feature = "fixture-backend")]
 pub mod seed;
 pub mod store;
 
@@ -508,6 +510,55 @@ pub struct ProjectEntry {
     pub kind: ProjectKind,
 }
 
+/// What a Home card's summary was computed from (APP-DESIGN §4.5, C1a D8): the names of the
+/// saves not sealed yet (`.tc/pending/`, one flat folder) and the size and modification time of
+/// `.tc/materialized.json`, which a seal, a consolidation or an intake rewrites (it records the
+/// md5 of every pack it lists). One listing and one stat at any history: the packs are not
+/// listed, since they are nested by sealer and month and their number grows with the history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SummaryStamp([u8; 32]);
+
+impl SummaryStamp {
+    /// SHA-256 over a domain tag, each name followed by a zero byte, then `1` with the manifest's
+    /// size and mtime (little-endian), or `0` when there is no manifest.
+    pub fn of(pending: &[String], manifest: Option<(u64, i64)>) -> Self {
+        let mut names: Vec<&String> = pending.iter().collect();
+        names.sort();
+        let mut context = ring::digest::Context::new(&ring::digest::SHA256);
+        context.update(b"tc4-summary-stamp\0");
+        for name in names {
+            context.update(name.as_bytes());
+            context.update(b"\0");
+        }
+        match manifest {
+            Some((len, mtime)) => {
+                context.update(&[1]);
+                context.update(&len.to_le_bytes());
+                context.update(&mtime.to_le_bytes());
+            }
+            None => context.update(&[0]),
+        }
+        let mut out = [0u8; 32];
+        out.copy_from_slice(context.finish().as_ref());
+        Self(out)
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.0.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    pub fn parse_hex(text: &str) -> Option<Self> {
+        if text.len() != 64 || !text.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let mut out = [0u8; 32];
+        for (i, byte) in out.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&text[2 * i..2 * i + 2], 16).ok()?;
+        }
+        Some(Self(out))
+    }
+}
+
 /// What the projects folder holds: the projects, and every folder that holds a project's
 /// files but cannot be opened as one. Home shows the second kind with its reason, so no folder
 /// that holds someone's work is left off it (AD12, B2): a declared difference from tC4, whose
@@ -584,6 +635,13 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// `test/reset`: every project back to its seed. The registry closes every session first.
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError>;
+
+    /// tc-store's hold points, which `test/hold` arms beside the app's own (C1a); `None` for a
+    /// store that has none.
+    #[cfg(feature = "test-hooks")]
+    fn store_hooks(&self) -> Option<Arc<tc_store::Hooks>> {
+        None
+    }
 }
 
 /// One open project.

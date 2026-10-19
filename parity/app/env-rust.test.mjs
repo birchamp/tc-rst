@@ -14,8 +14,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { recordSequence } from './behaviour.mjs';
-import { caseRoute, mergeCaptures } from './capture-rust.mjs';
-import { REPO, newRequestId, notYet, rustTracks, scenarioArgs, startRustEnv } from './env-rust.mjs';
+import { caseRoute, mergeCaptures, screenRoute } from './capture-rust.mjs';
+import { REPO, newRequestId, notYet, rustTracks, scenarioArgs, startDoor43Fake, startRustEnv } from './env-rust.mjs';
 import { CHROMIUM_ARGS, captureScreen, settle, trackRequests } from './observe.mjs';
 import { designUnits } from './units.mjs';
 
@@ -40,7 +40,10 @@ test('a scenario reaches tc4 as the state folder it was built into', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-env-rust-'));
   try {
     const args = scenarioArgs('shared', dir);
+    // The store by default (C1a); the memory backend only when asked for.
     assert.deepEqual(args, ['--scenario', path.join(dir, 'state')]);
+    assert.deepEqual(scenarioArgs('shared', dir, 'memory'), ['--scenario', path.join(dir, 'state'), '--backend', 'memory']);
+    assert.throws(() => scenarioArgs('shared', dir, 'memory+scripted'), /store or memory/);
     for (const file of ['client_settings/uw-tc4.json', 'repos/_local_/_local_/sample_burrito/metadata.json',
       'repos/_local_/_local_/sample_burrito/.remotes.json', 'repos/_local_/_sideloaded_/en_tn/metadata.json']) {
       assert.ok(fs.existsSync(path.join(args[1], file)), file);
@@ -93,6 +96,28 @@ test('a case takes its rust route, or its state\'s route when it is that state a
   const run = caseRoute({ steps: [] }, { portable: true, route: async (app) => steps.push(['route', app.page]) });
   await run({ page: 'the page' }, null);
   assert.deepEqual(steps, [['route', 'the page']]);
+});
+
+test('a screen\'s rust route is for a DOM-only capture', () => {
+  const run = async () => {};
+  const rust = async () => {};
+  assert.equal(screenRoute({ name: 'share-signin', run, rust }, ['dom']), rust);
+  assert.throws(() => screenRoute({ name: 'share-signin', run, rust }, ['pixels', 'dom']), /capture its pixels the tC4 way/);
+  assert.equal(screenRoute({ name: 'about', run }, ['pixels', 'dom']), run);
+});
+
+test('the fake Door43 signs in the parity account and is steered from its control port', { skip: process.env.TC4_DOOR43_FAKE ? false : 'set TC4_DOOR43_FAKE (cargo build -p tc-door43-fake)' }, async () => {
+  const door43 = await startDoor43Fake(process.env.TC4_DOOR43_FAKE);
+  try {
+    assert.match(door43.url, /^http:\/\/127\.0\.0\.1:\d+$/);
+    const secret = await door43.issueToken('facilitator-zq', 'translationCore', ['write:repository']);
+    assert.equal(await door43.secret('facilitator-zq', 'translationCore'), secret);
+    assert.deepEqual((await door43.tokens('facilitator-zq')).map((t) => t.name), ['translationCore']);
+    await door43.fault({ path: '/api/v1/user', times: 1, fault: { type: 'status', status: 503, message: 'down' } });
+    assert.deepEqual(await door43.requests(), []);
+  } finally {
+    await door43.close();
+  }
 });
 
 // A journey file left out of CI's node step is never even loaded there (A5's About journeys

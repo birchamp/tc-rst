@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use serde_json::Value;
-use tc_api::account::{AccountView, KeepState};
+use tc_api::account::{AccountView, KeepState, KeychainState};
 use tc_app::App;
 use tc_app::StartError;
 use tc_app::account::{MemKeychain, MemKeychainMode};
@@ -253,7 +253,9 @@ async fn account_state_has_no_user_and_no_notice_at_start() {
         AccountView {
             user: None,
             kept: KeepState::NotKept,
-            notice: None
+            notice: None,
+            server: "127.0.0.1:9".to_owned(),
+            keychain: KeychainState::Works,
         }
     );
 }
@@ -272,7 +274,11 @@ async fn a_kept_token_reads_as_kept_at_start() {
 async fn the_keychain_is_read_once_at_start() {
     let dir = tempfile::tempdir().unwrap();
     let counting = Arc::new(CountingKeychain::new(MemKeychain::holding(token("t0ken"))));
-    let t = TestApp::start_in(dir.path(), |_, deps| deps.keychain = counting.clone()).await;
+    let t = TestApp::start_in(dir.path(), |_, deps| {
+        deps.keychain = counting.clone();
+        deps.test_keychain = None;
+    })
+    .await;
     assert_eq!(counting.reads.load(Ordering::SeqCst), 1);
     for _ in 0..5 {
         account_of(&t.app).await;
@@ -291,7 +297,11 @@ async fn an_unreadable_kept_token_is_reported_and_not_kept() {
     let keychain = MemKeychain::with_mode(MemKeychainMode::Unreadable);
     keychain.seed(token("abcdef0123456789"));
     let keychain = Arc::new(keychain);
-    let t = TestApp::start_in(dir.path(), |_, deps| deps.keychain = keychain.clone()).await;
+    let t = TestApp::start_in(dir.path(), |_, deps| {
+        deps.keychain = keychain.clone();
+        deps.test_keychain = None;
+    })
+    .await;
     assert_eq!(account_of(&t.app).await.kept, KeepState::NotKept);
     let reports = reports_of(&t.app, ReportOp::Keychain);
     assert_eq!(reports.len(), 1);
@@ -310,7 +320,11 @@ async fn an_unreadable_kept_token_is_reported_and_not_kept() {
 async fn no_keychain_reads_as_not_kept_and_is_not_an_error() {
     let dir = tempfile::tempdir().unwrap();
     let keychain = Arc::new(MemKeychain::with_mode(MemKeychainMode::NoKeychain));
-    let t = TestApp::start_in(dir.path(), |_, deps| deps.keychain = keychain.clone()).await;
+    let t = TestApp::start_in(dir.path(), |_, deps| {
+        deps.keychain = keychain.clone();
+        deps.test_keychain = None;
+    })
+    .await;
     assert_eq!(account_of(&t.app).await.kept, KeepState::NotKept);
     assert!(reports_of(&t.app, ReportOp::Keychain).is_empty());
 }

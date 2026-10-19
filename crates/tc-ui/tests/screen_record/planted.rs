@@ -213,7 +213,7 @@ impl Planted {
         .unwrap();
         let entry = json!({
             "name": name, "kind": "case", "scenario": case["scenario"], "locale": case["locale"],
-            "by": unit, "backend": "memory", "layers": layers,
+            "by": unit, "backend": "store", "layers": layers,
             "error": null, "pageErrors": [], "refused": [],
             "homeCards": {}, "syncToast": null, "maskRects": {},
             "png": format!("screens/{name}.png"), "sha256": "", "dom": format!("dom/{name}.json"), "domSha256": "",
@@ -273,7 +273,7 @@ impl Planted {
         }
         let entry = json!({
             "name": name, "kind": "screen", "scenario": screen["scenario"], "locale": screen.get("locale").cloned().unwrap_or(json!("en")),
-            "by": "A6b", "backend": "memory", "layers": ["pixels", "dom", "meaning"],
+            "by": "A6b", "backend": "store", "layers": ["pixels", "dom", "meaning"],
             "error": null, "pageErrors": [], "refused": [],
             "homeCards": rename_keys(&screen["homeCards"]), "syncToast": toast, "maskRects": rects,
             "png": format!("screens/{name}.png"), "sha256": "", "dom": format!("dom/{name}.json"), "domSha256": "",
@@ -759,6 +759,8 @@ fn a_dom_only_capture_compares_the_dialog_alone() {
 fn a_layer_whose_unit_has_landed_must_be_captured() {
     let p = Planted::new();
     p.unland("A5");
+    // A8's DOM layers (share-signin, net-failed, signin-error) are not this test's.
+    p.unland("A8");
     p.edit_json("units.json", |u| {
         u["landed"].as_array_mut().unwrap().push(json!("B2"))
     });
@@ -839,6 +841,35 @@ fn a_scripted_row_fails_once_its_recapture_unit_has_landed() {
     assert!(p.run().rules("sync-ok").contains(&Rule::WrongBackend));
 }
 
+/// §7.5: once C1a has moved the parity environment to the store, a capture on the memory
+/// backend fails; a scripted capture keeps its own rule.
+#[test]
+fn a_memory_capture_fails_once_c1a_has_landed() {
+    let mut p = Planted::new();
+    p.identity("about");
+    p.edit_json("units.json", |u| {
+        u["landed"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|unit| unit != "C1a")
+    });
+    p.entry("about")["backend"] = json!("memory");
+    p.run().assert_clean(&["about"]);
+    p.edit_json("units.json", |u| {
+        u["landed"].as_array_mut().unwrap().push(json!("C1a"))
+    });
+    assert_eq!(p.run().rules("about"), [Rule::MemoryAfterStore]);
+    p.entry("about")["backend"] = json!("store");
+    p.run().assert_clean(&["about"]);
+    p.identity("sync-ok")["backend"] = json!("memory+scripted");
+    let out = p.run();
+    assert!(
+        !out.rules("sync-ok").contains(&Rule::MemoryAfterStore),
+        "{:?}",
+        out.rules("sync-ok")
+    );
+}
+
 #[test]
 fn a_capture_by_a_unit_that_has_not_landed_fails() {
     let mut p = Planted::new();
@@ -881,6 +912,40 @@ fn every_screen_the_rebuild_differs_on_has_a_mask_citing_its_ruling() {
     let p = Planted::new();
     p.edit_json("masks.json", |m| m["masks"][0]["ruling"] = json!("Q99"));
     assert!(p.run().global().iter().any(|f| f.rule == Rule::MaskRuling));
+}
+
+/// B9a masks the Urdu row of `source-texts` under tC4 #701, which docs/PLAN.md lists among the
+/// differences on purpose, as the gallery's residuals cite #552.
+#[test]
+fn a_mask_may_cite_a_tc4_issue_that_plan_lists() {
+    let p = Planted::new();
+    let mask = |ruling: &str| {
+        json!({
+            "id": "ur-deva-name",
+            "ruling": ruling,
+            "why": "tC4 names Urdu (Devanagari) اردو in Arabic script; the rebuild names it उर्दू and reads its helps left to right.",
+            "target": { "text": "اردو" },
+            "rust": { "text": "उर्दू" },
+            "rects": { "source-texts": { "x": 400, "y": 300, "width": 120, "height": 20 } },
+            "meaning": null,
+        })
+    };
+    p.edit_json("masks.json", |m| {
+        m["masks"].as_array_mut().unwrap().push(mask("#701"))
+    });
+    p.run().assert_clean(&["source-texts"]);
+    // An issue PLAN does not list is refused as an owner's answer it does not list is.
+    p.edit_json("masks.json", |m| {
+        *m["masks"].as_array_mut().unwrap().last_mut().unwrap() = mask("#7010")
+    });
+    let out = p.run();
+    let refused: Vec<_> = out
+        .global()
+        .into_iter()
+        .filter(|f| f.rule == Rule::MaskRuling)
+        .collect();
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert!(refused[0].message.contains("#7010"), "{}", refused[0]);
 }
 
 /// A DOM file as a behaviour step, each element numbered.

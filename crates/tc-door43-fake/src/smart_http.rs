@@ -16,6 +16,11 @@ pub(crate) struct CgiRequest<'a> {
     pub headers: &'a HeaderMap,
     /// Set after a successful sign-in; `git http-backend` refuses a push without it.
     pub remote_user: Option<&'a str>,
+    /// The account may read the repository but not write to it. Its push runs with
+    /// [`crate::git::Git::declining_hooks`], so git itself answers as Door43 does: HTTP 200,
+    /// the pack read and unpacked (with git's own progress on side band 2 for a large one),
+    /// then the hook's text and every ref declined. Nothing is written.
+    pub refuse_writes: bool,
     pub body: Vec<u8>,
 }
 
@@ -36,6 +41,11 @@ async fn run_backend(shared: &Shared, request: CgiRequest<'_>) -> Result<Respons
             .to_owned()
     };
     let mut command = shared.git.command(None);
+    if request.refuse_writes {
+        let mut setting = std::ffi::OsString::from("core.hooksPath=");
+        setting.push(&shared.git.declining_hooks);
+        command.arg("-c").arg(setting);
+    }
     command
         .arg("http-backend")
         .env("GIT_PROJECT_ROOT", &shared.git.root)

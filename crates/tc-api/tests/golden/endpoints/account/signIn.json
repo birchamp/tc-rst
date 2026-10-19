@@ -13,7 +13,9 @@
     "value": {
       "user": "jdoe",
       "kept": "kept",
-      "notice": null
+      "notice": null,
+      "server": "git.door43.org",
+      "keychain": "works"
     }
   },
   "error": {

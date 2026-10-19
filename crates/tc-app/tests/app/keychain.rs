@@ -28,7 +28,9 @@ fn without_a_keychain_keep_is_refused() {
         keychain.keep(&token("abc123")),
         Err(KeychainError::NoKeychain)
     );
-    assert_eq!(keychain.read(), Ok(None));
+    // As an operating system with no keychain answers: there is none to read.
+    assert_eq!(keychain.read(), Err(KeychainError::NoKeychain));
+    assert_eq!(keychain.forget(), Ok(()), "nothing to forget");
 }
 
 #[test]

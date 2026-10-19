@@ -43,6 +43,9 @@ tc-app = { path = ".", features = ["test-hooks", "fixture-backend"] }
 tc-api = { path = "../tc-api", features = ["server", "test-hooks", "proptest"] }
 # The scale corpus of docs/PERFORMANCE.md for the operation-count tests (§8.1, AD32).
 tc-corpus = { path = "../tc-corpus" }
+# The Door43 account's tests sign in to a fake Door43 on loopback (A8); tests never touch the
+# network.
+tc-door43-fake = { path = "../tc-door43-fake" }
 # The versification of the projects the store tests create (C0).
 tc-versification = { path = "../tc-versification" }
 proptest.workspace = true

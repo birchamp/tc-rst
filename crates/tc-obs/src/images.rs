@@ -2,10 +2,11 @@
 //!
 //! A frame's image line names its picture by URL, such as
 //! `https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg`. The picture is looked up by the
-//! URL's file name (`obs-en-01-02.jpg`) in the project's own picture ingredients, then in
-//! the picture packs the project pins (primary, then fallback), then in the default pack,
-//! `uW/obs_images_360`, whose files sit at `360px/obs-en-NN-FF.jpg`. Selection only reads:
-//! the image line stays byte for byte, and the screen shows the file it found.
+//! URL's file name (`obs-en-01-02.jpg`) among the project's own pictures, which are found
+//! by their path in the ingredient table ([`is_project_picture`]), then in the picture packs
+//! the project pins (primary, then fallback), then in the default pack, `uW/obs_images_360`,
+//! whose files sit at `360px/obs-en-NN-FF.jpg`. Selection only reads: the image line stays
+//! byte for byte, and the screen shows the file it found.
 
 use std::collections::BTreeMap;
 
@@ -69,7 +70,9 @@ impl ImagePins {
 pub struct ImageAsset {
     /// A path or URL the renderer reads.
     pub uri: String,
-    /// The burrito ingredient role; a project ingredient counts only as `x-obsimages`.
+    /// The burrito ingredient role. [`resolve_image`] counts a project asset only with
+    /// `x-obsimages`, as tC4 does; [`project_image_assets`] gives that role to every picture
+    /// it finds by path, so build project assets with it.
     pub role: Option<String>,
     /// `Some(false)` when a loader could not decode the bytes; the candidate then falls
     /// through to the next rung.
@@ -165,17 +168,38 @@ pub fn pack_from_ingredients<'a>(
     pack_from_paths(pin, &paths, uri_for)
 }
 
-/// The project's own picture ingredients: those with role `x-obsimages` below
-/// `ingredients/` (`projectImageIngredients`, `src/data/obsStory.ts:147-159`). `uri_for`
-/// gets the path below `ingredients/`.
+/// The folders below `ingredients/` that hold the app's own files and the stories, never a
+/// project's pictures (STORAGE §3.1, §3.2).
+const NOT_PICTURE_FOLDERS: [&str; 3] = ["checking", "tc", "content"];
+
+/// Whether the ingredient at `key` (as `metadata.json` lists it, `ingredients/…`) is one of
+/// the project's own pictures: a picture file below `ingredients/` whose first folder there is
+/// not `checking/`, `tc/` or `content/`. Its path decides, never its role: the rebuild's
+/// `metadata.json` lists a carried file with no role (STORAGE §3.3), and Pankosmia's rescan
+/// drops roles (tC4 BURRITO-SPEC S-2: paths are authoritative). tC4 takes a project picture
+/// only with the role `x-obsimages` (`projectImageIngredients`, `src/data/obsStory.ts:147-159`),
+/// so a picture a project carries never shows there (tC4 #549; a declared difference,
+/// docs/PLAN.md).
+pub fn is_project_picture(key: &str) -> bool {
+    let Some(ipath) = key.strip_prefix("ingredients/") else {
+        return false;
+    };
+    let first_folder = ipath.split_once('/').map_or("", |(first, _)| first);
+    let name = ipath.rsplit('/').next().unwrap_or(ipath);
+    !NOT_PICTURE_FOLDERS.contains(&first_folder) && is_picture_name(name)
+}
+
+/// The project's own pictures among the ingredient keys of its `metadata.json`
+/// ([`is_project_picture`]), each with the role [`resolve_image`] asks of a project asset.
+/// `uri_for` gets the path below `ingredients/`.
 pub fn project_image_assets<'a>(
-    ingredients: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
+    ingredient_keys: impl IntoIterator<Item = &'a str>,
     uri_for: impl Fn(&str) -> String,
 ) -> Vec<ImageAsset> {
-    ingredients
+    ingredient_keys
         .into_iter()
-        .filter(|(_, role)| *role == Some(IMAGE_ROLE))
-        .filter_map(|(key, _)| key.strip_prefix("ingredients/"))
+        .filter(|key| is_project_picture(key))
+        .filter_map(|key| key.strip_prefix("ingredients/"))
         .map(|ipath| ImageAsset {
             uri: uri_for(ipath),
             role: Some(IMAGE_ROLE.to_owned()),

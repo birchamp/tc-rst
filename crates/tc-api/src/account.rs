@@ -17,6 +17,25 @@ pub struct AccountView {
     pub kept: KeepState,
     /// What the last account step could not do, in the account menu's words.
     pub notice: Option<AccountNotice>,
+    /// The Door43 host the sign-in goes to, as the sign-in step names it (`signIn.server`):
+    /// `git.door43.org`, `qa.door43.org` in a development build, or a test server's
+    /// `host:port` (tC4 #120: the build chooses the server, never the person).
+    pub server: String,
+    /// Whether this computer has a keychain that keeps a sign-in between app sessions. Without
+    /// one the sign-in step has no "Stay signed in" (tC4 #496).
+    pub keychain: KeychainState,
+}
+
+/// Whether "Stay signed in on this computer" can work here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum KeychainState {
+    /// A keychain keeps the token between app sessions.
+    Works,
+    /// This computer has no keychain the app can use: a sign-in lasts for the app session
+    /// (`signIn.notKept`).
+    Missing,
 }
 
 /// Whether a sign-in is kept on this computer.
@@ -86,13 +105,16 @@ impl fmt::Debug for SignIn {
     }
 }
 
-/// `account/cancelSignIn`: the sign-in in flight ends; a token that arrives after it is
-/// forgotten.
+/// `account/cancelSignIn`: the named sign-in signs nobody in, whenever the cancel arrives:
+/// before the sign-in (it then sends nothing), while it waits for Door43 (it stops), or after
+/// it ended (the session it made is signed out, and a token it kept is forgotten).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CancelSignIn {
     pub request: RequestId,
+    /// The sign-in to cancel, by its request id.
+    pub sign_in: RequestId,
 }
 
 /// `account/resume`: asks Door43 who the kept token belongs to.

@@ -61,6 +61,25 @@ pub enum ScenarioError {
     Install { dir: String, problem: String },
     #[error("{path}: {problem}")]
     Digest { path: String, problem: String },
+    /// A scenario writes its projects only into an empty projects folder (C1a): never into,
+    /// or over, a folder that holds anyone's work.
+    #[error(
+        "the projects folder {path} is not empty: a scenario writes its projects only into an empty folder"
+    )]
+    ProjectsFolderNotEmpty { path: String },
+    #[error("the project {folder} could not be written: {problem}")]
+    Write { folder: String, problem: String },
+    #[error("the project {folder} opens read-only in this projects folder: {reason}")]
+    ReadOnly { folder: String, reason: String },
+    #[error("the project {folder} is not a valid Scripture Burrito: {problems:?}")]
+    NotABurrito {
+        folder: String,
+        problems: Vec<String>,
+    },
+    #[error("the project {folder} could not be opened: {problem}")]
+    Open { folder: String, problem: String },
+    #[error("the teammates' edits could not be made: {0}")]
+    Teammates(String),
 }
 
 /// A parity scenario's files, by `/`-separated path.

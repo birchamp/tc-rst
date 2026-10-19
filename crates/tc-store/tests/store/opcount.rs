@@ -22,8 +22,7 @@ fn open_once(fs: &FaultFs, folder: &std::path::Path) -> (StoreCounters, Vec<Path
 }
 
 fn is_journal(path: &std::path::Path) -> bool {
-    let text = path.to_string_lossy();
-    text.contains("/ingredients/tc/changes/") || text.contains("/.tc/pending/")
+    is_inside(path, &["ingredients", "tc", "changes"]) || is_inside(path, &[".tc", "pending"])
 }
 
 /// What an open after no change cost: the counters when the project became usable, those
@@ -174,7 +173,12 @@ fn a_save_reads_no_pack_and_writes_a_bounded_number_of_files() {
         assert!(read < 64 * 1024, "a save read {read} bytes");
         let created = log.iter().filter(|op| op.kind == OpKind::Create).count();
         assert_eq!(created, 1, "one pending file: {log:?}");
-        assert_eq!(delta.fsyncs, 2, "the file and its folder");
+        // Windows flushes the renamed file again after its folder (STORAGE §5.0 step 4).
+        let flushes = if cfg!(windows) { 3 } else { 2 };
+        assert_eq!(
+            delta.fsyncs, flushes,
+            "the file and its folder, then on Windows the renamed file"
+        );
         writes.push(log.len());
         handle.close().unwrap();
     }

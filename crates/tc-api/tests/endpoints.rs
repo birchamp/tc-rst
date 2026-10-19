@@ -37,6 +37,7 @@ const PHASE_0: &[&str] = &[
     "test/saveVerse",
     "test/fieldLog",
     "test/fieldDraft",
+    "test/keychain",
     "test/reset",
 ];
 
