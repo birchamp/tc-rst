@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Copy tC4's design-system CSS, fonts and images, its app-level `src/ui.css` and its interface
-# catalogs into crates/tc-ui/assets, byte for byte, from one commit of a tC4 checkout, and write
+# Copy tC4's design-system CSS, fonts and images, its app-level `src/ui.css`, its interface
+# catalogs and its LICENSE and COPYING (which About and License show) into crates/tc-ui/assets, byte for byte, from one commit of a tC4 checkout, and write
 # the list of what was copied to crates/tc-ui/vendored-from-tc4.txt. `cargo test -p tc-ui`
 # checks every file under assets/ against that list (tests/vendored_assets.rs).
 #
@@ -23,17 +23,18 @@ asset_path() {
     src/i18n/*) echo "i18n/${1#src/i18n/}" ;;
     src/ui.css) echo "ui.css" ;;
     public/assets/*) echo "images/${1#public/assets/}" ;;
+    LICENSE | COPYING) echo "about/$1" ;;
     *) echo "no place for $1" >&2; exit 1 ;;
   esac
 }
 
 entries="$(
   git -C "$TC4" ls-tree -r "$COMMIT" -- src/ds/styles.css src/ds/tokens src/ds/assets src/ui.css \
-    public/assets/translationcore-logo.png public/assets/logo-mark-color.png
+    public/assets/translationcore-logo.png public/assets/logo-mark-color.png LICENSE COPYING
   git -C "$TC4" ls-tree -r "$COMMIT" -- src/i18n | grep '\.json$'
 )"
 
-rm -rf "$ASSETS/ds" "$ASSETS/i18n" "$ASSETS/images" "$ASSETS/ui.css"
+rm -rf "$ASSETS/ds" "$ASSETS/i18n" "$ASSETS/images" "$ASSETS/ui.css" "$ASSETS/about"
 {
   echo "# tC4 files in crates/tc-ui/assets, copied byte for byte by vendor-tc4.sh."
   echo "# Each line: the file's git blob id in tC4, then its path in tC4."

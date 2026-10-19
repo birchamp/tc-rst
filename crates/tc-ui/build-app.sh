@@ -13,6 +13,8 @@
 #
 #   index.html              the page, with the build's folder name in its links (no-store)
 #   prepare.html            the first-launch window, app/prepare.html as it is (APP-DESIGN 5.3)
+#   help/                   tc-website's help pages as vendor-help.sh copied them (AD29), served
+#                           at /help/ unchanged and outside the hashed folder
 #   ui/<build>/             everything else; <build> is 16 hex digits of a SHA-256 over every
 #                           file's path and bytes
 #
@@ -81,4 +83,5 @@ mkdir -p "$OUT/ui"
 mv "$STAGE" "$OUT/ui/$BUILD"
 sed "s/@BUILD@/$BUILD/g" "$HERE/app/index.html" > "$OUT/index.html"
 cp "$HERE/app/prepare.html" "$OUT/prepare.html"
+cp -r "$HERE/help" "$OUT/help"
 echo "app: $OUT (build $BUILD, $(du -h "$OUT/ui/$BUILD/tc_ui_bg.wasm" | cut -f1) wasm)"
