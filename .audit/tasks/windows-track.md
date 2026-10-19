@@ -4,6 +4,13 @@ For a Claude Code session on the owner's Windows 10 computer. The cloud session 
 on Linux; this computer does what Linux cannot: build, test and measure on Windows, and reach
 Door43. Written 2026-10-17.
 
+> **Roles from 2026-10-19:** the owner set up a Windows 11 VM on the Linux PC, and the Linux
+> session runs every Windows build and test there (MSVC), on each new main. This laptop only
+> measures what needs the reference hardware: memory and startup (tC4, Paratext, Word, Edge, and
+> later the rebuild), the cold start after a reboot, and the rebuild's budgets. Task 7's hazard 6
+> (the proxy lookup) moved to the Linux session and the VM. Do not run builds or test suites here
+> unless the Linux session asks.
+
 ## Rules
 
 - Read `AGENTS.md`, `docs/PLAN.md` and `docs/PERFORMANCE.md` first. They apply here too.
