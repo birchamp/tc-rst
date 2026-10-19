@@ -12,10 +12,11 @@ use tempfile::TempDir;
 
 /// The words no release binary may hold: every endpoint name of the test service, the
 /// application's and the stand-in's alike, and every flag only a test build has.
-const HOOK_TEXT: [&str; 9] = [
+const HOOK_TEXT: [&str; 10] = [
     "test/crash",
     "test/fieldStore",
     "test/fieldLog",
+    "test/fieldDraft",
     "test/echo",
     "test/quiet",
     "test/hold",

@@ -761,12 +761,12 @@ has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible 
 | `export` | `preflight`, `run` (job) |
 | `feedback` | `compose` (the shell sends the report, Q-2) |
 | `jobs` | `get`, `cancel` |
-| `test` (feature `test-hooks`) | `quiet`, `echo`, `hold`, `release`, `crash`, `fieldStore`, `fieldLog`, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset` |
+| `test` (feature `test-hooks`) | `quiet`, `echo`, `hold`, `release`, `crash`, `fieldStore`, `fieldLog`, `fieldDraft` *(A4b)*, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset` |
 
 **The endpoints of phase 0** *(A1)*, which unit A1 defined with golden JSON, are `app/hello`, `quit`,
 `clientError`; all four of `prefs`; `net/state`, `set`; `jobs/get`, `cancel`; `account/state`,
 `signIn`, `cancelSignIn`, `resume`, `signOut`, `profileLink`, `helpLink`; `feedback/compose`; and
-the hooks `test/quiet`, `echo`, `crash`, `hold`, `release`, `fieldStore`, `fieldLog`, `reset`. Each later
+the hooks `test/quiet`, `echo`, `crash`, `hold`, `release`, `fieldStore`, `fieldLog`, `reset`, and `fieldDraft`, which A4b added. Each later
 unit adds the rows of its screens to `endpoint_table!` (B9b adds `account/orgs` and `repoLink`). `test/echo { size }` answers a list of Hebrew words whose
 reply is at least `size` bytes long, by at most one word (A2: a reply of a chosen size, for the
 loopback measurement of §8.3).
@@ -814,9 +814,13 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
   again, keeps every buffered entry and goes Home; the entries are offered when their project
   next opens (AD4). In the shell this happens on a fresh page, because the shell reloads the
   window at the restarted server's address (AD39). *(A-3)*
-- Persisted formats carry their own version: the browser buffer key `tc4.drafts.v2`, the
-  shell's `drafts-buffer.log` with the same entry format, one entry per line, and
-  `schemaVersion` in each app-data file. Unknown keys are kept on rewrite.
+- Persisted formats carry their own version: the browser buffer's item prefix `tc4.drafts.v2:`
+  (one item per field, §6.6), the shell's `drafts-buffer.log` with the same entry format, one
+  `BufferLine` per line, and `schemaVersion` in each app-data file. Unknown keys are kept on
+  rewrite. *(A4b: the types are `tc_api::buffer`, shared by the UI, the shell's reader and the
+  server; an entry accepts keys it does not know and a rewrite keeps them, while a request
+  refuses unknown keys at any depth, so `session/open { buffered }` carries entries as raw
+  lines.)*
 
 ---
 
@@ -1506,7 +1510,8 @@ show a 401 page.
 | `test/hold`, `test/release` | hold a book read, a checkpoint, a materialize, a save before B3, a draft write, or a sync step (R8); replaces tC4's `e2e/helpers/checkpointHold.ts:14` |
 | `test/crash` | end `tc4` at a named point (after a reply is sent, before B3, while a draft is written) for the reload and relaunch tests of §6.6 *(A-2, A-3)*. The points are in tc-app's write path and apply to every write but the arming hooks (§10 A3): before the handler (`beforeStore`), after it (`beforeReply`), and after the reply, which the server does when `App::call` answers `then: EndProcess`. An arm that can never fire (a query, an arming hook, or `duringDraftWrite` before any write reaches it) is a bad request; the unit that adds draft writes (S1, C1b) accepts it. |
 | `test/fieldStore` | a write endpoint that goes through the real reply cache and records every text it stores, with holds and crash points, so A4b can prove the save machine's no-loss rules before any real save exists *(A-2)*. Its tokens carry the field and its version under a key kept with the fields, so they verify after a restart; a store over an older version is logged as `stale`, and an unchanged text answers with the token it came with, as the store does (STORAGE:1446-1447, STORAGE §5.1 step 4). |
-| `test/fieldLog` | a test field's current value with its token, and every text `test/fieldStore` stored into it, in order, each with the token base it was saved over (`current` or `stale`): what A4b's tests read back *(A1)* |
+| `test/fieldLog` | a test field's current value with its token, and every text `test/fieldStore` stored into it, in order, each with the token base it was saved over (`current` or `stale`): what A4b's tests read back *(A1)*; and the newest draft `test/fieldDraft` kept with how many came *(A4b)* |
+| `test/fieldDraft` | a test field's draft, as `editor/draft` will keep a verse's in `.tc/drafts.json`: its token is checked as `fieldStore` checks one, the newest text per field is kept durably beside the stores, and the field's value and stores do not change. It waits at the `DraftWrite` hold before it takes the stores' lane, so a held draft never delays a store (R22). A4b's third panic case shows with it that the server holds the drafts `boot.js` posts (§6.8), before any real draft endpoint exists. `duringDraftWrite` stays refused: the unit that adds real draft writes accepts it *(A4b)* |
 | `test/clock` | a fixed clock for dates in screenshots |
 | `test/script` | queue scripted save or job outcomes (memory backend and port doubles) |
 | `test/door43` | configure tc-door43-fake faults, including R13's dropped connection |
@@ -1724,17 +1729,34 @@ aligner's `AlignSave`, as tC4's counts `alignSaveState` (`:3718-3720`). On close
 
 ### 6.6 The draft buffer
 
-- `localStorage["tc4.drafts.v2"]` maps `"<projectRef>|<projectId>|<fieldKey>"` to
-  `{api, base: [tokens], text, sent, request, at}`: `sent` and `request` are the body and id of
-  the save in flight, if any *(A-2)*. Keying by folder and project id means an entry for a
-  folder that was deleted and created again never meets the new project's records *(A-9)*.
-  Every access is wrapped in a `Result`.
+- Each field with typed text is one `localStorage` item, `"tc4.drafts.v2:" + <BufferKey as
+  JSON>`, with `BufferKey { project: ProjectRef, id: ProjectId, field: FieldKey { kind, place } }`,
+  and its value is one `BufferEntry { api, instance, base: [tokens], text, sent, at, draft }`
+  (`tc_api::buffer`). `sent: { request, text, scope }` is the id and the whole body of the save
+  in flight, if any *(A-2)*, and `instance` the server run the entry was written under. Keying by
+  folder and project id means an entry for a folder that was deleted and created again never
+  meets the new project's records *(A-9)*. Every access is wrapped in a `Result`; an item that
+  does not parse, or whose key is not exactly the JSON serde writes, is skipped and never
+  removed, and an entry is removed after a save only while its text is still the text that save
+  stored, so a second tab's newer text stays. *(A4b: the first draft kept one map,
+  `localStorage["tc4.drafts.v2"]`, keyed by `"<projectRef>|<projectId>|<fieldKey>"`. A folder name
+  may hold `|` (§3.2), so two fields could share a key, and one map made every keystroke parse
+  and rewrite every buffered field, a section buffer included, against the 16 ms typing budget.
+  `sent` keeps the save's scope because the reply cache compares the whole body. An entry is
+  restored, and its `sent` retried, only under the run it names: the operating system can give a
+  restarted `tc4` the old port, which brings the old origin's storage back, and a resend there
+  would store the text a second time over its old token. `draft: { path, body }` is how `boot.js`
+  posts the entry as a `Draft` after three panics (§6.8): it adds a fresh `request` and the
+  entry's `text` to `body`, so every draft endpoint's request has those two top-level keys.)*
 - The entry is written synchronously on every `input`. A capture-phase `input` listener in
   `boot.js` writes the text into the entry that wasm created when the field took focus, before
   wasm handles the event, so a panic in the handler loses nothing *(A-15)*.
 - In the shell, each change is also sent to the main process (`tc4Shell.bufferChanged`), which
   appends it as one line to `drafts-buffer.log` in app data at once and fsyncs the log at most
-  once a second (AD21), off its UI thread, which every request of the window waits for (AD11). A field that becomes clean appends a removal line. A crash of the page,
+  once a second (AD21), off its UI thread, which every request of the window waits for (AD11). A field that becomes clean appends a removal line. A line is one `BufferLine`,
+  `{"type":"changed","value":{"key":…,"entry":…}}` or `{"type":"removed","value":{"key":…}}`, as
+  `crates/tc-api/tests/golden/types/buffer.json` shows; JSON escapes line feeds, so a line holds
+  none *(A4b)*. A crash of the page,
   of `tc4` or of Electronite leaves the appended lines in the operating system's cache; a power
   cut can lose the last second, and a torn last line is skipped when the log is read. *(A-3)*
 - While a field is dirty, a `Draft` command goes to the server at most once a second; the store

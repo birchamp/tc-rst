@@ -1,0 +1,24 @@
+{
+  "path": "test/fieldDraft",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "13131313131313131313131313131313",
+    "field": "verse-1",
+    "shown": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+    "text": "Paul, a servant of God and"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
