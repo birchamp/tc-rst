@@ -275,9 +275,23 @@ async fn a_save_held_at_the_close_is_kept_and_announced_as_its_request() {
     tokio::task::spawn_blocking(move || hooks.wait_reached(Point::BeforeDurablePending, 1))
         .await
         .unwrap();
-    // The close takes the store and the relay at once; it finishes on a thread of its own.
-    let closing = handle.clone().close();
+    // The close takes the store and the relay at once and finishes on a thread of its own, so
+    // `close()` returns while the save is held. It is called on a thread of the test's own and
+    // the hold is released before the verdict, so a close that blocks fails the test instead of
+    // hanging it.
+    let (returned, closer) = {
+        let handle = handle.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let closer = std::thread::spawn(move || {
+            let closing = handle.close();
+            let _ = tx.send(());
+            closing
+        });
+        (rx.recv_timeout(Duration::from_secs(1)).is_ok(), closer)
+    };
     world.hooks.release(Point::BeforeDurablePending);
+    let closing = closer.join().unwrap();
+    assert!(returned, "close() returned while the save was held");
     let reply = saving.await.unwrap();
     assert_eq!(reply.stored, Stored::Durable);
 
@@ -309,6 +323,184 @@ async fn a_save_held_at_the_close_is_kept_and_announced_as_its_request() {
     );
 }
 
+/// A request id that names a round and a task.
+fn request(round: u8, task: u8) -> tc_api::ids::RequestId {
+    let mut bytes = [0xaa; 16];
+    bytes[0] = round;
+    bytes[1] = task;
+    tc_api::ids::RequestId::from_bytes(bytes)
+}
+
+fn multi_thread() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_time()
+        .build()
+        .unwrap()
+}
+
+/// The verse among `keys` that one of `ours` names, of a batch that saved one verse.
+fn saved_verse<'a>(
+    keys: &[RecordKey],
+    ours: &'a BTreeMap<RecordKey, tc_api::ids::RequestId>,
+) -> Option<(&'a RecordKey, &'a tc_api::ids::RequestId)> {
+    keys.iter().find_map(|key| ours.get_key_value(key))
+}
+
+/// D1, AD37: the relay takes the replies in the order the actor takes the commands, which
+/// `Origins::take` relies on. Many tasks on several threads submit at once, half of them
+/// dropping their futures unpolled; every batch is still announced as the request that wrote
+/// it, never as the store's own.
+#[test]
+fn concurrent_submits_are_each_announced_as_their_own_request() {
+    const ROUNDS: u8 = 15;
+    const TASKS: u8 = 8;
+    multi_thread().block_on(async {
+        let world = store_world();
+        let handle = world.open(&world.bible);
+        let mut events = handle.subscribe();
+        for round in 0..ROUNDS {
+            let ours: BTreeMap<RecordKey, tc_api::ids::RequestId> = (0..TASKS)
+                .map(|task| (tit(1, 1 + u16::from(task)), request(round, task)))
+                .collect();
+            let start = Arc::new(tokio::sync::Barrier::new(usize::from(TASKS)));
+            let mut tasks = Vec::new();
+            for (task, (key, id)) in ours.iter().enumerate() {
+                let (handle, start, key, id) = (handle.clone(), start.clone(), key.clone(), *id);
+                tasks.push(tokio::spawn(async move {
+                    start.wait().await;
+                    let submit = handle.submit(
+                        StoreCommand::save_verse(
+                            token(handle.as_ref(), &key),
+                            format!("round {round}, task {task}"),
+                        )
+                        .requested_by(id),
+                    );
+                    if task % 2 == 0 {
+                        drop(submit);
+                    } else {
+                        submit.await.unwrap();
+                    }
+                }));
+            }
+            for task in tasks {
+                task.await.unwrap();
+            }
+            let mut announced = BTreeMap::new();
+            while announced.len() < ours.len() {
+                let event = tokio::time::timeout(Duration::from_secs(10), events.recv())
+                    .await
+                    .expect("every batch is announced")
+                    .expect("the channel is open");
+                let StoreEvent::Committed { delta, cause, .. } = event else {
+                    continue;
+                };
+                let (key, id) = saved_verse(&delta.keys, &ours)
+                    .unwrap_or_else(|| panic!("round {round}: a batch of {:?}", delta.keys));
+                assert_eq!(
+                    cause,
+                    StoreCause::Command {
+                        origin: Origin::Request(*id)
+                    },
+                    "round {round}: {key:?}"
+                );
+                announced.insert(key.clone(), cause);
+            }
+        }
+        handle.close().await.unwrap();
+    });
+}
+
+/// D1, AD37: a close that races submits on several threads. Every save answered as stored is
+/// on disk and was announced as its own request before the events ended; every save answered
+/// `Closed` is not on disk and was never announced; a save nobody awaited is on disk only if
+/// it was announced as its own request.
+#[test]
+fn a_close_racing_submits_keeps_every_stored_save_and_no_closed_one() {
+    const ROUNDS: u8 = 20;
+    const TASKS: u8 = 8;
+    multi_thread().block_on(async {
+        for round in 0..ROUNDS {
+            let world = store_world();
+            let handle = world.open(&world.bible);
+            let mut events = handle.subscribe();
+            let start = Arc::new(tokio::sync::Barrier::new(usize::from(TASKS) + 1));
+            let mut tasks = Vec::new();
+            for task in 0..TASKS {
+                let (handle, start) = (handle.clone(), start.clone());
+                let key = tit(1, 1 + u16::from(task));
+                let words = format!("round {round}, task {task}");
+                tasks.push(tokio::spawn(async move {
+                    start.wait().await;
+                    let submit = handle.submit(
+                        StoreCommand::save_verse(token(handle.as_ref(), &key), words.clone())
+                            .requested_by(request(round, task)),
+                    );
+                    let answer = if task % 2 == 0 {
+                        drop(submit);
+                        None
+                    } else {
+                        Some(submit.await)
+                    };
+                    (key, words, request(round, task), answer)
+                }));
+            }
+            let closing = {
+                let (handle, start) = (handle.clone(), start.clone());
+                tokio::spawn(async move {
+                    start.wait().await;
+                    handle.close().await
+                })
+            };
+            let mut answers = Vec::new();
+            for task in tasks {
+                answers.push(task.await.unwrap());
+            }
+            closing.await.unwrap().unwrap();
+            let mut announced = BTreeMap::new();
+            loop {
+                let event = tokio::time::timeout(Duration::from_secs(10), events.recv())
+                    .await
+                    .expect("the channel ends with the close");
+                match event {
+                    Some(StoreEvent::Committed { delta, cause, .. }) => {
+                        for key in delta.keys {
+                            announced.insert(key, cause.clone());
+                        }
+                    }
+                    Some(_) => {}
+                    None => break,
+                }
+            }
+            drop(handle);
+
+            let reopened = world.open(&world.bible);
+            let snapshot = reopened.snapshot();
+            for (key, words, id, answer) in answers {
+                let on_disk = words_of(&snapshot, &key).as_deref() == Some(words.as_str());
+                let as_its_own = announced.get(&key)
+                    == Some(&StoreCause::Command {
+                        origin: Origin::Request(id),
+                    });
+                match answer {
+                    Some(Ok(reply)) => {
+                        assert_eq!(reply.stored, Stored::Durable, "round {round}: {key:?}");
+                        assert!(on_disk, "round {round}: {key:?} stored, not on disk");
+                        assert!(as_its_own, "round {round}: {key:?} {announced:?}");
+                    }
+                    Some(Err(CommandError::Closed)) => {
+                        assert!(!on_disk, "round {round}: {key:?} closed, yet on disk");
+                        assert!(!announced.contains_key(&key), "round {round}: {key:?}");
+                    }
+                    Some(Err(other)) => panic!("round {round}: {key:?} {other:?}"),
+                    None => assert_eq!(on_disk, as_its_own, "round {round}: {key:?}"),
+                }
+            }
+            reopened.close().await.unwrap();
+        }
+    });
+}
+
 /// "The channel ends when the handle closes": every subscriber's channel ends with the close,
 /// and a subscription after it ends at once.
 #[tokio::test]
@@ -324,7 +516,11 @@ async fn events_end_when_the_handle_closes() {
     assert!(ended.is_ok(), "the channel ended");
     let mut late = handle.subscribe();
     assert!(late.try_recv().is_err());
-    assert!(late.recv().await.is_none(), "ended at once");
+    let late_end = tokio::time::timeout(Duration::from_secs(5), late.recv()).await;
+    assert!(
+        matches!(late_end, Ok(None)),
+        "a subscription after the close ends at once: {late_end:?}"
+    );
     // A closed handle refuses commands and answers reads from its last state.
     assert_eq!(
         save(handle.as_ref(), &tit(1, 2), "after the close")
