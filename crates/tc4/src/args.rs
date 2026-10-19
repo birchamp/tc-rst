@@ -7,14 +7,38 @@ use std::time::Duration;
 
 use tc_door43::ServerUrl;
 
-/// The usage line, after "tc4: <what was wrong>".
-pub(crate) const USAGE: &str = if cfg!(feature = "test-hooks") {
-    "usage: tc4 serve --app-data <dir> --ui <dir> [--projects <dir>] [--door43 <url>] \
-     [--bundle <dir>] [--test-hooks] [--test-seed-pace <ms>]"
-} else {
-    "usage: tc4 serve --app-data <dir> --ui <dir> [--projects <dir>] [--door43 <url>] \
-     [--bundle <dir>]"
-};
+#[cfg(feature = "test-hooks")]
+macro_rules! hook_flags {
+    () => {
+        " [--test-hooks] [--test-seed-pace <ms>]"
+    };
+}
+#[cfg(not(feature = "test-hooks"))]
+macro_rules! hook_flags {
+    () => {
+        ""
+    };
+}
+#[cfg(feature = "fixture-backend")]
+macro_rules! fixture_flags {
+    () => {
+        " [--scenario <state dir>]"
+    };
+}
+#[cfg(not(feature = "fixture-backend"))]
+macro_rules! fixture_flags {
+    () => {
+        ""
+    };
+}
+
+/// The usage line, after "tc4: <what was wrong>". It names only the flags this build has.
+pub(crate) const USAGE: &str = concat!(
+    "usage: tc4 serve --app-data <dir> --ui <dir> [--projects <dir>] [--door43 <url>] ",
+    "[--bundle <dir>]",
+    hook_flags!(),
+    fixture_flags!()
+);
 
 /// What `tc4 serve` was asked to do.
 #[derive(Debug)]
@@ -37,6 +61,11 @@ pub(crate) struct Args {
     /// can watch it and close it on any disk. Exists only with the cargo feature.
     #[cfg(feature = "test-hooks")]
     pub seed_pace: Option<Duration>,
+    /// `--scenario <state dir>`: the projects are a parity scenario's, held by the memory
+    /// backend, and its sideloaded resources are installed into the app's store (APP-DESIGN
+    /// §4.2). Exists only with the cargo feature `fixture-backend`.
+    #[cfg(feature = "fixture-backend")]
+    pub scenario: Option<PathBuf>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -76,6 +105,8 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
     let mut test_hooks = false;
     #[cfg(feature = "test-hooks")]
     let mut seed_pace = None;
+    #[cfg(feature = "fixture-backend")]
+    let mut scenario = None;
     while let Some(flag) = args.next() {
         let name = flag.to_str().unwrap_or_default();
         match name {
@@ -113,6 +144,8 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
                     Duration::from_millis(ms),
                 )?;
             }
+            #[cfg(feature = "fixture-backend")]
+            "--scenario" => once("--scenario", &mut scenario, value("--scenario", &mut args)?)?,
             _ => return Err(ArgsError::UnknownFlag(flag.to_string_lossy().into_owned())),
         }
     }
@@ -126,6 +159,8 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
         test_hooks,
         #[cfg(feature = "test-hooks")]
         seed_pace,
+        #[cfg(feature = "fixture-backend")]
+        scenario: scenario.map(PathBuf::from),
     })
 }
 
@@ -257,6 +292,46 @@ mod tests {
             with(&["--test-seed-pace", "1", "--test-seed-pace", "2"]),
             Err(ArgsError::Repeated("--test-seed-pace"))
         );
+    }
+
+    #[cfg(feature = "fixture-backend")]
+    #[test]
+    fn the_scenario_needs_one_value_and_is_given_once() {
+        let with = |extra: &[&str]| {
+            let mut all = vec!["serve", "--app-data", "/a", "--ui", "/u"];
+            all.extend_from_slice(extra);
+            parse_all(&all).map(|args| args.scenario)
+        };
+        assert_eq!(with(&[]), Ok(None));
+        assert_eq!(with(&["--scenario", "/s"]), Ok(Some(PathBuf::from("/s"))));
+        assert_eq!(
+            with(&["--scenario"]),
+            Err(ArgsError::MissingValue("--scenario"))
+        );
+        assert_eq!(
+            with(&["--scenario", "/s", "--scenario", "/t"]),
+            Err(ArgsError::Repeated("--scenario"))
+        );
+        assert!(USAGE.contains("[--scenario <state dir>]"));
+    }
+
+    #[cfg(not(feature = "fixture-backend"))]
+    #[test]
+    fn a_build_without_the_fixture_backend_knows_no_scenario() {
+        let refused = parse_all(&[
+            "serve",
+            "--app-data",
+            "/a",
+            "--ui",
+            "/u",
+            "--scenario",
+            "/s",
+        ]);
+        assert_eq!(
+            refused.unwrap_err(),
+            ArgsError::UnknownFlag("--scenario".into())
+        );
+        assert!(!USAGE.contains("--scenario"));
     }
 
     #[test]

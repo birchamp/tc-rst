@@ -80,6 +80,54 @@ fn app_config(args: &Args) -> AppConfig {
     }
 }
 
+/// `--scenario <dir>`: the parity scenario's projects on the memory backend, and its
+/// sideloaded resources in the app's store, before the app starts (APP-DESIGN §4.2, §7.1). Each
+/// project is named on stderr, loaded or refused with every mismatch: a refused project shows
+/// nowhere, and the harness's log says why.
+#[cfg(feature = "fixture-backend")]
+fn scenario_deps(dir: &std::path::Path, app_data: &std::path::Path) -> Result<AppDeps, String> {
+    use tc_app::backend::memory::MemoryBackend;
+    use tc_app::backend::scenario::{ScenarioState, install_resources_into};
+    use tc_app::backend::seed::SeedRefusal;
+
+    let at = dir.display();
+    let failed =
+        |error: tc_app::backend::scenario::ScenarioError| format!("scenario {at}: {error}");
+    let state = ScenarioState::read(dir).map_err(failed)?;
+    let (backend, report) = MemoryBackend::from_scenario(&state).map_err(failed)?;
+    for (folder, seed) in &report.loaded {
+        eprintln!(
+            "tc4: scenario {at}: loaded {folder} ({} declared differences)",
+            seed.declared.len()
+        );
+    }
+    for (folder, refusal) in &report.refused {
+        match refusal {
+            SeedRefusal::Mismatches(mismatches) => {
+                eprintln!(
+                    "tc4: scenario {at}: refused {folder}, {} mismatches \
+                     (docs/evidence/state-seed-check-2026-10-18.md):",
+                    mismatches.len()
+                );
+                for mismatch in mismatches {
+                    eprintln!("tc4:   {mismatch}");
+                }
+            }
+            other => eprintln!("tc4: scenario {at}: refused {folder}: {other}"),
+        }
+    }
+    let installed =
+        install_resources_into(app_data, &state.resources().map_err(failed)?).map_err(failed)?;
+    eprintln!(
+        "tc4: scenario {at}: {} resources installed",
+        installed.len()
+    );
+    Ok(AppDeps {
+        store: Arc::new(backend),
+        ..AppDeps::production()
+    })
+}
+
 fn serve(args: &Args) -> ExitCode {
     if let Err(error) = std::fs::create_dir_all(&args.app_data) {
         return start_failed(format_args!("{}: {error}", args.app_data.display()));
@@ -122,10 +170,20 @@ fn serve(args: &Args) -> ExitCode {
     } else {
         server
     };
+    #[cfg(feature = "fixture-backend")]
+    let deps = match &args.scenario {
+        Some(dir) => match scenario_deps(dir, &args.app_data) {
+            Ok(deps) => deps,
+            Err(error) => return start_failed(error),
+        },
+        None => AppDeps::production(),
+    };
+    #[cfg(not(feature = "fixture-backend"))]
+    let deps = AppDeps::production();
     // The app starts before the address line, so a start that fails (a `--projects` folder
     // that is not there, say) prints its one error line and nothing else: the shell reads the
     // first line, and an address followed by an error would send it to a server that is gone.
-    let app = match runtime.block_on(App::start(app_config(args), AppDeps::production())) {
+    let app = match runtime.block_on(App::start(app_config(args), deps)) {
         Ok(app) => app,
         Err(error) => return start_failed(error),
     };
