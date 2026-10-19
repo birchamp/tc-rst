@@ -11,7 +11,7 @@
 //! These tests use real time and a multi-thread runtime: the store writes its file on the
 //! blocking pool. The page's own clock is virtual.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -149,34 +149,22 @@ impl World {
                         at: WallMs(self.now as i64),
                         ..entry
                     };
-                    match buffer::write(&mut self.page.store, &key, &entry) {
-                        Ok(text) if mirror => {
-                            self.mirror.push(buffer::changed_line(&key, &text).unwrap())
-                        }
-                        Ok(_) => {}
-                        Err(_) => {
-                            let _ = buffer::remove(
-                                &mut self.page.store,
-                                &key,
-                                None,
-                                self.page.m.instance(),
-                            );
-                        }
+                    let written = buffer::write_entry(&mut self.page.store, &key, &entry);
+                    if mirror && let Some(line) = written.line {
+                        self.mirror.push(line);
                     }
                 }
                 Command::Remove {
                     key,
+                    instance,
                     if_text,
                     mirror,
                 } => {
-                    let _ = buffer::remove(
-                        &mut self.page.store,
-                        &key,
-                        if_text.as_deref(),
-                        self.page.m.instance(),
-                    );
+                    let _ =
+                        buffer::remove(&mut self.page.store, &key, if_text.as_deref(), instance);
                     if mirror {
-                        self.mirror.push(buffer::removed_line(&key).unwrap());
+                        self.mirror
+                            .push(buffer::removed_line(&key, instance).unwrap());
                     }
                 }
                 Command::Send { sent, base, .. } => self.send(sent, &base),
@@ -193,7 +181,12 @@ impl World {
                             if hello.instance == self.page.m.instance() {
                                 self.send(sent, &base);
                             } else {
+                                // The restart path; A5 then goes Home, which closes the editor.
                                 self.page.m.restarted(hello.instance);
+                                let commands = self.page.m.close(&key, self.now);
+                                self.page.editor = false;
+                                self.page.focused = false;
+                                Box::pin(self.run(commands)).await;
                             }
                         }
                         _ => {
@@ -219,7 +212,7 @@ impl World {
                         app.call("test/fieldDraft", &body).await
                     }));
                 }
-                Command::DiscardDraft { .. } | Command::Show { .. } => {}
+                Command::DiscardDraft { .. } | Command::Show { .. } | Command::ReadSessions => {}
             }
         }
     }
@@ -275,18 +268,25 @@ impl World {
             let commands = self.page.m.focus(&key(), self.now);
             self.run(commands).await;
         }
-        // boot.js's capture listener, before the WebAssembly sees the keystroke.
+        // boot.js's capture listener, before the WebAssembly sees the keystroke, which then
+        // leaves the write to it only if it says its item took the text.
         let template = self.page.m.template(&key()).unwrap();
-        if let Some(line) = buffer::input_to_entry(
+        let input = buffer::input_to_entry(
             &mut self.page.store,
             &key(),
             text,
             WallMs(self.now as i64),
             &template,
-        ) {
+        );
+        if let Some(line) = input.line {
             self.mirror.push(line);
         }
-        let commands = self.page.m.typed(&key(), text, Source::Input, self.now);
+        let source = if input.stored {
+            Source::Input
+        } else {
+            Source::Program
+        };
+        let commands = self.page.m.typed(&key(), text, source, self.now);
         self.last_typed = text.to_owned();
         self.run(commands).await;
     }
@@ -459,31 +459,26 @@ impl World {
     }
 
     /// The offer of the next open, as the design defines it (6.6, STORAGE §5.14): the newest
-    /// mirrored entry of the field; dropped when the stored value already has its text; else
-    /// Keep stores it, over the stored value's token when the stored value is the text of the
-    /// save the entry was waiting for (that save landed before the crash, and the newer text
-    /// continues from it), and over the entry's own token otherwise, so a change made since
-    /// becomes a conflict.
+    /// mirrored entry of the field (the shell's lines, reduced as `takeBuffered` does); dropped
+    /// when the stored value already has its text; else Keep stores it, over the stored value's
+    /// token when the stored value is the text of the save the entry was waiting for (that save
+    /// landed before the crash, and the newer text continues from it), and over the entry's own
+    /// token otherwise, so a change made since becomes a conflict.
     async fn offer(&mut self) {
-        let mut newest: BTreeMap<BufferKey, Option<BufferEntry>> = BTreeMap::new();
-        for line in &self.mirror {
-            match serde_json::from_str::<BufferLine>(line) {
-                Ok(BufferLine::Changed { key, entry }) => {
-                    newest.insert(key, Some(entry));
-                }
-                Ok(BufferLine::Removed { key }) => {
-                    newest.insert(key, None);
-                }
-                Err(_) => {}
-            }
-        }
-        let Some(Some(entry)) = newest.remove(&key()) else {
+        let newest: Option<BufferEntry> =
+            buffer::merge(Vec::new(), &buffer::current_lines(&self.mirror))
+                .into_iter()
+                .filter(|(k, _)| *k == key())
+                .map(|(_, entry)| entry)
+                .max_by_key(|entry| entry.at);
+        let Some(entry) = newest else {
             return;
         };
         let log = self.log().await;
         let stored = log.current.value;
         if buffer::same_text(&entry.text, &stored) {
-            self.mirror.push(buffer::removed_line(&key()).unwrap());
+            self.mirror
+                .push(buffer::removed_line(&key(), entry.instance).unwrap());
             return;
         }
         let landed = entry
@@ -502,7 +497,8 @@ impl World {
             text: entry.text.clone(),
         };
         self.ask(&keep).await;
-        self.mirror.push(buffer::removed_line(&key()).unwrap());
+        self.mirror
+            .push(buffer::removed_line(&key(), entry.instance).unwrap());
     }
 
     /// Everything answered and saved, with nothing held.

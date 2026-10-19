@@ -61,6 +61,9 @@ impl Drop for Work {
 pub struct Api {
     token: Rc<Token>,
     busy: Rc<Busy>,
+    /// The page is going: a request with a body is sent with `keepalive`, so it outlives the
+    /// page (the saves of `pagehide`).
+    keepalive: Rc<Cell<bool>>,
 }
 
 fn unreachable(error: JsValue) -> CallError {
@@ -76,7 +79,13 @@ impl Api {
         Self {
             token: Rc::new(token),
             busy,
+            keepalive: Rc::new(Cell::new(false)),
         }
+    }
+
+    /// Every later request with a body is sent with `keepalive` while `on`.
+    pub(super) fn set_keepalive(&self, on: bool) {
+        self.keepalive.set(on);
     }
 
     /// One request (APP-DESIGN 6.2). The reply is the endpoint's value, or why there is none:
@@ -160,6 +169,11 @@ impl Api {
         init.set_headers(&headers);
         if let Some(body) = body {
             init.set_body(&JsValue::from_str(body));
+            if self.keepalive.get() {
+                // web-sys has no setter for it.
+                let _ =
+                    js_sys::Reflect::set(&init, &JsValue::from_str("keepalive"), &JsValue::TRUE);
+            }
         }
         init.set_signal(signal);
         let request = Request::new_with_str_and_init(url, &init).map_err(unreachable)?;

@@ -29,7 +29,7 @@ use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 use tc_api::app::{Hello, HelloView};
 use tc_api::event::EventFrame;
-use tc_api::ids::{LocaleId, Scope};
+use tc_api::ids::{LocaleId, Scope, ServerInstance};
 use tc_api::jobs::Get as JobsGet;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
@@ -178,16 +178,16 @@ impl Runtime {
         if let Incoming::Frame(frame) = &incoming {
             // A field's own save shows no "while you were typing" notice (AD37).
             if let tc_api::event::Event::Session {
+                at,
                 event:
                     tc_api::event::SessionEvent::Changed {
                         view,
                         cause: tc_api::event::ChangeCause::LocalSave { request },
                         ..
                     },
-                ..
             } = &frame.event
             {
-                self.0.saves.local_change(*request, *view);
+                self.0.saves.local_change(*request, at, *view);
             }
             // A copy of the list: a listener may add or remove listeners.
             let listeners: Vec<Listener> = self
@@ -222,15 +222,7 @@ impl Runtime {
             Effect::ReadHello => self.read_hello(),
             Effect::ReadJobs => self.read_jobs(),
             Effect::ReadEverything => self.0.cache.resync(),
-            Effect::Restarted(instance) => {
-                js::session_set(crate::app::recovery::INSTANCE_KEY, &instance.to_string());
-                self.0.cache.restarted();
-                state.restarted(instance);
-                // The new run's jobs are not the old run's.
-                self.0.busy.set_jobs(0);
-                // Nothing is sent again to a run that has no reply cache (AD4).
-                self.0.saves.restarted(instance);
-            }
+            Effect::Restarted(instance) => self.restarted(instance),
             Effect::Topic(topic) => self.0.cache.topic(&topic),
             Effect::Changed { at, scope } => self.0.cache.changed(&at, &scope),
             Effect::SessionOpened(at) => self.0.cache.opened(at),
@@ -273,6 +265,22 @@ impl Runtime {
                 self.0.saves.server_states_changed();
             }
         }
+    }
+
+    /// The server started again (3.10, AD4), whoever found out first: a frame of the new run,
+    /// a `hello` that names it, or the `hello` a lost reply's resend asks first. Once per run:
+    /// the others find it done.
+    fn restarted(&self, instance: ServerInstance) {
+        if self.0.state.instance.get_untracked() == instance {
+            return;
+        }
+        js::session_set(crate::app::recovery::INSTANCE_KEY, &instance.to_string());
+        self.0.cache.restarted();
+        self.0.state.restarted(instance);
+        // The new run's jobs are not the old run's.
+        self.0.busy.set_jobs(0);
+        // Nothing is sent again to a run that has no reply cache (AD4).
+        self.0.saves.restarted(instance);
     }
 
     /// Fields reattach to the current opens, and hold while theirs is read-only or gone.
@@ -332,6 +340,8 @@ impl Runtime {
             match self.0.api.call(&Hello {}).await {
                 // Not older than a frame already applied: take it.
                 Ok(hello) if self.0.state_frames.get() == before => {
+                    // A `hello` of another run is a restart, which `reseed` alone would hide.
+                    self.restarted(hello.instance);
                     self.0.state.reseed(&hello);
                     self.0.saves.sessions(&hello.sessions);
                     return;
@@ -486,7 +496,23 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     }
     saves.restore(&hello);
     saves.guard_close();
-    let runtime = Runtime::new(api, cache, state, saves, Rc::clone(busy));
+    let runtime = Runtime::new(api, cache, state, saves.clone(), Rc::clone(busy));
+    let weak = Rc::downgrade(&runtime.0);
+    saves.connect(saves::RuntimeHooks {
+        restarted: Box::new({
+            let weak = weak.clone();
+            move |instance| {
+                if let Some(inner) = weak.upgrade() {
+                    Runtime(inner).restarted(instance);
+                }
+            }
+        }),
+        read_sessions: Box::new(move || {
+            if let Some(inner) = weak.upgrade() {
+                Runtime(inner).read_hello();
+            }
+        }),
+    });
     spawn_local(stream::run(
         runtime.clone(),
         connection,

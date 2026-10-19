@@ -77,45 +77,51 @@ export function changedLine(keyText, entryText) {
 }
 
 /**
- * A keystroke into a tracked editor, before the WebAssembly sees it: the field's entry gets the
- * new text and time, or, when it has none, the editor's template becomes its entry. Every other
- * key of the entry is kept. An entry of another server run, or one that does not parse, is left
- * alone. Returns the mirror's line, which goes to the shell even when the storage refused the
- * write, or null.
+ * A keystroke into a tracked editor, before the WebAssembly sees it. The template is the field's
+ * entry as this page's save machine holds it (its run, its tokens and its save in flight): the item
+ * becomes the template with the new text and time, keeping every key of the stored entry this
+ * build does not know, so a keystroke in one tab never leaves another tab's save or tokens under
+ * its own text. An entry of another server run, or one that does not parse, is never written over;
+ * the keystroke still gets its mirror's line, as this page's entry. Returns the mirror's line,
+ * which goes to the shell even when the storage refused the write, and whether the item now holds
+ * the text: only then may the WebAssembly leave the keystroke to this listener.
  */
 export function inputToEntry(store, itemKey, text, now, templateText) {
-  let entry;
+  const none = { line: null, stored: false };
   let template;
   try {
     template = JSON.parse(templateText);
   } catch {
-    return null;
+    return none;
   }
+  if (!template || typeof template !== 'object' || Array.isArray(template)) return none;
+  const keyText = itemKey.slice(BUFFER_PREFIX.length);
   let stored = null;
   try {
     stored = store.getItem(itemKey);
   } catch {
     stored = null;
   }
+  let entry = {};
   if (stored != null) {
     try {
       entry = JSON.parse(stored);
     } catch {
-      return null;
+      entry = null;
     }
-    if (!entry || typeof entry !== 'object' || entry.instance !== template.instance) return null;
-  } else {
-    entry = template;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || entry.instance !== template.instance) {
+      return { line: changedLine(keyText, JSON.stringify({ ...template, text, at: now })), stored: false };
+    }
   }
-  entry.text = text;
-  entry.at = now;
-  const entryText = JSON.stringify(entry);
+  const entryText = JSON.stringify(Object.assign(entry, template, { text, at: now }));
+  let wrote = false;
   try {
     store.setItem(itemKey, entryText);
+    wrote = true;
   } catch {
     // The mirror's line still goes: the shell then holds the keystroke.
   }
-  return changedLine(itemKey.slice(BUFFER_PREFIX.length), entryText);
+  return { line: changedLine(keyText, entryText), stored: wrote };
 }
 
 /**

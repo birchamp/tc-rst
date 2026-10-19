@@ -19,8 +19,11 @@
 //! - **A failure stops automatic saves** until Retry (FR-32); typing goes on into the buffer.
 //! - **A value and its token are one pair** (AD37): a refresh replaces both or neither, never
 //!   while the field has had input since it took its pair, and never into a focused field.
-//! - **A restart drops every field and sends nothing**: the new run has no reply cache, and
-//!   the entries wait for the offer at their project's next open.
+//! - **A restart sends nothing**: the new run has no reply cache, and the entries wait for the
+//!   offer at their project's next open. A field with an editor still on screen stays, held,
+//!   so what is typed into it is still buffered; every other field is dropped.
+//! - **`StaleScope` never goes back to the open that refused it** (A-19): the field waits until
+//!   the page knows its project's new open, and asks for the sessions again.
 
 pub mod classify;
 pub mod indicator;
@@ -32,7 +35,7 @@ use tc_api::API_VERSION;
 use tc_api::app::OpenSession;
 use tc_api::buffer::{BufferEntry, BufferKey, SentSave};
 use tc_api::event::SessionMode;
-use tc_api::ids::{RequestId, Scope, ServerInstance, ViewSeq, WallMs};
+use tc_api::ids::{Epoch, RequestId, Scope, ServerInstance, ViewSeq, WallMs};
 use tc_api::shown::PersonLabel;
 use tc_api::token::ShownToken;
 use tc_api::write::ReadOnlyReason;
@@ -55,13 +58,34 @@ const MAX_REISSUES: u8 = 3;
 /// How many of a field's own answered requests it remembers, to know its own `Changed`.
 const OWN_KEPT: usize = 8;
 
+/// A session view and the open it belongs to. `ViewSeq` counts per open (3.2), so two views
+/// compare by their open first: a folder's epochs only grow in one server run, and a restart
+/// drops every field that could hold a view of the run before. A field of the app (a test
+/// field) has no open, and its views compare by their count alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct View {
+    pub epoch: Option<Epoch>,
+    pub seq: ViewSeq,
+}
+
+impl View {
+    /// A view of the open `at`, or of no open.
+    pub fn of(at: Option<&Scope>, seq: ViewSeq) -> Self {
+        Self {
+            epoch: at.map(|at| at.epoch),
+            seq,
+        }
+    }
+}
+
 /// The value an editor shows and the token it stands for, taken together (AD37).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pair {
     pub value: String,
     pub token: ShownToken,
-    /// The session view the read was made at; `None` for a read that has none (a test field).
-    pub view: Option<ViewSeq>,
+    /// The session view the read was made at, with its open; `None` for a read that has none
+    /// (a test field).
+    pub view: Option<View>,
 }
 
 /// A field's save state (6.5).
@@ -91,6 +115,10 @@ pub enum Hold {
     NoOpen,
     /// Its project is open read-only (A-10): the text stays for the offered copy.
     ReadOnly(ReadOnlyReason),
+    /// The server started again under the field, whose editor is still on screen: its text is
+    /// buffered and waits for the offer at its project's next open, never saved by this page
+    /// (AD4). Closing the editor forgets the field.
+    Restarted,
 }
 
 /// "Juan changed this verse while you were typing. Your text will be kept as a second
@@ -129,10 +157,11 @@ pub enum Command {
         entry: BufferEntry,
         mirror: bool,
     },
-    /// Remove the field's entry if its text is `if_text` in NFC (any text for `None`), and send
-    /// the removal to the mirror when `mirror`.
+    /// Remove the field's entry of the run `instance` if its text is `if_text` in NFC (any text
+    /// for `None`), and send the removal to the mirror when `mirror`.
     Remove {
         key: BufferKey,
+        instance: ServerInstance,
         if_text: Option<String>,
         mirror: bool,
     },
@@ -160,6 +189,9 @@ pub enum Command {
     DiscardDraft { key: BufferKey },
     /// Show this text in the field's editor, which is not focused.
     Show { key: BufferKey, text: String },
+    /// Read the open sessions again (`app/hello`): a save was refused as `StaleScope` by the
+    /// open the page still holds, so the page has not heard of its project's new open yet.
+    ReadSessions,
 }
 
 /// Where the navigation gate stands (6.5, D9 of the A4b plan).
@@ -184,16 +216,25 @@ struct Editor {
 struct Field {
     rules: FieldRules,
     scope: FieldScope,
+    /// The server run the field's entry belongs to: the machine's, or, for a field kept over a
+    /// restart, the run before, whose unsaved edit it goes on with (AD4).
+    instance: ServerInstance,
+    /// The save in flight when the server started again, kept in the entry of a field kept over
+    /// the restart: its answer never comes, and the offer at the next open needs it (6.6).
+    unanswered: Option<SentSave>,
     current: String,
     /// The stored text that `base` stands for, when known. A field restored after a reload
     /// does not know it until a read or an `Ack` says.
     persisted: Option<String>,
     base: Vec<ShownToken>,
     /// The view of the pair or `Ack` the field last took.
-    pair_view: Option<ViewSeq>,
+    pair_view: Option<View>,
     /// The newest view of a `Changed` that its own request caused.
-    own_view: Option<ViewSeq>,
+    own_view: Option<View>,
     own: Vec<RequestId>,
+    /// The open that last answered a save of this field with `StaleScope`. An epoch is never
+    /// reused, so no save goes to it again (A-19).
+    refused: Option<Scope>,
     state: FieldSave,
     editor: Option<Editor>,
     /// Input or composition since the field last took its pair (AD37).
@@ -218,16 +259,24 @@ struct Field {
 }
 
 impl Field {
-    fn new(kind_rules: FieldRules, scope: FieldScope, pair: Pair) -> Self {
+    fn new(
+        kind_rules: FieldRules,
+        scope: FieldScope,
+        instance: ServerInstance,
+        pair: Pair,
+    ) -> Self {
         Self {
             rules: kind_rules,
             scope,
+            instance,
+            unanswered: None,
             current: pair.value.clone(),
             persisted: Some(pair.value),
             base: vec![pair.token],
             pair_view: pair.view,
             own_view: None,
             own: Vec::new(),
+            refused: None,
             state: FieldSave::Clean,
             editor: None,
             touched: false,
@@ -263,8 +312,20 @@ impl Field {
         )
     }
 
+    fn is_kept_over_restart(&self) -> bool {
+        self.state == FieldSave::Held(Hold::Restarted)
+    }
+
     fn is_saving(&self) -> bool {
         matches!(self.state, FieldSave::Saving { .. })
+    }
+
+    /// A save was refused as `StaleScope` by the open the page still holds for the project: the
+    /// field waits for the sessions to name another open, or none (A-19).
+    fn awaits_open(&self) -> bool {
+        self.send_on_open
+            && matches!(self.state, FieldSave::Dirty { .. })
+            && matches!(&self.scope, FieldScope::Project(Some(at)) if self.refused.as_ref() == Some(at))
     }
 
     /// Whether a refresh is newer than what the field holds.
@@ -324,7 +385,6 @@ impl Field {
 
 /// The context a field's transitions need from the machine.
 struct Ctx<'a> {
-    instance: ServerInstance,
     sessions: &'a [OpenSession],
     gating: bool,
 }
@@ -385,7 +445,7 @@ impl SaveMachine {
             out.retain(|command| !matches!(command, Command::Show { key: shown_key, .. } if *shown_key == key));
             return (shown, out);
         }
-        let mut field = Field::new(rules(key.field.kind), scope, pair);
+        let mut field = Field::new(rules(key.field.kind), scope, self.instance, pair);
         field.editor = Some(Editor { focused: false });
         let shown = field.current.clone();
         self.fields.insert(key, field);
@@ -413,6 +473,7 @@ impl SaveMachine {
         let mut field = Field::new(
             kind_rules,
             scope,
+            self.instance,
             Pair {
                 value: entry.text.clone(),
                 token,
@@ -452,7 +513,6 @@ impl SaveMachine {
     /// The text of a field changed.
     pub fn typed(&mut self, key: &BufferKey, text: &str, source: Source, now: Ms) -> Vec<Command> {
         let mut out = Vec::new();
-        let instance = self.instance;
         let Some(field) = self.fields.get_mut(key) else {
             return out;
         };
@@ -475,16 +535,12 @@ impl SaveMachine {
         if tracked {
             field.mirrored = true;
         } else if field.is_clean_state() && !field.focused() {
-            out.push(Command::Remove {
-                key: key.clone(),
-                if_text: Some(field.current.clone()),
-                mirror: field.mirrored,
-            });
+            out.push(remove_of(key, field));
             field.mirrored = false;
         } else {
             out.push(Command::Write {
                 key: key.clone(),
-                entry: entry_of(instance, field),
+                entry: entry_of(field),
                 mirror: true,
             });
             field.mirrored = true;
@@ -534,11 +590,7 @@ impl SaveMachine {
         match field.state {
             FieldSave::Clean | FieldSave::SavedWithWarning(_) => {
                 if field.touched || field.mirrored {
-                    out.push(Command::Remove {
-                        key: key.clone(),
-                        if_text: Some(field.current.clone()),
-                        mirror: field.mirrored,
-                    });
+                    out.push(remove_of(key, field));
                     field.mirrored = false;
                     field.touched = false;
                 }
@@ -572,17 +624,12 @@ impl SaveMachine {
     /// retried with a new id.
     pub fn save(&mut self, key: &BufferKey, now: Ms) -> Vec<Command> {
         let mut out = Vec::new();
-        let ctx = Ctx {
-            instance: self.instance,
-            sessions: &self.sessions,
-            gating: self.gating,
-        };
         let Some(field) = self.fields.get_mut(key) else {
             return out;
         };
         match field.state {
             FieldSave::Dirty { .. } | FieldSave::Saving { .. } => field.due = Some(now),
-            FieldSave::Failed(_) => retry_field(key, field, &mut self.ids, &ctx, now, &mut out),
+            FieldSave::Failed(_) => retry_field(key, field, &mut self.ids, now, &mut out),
             FieldSave::Held(_) => field.send_on_open = true,
             FieldSave::Clean | FieldSave::SavedWithWarning(_) => {}
         }
@@ -592,12 +639,13 @@ impl SaveMachine {
 
     /// Cancel of a section card: the text, its entry and its server draft are discarded.
     pub fn discard(&mut self, key: &BufferKey) -> Vec<Command> {
-        if self.fields.remove(key).is_none() {
+        let Some(field) = self.fields.remove(key) else {
             return Vec::new();
-        }
+        };
         vec![
             Command::Remove {
                 key: key.clone(),
+                instance: field.instance,
                 if_text: None,
                 mirror: true,
             },
@@ -606,7 +654,8 @@ impl SaveMachine {
     }
 
     /// The editor unmounts. Leaving a field saves it as a blur does, and a check comment as
-    /// Done does (A-10); a section card's text stays a draft. A clean field is forgotten.
+    /// Done does (A-10); a section card's text stays a draft. A clean field is forgotten, and so
+    /// is one kept over a restart, whose entry waits for the offer.
     pub fn close(&mut self, key: &BufferKey, now: Ms) -> Vec<Command> {
         let mut out = self.blur(key, now);
         let Some(field) = self.fields.get_mut(key) else {
@@ -614,7 +663,7 @@ impl SaveMachine {
         };
         field.editor = None;
         field.notice = None;
-        if field.is_clean_state() {
+        if field.is_clean_state() || field.is_kept_over_restart() {
             self.fields.remove(key);
             return out;
         }
@@ -647,17 +696,16 @@ impl SaveMachine {
     ) -> Vec<Command> {
         let mut out = Vec::new();
         let ctx = Ctx {
-            instance: self.instance,
             sessions: &self.sessions,
             gating: self.gating,
         };
         let Some(field) = self.fields.get_mut(key) else {
             return out;
         };
-        match &field.state {
-            FieldSave::Saving { sent } if sent.request == request => {}
+        let sent = match &field.state {
+            FieldSave::Saving { sent } if sent.request == request => sent.clone(),
             _ => return out,
-        }
+        };
         field.retry_at = None;
         match answered {
             Answered::Acked(ack) => {
@@ -675,7 +723,9 @@ impl SaveMachine {
                 field.reissues = 0;
                 field.base = vec![token.token.clone()];
                 field.persisted = Some(saved.text.clone());
-                field.pair_view = field.pair_view.max(Some(ack.view));
+                field.pair_view = field
+                    .pair_view
+                    .max(Some(View::of(sent.scope.as_ref(), ack.view)));
                 field.remember_own(request);
                 if field
                     .waiting
@@ -693,11 +743,7 @@ impl SaveMachine {
                     field.draft_due = None;
                     field.draft_text = None;
                     field.touched = false;
-                    out.push(Command::Remove {
-                        key: key.clone(),
-                        if_text: Some(field.current.clone()),
-                        mirror: field.mirrored,
-                    });
+                    out.push(remove_of(key, field));
                     field.mirrored = false;
                     if !field.focused() {
                         // A focused field keeps the text as typed; the stored NFC form shows
@@ -716,7 +762,7 @@ impl SaveMachine {
                     field.note_waiting();
                     out.push(Command::Write {
                         key: key.clone(),
-                        entry: entry_of(ctx.instance, field),
+                        entry: entry_of(field),
                         mirror: true,
                     });
                     field.mirrored = true;
@@ -735,8 +781,15 @@ impl SaveMachine {
                     &mut out,
                 ),
                 FieldScope::Project(_) => {
+                    // The reply and the session event of a reopen come in either order (5.4):
+                    // while the page still holds the open that refused, the field waits for the
+                    // sessions to name another one, and asks for them.
+                    field.refused = sent.scope;
                     field.send_on_open = true;
                     attach(key, field, &mut self.ids, &ctx, now, &mut out);
+                    if field.awaits_open() {
+                        out.push(Command::ReadSessions);
+                    }
                 }
             },
             Answered::Reissue => {
@@ -750,7 +803,7 @@ impl SaveMachine {
                         &mut out,
                     );
                 } else {
-                    send(key, field, &mut self.ids, &ctx, &mut out);
+                    send(key, field, &mut self.ids, now, &mut out);
                 }
             }
             Answered::Failed(SaveError::NotSaved(NotSaved::ReadOnly(reason))) => {
@@ -758,7 +811,7 @@ impl SaveMachine {
                 field.send_on_open = true;
                 out.push(Command::Write {
                     key: key.clone(),
-                    entry: entry_of(ctx.instance, field),
+                    entry: entry_of(field),
                     mirror: true,
                 });
             }
@@ -772,14 +825,9 @@ impl SaveMachine {
     /// already saving is left alone, so ten presses send one request (tC4 #356).
     pub fn retry(&mut self, now: Ms) -> Vec<Command> {
         let mut out = Vec::new();
-        let ctx = Ctx {
-            instance: self.instance,
-            sessions: &self.sessions,
-            gating: self.gating,
-        };
         for (key, field) in &mut self.fields {
             if matches!(field.state, FieldSave::Failed(_)) {
-                retry_field(key, field, &mut self.ids, &ctx, now, &mut out);
+                retry_field(key, field, &mut self.ids, now, &mut out);
             }
         }
         self.pump(now, &mut out);
@@ -804,11 +852,7 @@ impl SaveMachine {
             // The read showed that the text is the stored text.
             field.state = FieldSave::Clean;
             field.due = None;
-            out.push(Command::Remove {
-                key: key.clone(),
-                if_text: Some(field.current.clone()),
-                mirror: field.mirrored,
-            });
+            out.push(remove_of(key, field));
             field.mirrored = false;
         }
         if !field.is_newer(&pair) {
@@ -841,7 +885,7 @@ impl SaveMachine {
     }
 
     /// `Changed { cause: LocalSave { request } }`: a refresh up to `view` is this field's own.
-    pub fn local_change(&mut self, request: RequestId, view: ViewSeq) {
+    pub fn local_change(&mut self, request: RequestId, view: View) {
         for field in self.fields.values_mut() {
             let in_flight =
                 matches!(&field.state, FieldSave::Saving { sent } if sent.request == request);
@@ -852,48 +896,80 @@ impl SaveMachine {
     }
 
     /// The open sessions, from `hello` and the session events: fields reattach to the current
-    /// open of their folder and project id, and hold while it is read-only or absent.
+    /// open of their folder and project id, and hold while it is read-only or absent. A clean
+    /// field with no editor is forgotten once its open has ended: a read of another open is
+    /// newer than anything it holds.
     pub fn sessions(&mut self, open: &[OpenSession], now: Ms) -> Vec<Command> {
         let mut out = Vec::new();
         self.sessions = open.to_vec();
         let ctx = Ctx {
-            instance: self.instance,
             sessions: &self.sessions,
             gating: self.gating,
         };
+        let mut ended = Vec::new();
         for (key, field) in &mut self.fields {
             if !matches!(field.scope, FieldScope::Project(_)) {
                 continue;
             }
+            let current = FieldScope::Project(session_of(key, ctx.sessions).map(|s| s.at.clone()));
             match field.state {
-                FieldSave::Saving { .. } => {
-                    // The reply decides; the next save goes to the current open.
-                    field.scope =
-                        FieldScope::Project(session_of(key, ctx.sessions).map(|s| s.at.clone()));
+                FieldSave::Held(Hold::Restarted) => {}
+                FieldSave::Clean | FieldSave::SavedWithWarning(_)
+                    if field.editor.is_none() && field.scope != current =>
+                {
+                    ended.push(key.clone());
                 }
-                FieldSave::Clean | FieldSave::SavedWithWarning(_) => {
-                    field.scope =
-                        FieldScope::Project(session_of(key, ctx.sessions).map(|s| s.at.clone()));
-                }
+                // A save in flight: the reply decides, and the next save goes to the current
+                // open.
+                FieldSave::Saving { .. }
+                | FieldSave::Clean
+                | FieldSave::SavedWithWarning(_)
+                | FieldSave::Failed(_) => field.scope = current,
                 FieldSave::Dirty { .. } | FieldSave::Held(_) => {
                     attach(key, field, &mut self.ids, &ctx, now, &mut out);
                 }
-                FieldSave::Failed(_) => {
-                    field.scope =
-                        FieldScope::Project(session_of(key, ctx.sessions).map(|s| s.at.clone()));
-                }
             }
+        }
+        for key in ended {
+            self.fields.remove(&key);
         }
         self.pump(now, &mut out);
         out
     }
 
-    /// The server started again: every field is dropped and nothing is sent (AD4). The
-    /// entries stay for the offer at their project's next open, and a reply that comes later
-    /// finds no field.
+    /// The server started again (AD4): nothing is sent, the entries stay for the offer at
+    /// their project's next open, and a reply that comes later changes nothing. A field whose
+    /// editor is still on screen stays, held, as the unsaved edit of the run before: what is
+    /// typed into it goes on into that run's entry, which this run never restores or sends, so
+    /// the offer shows it with the save that run never answered. Every other field is dropped.
+    /// A second report of the same run changes nothing, so whichever part of the page finds the
+    /// restart first, the others can tell it again.
     pub fn restarted(&mut self, instance: ServerInstance) {
+        if instance == self.instance {
+            return;
+        }
         self.instance = instance;
-        self.fields.clear();
+        self.fields.retain(|_, field| field.editor.is_some());
+        for field in self.fields.values_mut() {
+            if let FieldSave::Saving { sent } = &field.state {
+                field.unanswered = Some(sent.clone());
+            }
+            if !field.is_kept_over_restart() {
+                field.state = FieldSave::Held(Hold::Restarted);
+            }
+            if let FieldScope::Project(_) = field.scope {
+                field.scope = FieldScope::Project(None);
+            }
+            field.due = None;
+            field.retry_at = None;
+            field.draft_due = None;
+            field.send_on_open = false;
+            field.waiting = None;
+            field.notice = None;
+            field.own.clear();
+            field.own_view = None;
+            field.pair_view = None;
+        }
         self.sessions.clear();
         self.gating = false;
     }
@@ -914,11 +990,6 @@ impl SaveMachine {
     /// section buffer is never saved by the gate (A-1).
     pub fn flush_for_gate(&mut self, now: Ms) -> Vec<Command> {
         let mut out = Vec::new();
-        let ctx = Ctx {
-            instance: self.instance,
-            sessions: &self.sessions,
-            gating: self.gating,
-        };
         for (key, field) in &mut self.fields {
             if !field.sendable_by_gate() {
                 continue;
@@ -926,23 +997,39 @@ impl SaveMachine {
             match field.state {
                 FieldSave::Failed(_) if !field.gate_retried => {
                     field.gate_retried = true;
-                    retry_field(key, field, &mut self.ids, &ctx, now, &mut out);
+                    retry_field(key, field, &mut self.ids, now, &mut out);
                 }
-                FieldSave::Dirty { .. } => send(key, field, &mut self.ids, &ctx, &mut out),
+                FieldSave::Dirty { .. } => send(key, field, &mut self.ids, now, &mut out),
                 _ => {}
             }
         }
         out
     }
 
+    /// The page is hidden (`pagehide`): every field that may save now is sent, best effort, as
+    /// tC4 drains its schedulers then (`tC4:src/state.jsx:3699-3704`). Each entry names its save
+    /// before the request goes, so the next load of the same run sends the same request again
+    /// if no answer came. A failure is not retried: only Retry and the gate do that (FR-32).
+    pub fn hide(&mut self, now: Ms) -> Vec<Command> {
+        let mut out = Vec::new();
+        for (key, field) in &mut self.fields {
+            if field.sendable_by_gate() && matches!(field.state, FieldSave::Dirty { .. }) {
+                send(key, field, &mut self.ids, now, &mut out);
+            }
+        }
+        out
+    }
+
     /// Where the gate stands. A held field and a section buffer never block it: the person
-    /// cannot save the one, and the other is saved only by its Save (D9 of the A4b plan).
+    /// cannot save the one, and the other is saved only by its Save (D9 of the A4b plan). A
+    /// field that waits for its project's new open after `StaleScope` keeps it waiting, as a
+    /// save in flight does.
     pub fn gate(&self) -> GateState {
         let fields = || self.fields.values().filter(|f| f.sendable_by_gate());
         if fields().any(|f| matches!(f.state, FieldSave::Failed(_)) && f.gate_retried) {
             return GateState::Blocked;
         }
-        if self.fields.values().any(Field::is_saving) {
+        if self.fields.values().any(Field::is_saving) || fields().any(Field::awaits_open) {
             return GateState::Waiting;
         }
         if fields().any(|f| {
@@ -975,30 +1062,27 @@ impl SaveMachine {
         self.fields.keys()
     }
 
-    /// The entry `boot.js` writes when the person types into an editor whose field has none:
-    /// the first keystroke after a clean save, or the first of all (`text` and `at` are
-    /// filled in by `boot.js`).
+    /// The entry `boot.js` writes on a keystroke into the field's editor: the field's entry as
+    /// this page's machine holds it (its run, its tokens and its save in flight), with `text`
+    /// and `at` filled in by `boot.js`. A keystroke therefore never leaves another tab's save or
+    /// tokens under this page's text.
     pub fn template(&self, key: &BufferKey) -> Option<BufferEntry> {
         let field = self.fields.get(key)?;
         Some(BufferEntry {
-            api: API_VERSION,
-            instance: self.instance,
-            base: field.base.clone(),
             text: String::new(),
-            sent: None,
-            at: WallMs(0),
-            draft: None,
+            ..entry_of(field)
         })
     }
 
     /// The worst state of all fields: an error, a save in flight, unsaved or held text, or
-    /// saved.
+    /// saved. A field kept over a restart counts while its text differs from the stored text.
     pub fn worst(&self) -> Worst {
         self.fields
             .values()
             .map(|field| match field.state {
                 FieldSave::Failed(_) => Worst::Error,
                 FieldSave::Saving { .. } => Worst::Saving,
+                FieldSave::Held(Hold::Restarted) if !field.is_dirty() => Worst::Saved,
                 FieldSave::Dirty { .. } | FieldSave::Held(_) => Worst::Dirty,
                 FieldSave::Clean | FieldSave::SavedWithWarning(_) => Worst::Saved,
             })
@@ -1041,6 +1125,7 @@ impl SaveMachine {
             .values()
             .filter(|field| {
                 field.is_saving()
+                    || field.awaits_open()
                     || matches!(field.state, FieldSave::Dirty { .. }) && field.due.is_some()
             })
             .count()
@@ -1048,11 +1133,6 @@ impl SaveMachine {
 
     /// Runs what is due at `now`: lost replies sent again, due saves, drafts.
     fn pump(&mut self, now: Ms, out: &mut Vec<Command>) {
-        let ctx = Ctx {
-            instance: self.instance,
-            sessions: &self.sessions,
-            gating: self.gating,
-        };
         for (key, field) in &mut self.fields {
             match &field.state {
                 FieldSave::Saving { sent } if field.retry_at.is_some_and(|at| at <= now) => {
@@ -1065,7 +1145,7 @@ impl SaveMachine {
                     });
                 }
                 FieldSave::Dirty { .. } if field.due.is_some_and(|due| due <= now) => {
-                    send(key, field, &mut self.ids, &ctx, out);
+                    send(key, field, &mut self.ids, now, out);
                 }
                 _ => {}
             }
@@ -1075,18 +1155,29 @@ impl SaveMachine {
 }
 
 /// The entry of a field as it is now, with the save in flight if there is one.
-fn entry_of(instance: ServerInstance, field: &Field) -> BufferEntry {
+fn entry_of(field: &Field) -> BufferEntry {
     BufferEntry {
         api: API_VERSION,
-        instance,
+        instance: field.instance,
         base: field.base.clone(),
         text: field.current.clone(),
         sent: match &field.state {
             FieldSave::Saving { sent } => Some(sent.clone()),
+            FieldSave::Held(Hold::Restarted) => field.unanswered.clone(),
             _ => None,
         },
         at: WallMs(0),
         draft: None,
+    }
+}
+
+/// The removal of a field's entry once it is clean, while it still holds the text now.
+fn remove_of(key: &BufferKey, field: &Field) -> Command {
+    Command::Remove {
+        key: key.clone(),
+        instance: field.instance,
+        if_text: Some(field.current.clone()),
+        mirror: field.mirrored,
     }
 }
 
@@ -1097,16 +1188,32 @@ fn session_of<'a>(key: &BufferKey, sessions: &'a [OpenSession]) -> Option<&'a Op
 }
 
 /// Sends the field's current text with a new id: the entry with the save first (so a reload
-/// sends the same request again), then the request.
+/// sends the same request again), then the request. Never to an open that refused the field
+/// with `StaleScope`: the field then waits, unsaved, for the page to hear of the new open.
 fn send(
     key: &BufferKey,
     field: &mut Field,
     ids: &mut Box<dyn FnMut() -> RequestId>,
-    ctx: &Ctx<'_>,
+    now: Ms,
     out: &mut Vec<Command>,
 ) {
     let scope = match &field.scope {
         FieldScope::App => None,
+        FieldScope::Project(Some(at)) if field.refused.as_ref() == Some(at) => {
+            field.send_on_open = true;
+            field.due = None;
+            if !matches!(field.state, FieldSave::Dirty { .. }) {
+                // The entry no longer names the refused request: a reload must not repeat it.
+                field.state = FieldSave::Dirty { since: now };
+                out.push(Command::Write {
+                    key: key.clone(),
+                    entry: entry_of(field),
+                    mirror: true,
+                });
+                field.mirrored = true;
+            }
+            return;
+        }
         FieldScope::Project(Some(at)) => Some(at.clone()),
         FieldScope::Project(None) => {
             field.state = FieldSave::Held(Hold::NoOpen);
@@ -1127,7 +1234,7 @@ fn send(
     field.send_on_open = false;
     out.push(Command::Write {
         key: key.clone(),
-        entry: entry_of(ctx.instance, field),
+        entry: entry_of(field),
         mirror: true,
     });
     field.mirrored = true;
@@ -1143,19 +1250,14 @@ fn retry_field(
     key: &BufferKey,
     field: &mut Field,
     ids: &mut Box<dyn FnMut() -> RequestId>,
-    ctx: &Ctx<'_>,
-    _now: Ms,
+    now: Ms,
     out: &mut Vec<Command>,
 ) {
     if field.is_dirty() {
-        send(key, field, ids, ctx, out);
+        send(key, field, ids, now, out);
     } else {
         field.state = FieldSave::Clean;
-        out.push(Command::Remove {
-            key: key.clone(),
-            if_text: Some(field.current.clone()),
-            mirror: field.mirrored,
-        });
+        out.push(remove_of(key, field));
         field.mirrored = false;
     }
 }
@@ -1180,7 +1282,7 @@ fn attach(
                 field.due = None;
                 out.push(Command::Write {
                     key: key.clone(),
-                    entry: entry_of(ctx.instance, field),
+                    entry: entry_of(field),
                     mirror: true,
                 });
             }
@@ -1194,7 +1296,7 @@ fn attach(
                         field.due = None;
                         out.push(Command::Write {
                             key: key.clone(),
-                            entry: entry_of(ctx.instance, field),
+                            entry: entry_of(field),
                             mirror: true,
                         });
                     }
@@ -1202,7 +1304,7 @@ fn attach(
                 SessionMode::Writable => {
                     if field.send_on_open {
                         // Base token, new id, the current open (A-19).
-                        send(key, field, ids, ctx, out);
+                        send(key, field, ids, now, out);
                     } else if held_before {
                         field.state = FieldSave::Dirty { since: now };
                         field.due = field.due_now_by_rule(now);
@@ -1229,7 +1331,7 @@ fn fail(
     // The entry no longer names a save in flight: a reload must not repeat a refused request.
     out.push(Command::Write {
         key: key.clone(),
-        entry: entry_of(ctx.instance, field),
+        entry: entry_of(field),
         mirror: true,
     });
     field.mirrored = true;
@@ -1265,10 +1367,13 @@ fn pump_draft(key: &BufferKey, field: &mut Field, now: Ms, out: &mut Vec<Command
     if due > now || field.is_saving() {
         return;
     }
+    // A field kept over a restart sends nothing to the new run, its draft included (AD4).
     let unsaved = field.is_dirty()
         && matches!(
             field.state,
-            FieldSave::Dirty { .. } | FieldSave::Failed(_) | FieldSave::Held(_)
+            FieldSave::Dirty { .. }
+                | FieldSave::Failed(_)
+                | FieldSave::Held(Hold::NoOpen | Hold::ReadOnly(_))
         );
     if !unsaved || field.draft_text.as_deref() == Some(field.current.as_str()) {
         field.draft_due = None;

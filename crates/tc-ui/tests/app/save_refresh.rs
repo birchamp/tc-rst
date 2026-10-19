@@ -2,13 +2,15 @@
 //! together, never into a focused field and never over input; a field's own save shows no
 //! notice; texts compare in NFC; a refresh older than what the field holds is ignored.
 
+use tc_api::app::{OpenSession, SessionRole};
 use tc_api::buffer::FieldKind;
-use tc_api::ids::ViewSeq;
+use tc_api::event::SessionMode;
+use tc_api::ids::ProjectId;
 use tc_api::shown::{PersonLabel, Who};
 use tc_ui::app::save::classify::Answered;
 use tc_ui::app::save::{Command, FieldSave, FieldScope, Notice};
 
-use super::save_kit::{Page, ack, key_of, pair, tok};
+use super::save_kit::{PROJECT_ID, Page, ack, key_of, pair, pair_at, scope, tok, view};
 
 fn juan() -> Option<PersonLabel> {
     Some(PersonLabel {
@@ -125,7 +127,7 @@ fn own_save_event_before_ack_shows_no_notice() {
     page.blur(&k);
     let flight = page.inflight.pop_front().unwrap();
     // The save's own Changed comes first, then the refetch it causes, then the Ack.
-    page.m.local_change(flight.sent.request, ViewSeq::new(11));
+    page.m.local_change(flight.sent.request, view(11));
     let commands = refresh(&mut page, &k, "Paul, a servant", 2, 11);
     assert!(commands.is_empty());
     page.answer(&flight, Answered::Acked(ack("Paul, a servant", 2, 11)));
@@ -156,7 +158,7 @@ fn own_save_event_after_ack_shows_no_notice() {
     page.blur(&k);
     let flight = page.inflight.pop_front().unwrap();
     page.answer(&flight, Answered::Acked(ack("Paul, a servant", 2, 11)));
-    page.m.local_change(flight.sent.request, ViewSeq::new(11));
+    page.m.local_change(flight.sent.request, view(11));
     page.focus(&k);
     page.type_text(&k, "Paul, a servant of");
     let commands = refresh(&mut page, &k, "Paul, a servant", 2, 11);
@@ -280,4 +282,115 @@ fn a_composition_is_never_written_into() {
     page.blur(&k);
     assert!(page.shows().is_empty());
     assert_eq!(page.sends()[0].1, vec![tok(1)]);
+}
+
+// --- Across a reopen: views count per open (3.2) ----------------------------------------------
+
+fn open_at(epoch: u64) -> OpenSession {
+    OpenSession {
+        at: scope(epoch),
+        id: ProjectId::parse(PROJECT_ID).unwrap(),
+        mode: SessionMode::Writable,
+        role: SessionRole::Screen,
+    }
+}
+
+fn sessions(page: &mut Page, open: &[OpenSession]) {
+    let commands = page.m.sessions(open, page.now);
+    page.run(commands);
+}
+
+/// A verse editor of the project's open at epoch 1, on "Paul" at token 1, view 40.
+fn opened_at_epoch_1() -> (Page, tc_api::buffer::BufferKey) {
+    let mut page = Page::new();
+    let k = verse();
+    sessions(&mut page, &[open_at(1)]);
+    page.open_with(
+        &k,
+        FieldScope::Project(Some(scope(1))),
+        pair_at("Paul", 1, 1, 40),
+    );
+    (page, k)
+}
+
+/// The editor closes while its save is in flight, the Ack comes (view 41 of the first open),
+/// the person goes Home and opens the project again, where a teammate's change is at view 2 of
+/// the new open. The editor shows the teammate's text with its token, whether or not the page
+/// heard of the reopen before the editor opened.
+#[test]
+fn an_editor_closed_mid_save_shows_a_teammates_text_after_a_reopen() {
+    for heard_of_home in [true, false] {
+        let (mut page, k) = opened_at_epoch_1();
+        page.focus(&k);
+        page.type_text(&k, "Paul, a servant");
+        page.close(&k);
+        let flight = page
+            .inflight
+            .pop_front()
+            .expect("leaving the field saves it");
+        page.answer(&flight, Answered::Acked(ack("Paul, a servant", 5, 41)));
+        if heard_of_home {
+            sessions(&mut page, &[]);
+            sessions(&mut page, &[open_at(2)]);
+        }
+        let shown = page.open_with(
+            &k,
+            FieldScope::Project(Some(scope(2))),
+            pair_at("Paul, a servant of God", 9, 2, 2),
+        );
+        assert_eq!(
+            shown, "Paul, a servant of God",
+            "heard of Home: {heard_of_home}"
+        );
+        assert_eq!(page.m.base(&k), Some(&[tok(9)][..]));
+        assert_eq!(page.m.notice(&k), None);
+    }
+}
+
+#[test]
+fn a_refresh_of_the_new_open_reaches_a_clean_editor_reopened_under_it() {
+    let (mut page, k) = opened_at_epoch_1();
+    sessions(&mut page, &[open_at(2)]);
+    let commands = page
+        .m
+        .refresh(&k, pair_at("Paul, an apostle", 9, 2, 2), juan());
+    page.run(commands);
+    assert_eq!(page.shows(), ["Paul, an apostle"]);
+    assert_eq!(page.m.base(&k), Some(&[tok(9)][..]));
+    // A read of the first open that comes late is older than anything of the new one.
+    let commands = page.m.refresh(&k, pair_at("Paul", 1, 1, 99), None);
+    page.run(commands);
+    assert_eq!(page.m.text(&k), Some("Paul, an apostle"));
+}
+
+#[test]
+fn a_refresh_of_the_new_open_under_typed_text_shows_the_notice() {
+    let (mut page, k) = opened_at_epoch_1();
+    page.focus(&k);
+    page.type_text(&k, "Paul, a servant");
+    sessions(&mut page, &[open_at(2)]);
+    let commands = page
+        .m
+        .refresh(&k, pair_at("Paul, an apostle", 9, 2, 2), juan());
+    page.run(commands);
+    assert_eq!(page.m.notice(&k), Some(&Notice { by: juan() }));
+    assert_eq!(page.m.text(&k), Some("Paul, a servant"));
+    assert_eq!(
+        page.m.base(&k),
+        Some(&[tok(1)][..]),
+        "the save becomes a conflict"
+    );
+}
+
+#[test]
+fn views_of_a_field_of_the_app_compare_by_their_count() {
+    let (mut page, k) = opened();
+    let commands = page.m.refresh(&k, pair("Paul, old", 2, Some(9)), juan());
+    page.run(commands);
+    assert_eq!(page.m.text(&k), Some("Paul"));
+    page.m
+        .local_change(tc_api::ids::RequestId::from_bytes([3; 16]), view(12));
+    let commands = page.m.refresh(&k, pair("Paul, new", 3, Some(11)), juan());
+    page.run(commands);
+    assert_eq!(page.m.text(&k), Some("Paul, new"));
 }

@@ -6,7 +6,9 @@
 // - A capture listener writes each keystroke of a tracked editor into its field's buffer entry
 //   (and the shell's mirror) before the WebAssembly sees the event, so a panic in the input
 //   handler loses nothing. The WebAssembly tracks the focused editor with `tc4Boot.track(el,
-//   itemKey, template)`; the template is the entry to write when the field has none.
+//   itemKey, template)`; the template is the field's entry as the save machine holds it. An item
+//   of another server run is never written over: its keystrokes go to the mirror only. The
+//   listener says in `tc4Boot.wrote` whether the item took the keystroke.
 // - The first trap of the page (a window `error` or an `unhandledrejection` whose error is a
 //   WebAssembly.RuntimeError, or one `run_app` throws) is handled once; later traps of the same
 //   page are ignored. A page load that ended in a panic is counted in sessionStorage; the page
@@ -29,6 +31,10 @@ const boot = {
   untrack(element) {
     tracked.delete(element);
   },
+  // What the last keystroke wrote: `{ item, text }` when its field's item now holds its text,
+  // else null. The WebAssembly takes it in the same event and writes the entry itself unless it
+  // names this text, so its `Source::Input` never rests on an assumption.
+  wrote: null,
   // An array to collect the listener's own time per keystroke, for the measurements.
   measure: null,
   // Whether anything is unsaved, which the WebAssembly says on every change when there is no
@@ -43,18 +49,20 @@ window.tc4Boot = boot;
 function onInput(event) {
   const started = performance.now();
   const field = tracked.get(event.target);
+  boot.wrote = null;
   if (field) {
     const target = event.target;
     const text = typeof target.value === 'string' ? target.value : (target.textContent ?? '');
-    let line = null;
+    let result = { line: null, stored: false };
     try {
-      line = R.inputToEntry(localStorage, field.itemKey, text, Date.now(), field.template);
+      result = R.inputToEntry(localStorage, field.itemKey, text, Date.now(), field.template);
     } catch {
-      line = null;
+      result = { line: null, stored: false };
     }
-    if (line) {
+    if (result.stored) boot.wrote = { item: field.itemKey, text };
+    if (result.line) {
       try {
-        window.tc4Shell?.bufferChanged?.(line);
+        window.tc4Shell?.bufferChanged?.(result.line);
       } catch {
         // The shell's mirror is best effort here; the WebAssembly mirrors its own writes.
       }

@@ -941,7 +941,7 @@ fn buffer() -> Value {
         "lines": wire_samples(&[
             BufferLine::Changed { key: verse.clone(), entry: saving },
             BufferLine::Changed { key: comment.clone(), entry: typed },
-            BufferLine::Removed { key: verse },
+            BufferLine::Removed { key: verse, instance: ServerInstance::from_bytes([0xab; 16]) },
         ]),
     })
 }

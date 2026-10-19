@@ -115,3 +115,30 @@ proptest! {
         prop_assert_eq!(back, line);
     }
 }
+
+#[test]
+fn a_removal_names_its_run() {
+    // The shell drops only the removed run's entry of the field (§5.7): a line with no run
+    // could not say which, and is not read.
+    let key = json!({
+        "project": "en_ult",
+        "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+        "field": { "kind": "verse", "place": "TIT 1:4" },
+    });
+    let line: BufferLine = serde_json::from_value(json!({
+        "type": "removed",
+        "value": { "key": key, "instance": "abababababababababababababababab" },
+    }))
+    .unwrap();
+    assert_eq!(
+        line.instance(),
+        serde_json::from_value(json!("abababababababababababababababab")).unwrap()
+    );
+    assert!(
+        serde_json::from_value::<BufferLine>(json!({
+            "type": "removed",
+            "value": { "key": key },
+        }))
+        .is_err()
+    );
+}

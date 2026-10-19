@@ -192,6 +192,11 @@ pub struct DraftCall {
 
 /// One line of the shell's buffer log: a field's entry as it is now, or its removal once the
 /// field is clean.
+///
+/// The shell keeps the last line per field and server run, and a removal drops only its own
+/// run's entry: after a restart behind a reused port, one field can hold a text of each run, and
+/// saving the new run's text must not drop the old run's, which is offered at the next open
+/// (§5.7, §6.6).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(
@@ -201,14 +206,29 @@ pub struct DraftCall {
     rename_all_fields = "camelCase"
 )]
 pub enum BufferLine {
-    Changed { key: BufferKey, entry: BufferEntry },
-    Removed { key: BufferKey },
+    Changed {
+        key: BufferKey,
+        entry: BufferEntry,
+    },
+    /// The field became clean in the run `instance`; another run's entry of it stays.
+    Removed {
+        key: BufferKey,
+        instance: ServerInstance,
+    },
 }
 
 impl BufferLine {
     pub fn key(&self) -> &BufferKey {
         match self {
-            Self::Changed { key, .. } | Self::Removed { key } => key,
+            Self::Changed { key, .. } | Self::Removed { key, .. } => key,
+        }
+    }
+
+    /// The server run the line belongs to.
+    pub fn instance(&self) -> ServerInstance {
+        match self {
+            Self::Changed { entry, .. } => entry.instance,
+            Self::Removed { instance, .. } => *instance,
         }
     }
 }

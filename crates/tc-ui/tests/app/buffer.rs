@@ -6,13 +6,16 @@ use std::path::Path;
 
 use proptest::prelude::*;
 use serde_json::{Value, json};
+use tc_api::buffer::SentSave;
 use tc_api::buffer::{
     BUFFER_ITEM_PREFIX, BufferEntry, BufferKey, BufferLine, FieldKey, FieldKind, FieldPlace,
 };
+use tc_api::ids::RequestId;
 use tc_api::ids::{ProjectId, ProjectRef, ServerInstance, WallMs};
 use tc_ui::app::buffer::{
-    MemStore, Removal, Store, changed_line, entries, entries_of, input_to_entry, item_key, merge,
-    nfc, parse_item_key, read, rekey, remove, removed_line, write,
+    MemStore, Removal, Store, StoreError, changed_line, current_lines, entries, entries_of,
+    input_to_entry, item_key, merge, nfc, parse_item_key, read, rekey, remove, removed_line, write,
+    write_entry,
 };
 
 const ID: &str = "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50";
@@ -205,7 +208,7 @@ fn merge_keeps_the_newest_entry_per_field_and_skips_torn_lines() {
         newest,
         line(&key("TIT 1:2"), &entry("mirror, tie", 7)),
         line(&key("TIT 1:3"), &entry("mirror only", 1)),
-        removed_line(&key("TIT 1:4")).unwrap(),
+        removed_line(&key("TIT 1:4"), inst()).unwrap(),
         torn,
     ];
     let merged = merge(local, &mirror);
@@ -291,7 +294,7 @@ fn the_lines_have_the_golden_form() {
             BufferLine::Changed { key, entry } => {
                 changed_line(key, &serde_json::to_string(entry).unwrap()).unwrap()
             }
-            BufferLine::Removed { key } => removed_line(key).unwrap(),
+            BufferLine::Removed { key, instance } => removed_line(key, *instance).unwrap(),
         };
         let built: Value = serde_json::from_str(&built).unwrap();
         assert_eq!(&built, line, "line {n}");
@@ -337,9 +340,45 @@ fn another_runs_entry_is_never_written_over_or_removed() {
         remove(&mut store, &k, Some("typed before the restart"), inst()).unwrap(),
         Removal::Kept
     );
+    // The keystroke still reaches the shell, as this run's entry.
+    let input = input_to_entry(&mut store, &k, "x", WallMs(3), &entry("", 0));
+    assert!(!input.stored);
+    let parsed: BufferLine = serde_json::from_str(&input.line.unwrap()).unwrap();
     assert_eq!(
-        input_to_entry(&mut store, &k, "x", WallMs(3), &entry("", 0)),
-        None
+        parsed,
+        BufferLine::Changed {
+            key: k.clone(),
+            entry: BufferEntry {
+                at: WallMs(3),
+                ..entry("x", 0)
+            }
+        }
+    );
+    // So does the machine's own write.
+    let written = write_entry(&mut store, &k, &entry("y", 4));
+    assert_eq!(
+        written.failure, None,
+        "another run's item is the rule, not a fault"
+    );
+    assert!(written.line.unwrap().contains("\"y\""));
+    assert_eq!(store.items, before);
+}
+
+#[test]
+fn an_item_this_build_cannot_read_is_never_written_and_the_keystroke_is_mirrored() {
+    let mut store = MemStore::new();
+    let k = key("TIT 1:1");
+    let item = item_key(&k).unwrap();
+    store
+        .set(&item, r#"{"api":2,"text":"a newer build's"}"#)
+        .unwrap();
+    let before = store.items.clone();
+    let input = input_to_entry(&mut store, &k, "typed", WallMs(3), &entry("", 0));
+    assert!(!input.stored);
+    assert!(input.line.unwrap().contains("\"typed\""));
+    assert_eq!(
+        write(&mut store, &k, &entry("z", 1)),
+        Err(StoreError::Foreign)
     );
     assert_eq!(store.items, before);
 }
@@ -349,7 +388,9 @@ fn a_keystroke_updates_the_entry_or_makes_it_from_the_template() {
     let mut store = MemStore::new();
     let k = key("TIT 1:1");
     let template = entry("", 0);
-    let line = input_to_entry(&mut store, &k, "P", WallMs(10), &template).unwrap();
+    let input = input_to_entry(&mut store, &k, "P", WallMs(10), &template);
+    assert!(input.stored);
+    let line = input.line.unwrap();
     let stored = read(&store, &k).unwrap();
     assert_eq!((stored.text.as_str(), stored.at), ("P", WallMs(10)));
     let parsed: BufferLine = serde_json::from_str(&line).unwrap();
@@ -366,15 +407,123 @@ fn a_keystroke_updates_the_entry_or_makes_it_from_the_template() {
     store
         .set(&item_key(&k).unwrap(), &with_later.to_string())
         .unwrap();
-    input_to_entry(&mut store, &k, "Pau", WallMs(12), &template).unwrap();
+    assert!(input_to_entry(&mut store, &k, "Pau", WallMs(12), &template).stored);
     let raw: Value = serde_json::from_str(&store.get(&item_key(&k).unwrap()).unwrap()).unwrap();
     assert_eq!(raw["text"], "Pau");
-    assert_eq!(raw["later"], true, "only text and at change");
+    assert_eq!(raw["later"], true, "keys this build does not know stay");
 
-    // A full storage loses the write, never the mirror's line.
+    // A full storage loses the write, never the mirror's line, and says so.
     store.fail_writes = true;
-    let line = input_to_entry(&mut store, &k, "Paul", WallMs(13), &template).unwrap();
-    assert!(line.contains("\"Paul\""));
+    let input = input_to_entry(&mut store, &k, "Paul", WallMs(13), &template);
+    assert!(
+        !input.stored,
+        "the WebAssembly then writes the entry itself"
+    );
+    assert!(input.line.unwrap().contains("\"Paul\""));
+}
+
+fn saving(text: &str, request: u8) -> BufferEntry {
+    BufferEntry {
+        sent: Some(SentSave {
+            request: RequestId::from_bytes([request; 16]),
+            text: text.to_owned(),
+            scope: None,
+        }),
+        ..entry(text, 1)
+    }
+}
+
+/// Two tabs share a field's item. Tab A's save is in flight under its tokens; tab B's keystroke
+/// writes B's own state over it (its template), so a reload of B never sends A's request or
+/// takes A's answer as its own base, which would store B's text over A's unseen.
+#[test]
+fn a_keystroke_writes_this_pages_save_and_tokens_never_another_pages() {
+    let mut store = MemStore::new();
+    let k = key("TIT 1:1");
+    write(&mut store, &k, &saving("A1", 7)).unwrap();
+    let other_token: tc_api::ShownToken = serde_json::from_value(json!(
+        "st1.eyJoZWFkcyI6W10sImtleSI6eyJ4IjoxfX0AAAAAAAAAAAAAAAAAAAAA"
+    ))
+    .unwrap();
+    let tab_b = BufferEntry {
+        base: vec![other_token.clone()],
+        ..entry("", 0)
+    };
+    assert!(input_to_entry(&mut store, &k, "B1", WallMs(5), &tab_b).stored);
+    let kept = read(&store, &k).unwrap();
+    assert_eq!(kept.text, "B1");
+    assert_eq!(kept.sent, None, "tab A's save is not tab B's");
+    assert_eq!(kept.base, vec![other_token]);
+    // The same page's save in flight stays named under newer text (A-2).
+    let own = saving("B1", 8);
+    write(&mut store, &k, &own).unwrap();
+    let template = BufferEntry {
+        text: String::new(),
+        ..own.clone()
+    };
+    assert!(input_to_entry(&mut store, &k, "B1 more", WallMs(6), &template).stored);
+    assert_eq!(read(&store, &k).unwrap().sent, own.sent);
+}
+
+#[test]
+fn a_refused_write_keeps_an_item_of_the_same_save_and_drops_one_of_another() {
+    let k = key("TIT 1:1");
+    // The same save in flight, older text: the older text is better than none.
+    let mut store = MemStore::new();
+    write(&mut store, &k, &saving("older", 7)).unwrap();
+    store.fail_writes = true;
+    let written = write_entry(
+        &mut store,
+        &k,
+        &BufferEntry {
+            text: "newer".into(),
+            ..saving("older", 7)
+        },
+    );
+    assert!(matches!(written.failure, Some(StoreError::Refused(_))));
+    assert!(
+        written.line.unwrap().contains("\"newer\""),
+        "the mirror gets the text"
+    );
+    assert_eq!(read(&store, &k).unwrap().text, "older");
+    // Another save in flight: a reload must not send a request the field no longer waits for.
+    let mut store = MemStore::new();
+    write(&mut store, &k, &saving("older", 7)).unwrap();
+    store.fail_writes = true;
+    let _ = write_entry(&mut store, &k, &saving("newer", 8));
+    assert_eq!(read(&store, &k), None);
+}
+
+/// The shell's mirror after a restart behind a reused port: run 1 left an unsaved text, run 2
+/// typed into the same field and saved it. The removal of run 2's entry leaves run 1's for the
+/// offer at the next launch, which reads only the mirror (5.7, AD21).
+#[test]
+fn the_mirror_keeps_each_runs_entry_and_a_removal_drops_only_its_own() {
+    let k = key("TIT 1:1");
+    let run1 = BufferEntry {
+        instance: ServerInstance::from_bytes([9; 16]),
+        ..entry("R1, never saved", 5)
+    };
+    let changed = |e: &BufferEntry| {
+        serde_json::to_string(&BufferLine::Changed {
+            key: k.clone(),
+            entry: e.clone(),
+        })
+        .unwrap()
+    };
+    let lines = vec![
+        changed(&run1),
+        changed(&entry("R2", 8)),
+        "{\"type\":\"changed\",\"val".to_owned(),
+        removed_line(&k, inst()).unwrap(),
+    ];
+    let current = current_lines(&lines);
+    assert_eq!(current, vec![changed(&run1)]);
+    assert_eq!(merge(Vec::new(), &current).len(), 1);
+    // A removal of run 1 drops run 1's entry.
+    let mut later = lines.clone();
+    later.push(removed_line(&k, run1.instance).unwrap());
+    assert!(current_lines(&later).is_empty());
 }
 
 #[test]

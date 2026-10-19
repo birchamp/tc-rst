@@ -19,9 +19,9 @@ use tc_api::token::ShownToken;
 use tc_api::write::{Ack, SavedValue, Stored, TokenUpdate};
 use tc_ui::app::buffer::{self, MemStore};
 use tc_ui::app::save::classify::{Answered, SaveError};
-use tc_ui::app::save::{Command, FieldSave, FieldScope, Pair, SaveMachine};
+use tc_ui::app::save::{Command, FieldSave, FieldScope, Pair, SaveMachine, View};
 
-use super::save_kit::{InFlight, PROJECT_ID, Page, ids, key, key_of, scope, tok};
+use super::save_kit::{InFlight, PROJECT_ID, Page, ids, key, key_of, scope, tok, view};
 
 const TEXTS: [&str; 8] = [
     "",
@@ -69,6 +69,8 @@ enum Step {
     Deliver(usize, Reply),
     Retry,
     Teammate(usize, usize),
+    /// The project closed (`None`), its open announced again (`Some(0 | 1)`), or reopened under
+    /// a new epoch (`Some(2..)`): epochs only grow (3.2).
     Session(Option<u8>),
     Gate,
     Reload(bool),
@@ -97,7 +99,7 @@ fn step() -> impl Strategy<Value = Step> {
         5 => (0usize..4, reply()).prop_map(|(i, r)| Step::Deliver(i, r)),
         1 => Just(Step::Retry),
         1 => (field.clone(), 0..TEXTS.len()).prop_map(|(f, t)| Step::Teammate(f, t)),
-        1 => proptest::option::of(1u8..4).prop_map(Step::Session),
+        1 => proptest::option::of(0u8..4).prop_map(Step::Session),
         1 => Just(Step::Gate),
         2 => any::<bool>().prop_map(Step::Reload),
         1 => Just(Step::Restart),
@@ -154,13 +156,18 @@ impl Server {
         )
     }
 
-    fn pair(&self, k: &BufferKey) -> Pair {
+    /// The current pair, read from the open at `epoch` (`None` for a field of the app).
+    fn pair(&self, k: &BufferKey, epoch: Option<u64>) -> Pair {
         let (value, token, _) = self.latest(k);
         Pair {
             value,
             token,
-            view: Some(ViewSeq::new(self.view)),
+            view: Some(self.view_at(epoch)),
         }
+    }
+
+    fn view_at(&self, epoch: Option<u64>) -> View {
+        View::of(epoch.map(scope).as_ref(), ViewSeq::new(self.view))
     }
 
     /// The text a token stands for.
@@ -205,7 +212,7 @@ impl Server {
         ack
     }
 
-    fn teammate(&mut self, k: &BufferKey, text: &str) -> Pair {
+    fn teammate(&mut self, k: &BufferKey, text: &str, epoch: Option<u64>) -> Pair {
         self.versions.get_mut(k).unwrap().push(buffer::nfc(text));
         self.view += 1;
         let version = self.versions[k].len();
@@ -213,14 +220,14 @@ impl Server {
         Pair {
             value: buffer::nfc(text),
             token,
-            view: Some(ViewSeq::new(self.view)),
+            view: Some(self.view_at(epoch)),
         }
     }
 }
 
-fn session(epoch: u8) -> OpenSession {
+fn session(epoch: u64) -> OpenSession {
     OpenSession {
-        at: scope(u64::from(epoch)),
+        at: scope(epoch),
         id: ProjectId::parse(PROJECT_ID).unwrap(),
         mode: SessionMode::Writable,
         role: SessionRole::Screen,
@@ -244,6 +251,8 @@ struct World {
     last_typed: BTreeMap<BufferKey, String>,
     offered: Vec<(BufferKey, String)>,
     run: u8,
+    /// The newest epoch of the project's opens.
+    epoch: u64,
 }
 
 impl World {
@@ -264,7 +273,14 @@ impl World {
             last_typed: BTreeMap::new(),
             offered: Vec::new(),
             run: 1,
+            epoch: 1,
         }
+    }
+
+    /// The open a read of `k` is made against: the project's current open, or none for a
+    /// field of the app.
+    fn read_epoch(&self, k: &BufferKey) -> Option<u64> {
+        is_project(k).then_some(self.epoch)
     }
 
     fn scope_of(&self, k: &BufferKey) -> FieldScope {
@@ -279,7 +295,7 @@ impl World {
     fn editor(&mut self, k: &BufferKey) {
         if self.editors.insert(k.clone()) {
             let scope = self.scope_of(k);
-            let pair = self.server.pair(k);
+            let pair = self.server.pair(k, self.read_epoch(k));
             self.page.open_with(k, scope, pair);
         }
     }
@@ -444,7 +460,8 @@ impl World {
             }
             Step::Teammate(f, t) => {
                 let k = &keys[*f];
-                let pair = self.server.teammate(k, TEXTS[*t]);
+                let epoch = self.read_epoch(k);
+                let pair = self.server.teammate(k, TEXTS[*t], epoch);
                 let by = Some(PersonLabel {
                     who: Who::Teammate(2),
                     computer: None,
@@ -452,8 +469,15 @@ impl World {
                 let commands = self.page.m.refresh(k, pair, by);
                 self.page.run(commands);
             }
-            Step::Session(epoch) => {
-                self.sessions = epoch.map(session).into_iter().collect();
+            Step::Session(change) => {
+                self.sessions = match change {
+                    None => Vec::new(),
+                    Some(0 | 1) if !self.sessions.is_empty() => self.sessions.clone(),
+                    Some(_) => {
+                        self.epoch += 1;
+                        vec![session(self.epoch)]
+                    }
+                };
                 let commands = self.page.m.sessions(&self.sessions, self.page.now);
                 self.page.run(commands);
             }
@@ -548,6 +572,14 @@ impl World {
             self.old_run.insert(*id);
         }
         self.page.m.restarted(instance);
+        // A5 goes Home: every editor closes, and the fields kept for it go with it.
+        for k in std::mem::take(&mut self.editors) {
+            self.page.close(&k);
+        }
+        prop_assert!(
+            self.page.m.keys().next().is_none(),
+            "a field outlived the restart and its editor"
+        );
         // Late replies of the old run find no field.
         for flight in std::mem::take(&mut self.page.inflight) {
             let ack = self.server.store(&flight);
@@ -572,7 +604,8 @@ impl World {
 
     /// Everything answered, every field left and saved.
     fn settle(&mut self) -> Result<(), TestCaseError> {
-        self.sessions = vec![session(9)];
+        self.epoch += 1;
+        self.sessions = vec![session(self.epoch)];
         let commands = self.page.m.sessions(&self.sessions, self.page.now);
         self.page.run(commands);
         for _ in 0..30 {
@@ -676,7 +709,7 @@ proptest! {
     fn events_reply_order_is_safe((events, typing_after) in orders()) {
         let mut page = Page::new();
         let k = key_of(FieldKind::Verse, "TIT 1:1");
-        page.open_with(&k, FieldScope::App, Pair { value: "Paul".into(), token: tok(1), view: Some(ViewSeq::new(10)) });
+        page.open_with(&k, FieldScope::App, Pair { value: "Paul".into(), token: tok(1), view: Some(view(10)) });
         page.focus(&k);
         page.type_text(&k, "Paul, a servant");
         page.blur(&k);
@@ -689,9 +722,9 @@ proptest! {
         let mut newest = (own_view, own_token);
         for event in &events {
             match event {
-                Event::OwnChanged => page.m.local_change(flight.sent.request, ViewSeq::new(own_view)),
+                Event::OwnChanged => page.m.local_change(flight.sent.request, view(own_view)),
                 Event::OwnRefresh => {
-                    let commands = page.m.refresh(&k, Pair { value: "Paul, a servant".into(), token: tok(own_token), view: Some(ViewSeq::new(own_view)) }, None);
+                    let commands = page.m.refresh(&k, Pair { value: "Paul, a servant".into(), token: tok(own_token), view: Some(view(own_view)) }, None);
                     page.run(commands);
                 }
                 Event::Ack => {
@@ -712,7 +745,7 @@ proptest! {
                     }
                     newest = (view, token);
                     let by = Some(PersonLabel { who: Who::Username("juan".into()), computer: None });
-                    let commands = page.m.refresh(&k, Pair { value: text, token: tok(token), view: Some(ViewSeq::new(view)) }, by);
+                    let commands = page.m.refresh(&k, Pair { value: text, token: tok(token), view: Some(super::save_kit::view(view)) }, by);
                     page.run(commands);
                 }
             }

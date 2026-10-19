@@ -176,36 +176,109 @@ pub fn write(
     Ok(text)
 }
 
+/// What a `Write` command did ([`write_entry`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Written {
+    /// The mirror's line for the entry: the shell gets it whether or not the storage took it.
+    pub line: Option<String>,
+    /// Why the storage did not take the entry, when that is a fault to report: another run's
+    /// item is the rule, not a fault.
+    pub failure: Option<StoreError>,
+}
+
+/// What a `Write` command of the save machine does to the storage, the same in the browser glue
+/// and in the tests' pages. The entry is written over this run's item, keeping the keys this
+/// build does not know. An item of another run, or one this build cannot read, is left as it is
+/// (6.6). When the storage refuses, an item that names another save in flight than `entry` is
+/// removed, so a reload never sends again a request the field no longer waits for; one that
+/// names the same save keeps the older text, which is better than none. The mirror's line
+/// always carries the entry, so the shell holds the text even where the storage does not.
+pub fn write_entry(store: &mut dyn Store, key: &BufferKey, entry: &BufferEntry) -> Written {
+    let failure = match write(store, key, entry) {
+        Ok(text) => {
+            return Written {
+                line: changed_line(key, &text).ok(),
+                failure: None,
+            };
+        }
+        Err(StoreError::Foreign) => None,
+        Err(error) => {
+            if read(store, key).is_some_and(|stored| {
+                stored.instance == entry.instance && stored.sent != entry.sent
+            }) {
+                let _ = remove(store, key, None, entry.instance);
+            }
+            Some(error)
+        }
+    };
+    Written {
+        line: encode(entry)
+            .ok()
+            .and_then(|json| changed_line(key, &json).ok()),
+        failure,
+    }
+}
+
+/// What [`input_to_entry`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InputWrite {
+    /// The mirror's line, which `boot.js` sends to the shell.
+    pub line: Option<String>,
+    /// The field's item now holds the keystroke's text. Only then may the WebAssembly leave the
+    /// keystroke's write to `boot.js` (`Source::Input`); otherwise it writes it itself.
+    pub stored: bool,
+}
+
 /// What `boot.js`'s capture listener does on a keystroke, before the WebAssembly sees it
-/// (6.6, A-15), in Rust for the tests that play the page: the field's entry gets the new text
-/// and time, or, when it has none, the editor's `template` becomes its entry. Returns the
-/// mirror's line, which goes to the shell even when the storage refused the write. An entry of
-/// another run or one this build cannot read is left alone and gives no line.
+/// (6.6, A-15), in Rust for the tests that play the page. The `template` is the field's entry as
+/// this page's save machine holds it: its tokens and its save in flight. The item becomes the
+/// template with the new text and time, keeping the keys this build does not know, so a
+/// keystroke in one tab never keeps another tab's save or tokens under its own text. An item of
+/// another run, or one this build cannot read, is not written over; the keystroke still gets its
+/// mirror's line, as this page's entry, so a panic in the input handler loses nothing there
+/// either.
 pub fn input_to_entry(
     store: &mut dyn Store,
     key: &BufferKey,
     text: &str,
     at: WallMs,
     template: &BufferEntry,
-) -> Option<String> {
-    let item = item_key(key).ok()?;
-    let mut value = match store.get(&item) {
-        Some(stored) => {
-            if !is_own(&stored, template.instance) {
-                return None;
-            }
-            serde_json::from_str::<Value>(&stored).ok()?
-        }
-        None => serde_json::to_value(template).ok()?,
+) -> InputWrite {
+    let own = BufferEntry {
+        text: text.to_owned(),
+        at,
+        ..template.clone()
     };
-    let object = value.as_object_mut()?;
-    object.insert("text".to_owned(), Value::String(text.to_owned()));
-    object.insert("at".to_owned(), Value::from(at.0));
-    let entry_json = encode(&value).ok()?;
-    let line = changed_line(key, &entry_json).ok();
+    let Ok(item) = item_key(key) else {
+        return InputWrite {
+            line: None,
+            stored: false,
+        };
+    };
+    let old = store.get(&item);
+    if old
+        .as_deref()
+        .is_some_and(|old| !is_own(old, template.instance))
+    {
+        return InputWrite {
+            line: encode(&own)
+                .ok()
+                .and_then(|json| changed_line(key, &json).ok()),
+            stored: false,
+        };
+    }
+    let Ok(entry_json) = merged_text(old.as_deref(), &own) else {
+        return InputWrite {
+            line: None,
+            stored: false,
+        };
+    };
     // A refused write still sends the line: the shell's mirror then holds the keystroke.
-    let _ = store.set(&item, &entry_json);
-    line
+    let stored = store.set(&item, &entry_json).is_ok();
+    InputWrite {
+        line: changed_line(key, &entry_json).ok(),
+        stored,
+    }
 }
 
 /// What [`remove`] did.
@@ -276,9 +349,32 @@ pub fn changed_line(key: &BufferKey, entry_json: &str) -> Result<String, StoreEr
     ))
 }
 
-/// The mirror's line for a field that became clean.
-pub fn removed_line(key: &BufferKey) -> Result<String, StoreError> {
-    encode(&BufferLine::Removed { key: key.clone() })
+/// The mirror's line for a field that became clean in the run `instance`.
+pub fn removed_line(key: &BufferKey, instance: ServerInstance) -> Result<String, StoreError> {
+    encode(&BufferLine::Removed {
+        key: key.clone(),
+        instance,
+    })
+}
+
+/// What the shell's `takeBuffered` returns from the lines it holds (5.7): the last line per
+/// field and server run, with the entries a removal of the same run ended left out. A line that
+/// does not parse (a torn last line) is skipped. The shell does this in JavaScript (G1); this is
+/// the contract its tests and the tests of the page play.
+pub fn current_lines(lines: &[String]) -> Vec<String> {
+    let mut newest: BTreeMap<(BufferKey, ServerInstance), Option<&String>> = BTreeMap::new();
+    for line in lines {
+        let Ok(parsed) = serde_json::from_str::<BufferLine>(line) else {
+            continue;
+        };
+        let slot = (parsed.key().clone(), parsed.instance());
+        let kept = match parsed {
+            BufferLine::Changed { .. } => Some(line),
+            BufferLine::Removed { .. } => None,
+        };
+        newest.insert(slot, kept);
+    }
+    newest.into_values().flatten().cloned().collect()
 }
 
 /// The page's entries merged with what the shell's mirror gave (`takeBuffered`): the newest

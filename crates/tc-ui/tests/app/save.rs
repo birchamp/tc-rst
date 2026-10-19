@@ -11,7 +11,9 @@ use tc_api::{ApiError, NotSaved};
 use tc_ui::app::client::{CallError, Transport};
 use tc_ui::app::save::classify::{Answered, SaveError, classify};
 use tc_ui::app::save::indicator::{Worst, all_clean, indicator};
-use tc_ui::app::save::{Command, FieldSave, FieldScope, Hold, RETRY_MAX_MS, SaveMachine};
+use tc_ui::app::save::{
+    Command, FieldSave, FieldScope, GateState, Hold, RETRY_MAX_MS, SaveMachine,
+};
 
 use super::save_kit::{
     InFlight, PROJECT_ID, Page, ack, ids, instance, key, key_of, pair, scope, tok,
@@ -838,32 +840,287 @@ fn read_only_holds_fields_and_keeps_their_entries() {
 }
 
 #[test]
-fn a_restart_drops_every_field_keeps_every_entry_and_ignores_late_replies() {
+fn a_restart_keeps_only_the_fields_on_screen_sends_nothing_and_ignores_late_replies() {
     let mut page = Page::new();
     let (a, b) = (key("a"), key("b"));
     page.open(&a, "", 1);
     page.open(&b, "", 2);
+    // `a` closes while its save is in flight; `b` saves with its editor on screen.
     page.focus(&a);
-    page.type_text(&a, "in flight");
-    page.blur(&a);
+    page.type_text(&a, "in flight, closed");
+    page.close(&a);
     page.focus(&b);
-    page.type_text(&b, "dirty");
-    page.focused.clear();
+    page.type_text(&b, "in flight, on screen");
+    page.blur(&b);
+    assert_eq!(page.sends().len(), 2);
     let before = page.store.items.clone();
-    page.m
-        .restarted(tc_api::ids::ServerInstance::from_bytes([2; 16]));
-    let late = page.deliver_ok();
+    let mirrored = page.mirror.len();
+    let new_run = tc_api::ids::ServerInstance::from_bytes([2; 16]);
+    page.m.restarted(new_run);
+    assert!(page.m.state(&a).is_none(), "a field with no editor goes");
+    assert_eq!(page.state(&b), Some(FieldSave::Held(Hold::Restarted)));
+    assert_eq!(
+        worst(&page),
+        Worst::Dirty,
+        "the text on screen is not saved"
+    );
+    assert!(
+        page.gate(|_, _| unreachable!("nothing is sent"), |_| {}),
+        "a held field does not block the gate"
+    );
+    // Late replies of the old run change nothing.
+    while !page.inflight.is_empty() {
+        let flight = page.inflight.pop_front().unwrap();
+        let answered = page.stored(&flight);
+        assert!(page.answer(&flight, answered).is_empty());
+    }
     page.advance(10_000.0);
-    assert_eq!(page.sends().len(), 1, "nothing is sent again");
+    assert_eq!(page.sends().len(), 2, "nothing is sent again");
     assert_eq!(page.store.items, before, "every entry stays for the offer");
-    assert!(page.m.state(&a).is_none() && page.m.state(&b).is_none());
-    assert_eq!(late.sent.text, "in flight");
-    // An entry of the old run is never restored into the new one.
-    let (key_back, entry) = tc_ui::app::buffer::entries(&page.store).pop().unwrap();
+    assert_eq!(page.mirror.len(), mirrored);
+    // A second report of the same run, from another part of the page, changes nothing: a field
+    // of the new run, closed while its save is in flight, stays.
+    let c = key("c");
+    page.open(&c, "", 3);
+    page.focus(&c);
+    page.type_text(&c, "typed in the new run");
+    page.close(&c);
+    let in_flight = page.state(&c);
+    assert!(matches!(in_flight, Some(FieldSave::Saving { .. })));
+    page.m.restarted(new_run);
+    assert_eq!(page.state(&b), Some(FieldSave::Held(Hold::Restarted)));
+    assert_eq!(page.state(&c), in_flight);
+    let flight = page.inflight.pop_front().unwrap();
+    let answered = page.stored(&flight);
+    page.answer(&flight, answered);
+    assert_eq!(page.state(&c), Some(FieldSave::Clean));
+
+    // Typing into `b` goes on into the old run's entry, beside the save it never answered, so
+    // the offer stores it once over the right token; this run never restores or sends it.
+    page.focus(&b);
+    page.type_text(&b, "in flight, on screen, and more");
+    page.advance(10_000.0);
+    let entry = page.entry(&b).unwrap();
+    assert_eq!(entry.text, "in flight, on screen, and more");
+    assert_eq!(entry.instance, instance(), "the old run's entry");
+    assert_eq!(
+        entry.sent.map(|sent| sent.text),
+        Some("in flight, on screen".to_owned())
+    );
+    assert_eq!(page.sends().len(), 3, "only the new run's own field saved");
+    assert!(
+        page.drafts().is_empty(),
+        "no draft goes to the new run either"
+    );
+
+    // An entry of the old run with a save in flight is never restored into the new one, and
+    // its save is never sent.
+    let entry_a = page.entry(&a).unwrap();
+    assert!(entry_a.sent.is_some());
     assert!(
         page.m
-            .restore(key_back, entry, FieldScope::App, page.now)
+            .restore(a.clone(), entry_a, FieldScope::App, page.now)
             .is_empty()
+    );
+    assert!(page.m.state(&a).is_none(), "no field of a dead run");
+    page.advance(10_000.0);
+    assert_eq!(page.sends().len(), 3);
+
+    // A5 goes Home: the editor closes and the field goes; its entry waits for the offer.
+    page.focused.clear();
+    page.close(&b);
+    assert!(page.m.state(&b).is_none());
+    assert_eq!(
+        page.entry(&b).unwrap().text,
+        "in flight, on screen, and more"
+    );
+    assert_eq!(worst(&page), Worst::Saved);
+}
+
+/// RT-19 and 5.4: the write's `StaleScope` can come before the session event of the reopen.
+/// The field never goes back to the open that refused it; it waits, asks for the sessions
+/// once, and sends once the page knows the new open.
+#[test]
+fn stale_scope_before_the_session_event_waits_for_the_new_open() {
+    let mut page = Page::new();
+    let k = key_of(FieldKind::Verse, "TIT 1:1");
+    page.open_with(
+        &k,
+        FieldScope::Project(Some(scope(1))),
+        pair("old", 7, Some(1)),
+    );
+    let commands = page.m.sessions(&[writable(1)], 0.0);
+    page.run(commands);
+    page.focus(&k);
+    page.type_text(&k, "new");
+    page.blur(&k);
+    let refused = page.deliver(Answered::Reattach);
+    assert_eq!(
+        page.sends().len(),
+        1,
+        "never sent again to the open that refused it"
+    );
+    assert_eq!(page.session_reads, 1, "the sessions are asked for");
+    assert!(matches!(page.state(&k), Some(FieldSave::Dirty { .. })));
+    let entry = page.entry(&k).unwrap();
+    assert_eq!(
+        (entry.text.as_str(), entry.sent),
+        ("new", None),
+        "a reload never repeats the refused request"
+    );
+    assert_eq!(page.m.gate(), GateState::Waiting, "the gate waits for it");
+    assert_eq!(page.m.busy(), 1);
+    // Time, typing, the Save button and a hello that still lists the old open send nothing.
+    page.advance(10_000.0);
+    page.type_text(&k, "newer");
+    page.blur(&k);
+    page.save(&k);
+    page.advance(10_000.0);
+    let commands = page.m.sessions(&[writable(1)], page.now);
+    page.run(commands);
+    assert_eq!(page.sends().len(), 1);
+    assert_eq!(page.session_reads, 1, "asked once, not in a loop");
+    // The reopen: one save, to the new open, with the base token and a new id.
+    let commands = page.m.sessions(&[writable(2)], page.now);
+    page.run(commands);
+    let sends = page.sends();
+    assert_eq!(sends.len(), 2);
+    let (sent, base, resend) = sends.last().unwrap().clone();
+    assert_eq!(
+        (sent.text.as_str(), sent.scope, base, resend),
+        ("newer", Some(scope(2)), vec![tok(7)], false)
+    );
+    assert_ne!(sent.request, refused.sent.request);
+    page.deliver_ok();
+    assert_eq!(page.state(&k), Some(FieldSave::Clean));
+}
+
+#[test]
+fn stale_scope_before_the_session_event_holds_once_the_project_is_closed() {
+    let mut page = Page::new();
+    let k = key_of(FieldKind::Verse, "TIT 1:1");
+    page.open_with(
+        &k,
+        FieldScope::Project(Some(scope(1))),
+        pair("old", 7, Some(1)),
+    );
+    let commands = page.m.sessions(&[writable(1)], 0.0);
+    page.run(commands);
+    page.focus(&k);
+    page.type_text(&k, "new");
+    page.blur(&k);
+    page.deliver(Answered::Reattach);
+    let commands = page.m.sessions(&[], page.now);
+    page.run(commands);
+    assert_eq!(page.state(&k), Some(FieldSave::Held(Hold::NoOpen)));
+    assert_eq!(page.m.gate(), GateState::Pass);
+    assert_eq!(page.sends().len(), 1);
+}
+
+/// Two tabs of one browser share a field's item (the owner allows a second tab outside the
+/// shell). Tab A's save of A1 is in flight; tab B types B1 into the same field and reloads. B's
+/// page saves B1 over the version B was editing, so the store keeps both as a conflict; it never
+/// sends A's request again or takes A's answer as its base, which would store B1 over A1 unseen.
+#[test]
+fn a_second_tab_that_reloads_never_takes_over_the_first_tabs_save() {
+    let k = key("t");
+    let mut tab_a = Page::new();
+    tab_a.open(&k, "", 1);
+    tab_a.focus(&k);
+    tab_a.type_text(&k, "A1");
+    tab_a.blur(&k);
+    let a_request = tab_a.sends()[0].0.request;
+    let mut tab_b = Page::on(tab_a.store.clone());
+    tab_b.open(&k, "", 1);
+    tab_b.focus(&k);
+    tab_b.type_text(&k, "B1");
+    // Tab B reloads.
+    let mut reloaded = Page::on(tab_b.store.clone());
+    for (key, entry) in tc_ui::app::buffer::entries(&reloaded.store) {
+        let commands = reloaded.m.restore(key, entry, FieldScope::App, 0.0);
+        reloaded.run(commands);
+    }
+    reloaded.advance(2000.0);
+    let sends = reloaded.sends();
+    assert_eq!(sends.len(), 1);
+    let (sent, base, resend) = sends[0].clone();
+    assert_ne!(sent.request, a_request, "tab A's request is not tab B's");
+    assert_eq!(
+        (sent.text.as_str(), base, resend),
+        ("B1", vec![tok(1)], false)
+    );
+}
+
+/// 6.6: a field whose item holds another run's entry, or one this build cannot read, is never
+/// written there, and its first keystroke reaches the shell's mirror at once, long before a save.
+#[test]
+fn typing_into_a_field_whose_item_is_not_this_runs_reaches_the_mirror_at_once() {
+    use tc_ui::app::buffer::{Store, item_key, write};
+    let k = key("t");
+    let old_run = tc_api::buffer::BufferEntry {
+        api: 1,
+        instance: tc_api::ids::ServerInstance::from_bytes([9; 16]),
+        base: vec![tok(1)],
+        text: "dead".into(),
+        sent: None,
+        at: tc_api::ids::WallMs(1),
+        draft: None,
+    };
+    for unreadable in [false, true] {
+        let mut page = Page::new();
+        if unreadable {
+            page.store
+                .set(&item_key(&k).unwrap(), r#"{"api":2,"text":"dead"}"#)
+                .unwrap();
+        } else {
+            write(&mut page.store, &k, &old_run).unwrap();
+        }
+        let before = page.store.items.clone();
+        page.open(&k, "", 1);
+        page.focus(&k);
+        page.type_text(&k, " alive");
+        let lines: Vec<tc_api::buffer::BufferLine> = page
+            .mirror
+            .iter()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert!(
+            lines.iter().any(|line| matches!(line,
+                tc_api::buffer::BufferLine::Changed { entry, .. }
+                    if entry.text == " alive" && entry.instance == instance())),
+            "the keystroke is in the mirror (unreadable: {unreadable}): {lines:?}"
+        );
+        assert!(page.sends().is_empty());
+        assert_eq!(page.store.items, before, "the item waits for the offer");
+    }
+}
+
+/// tC4 drains its schedulers on `pagehide`; so does the page, best effort.
+#[test]
+fn hiding_the_page_sends_what_may_save_and_retries_no_failure() {
+    let mut page = Page::new();
+    let (typed, failed) = (key("typed"), key("failed"));
+    let section = key_of(FieldKind::Section, "TIT 1:1-4");
+    page.open(&typed, "", 1);
+    page.open(&failed, "", 2);
+    page.open_with(&section, FieldScope::App, pair("", 3, None));
+    page.focus(&failed);
+    page.type_text(&failed, "refused");
+    page.blur(&failed);
+    page.deliver(disk("full"));
+    page.focus(&section);
+    page.type_text(&section, "a card");
+    page.focused.clear();
+    page.focus(&typed);
+    page.type_text(&typed, "half a sentence");
+    let commands = page.m.hide(page.now);
+    page.run(commands);
+    assert_eq!(page.sent_texts(), ["refused", "half a sentence"]);
+    let entry = page.entry(&typed).unwrap();
+    assert_eq!(
+        entry.sent.map(|sent| sent.text),
+        Some("half a sentence".to_owned()),
+        "the next load of this run sends the same request again"
     );
 }
 

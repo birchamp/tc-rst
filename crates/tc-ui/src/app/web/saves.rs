@@ -9,7 +9,7 @@
 //! takes the machine's commands first and runs them after the borrow has ended.
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::{Rc, Weak};
@@ -36,7 +36,7 @@ use crate::app::client::CallError;
 use crate::app::save::classify::{Answered, classify};
 use crate::app::save::indicator::{self, Indicator, Worst};
 use crate::app::save::{
-    Command, FieldSave, FieldScope, GateState, Notice, Pair, SaveMachine, Source,
+    Command, FieldSave, FieldScope, GateState, Notice, Pair, SaveMachine, Source, View,
 };
 
 /// A future that stays on the page's one thread.
@@ -70,6 +70,15 @@ pub type GateHook = Rc<dyn Fn() -> LocalBoxFuture<bool>>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GateHookId(u64);
 
+/// What the saves ask of the runtime (`web::Runtime`), which owns the server's state.
+pub(super) struct RuntimeHooks {
+    /// A resend's `app/hello` named another server run: the runtime's one restart path, which
+    /// keeps the run for `boot.js`, empties the cache, shows the restart and tells the saves.
+    pub restarted: Box<dyn Fn(ServerInstance)>,
+    /// Read the open sessions again (`Command::ReadSessions`).
+    pub read_sessions: Box<dyn Fn()>,
+}
+
 /// Proof that the open is writable (6.4): editors take `Option<WriteCap>`, and their edit
 /// controls are off without one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,8 +93,8 @@ struct Inner {
     shown: RefCell<HashMap<BufferKey, ArcRwSignal<String>>>,
     /// The focused editor of each field and the template `boot.js` holds for it.
     tracked: RefCell<HashMap<BufferKey, (web_sys::HtmlElement, String)>>,
-    /// Fields whose item holds another run's entry: never written over (6.6).
-    foreign: RefCell<HashSet<BufferKey>>,
+    /// What the runtime does when the saves find out something only it can act on.
+    runtime: RefCell<Option<RuntimeHooks>>,
     timer: Cell<Option<i32>>,
     tick: RefCell<Option<Closure<dyn FnMut()>>>,
     indicator: ArcRwSignal<Indicator>,
@@ -125,7 +134,7 @@ impl Saves {
                 writers: RefCell::new(HashMap::new()),
                 shown: RefCell::new(HashMap::new()),
                 tracked: RefCell::new(HashMap::new()),
-                foreign: RefCell::new(HashSet::new()),
+                runtime: RefCell::new(None),
                 timer: Cell::new(None),
                 tick: RefCell::new(Some(tick)),
                 indicator: ArcRwSignal::new(Indicator {
@@ -137,10 +146,7 @@ impl Saves {
                 next_hook: Cell::new(0),
                 waiters: RefCell::new(Vec::new()),
                 buffer_failure_reported: Cell::new(false),
-                boot: js::window().is_ok_and(|window| {
-                    Reflect::get(&window, &JsValue::from_str("tc4Boot"))
-                        .is_ok_and(|boot| boot.is_object())
-                }),
+                boot: boot_object().is_some(),
             }
         });
         Saves(inner)
@@ -158,6 +164,11 @@ impl Saves {
                 R::default()
             }
         }
+    }
+
+    /// The runtime's side, once it exists: the saves are made before it, for the restore.
+    pub(super) fn connect(&self, hooks: RuntimeHooks) {
+        *self.0.runtime.borrow_mut() = Some(hooks);
     }
 
     pub fn register(&self, kind: FieldKind, writer: Rc<dyn FieldWriter>) {
@@ -178,13 +189,43 @@ impl Saves {
         shown
     }
 
+    /// The text of a field changed. `Source::Input` stands only when `boot.js` says it wrote
+    /// this very text into the field's item for this keystroke; otherwise (no `boot.js`, an
+    /// editor it does not track, an item of another run or one it cannot read, a full storage)
+    /// the machine's own write carries the keystroke, to the shell's mirror at least.
     pub fn typed(&self, key: &BufferKey, text: &str, source: Source) {
-        // `boot.js` writes nothing for a field it does not track: the machine's own write then
-        // carries the keystroke, to the mirror at least.
-        let tracked = self.0.boot && !self.0.foreign.borrow().contains(key);
-        let source = if tracked { source } else { Source::Program };
+        let source = if source == Source::Input && self.boot_wrote(key, text) {
+            Source::Input
+        } else {
+            Source::Program
+        };
         let commands = self.machine(|m| m.typed(key, text, source, js::now_ms()));
         self.run(commands);
+    }
+
+    /// Takes `boot.js`'s word for the keystroke it just handled (`tc4Boot.wrote`): the item it
+    /// wrote and the text it wrote there. Taken once, so it never stands for a later change.
+    fn boot_wrote(&self, key: &BufferKey, text: &str) -> bool {
+        if !self.0.boot {
+            return false;
+        }
+        let Some(boot) = boot_object() else {
+            return false;
+        };
+        let wrote = Reflect::get(&boot, &JsValue::from_str("wrote")).unwrap_or(JsValue::NULL);
+        let _ = Reflect::set(&boot, &JsValue::from_str("wrote"), &JsValue::NULL);
+        if !wrote.is_object() {
+            return false;
+        }
+        let field = |name: &str| {
+            Reflect::get(&wrote, &JsValue::from_str(name))
+                .ok()
+                .and_then(|value| value.as_string())
+        };
+        let Ok(item) = buffer::item_key(key) else {
+            return false;
+        };
+        field("item").as_deref() == Some(item.as_str()) && field("text").as_deref() == Some(text)
     }
 
     pub fn composition(&self, key: &BufferKey) {
@@ -192,15 +233,14 @@ impl Saves {
     }
 
     /// The editor took focus: `boot.js` now writes each keystroke into the field's entry
-    /// before the WebAssembly sees it (6.6, A-15).
+    /// before the WebAssembly sees it (6.6, A-15), or, where the item holds another run's entry
+    /// or one this build cannot read, sends it to the shell's mirror only.
     pub fn focus(&self, key: &BufferKey, element: &web_sys::HtmlElement) {
         let commands = self.machine(|m| m.focus(key, js::now_ms()));
-        if !self.0.foreign.borrow().contains(key) {
-            self.0
-                .tracked
-                .borrow_mut()
-                .insert(key.clone(), (element.clone(), String::new()));
-        }
+        self.0
+            .tracked
+            .borrow_mut()
+            .insert(key.clone(), (element.clone(), String::new()));
         self.run(commands);
     }
 
@@ -382,37 +422,62 @@ impl Saves {
         self.run(commands);
     }
 
-    /// The server started again (AD4): every field is dropped and nothing is sent.
+    /// The server started again (AD4): nothing is sent, and only the fields whose editor is
+    /// still on screen stay, held, so their typing is still buffered. Telling it twice changes
+    /// nothing.
     pub(super) fn restarted(&self, instance: ServerInstance) {
-        let keys: Vec<BufferKey> = self.0.tracked.borrow().keys().cloned().collect();
-        for key in keys {
-            self.untrack(&key);
-        }
-        self.0.foreign.borrow_mut().clear();
         self.machine(|m| m.restarted(instance));
         self.after();
     }
 
-    pub(super) fn local_change(&self, request: RequestId, view: ViewSeq) {
-        self.machine(|m| m.local_change(request, view));
+    /// A `Changed` that a save of this page caused, in the open `at`.
+    pub(super) fn local_change(&self, request: RequestId, at: &Scope, view: ViewSeq) {
+        self.machine(|m| m.local_change(request, View::of(Some(at), view)));
     }
 
-    /// The close guard (6.5): with the shell, `setCanClose` on every change and the gate on
-    /// a close request; in a browser, `boot.js`'s `beforeunload` asks while anything is unsaved
-    /// (`tc4Boot.setUnsaved`), never under the shell, where it would refuse the close silently
-    /// (tC4 #356). The listener is `boot.js`'s, not the WebAssembly's, so the reload after a panic
-    /// is never held by a question: the buffer brings the text back.
+    /// The close guard (6.5): with the shell, `setCanClose` on every change and, on a close
+    /// request, the gate, answering whether everything is saved; in a browser, `boot.js`'s
+    /// `beforeunload` asks while anything is unsaved (`tc4Boot.setUnsaved`), never under the
+    /// shell, where it would refuse the close silently (tC4 #356). The listener is `boot.js`'s,
+    /// not the WebAssembly's, so the reload after a panic is never held by a question: the
+    /// buffer brings the text back. When the page hides, every field that may save is sent with
+    /// `keepalive`, as tC4 drains on `pagehide`.
     pub(super) fn guard_close(&self) {
         if bridge::has_bridge() {
             let saves = self.clone();
             bridge::on_close_requested(move || {
                 let saves = saves.clone();
                 wasm_bindgen_futures::future_to_promise(async move {
-                    Ok(JsValue::from_bool(saves.gate().await))
+                    // The gate passes over a held field and a section buffer, which it cannot
+                    // save; the shell still asks before their text goes with the window.
+                    let saved = saves.gate().await && saves.all_clean();
+                    Ok(JsValue::from_bool(saved))
                 })
             });
         }
+        self.on_page("pagehide", |saves| {
+            saves.0.api.set_keepalive(true);
+            let commands = saves.machine(|m| m.hide(js::now_ms()));
+            saves.run(commands);
+        });
+        // A page the browser keeps and shows again sends as usual.
+        self.on_page("pageshow", |saves| saves.0.api.set_keepalive(false));
         self.after();
+    }
+
+    /// A listener on `window` for the page's life.
+    fn on_page(&self, event: &str, f: fn(&Saves)) {
+        let Ok(window) = js::window() else {
+            return;
+        };
+        let weak = Rc::downgrade(&self.0);
+        let listener = Closure::<dyn FnMut()>::new(move || {
+            if let Some(inner) = weak.upgrade() {
+                f(&Saves(inner));
+            }
+        });
+        let _ = window.add_event_listener_with_callback(event, listener.as_ref().unchecked_ref());
+        listener.forget();
     }
 
     /// The aligners' and the checkpoints' states changed: the indicator follows.
@@ -453,24 +518,18 @@ impl Saves {
     /// Carries out the machine's commands, then brings everything that follows the fields up
     /// to date.
     fn run(&self, commands: Vec<Command>) {
-        let instance = self.machine(|m| Some(m.instance()));
         for command in commands {
             match command {
                 Command::Write { key, entry, mirror } => self.write(&key, entry, mirror),
                 Command::Remove {
                     key,
+                    instance,
                     if_text,
                     mirror,
                 } => {
-                    if let Some(instance) = instance {
-                        let _ = buffer::remove(
-                            &mut LocalStore::open(),
-                            &key,
-                            if_text.as_deref(),
-                            instance,
-                        );
-                    }
-                    if mirror && let Ok(line) = buffer::removed_line(&key) {
+                    let _ =
+                        buffer::remove(&mut LocalStore::open(), &key, if_text.as_deref(), instance);
+                    if mirror && let Ok(line) = buffer::removed_line(&key, instance) {
                         bridge::buffer_changed(&line);
                     }
                 }
@@ -494,46 +553,29 @@ impl Saves {
                         shown.try_set(text);
                     }
                 }
+                Command::ReadSessions => {
+                    if let Some(hooks) = self.0.runtime.borrow().as_ref() {
+                        (hooks.read_sessions)();
+                    }
+                }
             }
         }
         self.after();
     }
 
+    /// A `Write` command: [`buffer::write_entry`] decides what the storage gets, and the
+    /// mirror gets the entry in any case. Another run's item is left for the offer, and this
+    /// run's text of the field then lives in the mirror (6.6).
     fn write(&self, key: &BufferKey, mut entry: BufferEntry, mirror: bool) {
         entry.at = WallMs(js::wall_ms());
         entry.draft = self
             .writer(key.field.kind)
             .and_then(|writer| writer.draft_call(key, &entry.base));
-        let mut store = LocalStore::open();
-        let foreign = self.0.foreign.borrow().contains(key);
-        let written = if foreign {
-            Err(StoreError::Foreign)
-        } else {
-            buffer::write(&mut store, key, &entry)
-        };
-        let text = match written {
-            Ok(text) => Some(text),
-            Err(StoreError::Foreign) => {
-                // Another run's text waits for the offer in this field's item, which this run
-                // never writes over; this run's text goes to the shell's mirror only, and the
-                // offer shows both (`buffer::merge`).
-                if !foreign {
-                    self.0.foreign.borrow_mut().insert(key.clone());
-                    self.untrack(key);
-                }
-                serde_json::to_string(&entry).ok()
-            }
-            Err(error) => {
-                // No stale entry may stay behind with an older `sent` (rule 2 of the plan).
-                let _ = buffer::remove(&mut store, key, None, entry.instance);
-                self.report_buffer_failure(&error);
-                serde_json::to_string(&entry).ok()
-            }
-        };
-        if mirror
-            && let Some(text) = text
-            && let Ok(line) = buffer::changed_line(key, &text)
-        {
+        let written = buffer::write_entry(&mut LocalStore::open(), key, &entry);
+        if let Some(error) = &written.failure {
+            self.report_buffer_failure(error);
+        }
+        if mirror && let Some(line) = written.line {
             bridge::buffer_changed(&line);
         }
     }
@@ -580,7 +622,11 @@ impl Saves {
                 Ok(hello) if Some(hello.instance) == saves.machine(|m| Some(m.instance())) => {
                     saves.send(key, sent, base);
                 }
-                Ok(hello) => saves.restarted(hello.instance),
+                // The runtime's restart path tells the saves, and the screens too (AD4).
+                Ok(hello) => match saves.0.runtime.borrow().as_ref() {
+                    Some(hooks) => (hooks.restarted)(hello.instance),
+                    None => saves.restarted(hello.instance),
+                },
                 Err(_) => {
                     let commands = saves
                         .machine(|m| m.reply(&key, sent.request, Answered::Lost, js::now_ms()));
@@ -638,12 +684,14 @@ impl Saves {
         }
     }
 
-    /// Hands `boot.js` the entry it writes for each focused editor whose field has none: the
-    /// field's tokens change with every `Ack`.
+    /// Hands `boot.js` the entry it writes for each focused editor: the field's entry as the
+    /// machine holds it, whose tokens and save in flight change with every save and reply. An
+    /// editor whose field the machine no longer holds is not tracked.
     fn retrack(&self) {
         let keys: Vec<BufferKey> = self.0.tracked.borrow().keys().cloned().collect();
         for key in keys {
             let Some(mut template) = self.machine(|m| m.template(&key)) else {
+                self.untrack(&key);
                 continue;
             };
             template.draft = self
@@ -672,12 +720,16 @@ impl Saves {
     }
 }
 
-/// Calls `window.tc4Boot[name](...args)`; `boot.js` defines it before the WebAssembly loads.
+/// `window.tc4Boot`, which `boot.js` defines before the WebAssembly loads.
+fn boot_object() -> Option<JsValue> {
+    let window = js::window().ok()?;
+    let boot = Reflect::get(&window, &JsValue::from_str("tc4Boot")).ok()?;
+    boot.is_object().then_some(boot)
+}
+
+/// Calls `window.tc4Boot[name](...args)`.
 fn boot_call(name: &str, args: &[JsValue]) {
-    let Ok(window) = js::window() else {
-        return;
-    };
-    let Ok(boot) = Reflect::get(&window, &JsValue::from_str("tc4Boot")) else {
+    let Some(boot) = boot_object() else {
         return;
     };
     let Ok(function) = Reflect::get(&boot, &JsValue::from_str(name)) else {

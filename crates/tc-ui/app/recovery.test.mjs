@@ -56,39 +56,60 @@ test('a_blocked_store_stops_at_once', () => {
   assert.equal(R.countPanic(forgetful, 1000), 'stop');
 });
 
-test('input_updates_only_text_and_at_and_keeps_unknown_keys', () => {
+test('input_writes_the_template_with_the_text_and_keeps_unknown_keys', () => {
   const entry = { ...ENTRY, later: { kept: true } };
   const local = storage({ [ITEM]: JSON.stringify(entry) });
-  const line = R.inputToEntry(local, ITEM, 'typed', 99, JSON.stringify({ ...ENTRY, text: '', sent: null }));
-  const stored = JSON.parse(local.getItem(ITEM));
-  assert.equal(stored.text, 'typed');
-  assert.equal(stored.at, 99);
-  assert.deepEqual(stored.later, { kept: true });
-  assert.deepEqual(stored.sent, ENTRY.sent, 'the save in flight stays named');
-  assert.deepEqual(JSON.parse(line), { type: 'changed', value: { key: KEY, entry: stored } });
+  const { line, stored } = R.inputToEntry(local, ITEM, 'typed', 99, JSON.stringify({ ...ENTRY, text: '', at: 0 }));
+  const kept = JSON.parse(local.getItem(ITEM));
+  assert.equal(stored, true);
+  assert.equal(kept.text, 'typed');
+  assert.equal(kept.at, 99);
+  assert.deepEqual(kept.later, { kept: true });
+  assert.deepEqual(kept.sent, ENTRY.sent, 'the save in flight the template names stays named');
+  assert.deepEqual(JSON.parse(line), { type: 'changed', value: { key: KEY, entry: kept } });
+});
+
+test('input_never_keeps_another_pages_save_or_tokens', () => {
+  // Two tabs share the item: tab A's save is in flight under its tokens. Tab B's keystroke writes
+  // B's own state, so a reload of B never sends A's request or saves over A's answer.
+  const local = storage({ [ITEM]: JSON.stringify(ENTRY) });
+  const other = 'st1.eyJoZWFkcyI6W10sImtleSI6eyJ4IjoxfX0AAAAAAAAAAAAAAAAAAAAA';
+  const template = { ...ENTRY, base: [other], sent: null, text: '', at: 0 };
+  const { stored } = R.inputToEntry(local, ITEM, 'B1', 5, JSON.stringify(template));
+  const kept = JSON.parse(local.getItem(ITEM));
+  assert.equal(stored, true);
+  assert.equal(kept.sent, null);
+  assert.deepEqual(kept.base, [other]);
+  assert.equal(kept.text, 'B1');
 });
 
 test('input_without_an_entry_writes_the_template', () => {
   const local = storage();
   const template = { ...ENTRY, text: '', sent: null, at: 0 };
-  R.inputToEntry(local, ITEM, 'first', 7, JSON.stringify(template));
+  assert.equal(R.inputToEntry(local, ITEM, 'first', 7, JSON.stringify(template)).stored, true);
   assert.deepEqual(JSON.parse(local.getItem(ITEM)), { ...template, text: 'first', at: 7 });
-  assert.equal(R.inputToEntry(local, ITEM, 'x', 8, 'not json'), null, 'no template, no write');
+  assert.deepEqual(R.inputToEntry(local, ITEM, 'x', 8, 'not json'), { line: null, stored: false }, 'no template, no write');
 });
 
-test('input_leaves_another_runs_entry_and_a_damaged_one_alone', () => {
+test('input_leaves_another_runs_entry_and_a_damaged_one_alone_and_still_mirrors', () => {
   const other = { ...ENTRY, instance: '00000000000000000000000000000000' };
   const local = storage({ [ITEM]: JSON.stringify(other) });
-  assert.equal(R.inputToEntry(local, ITEM, 'x', 1, JSON.stringify(ENTRY)), null);
+  const template = { ...ENTRY, text: '', at: 0 };
+  const result = R.inputToEntry(local, ITEM, 'x', 1, JSON.stringify(template));
+  assert.equal(result.stored, false);
   assert.deepEqual(JSON.parse(local.getItem(ITEM)), other);
+  assert.deepEqual(JSON.parse(result.line), { type: 'changed', value: { key: KEY, entry: { ...template, text: 'x', at: 1 } } });
   const damaged = storage({ [ITEM]: '{' });
-  assert.equal(R.inputToEntry(damaged, ITEM, 'x', 1, JSON.stringify(ENTRY)), null);
+  const again = R.inputToEntry(damaged, ITEM, 'y', 2, JSON.stringify(template));
+  assert.equal(again.stored, false);
   assert.equal(damaged.getItem(ITEM), '{');
+  assert.equal(JSON.parse(again.line).value.entry.text, 'y', 'the shell still gets the keystroke');
 });
 
 test('a_full_store_still_gives_the_mirror_its_line', () => {
   const local = storage({}, { blocked: true });
-  const line = R.inputToEntry(local, ITEM, 'kept by the shell', 3, JSON.stringify(ENTRY));
+  const { line, stored } = R.inputToEntry(local, ITEM, 'kept by the shell', 3, JSON.stringify(ENTRY));
+  assert.equal(stored, false, 'the WebAssembly then writes the entry itself');
   assert.equal(JSON.parse(line).value.entry.text, 'kept by the shell');
 });
 

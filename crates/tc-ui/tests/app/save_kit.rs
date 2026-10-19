@@ -15,7 +15,9 @@ use tc_api::token::ShownToken;
 use tc_api::write::{Ack, SavedValue, Stored, TokenUpdate};
 use tc_ui::app::buffer::{self, MemStore};
 use tc_ui::app::save::classify::Answered;
-use tc_ui::app::save::{Command, FieldSave, FieldScope, GateState, Ms, Pair, SaveMachine, Source};
+use tc_ui::app::save::{
+    Command, FieldSave, FieldScope, GateState, Ms, Pair, SaveMachine, Source, View,
+};
 
 pub const PROJECT_ID: &str = "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50";
 
@@ -50,11 +52,32 @@ pub fn scope(epoch: u64) -> Scope {
     }
 }
 
-pub fn pair(value: &str, token: u64, view: Option<u64>) -> Pair {
+/// A view of no open (a test field), or of the open at `epoch` with [`pair_at`].
+pub fn view(seq: u64) -> View {
+    View {
+        epoch: None,
+        seq: ViewSeq::new(seq),
+    }
+}
+
+pub fn view_at(epoch: u64, seq: u64) -> View {
+    View::of(Some(&scope(epoch)), ViewSeq::new(seq))
+}
+
+pub fn pair(value: &str, token: u64, seq: Option<u64>) -> Pair {
     Pair {
         value: value.to_owned(),
         token: tok(token),
-        view: view.map(ViewSeq::new),
+        view: seq.map(view),
+    }
+}
+
+/// A pair read from the open at `epoch`, at view `seq`.
+pub fn pair_at(value: &str, token: u64, epoch: u64, seq: u64) -> Pair {
+    Pair {
+        value: value.to_owned(),
+        token: tok(token),
+        view: Some(view_at(epoch, seq)),
     }
 }
 
@@ -97,6 +120,8 @@ pub struct Page {
     pub focused: BTreeSet<BufferKey>,
     /// The mirror's lines, as the shell would append them.
     pub mirror: Vec<String>,
+    /// How many times the machine asked for the sessions again.
+    pub session_reads: usize,
     next_token: u64,
     next_view: u64,
 }
@@ -127,6 +152,7 @@ impl Page {
             inflight: VecDeque::new(),
             focused: BTreeSet::new(),
             mirror: Vec::new(),
+            session_reads: 0,
             next_token: 100,
             next_view: 100,
         }
@@ -136,35 +162,30 @@ impl Page {
     pub fn run(&mut self, commands: Vec<Command>) -> Vec<Command> {
         for command in &commands {
             match command {
+                // What the glue does: `write_entry`, and the line to the mirror in any case.
                 Command::Write { key, entry, mirror } => {
                     let entry = BufferEntry {
                         at: WallMs(self.now as i64),
                         ..entry.clone()
                     };
-                    match buffer::write(&mut self.store, key, &entry) {
-                        Ok(text) => {
-                            if *mirror {
-                                self.mirror.push(buffer::changed_line(key, &text).unwrap());
-                            }
-                        }
-                        // The glue removes an item it could not update, so no stale `sent`
-                        // stays behind, and sends anyway (rule 2 of the plan).
-                        Err(_) => {
-                            let _ = buffer::remove(&mut self.store, key, None, self.m.instance());
-                        }
+                    let written = buffer::write_entry(&mut self.store, key, &entry);
+                    if *mirror && let Some(line) = written.line {
+                        self.mirror.push(line);
                     }
                 }
                 Command::Remove {
                     key,
+                    instance,
                     if_text,
                     mirror,
                 } => {
-                    let _ =
-                        buffer::remove(&mut self.store, key, if_text.as_deref(), self.m.instance());
+                    let _ = buffer::remove(&mut self.store, key, if_text.as_deref(), *instance);
                     if *mirror {
-                        self.mirror.push(buffer::removed_line(key).unwrap());
+                        self.mirror
+                            .push(buffer::removed_line(key, *instance).unwrap());
                     }
                 }
+                Command::ReadSessions => self.session_reads += 1,
                 Command::Send { key, sent, base } => self.inflight.push_back(InFlight {
                     key: key.clone(),
                     sent: sent.clone(),
@@ -213,24 +234,27 @@ impl Page {
     }
 
     /// A keystroke: `boot.js` writes the entry first when the editor is focused, then the
-    /// machine hears of it.
+    /// machine hears of it, as `Source::Input` only when `boot.js` says its item took the text
+    /// (`tc4Boot.wrote`), as the glue decides.
     pub fn type_text(&mut self, key: &BufferKey, text: &str) -> Vec<Command> {
-        let source = if self.focused.contains(key) {
-            if let Some(template) = self.m.template(key)
-                && let Some(line) = buffer::input_to_entry(
-                    &mut self.store,
-                    key,
-                    text,
-                    WallMs(self.now as i64),
-                    &template,
-                )
-            {
+        let mut source = Source::Program;
+        if self.focused.contains(key)
+            && let Some(template) = self.m.template(key)
+        {
+            let input = buffer::input_to_entry(
+                &mut self.store,
+                key,
+                text,
+                WallMs(self.now as i64),
+                &template,
+            );
+            if let Some(line) = input.line {
                 self.mirror.push(line);
             }
-            Source::Input
-        } else {
-            Source::Program
-        };
+            if input.stored {
+                source = Source::Input;
+            }
+        }
         let commands = self.m.typed(key, text, source, self.now);
         self.run(commands)
     }
