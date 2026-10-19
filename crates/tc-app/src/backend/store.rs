@@ -117,7 +117,7 @@ impl StoreBackend {
                 clock: Arc::new(tc_store::SystemClock),
                 threads,
             },
-            Arc::new(tc_store::Hooks::default()),
+            Arc::default(),
         )
     }
 
@@ -1065,7 +1065,7 @@ mod tests {
     #[test]
     fn review_token_in_a_save_is_refused_by_the_actor() {
         let fs = FaultFs::new();
-        let backend = backend_with_titus(&fs, Arc::new(tc_store::Hooks::default()));
+        let backend = backend_with_titus(&fs, Arc::default());
         let handle = StoreHandle::start(
             backend
                 .store
@@ -1123,7 +1123,7 @@ mod tests {
     #[test]
     fn a_handle_dropped_without_close_never_blocks_its_thread() {
         let fs = FaultFs::new();
-        let hooks = Arc::new(tc_store::Hooks::default());
+        let hooks: Arc<tc_store::Hooks> = Arc::default();
         let backend = backend_with_titus(&fs, hooks.clone());
         let handle = backend
             .open(&ProjectRef::parse("titus").unwrap(), progress())
