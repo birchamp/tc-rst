@@ -172,9 +172,8 @@ pub struct Facts {
     /// the ledger's heads of the bytes found name; `None` when the ledger keeps no heads for
     /// those bytes.
     pub holds: Option<bool>,
-    /// The file's size and time are the ones the ledger keeps for the bytes it stands on: the
-    /// bytes placed, the bytes a write under way replaces, the bytes held. Never on a network
-    /// drive (§6.2).
+    /// The file's size and time are the ones the ledger keeps for the bytes placed or held.
+    /// Never on a network drive (§6.2).
     pub same_stat: bool,
     /// The fold of the job is older than the one that placed the bytes there (a checkpoint's
     /// job, §5.13 C2).
@@ -242,14 +241,13 @@ pub enum Action {
 
 /// Who the bytes found are to the ledger.
 enum Who {
-    /// The app's own, placed as `Placement` (for a write under way, the bytes before it when
-    /// the file's size and time say the rename never reached the disk).
+    /// The app's own, placed as `Placement`.
     Ours(Placement),
     /// The bytes held.
     Held,
-    /// A write under way replaced these bytes, and the file's size and time are not the ones
-    /// they had: a program put them back after the rename (a revert), or the rename never
-    /// happened and the time moved. The bytes cannot tell which.
+    /// A write under way replaced these bytes: a program put them back after the rename (a
+    /// revert, a backup tool that keeps their size and time), or the rename never happened.
+    /// Neither the bytes nor their stat can tell which.
     Ambiguous,
     /// Bytes the ledger never named; `damage`: the size and time of the bytes placed did not
     /// move, settled (§6.2 held).
@@ -267,9 +265,6 @@ fn who(state: &State, md5: &str, facts: &Facts) -> Who {
             damage: placed.settled && facts.same_stat,
         },
         State::Writing { new, .. } if new == md5 => Who::Ours(Placement::renamed(new.clone(), 0)),
-        State::Writing { old: Some(old), .. } if old.md5 == md5 && facts.same_stat => {
-            Who::Ours(old.clone())
-        }
         State::Writing { old: Some(old), .. } if old.md5 == md5 => Who::Ambiguous,
         State::Writing { .. } => Who::Other {
             base: Base::Unknown,
@@ -626,13 +621,14 @@ mod tests {
                             assert_eq!(facts.holds, Some(true), "{context}");
                             assert!(named(&state).contains(md5), "{context}");
                             assert!(!matches!(state, State::Held { .. }), "{context}");
+                            // The bytes a write under way replaced are never taken as the
+                            // app's: a restore can give them back with their size and time.
                             if let State::Writing {
                                 old: Some(old),
                                 new,
                             } = &state
-                                && &old.md5 == md5
                             {
-                                assert!(facts.same_stat && new != md5, "{context}");
+                                assert!(&old.md5 != md5 || new == md5, "{context}");
                             }
                         }
                         let kept = actions
@@ -695,7 +691,8 @@ mod tests {
         // A revert to the bytes a stopped write replaced, made while the app was closed.
         let (_, actions) = next(&writing, &Event::Read(Disk::Bytes { md5: A.into() }), &ok);
         assert_eq!(actions, vec![Action::Record(Base::Unknown)]);
-        // The same bytes, untouched since: the rename never reached the disk.
+        // The same bytes with the size and time they had: the rename never reached the disk,
+        // or a backup tool put them back with their time. Both are kept.
         let untouched = Facts {
             same_stat: true,
             ..ok.clone()
@@ -705,13 +702,8 @@ mod tests {
             &Event::Read(Disk::Bytes { md5: A.into() }),
             &untouched,
         );
-        assert_eq!(actions, vec![Action::Write]);
-        assert_eq!(
-            after,
-            State::Placed {
-                placed: placed(A, true)
-            }
-        );
+        assert_eq!(actions, vec![Action::Record(Base::Unknown)]);
+        assert_eq!(after, writing);
         // Bytes whose changes a journal file lost, or whose batch lost a member.
         let lost = Facts {
             holds: Some(false),

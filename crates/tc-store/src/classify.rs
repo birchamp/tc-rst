@@ -146,7 +146,7 @@ impl Writer {
     }
 
     /// Whether the file's size and time, `meta`, are the ones the ledger keeps for the bytes
-    /// the state stands on. Never on a network drive (§6.2).
+    /// placed or held. Never on a network drive (§6.2).
     pub(crate) fn same_stat(&self, state: &State, meta: Option<FileMeta>) -> bool {
         if self.network {
             return false;
@@ -156,12 +156,11 @@ impl Writer {
         };
         let kept = match state {
             State::Placed { placed } => placed.stat(),
-            State::Writing { old: Some(old), .. } => old.stat(),
             State::Held { held } => held.mtime_ns.map(|mtime_ns| Stat {
                 size: held.size,
                 mtime_ns,
             }),
-            State::Writing { old: None, .. } | State::Unknown => None,
+            State::Writing { .. } | State::Unknown => None,
         };
         kept.is_some_and(|s| s.size == meta.len && s.mtime_ns == meta.mtime_ns)
     }

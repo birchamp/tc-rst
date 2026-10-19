@@ -2629,9 +2629,9 @@ to `Placed`), so the ledger never names more than two placements of a path.
   bytes name is held, applied (its batch complete or released, §7.4), and readable unless it is
   still a head the projection reads (whose readability is the fact above). *None* when the
   ledger keeps no heads of these bytes;
-- `same stat`: the file's size and mtime are the ones the ledger keeps for the bytes the state
-  stands on (the bytes placed, the bytes a write under way replaces, the bytes held). Never on a
-  network drive;
+- `same stat`: the file's size and mtime are the ones the ledger keeps for the bytes placed or
+  held. Never on a network drive, and never asked of the bytes a write under way replaces (a
+  backup tool puts those back with their size and mtime);
 - `newer fold`: the job's fold is older than the one that placed the bytes (a checkpoint's job,
   §5.13 C2).
 
@@ -2642,8 +2642,9 @@ actions are *Write*, *Rebuild*, *Remove*, *Refresh* (take the size and mtime aga
 with a base (keep both: X1 copies the bytes to `.tc/external/`, §11.1 records them against the
 base, each changed record a conflict with the project's text unless equal), *Hold* (copy, leave
 the file as it is, notice), *Wait* (leave the file, try again) and *Forget*. "Ours" below is:
-`Placed{p}` and `d = p`; `Writing` and `d = new`; or `Writing{old}`, `d = old` and same stat (the
-rename never reached the disk).
+`Placed{p}` and `d = p`; or `Writing` and `d = new`. The bytes a write under way replaces are
+never ours: whether its rename reached the disk is unknown, and a restore can give them back with
+their size and mtime.
 
 A read that found bytes `d`, the first row that applies:
 
@@ -2657,7 +2658,7 @@ A read that found bytes `d`, the first row that applies:
 | R6 | ours | holds, heads not readable | `Placed` | Wait: a value that cannot be read is never written as absent; the file keeps its bytes until it can be read (`MaterializeBlocked`, `ValuesUnreadable`) |
 | R7 | ours | holds, projection absent | `Placed` | Remove |
 | R8 | ours | holds, projection differs | `Placed` | Write |
-| R9 | `Writing{old}`, `d = old`, not same stat | | same | Record, no base: a revert of a rename that went through (a cloud client restoring a version), or the same old bytes written again over one that did not; the bytes cannot tell |
+| R9 | `Writing{old}`, `d = old` | | same | Record, no base: a revert of a rename that went through (a cloud client or a backup tool restoring a version, with its old mtime or not), or a rename that never happened; neither the bytes nor their stat can tell |
 | R10 | `Placed{p}`, `d ≠ p`, `p` settled and same stat | | same | Hold, damage (below) |
 | R11 | `Placed{p}`, `d ≠ p` | | same | Record, base = the ledger's heads of `p` |
 | R12 | `Writing`, `d` neither | | same | Record, no base: which version the person started from is unknown |
@@ -2679,7 +2680,7 @@ The other events:
 | `Writing{old}` | WriteBegun{n} | `Writing{old, new: n}`: the bytes of the first write are no longer named, so found again they are kept by R12 | — |
 | `Held` | WriteBegun | same: held bytes are written over only after Restore | — |
 | `Writing{new}` | Renamed (M4) | `Placed{new}` | — |
-| `Writing{old}` | WriteFailed (busy, refused by the last look, disk) | `Placed{old}`, or `Unknown` with no old | — |
+| `Writing{old}` | WriteFailed (busy, refused by the last look, the target unchanged by a failed write, a rename the stopped group never tried) | `Placed{old}`, or `Unknown` with no old | — |
 | `Placed`, `Held` | Stat (M7, a read) | same, with the size, mtime and settled mark | — |
 | any | Adopted{d}: a carried file's version the project places found there, a fixed file the app wrote again | `Placed{d}` | — |
 | any | Kept{d, cause, copy}, after Hold's copy | `Held{d}` | — |
@@ -2693,10 +2694,9 @@ changes nothing and does nothing. No row writes over or removes bytes unless the
 them as the app's and the fold holds what they show, or they are what the project would write;
 every other bytes are recorded, held or left as they are. The owner accepted (2026-10-19) that
 R9 can show an extra "two versions were kept" conflict after a crash between a write's ledger
-entry and its rename, instead of the app guessing. A program that puts the old bytes back with
-their old size and mtime after a crash between a rename and M7 (`cp -p`, `rsync -t`) is taken
-for a rename that never happened, as a same-size edit with its old mtime is taken for clean by
-stat (above).
+entry and its rename, instead of the app guessing. A group that stops with an error, the app
+still running, knows which renames it never tried or that left their target unchanged, and
+records WriteFailed for them, so that conflict follows only a crash.
 
 `metadata.json` follows the same table with one difference: it must list the files as they are
 (I7), so after a Record or a Hold it is written over at once; the copy and the recorded fields
@@ -2768,12 +2768,12 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | K0 | seal | the pack folder of a new month made, its entry in the parent not flushed | the folder only in the page cache; no pack | the next seal flushes the entry of the folder it finds (§5.0) before it writes the pack into it and removes the pending files | before or after; a power cut after the restart's seal keeps the pack |
 | Q1 | consolidate | new pack temp | temp + old packs | O2 (rename if it verifies, then as Q2; else remove) | before or after |
 | Q2 | consolidate | new pack renamed, old packs not removed | both | O7 removes redundant packs | after |
-| M1 | materialize | ledger written (`Writing`) | old files, their size and mtime the ledger's | O9: `d = old`, same stat → ours (R4 to R8) → rewrite | after |
-| M2 | materialize | some files renamed | mixed old and new | O9: `d = new` → ours; `d = old`, same stat → ours; → rewrite | after |
-| M3 | materialize | power loss loses a rename | that file has its old bytes, `d = old`, same stat | rewrite | after |
+| M1 | materialize | ledger written (`Writing`) | old files | O9: `d = old` → R9: kept in `.tc/external/`, recorded with no base (at worst an extra conflict), then rewritten | after |
+| M2 | materialize | some files renamed | mixed old and new | O9: `d = new` → ours → rewrite; `d = old` → R9 as M1 | after |
+| M3 | materialize | power loss loses a rename | that file has its old bytes, `d = old` | R9 as M1 | after |
 | M4 | materialize | files written, `metadata.json` not | `metadata.json` stale: the folder is not a valid burrito | O10 rewrites it | after |
 | M5 | materialize | `metadata.json` written, manifest not | manifest stale | O9: `d == e` → refresh | after |
-| M6 | materialize | a program put the old bytes back after a rename and before M7 | `Writing{old, new}`, `d = old`, another size or mtime | O9: R9, recorded with no base and kept in `.tc/external/`: at worst an extra conflict | after |
+| M6 | materialize | a program put the old bytes back after a rename and before M7, with their old mtime or not | `Writing{old, new}`, `d = old` | O9: R9, recorded with no base and kept in `.tc/external/`: at worst an extra conflict | after |
 | M7 | materialize | killed after a rename, before its directory flush; reopened without a power cut | the rename in the page cache only | O9: `d = new`, the file and its directory are flushed before the ledger names the bytes placed, so a later power cut cannot put the old bytes back under it | after |
 | G1 | commit | objects written, ref not moved | HEAD old, loose orphans | the next checkpoint commits again; repack drops orphans | after (git is not the truth) |
 | G2 | commit | ref lock file left | `refs/heads/<b>.lock` | O2 removes it | after |
@@ -4745,6 +4745,7 @@ and the on-disk end state, not only what the fold returns.
 | L114 | A project detail whose value can no longer be read: the token rule leaves its head out of `metadata.json`'s heads, so the ledger names nothing to ask the fold about, and a later write drops the detail | the ledger names the version the projection shows when the token rule leaves it out (§3.6) | `random_histories_lose_no_work` |
 | L115 | Bytes recorded once (a save the fold still held was skipped by its digest), then the journal loses that save and the next look records the same bytes again: a batch that reconciles the same path and md5 makes the second recording write nothing, and the file is written over without the save | only the records the earlier batch changed are left out of the second recording (§11.1 X4) | `random_histories_lose_no_work_long` |
 | L116 | A process killed after a rename and before its directory flush; the next open takes the new bytes as placed and writes nothing, so the rename stays in the page cache; the journal line of a save the file shows is cut, and a power cut puts the bytes before the rename back: the save is gone | a read that settles `Writing` on its new bytes flushes the file and its directory before the ledger names them placed (§6.2, §6.4 M7) | `random_histories_lose_no_work_long` |
+| L117 | A process killed right after the rename of a book file or `metadata.json`, then a backup tool (`cp -p`, `rsync -a`, Time Machine, File History) puts the earlier version back with its size and mtime while the app is closed: the stat matched the ledger's old placement, so the open took the restore for a rename that never happened and wrote over it | the bytes a write under way replaced are never the app's own, whatever their stat: R9 keeps them (an extra conflict after a crash, owner 2026-10-19); a group that stops with the app still running records WriteFailed for the renames it never tried, so that conflict follows only a crash (§6.2) | `a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept`, `a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept` (`tests/store/model.rs`) |
 
 ---
 
@@ -5027,7 +5028,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | K1's comparison with the ids the fold took from a pending file (drop a removed file, seal what a cut file holds) | `a_pending_file_deleted_outside_is_sealed_from_memory`, `a_pending_file_cut_short_at_a_line_is_sealed_from_memory`, `a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle` |
 | the app's own bytes that show changes no journal file holds recorded, not rewritten (O9, M1, M6) | `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded`, `a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap`, `metadata_json_holding_a_project_detail_whose_pending_file_was_deleted_is_recorded` |
 | the heads of an outside edit's base cut to those the fold holds (compare with a digest of a version the journal lost) | `a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_next_open`, `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded` |
-| R9's stat of a `Writing` state's old bytes (take `d = old` as the app's own whatever the stat) | `a_revert_made_while_the_app_is_closed_after_a_crash_past_the_rename_is_recorded`, `a_revert_the_open_could_not_read_is_recorded_by_the_first_compare_and_swap`, `a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept`, `a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept` |
+| R9 for a `Writing` state's old bytes (take `d = old` as the app's own when its size and mtime are the ones the ledger kept) | `a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept`, `a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept`, `a_revert_made_while_the_app_is_closed_after_a_crash_past_the_rename_is_recorded`, `a_revert_the_open_could_not_read_is_recorded_by_the_first_compare_and_swap`, `a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept`, `a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept` |
+| WriteFailed for the renames a group that stopped with an error never tried or left unchanged (keep `Writing`) | `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit`, `an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict` |
 | `holds` asking for applied and readable changes (ask only whether the fold's index holds them) | `a_batch_cut_at_a_line_while_closed_is_kept_from_the_book_file`, `a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file`, `a_book_file_whose_heads_were_put_back_is_recorded_not_written_over` |
 | R6, a rendering that read an unreadable value (write it) | `a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent` |
 | the journal files a session left because another program held them (list them as unknown: a second writer) | `a_pending_file_the_seal_could_not_remove_is_no_second_writer`, `a_pending_file_the_open_could_not_remove_is_no_second_writer` |

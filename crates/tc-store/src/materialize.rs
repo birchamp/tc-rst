@@ -16,8 +16,8 @@
 
 use crate::appdata::utc_stamp;
 use crate::atomic::{
-    DirSet, HeldRetry, SyncDir, Written, atomic_create_dirs, atomic_remove, atomic_write,
-    atomic_write_checked,
+    DirSet, HeldRetry, SyncDir, WriteError, Written, atomic_create_dirs, atomic_remove,
+    atomic_write, atomic_write_checked,
 };
 use crate::classify::Next;
 use crate::error::StoreError;
@@ -443,7 +443,13 @@ impl Writer {
         let mut processed: BTreeSet<String> = BTreeSet::new();
         let mut failed = None;
         for (i, group) in groups.iter().enumerate() {
-            if let Err(e) = self.run_group(group, &mut report, &mut processed) {
+            let ran = self.run_group(group, &mut report, &mut processed);
+            // A rename the stopped group never tried did not happen: the ledger knows the
+            // bytes before it are still there (§6.2).
+            for path in std::mem::take(&mut self.unattempted) {
+                self.note(&path, Event::WriteFailed);
+            }
+            if let Err(e) = ran {
                 // What was not done stays dirty, and is tried again.
                 for left in &groups[i..] {
                     self.restore_group(left);
@@ -840,6 +846,11 @@ impl Writer {
         }
         self.write_metadata_heads(&metadata_md5, SyncDir::Deferred(&mut dirs))?;
         dirs.sync(&*self.vfs)?;
+        for path in named.iter().map(|(p, _)| p.as_str()).chain([METADATA]) {
+            if !matches!(self.state_of(path), State::Writing { .. }) {
+                self.unattempted.insert(path.to_owned());
+            }
+        }
         for (path, r) in &named {
             self.note(
                 path,
@@ -864,7 +875,7 @@ impl Writer {
             let (dir, name) = self.folder.dir_and_name(&path);
             atomic_create_dirs(&*self.vfs, &dir)?;
             let mut outside: Option<Vec<u8>> = None;
-            let wrote = self.write_once(
+            let wrote = match self.write_once(
                 &dir,
                 name,
                 &r.bytes,
@@ -873,7 +884,15 @@ impl Writer {
                 &path,
                 seen.get(&path).copied().flatten(),
                 &mut outside,
-            )?;
+            ) {
+                Ok(wrote) => wrote,
+                Err(WriteError::NotWritten(e)) => return Err(e),
+                Err(WriteError::WrittenNotDurable(e)) => {
+                    self.unattempted.remove(&path);
+                    return Err(e);
+                }
+            };
+            self.unattempted.remove(&path);
             match wrote {
                 Wrote::Done => {}
                 Wrote::Busy => {
@@ -967,16 +986,22 @@ impl Writer {
             SyncDir::Now,
         ) {
             Ok(()) => true,
-            Err(crate::atomic::WriteError::NotWritten(e))
+            Err(WriteError::NotWritten(e))
                 if e.io_error().is_some_and(|io| self.vfs.is_held(io)) =>
             {
-                self.note(METADATA, Event::WriteFailed);
                 self.reasons.insert(METADATA.to_owned(), Blocked::FileBusy);
                 report.blocked.push(METADATA.to_owned());
                 false
             }
-            Err(e) => return Err(e.into_inner()),
+            Err(WriteError::NotWritten(e)) => return Err(e),
+            Err(WriteError::WrittenNotDurable(e)) => {
+                self.unattempted.remove(METADATA);
+                return Err(e);
+            }
         };
+        if metadata_written {
+            self.unattempted.remove(METADATA);
+        }
         if metadata_written {
             self.note(
                 METADATA,
@@ -1368,7 +1393,7 @@ impl Writer {
         rel: &str,
         seen: Option<FileMeta>,
         outside: &mut Option<Vec<u8>>,
-    ) -> Result<Wrote, StoreError> {
+    ) -> Result<Wrote, WriteError> {
         let abs = self.folder.path(rel);
         let mut look = || -> Result<bool, StoreError> {
             self.shared.hooks.wait(crate::hooks::Point::BeforeRename);
@@ -1408,12 +1433,12 @@ impl Writer {
         ) {
             Ok(Written::Renamed) => Ok(Wrote::Done),
             Ok(Written::Refused) => Ok(Wrote::Refused),
-            Err(crate::atomic::WriteError::NotWritten(e))
+            Err(WriteError::NotWritten(e))
                 if e.io_error().is_some_and(|io| self.vfs.is_held(io)) =>
             {
                 Ok(Wrote::Busy)
             }
-            Err(e) => Err(e.into_inner()),
+            Err(e) => Err(e),
         }
     }
     /// What the paths this job could not write need next: they stay dirty and are tried again,

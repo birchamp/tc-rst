@@ -177,6 +177,10 @@ pub(crate) struct Writer {
     /// The sequence number of the fold each derived path was last written or found equal
     /// from, so a checkpoint's tree never takes the bytes of a newer fold for its own.
     pub written_seq: BTreeMap<String, u64>,
+    /// The paths the running group named at M3 (from `Placed` or `Unknown`) whose rename has
+    /// certainly not happened yet (not tried, or refused with the target unchanged): when the
+    /// group stops with an error, the ledger learns the bytes before it are still there.
+    pub unattempted: BTreeSet<String>,
     pub packs: BTreeMap<String, PackFacts>,
     pub complete: bool,
     /// The expected packs that are missing or unreadable, which is why `complete` is false.
@@ -693,6 +697,7 @@ mod tests {
             fold,
             seq: 1,
             written_seq: BTreeMap::new(),
+            unattempted: BTreeSet::new(),
             packs: BTreeMap::new(),
             complete: true,
             packs_missing: Vec::new(),

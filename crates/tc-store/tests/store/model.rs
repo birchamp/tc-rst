@@ -102,6 +102,9 @@ pub enum Step {
     EditName { told: bool },
     /// Another program puts back the `back`-th older version of a file the run saw.
     Revert { file: File, back: u8, told: bool },
+    /// A backup tool (`cp -p`, `rsync -a`, Time Machine) puts back the `back`-th older version
+    /// of a file with the modification time it had when the run first saw it, unseen.
+    RevertKeepTime { file: File, back: u8 },
     /// Another program cuts a journal file: the `which`-th, keeping `keep` (a share of its
     /// lines), at a line end or inside a line.
     Cut {
@@ -161,8 +164,9 @@ pub struct Run {
     next: u32,
     saves: Vec<Save>,
     puts: Vec<Put>,
-    /// Every version of each file the run saw in the folder, oldest first.
-    versions: BTreeMap<&'static str, Vec<Vec<u8>>>,
+    /// Every version of each file the run saw in the folder, oldest first, with its
+    /// modification time when the run first saw it.
+    versions: BTreeMap<&'static str, Vec<(Vec<u8>, i64)>>,
     /// The bytes the app last left at each file: a put of the same bytes changes nothing.
     placed: BTreeMap<&'static str, Vec<u8>>,
     /// Whether the kill armed is a power cut.
@@ -463,8 +467,15 @@ impl Run {
         self.check(false)
     }
 
-    /// Another program writes `bytes` at `rel`.
-    fn put(&mut self, rel: &'static str, bytes: Vec<u8>, told: bool, what: String) {
+    /// Another program writes `bytes` at `rel`, with the modification time now or `mtime_ns`.
+    fn put(
+        &mut self,
+        rel: &'static str,
+        bytes: Vec<u8>,
+        mtime_ns: Option<i64>,
+        told: bool,
+        what: String,
+    ) {
         let fs = self.fs();
         let path = self.path(rel);
         let now = fs.peek(&path);
@@ -482,9 +493,9 @@ impl Run {
         let tell = told && self.handle.is_some();
         self.by_another_program(|| {
             if tell {
-                fs.put(&path, &bytes, None);
+                fs.put(&path, &bytes, mtime_ns);
             } else {
-                fs.put_unseen(&path, &bytes, None);
+                fs.put_unseen(&path, &bytes, mtime_ns);
             }
         });
         self.puts.push(Put {
@@ -507,6 +518,7 @@ impl Run {
         self.put(
             USFM,
             edited.into_bytes(),
+            None,
             told,
             format!("edit of 1:{v} to {token}"),
         );
@@ -523,19 +535,27 @@ impl Run {
         let token = self.token();
         json["identification"]["name"]["en"] = serde_json::Value::from(token.as_str());
         let edited = serde_json::to_vec_pretty(&json).unwrap();
-        self.put(META, edited, told, format!("edit of the name to {token}"));
+        self.put(
+            META,
+            edited,
+            None,
+            told,
+            format!("edit of the name to {token}"),
+        );
         self.settle_put(told)
     }
 
-    fn revert(&mut self, file: File, back: u8, told: bool) -> Result<(), String> {
+    /// Another program puts back an older version of `file`; `keep_time`: with the time the
+    /// run first saw it.
+    fn revert(&mut self, file: File, back: u8, told: bool, keep_time: bool) -> Result<(), String> {
         let rel = file.rel();
         let now = self.fs().peek(&self.path(rel));
-        let older: Vec<Vec<u8>> = self
+        let older: Vec<(Vec<u8>, i64)> = self
             .versions
             .get(rel)
             .map(|v| {
                 v.iter()
-                    .filter(|b| Some(b.as_slice()) != now.as_deref())
+                    .filter(|(b, _)| Some(b.as_slice()) != now.as_deref())
                     .cloned()
                     .collect()
             })
@@ -543,8 +563,13 @@ impl Run {
         if older.is_empty() {
             return Ok(());
         }
-        let bytes = older[older.len() - 1 - usize::from(back) % older.len()].clone();
-        self.put(rel, bytes, told, format!("revert of {rel}"));
+        let (bytes, mtime_ns) = older[older.len() - 1 - usize::from(back) % older.len()].clone();
+        let (mtime_ns, what) = if keep_time {
+            (Some(mtime_ns), format!("revert of {rel} with its old time"))
+        } else {
+            (None, format!("revert of {rel}"))
+        };
+        self.put(rel, bytes, mtime_ns, told, what);
         self.settle_put(told)
     }
 
@@ -910,9 +935,11 @@ impl Run {
                 if app && !put {
                     self.placed.insert(rel, bytes.clone());
                 }
+                let mtime_ns = tc_store::Vfs::metadata(&fs, &self.path(rel))
+                    .map_or(fs.now_ns(), |m| m.mtime_ns);
                 let seen = self.versions.entry(rel).or_default();
-                if !seen.contains(&bytes) {
-                    seen.push(bytes);
+                if !seen.iter().any(|(b, _)| *b == bytes) {
+                    seen.push((bytes, mtime_ns));
                 }
             }
         }
@@ -931,7 +958,8 @@ impl Run {
             Step::Open => self.open(),
             Step::Edit { verse, told } => self.edit(*verse, *told),
             Step::EditName { told } => self.edit_name(*told),
-            Step::Revert { file, back, told } => self.revert(*file, *back, *told),
+            Step::Revert { file, back, told } => self.revert(*file, *back, *told, false),
+            Step::RevertKeepTime { file, back } => self.revert(*file, *back, false, true),
             Step::Cut {
                 journal,
                 which,
@@ -947,7 +975,11 @@ impl Run {
         self.died();
         let app = !matches!(
             step,
-            Step::Edit { .. } | Step::EditName { .. } | Step::Revert { .. } | Step::Cut { .. }
+            Step::Edit { .. }
+                | Step::EditName { .. }
+                | Step::Revert { .. }
+                | Step::RevertKeepTime { .. }
+                | Step::Cut { .. }
         );
         self.see_versions(app);
         done
@@ -1063,6 +1095,7 @@ fn a_step() -> impl Strategy<Value = Step> {
         1 => any::<bool>().prop_map(|told| Step::EditName { told }),
         2 => (a_file(), 0u8..3, any::<bool>())
             .prop_map(|(file, back, told)| Step::Revert { file, back, told }),
+        1 => (a_file(), 0u8..3).prop_map(|(file, back)| Step::RevertKeepTime { file, back }),
         2 => (
             prop_oneof![3 => Just(Journal::Pending), 1 => Just(Journal::Pack)],
             any::<u8>(),
@@ -1229,6 +1262,42 @@ fn a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept() {
             file: File::Meta,
             back: 0,
             told: false,
+        },
+    ]);
+}
+
+/// A book file written by a group killed right after its rename, and put back while the app
+/// is closed by a backup tool that keeps the old version's size and time: the restore is the
+/// person's, and is kept.
+#[test]
+fn a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept() {
+    assert_kept(&[
+        act(Act::Save(1)),
+        act(Act::Leave),
+        Step::Advance,
+        act(Act::Save(1)),
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Leave),
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 0,
+        },
+    ]);
+}
+
+/// The same for `metadata.json`.
+#[test]
+fn a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept() {
+    assert_kept(&[
+        act(Act::Name),
+        act(Act::Leave),
+        Step::Advance,
+        act(Act::Name),
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Leave),
+        Step::RevertKeepTime {
+            file: File::Meta,
+            back: 0,
         },
     ]);
 }

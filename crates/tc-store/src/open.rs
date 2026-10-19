@@ -622,6 +622,7 @@ fn open_inner(
         fold: project.fold.clone(),
         seq: 0,
         written_seq: BTreeMap::new(),
+        unattempted: std::collections::BTreeSet::new(),
         packs: project.pack_facts(),
         complete: project.journal.complete(),
         packs_missing: project.journal.blocked_packs(),

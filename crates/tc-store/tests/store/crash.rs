@@ -438,15 +438,22 @@ fn crash_materialize_rewrites_forward() {
 /// teammate changed the verse the job was writing before the next open: the file the job left
 /// holds the verse as the job projected it, which the new projection does not name, and only
 /// the ledger's `Writing` state says it is the app's own. Read as an edit it would be recorded
-/// and make a conflict between the app's text and the teammate's.
+/// and make a conflict between the app's text and the teammate's. A kill between the ledger's
+/// entry and the rename leaves the bytes before the write, which a backup tool could have put
+/// back with their size and time: R9 keeps them (an extra conflict, owner 2026-10-19), never
+/// the job's own new bytes.
 #[test]
 fn crash_materialize_ledger_tells_its_bytes_from_an_outside_edit() {
     use std::sync::Mutex;
     use tc_journal::fold::{ConflictKind, Notice};
     use tc_journal::record::VerseValue;
     use tc_journal::{BookId, ChangeId, ChapterNo, DeviceId, VerseNo};
+    use tc_store::ledger::State;
+    use tc_store::manifest::Manifest;
     let (base, folder) = base_titus();
     let written: Mutex<Option<ChangeId>> = Mutex::new(None);
+    // The kill left the bytes a write under way replaced (R9).
+    let before_rename = Mutex::new(false);
     let points = kill_everywhere_between(
         &base,
         &folder,
@@ -459,6 +466,16 @@ fn crash_materialize_ledger_tells_its_bytes_from_an_outside_edit() {
             Outcome::NotSaved
         },
         &|fs| {
+            let usfm = fs.peek(&folder.join("ingredients/TIT.usfm"));
+            let manifest = fs
+                .peek(&folder.join(".tc/materialized.json"))
+                .and_then(|m| serde_json::from_slice::<Manifest>(&m).ok());
+            *before_rename.lock().unwrap() = matches!(
+                (manifest.as_ref().and_then(|m| m.paths.get("ingredients/TIT.usfm")), &usfm),
+                (Some(entry), Some(bytes)) if matches!(&entry.state,
+                    State::Writing { old: Some(old), .. }
+                        if old.md5 == tc_journal::Md5::of(bytes).to_hex())
+            );
             let parent = written.lock().unwrap().expect("the job's save");
             let record = Record::Verse {
                 book: BookId::Titus,
@@ -480,22 +497,44 @@ fn crash_materialize_ledger_tells_its_bytes_from_an_outside_edit() {
                 vec![(record, vec![parent])],
             );
         },
-        &|handle, _, _| {
+        &|handle, fs, _| {
             handle.wait_idle();
             let edits: Vec<_> = handle
                 .notices()
                 .into_iter()
                 .filter(|n| matches!(n.notice, Notice::OutsideEditRecorded { .. }))
                 .collect();
-            assert!(
-                edits.is_empty(),
-                "the app's own bytes were recorded: {edits:?}"
-            );
             let conflicts = handle
                 .snapshot()
                 .fold()
                 .conflicts_of(ConflictKind::VerseText)
                 .count();
+            if *before_rename.lock().unwrap() {
+                for edit in &edits {
+                    assert!(
+                        matches!(
+                            edit.notice,
+                            Notice::OutsideEditRecorded {
+                                unknown_base: true,
+                                ..
+                            }
+                        ),
+                        "{edit:?}"
+                    );
+                    let copy = edit.copy.as_ref().expect("a copy");
+                    let kept = fs.peek(&folder.join(copy)).expect("the copy");
+                    assert!(
+                        !String::from_utf8_lossy(&kept).contains("B, written by the killed job"),
+                        "the job's own bytes were recorded: {edit:?}"
+                    );
+                }
+                assert!(conflicts <= 1, "{conflicts} conflicts");
+                return;
+            }
+            assert!(
+                edits.is_empty(),
+                "the app's own bytes were recorded: {edits:?}"
+            );
             assert_eq!(conflicts, 0, "a conflict with the app's own text");
             assert_eq!(
                 words(handle, 1, 2).as_deref(),
