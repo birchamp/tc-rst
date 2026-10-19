@@ -15,9 +15,12 @@ pub mod boot;
 pub mod buffer;
 pub mod cache;
 pub mod client;
+pub mod confirm;
 pub mod effects;
 pub mod events;
 pub mod load;
+pub mod recovery;
+pub mod save;
 
 #[cfg(all(target_arch = "wasm32", feature = "app"))]
 pub mod web;

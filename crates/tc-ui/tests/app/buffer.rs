@@ -11,8 +11,8 @@ use tc_api::buffer::{
 };
 use tc_api::ids::{ProjectId, ProjectRef, ServerInstance, WallMs};
 use tc_ui::app::buffer::{
-    MemStore, Removal, Store, changed_line, entries, entries_of, item_key, merge, nfc,
-    parse_item_key, read, rekey, remove, removed_line, write,
+    MemStore, Removal, Store, changed_line, entries, entries_of, input_to_entry, item_key, merge,
+    nfc, parse_item_key, read, rekey, remove, removed_line, write,
 };
 
 const ID: &str = "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50";
@@ -40,10 +40,14 @@ fn key(place: &str) -> BufferKey {
     key_in("en_ult", ID, place)
 }
 
+fn inst() -> ServerInstance {
+    ServerInstance::from_bytes([1; 16])
+}
+
 fn entry(text: &str, at: i64) -> BufferEntry {
     BufferEntry {
         api: 1,
-        instance: ServerInstance::from_bytes([1; 16]),
+        instance: inst(),
         base: vec![token()],
         text: text.to_owned(),
         sent: None,
@@ -90,9 +94,9 @@ fn a_non_canonical_or_foreign_item_is_never_read_or_removed() {
     assert!(entries(&store).is_empty(), "nothing foreign is read");
 
     write(&mut store, &key("TIT 1:3"), &entry("mine", 1)).unwrap();
-    remove(&mut store, &key("TIT 1:3"), None).unwrap();
+    remove(&mut store, &key("TIT 1:3"), None, inst()).unwrap();
     assert_eq!(
-        remove(&mut store, &key("TIT 1:2"), Some("x")).unwrap(),
+        remove(&mut store, &key("TIT 1:2"), Some("x"), inst()).unwrap(),
         Removal::Kept
     );
     rekey(
@@ -139,19 +143,19 @@ fn an_entry_is_removed_only_when_its_text_is_the_text_just_saved() {
     write(&mut store, &k, &entry("newer text", 1)).unwrap();
     // Another tab or boot.js wrote newer text after the save was sent.
     assert_eq!(
-        remove(&mut store, &k, Some("saved text")).unwrap(),
+        remove(&mut store, &k, Some("saved text"), inst()).unwrap(),
         Removal::Kept
     );
     assert_eq!(read(&store, &k).unwrap().text, "newer text");
 
     write(&mut store, &k, &entry("e\u{301}", 2)).unwrap();
     assert_eq!(
-        remove(&mut store, &k, Some("\u{e9}")).unwrap(),
+        remove(&mut store, &k, Some("\u{e9}"), inst()).unwrap(),
         Removal::Removed,
         "equal in NFC is equal"
     );
     assert_eq!(
-        remove(&mut store, &k, Some("\u{e9}")).unwrap(),
+        remove(&mut store, &k, Some("\u{e9}"), inst()).unwrap(),
         Removal::Absent
     );
 }
@@ -312,4 +316,63 @@ fn one_nfc_for_the_ui_and_the_server() {
     // Hebrew points are reordered by NFC (sheva before dagesh), which is why the clean rule
     // compares in NFC.
     assert_eq!(nfc("\u{5d1}\u{5bc}\u{5b0}"), "\u{5d1}\u{5b0}\u{5bc}");
+}
+
+#[test]
+fn another_runs_entry_is_never_written_over_or_removed() {
+    let mut store = MemStore::new();
+    let k = key("TIT 1:1");
+    let old_run = BufferEntry {
+        instance: ServerInstance::from_bytes([9; 16]),
+        ..entry("typed before the restart", 1)
+    };
+    write(&mut store, &k, &old_run).unwrap();
+    let before = store.items.clone();
+    assert_eq!(
+        write(&mut store, &k, &entry("new run", 2)),
+        Err(tc_ui::app::buffer::StoreError::Foreign)
+    );
+    assert_eq!(remove(&mut store, &k, None, inst()).unwrap(), Removal::Kept);
+    assert_eq!(
+        remove(&mut store, &k, Some("typed before the restart"), inst()).unwrap(),
+        Removal::Kept
+    );
+    assert_eq!(
+        input_to_entry(&mut store, &k, "x", WallMs(3), &entry("", 0)),
+        None
+    );
+    assert_eq!(store.items, before);
+}
+
+#[test]
+fn a_keystroke_updates_the_entry_or_makes_it_from_the_template() {
+    let mut store = MemStore::new();
+    let k = key("TIT 1:1");
+    let template = entry("", 0);
+    let line = input_to_entry(&mut store, &k, "P", WallMs(10), &template).unwrap();
+    let stored = read(&store, &k).unwrap();
+    assert_eq!((stored.text.as_str(), stored.at), ("P", WallMs(10)));
+    let parsed: BufferLine = serde_json::from_str(&line).unwrap();
+    assert_eq!(
+        parsed,
+        BufferLine::Changed {
+            key: k.clone(),
+            entry: stored
+        }
+    );
+
+    let mut with_later = serde_json::to_value(entry("Pa", 11)).unwrap();
+    with_later["later"] = json!(true);
+    store
+        .set(&item_key(&k).unwrap(), &with_later.to_string())
+        .unwrap();
+    input_to_entry(&mut store, &k, "Pau", WallMs(12), &template).unwrap();
+    let raw: Value = serde_json::from_str(&store.get(&item_key(&k).unwrap()).unwrap()).unwrap();
+    assert_eq!(raw["text"], "Pau");
+    assert_eq!(raw["later"], true, "only text and at change");
+
+    // A full storage loses the write, never the mirror's line.
+    store.fail_writes = true;
+    let line = input_to_entry(&mut store, &k, "Paul", WallMs(13), &template).unwrap();
+    assert!(line.contains("\"Paul\""));
 }

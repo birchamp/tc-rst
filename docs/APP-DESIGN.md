@@ -206,7 +206,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD34 | Checkpoint on every mode switch, as tC4 does (`tC4:src/state.jsx:4031-4038`), until the owner and the storage team rule (Q-5). Before R17 is adopted, unit P measures save latency while a checkpoint runs (R9), and the storage team is asked to keep the long part of a checkpoint off the actor (R21). If the 25 ms save budget still fails, Q-5 offers one checkpoint per mode switch at most every two minutes. *(A-11)* | tC4's J8 asserts it (`tC4:e2e/j08-resume.spec.ts:194`); STORAGE lists only leaving Translate (STORAGE:1723). A checkpoint is an actor step with a 500 ms budget for a whole Bible (STORAGE:1725-1735, 2720; PERF:92), so a checker who switches after each decision would wait behind one each time. | Silently following either. |
 | AD35 | Test hooks exist only under the cargo features `test-hooks` and `fixture-backend`. `release_has_no_test_hooks` checks the release binary. | No hook may ship. | Runtime flags. |
 | AD36 | Teammate changes in parity scenarios are written only through tc-journal's encoders (phase 1) and the store's sealing API (from C1a), never by hand. | The scenario must exercise the real format. | Hand-made packs. |
-| AD37 | An open editor holds its value and its token as one pair, taken when it opened. A refresh replaces the pair only while the editor has had no input and no composition since then; otherwise the field keeps its text and token and shows the "changed while you were typing" notice. A `Changed` whose cause is the field's own request shows nothing. Nothing is ever written into a focused field, and texts are compared in NFC. *(A-6)* | A value and a token that come apart make the next save conflict with itself, or revert a change unseen (STORAGE:1449-1453). The `Ack` and the `Changed` event of one write may arrive in either order (§5.4). NFC reorders Hebrew points and Arabic marks (STORAGE:1445), and writing into a focused field moves the caret and breaks an IME composition. | Following the query in an open editor; never refreshing an open editor. |
+| AD37 | An open editor holds its value and its token as one pair, taken when it opened, and taken again when an `Ack` leaves the field clean *(A4b)*. A refresh replaces the pair only while the editor has had no input and no composition since it last took it; otherwise the field keeps its text and token and shows the "changed while you were typing" notice. A `Changed` whose cause is the field's own request shows nothing. Nothing is ever written into a focused field, and texts are compared in NFC. *(A-6)* | A value and a token that come apart make the next save conflict with itself, or revert a change unseen (STORAGE:1449-1453). The `Ack` and the `Changed` event of one write may arrive in either order (§5.4). NFC reorders Hebrew points and Arabic marks (STORAGE:1445), and writing into a focused field moves the caret and breaks an IME composition. | Following the query in an open editor; never refreshing an open editor. |
 | AD38 | `SessionRegistry` runs one open per folder at a time; a second caller waits for it and shares the session. The screen session closes when the person goes Home, with tC4's "leaving the project" checkpoint. *(A-8, A-25)* | A second open finds `.tc/lock` held by this same `tc4` and is refused, with `tc4` itself as the holder (STORAGE §6.1 O1). tC4 closes the project at Home (`tC4:src/state.jsx:7286-7328`), and J8 asserts that commit. | Waiting only for a running leave-checkpoint; closing the session only when another project opens. |
 | AD39 | The shell supervises `tc4`. When `tc4` exits without being asked, the shell starts it again and loads Home at the new address; the new page reads the shell's buffer mirror (AD21). `tc4` treats a closed stdin as a quit. The shell starts `tc4` with `detached: true` and `windowsHide: true`: on Windows, Node's plain `spawn` puts the child in libuv's job object, which ends it the moment the shell's process ends, before it can read its closed stdin and quit (G0's "end the shell" rows measure both). A `tc4` that finds `app.lock` held waits up to 10 s for the old process to finish closing, then names it (`app-lock.json` beside the lock records its pid, §5.1). *(A-3)* | Every launch has a new port, so the old page cannot reach a restarted server (§5.2). An orphaned `tc4` would hold `app.lock` and `.tc/lock` and refuse the next launch. When the shell dies, the pipe to `tc4`'s stdin closes. | A quit endpoint for orphans (it would need the old token); restarting in place. |
 
@@ -1598,11 +1598,16 @@ One task reads the stream and dispatches:
 
 - `Changed { scope }` re-queries only the chapters, items or cards in scope. Open editors follow
   AD37 *(A-6)*:
-  - An editor holds the value and the token it opened with as one pair. If the editor has had
-    no input and no composition since it opened, a refresh replaces the pair together, unless
+  - An editor holds the value and the token it opened with as one pair, and takes the stored
+    value and the `Ack`'s token as its pair again when an `Ack` leaves it clean. If the editor has had
+    no input and no composition since it last took its pair, a refresh replaces the pair together, unless
     the editor has focus: then the new pair waits and is applied on blur, so nothing is written
     into a focused field. If the person types before that blur, the waiting pair is dropped and
-    the next rule applies.
+    the next rule applies. *(A4b: "since it opened" read literally would show "Juan changed this verse while you were
+    typing" under a teammate's later change to a field that was typed into, saved and is clean,
+    although nothing unsaved remains and no second version will be kept. A refresh that comes
+    while the field's own save is in flight is judged once its reply has come: it may be that
+    save's own refetch, which no `Changed` frame needs to name if a gap lost it.)*
   - Once the person has typed, the field keeps its text and its base token. If the refreshed
     value differs from the base (compared in NFC), the field shows "Juan changed this verse
     while you were typing. Your text will be kept as a second version." (STORAGE:2978-2981),
@@ -1645,15 +1650,26 @@ One task reads the stream and dispatches:
 
 ### 6.5 Saving
 
-**The save machine.** `tc_ui::logic::save_machine` is a host-tested port of
+**The save machine.** `tc_ui::app::save` *(A4b: beside A4a's other pure runtime modules, which
+are all under `tc_ui::app`; the first draft named it `tc_ui::logic::save_machine`)* is a host-tested port of
 `tC4:src/data/saveScheduler.ts`. Per field it holds `current`, `persisted`, the base tokens, and
 a state:
 
 ```rust
 pub enum FieldSave { Clean, Dirty { since: f64 },
-                     Saving { sent: String, request: RequestId },
-                     Failed(NotSaved), SavedWithWarning(String) }
+                     Saving { sent: SentSave },          // request, text and scope (§6.6)
+                     Failed(SaveError), Held(Hold), SavedWithWarning(String) }
+pub enum SaveError { NotSaved(NotSaved), Api(ApiError), Transport(Transport), BadAck(&'static str) }
+pub enum Hold { NoOpen, ReadOnly(ReadOnlyReason) }
 ```
+
+*(A4b: `Failed(SaveError)`, because a write can also end in `Unavailable` (every save before S1),
+`Internal`, `BadRequest`, a refused token or an `Ack` the UI cannot read, and each shows "Not saved
+… Retry" instead of vanishing. `Held` is a field whose text stays and cannot be saved now: its
+project has no open after `StaleScope`, or is read-only (A-10); it does not block the navigation
+gate and its entry stays for the copy or the next open. The machine returns commands (buffer
+writes, mirror lines, saves, resends, drafts, a value to show) that `web::saves` carries out and
+tc-app's tests carry out against `test/fieldStore`.)*
 
 - One save in flight per field. The next save of a field waits for the reply and uses its tokens.
 - On a reply: if `Ack.saved` equals the NFC form of the field's current text, the field is clean
@@ -1665,11 +1681,23 @@ pub enum FieldSave { Clean, Dirty { since: f64 },
   same `RequestId` and the same body, rebuilt from the buffer entry's `sent`, never from the
   current text. The reply cache answers it, waits for it if the first attempt is still running,
   or answers `RequestReused` if the bodies differ. If the person typed more in the meantime,
-  the field stays dirty after the retry's `Ack` and saves the newer text next. *(A-2)*
+  the field stays dirty after the retry's `Ack` and saves the newer text next. *(A-2)* *(A4b: only
+  a lost reply keeps its id: no answer at all, a 503, or a reload. The reply cache keeps every
+  answer of a write, refusals included, so Retry, the navigation gate's retry, the resend after
+  `StaleScope` and the save after `RequestReused` each mint a new id; the old one would get its
+  refusal back for ever. A live page resends after 250 ms, doubling to 5 s, and only after
+  `app/hello` names the server run the field sent to: a run that started again has no reply
+  cache and would store the text a second time over its old token. A restarted `tc4` has a new
+  token, so the old page's requests get 401 first; the `hello` check covers a page that can
+  still reach the new run. A reload retries only an entry of the run that `hello` names (§6.6).
+  The usual timer after a reload exists only for a field that saves on a pause; a restored
+  comment or check comment waits for an editor's blur or the navigation gate.)*
 - `NotSaved::StaleScope` (the project was closed or reopened under the field) keeps the text:
   the UI reattaches to the current session and resends with the field's base token, so a change
   made meanwhile becomes a conflict, never a revert *(A-19)*.
 - `drain()` resolves false while a failure stands (`saveScheduler.ts:139-146`).
+- A section card's restored buffer is never saved by anything but its Save: not by the timer,
+  not by a reload, not by the navigation gate *(A4b)*.
 - Async completions update signals with `try_update` and read them with `try_get`, so a reply
   that arrives after its screen was disposed does nothing instead of panicking (`reactive_graph`
   0.2.16 panics on a disposed signal); tc-ui's app modules also enable `clippy::indexing_slicing`
@@ -1716,7 +1744,15 @@ not saved" shows only when no save failed. A disk warning shows as a notice.
 Keep this version, and opening the gateway-change or upgrade preview first drain every field and
 call `align/flush` for an open aligner. A standing failure keeps the person where they are
 (FR-32, `tC4:src/state.jsx:4018-4024`, and before the gateway preview `:4373-4377`). *(A-4,
-A-26)*
+A-26)* *(A4b: exactly, `Saves::gate()` is tC4's `drainSchedulers` loop: it sends every field that
+may save now, retries each failure that stood when it began once (a failure that first comes
+during it is not retried, as tC4's `drain` does not), waits for every reply, runs the hooks
+registered with `Saves::add_gate_hook` (B6 registers `align/flush`), and repeats while new work
+appeared; it resolves false as soon as a failure stands after its retry. A section card's buffer
+is never saved by the gate and does not block it: tC4's editing lock keeps the exits off while a
+card is open, and a buffer restored after a panic stays a draft and is offered at the next open.
+A held field does not block it either, since the person cannot save it. The gate has no timeout:
+while a lost reply is resent the indicator says "Saving".)*
 
 **The editing lock.** `Editing` is one enum: `None | Verse(VerseKey) | Section(SectionKey) |
 Frame(FrameKey)`. Anything but `None` disables the exits DELTA:909-927 lists, in Bible Translate

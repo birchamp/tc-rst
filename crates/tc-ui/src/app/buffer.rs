@@ -8,6 +8,8 @@
 //!
 //! - An item this build cannot read (another build's, a damaged one, a key not in the exact
 //!   form serde writes) is skipped and never removed or rewritten.
+//! - An entry of another server run is never written over or removed by this run: it waits
+//!   for the offer at its project's next open (AD4).
 //! - A rewrite keeps the keys of the stored entry that this build does not know (3.10).
 //! - An entry is removed after a save only while its text is still the text that save stored:
 //!   another tab, or `boot.js` on a keystroke, may have written newer text since.
@@ -16,7 +18,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 use tc_api::buffer::{BUFFER_ITEM_PREFIX, BufferEntry, BufferKey, BufferLine};
-use tc_api::ids::{ProjectId, ProjectRef};
+use tc_api::ids::{ProjectId, ProjectRef, ServerInstance, WallMs};
 use unicode_normalization::UnicodeNormalization;
 
 /// The browser refused a write, or an entry could not be written as JSON.
@@ -26,6 +28,10 @@ pub enum StoreError {
     Refused(String),
     #[error("a draft could not be written as JSON: {0}")]
     Encode(String),
+    /// The field's item holds an entry of another server run, or one this build cannot read.
+    /// It waits for the offer at its project's next open and is never written over.
+    #[error("the field's buffer holds another run's text")]
+    Foreign,
 }
 
 /// The browser's storage, or a map in tests.
@@ -134,17 +140,63 @@ fn merged_text(old: Option<&str>, entry: &BufferEntry) -> Result<String, StoreEr
     encode(&Value::Object(merged))
 }
 
+/// Whether a stored item may be replaced by an entry of `instance`: it is an entry this build
+/// reads, of the same run.
+fn is_own(stored: &str, instance: ServerInstance) -> bool {
+    parse_entry(stored).is_some_and(|entry| entry.instance == instance)
+}
+
 /// Writes `entry` over the field's item, keeping every key of the stored entry this build does
-/// not know (3.10). Returns the JSON text written, for the mirror's line.
+/// not know (3.10). Returns the JSON text written, for the mirror's line. An item of another
+/// run, or one this build cannot read, is not written over ([`StoreError::Foreign`]).
 pub fn write(
     store: &mut dyn Store,
     key: &BufferKey,
     entry: &BufferEntry,
 ) -> Result<String, StoreError> {
     let item = item_key(key)?;
-    let text = merged_text(store.get(&item).as_deref(), entry)?;
+    let old = store.get(&item);
+    if old
+        .as_deref()
+        .is_some_and(|old| !is_own(old, entry.instance))
+    {
+        return Err(StoreError::Foreign);
+    }
+    let text = merged_text(old.as_deref(), entry)?;
     store.set(&item, &text)?;
     Ok(text)
+}
+
+/// What `boot.js`'s capture listener does on a keystroke, before the WebAssembly sees it
+/// (6.6, A-15), in Rust for the tests that play the page: the field's entry gets the new text
+/// and time, or, when it has none, the editor's `template` becomes its entry. Returns the
+/// mirror's line, which goes to the shell even when the storage refused the write. An entry of
+/// another run or one this build cannot read is left alone and gives no line.
+pub fn input_to_entry(
+    store: &mut dyn Store,
+    key: &BufferKey,
+    text: &str,
+    at: WallMs,
+    template: &BufferEntry,
+) -> Option<String> {
+    let item = item_key(key).ok()?;
+    let mut value = match store.get(&item) {
+        Some(stored) => {
+            if !is_own(&stored, template.instance) {
+                return None;
+            }
+            serde_json::from_str::<Value>(&stored).ok()?
+        }
+        None => serde_json::to_value(template).ok()?,
+    };
+    let object = value.as_object_mut()?;
+    object.insert("text".to_owned(), Value::String(text.to_owned()));
+    object.insert("at".to_owned(), Value::from(at.0));
+    let entry_json = encode(&value).ok()?;
+    let line = changed_line(key, &entry_json).ok();
+    // A refused write still sends the line: the shell's mirror then holds the keystroke.
+    let _ = store.set(&item, &entry_json);
+    line
 }
 
 /// What [`remove`] did.
@@ -157,22 +209,24 @@ pub enum Removal {
     Absent,
 }
 
-/// Removes the field's item when its text is `if_text` in NFC, or whatever it holds when
-/// `if_text` is `None` (Cancel of a section card discards it on purpose).
+/// Removes the field's item when it is an entry of `instance` whose text is `if_text` in NFC,
+/// or any text for `None` (Cancel of a section card discards it on purpose). An entry of
+/// another run, or one this build cannot read, is kept.
 pub fn remove(
     store: &mut dyn Store,
     key: &BufferKey,
     if_text: Option<&str>,
+    instance: ServerInstance,
 ) -> Result<Removal, StoreError> {
     let item = item_key(key)?;
     let Some(stored) = store.get(&item) else {
         return Ok(Removal::Absent);
     };
-    if let Some(expected) = if_text {
-        match parse_entry(&stored) {
-            Some(entry) if same_text(&entry.text, expected) => {}
-            _ => return Ok(Removal::Kept),
-        }
+    match parse_entry(&stored) {
+        Some(entry)
+            if entry.instance == instance
+                && if_text.is_none_or(|expected| same_text(&entry.text, expected)) => {}
+        _ => return Ok(Removal::Kept),
     }
     store.remove(&item)?;
     Ok(Removal::Removed)
