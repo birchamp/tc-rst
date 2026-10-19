@@ -90,7 +90,7 @@ fn a_hebrew_verse_edited_keeps_its_other_links_and_reports_the_lost_one() {
 fn hebrew_verses_open_with_the_bank_in_reading_order_and_repeated_words_by_occurrence() {
     let mut regrouped = Vec::new();
     for (reference, verse, source) in jonah_1() {
-        let aligner = Aligner::open(None, verse.clone(), &source, basis(1)).unwrap();
+        let aligner = Aligner::open(None, None, verse.clone(), &source, basis(1)).unwrap();
         assert_eq!(aligner.value().word_bank, verse.words(), "{reference}");
         if verse.bank_order() != verse.words() {
             regrouped.push(reference);
@@ -112,7 +112,7 @@ fn a_hebrew_card_keeps_its_words_in_reading_order_however_they_are_dropped() {
             .cloned()
             .unwrap()
     };
-    let mut aligner = Aligner::open(None, verse.clone(), &source, basis(1)).unwrap();
+    let mut aligner = Aligner::open(None, None, verse.clone(), &source, basis(1)).unwrap();
     aligner.place(0, &el(3)).unwrap();
     aligner.place_many(0, &[el(2), el(1)]).unwrap();
     assert_eq!(
@@ -128,7 +128,7 @@ fn a_hebrew_card_keeps_its_words_in_reading_order_however_they_are_dropped() {
 #[test]
 fn a_shift_click_on_a_hebrew_bank_selects_a_run_in_reading_order_either_way() {
     let (_, verse, source) = jonah_1().swap_remove(2);
-    let mut aligner = Aligner::open(None, verse.clone(), &source, basis(1)).unwrap();
+    let mut aligner = Aligner::open(None, None, verse.clone(), &source, basis(1)).unwrap();
     let words = verse.words();
     aligner.click_bank_word(5, Click::Plain);
     aligner.click_bank_word(2, Click::Range);

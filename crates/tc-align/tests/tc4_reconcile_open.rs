@@ -41,7 +41,7 @@ fn texts() -> (String, String) {
 }
 
 fn open_with(stored: Option<&AlignmentValue>, text: &str, source: &SourceVerse) -> Aligner {
-    Aligner::open(stored, TargetVerse::new(text), source, basis(1)).unwrap()
+    Aligner::open(stored, None, TargetVerse::new(text), source, basis(1)).unwrap()
 }
 
 fn open(stored: Option<&AlignmentValue>, text: &str) -> Aligner {
@@ -190,8 +190,18 @@ fn one_edit_on_a_reconciled_verse_saves_exactly_the_verse_words_and_the_export_w
         multiset(TargetVerse::new(&t2).words())
     );
     let verse = TargetVerse::new(&t2);
-    assert!(needs_review(&stored, &basis(1).aligned_run(&verse), &verse));
-    assert!(!needs_review(after, &basis(1).aligned_run(&verse), &verse));
+    assert!(needs_review(
+        &stored,
+        &basis(1).aligned_run(&verse),
+        &verse,
+        None
+    ));
+    assert!(!needs_review(
+        after,
+        &basis(1).aligned_run(&verse),
+        &verse,
+        None
+    ));
 }
 
 #[test]
@@ -268,6 +278,7 @@ fn a_verse_that_was_never_saved_opens_with_its_bank_in_verse_order() {
     );
     let body = &span[0].1;
     let aligner = Aligner::open(
+        None,
         None,
         TargetVerse::new(body),
         &source_verse(UHB, "2:9-10"),
@@ -364,7 +375,7 @@ fn a_record_holding_a_word_the_verse_lacks_is_invalid_on_the_rail() {
     let run = basis(1).aligned_run(&esclavo);
     let siervo = valid_4_of_4("Pablo, esclavo de Dios");
     assert!(siervo.is_valid(&run), "the hash alone vouches for it");
-    let status = verse_status(Some(&siervo), Some((&run, &esclavo)));
+    let status = verse_status(Some(&siervo), Some((&run, &esclavo)), None);
     assert_eq!(
         (status.state, status.placed, status.total),
         (VerseState::Invalid, 4, 4)
@@ -374,7 +385,7 @@ fn a_record_holding_a_word_the_verse_lacks_is_invalid_on_the_rail() {
     let fine = valid_4_of_4("Pablo, siervo de Dios");
     let run = basis(1).aligned_run(&own);
     assert_eq!(
-        verse_status(Some(&fine), Some((&run, &own))).state,
+        verse_status(Some(&fine), Some((&run, &own)), None).state,
         VerseState::Valid
     );
     // The store's reflow carries it to the verse's words.
@@ -397,7 +408,7 @@ fn after_a_source_upgrade_the_open_verse_shows_the_notice() {
     let at = |source: ResourceRef| {
         let mut basis = basis(1);
         basis.source = Some(source);
-        Aligner::open(Some(&stored), TargetVerse::new(&t1), &orig(), basis).unwrap()
+        Aligner::open(Some(&stored), None, TargetVerse::new(&t1), &orig(), basis).unwrap()
     };
     assert!(!at(old).is_stale());
     let mut upgraded = at(new.clone());
@@ -409,7 +420,7 @@ fn after_a_source_upgrade_the_open_verse_shows_the_notice() {
     basis.source = Some(new);
     let run = basis.aligned_run(&verse);
     assert_eq!(
-        verse_status(Some(&stored), Some((&run, &verse))).state,
+        verse_status(Some(&stored), Some((&run, &verse)), None).state,
         VerseState::Invalid
     );
     // Mark valid clears the notice.
@@ -428,12 +439,58 @@ fn a_verse_edit_of_a_word_the_hash_leaves_out_reflows_its_alignment() {
     assert!(!stored.is_stale_against(&after));
     let run = basis(1).aligned_run(&after);
     assert_eq!(
-        verse_status(Some(&stored), Some((&run, &after))).state,
+        verse_status(Some(&stored), Some((&run, &after)), None).state,
         VerseState::Invalid
     );
     let carried = reflow(&stored, &after).unwrap();
     assert_eq!(carried.dropped.len(), 1);
     assert!(bank_words(&carried.value).contains(&"Pause"));
+}
+
+/// The links on the card of `greek`'s `occurrence`.
+fn links_on(aligner: &Aligner, greek: &str, occurrence: u32) -> Vec<String> {
+    let card = aligner
+        .value()
+        .alignments
+        .iter()
+        .find(|g| {
+            g.top_words
+                .iter()
+                .any(|w| w.word == greek && w.occurrence == occurrence)
+        })
+        .unwrap();
+    show(&card.bottom_words)
+}
+
+#[test]
+fn a_link_to_a_retyped_copy_of_its_word_opens_dropped_and_is_not_saved_on_leaving() {
+    // A sync, a kept version or an outside edit: the first Dios deleted and another typed
+    // earlier, so the verse still holds two.
+    let (stored, t1) = sample_tit_1_1();
+    let moved = t1.replacen("Pablo, siervo de Dios", "Pablo, Dios, siervo de", 1);
+    let aligner = open(Some(&stored), &moved);
+    assert!(links_on(&aligner, "Θεοῦ", 1).is_empty(), "not the new Dios");
+    assert!(links_on(&aligner, "Θεοῦ", 2).is_empty());
+    let dropped: Vec<_> = aligner.dropped().iter().map(|d| d.word.clone()).collect();
+    assert_eq!(show(&dropped), ["Dios/1/2", "Dios/2/2"]);
+    assert!(aligner.is_stale());
+    assert!(
+        !aligner.is_changed(),
+        "an unclear carry-over waits for the translator"
+    );
+    // With the text the record was made against, each link follows its own word.
+    let aligner = Aligner::open(
+        Some(&stored),
+        Some(&TargetVerse::new(&t1)),
+        TargetVerse::new(&moved),
+        &orig(),
+        basis(1),
+    )
+    .unwrap();
+    assert!(links_on(&aligner, "Θεοῦ", 1).is_empty());
+    assert_eq!(links_on(&aligner, "Θεοῦ", 2), ["Dios/2/2"]);
+    assert_eq!(aligner.dropped().len(), 1);
+    assert!(!aligner.is_changed());
 }
 
 // ---- #794 a verse that holds its alignment markup ----
@@ -446,7 +503,7 @@ fn a_verse_that_holds_alignment_markup_does_not_open() {
     assert!(verse.holds_alignment_markup());
     assert!(!verse.words().is_empty(), "it has words to show");
     let refused = |source: &SourceVerse| {
-        Aligner::open(None, TargetVerse::new(&aligned), source, basis(1)).unwrap_err()
+        Aligner::open(None, None, TargetVerse::new(&aligned), source, basis(1)).unwrap_err()
     };
     assert_eq!(
         refused(&source_verse(UGNT, "1:1")),
@@ -541,6 +598,30 @@ fn a_link_to_a_source_word_the_pin_lacks_is_dropped_and_shown() {
         "a link taken off waits for the translator"
     );
     assert_eq!(value.alignments.len(), 16);
+}
+
+#[test]
+fn a_done_record_with_a_source_word_the_pin_lacks_is_invalid_on_the_rail_and_opens_stale() {
+    // An imported record names no pin, so only the pinned words can tell.
+    let (mut stored, t1) = sample_tit_1_1();
+    assert_eq!(stored.source, None);
+    stored.done = true;
+    let ugnt = source_verse(UGNT, "1:1");
+    let verse = TargetVerse::new(&t1);
+    let run = basis(1).aligned_run(&verse);
+    let rail =
+        |value: &AlignmentValue| verse_status(Some(value), Some((&run, &verse)), Some(&ugnt));
+    assert_eq!(rail(&stored).state, VerseState::Valid);
+    assert!(!open_with(Some(&stored), &t1, &ugnt).is_stale());
+    stored.alignments[0].top_words[0].word = "Σαῦλος".into();
+    assert_eq!(rail(&stored).state, VerseState::Invalid);
+    assert!(needs_review(&stored, &run, &verse, Some(&ugnt)));
+    let aligner = open_with(Some(&stored), &t1, &ugnt);
+    assert_eq!(aligner.dropped().len(), 1);
+    assert!(
+        aligner.is_stale(),
+        "the open takes a link off: the notice shows"
+    );
 }
 
 #[test]

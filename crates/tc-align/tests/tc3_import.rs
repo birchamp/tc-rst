@@ -148,6 +148,7 @@ fn a_tc3_record_opens_as_it_is_and_tc3s_word_type_goes_with_the_word() {
     assert!(typed_words(&verse.record["wordBank"]) > 0);
     let mut aligner = Aligner::open(
         Some(&stored),
+        None,
         verse.verse.clone(),
         &source_verse(UGNT, "1:1"),
         basis(1),

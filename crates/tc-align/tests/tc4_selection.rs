@@ -137,6 +137,7 @@ const TEXT: &str = "Paul, a servant of God and an apostle of Jesus Christ";
 fn open() -> Aligner {
     Aligner::open(
         None,
+        None,
         TargetVerse::new(TEXT),
         &source_verse(UGNT, "1:1"),
         basis(1),
@@ -328,8 +329,14 @@ fn sample_open(selected: &[&str], suggested: bool) -> Aligner {
             .flat_map(|g| g.top_words.clone())
             .collect(),
     );
-    let mut aligner =
-        Aligner::open(Some(&stored), TargetVerse::new(&text), &source, basis(1)).unwrap();
+    let mut aligner = Aligner::open(
+        Some(&stored),
+        None,
+        TargetVerse::new(&text),
+        &source,
+        basis(1),
+    )
+    .unwrap();
     assert_eq!(aligner.value().alignments[8].top_words[0].word, "ἐκλεκτῶν");
     select(&mut aligner, selected);
     if suggested {

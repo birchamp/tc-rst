@@ -8,9 +8,11 @@
 //!
 //! Whether a stored value still vouches for its verse is [`needs_review`]: the journal's rule
 //! ([`AlignmentValue::staleness`] against an [`AlignedRun`], §7.7), the one the fold
-//! projects `"invalid"` with, and the words: a value that holds a word the verse does not
+//! projects `"invalid"` with, the words: a value that holds a word the verse does not
 //! have cannot be woven, whatever its hash says (the hash leaves out some words, such as a
-//! `\qs` Selah). It is the one rule of the Align rail, the open verse's notice and the reflow
+//! `\qs` Selah), and the pinned original-language words: a card for a word the pin lacks
+//! cannot stand on it, whatever the record's pin says (an imported record names none, tC4
+//! #790). It is the one rule of the Align rail, the open verse's notice and the reflow
 //! (tC4 #796). It compares the run with the span moved with its text, so a renumbered verse
 //! stays valid.
 //!
@@ -18,13 +20,14 @@
 //! is held once, in the bank or on one card, and every occurrence lies between 1 and its
 //! count.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tc_journal::alignment::AlignedRun;
 use tc_journal::ids::VerseNo;
-use tc_journal::record::{AlignmentValue, ResourceRef, SourceWord, TargetWord};
+use tc_journal::record::{AlignmentGroup, AlignmentValue, ResourceRef, SourceWord, TargetWord};
+use unicode_normalization::UnicodeNormalization;
 
 use crate::edit::Alignment;
-use crate::words::TargetVerse;
+use crate::words::{SourceVerse, TargetVerse};
 
 /// What an alignment is made against besides the target text: the run of verses the
 /// aligner shows and the original-language text it aligns to.
@@ -94,16 +97,95 @@ pub fn holds_the_words_of(value: &AlignmentValue, verse: &TargetVerse) -> bool {
     held == words
 }
 
-/// Whether `value`, placed at `run` with `verse` as its text, no longer vouches for it: the
-/// span, the text or the pin changed, it is marked for re-review, or it holds a word, placed
-/// or banked, that is not a word of the verse by text, occurrence and count, or holds one
-/// twice. A value that holds fewer words than the verse still vouches for its links (tC4
-/// reads a record with no word bank); the aligner banks the rest. See the module
+/// Whether `value`, placed at `run` with `verse` as its text and `pin` as its pinned
+/// original-language words, no longer vouches for it: the span, the text or the pin
+/// changed, it is marked for re-review, it holds a word, placed or banked, that is not a
+/// word of the verse by text, occurrence and count, or holds one twice, or a card does not
+/// stand on `pin` ([`Pin::holds`]). A value that holds fewer words than the verse still
+/// vouches for its links (tC4 reads a record with no word bank); the aligner banks the rest.
+/// `pin` is `None` only where the pinned verse is not available. See the module
 /// documentation.
-pub fn needs_review(value: &AlignmentValue, run: &AlignedRun, verse: &TargetVerse) -> bool {
+pub fn needs_review(
+    value: &AlignmentValue,
+    run: &AlignedRun,
+    verse: &TargetVerse,
+    pin: Option<&SourceVerse>,
+) -> bool {
     let key = |w: &TargetWord| (w.word.clone(), w.occurrence, w.occurrences);
     let mut words: HashSet<_> = verse.words().iter().map(key).collect();
-    !value.is_valid(run) || !value.all_target_words().all(|w| words.remove(&key(w)))
+    !value.is_valid(run)
+        || !value.all_target_words().all(|w| words.remove(&key(w)))
+        || pin.is_some_and(|pin| !Pin::new(pin).holds(value))
+}
+
+/// The pinned original-language words, to find a card's source words in (tC4 #790). A source
+/// word is found by its text and occurrence as written, else in NFC with the pin's words
+/// numbered in NFC: the pin numbers two forms of one word apart, and an aligned file or a
+/// tC4 4.0 record may write either.
+pub(crate) struct Pin<'a> {
+    as_written: HashMap<(&'a str, u32), usize>,
+    in_nfc: HashMap<(String, u32), usize>,
+}
+
+impl<'a> Pin<'a> {
+    pub(crate) fn new(source: &'a SourceVerse) -> Self {
+        let as_written = source
+            .words()
+            .iter()
+            .enumerate()
+            .map(|(at, w)| ((w.word.as_str(), w.occurrence), at))
+            .collect();
+        let mut seen: HashMap<String, u32> = HashMap::new();
+        let in_nfc = source
+            .words()
+            .iter()
+            .enumerate()
+            .map(|(at, w)| {
+                let text = nfc(&w.word);
+                let n = seen.entry(text.clone()).or_default();
+                *n += 1;
+                ((text, *n), at)
+            })
+            .collect();
+        Self { as_written, in_nfc }
+    }
+
+    /// The places in the pin of `card`'s source words, or `None` when the card cannot stand
+    /// on the pin: the pin lacks one of its source words, or it holds links and no source
+    /// word.
+    pub(crate) fn card(&self, card: &AlignmentGroup) -> Option<Vec<usize>> {
+        let at = card
+            .top_words
+            .iter()
+            .map(|w| {
+                self.as_written
+                    .get(&(w.word.as_str(), w.occurrence))
+                    .or_else(|| self.in_nfc.get(&(nfc(&w.word), w.occurrence)))
+                    .copied()
+            })
+            .collect::<Option<Vec<_>>>()?;
+        (!at.is_empty() || card.bottom_words.is_empty()).then_some(at)
+    }
+
+    /// Whether every card of `value` stands on the pin. A value whose source words carry
+    /// `x-ref` (per-verse occurrences in a span, #409) is not compared.
+    pub(crate) fn holds(&self, value: &AlignmentValue) -> bool {
+        counts_by_verse(value) || value.alignments.iter().all(|g| self.card(g).is_some())
+    }
+}
+
+/// Whether `value`'s source words carry `x-ref`: their occurrences are counted in their own
+/// verse of a span (#409), not in the pinned span.
+pub(crate) fn counts_by_verse(value: &AlignmentValue) -> bool {
+    value
+        .alignments
+        .iter()
+        .flat_map(|g| &g.top_words)
+        .any(|w| w.extra.contains_key("x-ref"))
+}
+
+fn nfc(text: &str) -> String {
+    text.nfc().collect()
 }
 
 /// How a value breaks the rules every edit keeps. See the module documentation.
@@ -139,12 +221,13 @@ pub struct VerseStatus {
 }
 
 /// tC4's rail status (`alignVerseStatus`). `current` is where the value is placed and the
-/// verse it is placed on, `None` for a verse with no text. [`needs_review`] outranks `done`;
-/// `done` alone makes a verse valid, so a fully placed record that was never marked done
-/// is still to do.
+/// verse it is placed on, `None` for a verse with no text, and `pin` the pinned
+/// original-language words. [`needs_review`] outranks `done`; `done` alone makes a verse
+/// valid, so a fully placed record that was never marked done is still to do.
 pub fn verse_status(
     value: Option<&AlignmentValue>,
     current: Option<(&AlignedRun, &TargetVerse)>,
+    pin: Option<&SourceVerse>,
 ) -> VerseStatus {
     let Some((run, verse)) = current else {
         return VerseStatus {
@@ -155,7 +238,7 @@ pub fn verse_status(
     };
     let (placed, total) = value.map_or((0, 0), |v| (v.placed(), v.total()));
     let state = match value {
-        Some(v) if needs_review(v, run, verse) => VerseState::Invalid,
+        Some(v) if needs_review(v, run, verse, pin) => VerseState::Invalid,
         Some(v) if v.done => VerseState::Valid,
         _ => VerseState::Todo,
     };

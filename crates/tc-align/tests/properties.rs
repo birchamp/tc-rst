@@ -342,10 +342,10 @@ proptest! {
                     }
                 }
                 for drop in &next.dropped {
-                    // Gone, or the verse holds another number of copies of it, so it is not
-                    // clear which copy it is now (#789).
+                    // Gone, or it is not clear which copy it is now: the changed verse holds
+                    // another number of copies of it, or more than one (#789).
                     let count = new_verse.words().iter().filter(|w| w.word == drop.word.word).count();
-                    prop_assert!(new_verse.position(&drop.word).is_none() || count != drop.word.occurrences as usize);
+                    prop_assert!(new_verse.position(&drop.word).is_none() || count != drop.word.occurrences as usize || count > 1);
                     prop_assert!(value.alignments[drop.card].bottom_words.contains(&drop.word));
                 }
                 prop_assert!(!next.value.is_stale_against(&new_verse));
@@ -368,7 +368,7 @@ proptest! {
         let (mut stored, _) = edited(&source, &text, &ops);
         stored.marked_invalid = flagged;
         let new_verse = TargetVerse::new(&new_text);
-        let aligner = Aligner::open(Some(&stored), new_verse.clone(), &source, basis(1)).unwrap();
+        let aligner = Aligner::open(Some(&stored), None, new_verse.clone(), &source, basis(1)).unwrap();
         prop_assert_eq!(
             sorted(aligner.value().all_target_words().cloned()),
             sorted(new_verse.words().to_vec())
@@ -389,7 +389,7 @@ proptest! {
     ) {
         let (stored, _) = edited(&source, &text, &ops);
         let verse = TargetVerse::new(&new_text);
-        let mut value = Aligner::open(Some(&stored), verse.clone(), &source, basis(1)).unwrap().into_value();
+        let mut value = Aligner::open(Some(&stored), None, verse.clone(), &source, basis(1)).unwrap().into_value();
         for op in &more {
             if apply(&mut value, &verse, op) {
                 value.settle(&verse);
@@ -416,7 +416,7 @@ proptest! {
     ) {
         let (value, _) = edited(&source, &text, &ops);
         let verse = TargetVerse::new(&new_text);
-        let mut aligner = Aligner::open(stored.then_some(&value), verse.clone(), &source, basis(1)).unwrap();
+        let mut aligner = Aligner::open(stored.then_some(&value), None, verse.clone(), &source, basis(1)).unwrap();
         let source_order: Vec<SourceWord> = source.words().to_vec();
         assert_shown_in_verse_order(&aligner, &verse)?;
         for step in &steps {
@@ -461,7 +461,7 @@ proptest! {
         for group in &mut stored.alignments {
             group.bottom_words.reverse();
         }
-        let aligner = Aligner::open(Some(&stored), verse.clone(), &source, basis(1)).unwrap();
+        let aligner = Aligner::open(Some(&stored), None, verse.clone(), &source, basis(1)).unwrap();
         prop_assert!(!aligner.is_changed(), "order alone is not saved");
         assert_shown_in_verse_order(&aligner, &verse)?;
         let mut sorted_stored = stored.clone();

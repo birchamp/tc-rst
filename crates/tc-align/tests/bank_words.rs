@@ -89,7 +89,8 @@ fn a_tc4_imported_verse_with_nested_zaln_banks_every_word() {
         "dcs::unfoldingWord/hbo_uhb@v3.0.0".into(),
         None,
     );
-    let aligner = Aligner::open(Some(&value), TargetVerse::new(&plain), &source, basis).unwrap();
+    let aligner =
+        Aligner::open(Some(&value), None, TargetVerse::new(&plain), &source, basis).unwrap();
     assert_eq!(value.placed(), 10);
     assert_eq!(aligner.value().placed(), 10);
     assert!(aligner.dropped().is_empty());
@@ -134,7 +135,7 @@ fn open_imported(
     let basis = Basis::run(verse_no(verse), verse_no(verse), source_name.into(), None);
     let target = TargetVerse::new(&plain);
     let bank = target.words().iter().map(|w| w.word.clone()).collect();
-    let aligner = Aligner::open(Some(&value), target, &source, basis).unwrap();
+    let aligner = Aligner::open(Some(&value), None, target, &source, basis).unwrap();
     (
         bank,
         value.placed(),

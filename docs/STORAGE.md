@@ -36,8 +36,8 @@ Words used here: a **change** is one immutable version of one record (tC4 called
    (verse text hash, resource sha). The fold computes "invalid, kept" from the current text and
    pins. A resource upgrade writes nothing on alignments, and a text edit nothing on
    decisions. A text edit carries the verse's alignment over to the new text in the same batch
-   (`tc_align::reflow`: links to words the verse still has are kept, the others go back to the
-   bank), so a verse and its alignment are never seen apart; the earlier alignment stays in
+   (`tc_align::reflow_edit`: each link follows its own word into the new text, the others go
+   back to the bank), so a verse and its alignment are never seen apart; the earlier alignment stays in
    History (§5.1).
 5. **Storage.** A save is one atomic file in `.tc/pending/`, outside the burrito, named by its
    device and its content hash, so no other save can ever replace it. A **seal**
@@ -1616,8 +1616,9 @@ layer holds an open project as a handle:
 5. One `Verse` change, `parents = shown.heads`, `cause: Edit`. In the same batch, the verse's
    alignment carried over to the new text (APP-DESIGN R25): when the alignment keyed by the
    run's anchor (§7.7) is not in conflict, covers this run's span, is not marked invalid, has a
-   card, and its text hash no longer matches, `tc_align::reflow` keeps on each card the target
-   words the new text still has, at their new occurrences, sends new words to the bank and drops
+   card, and its text hash no longer matches, `tc_align::reflow_edit`, from the old text to the
+   new, keeps on each card the target words that follow into the new text, at their new
+   occurrences, sends new words to the bank and drops
    words that are gone; the change has `parents` = the alignment's heads in the actor's fold and
    `cause: Edit`. tC4 reflows when the aligner next opens the verse; writing the reflow with the
    verse keeps the two in one batch, so no crash, sync or reader ever sees a verse beside an

@@ -541,7 +541,7 @@ fn mark_done_sets_done_with_words_in_the_bank_and_vouches_for_the_current_text()
     flagged.mark_done(&new_text);
     assert!(!flagged.marked_invalid);
     assert_eq!(
-        verse_status(Some(&flagged), Some((&current(&new_text), &new_text))).state,
+        verse_status(Some(&flagged), Some((&current(&new_text), &new_text)), None).state,
         VerseState::Valid
     );
 }
@@ -569,7 +569,7 @@ fn the_rail_reads_valid_from_done_only_and_staleness_outranks_it() {
         .link(1, &bank_word(&full_no_flag, "siervo", 1))
         .unwrap();
     let state = |v: Option<&AlignmentValue>, c: Option<(&AlignedRun, &TargetVerse)>| {
-        verse_status(v, c).state
+        verse_status(v, c, None).state
     };
     let now = (&now, &verse);
     assert_eq!(state(Some(&full_no_flag), Some(now)), VerseState::Todo);
@@ -589,7 +589,7 @@ fn the_rail_reads_valid_from_done_only_and_staleness_outranks_it() {
     assert_eq!(state(Some(&flagged), Some(now)), VerseState::Invalid);
     assert_eq!(state(None, Some(now)), VerseState::Todo);
     assert_eq!(state(None, None), VerseState::Undrafted);
-    let status = verse_status(Some(&half), Some(now));
+    let status = verse_status(Some(&half), Some(now), None);
     assert_eq!((status.placed, status.total), (1, 2));
 }
 
@@ -601,7 +601,7 @@ fn an_edit_clears_the_re_review_flag_tc3_or_tc4_set() {
     flagged.settle(&verse);
     assert!(!flagged.marked_invalid);
     assert_eq!(
-        verse_status(Some(&flagged), Some((&current(&verse), &verse))).state,
+        verse_status(Some(&flagged), Some((&current(&verse), &verse)), None).state,
         VerseState::Valid
     );
 }
@@ -663,7 +663,7 @@ fn staleness_names_each_reason_a_done_value_no_longer_vouches_for_the_verse() {
         } else {
             &other
         };
-        let state = verse_status(Some(&value), Some((now, text))).state;
+        let state = verse_status(Some(&value), Some((now, text)), None).state;
         let expected = if reasons.is_empty() {
             VerseState::Valid
         } else {

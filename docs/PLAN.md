@@ -95,7 +95,7 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   the word, unannounced (#789 is open in tC4).
 - Align opens a verse with a card for every word of the pinned original-language verse,
   comparing words in NFC; a link to a word the pin lacks goes back to the word bank and is
-  listed (#790). tC4 shows the stored cards as they are, so the sample's TIT 1:1 offers 11
+  listed, and the verse needs review on the rail and when it opens (#790). tC4 shows the stored cards as they are, so the sample's TIT 1:1 offers 11
   of UGNT's 17 Greek words. Suggestions compare original-language words in NFC (#793), so
   Hebrew alignments imported from tC4 4.0, which stores them in NFC, train suggestions for
   the pinned UHB.

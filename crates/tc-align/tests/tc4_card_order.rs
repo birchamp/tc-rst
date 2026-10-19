@@ -124,7 +124,7 @@ fn a_stored_out_of_order_card_opens_in_verse_order_with_nothing_to_save() {
     }
     value.settle(&verse);
     let stored = value.clone();
-    let aligner = Aligner::open(Some(&stored), verse, &orig(), basis(1)).unwrap();
+    let aligner = Aligner::open(Some(&stored), None, verse, &orig(), basis(1)).unwrap();
     assert_eq!(card(aligner.value(), 0), ["la/1", "fe/1", "los/1"]);
     assert!(!aligner.is_changed(), "the store sees no write");
     assert_eq!(
@@ -165,7 +165,7 @@ fn weaving_a_card_in_drop_order_or_in_verse_order_gives_the_same_bytes() {
 #[test]
 fn every_edit_leaves_each_card_in_verse_order_wherever_the_word_was_dropped() {
     let verse = TargetVerse::new(TEXT);
-    let mut aligner = Aligner::open(None, verse, &orig(), basis(1)).unwrap();
+    let mut aligner = Aligner::open(None, None, verse, &orig(), basis(1)).unwrap();
     let word = |a: &Aligner, w: &str, o: u32| bank(a.value(), w, o);
     for w in ["los", "fe", "la"] {
         aligner.place(0, &word(&aligner, w, 1)).unwrap();
@@ -210,6 +210,7 @@ fn tc4s_sample_record_opens_in_verse_order_and_is_saved_in_it_only_after_an_edit
     let open = || {
         Aligner::open(
             Some(&stored),
+            None,
             verse.clone(),
             &source_verse(UGNT, "1:1"),
             basis(1),

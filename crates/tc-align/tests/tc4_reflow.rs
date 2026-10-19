@@ -29,12 +29,17 @@ const TEXT: &str = "Pablo, siervo de Dios y de Dios";
 
 /// Pablo on Παῦλος, siervo on δοῦλος and Dios(2) on θεοῦ.
 fn linked() -> AlignmentValue {
+    linked_on(TEXT)
+}
+
+/// [`linked`] made against `text`, which holds TEXT's words.
+fn linked_on(text: &str) -> AlignmentValue {
     let source = SourceVerse::new(vec![
         greek("Παῦλος", "G39720", "Παῦλος"),
         greek("δοῦλος", "G14010", "δοῦλος"),
         greek("θεοῦ", "G23160", "θεός"),
     ]);
-    let verse = TargetVerse::new(TEXT);
+    let verse = TargetVerse::new(text);
     let mut value = bootstrap(&source, &verse, basis(1));
     for (card, text, occurrence) in [(0, "Pablo", 1), (1, "siervo", 1), (2, "Dios", 2)] {
         let word = value
@@ -61,7 +66,7 @@ fn placed(value: &AlignmentValue) -> Vec<Vec<String>> {
 fn a_link_whose_target_word_is_still_present_is_kept_and_a_new_word_is_banked() {
     let before = linked();
     let text = "Pablo, siervo de Dios y apóstol de Dios";
-    let next = reflow(&before, &TargetVerse::new(text)).unwrap();
+    let next = reflow_edit(&before, &TargetVerse::new(TEXT), &TargetVerse::new(text)).unwrap();
     assert_eq!(
         placed(&next.value),
         [["Pablo/1/1"], ["siervo/1/1"], ["Dios/2/2"]]
@@ -85,8 +90,9 @@ fn a_link_whose_target_word_is_still_present_is_kept_and_a_new_word_is_banked() 
 
 #[test]
 fn a_changed_word_loses_its_link_and_its_replacement_is_banked() {
-    let next = reflow(
+    let next = reflow_edit(
         &linked(),
+        &TargetVerse::new(TEXT),
         &TargetVerse::new("Pablo, esclavo de Dios y de Dios"),
     )
     .unwrap();
@@ -212,15 +218,16 @@ fn assert_no_loss(
     assert_eq!(held, words, "{at}");
 }
 
+fn count(verse: &TargetVerse) -> std::collections::BTreeMap<String, usize> {
+    let mut n = std::collections::BTreeMap::<String, usize>::new();
+    for w in verse.words() {
+        *n.entry(w.word.clone()).or_default() += 1;
+    }
+    n
+}
+
 /// The texts the edit gave another number of copies.
 fn recounted(before: &TargetVerse, after: &TargetVerse) -> std::collections::BTreeSet<String> {
-    let count = |v: &TargetVerse| {
-        let mut n = std::collections::BTreeMap::<String, usize>::new();
-        for w in v.words() {
-            *n.entry(w.word.clone()).or_default() += 1;
-        }
-        n
-    };
     let (old, new) = (count(before), count(after));
     old.keys()
         .chain(new.keys())
@@ -263,13 +270,16 @@ fn reflow_matches_tc4_on_edited_en_ult_verses_and_drops_nothing_silently() {
             }
             let ours = ours.unwrap_or_else(|e| panic!("{at}: {e:?}"));
             // Without the earlier text, a link whose word the edit gave another number of
-            // copies goes back to the bank, reported (#789, Q30 (a)); every other link is
-            // tC4's.
+            // copies, or that the edited verse holds more than once, goes back to the bank,
+            // reported (#789, Q30 (a)); every other link is tC4's.
             let recounted = recounted(&before, &verse);
+            let repeated = count(&verse);
             let mut theirs = value_of(expected);
             for group in &mut theirs.alignments {
                 let before = group.bottom_words.len();
-                group.bottom_words.retain(|w| !recounted.contains(&w.word));
+                group
+                    .bottom_words
+                    .retain(|w| !recounted.contains(&w.word) && repeated[&w.word] == 1);
                 unclear += before - group.bottom_words.len();
             }
             assert_eq!(cards(&ours.value), cards(&theirs), "{at}");
@@ -282,7 +292,7 @@ fn reflow_matches_tc4_on_edited_en_ult_verses_and_drops_nothing_silently() {
             let edited = reflow_edit(&value, &before, &verse).unwrap();
             assert_no_loss(&value, &edited, &verse, &at);
             if recounted.is_empty() {
-                assert_eq!(edited, ours, "{at}");
+                assert_eq!(cards(&edited.value), cards(&value_of(expected)), "{at}");
             }
             dropped += ours.dropped.len();
             reflowed += 1;
@@ -301,8 +311,9 @@ fn a_word_held_on_two_cards_is_kept_on_the_first_and_reported_dropped_from_the_s
     let pablo = twice.alignments[0].bottom_words[0].clone();
     twice.alignments[2].bottom_words.push(pablo.clone());
     assert!(twice.well_formed().is_err());
-    let next = reflow(
+    let next = reflow_edit(
         &twice,
+        &TargetVerse::new(TEXT),
         &TargetVerse::new("Pablo, siervo de Dios y apóstol de Dios"),
     )
     .unwrap();
@@ -388,7 +399,7 @@ fn deleting_an_earlier_copy_keeps_the_link_on_its_physical_word() {
     assert!(!next.value.marked_invalid);
     let run = basis(1).aligned_run(&after);
     assert_ne!(
-        tc_align::verse_status(Some(&next.value), Some((&run, &after))).state,
+        tc_align::verse_status(Some(&next.value), Some((&run, &after)), None).state,
         tc_align::VerseState::Invalid
     );
     // Without the earlier text it is not clear which Dios went: both links go back to the
@@ -434,6 +445,49 @@ fn delete_then_readd_never_reattaches_an_old_link() {
     assert!(placed(&next.value)[2].is_empty());
     assert_eq!(placed(&next.value)[9], ["Dios/2/2"]);
     assert_eq!(next.dropped.len(), 1);
+}
+
+#[test]
+fn without_the_earlier_text_a_link_never_moves_to_a_retyped_copy_of_its_word() {
+    // The first Dios deleted and another typed earlier: the verse still holds two.
+    let (stored, text) = sample();
+    let moved =
+        TargetVerse::new(&text.replacen("Pablo, siervo de Dios", "Pablo, Dios, siervo de", 1));
+    let next = reflow(&stored, &moved).unwrap();
+    assert!(
+        placed(&next.value)[2].is_empty(),
+        "Θεοῦ¹ does not take the new Dios"
+    );
+    assert!(placed(&next.value)[9].is_empty());
+    let dropped: Vec<_> = next
+        .dropped
+        .iter()
+        .map(|d| (d.card, show(std::slice::from_ref(&d.word))))
+        .collect();
+    assert_eq!(
+        dropped,
+        [
+            (2, vec!["Dios/1/2".to_owned()]),
+            (9, vec!["Dios/2/2".to_owned()])
+        ]
+    );
+    assert!(show(&next.value.word_bank).contains(&"Dios/1/2".to_owned()));
+    // A link to a word the verse holds once is clear.
+    assert_eq!(placed(&next.value)[0], ["Pablo/1/1"]);
+}
+
+#[test]
+fn a_value_stamped_with_the_shown_text_as_tc4_stamps_keeps_its_links_to_repeated_words() {
+    // A `\qs` Selah written over lines: the shown text has it, the hashed text does not.
+    let text = "Pablo, siervo de Dios y de Dios\n\\qs\nSelah\n\\qs*\n";
+    let verse = TargetVerse::new(text);
+    let mut value = linked_on(text);
+    value.target_verse_md5 = tc_align::Md5::of(verse.text().as_bytes());
+    assert_ne!(value.target_verse_md5, verse.md5());
+    let next = reflow(&value, &verse).unwrap();
+    assert!(next.dropped.is_empty());
+    assert_eq!(placed(&next.value)[2], ["Dios/2/2"]);
+    assert_eq!(next.value.target_verse_md5, verse.md5());
 }
 
 #[test]

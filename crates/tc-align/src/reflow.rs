@@ -7,12 +7,13 @@
 //!
 //! Each link follows its own word, by position (tC4 #789, the owner's Q30 (a)). Given the
 //! text the value was made against ([`reflow_edit`]), the words of the two texts are matched
-//! as a longest common subsequence by text, and a word goes where every such match puts it.
-//! Without that text ([`reflow`]), a word keeps its occurrence only while the verse holds as
-//! many copies of it as when it was placed. Either way, when it is not clear where a linked
-//! word went (an earlier copy of it was added or deleted, and the texts do not tell which),
-//! its link returns to the bank and is reported, so it never moves to another copy of the
-//! word. The verse is not marked for review for it.
+//! as a longest common subsequence by text, and a word goes where every such match puts it;
+//! when it is not clear where a linked word went (an earlier copy of it was added or
+//! deleted, and the texts do not tell which), its link returns to the bank and is reported.
+//! Without that text ([`reflow`]), only a word the verse holds once, and held once when it
+//! was placed, is clear: a link to a repeated word returns to the bank and is reported,
+//! since a copy deleted and another typed elsewhere leaves the same count. So a link never
+//! moves to another copy of its word. The verse is not marked for review for it.
 //!
 //! Nothing here writes. tC4 writes the reflow of every edited verse at draft save. Here the
 //! store writes it in the batch of the verse save (APP-DESIGN R25, STORAGE.md §5.1 step 5,
@@ -28,6 +29,7 @@ use std::collections::HashMap;
 use crate::edit::Alignment;
 use crate::value::holds_the_words_of;
 use crate::words::TargetVerse;
+use tc_core::Md5;
 use tc_journal::json::JsonMap;
 use tc_journal::record::{AlignmentGroup, AlignmentValue, SourceWord, TargetWord};
 
@@ -192,30 +194,41 @@ enum Places<'a> {
         before: &'a TargetVerse,
         to: Vec<Option<usize>>,
     },
-    /// Without the earlier text: by text and occurrence, while the count is unchanged.
-    Counted,
+    /// Without the earlier text: by text and occurrence, while the count is unchanged, and
+    /// over `changed` text only for a word held once.
+    Counted { changed: bool },
 }
 
 impl<'a> Places<'a> {
     fn new(value: &AlignmentValue, before: Option<&'a TargetVerse>, verse: &TargetVerse) -> Self {
-        match before.filter(|b| !value.is_stale_against(b)) {
+        match before.filter(|b| made_against(value, b)) {
             Some(before) => Places::Moved {
                 before,
                 to: follow(before.words(), verse.words()),
             },
-            None => Places::Counted,
+            None => Places::Counted {
+                changed: !made_against(value, verse),
+            },
         }
     }
 
     fn of(&self, word: &TargetWord, verse: &TargetVerse) -> Option<usize> {
         match self {
             Places::Moved { before, to } => to[before.position(word)?],
-            Places::Counted => {
+            Places::Counted { changed } => {
                 let at = verse.position(word)?;
-                (verse.words()[at].occurrences == word.occurrences).then_some(at)
+                let count = verse.words()[at].occurrences;
+                (count == word.occurrences && (count == 1 || !changed)).then_some(at)
             }
         }
     }
+}
+
+/// Whether `value` was made against `verse`: its hash is the verse's, or the md5 of the
+/// verse's shown text, which tC4's aligner stamps instead (`stampTargetVerse`, STORAGE.md
+/// §7.7 on the two texts).
+fn made_against(value: &AlignmentValue, verse: &TargetVerse) -> bool {
+    !value.is_stale_against(verse) || value.target_verse_md5 == Md5::of(verse.text().as_bytes())
 }
 
 /// For each word of `old`, its position in `new` when every longest common subsequence of

@@ -98,7 +98,7 @@ fn every_aligned_ult_verse_opens_in_verse_order_with_nothing_to_save() {
     for verse in &verses {
         let at = &verse.reference;
         let (stored, target) = stored(verse);
-        let aligner = Aligner::open(Some(&stored), target, &verse.source, basis(1))
+        let aligner = Aligner::open(Some(&stored), None, target, &verse.source, basis(1))
             .unwrap_or_else(|e| panic!("{at}: {e}"));
         assert!(shown_in_verse_order(&aligner), "{at}");
         assert!(!aligner.is_changed(), "{at}: order alone is not saved");
@@ -138,7 +138,7 @@ fn every_hebrew_verse_as_the_translation_opens_and_edits_in_reading_order() {
         if words.iter().any(|w| w.occurrences > 1) {
             repeated += 1;
         }
-        let mut aligner = Aligner::open(None, target, &verse.source, basis(1))
+        let mut aligner = Aligner::open(None, None, target, &verse.source, basis(1))
             .unwrap_or_else(|e| panic!("{at}: {e}"));
         assert_eq!(aligner.value().word_bank, words, "{at}: the first view");
 
@@ -196,7 +196,8 @@ fn opening_editing_and_reflowing_the_longest_psalms_verse_meet_the_budgets() {
     // A debug build only checks that the code runs.
     let runs = if cfg!(debug_assertions) { 1 } else { 21 };
 
-    let open = || Aligner::open(Some(&stored), target.clone(), &verse.source, basis(1)).unwrap();
+    let open =
+        || Aligner::open(Some(&stored), None, target.clone(), &verse.source, basis(1)).unwrap();
     let (open_median, open_p95) = time(runs, || timed(open));
 
     // The edits a translator makes on the verse: every word back to the bank and onto

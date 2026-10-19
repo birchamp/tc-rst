@@ -414,7 +414,7 @@ fn compare_alignments(state: &FoldState, pins: &ProjectPins, book: BookId, out: 
             text_md5: verse.md5(),
             source_sha,
         };
-        let shown = verse_status(Some(&value), Some((&run, &verse)));
+        let shown = verse_status(Some(&value), Some((&run, &verse)), None);
         // The rail reads `tc_align::needs_review`: the fold's rule, and also whether every
         // word the alignment holds is a word of the verse, which the fold's `invalid` does not
         // read yet (tC4 #796; the corpus stamps a save with the current text's hash over the
