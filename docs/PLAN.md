@@ -70,6 +70,10 @@ owner is told of each:
   registry says right to left and names it اردو in Arabic script, so its helps would read
   backwards. The Source texts screen draws that row in Devanagari; B9a masks it and cites this
   entry.
+- A story project's own pictures are found by their path below `ingredients/`, outside
+  `checking/`, `tc/` and `content/` (#549). tC4 4.0 takes only an ingredient with the role
+  `x-obsimages`, which the rebuild's `metadata.json` does not write for a carried file and
+  Pankosmia's rescan drops, so a project's own pictures would never show.
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
