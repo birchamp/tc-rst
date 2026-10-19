@@ -4820,6 +4820,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the snapshot taken when the seal starts (hand the writer the newest) | `a_commit_made_while_a_save_is_served_shows_only_what_its_packs_hold` |
 | the tree's paths from the snapshot (waiting outside edit, written from a newer snapshot) | `a_commit_takes_a_file_waiting_for_an_outside_edit_from_the_snapshot`, `a_retry_that_wrote_a_newer_snapshot_does_not_reach_the_tree` |
 | the freshening of a reused blob and the repack's guard while a commit is made | `a_blob_a_new_commit_names_again_is_kept_young`, `a_repack_prunes_nothing_while_a_commit_is_being_made` (`git.rs`) |
+| the notice of a rewrite whose every digest equals its base | `a_whitespace_only_rewrite_records_nothing` |
+| the recording of the fields of an outside edit of `metadata.json` | `arbitrary_meta_never_blocks_commit`, `every_kind_of_outside_edit_in_one_project_conserves` |
 | the removal of a `Failed` notice by a job that wrote | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit` |
 | the revert rule and the removal rule of the planner (switch either off) | `every_kind_of_outside_edit_in_one_project_conserves`, `outside_edit_reconcile_conserves` |
 | the look at a file just before its rename (rename over what M1 read) | `an_outside_save_during_the_rename_window_is_never_overwritten` |
