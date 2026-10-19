@@ -99,6 +99,11 @@ impl Outcome {
     }
 }
 
+/// The units landed in the planted world: those of phase 0 (APP-DESIGN §10).
+const PLANTED_LANDED: [&str; 15] = [
+    "A1", "A2", "A3", "A4a", "A4b", "A6a", "A6b", "A7", "A9", "A10", "A11", "B1b", "C0", "G0", "A5",
+];
+
 impl Planted {
     fn new() -> Self {
         let committed = Paths::committed();
@@ -127,14 +132,21 @@ impl Planted {
             "projects": { "sample": projects, "en-pins": projects, "shared": projects },
             "screens": [],
         });
-        Self {
+        let planted = Self {
             dir,
             committed,
             manifest,
             captures,
             report_override: None,
             gallery: None,
-        }
+        };
+        // The planted world is the record as phase 0 left it, whatever has landed since: its
+        // units, and no row explained yet. Its captures start empty, so a later unit's landing
+        // would make each of its layers overdue in every planted test; a test that needs a
+        // later unit lands it.
+        planted.edit_json("units.json", |u| u["landed"] = json!(PLANTED_LANDED));
+        planted.edit_json("residuals.json", |r| r["rows"] = json!({}));
+        planted
     }
 
     fn app(&self) -> &Path {

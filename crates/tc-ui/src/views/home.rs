@@ -467,14 +467,39 @@ fn conflicts_chip(
                     on:click=move |_| actions.open_project_conflicts(project_open.clone())
                     style=style
                 >
-                    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; display: block;">
-                        <path d="M6 3v12"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="6" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path>
-                    </svg>
+                    {branch_icon()}
                     {move || t(if n == 1 { keys::home::CONFLICTS_ONE } else { keys::home::CONFLICTS_MANY }, &[("n", &n.to_string())])}
                 </button>
             }
         })
     }
+}
+
+/// The chip's branch icon. Built with the SVG builders: `view!` would wrap each shape in a
+/// group.
+fn branch_icon() -> AnyView {
+    use leptos::svg;
+    use crate::ds::fixed;
+    svg::svg()
+        .add_any_attr(fixed(&[
+            ("aria-hidden", "true"),
+            ("width", "13"),
+            ("height", "13"),
+            ("viewBox", "0 0 24 24"),
+            ("fill", "none"),
+            ("stroke", "currentColor"),
+            ("stroke-width", "2.2"),
+            ("stroke-linecap", "round"),
+            ("stroke-linejoin", "round"),
+            ("style", "flex: none; display: block;"),
+        ]))
+        .child((
+            svg::path().add_any_attr(fixed(&[("d", "M6 3v12")])),
+            svg::circle().add_any_attr(fixed(&[("cx", "6"), ("cy", "18"), ("r", "3")])),
+            svg::circle().add_any_attr(fixed(&[("cx", "18"), ("cy", "6"), ("r", "3")])),
+            svg::path().add_any_attr(fixed(&[("d", "M18 9a9 9 0 0 1-9 9")])),
+        ))
+        .into_any()
 }
 
 /// A book tile's conflict line.

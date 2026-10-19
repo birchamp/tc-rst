@@ -10,13 +10,28 @@ use crate::app::web::{Actions, AppCtx, use_app};
 use crate::ds::{Attrs, Content, OptionCard};
 use crate::i18n::{Key, keys, t};
 
-/// The arrow down to a line of the Door43 card (the owner's mockup, artboard d).
-fn download_icon() -> impl IntoView {
-    view! {
-        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path>
-        </svg>
-    }
+/// The arrow down to a line of the Door43 card (the owner's mockup, artboard d). Built with the
+/// SVG builders: `view!` would wrap each path in a group.
+fn download_icon() -> AnyView {
+    use leptos::svg;
+    svg::svg()
+        .add_any_attr(crate::ds::fixed(&[
+            ("aria-hidden", "true"),
+            ("width", "18"),
+            ("height", "18"),
+            ("viewBox", "0 0 24 24"),
+            ("fill", "none"),
+            ("stroke", "currentColor"),
+            ("stroke-width", "2"),
+            ("stroke-linecap", "round"),
+            ("stroke-linejoin", "round"),
+        ]))
+        .child((
+            svg::path().add_any_attr(crate::ds::fixed(&[("d", "M12 4v11")])),
+            svg::path().add_any_attr(crate::ds::fixed(&[("d", "M7 10l5 5 5-5")])),
+            svg::path().add_any_attr(crate::ds::fixed(&[("d", "M5 20h14")])),
+        ))
+        .into_any()
 }
 
 /// The dialog, while `s.modal` is AddProject.

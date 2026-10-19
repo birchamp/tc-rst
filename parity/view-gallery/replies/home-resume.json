@@ -1,0 +1,27 @@
+{
+  "case": "home-resume",
+  "replies": [
+    {
+      "endpoint": "test/lastEdit",
+      "source": "hand",
+      "request": {
+        "project": "sample_burrito",
+        "place": {
+          "type": "book",
+          "value": {
+            "book": "TIT",
+            "chapter": 1,
+            "verse": "1"
+          }
+        },
+        "mode": "draft",
+        "snippet": "Pablo, siervo de Dios y  xapóstol de Jesucristo, según la fe de los escogidos de Dios y el",
+        "at": 1792378282100
+      },
+      "reply": {
+        "type": "ok",
+        "value": null
+      }
+    }
+  ]
+}

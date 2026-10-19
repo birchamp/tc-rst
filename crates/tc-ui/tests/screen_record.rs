@@ -198,7 +198,8 @@ fn section_7_4_names_every_gallery_group_with_its_units() {
     let paths = Paths::committed();
     let design = doc(&paths);
     let record = Record::load(paths).unwrap();
-    assert_eq!(design.gallery.len(), 18);
+    // B2 D10 moved three Home cases into home-held, home-open and home-checkpoint.
+    assert_eq!(design.gallery.len(), 21);
     let units = |name: &str| {
         let group = design
             .group(name)
@@ -211,6 +212,10 @@ fn section_7_4_names_every_gallery_group_with_its_units() {
     assert_eq!(units("M18"), ("B4b", "B4b"));
     assert_eq!(units("S4"), ("B11", "B11"));
     assert_eq!(units("check-empty"), ("B5a", "B5a"));
+    assert_eq!(units("home"), ("B2", "B2"));
+    assert_eq!(units("home-held"), ("B3", "B3"));
+    assert_eq!(units("home-open"), ("B3", "B3"));
+    assert_eq!(units("home-checkpoint"), ("D1", "D1"));
     for case in &record.cases.cases {
         let group = design
             .group(&case.group)

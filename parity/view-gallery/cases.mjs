@@ -9,6 +9,7 @@
 // (replies added over the state's recorded ones); steps (steps.mjs); scope; masks (masks of
 // parity/app/masks.json whose element the case shows); rust (how the Rust app reaches the
 // case, when the default does not apply: parity/app/capture-rust.mjs --case); why.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { applyPatch } from './lib.mjs';
@@ -25,6 +26,13 @@ const AT = '2026-10-18T12:00:00.000Z';
  * could not connect, which tC4 does not wrap (ServerApi awaits fetch). Used where a case shows
  * a failed read, so the failure is one tC4 really meets and no text is made up. */
 const FETCH_FAILED = 'Failed to fetch';
+
+/** A case's hand replies (`replies/<case>.json`), which its Rust route gives the page or the
+ * server (APP-DESIGN §7.4). */
+const readReplies = (name) => JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'view-gallery', 'replies', `${name}.json`), 'utf8'));
+/** The `home/list` reply a case's Rust route answers once. */
+const homeReply = (name) => readReplies(name).replies.find((r) => r.endpoint === 'home/list').reply;
+const newRequestId = () => crypto.randomBytes(16).toString('hex');
 
 /** The next release name after `version` (v66 -> v67, v0.34 -> v0.35). */
 const nextVersion = (version) => version.replace(/(\d+)$/, (n) => String(Number(n) + 1));
@@ -237,6 +245,15 @@ export const CASES = [
     ],
     why: 'The License dialog from About (AccountMenu.jsx LicenseDialog).' },
   { name: 'net-failed', group: 'net-failed', state: 'home', scope: LAST_DIALOG, patch: () => ({ netFailed: true }),
+    // The Rust app: the Share question over Home, with `net/set` answering once that the
+    // switch stayed off (B2 D6, D10): the step cannot run, as when turning it on fails.
+    rust: async (app, env) => {
+      await app.home();
+      await app.page.route('**/api/v1/net/set', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'ok', value: { on: false } }) }), { times: 1 });
+      await app.shareButton(BIBLE).click();
+      await app.page.getByTestId('net-confirm').click();
+      await app.page.getByTestId('net-failed').waitFor();
+    },
     why: '"tC4 could not use the internet": turning the internet on failed (AccountMenu.jsx InternetDialog). The mock\'s gate never fails.' },
 
   // ---- share ---------------------------------------------------------------------------------
@@ -344,20 +361,43 @@ export const CASES = [
     why: 'Align after the verse failed to read: the error and Retry (openAlign\'s catch).' },
 
   // ---- home ----------------------------------------------------------------------------------
-  { name: 'home-loading', group: 'home', state: 'home', patch: () => ({ projects: null }),
+  // home-loading photographs a read in flight, which B3 can capture (S14 needs it too); the
+  // open's and the checkpoint's errors need the open (B3) and the leave checkpoint (D1) (B2 D10).
+  { name: 'home-loading', group: 'home-held', state: 'home', patch: () => ({ projects: null }),
     why: 'Home before the project list is read.' },
   { name: 'home-empty', group: 'home', state: 'home', patch: () => ({ projects: [] }),
+    // The Rust app: home/list answered once with no project, a hand reply (replies/home-empty.json).
+    rust: async (app, env) => {
+      await app.page.route('**/api/v1/home/list', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(homeReply('home-empty')) }), { times: 1 });
+      await env.load(app.page, { locale: 'en' });
+      await app.page.getByText(env.catalog('en')['home.noProjects']).waitFor();
+    },
     why: 'Home with no project.' },
   { name: 'home-list-error', group: 'home', state: 'home', patch: () => ({ projects: null, bookError: `TypeError: ${FETCH_FAILED}` }),
+    // The Rust app: home/list answered once with an error, a hand reply (replies/home-list-error.json):
+    // a 200 with an error, since a failed load would log a console error, which fails a capture.
+    rust: async (app, env) => {
+      await app.page.route('**/api/v1/home/list', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(homeReply('home-list-error')) }), { times: 1 });
+      await env.load(app.page, { locale: 'en' });
+      await app.page.getByTestId('projects-retry').waitFor();
+    },
     why: 'Home when the project list failed to read: the banner with Retry (state.jsx refreshProjects\' catch writes String(e)).' },
-  { name: 'home-open-error', group: 'home', state: 'home-open-error',
+  { name: 'home-open-error', group: 'home-open', state: 'home-open-error',
     why: 'Home after an open refused a file written outside the app.' },
-  { name: 'home-checkpoint-error', group: 'home', state: 'home',
+  { name: 'home-checkpoint-error', group: 'home-checkpoint', state: 'home',
     patch: (s, { kit }) => ({ commitError: `${kit.t('app.commitError')}: ${FETCH_FAILED}`, commitErrorHelp: null, commitErrorRepo: BIBLE }),
     why: 'Home after the checkpoint of the project just left failed (state.jsx startLeaveCheckpoint).' },
 
   // ---- resume, import-toast ------------------------------------------------------------------
   { name: 'home-resume', group: 'resume', state: 'resume',
+    // The Rust app: the Resume record tC4 recorded, through test/lastEdit (replies/home-resume.json),
+    // before any save exists (B2 D12).
+    rust: async (app, env) => {
+      await app.home();
+      const { request } = readReplies('home-resume').replies[0];
+      await env.call('test/lastEdit', { ...request, request: newRequestId() });
+      await app.page.getByTestId('resume-card').waitFor();
+    },
     why: 'Home with the Resume card after a section of Titus 1 was saved.' },
   { name: 'import-toast', group: 'import-toast', state: 'home',
     patch: (s, { kit }) => {

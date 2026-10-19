@@ -1,0 +1,19 @@
+{
+  "case": "home-list-error",
+  "replies": [
+    {
+      "endpoint": "home/list",
+      "source": "hand",
+      "request": {},
+      "reply": {
+        "type": "err",
+        "value": {
+          "type": "internal",
+          "value": {
+            "report": 0
+          }
+        }
+      }
+    }
+  ]
+}

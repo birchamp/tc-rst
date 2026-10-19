@@ -2566,7 +2566,10 @@ The groups, which the gate reads (keep the backticks and the four cells):
 | `sign-in` | the sign-in error (`ShareSignIn.jsx`) | A8 | B9b |
 | `check-empty` | the check empty states (`Check.jsx`: `CheckEmpty`, deriving, an error, a filter with no match, a picker card with no items) | B5a | B5a |
 | `align-unavailable` | the align unavailable states (`Align.jsx`, `AlignBlocked`), loading and an error | B6 | B6 |
-| `home` | Home loading, empty and with an error (`Home.jsx`) | B2 | B2 |
+| `home` | Home empty and with an error of its listing (`Home.jsx`) | B2 | B2 |
+| `home-held` | Home while its listing is read (`Home.jsx`): a photograph of a read in flight, which the capture of work in flight that B3 builds for S14 takes *(B2 D10)* | B3 | B3 |
+| `home-open` | Home after an open was refused (`Home.jsx`, `bookError`): it needs the open *(B2 D10)* | B3 | B3 |
+| `home-checkpoint` | Home after the checkpoint of the project just left failed (`Home.jsx`, `commitError`): it needs the leave checkpoint *(B2 D10)* | D1 | D1 |
 | `resume` | the Resume card (`Home.jsx`, `ResumeCard`) | B2 | B2 |
 | `import-toast` | the import toast (`Home.jsx`) | F1 | F1 |
 

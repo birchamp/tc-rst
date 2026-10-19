@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "71e4a7c9e82fb4cb",
+    "ui": "cf0b546e8b0db4c2",
     "commit": "dev",
     "api": 1
   },
@@ -21,56 +21,166 @@
   },
   "screens": [
     {
-      "name": "account-menu",
+      "name": "home",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
+      "by": "B2",
       "backend": "memory",
       "layers": [
-        "dom"
+        "pixels",
+        "dom",
+        "meaning"
       ],
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {},
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/home.png",
+      "sha256": "86eebce10e6faadb77d06970f2dc469261766fae4dad2e270dbaa76e97fc4540",
+      "dom": "dom/home.json",
+      "domSha256": "fcbba3ccd12dd9ed1b0cb61470c92475ecd0876151300ce40a3ea263eb7aff7e"
+    },
+    {
+      "name": "add-project",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/add-project.png",
+      "sha256": "2d95703d1d9dfe8e128a2af0bf6d4b78adf3f77f51ab3d6835ed6fc0be321e2e",
+      "dom": "dom/add-project.json",
+      "domSha256": "d77cc83d7a89aa092602e19f6bf5f10b3ee5ba75622b962956cebca0db062f06"
+    },
+    {
+      "name": "new-bible",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/new-bible.png",
+      "sha256": "6f8a27c11a512eabcf1365c08e5710d912b069ecd65071a6b815d535c3b0cf04",
+      "dom": "dom/new-bible.json",
+      "domSha256": "9c16df3d440020ba3583df890f8d49430b9eff73e7ce4bdc9e737b9adc235ece"
+    },
+    {
+      "name": "import",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import.png",
+      "sha256": "2e2bbe70d756ebce7502a11222f4f649c9f5e0bae04ce86c150c00a1b3d3f03e",
+      "dom": "dom/import.json",
+      "domSha256": "9635ca8005fe211acde02b2150c3279119815f7978c6f442939f0545c632665a"
+    },
+    {
+      "name": "account-menu",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/account-menu.png",
-      "sha256": "7bc2b05f7c74769001a55c931bf5c193f3a01fdb6d1fdc18ab9e7ab5d10401a4",
+      "sha256": "8737f483073955d7d56a81c13fa9076acf8e809e8be91d10d23ffb0fc8985070",
       "dom": "dom/account-menu.json",
-      "domSha256": "0103f8f43b98d492a5b044084b9bdc6c360b0a99347a5863d395bdb072fa8ff5"
+      "domSha256": "375b9e3a9f038d2bc9ceb27d4ee4a0a9dabbe993c4f0c7ca171adec5855a1a41"
     },
     {
       "name": "app-language",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
+      "by": "B2",
       "backend": "memory",
       "layers": [
-        "dom"
+        "pixels",
+        "dom",
+        "meaning"
       ],
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {},
+      "homeCards": {
+        "sample_burrito": "share"
+      },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/app-language.png",
-      "sha256": "4f8c1f7a586efc1534dc51f0b0cae018135ece1c8b5e84bf5d1213ebb46aa5db",
+      "sha256": "b3cf2ac8d8494f33646b09d74c33cfd79177a1473d13258676c842a0c7dca5eb",
       "dom": "dom/app-language.json",
-      "domSha256": "11b36d460f298f998b05da7793f5b26e6802fb0b5ca4341eb7fc287f16d4bb9b"
+      "domSha256": "17c080004cc1785f76ec5b6dd788b33dcdb00a98efc045ac97d019a6de06a4cb"
     },
     {
       "name": "help",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
+      "by": "B2",
       "backend": "memory",
       "layers": [
-        "dom"
+        "pixels",
+        "dom",
+        "meaning"
       ],
       "error": null,
       "pageErrors": [],
@@ -81,22 +191,26 @@
       "png": "screens/help.png",
       "sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
       "dom": "dom/help.json",
-      "domSha256": "026b481b7e214d2387c4ffdbc54f4534f829de2c5acc155694c0a86394f5ef4a"
+      "domSha256": "4d822ac4cc77664592a2f76314008d2a97244db29234b2c3f4d70bd177b03ed8"
     },
     {
       "name": "about",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
+      "by": "B2",
       "backend": "memory",
       "layers": [
-        "dom"
+        "pixels",
+        "dom",
+        "meaning"
       ],
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {},
+      "homeCards": {
+        "sample_burrito": "share"
+      },
       "syncToast": null,
       "maskRects": {
         "about-build": {
@@ -107,19 +221,21 @@
         }
       },
       "png": "screens/about.png",
-      "sha256": "4e7c4cf21a8ef1b94e87aea240bf822666aeb93a29bc122e842d092381c8b7e3",
+      "sha256": "0f2bde2f1a730289cda790ab1acf005cd8d414db2f017eeb55c183029cdb25b5",
       "dom": "dom/about.json",
-      "domSha256": "5e929b3f56697b62fd05f6a43a76b69af83a7676fc7ddfb6a524c4d9dc9186d7"
+      "domSha256": "bf58a1eea2cce010a2e017efd80f772271a907b6eec62b38e018427c6a4dd5fe"
     },
     {
       "name": "feedback",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
+      "by": "B2",
       "backend": "memory",
       "layers": [
-        "dom"
+        "pixels",
+        "dom",
+        "meaning"
       ],
       "error": null,
       "pageErrors": [],
@@ -135,18 +251,69 @@
         }
       },
       "png": "screens/feedback.png",
-      "sha256": "06d58c8808c2dc61d51453a057b09245836f7965a60c81ff2a248cf7ff4879dd",
+      "sha256": "23a628784f5cde1e960736cbced1a97af2d848b310d4559be4f18ab809ce009c",
       "dom": "dom/feedback.json",
-      "domSha256": "8d8210dfc1b7c6db1a4d378027e8a37fe1c837ee3c984f5a8a45ff80cf09d014"
+      "domSha256": "90716040688f6f587155e81483fb762ed4df9ef1eb743de5cb499f09c4d3df20"
+    },
+    {
+      "name": "new-obs",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/new-obs.png",
+      "sha256": "3532b4295e471edf9ae585499f162b1b12f697d17250fa8c19edd4d771120f25",
+      "dom": "dom/new-obs.json",
+      "domSha256": "1dd90f31c670b73234dac0eb05d72c7cfd2b67ed0110aee5d4e1b86f834d8ac5"
+    },
+    {
+      "name": "add-book",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/add-book.png",
+      "sha256": "9fb4487699f22ba1c333f73712b3b4ffcb4f2bd754506f82ea1e9b3cef6c138c",
+      "dom": "dom/add-book.json",
+      "domSha256": "783fe7e37839eb8eab72501f86642f450dbe030a90e46e13d42989e9bef84544"
     },
     {
       "name": "license",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
+      "by": "B2",
       "backend": "memory",
       "layers": [
+        "pixels",
         "dom"
       ],
       "error": null,
@@ -156,9 +323,101 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/license.png",
-      "sha256": "7679f56a695faf00203fa7f5e6092ed563decba27e4c69a2a8d9a77ec856749b",
+      "sha256": "ac95625a8c200093edc32afca90d0fefc192db7d00714d99a3d769061a66b5a1",
       "dom": "dom/license.json",
-      "domSha256": "41cdd8ac9b12b0bfac5fdc227f3490ac803096a9d76671c3e98d1c390cf61930"
+      "domSha256": "f7f41f870c866347318d0111029ded7bcf4d2f70a59b70dc37a4739542c962d0"
+    },
+    {
+      "name": "net-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/net-failed.png",
+      "sha256": "a620223367aeb7f2dff1d75937388e3285a5c63f229453700aef047d25ed5a7c",
+      "dom": "dom/net-failed.json",
+      "domSha256": "739df8180ceac23dbc5aea621e68f0ba96ffa51c566ca712000eafc20c4293ea"
+    },
+    {
+      "name": "home-empty",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/home-empty.png",
+      "sha256": "f1e26c0784e1a9e26504707a0e5542d30ab0f08e35023123d6340e3376b0e0f7",
+      "dom": "dom/home-empty.json",
+      "domSha256": "8038a3aa914e9f05d0570fb2248cfefc2c0c2c42bdc8f29a5485875a889f8491"
+    },
+    {
+      "name": "home-list-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/home-list-error.png",
+      "sha256": "85218517891b73f5f5c900e50a65c3fc33bab3042a44f38c223ef7dad5ee298d",
+      "dom": "dom/home-list-error.json",
+      "domSha256": "200cee1827b9e747b881ad1e530a33a82821a46d114639a235de3d9b9f26d069"
+    },
+    {
+      "name": "home-resume",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B2",
+      "backend": "memory",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/home-resume.png",
+      "sha256": "5b6810495cd9f47b4e74b72f98590fd90b3ff61328749cc89d7d9847c9a37583",
+      "dom": "dom/home-resume.json",
+      "domSha256": "df244bc765795feb3059dbdf36e32643c79ca8906e5d74c22fa36795fd514bf1"
     }
   ]
 }
