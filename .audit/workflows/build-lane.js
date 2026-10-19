@@ -111,8 +111,9 @@ async function verify(u, report) {
 const done = {}
 function run(u) {
   if (done[u.key]) return done[u.key]
+  if (DONE.has(u.key)) return (done[u.key] = Promise.resolve({ key: u.key, merged: true }))
   done[u.key] = (async () => {
-    const deps = await Promise.all(u.deps.map(k => byKey[k] ? run(byKey[k]) : Promise.resolve({ merged: DONE.has(k) })))
+    const deps = await Promise.all(u.deps.map(k => byKey[k] && !DONE.has(k) ? run(byKey[k]) : Promise.resolve({ merged: DONE.has(k) })))
     const unmet = u.deps.filter((k, i) => !deps[i] || !deps[i].merged)
     if (unmet.length) { log(`${u.id || u.label}: waits for ${unmet.join(', ')}`); return { key: u.key, merged: false, waits: unmet } }
     if (u.ref) {
