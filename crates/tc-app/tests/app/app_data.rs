@@ -36,11 +36,13 @@ fn files_of(fs: &FaultFs) -> Vec<String> {
     fs.files_under(&root())
         .into_keys()
         .map(|p| {
+            // Joined with '/' on every system, so the expected lists hold on Windows too.
             p.strip_prefix(ROOT)
                 .unwrap()
-                .to_string_lossy()
-                .trim_start_matches('/')
-                .to_owned()
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/")
         })
         .collect()
 }
