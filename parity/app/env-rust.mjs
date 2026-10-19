@@ -34,6 +34,24 @@ export function rustTracks(url) {
 /** A request id as tc-api spells it: 16 random bytes in lowercase hex. */
 export const newRequestId = () => crypto.randomBytes(16).toString('hex');
 
+/** Whether `parity/app/units.json` lists `unit` as landed. */
+export function landed(unit) {
+  const units = JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'app', 'units.json'), 'utf8'));
+  return units.landed.includes(unit);
+}
+
+/** What Home looks like when the Rust app has drawn it (A5 D6): both project cards once unit B2
+ * ports Home; before that the top bar's account button, because the stand-in Home draws no
+ * project. */
+export async function rustHomeReady(page, card) {
+  if (landed('B2')) {
+    await card(BIBLE).waitFor();
+    await card(OBS).waitFor();
+  } else {
+    await page.getByTestId('account-menu').waitFor();
+  }
+}
+
 /** A Door43 step the Rust environment cannot take yet. */
 export function notYet(step, unit) {
   return async () => {
@@ -173,6 +191,9 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
       await page.goto('about:blank');
       await page.goto(`${origin}/#t=${token}`);
     },
+    homeReady: rustHomeReady,
+    /** The run's app-data folder, where a test can make a save fail (A4b's P7). */
+    appData: path.join(dir, 'appdata'),
     /** Work the request tracker cannot see: the server's (`test/quiet`) and the page's own
      * (`window.__tcIdle`, which also covers the catalogs it fetches). */
     async busy(page) {

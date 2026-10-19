@@ -11,8 +11,12 @@ import { BIBLE, OBS } from './screens.mjs';
  * @typedef {object} AppEnv
  * @property {(page: import('playwright').Page, options: { locale: string }) => Promise<void>} load
  *   Load Home afresh with `locale` saved as the app language and nothing else remembered: no
- *   place, no Resume card, no last-used order. The driver then waits for both project cards
- *   and for `<html lang>`.
+ *   place, no Resume card, no last-used order. The driver then waits for `homeReady` and for
+ *   `<html lang>`.
+ * @property {(page: import('playwright').Page, card: (repo: string) => import('playwright').Locator) => Promise<void>} homeReady
+ *   Wait until Home is drawn as far as this app can draw it: tC4's two project cards; on the
+ *   Rust app the cards once B2 ports Home, and the top bar's account button before that
+ *   (APP-DESIGN §7.1, A5 D6).
  * @property {(locale: string) => Record<string, string>} catalog The app's message catalog of
  *   `locale`, for steps that wait on a text.
  * @property {(repo: string) => string} projectId The id that the app's test ids use for the
@@ -42,8 +46,7 @@ export function appDriver({ page, env }) {
     async home({ locale = 'en' } = {}) {
       c = env.catalog(locale);
       await env.load(page, { locale });
-      await card(BIBLE).waitFor();
-      await card(OBS).waitFor();
+      await env.homeReady(page, card);
       await page.waitForFunction((lang) => document.documentElement.lang === lang, locale);
     },
     card,
