@@ -7,6 +7,7 @@
 mod common;
 
 use std::collections::{BTreeSet, HashMap};
+use std::time::{Duration, Instant};
 
 use common::{fixture, repo_text, resource};
 use proptest::prelude::*;
@@ -533,6 +534,125 @@ fn genesis_maqaf_quotes_title_in_the_ult() {
     // Quotes without a maqaf stay as they were.
     assert_eq!(title(5, note("c9yz", 5)).as_deref(), Some("And God called"));
     assert_eq!(title(5, note("xmx5", 5)).as_deref(), Some("one day"));
+}
+
+/// One row of a vector table: the row id, `chapter:verse`, and tC4's title.
+type TitleRow = (String, String, Option<String>);
+
+/// The occurrence `CheckItem::title` passes: tC4 reads 0, -1 and an empty cell as the first
+/// occurrence (`Math.max(1, Number(occurrence) || 1)`).
+fn title_occurrence(occurrence: Occurrence) -> Occurrence {
+    match occurrence {
+        Occurrence::Nth(_) => occurrence,
+        Occurrence::NotTied | Occurrence::All | Occurrence::Unrecorded => Occurrence::NotTied,
+    }
+}
+
+#[test]
+fn every_gateway_title_of_genesis_psalms_and_titus_is_tc4s() {
+    let vectors: serde_json::Value =
+        serde_json::from_str(&fixture("helps/gateway-title-vectors.json")).unwrap();
+    assert_eq!(
+        vectors["tc4"]["commit"],
+        "9ad4d5c506466819e5b10f255bbb4a36d394e498"
+    );
+    let tables = vectors["tables"].as_array().unwrap();
+    let sources: BTreeSet<&str> = tables.iter().map(|t| t["ult"].as_str().unwrap()).collect();
+    let ults: HashMap<&str, String> = sources.into_iter().map(|s| (s, repo_text(s))).collect();
+    let index: HashMap<&str, HashMap<(u16, u16), &str>> = ults
+        .iter()
+        .map(|(s, usfm)| (*s, verse_bodies(usfm)))
+        .collect();
+    let mut converted: HashMap<&str, HashMap<(u16, u16), AlignedVerse>> = HashMap::new();
+    let mut genesis_rows = 0;
+    let mut failures = Vec::new();
+    for table in tables {
+        let (book, helps) = (
+            table["book"].as_str().unwrap(),
+            table["helps"].as_str().unwrap(),
+        );
+        let ult = table["ult"].as_str().unwrap();
+        let bodies = &index[ult];
+        let scope = TsvScope::Book(book.parse::<BookId>().unwrap());
+        let tsv = repo_text(table["tsv"].as_str().unwrap());
+        let quoted: Vec<(String, (u16, u16), Quote, Occurrence)> = match helps {
+            "tn" => parse_notes(&tsv, scope)
+                .unwrap()
+                .notes
+                .into_iter()
+                .map(|n| (n.id, n.reference, n.quote, n.occurrence))
+                .collect::<Vec<_>>(),
+            "twl" => parse_word_links(&tsv, scope)
+                .unwrap()
+                .into_iter()
+                .map(|l| (l.id, l.reference, l.orig_words, l.occurrence))
+                .collect(),
+            other => panic!("helps {other}"),
+        }
+        .into_iter()
+        .filter_map(|(id, reference, quote, occurrence)| {
+            let at = single_verse(&reference)?;
+            (!quote.is_empty() && bodies.contains_key(&at)).then(|| {
+                let id = id.upstream_row_id().unwrap().as_str().to_owned();
+                (id, at, quote, title_occurrence(occurrence))
+            })
+        })
+        .collect();
+        let verses = converted.entry(ult).or_default();
+        for (_, at, _, _) in &quoted {
+            verses.entry(*at).or_insert_with(|| aligned(bodies[at]));
+        }
+
+        let started = Instant::now();
+        let got: Vec<TitleRow> = quoted
+            .iter()
+            .map(|(id, at, quote, occurrence)| {
+                let title = gateway_quote(&verses[at], quote, *occurrence);
+                (id.clone(), format!("{}:{}", at.0, at.1), title)
+            })
+            .collect();
+        let took = started.elapsed();
+        eprintln!("{book} {helps}: {} titles in {took:?}", got.len());
+        if !cfg!(debug_assertions) && (book, helps) == ("PSA", "tn") {
+            // Three times the Check screen's 250 ms open budget (PERFORMANCE rule 5).
+            assert!(
+                took < Duration::from_millis(750),
+                "{book} {helps}: {took:?}"
+            );
+        }
+
+        let want: Vec<TitleRow> = serde_json::from_value(table["rows"].clone()).unwrap();
+        if book == "GEN" {
+            genesis_rows += want.len();
+            // C34: since #765 no Genesis row falls back to its Hebrew quote.
+            assert!(
+                want.iter().all(|(_, _, title)| title.is_some()),
+                "{book} {helps}"
+            );
+        }
+        let differ: Vec<String> = want
+            .iter()
+            .zip(&got)
+            .filter(|(w, g)| w != g)
+            .map(|(w, g)| {
+                format!(
+                    "  {} {}: tC4 {:?}, here {} {} {:?}",
+                    w.0, w.1, w.2, g.0, g.1, g.2
+                )
+            })
+            .collect();
+        if want.len() != got.len() || !differ.is_empty() {
+            failures.push(format!(
+                "{book} {helps}: {} rows, tC4 has {}; {} differ, first:\n{}",
+                got.len(),
+                want.len(),
+                differ.len(),
+                differ[..differ.len().min(10)].join("\n")
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert_eq!(genesis_rows, 11_398);
 }
 
 // Story 1 of en_obs v9, quoted as tC4's test quotes it, with the en_obs-tn v13 quotes.
