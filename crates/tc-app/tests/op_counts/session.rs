@@ -10,8 +10,9 @@ use tc_journal::fold::Counters;
 use super::corpus::{PSALMS, corpora};
 use super::harness::{Scale, costs_on_both, costs_what_it_touches, growth, nothing, opened};
 
-/// The row's test: an open lists no key and walks nothing, at any size (§8.2; there is no
-/// project-wide index, A-21).
+/// The row's test: an open makes no counted read and walks nothing, at any size (§8.2; there
+/// is no project-wide index, A-21). tc-journal counts no work for `record_keys`, so no count
+/// sees a key listing; the lint holds that half (`lint.rs`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn open_lists_no_key() {
     let (small, large) = costs_what_it_touches("an open", nothing, async |s: &Scale| {

@@ -8,8 +8,8 @@
 //! count grows.
 //!
 //! The walks that cost the whole project (`record_keys`, `frontier`, `device_stats`,
-//! `derived_files`, `batch_changes`) are not here at all: `crates/tc-app/clippy.toml` refuses
-//! them, and the counted walks, anywhere in tc-app's code but this file.
+//! `derived_files`, `batch_changes`, …) are not here at all: `crates/tc-app/clippy.toml` refuses
+//! them, and the fold reads counted here, anywhere in tc-app's code but this file.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -86,6 +86,9 @@ counters! {
     BooksRendered => books_rendered,
     /// Whole books projected as USFM.
     BookUsfm => book_usfm,
+    /// Derived files rendered one at a time, other than a book's text and the conflict list,
+    /// which count as `book_usfm` and `conflict_walks`.
+    FilesRendered => files_rendered,
 }
 
 /// The app's counters, shared by every reader. Clones of the `Arc` count into one set.
@@ -286,6 +289,30 @@ impl CountingSnapshot {
     pub fn book_usfm(&self, book: BookId) -> Option<String> {
         self.count(AppCounter::BookUsfm, 1);
         self.snapshot.fold().book_usfm(book)
+    }
+
+    /// One derived file's bytes. A book's text projects the whole book and the conflict list
+    /// walks every conflict, so they count as [`Self::book_usfm`] and [`Self::conflicts`] do.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the one counted rendering of a single file"
+    )]
+    pub fn render(&self, file: &DerivedFile) -> Option<Vec<u8>> {
+        let counter = match file {
+            DerivedFile::Usfm(_) => AppCounter::BookUsfm,
+            DerivedFile::Conflicts => AppCounter::ConflictWalks,
+            DerivedFile::Alignments(_)
+            | DerivedFile::Decisions(..)
+            | DerivedFile::Comments(_)
+            | DerivedFile::Resources
+            | DerivedFile::Settings
+            | DerivedFile::Versification
+            | DerivedFile::Story(_)
+            | DerivedFile::StoryDecisions(_)
+            | DerivedFile::StoryComments => AppCounter::FilesRendered,
+        };
+        self.count(counter, 1);
+        self.snapshot.fold().render(file)
     }
 }
 

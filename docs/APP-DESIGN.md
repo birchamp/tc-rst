@@ -2381,22 +2381,31 @@ tC4's spec assertions are the reference.
 - tc-store's counters (R14), or C0's own counts of commands, replies and waits until R14 lands *(A-5)*.
 - `AppCounters`: `records_read`, `values_decoded`, `items_derived`, `rows_serialized`,
   `chapters_projected`, `book_resource_loads`, `summaries_computed`, `keys_probed`,
-  `saves_waiting_behind_a_draft_write` *(A-20, A-21)*, and `conflict_walks`, `books_rendered` and
-  `book_usfm` for the counted walks below (B1b).
+  `saves_waiting_behind_a_draft_write` *(A-20, A-21)*, and `conflict_walks`, `books_rendered`,
+  `book_usfm` and `files_rendered` for the counted walks below (B1b).
 - `CountingSnapshot` wraps every snapshot a query gets. It counts the records it reads, the keys
   R1's range reads return (`keys_probed`), full conflict-list walks, `render_book` and `book_usfm`
-  *(A-21)*. *(B1b: `crates/tc-app/clippy.toml` refuses `record_keys`, `frontier`, `device_stats`,
-  `derived_files`, `batch_changes`, `conflicts`, `conflicts_of`, `unreadable_records`,
-  `retry_unreadable`, `conflicts_rebuilt`, `metadata_source`, `render_book` and `book_usfm`
-  anywhere in tc-app's code but `counters.rs`, whose counted wrappers carry an `#[expect]`, and B1a's
-  seed check, which reads a whole fold once when a fixture loads. These are the public reads of
-  `FoldState` that walk every key, change, book, batch or conflict, or project every book; reads
-  that walk less (one book, the books, the devices, the anomaly or detached list) are not refused,
-  and `tests/op_counts/lint.rs` fails when one of the thirteen leaves the list. A count fails only
-  on a path a test runs; the lint fails every path. B1b proved it fires on each path through the
-  re-export `tc_journal::fold::FoldState`; the first list missed the four conflict-list and
-  every-book walks after `conflicts_of`. Test crates allow it, because tests read whole folds to
-  check results.)*
+  *(A-21)*, and each file `render` gives: a book's text as `book_usfm`, `conflicts.json` as a
+  conflict walk, any other file as `files_rendered` (B1b). *(B1b: `crates/tc-app/clippy.toml`
+  refuses `record_keys`, `frontier`, `device_stats`, `derived_files`, `batch_changes`,
+  `conflicts`, `conflicts_of`, `unreadable_records`, `retry_unreadable`, `conflicts_rebuilt`,
+  `metadata_source`, `render_book`, `book_usfm`, `render`, `scope_digest` and `scope_digests`
+  anywhere in tc-app's code but `counters.rs`, whose counted wrappers carry an `#[expect]`, and
+  B1a's seed check, which reads a whole fold once when a fixture loads. These are the public reads
+  of `FoldState` that walk every key, change, book, batch or conflict, or project a whole book,
+  for all they are asked or for some of it: `render` and the two scope digests walk every
+  conflict for `conflicts.json`, and `render` projects a whole book for its USFM. Every other
+  public method costs a number, one record, one chapter, one book or the stories, the books,
+  devices and project details, the conflicts its caller names, or builds a fold.
+  `tests/op_counts/lint.rs` reads every `pub fn` of tc-journal's `impl FoldState` blocks and
+  fails when one is in neither its refused list (which must match `clippy.toml`) nor its list of
+  what each other one costs, so a new method or a missed one waits for someone to say what it
+  costs; the same file fails when any file of tc-app's library but those two and the seed's unit
+  tests turns the lint off. A count fails only on a path a test runs; the lint fails every path.
+  B1b proved it fires on each path through the re-export `tc_journal::fold::FoldState`; the first
+  list missed the four conflict-list and every-book walks after `conflicts_of`, and the second
+  missed `render` and the scope digests, which is why every method is now listed. Test crates
+  allow it, because tests read whole folds to check results.)*
 
 Every count test runs the action on tc-corpus Psalms and on ten times Psalms and fails if a count
 grows (PERF:20-24). From B1b to C1a they run on `MemoryBackend`; from C1a on, on `StoreBackend` too.
@@ -2416,7 +2425,7 @@ Count tests live in `crates/tc-app/tests/op_counts.rs` unless named otherwise.
 | Home list, 10 cards | proposed 3 s repeat launch (PERF:100); no cost per history (PERF:12-19) | `home_costs_projects_not_history`: fresh summaries mean 0 folds, 0 pack reads, at most 5 files per card; a stale card starts one summary job | store only: the memory backend's `peek` folds, which the product never does *(A-25)* |
 | First launch | 60 s with a determinate count (PERF:99, rule 4); a read of each bundled file once, a write of each once, no read back (PERF:133-138) | `first_launch_opens_each_bundled_file_once_and_writes_each_once` (`crates/tc-app/tests/app/seed.rs`, in process, because the counters are per thread); `quit_while_seeding_stops_the_seed_and_waits_for_it`; `c29_a_stop_asked_at_the_last_file_of_a_copy_leaves_that_copy_finished` (`crates/tc-resources/tests/seed.rs`: a copy whose files are all written is finished, whatever the watch says); `a_bundle_that_lost_an_install_fails_the_startup_at_once_and_copies_nothing` and `a_leftover_that_cannot_be_removed_stops_neither_the_start_nor_the_seed` (same file); Playwright `prepare-smoke.mjs`. Until the installer ships the archives themselves (DELTA §3.6 item 3), the count is per bundled file, not per archive; the measurement is `docs/evidence/first-launch-seeding-2026-10-18.md` *(A9)* | none (A9) |
 | Repeat launch | 0 resource content reads (PERF:100) | `repeat_launch_reads_no_resource_content_file` (`crates/tc-app/tests/app/seed.rs`, in process, because the counters are per thread), with `a_repeat_launch_is_ready_at_once_and_changes_no_resource_file` (`crates/tc4/tests/seed.rs`, the real binary) *(A9)* | none (A9) |
-| Open project | 3 s / 10 s; first report within 300 ms (PERF:89-90) | tc-store owns it; tc-app adds `app_forwards_open_reports_unchanged` and `open_lists_no_key` (`record_keys` 0, no index) *(A-21)*. *(B1b: `open_lists_no_key` runs on the memory backend now: an open and `hello` read no key and do no fold work, every `AppCounts` field and fold counter 0, on Psalms and ten times Psalms)* | store (memory for `open_lists_no_key`) |
+| Open project | 3 s / 10 s; first report within 300 ms (PERF:89-90) | tc-store owns it; tc-app adds `app_forwards_open_reports_unchanged` and `open_lists_no_key` (`record_keys` 0, no index) *(A-21)*. *(B1b: `open_lists_no_key` runs on the memory backend now: an open and `hello` make no counted read and do no fold work, every `AppCounts` field and fold counter 0, on Psalms and ten times Psalms. tc-journal counts no work for `record_keys`, so no count can see a key listing: "`record_keys` 0", here and in every row that says it, is held by §8.1's lint, which refuses the call on every path, and by `only_the_counted_walks_and_the_seed_check_turn_the_lint_off`, which fails when any file of tc-app's library but the counted walks and the seed check turns the lint off)* | store (memory for `open_lists_no_key`) |
 | Open a book (Understand, Translate) | 150 ms; first chapter 50 ms (PERF:73) | `open_book_touches_one_book`: records read equal that book's | memory |
 | Move to another chapter | 16 ms (PERF:75) | `chapter_switch_sends_no_request` (harness) | memory |
 | Save one verse until "Saved" | 25 ms with fsync (PERF:74) | `save_verse_touches_one_verse`: one command, `record_keys` 0, summary update one chapter; `saves_waiting_behind_a_draft_write` is counted and must stay 0 once R22 lands *(A-20)* | store |

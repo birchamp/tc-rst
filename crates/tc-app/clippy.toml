@@ -7,12 +7,14 @@ allow-dbg-in-tests = true
 
 # No read in tc-app may cost the whole project (APP-DESIGN §4.3, §8.1, PERFORMANCE rule 1). These
 # are the public reads of `FoldState` that walk every key, change, book, batch or conflict of a
-# fold, or project every book; `tests/op_counts/lint.rs` names the same list, so a method dropped
-# from here fails a test. A fold read that walks less (a book, a chapter, the books, the device
-# list, the anomaly or detached list) is not listed. The counted walks go through
-# `counters::CountingSnapshot`, the one place allowed to call them; the seed check of the fixture
-# backend reads a whole fold once when a fixture loads, with an `#[expect]` saying so. Test
-# crates allow the lint: tests read whole folds to check results.
+# fold, or project a whole book, whatever they are asked for or only for some of it (`render`
+# and the scope digests walk every conflict for `conflicts.json`). `tests/op_counts/lint.rs`
+# names every public method of `FoldState` in tc-journal's source, each either in this list or
+# with what it costs instead, so a method dropped from here, or a new one, fails a test. The
+# counted walks go through `counters::CountingSnapshot`, the one place allowed to call them; the
+# seed check of the fixture backend reads a whole fold once when a fixture loads, with an
+# `#[expect]` saying so, and the same test fails when any other file of tc-app's library turns
+# the lint off. Test crates allow the lint: tests read whole folds to check results.
 disallowed-methods = [
   { path = "tc_journal::fold::FoldState::record_keys", reason = "lists and sorts every key of the project; use CountingSnapshot's range reads (APP-DESIGN §4.3)" },
   { path = "tc_journal::fold::FoldState::frontier", reason = "walks every key of the project; tc-app never needs it" },
@@ -27,4 +29,7 @@ disallowed-methods = [
   { path = "tc_journal::fold::FoldState::metadata_source", reason = "projects every book to tell whether the text is NFC; metadata.json is the store's" },
   { path = "tc_journal::fold::FoldState::render_book", reason = "renders every file of a book: go through CountingSnapshot::render_book, which counts it" },
   { path = "tc_journal::fold::FoldState::book_usfm", reason = "projects a whole book: go through CountingSnapshot::book_usfm, which counts it" },
+  { path = "tc_journal::fold::FoldState::render", reason = "renders a file: a book's text projects the whole book and conflicts.json walks every conflict; go through CountingSnapshot::render, which counts it" },
+  { path = "tc_journal::fold::FoldState::scope_digest", reason = "digests a file's scope, every conflict for conflicts.json: the store's manifest" },
+  { path = "tc_journal::fold::FoldState::scope_digests", reason = "digests files' scopes, every conflict for conflicts.json: the store's manifest" },
 ]
