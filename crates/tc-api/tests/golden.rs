@@ -173,6 +173,7 @@ fn ack() -> Ack {
         rows: vec![RailRowPatch {
             row: RailRow {
                 index: 7,
+                check_id: "abcd".into(),
                 place: verse_place(BookId::Titus, "1", "4"),
                 title: "faith".into(),
                 flags: RowFlags {

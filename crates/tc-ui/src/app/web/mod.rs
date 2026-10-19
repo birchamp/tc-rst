@@ -10,6 +10,7 @@
 mod api;
 pub mod app_ctx;
 pub(crate) mod bridge;
+pub mod check;
 pub(crate) mod js;
 mod panic;
 #[cfg(feature = "test-hooks")]

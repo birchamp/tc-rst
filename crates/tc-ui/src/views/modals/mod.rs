@@ -3,6 +3,7 @@
 pub mod add_book;
 pub mod add_project;
 pub mod feedback;
+pub mod guided_fix;
 pub mod import;
 pub mod language_name_field;
 pub mod new_bible;

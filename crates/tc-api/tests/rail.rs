@@ -15,6 +15,7 @@ fn rail(n: u32, flags: &[RowFlags]) -> Vec<RailRow> {
     (0..n)
         .map(|i| RailRow {
             index: (i * 7) % n,
+            check_id: "abcd".into(),
             place: format!("TIT 1:{}", i + 1).parse().unwrap(),
             title: format!("check {i}"),
             flags: flags[i as usize],
@@ -82,6 +83,7 @@ fn rail_groups_visit_each_row_once() {
     let all: Vec<RailRow> = (0..rows)
         .map(|i| RailRow {
             index: i,
+            check_id: "abcd".into(),
             place: "PSA 1:1".parse().unwrap(),
             title: String::new(),
             flags,

@@ -297,6 +297,40 @@
       ],
       "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
       "until": "C3"
+    },
+    "check-picker": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #764, a declared difference (TC4-ISSUES, B5a): a Check bar fills at least 6 px once one check is resolved (`min-width` on its fill), so 1 of 112 shows as done where tC4's 0.9% sliver reads as nothing, and the bar names its count for screen readers (`aria-label`, \"1 of 112 resolved\"). The Align and Community Checking bars are tC4's. Every other line of the DOM, every computed style included, is tC4's; the pixels differ only at the bars' fills."
+    },
+    "en-check-picker": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #764, a declared difference (TC4-ISSUES, B5a): a Check bar fills at least 6 px once one check is resolved (`min-width` on its fill), so 1 of 112 shows as done where tC4's 0.9% sliver reads as nothing, and the bar names its count for screen readers (`aria-label`, \"1 of 112 resolved\"). The Align and Community Checking bars are tC4's. Every other line of the DOM, every computed style included, is tC4's; the pixels differ only at the bars' fills."
+    },
+    "guided-fix": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The guided fix's dialog is tC4's, line for line and pixel for pixel. Behind it, the picker's Translation Notes bar carries tC4 #764's declared difference (a 6 px least fill once one check is resolved and its count for screen readers, see check-picker); the dialog hides that bar, so only the DOM shows it."
+    },
+    "check-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The reason under the failed open: tC4 prints its fetch's error (`Failed to fetch`, the gallery's patch); the Rust route answers `check/open` with an error the server does give, a bug's report, which the screen prints as the rebuild's error text (`internal error`). The centred message, its colour and its place are tC4's."
+    },
+    "check-rail-empty": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The item detail beside the rail is unit B5b's, which captures this case again with its session screens: until then the detail column is empty. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid."
     }
   }
 }

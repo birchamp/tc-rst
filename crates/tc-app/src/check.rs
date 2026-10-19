@@ -363,22 +363,21 @@ fn derive(
     // The rail's reference sort (tc-check's, tC4's `railGroupsOf`): stable, so the checks of
     // one verse keep the resource's order.
     tc_check::rail::sort_by_reference(&items, &mut order);
-    let mut terms: Vec<String> = Vec::new();
-    let mut term_of = vec![None; items.len()];
-    if tool == Tool::TranslationWords {
-        let mut slugs: Vec<&str> = items.iter().map(|i| i.group_id.as_str()).collect();
-        slugs.sort_by(|a, b| tc_check::rail::locale_cmp(a, b));
-        slugs.dedup();
-        let at: HashMap<&str, u32> = slugs
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (*s, count(i)))
-            .collect();
-        for (i, item) in items.iter().enumerate() {
-            term_of[i] = at.get(item.group_id.as_str()).copied();
-        }
-        terms = slugs.into_iter().map(str::to_owned).collect();
-    }
+    // The group ids of both tools: By word groups a tW rail by them, and every row's tooltip
+    // names its own.
+    let mut slugs: Vec<&str> = items.iter().map(|i| i.group_id.as_str()).collect();
+    slugs.sort_by(|a, b| tc_check::rail::locale_cmp(a, b));
+    slugs.dedup();
+    let at: HashMap<&str, u32> = slugs
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (*s, count(i)))
+        .collect();
+    let term_of: Vec<Option<u32>> = items
+        .iter()
+        .map(|item| at.get(item.group_id.as_str()).copied())
+        .collect();
+    let terms: Vec<String> = slugs.into_iter().map(str::to_owned).collect();
     let ids = loaded.pane_ids();
     let literal = crate::understand::literal_pane(&ids)
         .and_then(|id| loaded.pane(&id))
@@ -453,6 +452,7 @@ fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, book: BookId) ->
         .enumerate()
         .map(|(i, state)| RailRow {
             index: count(i),
+            check_id: derived.items[i].key.check_id.as_str().to_owned(),
             place: derived.places[i].clone(),
             title: derived.titles[i].clone(),
             flags: flags(state),

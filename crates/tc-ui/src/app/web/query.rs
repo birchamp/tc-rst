@@ -272,3 +272,54 @@ impl CachedQuery for tc_api::helps::Article {
         project_read(&self.at, resource_keys())
     }
 }
+
+/// The Check picker (B5a): both tools' lists, the book's verses for the Align card, and the
+/// pins the preflight reads.
+impl CachedQuery for tc_api::check::Picker {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        use tc_api::check::{CheckListRef, CheckUnit, Tool};
+        use tc_api::event::Aspect;
+        use tc_api::query::QueryKey;
+        let list = |tool| {
+            QueryKey::CheckList(CheckListRef {
+                tool,
+                unit: CheckUnit::Book(self.book),
+            })
+        };
+        project_read(
+            &self.at,
+            vec![
+                list(Tool::TranslationWords),
+                list(Tool::TranslationNotes),
+                QueryKey::Book(self.book),
+                QueryKey::Aspect(Aspect::Pins),
+            ],
+        )
+    }
+}
+
+/// A tool's rail (B5a) is read once per session and then patched by row (AD17): these reads are
+/// made by the Check screen's actions, never kept in the cache.
+impl CachedQuery for tc_api::check::Open {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            vec![tc_api::query::QueryKey::CheckList(self.list)],
+        )
+    }
+}
+
+impl CachedQuery for tc_api::check::Rows {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            vec![tc_api::query::QueryKey::CheckList(self.list)],
+        )
+    }
+}
+
+impl CachedQuery for tc_api::check::FixState {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}

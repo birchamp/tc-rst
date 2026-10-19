@@ -173,7 +173,10 @@ async fn a_tool_opens_whole_at_its_first_undecided_check() {
     let mut indices: Vec<u32> = rows.iter().map(|r| r.index).collect();
     indices.sort_unstable();
     assert_eq!(indices, (0..112).collect::<Vec<u32>>());
-    assert!(session.terms.is_empty(), "a notes rail has no terms");
+    assert!(
+        session.terms.contains(&"figs-abstractnouns".to_owned()),
+        "a notes rail names its Academy slugs"
+    );
 }
 
 /// A teammate's edit of a verse arrives by sync and takes the words of a decided check away:

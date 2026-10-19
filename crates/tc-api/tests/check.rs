@@ -34,6 +34,7 @@ fn row(index: usize, place: CheckPlace) -> RailRowPatch {
     RailRowPatch {
         row: RailRow {
             index: u32::try_from(index).unwrap(),
+            check_id: "abcd".into(),
             place,
             title: format!("check {index}"),
             flags: RowFlags {
@@ -166,6 +167,7 @@ fn the_psalms_forms_that_a_numeric_reference_refused_read_back_as_written() {
         .map(|place| {
             json!({"row": {
                 "index": 0,
+                "checkId": "abcd",
                 "place": place,
                 "title": "a check",
                 "flags": {"dot": "todo", "decided": false, "invalidated": false,

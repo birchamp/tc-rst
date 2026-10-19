@@ -239,10 +239,14 @@ pub struct RowFlags {
 pub struct RailRow {
     /// The check's place in the session's list.
     pub index: u32,
+    /// tC4's `checkId`: the help row the check comes from, which the row's `data-check-id`
+    /// names.
+    pub check_id: String,
     pub place: CheckPlace,
     pub title: String,
     pub flags: RowFlags,
-    /// The tW term, as an index into the session's terms.
+    /// The check's group id (a tW term, a tN Translation Academy slug), as an index into the
+    /// session's terms: By word groups by it, and the row's tooltip names it.
     pub term: Option<u32>,
     pub category: Option<Category>,
     pub marker: Option<ConflictMarker>,
@@ -444,7 +448,8 @@ pub struct CheckSessionView {
     /// `check/rows { since: view }` patches the rail from here.
     pub view: ViewSeq,
     pub rows: RailRows,
-    /// The tW terms, in the order By word lists them; a row's `term` indexes it.
+    /// The group ids of the list's checks (tW terms, tN Translation Academy slugs), in the
+    /// order By word lists them; a row's `term` indexes it.
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub terms: Vec<String>,
     pub progress: RailProgress,

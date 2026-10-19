@@ -42,7 +42,7 @@ use crate::app::shell::{CurrentProject, Editing, View};
 use crate::i18n::show_locale;
 
 /// The dialogs `s.modal` names (tC4 `tC4:src/state.jsx:476`). The units that port the others
-/// add theirs: ProjectSettings, SourceTexts (B9a), GuidedFix (B5a).
+/// add theirs: ProjectSettings, SourceTexts (B9a).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialog {
     Feedback,
@@ -62,6 +62,8 @@ pub enum Dialog {
     OpenDoor43,
     /// Share on Door43; its form is `sh`.
     Share,
+    /// The guided fix (M11, B5a); its state is `c.fix`.
+    GuidedFix,
 }
 
 /// A banner on Home: its text, and the "Ask for help" it offers (tC4 #378).
@@ -128,6 +130,8 @@ pub struct AppState {
     pub imported_repo: ArcRwSignal<Option<ProjectRef>>,
     /// The open and the Understand screen (B3).
     pub u: super::understand::UnderstandState,
+    /// The Check screen (B5a).
+    pub c: super::check::CheckState,
     /// `/ui/<build>/`, where the logo and the catalogs are.
     pub base: Arc<str>,
     /// What the server holds: the internet switch, the account, the saved language, the
@@ -169,6 +173,7 @@ impl AppState {
                 place.map(|p| p.book),
                 place.map_or(1, |p| p.chapter),
             ),
+            c: super::check::CheckState::new(),
             base: Arc::from(base),
             server,
         }
@@ -732,6 +737,7 @@ impl Actions {
         s.im.try_set(None);
         s.sh.try_set(None);
         s.od.try_set(None);
+        s.c.fix.try_set(None);
         self.0.share_flows.set(self.0.share_flows.get() + 1);
     }
 
