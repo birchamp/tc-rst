@@ -17,14 +17,57 @@ import { appDriver } from './driver.mjs';
 import { CHROMIUM_ARGS, CONTEXT_OPTIONS, domSnapshot, settle, tagNodes, trackRequests } from './observe.mjs';
 import { SCREEN_LIST } from './screens.mjs';
 
+/** The App language dialog from the account menu, as a person opens it again. */
+const reopenLanguage = [{ click: '[data-testid="account-menu"]' }, { click: '[data-testid="account-language"]' }];
+/** A language chosen in the dialog's list, by the name the list shows (LOCALES). */
+const choose = (label) => [{ click: '[data-testid="language-select"]' }, { click: `[role="option"]:has-text("${label}")` }];
+
 /**
  * A sequence: { name, screen: <baseline screen it starts from>, steps }. A step is { click: sel }
  * (an element inside #root), { hover: sel }, { mouse: [x, y] } (a click on the page there),
  * { move: [x, y] }, { key: 'Enter' } or { type: 'jo' }; `wait` is how long to let the page move
- * before the snapshot (350 ms unless given: the panel motion takes 240). Unit A5 adds the first
- * ones (APP-DESIGN 10).
+ * before the snapshot (350 ms unless given: the panel motion takes 240).
+ *
+ * Unit A5's two (APP-DESIGN 10). No step moves the focus out of the menu or the dialog into
+ * Home's content (Tab, a click outside): Home is the stand-in on the Rust side until B2, so the
+ * focus line would differ for a reason that is not the menu's. B2 adds Tab to the keyboard
+ * sequence.
  */
-export const SEQUENCES = [];
+export const SEQUENCES = [
+  {
+    // The account menu's keyboard contract (APP-DESIGN 6.10): the first row focused on open,
+    // the arrows wrap, Home and End, Escape returns the focus to the button, and Enter on the
+    // button opens the menu on its first row again.
+    name: 'account-menu-keyboard',
+    screen: 'account-menu',
+    steps: [
+      { key: 'ArrowDown' }, { key: 'ArrowDown' }, { key: 'End' }, { key: 'ArrowDown' }, { key: 'ArrowUp' },
+      { key: 'Home' }, { key: 'Escape' }, { key: 'Enter' }, { key: 'ArrowDown' }, { key: 'Escape' },
+    ],
+  },
+  {
+    // M16 preview and restore: each choice rewrites the dialog in place in the previewed
+    // language, <html lang dir> follows, and Cancel, Escape, the ✕ and the scrim each show
+    // English again.
+    name: 'app-language-preview',
+    screen: 'app-language',
+    steps: [
+      ...choose('Français'),
+      { click: '[data-testid="language-select"]' },
+      { key: 'Escape' },
+      { click: '[data-testid="language-cancel"]' },
+      ...reopenLanguage,
+      ...choose('العربية'),
+      { key: 'Escape' },
+      ...reopenLanguage,
+      ...choose('हिन्दी'),
+      { click: '[role="dialog"] button[aria-label]' },
+      ...reopenLanguage,
+      ...choose('Español (Latinoamérica)'),
+      { mouse: [5, 400] },
+    ],
+  },
+];
 
 /** Runs in the page: what the DOM snapshot leaves out. */
 function pageState() {

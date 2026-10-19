@@ -286,7 +286,15 @@
         "same": true,
         "declared": [],
         "firstDiffs": []
-      }
+      },
+      "behaviour": [
+        {
+          "sequence": "account-menu-keyboard",
+          "steps": 11,
+          "same": true,
+          "firstDiff": null
+        }
+      ]
     },
     {
       "name": "app-language",
@@ -311,7 +319,15 @@
         "same": true,
         "declared": [],
         "firstDiffs": []
-      }
+      },
+      "behaviour": [
+        {
+          "sequence": "app-language-preview",
+          "steps": 21,
+          "same": true,
+          "firstDiff": null
+        }
+      ]
     },
     {
       "name": "help",

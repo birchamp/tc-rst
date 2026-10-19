@@ -820,9 +820,11 @@ pub fn AppLanguageDialog(
     let (dialog, show) = LanguageDialog::open(applied);
     actions.preview_app_locale(show);
     let dialog = ArcRwSignal::new(dialog);
+    // A memo, so a preview, which changes the dialog's state but not the lock, does not draw
+    // the ✕ again: the Modal draws it from `closable`.
     let locked = {
         let dialog = dialog.clone();
-        Signal::derive(move || dialog.with(LanguageDialog::locked))
+        Signal::from(Memo::new(move |_| dialog.with(LanguageDialog::locked)))
     };
     let cancel = {
         let (dialog, actions) = (dialog.clone(), actions.clone());
