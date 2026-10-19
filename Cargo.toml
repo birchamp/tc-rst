@@ -39,6 +39,8 @@ regex = "1.13.1"
 proptest = "1"
 proptest-derive = "0.9.0"
 tempfile = "3"
+# The parity gate (crates/tc-ui/tests/screen_record.rs) reads and draws screenshots.
+png = "0.18.1"
 axum = { version = "0.8.9", default-features = false }
 base64 = "0.22.1"
 # Already in Cargo.lock through axum and hyper; the versions locked there.
@@ -91,3 +93,25 @@ opt-level = 2
 
 [profile.dev.package.tc-usfm]
 opt-level = 2
+
+# The parity gate (crates/tc-ui/tests/screen_record.rs) decodes and encodes 1280x800
+# screenshots wherever a planted or real capture differs from tC4's. Unoptimized, the planted
+# pixel test took 3.1 s (whole file 3.8-4.0 s, load 3.5-4.4); optimized, 0.96 s (1.26-1.34 s,
+# load 4.9).
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.fdeflate]
+opt-level = 3
+
+[profile.dev.package.flate2]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+[profile.dev.package.crc32fast]
+opt-level = 3
+
+[profile.dev.package.simd-adler32]
+opt-level = 3

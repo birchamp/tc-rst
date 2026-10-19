@@ -342,6 +342,7 @@ export const SCREEN_LIST = [
     name: 'open-door43-internet-consent', scenario: 'sample', view: 'home', modal: 'netAsk',
     steps: ['Home', '+ Add a project', 'Open a project from Door43', `Repository: ${OPEN_REPO}`, 'Open project'],
     shows: '"Turn on the internet?" asked for an open from Door43 (kind `open`): get a full copy of the project and check its files; nothing from your projects is sent',
+    rebuildDiffers: { ruling: 'Q3', rebuild: 'Behind the scrim, the note of the Open a project from Door43 dialog has no sentence that only public repositories can be opened (see open-door43).' },
     run: async (app) => {
       const { page } = app;
       await app.home(); await page.getByTestId('add-project').click();
