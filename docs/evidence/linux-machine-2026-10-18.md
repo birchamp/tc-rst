@@ -22,9 +22,10 @@ this file.
   (`docs/PERFORMANCE.md`, "Budgets"). A budget met here is not shown met on the reference laptop.
 - Several agents build and test at once on this machine. Record the load (`uptime`) beside every
   timing, and rerun a miss once before calling it a miss.
-- The parity baseline (`parity/tc4-baseline`) was captured on the cloud machine with the same
-  Chromium build. The system fonts here may differ, so the parity harness must show that the
-  baseline reproduces here before a pixel difference is trusted.
+- The parity baseline (`parity/tc4-baseline`) was recaptured here by unit A6b, and a second full
+  capture at its merge into main reproduced all 62 screens byte for byte (the `fc-list`
+  fingerprint in its `manifest.json` names this machine's 535 fonts). A capture on another
+  machine is compared only after its font fingerprint matches.
 - The baseline did not reproduce here: 57 of its 62 PNGs differ from the cloud machine's by
   fonts, and none of its DOM snapshots differ. Unit A6b recaptured it here and made every capture
   record its machine (docs/evidence/parity-harness-2026-10-18.md).

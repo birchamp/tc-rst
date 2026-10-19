@@ -15,7 +15,7 @@ States: **done** (merged into main), **running**, **next** (its dependencies are
 | J1, J2 | tc-journal: model, codecs, fold, conflicts | done |
 | C | converge with main | done |
 | S1 | tc-store: store I/O, open, saves | done |
-| S2 | materialize off the actor, Git, held-file retries, outside edits | running: review found 1 blocker and 6 majors; fixing |
+| S2 | materialize off the actor, Git, held-file retries, outside edits | running: 11 of 12 review findings fixed; the fix check found 4 more; second fix round |
 | P | scale against the reference laptop | waits: S2 |
 | X | Door43 sync and USB exchange | waits: P |
 | I | tC4 and tC3 import | waits: X |
@@ -29,7 +29,7 @@ orchestrating session merges it into main with `merge-main.js`.
 
 | Phase | Units done | Running | Waiting |
 |---|---|---|---|
-| 0 | A1, A2, A3, A4a, A6a, A9, A10, A11, G0 (run on Windows) | A4b, A6b | A5 (A4b, A6b), A7 (A6b), A8 (A5) |
+| 0 | A1, A2, A3, A4a, A6a, A6b, A9, A10, A11, G0 (run on Windows) | A4b, A7 | A5 (A4b), A8 (A5) |
 | 1 | | B1a | B1b (B1a); B2 (B1b, A5, A6b); B3 to B11 after B2 |
 | 2 | | | C0 (B1b), C1a, C1b, then C2 to C8 with their B units |
 | 3 | | | D1 (S2, C2, C5), D2 (S2, B8) |
