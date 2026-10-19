@@ -1814,7 +1814,8 @@ under the shell a close request runs the navigation gate before the window goes 
   clean field as unsaved, and the first keystroke after an `Ack` cleaned the field and removed its
   entry is kept too. The template follows the field's tokens after every `Ack`. An entry of
   another server run is never written over: `boot.js` leaves it, and so does the WebAssembly,
-  which then keeps no buffer for that field until the offer has settled it. Without `boot.js` on
+  which then sends that field's typing to the shell's mirror only; `buffer::merge` keeps the
+  newest entry per field and run, so the offer shows both texts. Without `boot.js` on
   the page the WebAssembly writes every keystroke's entry itself.)*
 - In the shell, each change is also sent to the main process (`tc4Shell.bufferChanged`), which
   appends it as one line to `drafts-buffer.log` in app data at once and fsyncs the log at most

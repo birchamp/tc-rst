@@ -179,7 +179,10 @@ impl Saves {
     }
 
     pub fn typed(&self, key: &BufferKey, text: &str, source: Source) {
-        let source = if self.0.boot { source } else { Source::Program };
+        // `boot.js` writes nothing for a field it does not track: the machine's own write then
+        // carries the keystroke, to the mirror at least.
+        let tracked = self.0.boot && !self.0.foreign.borrow().contains(key);
+        let source = if tracked { source } else { Source::Program };
         let commands = self.machine(|m| m.typed(key, text, source, js::now_ms()));
         self.run(commands);
     }
@@ -497,21 +500,28 @@ impl Saves {
     }
 
     fn write(&self, key: &BufferKey, mut entry: BufferEntry, mirror: bool) {
-        if self.0.foreign.borrow().contains(key) {
-            return;
-        }
         entry.at = WallMs(js::wall_ms());
         entry.draft = self
             .writer(key.field.kind)
             .and_then(|writer| writer.draft_call(key, &entry.base));
         let mut store = LocalStore::open();
-        let text = match buffer::write(&mut store, key, &entry) {
+        let foreign = self.0.foreign.borrow().contains(key);
+        let written = if foreign {
+            Err(StoreError::Foreign)
+        } else {
+            buffer::write(&mut store, key, &entry)
+        };
+        let text = match written {
             Ok(text) => Some(text),
             Err(StoreError::Foreign) => {
-                // Another run's text waits for the offer; this field keeps no buffer here.
-                self.0.foreign.borrow_mut().insert(key.clone());
-                self.untrack(key);
-                None
+                // Another run's text waits for the offer in this field's item, which this run
+                // never writes over; this run's text goes to the shell's mirror only, and the
+                // offer shows both (`buffer::merge`).
+                if !foreign {
+                    self.0.foreign.borrow_mut().insert(key.clone());
+                    self.untrack(key);
+                }
+                serde_json::to_string(&entry).ok()
             }
             Err(error) => {
                 // No stale entry may stay behind with an older `sent` (rule 2 of the plan).

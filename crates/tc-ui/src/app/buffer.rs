@@ -282,26 +282,35 @@ pub fn removed_line(key: &BufferKey) -> Result<String, StoreError> {
 }
 
 /// The page's entries merged with what the shell's mirror gave (`takeBuffered`): the newest
-/// `at` per field, the page's own on a tie. A line that does not parse (a torn last line) and
-/// a removal add nothing.
+/// `at` per field and server run, the page's own on a tie. A line that does not parse (a torn
+/// last line) and a removal add nothing. Two runs' entries of one field are both kept: one
+/// typed before a restart and one typed after it, behind a reused port, before the offer
+/// settled the first, are two texts, and the offer shows both.
 pub fn merge(
     local: Vec<(BufferKey, BufferEntry)>,
     mirror: &[String],
 ) -> Vec<(BufferKey, BufferEntry)> {
-    let mut newest: BTreeMap<BufferKey, BufferEntry> = local.into_iter().collect();
+    let mut newest: BTreeMap<(BufferKey, ServerInstance), BufferEntry> = local
+        .into_iter()
+        .map(|(key, entry)| ((key, entry.instance), entry))
+        .collect();
     for line in mirror {
         let Ok(BufferLine::Changed { key, entry }) = serde_json::from_str::<BufferLine>(line)
         else {
             continue;
         };
-        match newest.get(&key) {
+        let slot = (key, entry.instance);
+        match newest.get(&slot) {
             Some(kept) if kept.at >= entry.at => {}
             _ => {
-                newest.insert(key, entry);
+                newest.insert(slot, entry);
             }
         }
     }
-    newest.into_iter().collect()
+    newest
+        .into_iter()
+        .map(|((key, _), entry)| (key, entry))
+        .collect()
 }
 
 /// The copy of a read-only project takes its folder's entries (A-10, 6.4): every item of

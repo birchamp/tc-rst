@@ -389,3 +389,20 @@ fn texts_compare_in_nfc() {
     assert!(!same_text("e\u{301}x", "\u{e9}"));
     assert!(same_text("", ""));
 }
+
+#[test]
+fn merge_keeps_two_runs_entries_of_one_field() {
+    let old_run = BufferEntry {
+        instance: ServerInstance::from_bytes([9; 16]),
+        ..entry("typed before the restart", 5)
+    };
+    let line = serde_json::to_string(&BufferLine::Changed {
+        key: key("TIT 1:1"),
+        entry: entry("typed after it", 9),
+    })
+    .unwrap();
+    let merged = merge(vec![(key("TIT 1:1"), old_run)], &[line]);
+    let mut texts: Vec<&str> = merged.iter().map(|(_, e)| e.text.as_str()).collect();
+    texts.sort_unstable();
+    assert_eq!(texts, ["typed after it", "typed before the restart"]);
+}
