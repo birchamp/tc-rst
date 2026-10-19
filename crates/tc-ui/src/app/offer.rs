@@ -7,7 +7,7 @@
 //! items go, each only while it still holds the offered text, so text typed since stays.
 
 use tc_api::buffer::BufferLine;
-use tc_api::ids::{ProjectId, ProjectRef};
+use tc_api::ids::{ProjectId, ProjectRef, ServerInstance};
 use tc_api::session::{BufferSlot, DraftOffer, Keep};
 use tc_api::write::ReadOnlyReason;
 
@@ -15,18 +15,23 @@ use super::buffer::{self, Store};
 use crate::i18n::{Key, keys};
 
 /// The folder's unsaved entries, the page's and the shell's mirror's (`takeBuffered`) merged
-/// as [`buffer::merge`] does, each a `changed` line: the `buffered` of `session/drafts`. Every
-/// run's entry goes: at an open, none of them belongs to the open's session.
+/// as [`buffer::merge`] does, each a `changed` line: the `buffered` of `session/drafts`.
+/// `restored` is the run whose entries the save machine took back as dirty fields after a
+/// reload in the same launch (6.6): they save themselves, and offering them as well would let
+/// Keep store one text twice. At an open, `None`: none of them belongs to the new open.
 pub fn buffered_lines(
     store: &dyn Store,
     mirror: &[String],
     project: &ProjectRef,
     id: &ProjectId,
+    restored: Option<ServerInstance>,
 ) -> Vec<String> {
     let local = buffer::entries_of(store, project, id);
     buffer::merge(local, &buffer::current_lines(mirror))
         .into_iter()
-        .filter(|(key, _)| key.project == *project && key.id == *id)
+        .filter(|(key, entry)| {
+            key.project == *project && key.id == *id && Some(entry.instance) != restored
+        })
         .filter_map(|(key, entry)| serde_json::to_string(&BufferLine::Changed { key, entry }).ok())
         .collect()
 }

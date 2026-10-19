@@ -83,15 +83,23 @@ fn the_open_sends_the_folders_entries_of_page_and_mirror() {
         .unwrap(),
         "{\"type\":\"changed\"".to_owned(),
     ];
-    let lines = buffered_lines(
-        &store,
-        &mirror,
-        &ProjectRef::parse("en_ult").unwrap(),
-        &ProjectId::parse(ID).unwrap(),
+    let (project, id) = (
+        ProjectRef::parse("en_ult").unwrap(),
+        ProjectId::parse(ID).unwrap(),
     );
+    let lines = buffered_lines(&store, &mirror, &project, &id, None);
     let mut got = texts(&lines);
     got.sort();
     assert_eq!(got, ["mirror only", "mirror, newer"]);
+    // After a reload in the same launch, run 1's entries are dirty fields again: not offered.
+    let lines = buffered_lines(
+        &store,
+        &mirror,
+        &project,
+        &id,
+        Some(ServerInstance::from_bytes([1; 16])),
+    );
+    assert_eq!(texts(&lines), ["mirror only"]);
 }
 
 /// Settling an offer drops each item only while it holds the offered text and run, and tells

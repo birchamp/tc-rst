@@ -2259,7 +2259,8 @@ had failed for a cause since gone was not stored when the person left.)*
   it. A change anyone else made since makes the stored value differ from `sent`, so it still
   becomes a conflict.)* *(C1b: built as `tc_app::drafts::offer` behind `session/drafts { at, buffered }`, sent once
   the open has its scope (`tc_ui::app::offer::buffered_lines` builds `buffered` from the page's
-  storage and `takeBuffered`), with these refinements, each with a test in
+  storage and `takeBuffered`, leaving out after a reload in the same launch the run whose
+  entries came back as dirty fields, which save themselves), with these refinements, each with a test in
   `tests/app/drafts.rs`. "The newest per field" became: a stored draft gives way to a buffered
   entry of its field at least as new that edits the same version (the same tokens), since
   `drafts.json` is the older copy of the typing the buffer kept; every other distinct text of a
