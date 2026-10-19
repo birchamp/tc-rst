@@ -22,6 +22,7 @@ pub mod feedback;
 pub mod flows;
 pub mod folders;
 mod handlers;
+pub mod home;
 #[cfg(feature = "test-hooks")]
 pub mod hooks;
 pub mod jobs;

@@ -116,8 +116,11 @@ fn build() -> Result<Validator, SchemaLoadError> {
 
 /// The schema's `languageTag` (`common.schema.json`), compiled from the same bundle and
 /// registry as the whole schema, so it judges a tag exactly as a `languages[].tag` is judged.
-static LANGUAGE_TAG: LazyLock<Result<Validator, SchemaLoadError>> =
-    LazyLock::new(|| compile(&format!("{BASE}common.schema.json#/definitions/languageTag")));
+static LANGUAGE_TAG: LazyLock<Result<Validator, SchemaLoadError>> = LazyLock::new(|| {
+    compile(&format!(
+        "{BASE}common.schema.json#/definitions/languageTag"
+    ))
+});
 
 /// Whether `tag` is a language tag a Scripture Burrito can hold: the schema's `languageTag`
 /// (BCP 47's form, at least two characters). Door43 lists codes that are not, such as
@@ -303,7 +306,15 @@ mod tests {
         for tag in ["en", "es-419", "x-ug", "aac-x-siraul", "hbo", "zh-min-nan"] {
             assert!(is_language_tag(tag), "{tag} is a tag");
         }
-        for tag in ["acm-x-lebarabic", "-x-", "e", "iba-x-", "", "en--us", "en us"] {
+        for tag in [
+            "acm-x-lebarabic",
+            "-x-",
+            "e",
+            "iba-x-",
+            "",
+            "en--us",
+            "en us",
+        ] {
             assert!(!is_language_tag(tag), "{tag} is not a tag");
         }
     }

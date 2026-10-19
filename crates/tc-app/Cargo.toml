@@ -27,6 +27,8 @@ tc-resources = { path = "../tc-resources" }
 # The project store behind the storage seam (APP-DESIGN §4.2, unit C0).
 tc-store = { path = "../tc-store" }
 tc-usfm = { path = "../tc-usfm" }
+# The versifications New Bible offers (B2).
+tc-versification = { path = "../tc-versification" }
 base64.workspace = true
 ring.workspace = true
 serde.workspace = true
@@ -44,8 +46,6 @@ tc-app = { path = ".", features = ["test-hooks", "fixture-backend"] }
 tc-api = { path = "../tc-api", features = ["server", "test-hooks", "proptest"] }
 # The scale corpus of docs/PERFORMANCE.md for the operation-count tests (§8.1, AD32).
 tc-corpus = { path = "../tc-corpus" }
-# The versification of the projects the store tests create (C0).
-tc-versification = { path = "../tc-versification" }
 proptest.workspace = true
 # The git blob id of the vendored language list (assets/README.md).
 sha1.workspace = true

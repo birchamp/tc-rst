@@ -16,6 +16,7 @@ use common::{
 use tc_api::NetKind;
 use tc_api::account::AccountNotice;
 use tc_api::feedback::FeedbackCategory;
+use tc_api::home::UnusableReason;
 use tc_api::ids::LOCALE_IDS;
 use tc_api::refusal::{FeedbackRefusal, Message, Refusal, SyncBlock, SyncFailure, SyncRefusal};
 
@@ -161,6 +162,25 @@ fn other_keys() -> Vec<(&'static str, BTreeSet<String>)> {
         if let Some(note) = failure.kept_note() {
             keys.push((note, BTreeSet::new()));
         }
+    }
+    let reason = || "a reason".to_owned();
+    for unusable in [
+        UnusableReason::NoProjectFile,
+        UnusableReason::ProjectFileUnreadable { reason: reason() },
+        UnusableReason::ProjectFileDamaged { reason: reason() },
+        UnusableReason::Link,
+        UnusableReason::NameNotAllowed,
+        UnusableReason::NameNotText,
+    ] {
+        let vars = unusable.vars().into_iter().map(|(name, _)| name.to_owned());
+        keys.push((unusable.key(), vars.collect()));
+    }
+    keys.push(("home.unusable.badge", BTreeSet::new()));
+    for (key, vars) in [
+        ("newBible.codeAdjusted", &["code", "door43"][..]),
+        ("newBible.codeUnusable", &["door43"][..]),
+    ] {
+        keys.push((key, vars.iter().map(|v| (*v).to_owned()).collect()));
     }
     keys
 }

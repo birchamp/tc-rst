@@ -26,7 +26,7 @@ use serde::Deserialize;
 use tc_api::ids::ProjectRef;
 use tc_resources::{Installed, ResourcePin, ResourceStore, install_dcs_zip};
 
-pub use super::memory::Door43Remote;
+pub use super::Door43Remote;
 use super::memory::{MemoryBackend, MemoryProject};
 use super::seed::{SeedRefusal, SeedReport, Tc4Folder, fixture_project_id, tc4_state_seed};
 
@@ -217,28 +217,17 @@ fn door43_remote(path: &str, bytes: &[u8]) -> Result<Door43Remote, ScenarioError
         .iter()
         .find(|r| r.name == "origin")
         .ok_or_else(|| refuse("no origin".to_owned()))?;
-    let rest = origin
+    origin
         .url
-        .strip_prefix("https://")
-        .and_then(|rest| rest.strip_suffix(".git"))
+        .ends_with(".git")
+        .then(|| Door43Remote::parse_url(&origin.url))
+        .flatten()
         .ok_or_else(|| {
             refuse(format!(
                 "{} is not https://<host>/<owner>/<repo>.git",
                 origin.url
             ))
-        })?;
-    match rest.split('/').collect::<Vec<_>>().as_slice() {
-        [host, owner, repo] if !host.is_empty() && !owner.is_empty() && !repo.is_empty() => {
-            Ok(Door43Remote {
-                owner: (*owner).to_owned(),
-                repo: (*repo).to_owned(),
-            })
-        }
-        _ => Err(refuse(format!(
-            "{} is not https://<host>/<owner>/<repo>.git",
-            origin.url
-        ))),
-    }
+        })
 }
 
 #[derive(Deserialize)]

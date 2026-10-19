@@ -131,6 +131,7 @@ fn only_the_shared_scenario_names_a_door43_remote() {
             .collect();
         let shared = |repo: &str| {
             (name == "shared").then(|| Door43Remote {
+                host: "git.door43.org".to_owned(),
                 owner: "facilitator-zq".to_owned(),
                 repo: repo.to_owned(),
             })
@@ -151,6 +152,7 @@ fn only_the_shared_scenario_names_a_door43_remote() {
     assert_eq!(
         backend.project(&folder("sample_burrito")).unwrap().remote,
         Some(Door43Remote {
+            host: "git.door43.org".to_owned(),
             owner: "facilitator-zq".to_owned(),
             repo: "sample_burrito".to_owned()
         })

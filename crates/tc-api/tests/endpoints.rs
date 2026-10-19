@@ -1,4 +1,5 @@
-//! The endpoint list (APP-DESIGN §3.3, §3.9): one row per endpoint, the phase-0 set.
+//! The endpoint list (APP-DESIGN §3.3, §3.9): one row per endpoint, the phase-0 set and the
+//! rows of the units that have landed since.
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -28,6 +29,11 @@ const PHASE_0: &[&str] = &[
     "account/profileLink",
     "account/helpLink",
     "feedback/compose",
+    // B2: Home and its dialogs.
+    "home/list",
+    "home/card",
+    "home/versifications",
+    "home/languages",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -38,6 +44,7 @@ const PHASE_0: &[&str] = &[
     "test/fieldLog",
     "test/fieldDraft",
     "test/reset",
+    "test/lastEdit",
 ];
 
 #[test]

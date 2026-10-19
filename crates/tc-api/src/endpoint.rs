@@ -176,6 +176,7 @@ unscoped!(
     crate::test::FieldStore,
     crate::test::FieldDraft,
     crate::test::Reset,
+    crate::test::LastEdit,
 );
 
 /// What an endpoint answers inside an HTTP 200 (AD9). On the wire it follows the crate's

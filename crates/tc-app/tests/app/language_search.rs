@@ -121,8 +121,10 @@ fn language_suggestions_rank_as_tc4_offline() {
 #[test]
 fn a_suggestion_offers_a_code_a_burrito_can_hold() {
     let rows: Vec<&LanguageRow> = index().rows().collect();
-    let offers: Vec<(&LanguageRow, Offer)> =
-        rows.iter().map(|row| (*row, offered_code(&row.lc))).collect();
+    let offers: Vec<(&LanguageRow, Offer)> = rows
+        .iter()
+        .map(|row| (*row, offered_code(&row.lc)))
+        .collect();
 
     let unusable: Vec<&str> = offers
         .iter()
@@ -158,7 +160,10 @@ fn a_suggestion_offers_a_code_a_burrito_can_hold() {
     let mut by_offer: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for (door43, code) in &adjusted {
         by_offer.entry(code).or_default().push(door43);
-        assert!(!listed.contains(code), "{door43} is offered {code}, a listed code");
+        assert!(
+            !listed.contains(code),
+            "{door43} is offered {code}, a listed code"
+        );
     }
     let shared: Vec<(&str, Vec<&str>)> = by_offer
         .into_iter()

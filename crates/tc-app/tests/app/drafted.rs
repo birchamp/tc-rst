@@ -25,7 +25,9 @@ fn an_undrafted_span_counts_its_verses() {
 fn joining_verses_keeps_the_drafted_percentage() {
     let head = "\\id TST\n\\c 1\n\\p\n";
     assert_eq!(
-        percent(&format!("{head}\\v 1 uno\n\\v 2 dos\n\\v 3 tres\n\\v 4 ___\n")),
+        percent(&format!(
+            "{head}\\v 1 uno\n\\v 2 dos\n\\v 3 tres\n\\v 4 ___\n"
+        )),
         75
     );
     assert_eq!(
@@ -33,7 +35,9 @@ fn joining_verses_keeps_the_drafted_percentage() {
         75
     );
     assert_eq!(
-        percent(&format!("{head}\\v 1 uno\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n")),
+        percent(&format!(
+            "{head}\\v 1 uno\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n"
+        )),
         25
     );
     assert_eq!(

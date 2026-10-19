@@ -3,7 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{RequestId, Scope};
+use crate::home::ResumePlace;
+use crate::ids::{ProjectRef, RequestId, Scope, WallMs};
+use crate::prefs::PlaceMode;
 use crate::shown::Shown;
 use crate::token::ShownToken;
 
@@ -254,4 +256,20 @@ pub enum TokenBase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Reset {
     pub request: RequestId,
+}
+
+/// `test/lastEdit`: records a Resume record and the project's last use through the calls a
+/// save makes (C2), then tells Home the projects changed, so the Resume card can be
+/// photographed before any save exists (B2). It applies to no open project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LastEdit {
+    pub request: RequestId,
+    pub project: ProjectRef,
+    pub place: ResumePlace,
+    pub mode: PlaceMode,
+    /// Kept as given, spaces included.
+    pub snippet: String,
+    pub at: WallMs,
 }

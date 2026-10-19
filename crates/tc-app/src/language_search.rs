@@ -53,7 +53,11 @@ pub struct LanguageListError(String);
 /// The name a suggestion shows and a choice stores: the anglicized name, or the language's own
 /// name where Door43 has no anglicized one.
 pub fn language_name(row: &LanguageRow) -> &str {
-    if row.ang.is_empty() { &row.ln } else { &row.ang }
+    if row.ang.is_empty() {
+        &row.ln
+    } else {
+        &row.ang
+    }
 }
 
 const CODE: u8 = 0;

@@ -25,6 +25,7 @@ mod app {
     mod flows;
     mod folders;
     mod hello;
+    mod home;
     mod hooks;
     mod internet;
     mod jobs;
