@@ -376,3 +376,16 @@ fn a_keystroke_updates_the_entry_or_makes_it_from_the_template() {
     let line = input_to_entry(&mut store, &k, "Paul", WallMs(13), &template).unwrap();
     assert!(line.contains("\"Paul\""));
 }
+
+#[test]
+fn texts_compare_in_nfc() {
+    use tc_ui::app::buffer::same_text;
+    assert!(same_text("e\u{301}", "\u{e9}"));
+    assert!(
+        same_text("\u{5d1}\u{5bc}\u{5b0}", "\u{5d1}\u{5b0}\u{5bc}"),
+        "Hebrew points in either order"
+    );
+    assert!(!same_text("Paul", "Paula"));
+    assert!(!same_text("e\u{301}x", "\u{e9}"));
+    assert!(same_text("", ""));
+}

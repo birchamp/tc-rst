@@ -661,7 +661,11 @@ async function caseP9(browser) {
       // The lost reply's resend first asks app/hello, which names another run: the field is
       // dropped and nothing is sent (D8). A page that has read no frame cannot tell the new run
       // from a reconnect by its event stream alone; the check before a resend does not need it.
-      await until(async () => (await page.evaluate(() => window.__tc4Probe.state('probe-a'))) === 'none', 20000, 'the field is dropped');
+      await until(
+        async () => (await page.evaluate(() => window.__tc4Probe.state('probe-a'))) === 'none' || (await second.log()).stores.length > 1,
+        20000,
+        'the field is dropped, or a resend stored',
+      );
       await sleep(3000);
       const stored = texts(await second.log());
       check('P9: a restart behind the same origin resends nothing', JSON.stringify(stored) === '["Stored once"]', stored);
@@ -724,7 +728,12 @@ function stats(values) {
   return { n: sorted.length, median: percentile(sorted, 50), p95: percentile(sorted, 95), max: sorted.at(-1) ?? null };
 }
 
-/** Input to frame per keystroke: from the keydown's timeStamp to the next animation frame. */
+/**
+ * Per keystroke, from the keydown event's timeStamp: to the end of the input event's handling
+ * (a window listener in the bubble phase, the last one to run: boot.js's listener, the
+ * WebAssembly's handler and the save machine are done), and to the next animation frame (which
+ * includes the wait for the display's next frame, up to 16.7 ms at 60 Hz, whatever the work).
+ */
 async function typingRun(page, start, keys) {
   await page.evaluate((text) => {
     const area = document.querySelector('[data-testid=probe-field-a]');
@@ -735,12 +744,18 @@ async function typingRun(page, start, keys) {
   await page.keyboard.press('End');
   await page.evaluate(() => {
     window.__frames = [];
+    window.__handled = [];
     window.tc4Boot.measure = [];
     window.__onKey = (event) => {
       const at = event.timeStamp;
+      window.__keyAt = at;
       requestAnimationFrame(() => window.__frames.push(performance.now() - at));
     };
+    window.__onInput = () => {
+      if (window.__keyAt !== undefined) window.__handled.push(performance.now() - window.__keyAt);
+    };
     window.addEventListener('keydown', window.__onKey, true);
+    window.addEventListener('input', window.__onInput, false);
   });
   for (let i = 0; i < keys; i += 1) {
     await page.keyboard.type(String.fromCharCode(97 + (i % 26)));
@@ -749,7 +764,8 @@ async function typingRun(page, start, keys) {
   await sleep(100);
   return page.evaluate(() => {
     window.removeEventListener('keydown', window.__onKey, true);
-    const out = { frames: window.__frames, listener: window.tc4Boot.measure };
+    window.removeEventListener('input', window.__onInput, false);
+    const out = { frames: window.__frames, handled: window.__handled, listener: window.tc4Boot.measure };
     window.tc4Boot.measure = null;
     return out;
   });
@@ -762,6 +778,7 @@ async function measure() {
   try {
     for (const [label, size] of [['2KB', 2048], ['20KB', 20480]]) {
       const frames = [];
+      const handled = [];
       const listener = [];
       const server = await Server.start();
       try {
@@ -770,6 +787,7 @@ async function measure() {
           for (let run = 0; run < runs; run += 1) {
             const result = await typingRun(page, 'x'.repeat(size), 200);
             frames.push(...result.frames);
+            handled.push(...result.handled);
             listener.push(...result.listener);
             await blur(page);
           }
@@ -777,12 +795,13 @@ async function measure() {
       } finally {
         await server.stop();
       }
-      out.typing[label] = { inputToFrame: stats(frames), captureListener: stats(listener) };
+      out.typing[label] = { inputHandled: stats(handled), inputToFrame: stats(frames), captureListener: stats(listener) };
     }
     // Without boot.js's capture listener, to isolate its cost.
     {
       const server = await Server.start();
       const frames = [];
+      const handled = [];
       try {
         const initScripts = [
           () => {
@@ -796,14 +815,16 @@ async function measure() {
         await withPage(browser, server, { initScripts }, async (page) => {
           await openProbe(page, server.url, server.token);
           for (let run = 0; run < runs; run += 1) {
-            frames.push(...(await typingRun(page, 'x'.repeat(2048), 200)).frames);
+            const result = await typingRun(page, 'x'.repeat(2048), 200);
+            frames.push(...result.frames);
+            handled.push(...result.handled);
             await blur(page);
           }
         });
       } finally {
         await server.stop();
       }
-      out.typing.withoutListener2KB = { inputToFrame: stats(frames) };
+      out.typing.withoutListener2KB = { inputHandled: stats(handled), inputToFrame: stats(frames) };
     }
     // The writes of a keystroke, and 10 s of typing.
     {

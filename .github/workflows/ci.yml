@@ -30,6 +30,8 @@ jobs:
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets --features gallery -- -D warnings
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets --features app -- -D warnings
+      # The no-loss probe page (unit A4b), which only the browser tests build.
+      - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets --features test-hooks -- -D warnings
       # tc-api's types are the UI's too, so they must build for wasm32 as well.
       - run: cargo clippy -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings
 
@@ -45,4 +47,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs
+      - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs crates/tc-ui/app/recovery.test.mjs

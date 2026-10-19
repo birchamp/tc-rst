@@ -167,8 +167,10 @@ test('the_callout_sets_every_text_by_textContent', () => {
 test('english_when_no_text_was_kept', () => {
   assert.deepEqual(R.calloutText(storage()), R.ENGLISH);
   assert.deepEqual(R.calloutText(storage({ [R.TEXT_KEY]: '{' })), R.ENGLISH);
-  const arabic = { lang: 'ar', title: 'تعذّر عرض هذه الشاشة.', home: 'العودة إلى الرئيسية' };
+  const arabic = { lang: 'ar', dir: 'rtl', title: 'تعذّر عرض هذه الشاشة.', home: 'العودة إلى الرئيسية' };
   assert.deepEqual(R.calloutText(storage({ [R.TEXT_KEY]: JSON.stringify(arabic) })), arabic);
+  const odd = { ...arabic, dir: 'sideways' };
+  assert.equal(R.calloutText(storage({ [R.TEXT_KEY]: JSON.stringify(odd) })).dir, 'ltr');
   assert.equal(R.ENGLISH.title, JSON.parse(fs.readFileSync(path.join(here, '../assets/i18n/en.json'), 'utf8'))['app.viewError']);
 });
 

@@ -118,6 +118,9 @@ function showStatic(message) {
     }
     location.reload();
   });
+  // A page that panicked at boot has not set the shown language's lang and dir yet.
+  document.documentElement.setAttribute('lang', text.lang);
+  document.documentElement.setAttribute('dir', text.dir);
   document.getElementById('root')?.replaceChildren(root);
   postDrafts();
 }

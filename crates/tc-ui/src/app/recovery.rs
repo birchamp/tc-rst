@@ -69,7 +69,10 @@ pub fn follows_panic(marker: Option<&str>, page: &str) -> Option<CrashMarker> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewErrorText {
+    /// `<html lang>` and `dir` of the shown language, which a page that panicked at boot has
+    /// not set yet.
     pub lang: String,
+    pub dir: String,
     pub title: String,
     pub home: String,
 }

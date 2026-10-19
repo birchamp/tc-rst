@@ -1,0 +1,87 @@
+{
+  "build": "tc-ui-app-release-hooks",
+  "browser": "141.0.7390.37",
+  "node": "v22.23.3",
+  "load": [
+    14.26,
+    13.02,
+    12.28
+  ],
+  "typing": {
+    "2KB": {
+      "inputHandled": {
+        "n": 4000,
+        "median": 0.8999999910593033,
+        "p95": 1.2999999970197678,
+        "max": 5.4000000059604645
+      },
+      "inputToFrame": {
+        "n": 4000,
+        "median": 1.5,
+        "p95": 15.600000008940697,
+        "max": 20.5
+      },
+      "captureListener": {
+        "n": 4000,
+        "median": 0.09999999403953552,
+        "p95": 0.20000000298023224,
+        "max": 3.5
+      }
+    },
+    "20KB": {
+      "inputHandled": {
+        "n": 4000,
+        "median": 1.6000000089406967,
+        "p95": 4.399999991059303,
+        "max": 6.899999991059303
+      },
+      "inputToFrame": {
+        "n": 4000,
+        "median": 3.9000000059604645,
+        "p95": 16.299999997019768,
+        "max": 18.099999994039536
+      },
+      "captureListener": {
+        "n": 4000,
+        "median": 0.10000000894069672,
+        "p95": 0.20000000298023224,
+        "max": 4.199999988079071
+      }
+    },
+    "withoutListener2KB": {
+      "inputHandled": {
+        "n": 4000,
+        "median": 0.7000000029802322,
+        "p95": 1.199999988079071,
+        "max": 6.399999991059303
+      },
+      "inputToFrame": {
+        "n": 4000,
+        "median": 1.300000011920929,
+        "p95": 15.399999991059303,
+        "max": 21.400000005960464
+      }
+    }
+  },
+  "writes": {
+    "localStorageSetsPerKeystroke": 1,
+    "mirrorLinesPerKeystroke": 1,
+    "savesIn10sOfTyping": 0,
+    "draftsIn10sOfTyping": 10
+  },
+  "panic": {
+    "toCalloutMs": {
+      "n": 20,
+      "median": 109,
+      "p95": 138,
+      "max": 229
+    }
+  },
+  "wasmBytes": 1650886,
+  "plainWasmBytes": 1429647,
+  "loadAfter": [
+    8.63,
+    7.92,
+    10.04
+  ]
+}

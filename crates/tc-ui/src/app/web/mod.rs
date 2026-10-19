@@ -499,8 +499,10 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
         provide_context(provided.clone());
         // The static callout's words follow the shown language (6.8).
         leptos::prelude::Effect::new(move |_| {
+            let (lang, dir) = i18n::html_lang_dir(i18n::shown_locale());
             panic::keep_view_error_text(&ViewErrorText {
-                lang: i18n::shown_locale().as_str().to_owned(),
+                lang: lang.to_owned(),
+                dir: dir.to_owned(),
                 title: t(keys::app::VIEW_ERROR, &[]),
                 home: t(keys::app::BACK_TO_HOME, &[]),
             });

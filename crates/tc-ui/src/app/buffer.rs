@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value};
 use tc_api::buffer::{BUFFER_ITEM_PREFIX, BufferEntry, BufferKey, BufferLine};
 use tc_api::ids::{ProjectId, ProjectRef, ServerInstance, WallMs};
-use unicode_normalization::UnicodeNormalization;
+use unicode_normalization::{IsNormalized, UnicodeNormalization, is_nfc_quick};
 
 /// The browser refused a write, or an entry could not be written as JSON.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -91,9 +91,18 @@ pub fn nfc(text: &str) -> String {
     text.nfc().collect()
 }
 
-/// Whether two texts are one text in NFC.
+/// Whether two texts are one text in NFC. Runs on every keystroke: two texts that are already
+/// in NFC (the quick check, one pass and no allocation, says so for nearly all text) and differ
+/// are different, so only text that may not be in NFC is normalized.
 pub fn same_text(a: &str, b: &str) -> bool {
-    a == b || nfc(a) == nfc(b)
+    if a == b {
+        return true;
+    }
+    let normalized = |text: &str| is_nfc_quick(text.chars()) == IsNormalized::Yes;
+    if normalized(a) && normalized(b) {
+        return false;
+    }
+    nfc(a) == nfc(b)
 }
 
 fn encode<T: serde::Serialize>(value: &T) -> Result<String, StoreError> {

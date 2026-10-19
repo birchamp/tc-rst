@@ -17,7 +17,7 @@ export const PANICS_TO_STOP = 3;
 export const API_VERSION = 1;
 
 /** The English words of the callout, for a page that never kept its language's. */
-export const ENGLISH = { lang: 'en', title: 'This screen could not be shown.', home: 'Back to Home' };
+export const ENGLISH = { lang: 'en', dir: 'ltr', title: 'This screen could not be shown.', home: 'Back to Home' };
 
 /** A draft endpoint: `service/name`, so a damaged entry cannot post anywhere else. */
 const DRAFT_PATH = /^[a-z][a-z0-9]*\/[A-Za-z][A-Za-z0-9]*$/;
@@ -168,7 +168,7 @@ export function calloutText(sessionStore) {
   try {
     const kept = JSON.parse(sessionStore.getItem(TEXT_KEY));
     if (kept && typeof kept.title === 'string' && typeof kept.home === 'string' && typeof kept.lang === 'string') {
-      return { lang: kept.lang, title: kept.title, home: kept.home };
+      return { lang: kept.lang, dir: kept.dir === 'rtl' ? 'rtl' : 'ltr', title: kept.title, home: kept.home };
     }
   } catch {
     // English below.
