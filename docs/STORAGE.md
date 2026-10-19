@@ -2121,7 +2121,13 @@ C1  On the actor: list the journal folders for a second writer (§5.0), check th
     marks, and it belongs to the next checkpoint and to a materialization of its own (a timer is
     set). The commit shows the project as its packs hold it.
 C2  On the writer: materialize (§5.10) from that snapshot. The new packs are now listed in
-    metadata.json. This closes the write group the seal opened (I7).
+    metadata.json. This closes the write group the seal opened (I7). A path the writer's own
+    retry or a look at the folder wrote meanwhile from a newer snapshot (it holds a save served
+    between the seal's steps) is left as it is in M1: the job never writes an older projection
+    over the person's newer save, and the job that follows the served saves finds the file equal
+    to its projection. `metadata.json` is listed and written from the job's snapshot, so the
+    project details of such a newer write show their older values in the folder, never in the
+    tree or the journal, until that job (about 3 s).
 C3  On the writer. If the seal failed, stop: the tree's files would show changes its packs lack.
     If an expected pack could be neither restored nor read, stop: no commit, and the notice
     (`MaterializeBlocked`, reason `PackMissing`) names the file ("translationCore can't read a
@@ -4840,6 +4846,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the heads file written when an outside edit is durable | `two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict` |
 | the parents of a carried file's edit (the newest head instead of the placed version) | `an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version` |
 | the snapshot taken when the seal starts (hand the writer the newest) | `a_commit_made_while_a_save_is_served_shows_only_what_its_packs_hold` |
+| the checkpoint job's M1 leaving a path a newer snapshot wrote (write the older projection) | `a_checkpoint_never_writes_an_older_projection_over_a_save_a_retry_wrote` |
 | the tree's paths from the snapshot (waiting outside edit, written from a newer snapshot) | `a_commit_takes_a_file_waiting_for_an_outside_edit_from_the_snapshot`, `a_retry_that_wrote_a_newer_snapshot_does_not_reach_the_tree` |
 | the freshening of a reused blob and the repack's guard while a commit is made | `a_blob_a_new_commit_names_again_is_kept_young`, `a_repack_prunes_nothing_while_a_commit_is_being_made` (`git.rs`) |
 | the notice of a rewrite whose every digest equals its base | `a_whitespace_only_rewrite_records_nothing` |

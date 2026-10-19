@@ -375,3 +375,86 @@ fn a_retry_that_wrote_a_newer_snapshot_does_not_reach_the_tree() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// A checkpoint's job runs on the snapshot its packs stand for. When the writer's own retry
+/// has written a path from a newer snapshot meanwhile (a save served between the steps of the
+/// seal), the checkpoint's job leaves the file alone: it never writes the older projection
+/// over the person's newer save, not even for the seconds until the next job (§5.13 C2).
+#[test]
+fn a_checkpoint_never_writes_an_older_projection_over_a_save_a_retry_wrote() {
+    use std::sync::Mutex;
+    let (rig, folder) = titus();
+    let handle = Arc::new(open(&rig, &folder));
+    let path = usfm(&folder);
+    rig.fs.set_busy(&path, true);
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    // TIT.usfm is marked again, so the checkpoint's own job carries it.
+    save_verse(&handle, 1, 3, "to Titus, a true child").unwrap();
+    let steps = Arc::new(Mutex::new(0));
+    let seen_during = Arc::new(Mutex::new(None));
+    {
+        let (handle, steps, fs, seen_during) = (
+            handle.clone(),
+            steps.clone(),
+            rig.fs.clone(),
+            seen_during.clone(),
+        );
+        rig.store.hooks().at_seal_step(move || {
+            let mut steps = steps.lock().unwrap();
+            *steps += 1;
+            if *steps == 2 {
+                let shown = handle.mint(&verse(1, 2), None).unwrap();
+                drop(handle.submit(tc_journal::command::Command::SaveVerse {
+                    shown,
+                    words: "saved while the seal runs".into(),
+                }));
+            }
+            if *steps == 3 {
+                // The program lets go, and the writer's retry runs before the seal ends.
+                fs.set_busy(&usfm(Path::new("/projects/Titus")), false);
+                std::thread::sleep(Duration::from_millis(1500));
+                *seen_during.lock().unwrap() = fs
+                    .peek(&usfm(Path::new("/projects/Titus")))
+                    .map(|b| String::from_utf8_lossy(&b).into_owned());
+            }
+        });
+    }
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    rig.store.hooks().at_seal_step(|| {});
+    let shown_during = seen_during.lock().unwrap().take().expect("the seal ran");
+    assert!(
+        shown_during.contains("saved while the seal runs"),
+        "the retry wrote the newer snapshot: {shown_during}"
+    );
+    // The checkpoint's job has run: the folder still shows every save, with no wait for the
+    // timer job that follows.
+    let after = String::from_utf8(rig.fs.peek(&path).unwrap()).unwrap();
+    assert!(
+        after.contains("saved while the seal runs"),
+        "the checkpoint wrote its older projection over a newer save"
+    );
+    assert!(after.contains("to Titus, a true child"));
+    // The tree still shows what its packs hold.
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    let text =
+        String::from_utf8(commit_files(&repo, commit)["ingredients/TIT.usfm"].clone()).unwrap();
+    assert!(!text.contains("saved while the seal runs"));
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    handle.wait_idle();
+    let handle = Arc::try_unwrap(handle).unwrap_or_else(|_| panic!("no other owner"));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}

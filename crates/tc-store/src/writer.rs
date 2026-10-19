@@ -9,7 +9,8 @@
 //! Message passing only. The actor sends [`Job`]s and never waits for one but at close; the
 //! writer sends the actor a [`Msg`] when the open's first job fails. A job runs with the
 //! snapshot it was sent, or a newer one when the writer has already run newer ones: a job
-//! never writes older bytes over newer.
+//! never writes older bytes over newer. A checkpoint's job runs on exactly the snapshot its
+//! packs stand for, and leaves alone the files a newer snapshot wrote.
 
 use crate::atomic::{SyncDir, atomic_remove};
 use crate::clock::Clock;
@@ -280,7 +281,8 @@ impl Writer {
     /// Takes the view of a checkpoint's job: exactly the snapshot its packs stand for, even
     /// when a look at the folder ran on a newer one meanwhile. The commit shows the project
     /// as the packs hold it, never a save they lack (§5.13 C3); the paths a newer snapshot
-    /// wrote are rendered again for the tree ([`Writer::stale_paths`]).
+    /// wrote are rendered again for the tree ([`Writer::stale_paths`]) and left as they are in
+    /// the folder ([`Writer::written_from_newer_fold`]).
     fn begin_exact(
         &mut self,
         snapshot: &Snapshot,

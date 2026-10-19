@@ -715,6 +715,18 @@ impl Writer {
         candidates
     }
 
+    /// A look at the folder or a retry wrote `path` from a fold newer than this job's. Only a
+    /// checkpoint's job runs on an older fold than one the writer has run on (it stands on the
+    /// snapshot its packs hold, §5.13 C1): it leaves the path as it is, since the newer bytes
+    /// are the app's own and hold saves the older projection lacks; the commit's tree takes the
+    /// path from the snapshot ([`Writer::stale_paths`]) and the next job, whose marks include
+    /// every save served meanwhile, finds the file equal to the projection.
+    pub(crate) fn written_from_newer_fold(&self, path: &str) -> bool {
+        self.written_seq
+            .get(path)
+            .is_some_and(|written| *written > self.seq)
+    }
+
     /// M0 to M8 for one group.
     fn run_group(
         &mut self,
@@ -738,6 +750,9 @@ impl Writer {
             processed.insert(path.clone());
             if self.pending_record.contains_key(&path) {
                 // The actor is recording what was found there: nothing is written meanwhile.
+                continue;
+            }
+            if self.written_from_newer_fold(&path) {
                 continue;
             }
             let entry = self.manifest.paths.get(&path).cloned();
@@ -807,6 +822,9 @@ impl Writer {
         let mut removing: Vec<String> = Vec::new();
         for path in removes {
             processed.insert(path.clone());
+            if self.written_from_newer_fold(&path) {
+                continue;
+            }
             match self.read_disk(&path) {
                 Disk::Missing => gone.push(path),
                 Disk::Unreadable => {
