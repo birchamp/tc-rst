@@ -502,8 +502,9 @@ struct OriginState {
     by_change: HashMap<ChangeId, Origin>,
     /// Submits handed to the actor whose reply is not settled yet.
     in_flight: usize,
-    /// The highest `seq` of a reply the relay settled. Only the relay raises it, because only
-    /// the relay settles replies in the order the actor gave them.
+    /// The highest `seq` of a stored or unchanged reply the relay settled; an error reply has
+    /// none. Only the relay raises it, because only the relay settles replies in the order the
+    /// actor gave them.
     relay_seq: u64,
     /// The relay has stopped: every reply it will ever see is recorded.
     relay_gone: bool,
@@ -554,12 +555,14 @@ impl Origins {
     ///
     /// - no submit is in flight (each is counted before it reaches the actor and settled
     ///   under the same lock as its record), or
-    /// - the relay settled a reply with this `seq` or a later one: the actor gave that reply
-    ///   after this batch, and the relay settles in the actor's order, so a submit that wrote
-    ///   this batch would have been recorded first.
+    /// - the relay settled a stored or unchanged reply with this `seq` or a later one: the
+    ///   actor gave that reply after this batch, and the relay settles in the actor's order,
+    ///   so a submit that wrote this batch would have been recorded first.
     ///
-    /// So a batch the store folds on its own (S2's outside edits, E1a's intakes) never holds
-    /// the project's events back for longer than the next reply the actor gives.
+    /// So a batch the store folds on its own (S2's outside edits, E1a's intakes) holds the
+    /// project's events back until the next stored or unchanged reply the actor gives after
+    /// it, or until no submit is in flight. An error reply carries no `seq`, so it says nothing
+    /// of where the batch stands in the actor's order and does not end the wait.
     fn take(&self, change: &ChangeId, seq: u64) -> Option<Origin> {
         let mut state = lock(&self.state);
         loop {
@@ -1288,10 +1291,10 @@ mod tests {
     }
 
     /// The same batch while a submit waits behind it in the actor: the events thread waits
-    /// for that submit's reply, which the actor gives after the batch, and then passes both
-    /// on, each with its own cause.
+    /// for that submit's stored reply, which the actor gives after the batch, and then passes
+    /// both on, each with its own cause.
     #[test]
-    fn a_batch_no_submit_asked_for_waits_at_most_for_the_next_reply() {
+    fn a_batch_no_submit_asked_for_waits_for_the_next_stored_reply() {
         let fs = FaultFs::new();
         let hooks: Arc<tc_store::Hooks> = Arc::default();
         let backend = backend_with_titus(&fs, hooks.clone());
@@ -1411,7 +1414,34 @@ mod tests {
             "a submit's own settle does not end the wait"
         );
         drafted.settled(Some(&written(mine, 6)), &request, SettledBy::Relay);
-        assert_eq!(taken.recv_timeout(AT_ONCE), Ok(Some(request)));
+        assert_eq!(taken.recv_timeout(AT_ONCE), Ok(Some(request.clone())));
+
+        // An error reply (refused, read-only, not written) carries no seq, so it says nothing of
+        // the batch's place in the actor's order: the wait goes on while another submit is in
+        // flight, and ends with a later stored reply (APP-DESIGN §4.2's note, the C0 row's D7).
+        let refused = Arc::new(Origins::default());
+        refused.begin();
+        refused.begin();
+        let taken = take_on_a_thread(&refused, outside, 3);
+        refused.settled(None, &request, SettledBy::Relay);
+        assert!(
+            taken.recv_timeout(A_WHILE).is_err(),
+            "an error reply does not end the wait"
+        );
+        refused.settled(Some(&written(later, 4)), &request, SettledBy::Relay);
+        assert_eq!(taken.recv_timeout(AT_ONCE), Ok(None));
+
+        // ... or when the error reply leaves no submit in flight.
+        let drained = Arc::new(Origins::default());
+        drained.begin();
+        let taken = take_on_a_thread(&drained, outside, 3);
+        assert!(taken.recv_timeout(A_WHILE).is_err());
+        drained.settled(None, &request, SettledBy::Relay);
+        assert_eq!(
+            taken.recv_timeout(AT_ONCE),
+            Ok(None),
+            "nothing in flight after the error reply"
+        );
     }
 
     /// AD3, R19: a review token in a save cannot be built through the seam (two
