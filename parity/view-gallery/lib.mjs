@@ -4,7 +4,7 @@
 // `encodeValue` is self-contained so a recorder can ship its source to real tC4's page.
 
 /** Tags for values JSON cannot carry. An object with exactly one key from TAGS is a tag. */
-export const TAGS = ['$u8', '$part'];
+export const TAGS = ['$u8', '$symbol', '$part'];
 
 /**
  * Walks `value` (named `path` in refusals) and returns `{ value, refused }`: the value as
@@ -12,14 +12,16 @@ export const TAGS = ['$u8', '$part'];
  * must never hold: undefined (as a property or in an array), functions, symbols, bigints,
  * non-finite numbers, Map, Set, Date, class instances, cycles, strings that start with
  * "blob:" (a URL that dies with its page), and plain objects whose only key is a tag name.
- * A Uint8Array (an uploaded file's bytes) becomes `{ $u8: <base64> }`. A value shared by two
- * places is written twice, as JSON writes it; a value that holds itself is a cycle.
+ * A Uint8Array (an uploaded file's bytes) becomes `{ $u8: <base64> }`, and a symbol (tC4 marks
+ * a sign-in step with a fresh one, state.jsx `si.opened`, compared only by identity)
+ * `{ $symbol: <description> }`. A value shared by two places is written twice, as JSON writes
+ * it; a value that holds itself is a cycle.
  *
  * Self-contained: it closes over nothing in this module, so `String(encodeValue)` runs in a
  * page that never loaded it.
  */
 export function encodeValue(value, path = 's') {
-  const tags = ['$u8', '$part'];
+  const tags = ['$u8', '$symbol', '$part'];
   const refused = [];
   const ancestors = [];
   const base64 = (bytes) => {
@@ -41,6 +43,7 @@ export function encodeValue(value, path = 's') {
       refused.push(`${at}: undefined`);
       return null;
     }
+    if (typeof v === 'symbol') return { $symbol: v.description ?? '' };
     if (typeof v !== 'object') {
       refused.push(`${at}: a ${typeof v}`);
       return null;
@@ -76,13 +79,15 @@ export function encodeValue(value, path = 's') {
   return { value: encoded, refused };
 }
 
-/** The inverse of `encodeValue`, in the page: `{ $u8 }` becomes a Uint8Array again. Every
- * other value is returned as it is (a new object or array where something inside changed). */
+/** The inverse of `encodeValue`, in the page: `{ $u8 }` becomes a Uint8Array again and
+ * `{ $symbol }` a new symbol with that description, as unique as tC4's was. Every other value
+ * is returned as it is (a new object or array where something inside changed). */
 export function reviveValue(value) {
   if (Array.isArray(value)) return value.map(reviveValue);
   if (value === null || typeof value !== 'object') return value;
   const keys = Object.keys(value);
   if (keys.length === 1 && keys[0] === '$u8') return Uint8Array.from(atob(value.$u8), (c) => c.charCodeAt(0));
+  if (keys.length === 1 && keys[0] === '$symbol') return Symbol(value.$symbol);
   if (keys.length === 1 && keys[0] === '$part') throw new Error(`a state part (${value.$part}) reached the page unjoined`);
   const out = {};
   for (const key of keys) out[key] = reviveValue(value[key]);

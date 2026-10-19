@@ -1,0 +1,557 @@
+{
+  "name": "signin-error",
+  "s": {
+    "view": "home",
+    "projects": [
+      {
+        "id": "_local_/_local_/sample_burrito_obs",
+        "name": "Equipo Ejemplo — Historias Bíblicas Abiertas",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textStories",
+        "bookCodes": [],
+        "timestamp": 1789473600000
+      },
+      {
+        "id": "_local_/_local_/sample_burrito",
+        "name": "Equipo Ejemplo — Tito y Jonás",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textTranslation",
+        "bookCodes": [
+          "JON",
+          "TIT"
+        ],
+        "timestamp": 1782993600000
+      }
+    ],
+    "project": null,
+    "opening": null,
+    "book": null,
+    "chapter": 1,
+    "bookRaw": null,
+    "bookError": null,
+    "bookErrorHelp": null,
+    "storyNumbers": [],
+    "storyNumber": null,
+    "story": null,
+    "sourceStory": null,
+    "storyImages": {},
+    "storyImageNote": null,
+    "storyLoading": false,
+    "storyError": null,
+    "storySource": null,
+    "sources": {},
+    "sourceTab": "ult",
+    "editing": null,
+    "saveState": "saved",
+    "rail": true,
+    "helps": true,
+    "helpsWidth": null,
+    "helpsTab": "notes",
+    "helpsHover": null,
+    "helpsActive": null,
+    "academy": null,
+    "understand": null,
+    "noteSaveState": "saved",
+    "alignSaveState": "saved",
+    "checkSaveState": "saved",
+    "storySaveState": "saved",
+    "storySaveError": null,
+    "commitError": null,
+    "commitErrorHelp": null,
+    "commitErrorRepo": null,
+    "modal": "signIn",
+    "fb": null,
+    "np": null,
+    "ab": null,
+    "st": null,
+    "im": null,
+    "si": {
+      "login": "facilitator-zq",
+      "password": "",
+      "stay": false,
+      "server": "git.door43.org",
+      "busy": false,
+      "error": {
+        "code": "share.auth-failed",
+        "message": "Door43 did not accept the username or the password"
+      },
+      "share": {
+        "id": "_local_/_local_/sample_burrito",
+        "name": "Equipo Ejemplo — Tito y Jonás",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textTranslation",
+        "bookCodes": [
+          "JON",
+          "TIT"
+        ],
+        "timestamp": 1782993600000
+      },
+      "renew": false,
+      "flow": {
+        "kind": "share",
+        "closed": false,
+        "dialog": true,
+        "attempt": null
+      },
+      "opened": {
+        "$symbol": "sign-in step"
+      }
+    },
+    "door43User": null,
+    "door43Kept": false,
+    "door43NotKept": false,
+    "sh": null,
+    "remoteByProject": {
+      "_local_/_local_/sample_burrito_obs": null,
+      "_local_/_local_/sample_burrito": null
+    },
+    "importToast": null,
+    "importedRepo": null,
+    "od": null,
+    "fix": null,
+    "src": {
+      "gateway": null,
+      "book": "TIT",
+      "rows": [],
+      "loading": false,
+      "error": null,
+      "dl": null,
+      "exclude": {}
+    },
+    "installedSrc": [],
+    "installEpoch": 0,
+    "checkable": [],
+    "checkableError": null,
+    "preflightError": null,
+    "gatewayError": null,
+    "internetOn": true,
+    "netAsk": null,
+    "netFailed": false,
+    "accountError": null,
+    "appLocale": "en",
+    "projectPins": null,
+    "projectPinsSeq": 0,
+    "projectPinsLoaded": false,
+    "projectPinsError": null,
+    "sourcePanes": null,
+    "preflight": null,
+    "gatewayPreview": null,
+    "gatewayBusy": false,
+    "upgrade": {
+      "checking": false,
+      "offers": null,
+      "textOffers": null,
+      "offersFor": null,
+      "error": null,
+      "installing": null,
+      "progress": null,
+      "preview": null
+    },
+    "ops": {
+      "entries": [],
+      "errors": []
+    },
+    "aligning": false,
+    "alignIndex": null,
+    "alignVerse": null,
+    "alignSession": null,
+    "checkTool": null,
+    "checkSession": null,
+    "pickerProgress": null,
+    "toolPos": {},
+    "progressByProject": {
+      "_local_/_local_/sample_burrito": {
+        "JON": 4,
+        "TIT": 11
+      },
+      "_local_/_local_/sample_burrito_obs": {
+        "OBS": 1,
+        "stories": [
+          {
+            "number": 1,
+            "title": "La Creación",
+            "pct": 13,
+            "frames": 16,
+            "drafted": 2
+          },
+          {
+            "number": 2,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 3,
+            "title": "",
+            "pct": 0,
+            "frames": 16,
+            "drafted": 0
+          },
+          {
+            "number": 4,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 5,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 6,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 7,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 8,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 9,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 10,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 11,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 12,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 13,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 14,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 15,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 16,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 17,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 18,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 19,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 20,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 21,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 22,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 23,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 24,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 25,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 26,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 27,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 28,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 29,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 30,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 31,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 32,
+            "title": "",
+            "pct": 0,
+            "frames": 16,
+            "drafted": 0
+          },
+          {
+            "number": 33,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 34,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 35,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 36,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 37,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 38,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 39,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 40,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 41,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 42,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 43,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 44,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 45,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 46,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 47,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 48,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 49,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 50,
+            "title": "",
+            "pct": 0,
+            "frames": 17,
+            "drafted": 0
+          }
+        ]
+      }
+    },
+    "conflictsByProject": {
+      "_local_/_local_/sample_burrito": {}
+    },
+    "teamByProject": {
+      "_local_/_local_/sample_burrito": {
+        "names": {},
+        "actors": []
+      }
+    },
+    "syncing": null,
+    "syncResult": null,
+    "verseConflicts": [],
+    "team": null,
+    "conflictReview": null,
+    "obsStoryByProject": {},
+    "obsRecentByProject": {},
+    "placeByProject": {},
+    "storyFrame": null,
+    "draftUnits": {},
+    "alignSuggestions": {},
+    "alignSuggest": {
+      "status": "off",
+      "testament": null,
+      "verses": 0,
+      "boosted": false,
+      "error": null
+    },
+    "lastEdit": null,
+    "tick": 0
+  },
+  "returns": {}
+}

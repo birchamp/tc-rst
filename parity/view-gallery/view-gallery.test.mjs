@@ -9,13 +9,21 @@
 // 1.56.1 (parity/tc4-baseline/node_modules); without them each of its tests is skipped and
 // says why. Only Node built-ins are imported at the top.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { stateExportsSource, stateStub } from './build.mjs';
 import { applyPatch, domDigestInput, encodeValue, makeActions, renumberIds, reviveValue, traceArgs } from './lib.mjs';
+import { HERE, STATES_DIR, filesUnder, joinParts, partsOf, sha256, splitParts } from './node-lib.mjs';
+import { STATES } from './states.mjs';
+
+const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+const statesIndex = readJson(path.join(HERE, 'states.json'));
 
 // ---- the pure helpers ----------------------------------------------------------------------
 
-test('encodeValue carries plain JSON and Uint8Array, and refuses everything else with its path', () => {
+test('encodeValue carries plain JSON, Uint8Array and symbols, and refuses everything else with its path', () => {
   const plain = { a: 1, b: 'x', c: [true, null, { d: -2.5 }], e: {}, 'f-g': [] };
   const shared = { n: 1 };
   const { value, refused } = encodeValue({ plain, twice: [shared, shared] });
@@ -31,6 +39,12 @@ test('encodeValue carries plain JSON and Uint8Array, and refuses everything else
   assert.ok(back.files[0].bytes instanceof Uint8Array);
   assert.deepEqual([...back.files[0].bytes], [...bytes]);
 
+  const marked = encodeValue({ si: { opened: Symbol('sign-in step') } });
+  assert.deepEqual(marked, { value: { si: { opened: { $symbol: 'sign-in step' } } }, refused: [] });
+  const opened = reviveValue(JSON.parse(JSON.stringify(marked.value))).si.opened;
+  assert.equal(typeof opened, 'symbol');
+  assert.equal(opened.description, 'sign-in step');
+
   const cycle = { a: { b: [0, 1, null] } };
   cycle.a.b[2] = cycle;
   class X {}
@@ -38,7 +52,6 @@ test('encodeValue carries plain JSON and Uint8Array, and refuses everything else
     [{ a: { b: [0, 1, undefined] } }, 's.a.b[2]', 'undefined'],
     [{ a: { b: undefined } }, 's.a.b', 'undefined'],
     [{ a: { b: [0, 1, () => 1] } }, 's.a.b[2]', 'a function'],
-    [{ a: { b: [0, 1, Symbol('x')] } }, 's.a.b[2]', 'a symbol'],
     [{ a: { b: [0, 1, 10n] } }, 's.a.b[2]', 'a bigint'],
     [{ a: { b: [0, 1, Number.NaN] } }, 's.a.b[2]', 'the number NaN'],
     [{ a: { b: [0, 1, Infinity] } }, 's.a.b[2]', 'the number Infinity'],
@@ -50,6 +63,7 @@ test('encodeValue carries plain JSON and Uint8Array, and refuses everything else
     [{ a: { b: [0, 1, 'blob:x'] } }, 's.a.b[2]', 'a blob: URL'],
     [{ a: { b: [0, 1, { $u8: 'x' }] } }, 's.a.b[2]', 'a plain object whose only key is the tag $u8'],
     [{ a: { b: [0, 1, { $part: 'x' }] } }, 's.a.b[2]', 'a plain object whose only key is the tag $part'],
+    [{ a: { b: [0, 1, { $symbol: 'x' }] } }, 's.a.b[2]', 'a plain object whose only key is the tag $symbol'],
   ]) {
     assert.deepEqual(encodeValue(bad).refused, [`${path}: ${why}`], why);
   }
@@ -150,4 +164,67 @@ test('the stub takes tC4\'s own SCRIPT_FONTS and isOldTestament, and the build r
   assert.equal(await plugin.resolveId.call(context, '../state.jsx', '/tc4/src/views/Home.jsx', {}), '/gallery/stub.jsx');
   assert.equal(await plugin.resolveId.call(context, './state', '/tc4/src/views/Home.jsx', {}), null, 'another file named state stays');
   assert.equal(await plugin.resolveId.call(context, 'react', '/tc4/src/App.jsx', {}), null);
+});
+
+// ---- the recorded states ---------------------------------------------------------------------
+
+test('parts are content-addressed and shared', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gallery-parts-'));
+  try {
+    const big = { chapters: Array.from({ length: 70 }, (_, i) => 'x'.repeat(1000) + i) };
+    const a = { view: 'draft', sources: big, small: { text: 'y'.repeat(10 * 1024) } };
+    const b = { view: 'check', sources: structuredClone(big) };
+    const sa = splitParts(a);
+    const sb = splitParts(b);
+    assert.deepEqual(Object.keys(sa.parts), Object.keys(sb.parts), 'one value, one part');
+    assert.equal(Object.keys(sa.parts).length, 1);
+    const [id] = Object.keys(sa.parts);
+    assert.match(id, /^[0-9a-f]{16}$/);
+    assert.ok(sha256(sa.parts[id]).startsWith(id));
+    assert.deepEqual(sa.s.sources, { $part: id });
+    assert.deepEqual(sa.s.small, a.small, 'a 10 KiB value stays inline');
+    assert.deepEqual(partsOf(sa.s), [id]);
+    fs.writeFileSync(path.join(dir, `${id}.json`), sa.parts[id]);
+    assert.deepEqual(joinParts(sa.s, dir), a);
+    assert.deepEqual(joinParts(sb.s, dir), b);
+    fs.writeFileSync(path.join(dir, `${id}.json`), sa.parts[id].replace('x', 'z'));
+    assert.throws(() => joinParts(sa.s, dir), /does not have the sha256 its name gives/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('states.json names every state file and part, and nothing else is in states/', () => {
+  const named = new Set();
+  for (const entry of statesIndex.states) {
+    const text = fs.readFileSync(path.join(HERE, entry.file));
+    assert.equal(sha256(text), entry.sha256, `${entry.file} is not the file states.json names`);
+    const file = JSON.parse(text);
+    assert.equal(file.name, entry.name);
+    assert.deepEqual(partsOf(file.s), entry.parts, `${entry.file} names other parts than states.json`);
+    named.add(path.relative(STATES_DIR, path.join(HERE, entry.file)));
+    for (const id of entry.parts) {
+      const part = fs.readFileSync(path.join(STATES_DIR, 'parts', `${id}.json`));
+      assert.ok(sha256(part).startsWith(id), `part ${id} does not have the sha256 its name gives`);
+      named.add(`parts/${id}.json`);
+    }
+    assert.match(entry.real.png, /^[0-9a-f]{64}$/);
+    assert.match(entry.real.dom, /^[0-9a-f]{64}$/);
+  }
+  assert.deepEqual(filesUnder(STATES_DIR), [...named].sort(), 'a file under states/ that no state names, or a named file missing');
+  assert.match(statesIndex.tc4.commit, /^[0-9a-f]{40}$/);
+});
+
+test('every state of states.mjs is recorded, as states.mjs describes it', () => {
+  assert.deepEqual(statesIndex.states.map((e) => e.name), STATES.map((s) => s.name));
+  for (const state of STATES) {
+    const entry = statesIndex.states.find((e) => e.name === state.name);
+    const { scenario, locale, baseline, portable, calls } = state;
+    assert.deepEqual(
+      { scenario: entry.scenario, locale: entry.locale, baseline: entry.baseline, portable: entry.portable, calls: entry.calls },
+      { scenario, locale, baseline, portable, calls },
+      `states.json's entry of ${state.name} is not what states.mjs records: record it again`,
+    );
+  }
+  assert.equal(new Set(STATES.map((s) => s.name)).size, STATES.length);
 });

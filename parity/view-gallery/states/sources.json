@@ -1,0 +1,1013 @@
+{
+  "name": "sources",
+  "s": {
+    "view": "read",
+    "projects": [
+      {
+        "id": "_local_/_local_/sample_burrito_obs",
+        "name": "Equipo Ejemplo — Historias Bíblicas Abiertas",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textStories",
+        "bookCodes": [],
+        "timestamp": 1789473600000
+      },
+      {
+        "id": "_local_/_local_/sample_burrito",
+        "name": "Equipo Ejemplo — Tito y Jonás",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textTranslation",
+        "bookCodes": [
+          "JON",
+          "TIT"
+        ],
+        "timestamp": 1782993600000
+      }
+    ],
+    "project": {
+      "id": "_local_/_local_/sample_burrito",
+      "name": "Equipo Ejemplo — Tito y Jonás",
+      "languageTag": "es-419",
+      "scriptDirection": "ltr",
+      "flavor": "textTranslation",
+      "bookCodes": [
+        "JON",
+        "TIT"
+      ],
+      "timestamp": 1782993600000,
+      "textFont": null,
+      "repoPath": "_local_/_local_/sample_burrito"
+    },
+    "opening": null,
+    "book": "JON",
+    "chapter": 1,
+    "bookRaw": "\\id JON ejemplo_tj\n\\usfm 3.0\n\\h Jonás\n\\toc1 El Libro de Jonás\n\\toc2 Jonás\n\\toc3 Jon\n\\mt Jonás\n\\c 1\n\\p\n\\v 1 ___\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n\\v 5 ___\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\v 11 ___\n\\v 12 ___\n\\v 13 ___\n\\v 14 ___\n\\v 15 ___\n\\v 16 ___\n\\v 17 ___\n\\c 2\n\\p\n\\v 1 ___\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n\\v 5 ___\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9-10 Mas yo te ofreceré sacrificios con voz de gratitud; pagaré lo que prometí. ¡La salvación viene de Jehová! Y Jehová dio orden al pez, y este vomitó a Jonás en tierra firme.\n\\c 3\n\\p\n\\v 1 ___\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n\\v 5 ___\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\c 4\n\\p\n\\v 1 ___\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n\\v 5 ___\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\v 11 ___\n",
+    "bookError": null,
+    "bookErrorHelp": null,
+    "storyNumbers": [],
+    "storyNumber": null,
+    "story": null,
+    "sourceStory": null,
+    "storyImages": {},
+    "storyImageNote": null,
+    "storyLoading": false,
+    "storyError": null,
+    "storySource": null,
+    "sources": {
+      "orig": "not-installed",
+      "ult": "missing",
+      "ust": "missing"
+    },
+    "sourceTab": "ult",
+    "editing": null,
+    "saveState": "saved",
+    "rail": true,
+    "helps": true,
+    "helpsWidth": null,
+    "helpsTab": "notes",
+    "helpsHover": null,
+    "helpsActive": null,
+    "academy": null,
+    "understand": {
+      "loading": false,
+      "book": "JON",
+      "notes": {
+        "state": "missing",
+        "pin": {
+          "repoPath": "git.door43.org/es-419_gl/es-419_tn",
+          "version": "v66",
+          "sha": "22f3d0c61e2ab4701cb869547de9c3c43da07208",
+          "flavor": "parascriptural/x-bcvnotes",
+          "books": [
+            "TIT",
+            "JON",
+            "RUT",
+            "3JN"
+          ]
+        },
+        "rung": "primary"
+      },
+      "questions": {
+        "state": "fetch",
+        "pin": {
+          "repoPath": "git.door43.org/unfoldingWord/en_tq",
+          "version": "v91",
+          "sha": "8be02772584ff5a5fea893a392b4f019e3efcc77",
+          "flavor": "parascriptural/x-bcvquestions"
+        }
+      },
+      "words": {
+        "state": "fetch",
+        "pin": {
+          "repoPath": "git.door43.org/es-419_gl/es-419_twl",
+          "version": "v18",
+          "sha": "c2d9547ec95e40c2ba085c597b127c94733feb8a",
+          "flavor": "parascriptural/x-bcvarticles",
+          "books": [
+            "TIT",
+            "JON",
+            "RUT",
+            "3JN"
+          ]
+        },
+        "rung": "primary"
+      },
+      "simplified": {
+        "state": "missing",
+        "pin": {
+          "repoPath": "git.door43.org/unfoldingWord/en_ust",
+          "version": "v91",
+          "sha": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+          "flavor": "scripture/textTranslation",
+          "books": [
+            "TIT"
+          ]
+        },
+        "rung": null
+      },
+      "comprehension": {},
+      "sourceRefs": null
+    },
+    "noteSaveState": "saved",
+    "alignSaveState": "saved",
+    "checkSaveState": "saved",
+    "storySaveState": "saved",
+    "storySaveError": null,
+    "commitError": null,
+    "commitErrorHelp": null,
+    "commitErrorRepo": null,
+    "modal": "sources",
+    "fb": null,
+    "np": null,
+    "ab": null,
+    "st": null,
+    "im": null,
+    "si": null,
+    "door43User": null,
+    "door43Kept": false,
+    "door43NotKept": false,
+    "sh": null,
+    "remoteByProject": {
+      "_local_/_local_/sample_burrito_obs": null,
+      "_local_/_local_/sample_burrito": null
+    },
+    "importToast": null,
+    "importedRepo": null,
+    "od": null,
+    "fix": null,
+    "src": {
+      "gateway": null,
+      "book": "TIT",
+      "rows": [],
+      "loading": false,
+      "error": null,
+      "dl": null,
+      "exclude": {}
+    },
+    "installedSrc": [],
+    "installEpoch": 0,
+    "checkable": [
+      "en::unfoldingWord"
+    ],
+    "checkableError": null,
+    "preflightError": null,
+    "gatewayError": null,
+    "internetOn": false,
+    "netAsk": null,
+    "netFailed": false,
+    "accountError": null,
+    "appLocale": "en",
+    "projectPins": {
+      "schemaVersion": 2,
+      "languageSets": {
+        "primary": {
+          "gatewayLanguage": {
+            "languageId": "es-419",
+            "owner": "es-419_gl"
+          },
+          "translationNotes": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_tn",
+            "version": "v66",
+            "sha": "22f3d0c61e2ab4701cb869547de9c3c43da07208",
+            "flavor": "parascriptural/x-bcvnotes",
+            "books": [
+              "TIT",
+              "JON",
+              "RUT",
+              "3JN"
+            ]
+          },
+          "translationWordsLinks": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_twl",
+            "version": "v18",
+            "sha": "c2d9547ec95e40c2ba085c597b127c94733feb8a",
+            "flavor": "parascriptural/x-bcvarticles",
+            "books": [
+              "TIT",
+              "JON",
+              "RUT",
+              "3JN"
+            ]
+          },
+          "translationWords": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_tw",
+            "version": "v37",
+            "sha": "7586f4ff1f0483ea40a4a68e5e1f33158e08c208",
+            "flavor": "parascriptural/x-bcvarticles",
+            "books": [
+              "TIT",
+              "JON",
+              "RUT",
+              "3JN"
+            ]
+          },
+          "translationAcademy": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_ta",
+            "version": "v4",
+            "sha": "26606b578c37cc2c0ee09bb7b9a291860ff59444",
+            "flavor": "peripheral/x-peripheralArticles"
+          }
+        },
+        "fallback": {
+          "gatewayLanguage": {
+            "languageId": "en",
+            "owner": "unfoldingWord"
+          },
+          "translationNotes": {
+            "repoPath": "git.door43.org/unfoldingWord/en_tn",
+            "version": "v91",
+            "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a",
+            "flavor": "parascriptural/x-bcvnotes",
+            "books": [
+              "GEN",
+              "EXO",
+              "LEV",
+              "DEU",
+              "JOS",
+              "JDG",
+              "RUT",
+              "1SA",
+              "2SA",
+              "1KI",
+              "2KI",
+              "EZR",
+              "NEH",
+              "EST",
+              "JOB",
+              "PSA",
+              "PRO",
+              "SNG",
+              "LAM",
+              "DAN",
+              "HOS",
+              "JOL",
+              "AMO",
+              "OBA",
+              "JON",
+              "MIC",
+              "NAM",
+              "HAB",
+              "ZEP",
+              "HAG",
+              "ZEC",
+              "MAL",
+              "MAT",
+              "MRK",
+              "LUK",
+              "JHN",
+              "ACT",
+              "ROM",
+              "1CO",
+              "2CO",
+              "GAL",
+              "EPH",
+              "PHP",
+              "COL",
+              "1TH",
+              "2TH",
+              "1TI",
+              "2TI",
+              "TIT",
+              "PHM",
+              "HEB",
+              "JAS",
+              "1PE",
+              "2PE",
+              "1JN",
+              "2JN",
+              "3JN",
+              "JUD",
+              "REV"
+            ]
+          },
+          "translationWordsLinks": {
+            "repoPath": "git.door43.org/unfoldingWord/en_twl",
+            "version": "v91",
+            "sha": "7cbb3419f79780ce84b92ad7d42bd476cc5d8a64",
+            "flavor": "parascriptural/x-bcvarticles",
+            "books": [
+              "GEN",
+              "EXO",
+              "LEV",
+              "DEU",
+              "JOS",
+              "JDG",
+              "RUT",
+              "1SA",
+              "2SA",
+              "1KI",
+              "2KI",
+              "EZR",
+              "NEH",
+              "EST",
+              "JOB",
+              "PSA",
+              "PRO",
+              "SNG",
+              "LAM",
+              "DAN",
+              "HOS",
+              "JOL",
+              "AMO",
+              "OBA",
+              "JON",
+              "MIC",
+              "NAM",
+              "HAB",
+              "ZEP",
+              "HAG",
+              "ZEC",
+              "MAL",
+              "MAT",
+              "MRK",
+              "LUK",
+              "JHN",
+              "ACT",
+              "ROM",
+              "1CO",
+              "2CO",
+              "GAL",
+              "EPH",
+              "PHP",
+              "COL",
+              "1TH",
+              "2TH",
+              "1TI",
+              "2TI",
+              "TIT",
+              "PHM",
+              "HEB",
+              "JAS",
+              "1PE",
+              "2PE",
+              "1JN",
+              "2JN",
+              "3JN",
+              "JUD",
+              "REV"
+            ]
+          },
+          "translationWords": {
+            "repoPath": "git.door43.org/unfoldingWord/en_tw",
+            "version": "v91",
+            "sha": "ff5b3852c27c3a0d01b109e482eb26047dcd20e2",
+            "flavor": "parascriptural/x-bcvarticles",
+            "books": [
+              "BIBLE"
+            ]
+          },
+          "translationAcademy": {
+            "repoPath": "git.door43.org/unfoldingWord/en_ta",
+            "version": "v91",
+            "sha": "ce9a1bb9431317ca888e8c1f9620caa7f5fe45fd",
+            "flavor": "peripheral/x-peripheralArticles"
+          },
+          "translationQuestions": {
+            "repoPath": "git.door43.org/unfoldingWord/en_tq",
+            "version": "v91",
+            "sha": "8be02772584ff5a5fea893a392b4f019e3efcc77",
+            "flavor": "parascriptural/x-bcvquestions"
+          },
+          "simplifiedText": {
+            "repoPath": "git.door43.org/unfoldingWord/en_ust",
+            "version": "v91",
+            "sha": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+            "flavor": "scripture/textTranslation",
+            "books": [
+              "TIT"
+            ]
+          },
+          "obs": {
+            "repoPath": "git.door43.org/unfoldingWord/en_obs",
+            "version": "v9",
+            "sha": "d39a1dc7a7557ac54e4a8fecc3462147fe7eec3b",
+            "flavor": "gloss/textStories"
+          },
+          "obs-tn": {
+            "repoPath": "git.door43.org/unfoldingWord/en_obs-tn",
+            "version": "v13",
+            "sha": "e86138ea13f619f09f7a6dcaa60592716d407fe4",
+            "flavor": "peripheral/x-obsnotes"
+          },
+          "obs-twl": {
+            "repoPath": "git.door43.org/unfoldingWord/en_obs-twl",
+            "version": "v3",
+            "sha": "44ebc9fafe8101665f985007d566f5036a2be85b",
+            "flavor": "parascriptural/x-bcvarticles"
+          },
+          "obs-tq": {
+            "repoPath": "git.door43.org/unfoldingWord/en_obs-tq",
+            "version": "v10",
+            "sha": "01b92fe8793d62cff3a2221f5174c768cbad3dc1",
+            "flavor": "peripheral/x-obsquestions"
+          }
+        }
+      },
+      "resources": {
+        "originalLanguage": {
+          "nt": {
+            "repoPath": "git.door43.org/unfoldingWord/el-x-koine_ugnt",
+            "version": "v0.34",
+            "sha": "fc95b2b8aad08bb65ab54628ab685413a1139e97",
+            "flavor": "scripture/textTranslation"
+          },
+          "ot": {
+            "repoPath": "git.door43.org/unfoldingWord/hbo_uhb",
+            "version": "v3.0.0",
+            "sha": "74022f0fed012a3ef169886f595dd98e7b200543",
+            "flavor": "scripture/textTranslation"
+          }
+        },
+        "lexicon": {
+          "nt": {
+            "repoPath": "git.door43.org/unfoldingWord/en_ugl",
+            "version": "v0.5",
+            "sha": "8fa6eb60c0fe7afa61a80264c7326d63db5f1e70",
+            "flavor": "peripheral/x-lexicon"
+          },
+          "ot": {
+            "repoPath": "git.door43.org/unfoldingWord/en_uhl",
+            "sha": "db0098f3582814066f1a69c0aa2743a3ad0e8c81",
+            "flavor": "peripheral/x-lexicon"
+          }
+        }
+      },
+      "extraScripture": [
+        {
+          "id": "ult",
+          "repoPath": "git.door43.org/unfoldingWord/en_ult",
+          "version": "v91",
+          "sha": "35d215957f3203fd2e2fac5702ce14902d417f9d",
+          "flavor": "scripture/textTranslation",
+          "books": [
+            "1CO",
+            "1JN",
+            "1KI",
+            "1PE",
+            "1SA",
+            "1TH",
+            "1TI",
+            "2CO",
+            "2JN",
+            "2KI",
+            "2PE",
+            "2SA",
+            "2TH",
+            "2TI",
+            "3JN",
+            "ACT",
+            "COL",
+            "DEU",
+            "EPH",
+            "EST",
+            "EXO",
+            "EZR",
+            "GAL",
+            "GEN",
+            "HAB",
+            "HAG",
+            "HEB",
+            "JAS",
+            "JDG",
+            "JHN",
+            "JOB",
+            "JOL",
+            "JON",
+            "JOS",
+            "JUD",
+            "LAM",
+            "LEV",
+            "LUK",
+            "MAL",
+            "MAT",
+            "MRK",
+            "NAM",
+            "NEH",
+            "OBA",
+            "PHM",
+            "PHP",
+            "PRO",
+            "PSA",
+            "REV",
+            "ROM",
+            "RUT",
+            "SNG",
+            "TIT",
+            "ZEP"
+          ]
+        },
+        {
+          "id": "ust",
+          "repoPath": "git.door43.org/unfoldingWord/en_ust",
+          "version": "v91",
+          "sha": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+          "flavor": "scripture/textTranslation",
+          "books": [
+            "TIT"
+          ]
+        }
+      ]
+    },
+    "projectPinsSeq": 0,
+    "projectPinsLoaded": true,
+    "projectPinsError": null,
+    "sourcePanes": [
+      "ult",
+      "ust"
+    ],
+    "preflight": null,
+    "gatewayPreview": null,
+    "gatewayBusy": false,
+    "upgrade": {
+      "checking": false,
+      "offers": null,
+      "textOffers": null,
+      "offersFor": null,
+      "error": null,
+      "installing": null,
+      "progress": null,
+      "preview": null
+    },
+    "ops": {
+      "entries": [
+        {
+          "id": "2026-10-19T02:50:24.384Z#1",
+          "op": "open",
+          "startedAt": "2026-10-19T02:50:24.384Z",
+          "facts": {
+            "repoPath": "_local_/_local_/sample_burrito"
+          },
+          "report": {
+            "op": "open",
+            "ok": true,
+            "facts": {
+              "replayed": [],
+              "seeded": true,
+              "classification": "seeded",
+              "regeneratedPaths": [
+                "checking/translationNotes/TIT.json",
+                "checking/translationWords/TIT.json",
+                "checking/settings.json"
+              ],
+              "reconciledBooks": [],
+              "forks": [],
+              "retained": [],
+              "pendingStructural": [],
+              "phases": [
+                {
+                  "op": "seed",
+                  "ok": true,
+                  "facts": {
+                    "seeded": true,
+                    "regeneratedPaths": [
+                      "checking/translationNotes/TIT.json",
+                      "checking/translationWords/TIT.json",
+                      "checking/settings.json"
+                    ]
+                  },
+                  "startedAt": "2026-10-19T02:50:24.635Z",
+                  "endedAt": "2026-10-19T02:50:25.579Z"
+                }
+              ]
+            },
+            "startedAt": "2026-10-19T02:50:24.473Z",
+            "endedAt": "2026-10-19T02:50:25.580Z"
+          }
+        }
+      ],
+      "errors": []
+    },
+    "aligning": false,
+    "alignIndex": null,
+    "alignVerse": null,
+    "alignSession": null,
+    "checkTool": null,
+    "checkSession": null,
+    "pickerProgress": null,
+    "toolPos": {},
+    "progressByProject": {
+      "_local_/_local_/sample_burrito": {
+        "JON": 4,
+        "TIT": 11
+      },
+      "_local_/_local_/sample_burrito_obs": {
+        "OBS": 1,
+        "stories": [
+          {
+            "number": 1,
+            "title": "La Creación",
+            "pct": 13,
+            "frames": 16,
+            "drafted": 2
+          },
+          {
+            "number": 2,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 3,
+            "title": "",
+            "pct": 0,
+            "frames": 16,
+            "drafted": 0
+          },
+          {
+            "number": 4,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 5,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 6,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 7,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 8,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 9,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 10,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 11,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 12,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 13,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 14,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 15,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 16,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 17,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 18,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 19,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 20,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 21,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 22,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 23,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 24,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 25,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 26,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 27,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 28,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 29,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 30,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 31,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 32,
+            "title": "",
+            "pct": 0,
+            "frames": 16,
+            "drafted": 0
+          },
+          {
+            "number": 33,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 34,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 35,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 36,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 37,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 38,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 39,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 40,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 41,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 42,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 43,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 44,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 45,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 46,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 47,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 48,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 49,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 50,
+            "title": "",
+            "pct": 0,
+            "frames": 17,
+            "drafted": 0
+          }
+        ]
+      }
+    },
+    "conflictsByProject": {
+      "_local_/_local_/sample_burrito": {}
+    },
+    "teamByProject": {
+      "_local_/_local_/sample_burrito": {
+        "names": {},
+        "actors": [
+          "af3ebbd93f7c9c08"
+        ]
+      }
+    },
+    "syncing": null,
+    "syncResult": null,
+    "verseConflicts": [],
+    "team": {
+      "me": "af3ebbd93f7c9c08",
+      "names": {},
+      "actors": [
+        "af3ebbd93f7c9c08"
+      ]
+    },
+    "conflictReview": null,
+    "obsStoryByProject": {},
+    "obsRecentByProject": {},
+    "placeByProject": {},
+    "storyFrame": null,
+    "draftUnits": {},
+    "alignSuggestions": {},
+    "alignSuggest": {
+      "status": "off",
+      "testament": null,
+      "verses": 0,
+      "boosted": false,
+      "error": null
+    },
+    "lastEdit": null,
+    "tick": 0,
+    "projectScope": {
+      "JON": [],
+      "TIT": []
+    }
+  },
+  "returns": {}
+}
