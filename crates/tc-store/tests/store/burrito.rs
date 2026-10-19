@@ -249,6 +249,8 @@ mod arbitrary {
         used: AtomicU32,
         invalid: AtomicU32,
         outside: AtomicU32,
+        /// Outside edits whose name is a record of the project afterwards.
+        outside_recorded: AtomicU32,
         refused: AtomicU32,
     }
 
@@ -342,9 +344,44 @@ mod arbitrary {
         assert_commits_valid(&rig.fs, &folder);
         assert_valid_burrito(&rig.fs, &folder);
 
-        // Every value the document does not use is listed.
+        // The name the program wrote is a record of the project, whatever it is: the document
+        // uses it, or the project lists it as one it cannot use (§11.1 X2).
         let snapshot = handle.snapshot();
         let fold = snapshot.fold();
+        let name_key = RecordKey::ProjectMeta(MetaField::Name);
+        let wanted = serde_json::Value::from(outside);
+        let was_recorded = fold.history(&name_key).iter().any(|id| {
+            matches!(
+                fold.body(id).map(|b| b.record),
+                Some(Record::ProjectMeta { value: Some(v), .. })
+                    if serde_json::Value::from(&v) == wanted
+            )
+        });
+        assert!(
+            was_recorded,
+            "the name {wanted} written in metadata.json is no record of the project: {:?}",
+            handle.notices()
+        );
+        census.outside_recorded.fetch_add(1, Ordering::Relaxed);
+        let shown = match fold.projected(&name_key) {
+            Some(Record::ProjectMeta {
+                value: Some(shown), ..
+            }) => Some(serde_json::Value::from(&shown)),
+            _ => None,
+        };
+        if shown.as_ref() == Some(&wanted) {
+            let source = fold.metadata_source((1, 0));
+            assert!(
+                source.fields.get("identification.name") == Some(&wanted)
+                    || fold.anomalies().any(|a| matches!(
+                        a,
+                        Anomaly::InvalidForBurrito { key, .. } if *key == name_key
+                    )),
+                "the name {wanted} is neither used nor listed"
+            );
+        }
+
+        // Every value the document does not use is listed.
         let source = fold.metadata_source((1, 0));
         for key in fold.record_keys() {
             let RecordKey::ProjectMeta(field) = &key else {
@@ -399,6 +436,10 @@ mod arbitrary {
         let invalid = census.invalid.load(Ordering::Relaxed);
         assert!(used > 0, "no value was ever used: {invalid} invalid");
         assert!(invalid > 0, "no value was ever invalid: {used} used");
+        assert!(
+            census.outside_recorded.load(Ordering::Relaxed) > 0,
+            "no edit of metadata.json was ever recorded"
+        );
         assert!(
             census.refused.load(Ordering::Relaxed) < 40,
             "most plans were refused: the claim is not tested"
