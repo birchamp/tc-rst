@@ -47,6 +47,9 @@ pub enum Rule {
     ScriptedOverdue,
     /// A capture on a backend that §7.6 does not give the screen.
     WrongBackend,
+    /// A capture on the memory backend after C1a moved the parity environment to the store
+    /// (§7.5). Scripted captures keep their own rule.
+    MemoryAfterStore,
     MaskRuling,
     MaskRect,
     /// The rebuild's masked element lies outside the mask's rectangle.
@@ -552,6 +555,9 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
     for capture in &record.captures.screens {
         if !landed.contains(&capture.by) {
             out.add(Some(&capture.name), Rule::CapturedByUnlandedUnit, format!("captured by {}, which units.json does not list as landed: the unit adds itself there", capture.by));
+        }
+        if capture.backend == Backend::Memory && landed.iter().any(|u| u.as_str() == "C1a") {
+            out.add(Some(&capture.name), Rule::MemoryAfterStore, "captured on the memory backend after C1a landed: capture it again on the store (`--backend store`, the default)".to_owned());
         }
         let Some(plan) = design
             .screen(&capture.name)

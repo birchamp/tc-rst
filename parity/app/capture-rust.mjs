@@ -3,11 +3,13 @@
 // captured tC4's (parity/tc4-baseline/capture.mjs), over `tc4 serve` (env-rust.mjs).
 //
 //   node parity/app/capture-rust.mjs --unit <A5|B2|...> (--only a,b,... | --all | --case c,d,...)
-//        [--layers pixels,dom,meaning] [--backend memory|memory+scripted|store]
+//        [--layers pixels,dom,meaning] [--backend store|memory|memory+scripted]
 //        [--tc4 target/debug/tc4] [--ui target/tc-ui-app] [--out parity/app]
 //
 // Needs `tc4` built with `--features test-hooks,fixture-backend` (each scenario's projects are
-// loaded with `--scenario`) and the UI folder of crates/tc-ui/build-app.sh.
+// written with `--scenario` into the run's projects folder and opened through the store, the
+// default since unit C1a; `memory` and `memory+scripted` start it with `--backend memory`) and
+// the UI folder of crates/tc-ui/build-app.sh.
 // `--unit` names the unit of docs/APP-DESIGN.md §10 that captures (the gate checks it has
 // landed); `--layers` the layers the capture claims (`dom` alone is a DOM-first capture of a
 // screen whose pixels come later, APP-DESIGN 7.6). `--case` captures cases of the tC4
@@ -91,7 +93,7 @@ export function caseRoute(c, state) {
 }
 
 async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit, layers, backend, masks }) {
-  const env = await startRustEnv({ scenario, tc4, ui });
+  const env = await startRustEnv({ scenario, tc4, ui, backend: backend === 'store' ? 'store' : 'memory' });
   const entries = [];
   try {
     const context = await browser.newContext(env.contextOptions);
@@ -156,7 +158,7 @@ async function main() {
   const layers = (argValue('--layers') ?? (caseNames ? 'pixels,dom' : LAYERS.join(','))).split(',');
   if (!layers.length || layers.some((l) => !LAYERS.includes(l))) throw new Error(`--layers is a list of ${LAYERS.join(', ')}`);
   if (caseNames && layers.includes('meaning')) throw new Error('a gallery case has no meaning layer: --layers pixels,dom or dom');
-  const backend = argValue('--backend') ?? 'memory';
+  const backend = argValue('--backend') ?? 'store';
   if (!BACKENDS.includes(backend)) throw new Error(`--backend is one of ${BACKENDS.join(', ')}`);
   const tc4 = argValue('--tc4') ?? path.join(REPO, 'target', 'debug', 'tc4');
   const ui = argValue('--ui') ?? path.join(REPO, 'target', 'tc-ui-app');

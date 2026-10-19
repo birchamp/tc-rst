@@ -61,13 +61,15 @@ export function notYet(step, unit) {
 }
 
 /** Builds `scenario`'s state into `<dir>/state` from this repository's copies of tC4's fixtures,
- * the same bytes the tC4 environment starts from (APP-DESIGN 7.2), and answers the flag that
- * starts `tc4` on it: the memory backend holds its projects, and its sideloaded resources go into
- * the app's store (unit B1b). */
-export function scenarioArgs(scenario, dir) {
+ * the same bytes the tC4 environment starts from (APP-DESIGN 7.2), and answers the flags that
+ * start `tc4` on it: its projects are written into the run's empty projects folder and opened
+ * through the store (unit C1a), or held by the memory backend with `backend` 'memory' (unit
+ * B1b); its sideloaded resources go into the app's store. */
+export function scenarioArgs(scenario, dir, backend = 'store') {
+  if (!['store', 'memory'].includes(backend)) throw new Error(`the backend is store or memory, not ${backend}`);
   const state = path.join(dir, 'state');
   buildScenarioState({ scenario, out: state });
-  return ['--scenario', state];
+  return ['--scenario', state, ...(backend === 'memory' ? ['--backend', 'memory'] : [])];
 }
 
 /** A port nothing listens on: Door43 stays on this machine even if the internet switch were
@@ -122,7 +124,7 @@ function apiCall(base, token, endpoint, body) {
  * Every run gets its own app-data and projects folders under `runDir` (in target/, never the
  * person's own folders: without `--projects`, tc4 uses `~/translationCore4/projects`).
  */
-export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
+export async function startRustEnv({ scenario, tc4, ui, backend = 'store', runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
   if (!PROJECTS[scenario]) throw new Error(`no scenario ${scenario}; the scenarios are ${Object.keys(PROJECTS).join(', ')}`);
   const dir = path.join(runDir, scenario);
   fs.rmSync(dir, { recursive: true, force: true });
@@ -131,7 +133,7 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
   // stdin stays open: a closed stdin makes tc4 quit.
   const child = spawn(path.resolve(tc4), [
     'serve', '--app-data', path.join(dir, 'appdata'), '--projects', path.join(dir, 'projects'), '--ui', path.resolve(ui),
-    '--door43', DEAD_DOOR43, '--test-hooks', ...scenarioArgs(scenario, dir),
+    '--door43', DEAD_DOOR43, '--test-hooks', ...scenarioArgs(scenario, dir, backend),
   ], { stdio: ['pipe', 'pipe', 'inherit'] });
   const lines = readline.createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));

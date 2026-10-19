@@ -213,7 +213,7 @@ impl Planted {
         .unwrap();
         let entry = json!({
             "name": name, "kind": "case", "scenario": case["scenario"], "locale": case["locale"],
-            "by": unit, "backend": "memory", "layers": layers,
+            "by": unit, "backend": "store", "layers": layers,
             "error": null, "pageErrors": [], "refused": [],
             "homeCards": {}, "syncToast": null, "maskRects": {},
             "png": format!("screens/{name}.png"), "sha256": "", "dom": format!("dom/{name}.json"), "domSha256": "",
@@ -273,7 +273,7 @@ impl Planted {
         }
         let entry = json!({
             "name": name, "kind": "screen", "scenario": screen["scenario"], "locale": screen.get("locale").cloned().unwrap_or(json!("en")),
-            "by": "A6b", "backend": "memory", "layers": ["pixels", "dom", "meaning"],
+            "by": "A6b", "backend": "store", "layers": ["pixels", "dom", "meaning"],
             "error": null, "pageErrors": [], "refused": [],
             "homeCards": rename_keys(&screen["homeCards"]), "syncToast": toast, "maskRects": rects,
             "png": format!("screens/{name}.png"), "sha256": "", "dom": format!("dom/{name}.json"), "domSha256": "",
@@ -837,6 +837,35 @@ fn a_scripted_row_fails_once_its_recapture_unit_has_landed() {
     // A scripted screen captured as if its outcome were real is refused too.
     p.entry("sync-ok")["backend"] = json!("memory");
     assert!(p.run().rules("sync-ok").contains(&Rule::WrongBackend));
+}
+
+/// §7.5: once C1a has moved the parity environment to the store, a capture on the memory
+/// backend fails; a scripted capture keeps its own rule.
+#[test]
+fn a_memory_capture_fails_once_c1a_has_landed() {
+    let mut p = Planted::new();
+    p.identity("about");
+    p.edit_json("units.json", |u| {
+        u["landed"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|unit| unit != "C1a")
+    });
+    p.entry("about")["backend"] = json!("memory");
+    p.run().assert_clean(&["about"]);
+    p.edit_json("units.json", |u| {
+        u["landed"].as_array_mut().unwrap().push(json!("C1a"))
+    });
+    assert_eq!(p.run().rules("about"), [Rule::MemoryAfterStore]);
+    p.entry("about")["backend"] = json!("store");
+    p.run().assert_clean(&["about"]);
+    p.identity("sync-ok")["backend"] = json!("memory+scripted");
+    let out = p.run();
+    assert!(
+        !out.rules("sync-ok").contains(&Rule::MemoryAfterStore),
+        "{:?}",
+        out.rules("sync-ok")
+    );
 }
 
 #[test]
