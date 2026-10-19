@@ -19,6 +19,22 @@ fn md5_hex(bytes: &[u8]) -> String {
     Md5::of(bytes).to_hex()
 }
 
+/// What bytes found at a derived path are to the app (§6.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Found {
+    /// The app's own: what its entry names, or the bytes of a write its intent names, whether
+    /// or not the write's rename reached the disk.
+    Ours,
+    /// The bytes a write the intent names replaced, put back by a program after the app's last
+    /// write: the file's size and time are not its entry's. Either the rename went through and
+    /// a program reverted it (a cloud client restoring a version) or a program wrote the same
+    /// old bytes again; the bytes cannot tell which, so they are an edit with no base, which a
+    /// revert is (§11.1 X3), and at worst a conflict the person settles, never a loss.
+    Reverted,
+    /// None the app wrote.
+    Other,
+}
+
 impl Writer {
     /// O9 (§6.2): classifies every derived path, reading and projecting only what may have
     /// changed, and marks what to write. Returns the paths taken as converged without being
@@ -141,6 +157,34 @@ impl Writer {
         }
         self.renew_hold_notices();
         Ok(unread)
+    }
+
+    /// What bytes of md5 `d` at `rel` are to the app, with `intent` the intent a stopped write
+    /// left (§6.2). The intent's old bytes (and the entry's, which a stopped write's M7 never
+    /// replaced) are the app's only while the file is as the entry says it left it: a rename
+    /// changes its size and time, and so does a program that writes it.
+    pub(crate) fn found_at(&self, rel: &str, d: &str, intent: Option<&Intent>) -> Found {
+        let entry = self.manifest.paths.get(rel);
+        let entry_md5 = entry.is_some_and(|e| e.md5 == d);
+        let Some(intent) = intent.filter(|i| !i.new_md5s_of(rel).is_empty()) else {
+            return if entry_md5 { Found::Ours } else { Found::Other };
+        };
+        if intent.new_md5s_of(rel).contains(&d) {
+            return Found::Ours;
+        }
+        if !entry_md5 && !intent.old_md5s_of(rel).contains(&d) {
+            return Found::Other;
+        }
+        let untouched = entry.is_some_and(|e| {
+            self.vfs
+                .metadata(&self.folder.path(rel))
+                .is_ok_and(|m| m.len == e.size && m.mtime_ns == e.mtime_ns)
+        });
+        if untouched {
+            Found::Ours
+        } else {
+            Found::Reverted
+        }
     }
 
     /// Whether the bytes the app wrote at `rel` show changes no journal file holds any more
@@ -343,8 +387,7 @@ impl Writer {
             }
             return Ok(());
         }
-        let ours = entry.as_ref().is_some_and(|en| en.md5 == d)
-            || intent.is_some_and(|i| i.md5s_of(rel).contains(&d.as_str()));
+        let found = self.found_at(rel, &d, intent);
         if let Some(held) = entry.as_ref().and_then(|en| en.held.as_ref()) {
             if held.md5 == d {
                 // A hold of an edit that an earlier version of the app could only keep is
@@ -357,14 +400,19 @@ impl Writer {
             // Changed again outside the app: recorded with no base (§6.2); the hold ends.
             return self.found_outside(rel, disk, true);
         }
-        if ours {
-            if self.shows_lost_changes(rel) {
-                // The app wrote these bytes, but they show changes no journal file holds any
-                // more: they are the only copy of that work, recorded, never written over.
-                return self.found_outside(rel, disk, false);
+        match found {
+            Found::Ours => {
+                if self.shows_lost_changes(rel) {
+                    // The app wrote these bytes, but they show changes no journal file holds
+                    // any more: they are the only copy of that work, recorded, never written
+                    // over.
+                    return self.found_outside(rel, disk, false);
+                }
+                self.dirty.files.insert(file.clone());
+                return Ok(());
             }
-            self.dirty.files.insert(file.clone());
-            return Ok(());
+            Found::Reverted => return self.found_outside(rel, disk, true),
+            Found::Other => {}
         }
         if self.clean_by_stat(rel) {
             return self.hold(rel, disk, true);

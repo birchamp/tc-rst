@@ -186,6 +186,25 @@ impl Intent {
             .collect()
     }
 
+    /// The new md5 of each write the intent names for `path`: bytes a rename put there.
+    pub fn new_md5s_of(&self, path: &str) -> Vec<&str> {
+        self.writes
+            .iter()
+            .filter(|w| w.path == path)
+            .map(|w| w.new_md5.as_str())
+            .collect()
+    }
+
+    /// The old md5 of each write the intent names for `path`: bytes a rename replaced, unless
+    /// it never reached the disk.
+    pub fn old_md5s_of(&self, path: &str) -> Vec<&str> {
+        self.writes
+            .iter()
+            .filter(|w| w.path == path)
+            .filter_map(|w| w.old_md5.as_deref())
+            .collect()
+    }
+
     pub fn names(&self, path: &str) -> bool {
         self.writes.iter().any(|w| w.path == path) || self.removes.iter().any(|r| r == path)
     }

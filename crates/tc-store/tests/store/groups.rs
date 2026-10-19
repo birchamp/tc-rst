@@ -1125,3 +1125,73 @@ fn a_group_keeps_the_intent_of_a_path_it_could_not_read() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// §5.10, §6.2: the process is killed right after the rename of `TIT.usfm` (the second save),
+/// before its heads file and M7. While the app is closed, the person's program puts back the
+/// bytes from before (a cloud client restoring a previous version). The open finds them equal to
+/// the manifest entry and to the intent's old md5, but the file's size and time are not the
+/// entry's: a program wrote those bytes after the app's last write, so they are an edit, recorded
+/// with no base, listed as a conflict and kept whole in `.tc/external/`, as in the session that
+/// saw the rename go through.
+#[test]
+fn a_revert_made_while_the_app_is_closed_after_a_crash_past_the_rename_is_recorded() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let before = rig.fs.peek(&usfm).unwrap();
+    assert!(String::from_utf8_lossy(&before).contains("first save"));
+    rig.fs.kill_before(k, false);
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    assert!(rig.fs.is_dead(), "killed at the heads file");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    assert!(
+        String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("second save"),
+        "the rename happened"
+    );
+    rig.fs.advance(Duration::from_secs(10));
+    rig.fs.put_unseen(&usfm, &before, None);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        outside_edit_notices(&handle),
+        vec![(1, true)],
+        "the revert was taken for the app's own bytes: {:?}",
+        handle.notices()
+    );
+    assert_eq!(verse_text_conflicts(&handle), 1);
+    assert_eq!(external_copies_of(&rig, &folder, &before).len(), 1);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The same revert, and the open cannot read `TIT.usfm` (a program holds it): the open's first
+/// job leaves the file, and the compare-and-swap that reads it later asks what the open would
+/// have asked, and records the revert instead of writing the second save over it.
+#[test]
+fn a_revert_the_open_could_not_read_is_recorded_by_the_first_compare_and_swap() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let before = rig.fs.peek(&usfm).unwrap();
+    rig.fs.kill_before(k, false);
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    assert!(rig.fs.is_dead(), "killed at the heads file");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    rig.fs.advance(Duration::from_secs(10));
+    rig.fs.put_unseen(&usfm, &before, None);
+    rig.fs.set_unreadable(&usfm, true);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    rig.fs.set_unreadable(&usfm, false);
+    wait_for("the writer's retry to read the file", || {
+        !outside_edit_notices(&handle).is_empty()
+    });
+    handle.wait_idle();
+    assert_eq!(outside_edit_notices(&handle), vec![(1, true)]);
+    assert_eq!(verse_text_conflicts(&handle), 1);
+    assert_eq!(external_copies_of(&rig, &folder, &before).len(), 1);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}

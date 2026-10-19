@@ -2044,6 +2044,19 @@ stopped group must never turn a revert into the app's own write, which the next 
 over. The manifest file is not rewritten for this (an open that finds the older one finds the
 intent beside it, which names both md5s).
 
+The open after a process stopped in that window (a kill or a power cut between the rename and M7)
+holds the older manifest and the intent that names both md5s, and must not take a revert made
+while the app was closed for the app's own bytes either. It takes the intent's new md5 as the app's
+own, and the bytes the write replaced (the entry's md5, an old md5 of the intent) only while the
+file's size and mtime are the entry's: then the rename never reached the disk, and nothing else
+wrote the file since the app last did. With another size or mtime, a program wrote those bytes after
+the app's last write, and they are recorded as a revert the session saw is: with no base, listed as
+a conflict, kept whole in `.tc/external/`. The bytes cannot tell a revert of a rename that went
+through from a program that wrote the same old bytes again over a rename that never happened; the
+second costs at worst a conflict between the person's text and the same text from before, which the
+person settles, and the first would have lost a revert. A path the open could not read is asked the
+same by the first compare-and-swap that reads it.
+
 A file M1 or the open's O9 finds equal to the projection while its entry names other bytes or
 another scope, the intent names it, or the heads file is known to lag (the group stopped between
 the rename and the heads file, in this session or before a restart) gets its heads file written
@@ -2625,6 +2638,7 @@ the projection (computed when the rules above call for it):
 |---|---|---|---|
 | present | `d == e` | converged | refresh the manifest entry (a hold ends) |
 | present | `d == m` or `d ∈ {o, n}`, and the bytes show changes no journal file holds (the manifest marks `p` as `aheadOfJournal`, or its heads file names a change the fold does not hold: a pending file another program removed or cut short) | written by this app, and the only copy of those changes | §11.1, base = the heads file, each record's heads cut to those the fold holds (a record that lost a head is compared in full, not skipped by its digest), so the bytes are kept in `.tc/external/`, recorded, and conflict with any version the project holds that they do not show; the mark goes once they are recorded or written over |
+| present | the intent writes `p`, `d == m` or `d == o`, and the file's size or mtime is not the entry's | a program wrote the bytes the app's write replaced after that write: a revert of a rename that went through before a crash, or the same old bytes written again (§5.10) | §11.1 in unknown-base mode: a copy, a conflict with the newer text, a notice |
 | present | `d == m` or `d ∈ {o, n}` | written by this app; stale (a crash after a save, before its materialization) or interrupted | rewrite from the fold, or remove it if the projection no longer has `p` |
 | present | held, `d` = the held md5 | held (above) | nothing; the notice stays listed |
 | present | held, `d` ≠ the held md5 | changed again outside the app | §11.1 in unknown-base mode; the hold ends |
@@ -4939,6 +4953,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | K1's comparison with the ids the fold took from a pending file (drop a removed file, seal what a cut file holds) | `a_pending_file_deleted_outside_is_sealed_from_memory`, `a_pending_file_cut_short_at_a_line_is_sealed_from_memory`, `a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle` |
 | the app's own bytes that show changes no journal file holds recorded, not rewritten (O9, M1, M6) | `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded`, `a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap`, `metadata_json_holding_a_project_detail_whose_pending_file_was_deleted_is_recorded` |
 | the heads of an outside edit's base cut to those the fold holds (compare with a digest of a version the journal lost) | `a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_next_open`, `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded` |
+| the open's look at the stat of a path whose intent names its old bytes (take `d == m` or `d == o` as the app's own whatever the stat) | `a_revert_made_while_the_app_is_closed_after_a_crash_past_the_rename_is_recorded`, `a_revert_the_open_could_not_read_is_recorded_by_the_first_compare_and_swap` |
 | the manifest's `aheadOfJournal`, marked by a seal that lost changes for good | `a_book_file_a_seal_marked_is_recorded_even_when_its_heads_file_lags` |
 | K4 taking a pending file another program removed after K1 as removed (fail the seal with the removal's error) | `a_pending_file_removed_outside_during_the_seal_ends_the_seal_as_removed` |
 | the values of a pending file that lost lines left where the fold reads them (move them to the pack's offsets) | `a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle` |

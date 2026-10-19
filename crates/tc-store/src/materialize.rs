@@ -815,10 +815,17 @@ impl Writer {
                     } else if ours == Some(d.as_str())
                         || intent_now.md5s_of(&path).contains(&d.as_str())
                     {
-                        // The app's bytes may be the only copy of changes a journal file lost.
-                        if self.manifest.ahead.contains(&path)
+                        let reverted = unclassified
+                            && self.found_at(&path, &d, Some(&intent_now))
+                                == crate::classify::Found::Reverted;
+                        if reverted {
+                            self.found_outside(&path, &disk, true)?;
+                            report.recorded.push(path);
+                        } else if self.manifest.ahead.contains(&path)
                             || (unclassified && self.shows_lost_changes(&path))
                         {
+                            // The app's bytes may be the only copy of changes a journal file
+                            // lost.
                             self.found_outside(&path, &disk, false)?;
                             report.recorded.push(path);
                         } else {
