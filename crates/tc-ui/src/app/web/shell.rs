@@ -42,8 +42,11 @@ pub fn App() -> impl IntoView {
         "font-family": "var(--font-ui)",
         "overflow": "hidden",
     };
-    let dialog = ctx.s.layers.dialog.clone();
-    let has_fb = ctx.s.fb.clone();
+    // Memos, so a keystroke in the report, which changes `fb`, never draws the dialog again.
+    let feedback_open = {
+        let (dialog, fb) = (ctx.s.layers.dialog.clone(), ctx.s.fb.clone());
+        Memo::new(move |_| dialog.get() == Some(Dialog::Feedback) && fb.with(Option::is_some))
+    };
     view! {
         <div style=frame.to_style()>
             <TopBar />
@@ -51,10 +54,7 @@ pub fn App() -> impl IntoView {
             // AddProject, NewBible, NewObs, AddBook, Import (B2, C6, F1), OpenFromDoor43 (B9b),
             // ProjectSettings, SourceTexts (B9a), GatewayChange, UpgradeSet (C8), GuidedFix
             // (B5a), ShareSignIn (A8), ShareDialog (B9b, E1b) mount here, in this order.
-            {move || {
-                (dialog.get() == Some(Dialog::Feedback) && has_fb.with(Option::is_some))
-                    .then(|| view! { <Feedback /> })
-            }}
+            {move || feedback_open.get().then(|| view! { <Feedback /> })}
             <InternetDialog />
             // OpenProgress (B3) and the Inspector (late) mount here.
         </div>
@@ -189,9 +189,14 @@ fn TopBar() -> impl IntoView {
 fn mode_switch(s: &AppState, actions: &Actions) -> impl IntoView + use<> {
     let (view, project, editing) = (s.view.clone(), s.project.clone(), s.editing.clone());
     let actions = actions.clone();
+    // A memo: a mode tab changes the view, and the switch must stay the same node, with the
+    // focus on the tab.
+    let shown = {
+        let view = view.clone();
+        Memo::new(move |_| project.with(|p| in_project(view.get(), p.as_ref())))
+    };
     move || {
-        let shown = project.with(|p| in_project(view.get(), p.as_ref()));
-        if !shown {
+        if !shown.get() {
             return None;
         }
         let editing_now = editing.clone();
@@ -258,11 +263,12 @@ fn SaveIndicator() -> impl IntoView {
         return ().into_any();
     };
     let project = ctx.s.project.clone();
+    let open = Memo::new(move |_| project.with(Option::is_some));
     let runtime = super::use_runtime().map(send_wrapper::SendWrapper::new);
     let actions = ctx.actions.clone();
     (move || {
         let runtime = runtime.clone()?;
-        project.with(Option::is_some).then(|| {
+        open.get().then(|| {
             let actions = actions.clone();
             let indicator = runtime.saves().indicator();
             view! {
@@ -347,7 +353,12 @@ fn ViewBoundary() -> impl IntoView {
     let Some(ctx) = use_app() else {
         return ().into_any();
     };
-    let view_error = ctx.s.view_error.clone();
+    // A memo: navigation clears the error even when there is none, and that must not draw the
+    // screen again.
+    let view_error = {
+        let error = ctx.s.view_error.clone();
+        Memo::new(move |_| error.get())
+    };
     let actions = ctx.actions.clone();
     let s = ctx.s.clone();
     let key = {

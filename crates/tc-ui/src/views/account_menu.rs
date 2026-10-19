@@ -223,7 +223,8 @@ pub fn AccountMenu() -> impl IntoView {
 
     let account = s.server.account.clone();
     let internet = s.server.internet.clone();
-    let online = Signal::derive(move || internet.get());
+    // A memo: every re-read of `hello` sets the switch again, which must not draw the dot again.
+    let online = Signal::from(Memo::new(move |_| internet.get()));
     let user = {
         let account = account.clone();
         Memo::new(move |_| account.with(|a| a.user.clone()))
@@ -422,19 +423,35 @@ pub fn AccountMenu() -> impl IntoView {
 
 /// The menu keeps its first row focused for its first frames: the Layer settles over them and
 /// can hand the focus back to the trigger (`tC4:AccountMenu.jsx:97-108`).
+///
+/// The first try waits for the next frame. React runs the Layer's effect, a child's, before
+/// this one, so the Layer notes the trigger as the element to give the focus back to; here this
+/// effect would run first, and on a menu opened again while the last one still fades out, it
+/// would focus that panel's first row before the Layer noted it, and the Layer would give the
+/// focus back to that row when the menu closes.
 fn hold_first_row(open: RwSignal<bool>, panel: NodeRef<html::Div>) {
     let generation = Rc::new(Cell::new(0u64));
     Effect::new(move |_| {
         let mine = generation.get() + 1;
         generation.set(mine);
         if open.get() {
-            hold(panel, 10, generation.clone(), mine);
+            let generation = generation.clone();
+            request_animation_frame(move || hold(open, panel, 10, generation, mine));
         }
     });
 }
 
-fn hold(panel: NodeRef<html::Div>, tries: u32, generation: Rc<Cell<u64>>, mine: u64) {
-    if generation.get() != mine {
+/// One frame of the hold. It stops as soon as the menu closes, as React cancels tC4's frame
+/// when `open` changes: the effect that would bump the generation runs later than the next
+/// frame, and a row focused then would take the focus from the dialog the row opened.
+fn hold(
+    open: RwSignal<bool>,
+    panel: NodeRef<html::Div>,
+    tries: u32,
+    generation: Rc<Cell<u64>>,
+    mine: u64,
+) {
+    if generation.get() != mine || !open.try_get_untracked().unwrap_or(false) {
         return;
     }
     if let Some(panel) = panel.get_untracked() {
@@ -445,7 +462,7 @@ fn hold(panel: NodeRef<html::Div>, tries: u32, generation: Rc<Cell<u64>>, mine: 
         }
     }
     if tries > 0 {
-        request_animation_frame(move || hold(panel, tries - 1, generation, mine));
+        request_animation_frame(move || hold(open, panel, tries - 1, generation, mine));
     }
 }
 
@@ -899,7 +916,7 @@ pub fn AppLanguageDialog(
             };
             let error = {
                 let dialog = dialog.clone();
-                move || dialog.with(LanguageDialog::error)
+                Memo::new(move |_| dialog.with(LanguageDialog::error))
             };
             let options: Vec<SelectOption> = LOCALES
                 .iter()
@@ -925,7 +942,7 @@ pub fn AppLanguageDialog(
                     clear_label=move || t(keys::common::CLEAR, &[])
                 />
                 {move || {
-                    error().then(|| view! {
+                    error.get().then(|| view! {
                         <Callout tone=CalloutTone::Warn attrs=Attrs::from([("role", "alert"), ("data-testid", "language-error")])>
                             {move || t(keys::language::SAVE_FAILED, &[])}
                         </Callout>
