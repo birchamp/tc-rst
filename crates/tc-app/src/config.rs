@@ -150,8 +150,10 @@ pub fn local_projects_root(env: &HostEnv) -> Result<PathBuf, ConfigError> {
         }
         HostOs::MacOs => home_dir(env)?.join("Library").join("Application Support"),
         HostOs::Linux => match env.var("XDG_DATA_HOME").map(PathBuf::from) {
-            // The XDG rule: a relative value is invalid and ignored.
-            Some(dir) if dir.is_absolute() => dir,
+            // The XDG rule: a relative value is invalid and ignored. Unix calls a path absolute
+            // when it has a root; `is_absolute` would ask the running computer's rule, and on
+            // Windows `/data` has no drive, so a test there could not describe Linux.
+            Some(dir) if dir.has_root() => dir,
             _ => home_dir(env)?.join(".local").join("share"),
         },
     };

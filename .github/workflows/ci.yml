@@ -25,6 +25,15 @@ jobs:
       # tc-app's library without test hooks, as a release build has it; every other build
       # has them through the self dev-dependency.
       - run: cargo clippy -p tc-app --lib -- -D warnings
+      # Windows code, and a helper only Unix tests call, builds only for a Windows target. A
+      # check never links, but ring's and aws-lc's build scripts compile C, so they need MinGW's
+      # compiler, and aws-lc's Windows assembly needs NASM.
+      - name: clippy for Windows (x86_64-pc-windows-gnu)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm
+          rustup target add x86_64-pc-windows-gnu
+          cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings
       - run: cargo test --workspace
       # tc-ui's components compile for wasm32 only, so the host steps above never see them.
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings
