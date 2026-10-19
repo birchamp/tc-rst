@@ -944,3 +944,50 @@ fn a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit() {
     );
     drop(handle);
 }
+
+/// §5.11 K4: a pending file another program removes after K1 read it and before K4 removes it.
+/// The verified pack holds every change of it already, so the seal goes on as if K4 had
+/// removed it: the checkpoint commits, and the next checkpoint writes no second pack of the
+/// same lines.
+#[test]
+fn a_pending_file_removed_outside_during_the_seal_ends_the_seal_as_removed() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved before the file was removed").unwrap();
+    let pending = pending_files(&rig, &folder);
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    let packs_before = packs(&rig.fs, &folder).len();
+    {
+        let (fs, file) = (rig.fs.clone(), pending[0].clone());
+        let steps = std::sync::Arc::new(std::sync::Mutex::new(0));
+        rig.store.hooks().at_seal_step(move || {
+            let mut steps = steps.lock().unwrap();
+            *steps += 1;
+            // After the pack is built, before it is written and before K4.
+            if *steps == 2 {
+                fs.delete(&file).unwrap();
+            }
+        });
+    }
+    let report = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
+    rig.store.hooks().at_seal_step(|| {});
+    let report = report.expect("the seal ends without an error");
+    assert_eq!(report.skipped, None, "{report:?}");
+    assert_eq!(report.sealed.len(), 1, "{report:?}");
+    assert!(report.commit.is_some(), "{report:?}");
+    assert_eq!(packs(&rig.fs, &folder).len(), packs_before + 1);
+    let again = checkpoint(&handle);
+    assert_eq!(again.sealed, Vec::<String>::new(), "{again:?}");
+    assert_eq!(again.skipped, Some(CheckpointSkip::NoChanges), "{again:?}");
+    assert_eq!(packs(&rig.fs, &folder).len(), packs_before + 1);
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was removed")
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}

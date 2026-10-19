@@ -8,7 +8,7 @@
 //! ([`HeldRetry`]) while the error says the file is held.
 
 use crate::error::{IoContext, StoreError};
-use crate::vfs::Vfs;
+use crate::vfs::{Vfs, is_not_found};
 use std::collections::BTreeSet;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -327,7 +327,8 @@ pub fn atomic_remove(vfs: &dyn Vfs, path: &Path, sync_dir: SyncDir<'_>) -> Resul
 
 /// Removes a file that only waits to go (a pending file a seal has sealed, a pack a
 /// consolidation replaced): `Ok(false)` when another program still holds it after the
-/// retries. The file then stays and the next open removes it (§6.1 O7).
+/// retries, and the file then stays and the next open removes it (§6.1 O7); `Ok(false)` too
+/// when another program removed it first, which is what the caller wanted done.
 pub fn atomic_remove_if_free(
     vfs: &dyn Vfs,
     path: &Path,
@@ -335,7 +336,12 @@ pub fn atomic_remove_if_free(
 ) -> Result<bool, StoreError> {
     match atomic_remove_with(vfs, path, sync_dir, &HeldRetry::SAVE) {
         Ok(()) => Ok(true),
-        Err(e) if e.io_error().is_some_and(|io| vfs.is_held(io)) => Ok(false),
+        Err(e)
+            if e.io_error()
+                .is_some_and(|io| vfs.is_held(io) || is_not_found(io)) =>
+        {
+            Ok(false)
+        }
         Err(e) => Err(e),
     }
 }

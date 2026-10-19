@@ -2139,7 +2139,9 @@ K3  Re-read every new pack from disk; P2 to P4 must pass and its id set must equ
     that cannot be stored now is stored by the checkpoint's tree build.
 K4  atomic_remove each pending file all of whose change ids are in the verified packs or were
     set aside in K2;
-    fsync .tc/pending. A pending file that could not be read is never removed (§4.4).
+    fsync .tc/pending. A pending file that could not be read is never removed (§4.4). One
+    another program removed after K1 read it is as good as removed: the verified pack holds
+    every change it held, so the seal goes on and the next one writes no second pack of it.
 K5  Update ledger.json (lastSeq, lastAt) in app data.
 K6  Consolidate if §4.7 says so (§5.12).
 ```
@@ -4916,6 +4918,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the entry of `metadata.json` naming the bytes M6 wrote (the md5 M2 checked) | `the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote` |
 | the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_commit_waits_for_a_pending_file_that_no_longer_verifies`, `a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit` |
 | K1's comparison with the ids the fold took from a pending file (drop a removed file, seal what a cut file holds) | `a_pending_file_deleted_outside_is_sealed_from_memory`, `a_pending_file_cut_short_at_a_line_is_sealed_from_memory`, `a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle` |
+| K4 taking a pending file another program removed after K1 as removed (fail the seal with the removal's error) | `a_pending_file_removed_outside_during_the_seal_ends_the_seal_as_removed` |
 | the values of a pending file that lost lines left where the fold reads them (move them to the pack's offsets) | `a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle` |
 | the checkpoint job's carried placements leaving a path a newer snapshot placed or recorded (place the older version) | `a_checkpoint_job_never_places_an_older_version_over_a_newer_edit` |
 | the checkpoint job's carried listing from the entries of a newer snapshot (list the older placement's blob) | `a_checkpoint_listing_keeps_the_placed_version_of_a_newer_edit`, `a_checkpoint_job_never_places_an_older_version_over_a_newer_edit` |
