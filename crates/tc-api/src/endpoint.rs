@@ -172,6 +172,7 @@ unscoped!(
     crate::test::Hold,
     crate::test::Release,
     crate::test::FieldStore,
+    crate::test::FieldDraft,
     crate::test::Reset,
 );
 

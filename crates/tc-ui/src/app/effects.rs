@@ -201,15 +201,18 @@ pub fn active_jobs(jobs: &BTreeMap<JobId, JobView>) -> usize {
 }
 
 /// The work in flight, for `window.__tcIdle` (APP-DESIGN 6.2): API calls and catalog fetches
-/// (not the event stream) and jobs that are active. The page is idle when there is none.
+/// (not the event stream), jobs that are active, and saves in flight or armed (the save
+/// machine's `busy`, so a test that waits for idle sees a save that is due). The page is idle
+/// when there is none.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct BusyCount {
     pub fetches: usize,
     pub jobs: usize,
+    pub saves: usize,
 }
 
 impl BusyCount {
     pub fn is_idle(self) -> bool {
-        self.fetches == 0 && self.jobs == 0
+        self.fetches == 0 && self.jobs == 0 && self.saves == 0
     }
 }

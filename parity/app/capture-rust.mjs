@@ -2,7 +2,7 @@
 // Capture the Rust app's screens with the driver, the screen list and the capture rules that
 // captured tC4's (parity/tc4-baseline/capture.mjs), over `tc4 serve` (env-rust.mjs).
 //
-//   node parity/app/capture-rust.mjs --unit <A5|B2|...> (--only a,b,... | --all)
+//   node parity/app/capture-rust.mjs --unit <A5|B2|...> (--only a,b,... | --all | --case c,d,...)
 //        [--layers pixels,dom,meaning] [--backend memory|memory+scripted|store]
 //        [--tc4 target/debug/tc4] [--ui target/tc-ui-app] [--out parity/app]
 //
@@ -10,10 +10,14 @@
 // loaded with `--scenario`) and the UI folder of crates/tc-ui/build-app.sh.
 // `--unit` names the unit of docs/APP-DESIGN.md §10 that captures (the gate checks it has
 // landed); `--layers` the layers the capture claims (`dom` alone is a DOM-first capture of a
-// screen whose pixels come later, APP-DESIGN 7.6).
+// screen whose pixels come later, APP-DESIGN 7.6). `--case` captures cases of the tC4
+// view-state gallery (parity/view-gallery/cases.mjs, APP-DESIGN 7.4), which have no meaning
+// layer: each through its `rust` route, or, for a case with no patch and no replies on a state
+// whose route uses only the driver, that route and the case's steps.
 //
 // Writes into `--out`: screens/<name>.png, dom/<name>.json and captures.json, whose entries are
-// merged by name in the order of the screen list, so a partial run updates its screens in place.
+// merged by name, screens in the order of the screen list and then cases in the order of
+// cases.mjs, so a partial run updates its entries in place and keeps every other.
 // Then: UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record, and review the report.
 // Exit code 1 when a screen failed or a request to another origin was refused.
 import crypto from 'node:crypto';
@@ -25,6 +29,9 @@ import { REPO, startRustEnv } from './env-rust.mjs';
 import { CHROMIUM_ARGS, captureScreen, machineFingerprint, measureTargets, trackRequests } from './observe.mjs';
 import { BIBLE, OBS, SCREEN_LIST } from './screens.mjs';
 import { repoUnits } from './units.mjs';
+import { CASES } from '../view-gallery/cases.mjs';
+import { stateNamed } from '../view-gallery/states.mjs';
+import { runSteps } from '../view-gallery/steps.mjs';
 
 const LAYERS = ['pixels', 'dom', 'meaning'];
 const BACKENDS = ['memory', 'memory+scripted', 'store'];
@@ -55,6 +62,34 @@ export function rustMaskTargets(masks, screen, projectId) {
   });
 }
 
+/**
+ * The entries of captures.json after a run: every entry of `previous` and `captured`, a
+ * captured one replacing the previous one of its kind and name, screens in the order of
+ * `screenList` and then cases in the order of `cases`. A run of screens keeps the cases, and a
+ * run of cases keeps the screens.
+ */
+export function mergeCaptures(previous, captured, screenList, cases) {
+  const key = (e) => `${e.kind}:${e.name}`;
+  const byKey = new Map([...previous, ...captured].map((e) => [key(e), e]));
+  return [
+    ...screenList.map((s) => byKey.get(`screen:${s.name}`)),
+    ...cases.map((c) => byKey.get(`case:${c.name}`)),
+  ].filter(Boolean);
+}
+
+/** How the Rust app reaches gallery case `c`: its `rust` route, or the route of its state and
+ * its steps when the case is that state as tC4 drew it and the route uses only the driver. */
+export function caseRoute(c, state) {
+  if (c.rust) return c.rust;
+  if (state.portable && !c.patch && !c.returns) {
+    return async (app, env) => {
+      await state.route(app, env);
+      await runSteps(app.page, c.steps ?? []);
+    };
+  }
+  return null;
+}
+
 async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit, layers, backend, masks }) {
   const env = await startRustEnv({ scenario, tc4, ui });
   const entries = [];
@@ -72,8 +107,10 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
       const refusedBefore = new Set(env.refused());
       process.stdout.write(`  ${screen.name} ... `);
       const file = path.join(out, 'screens', `${screen.name}.png`);
+      // A gallery case's route takes the environment too (a state's route may need it).
+      const shot = screen.kind === 'case' ? { ...screen, run: (driver) => screen.run(driver, env) } : screen;
       const { error, homeCards, syncToast, dom } = await captureScreen({
-        page, app, screen, inFlight, file, busy: () => env.busy(page), failureTestIds: env.failureTestIds,
+        page, app, screen: shot, inFlight, file, busy: () => env.busy(page), failureTestIds: env.failureTestIds,
       });
       const maskRects = await measureTargets(page, rustMaskTargets(masks, screen.name, env.projectId));
       const domFile = path.join(out, 'dom', `${screen.name}.json`);
@@ -83,7 +120,7 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
       console.log(failed ? `FAILED: ${error ?? pageErrors[0] ?? `refused ${refused[0]}`}` : 'ok');
       entries.push({
         name: screen.name,
-        kind: 'screen',
+        kind: screen.kind ?? 'screen',
         scenario,
         locale: screen.locale ?? 'en',
         by: unit,
@@ -113,9 +150,12 @@ async function main() {
   const units = repoUnits(REPO);
   if (!unit || !units.has(unit)) throw new Error(`--unit must name a unit of docs/APP-DESIGN.md §10 (${[...units].join(', ')})`);
   const only = argValue('--only')?.split(',').filter(Boolean);
-  if (!only && !process.argv.includes('--all')) throw new Error('say which screens: --only <names> or --all');
-  const layers = (argValue('--layers') ?? LAYERS.join(',')).split(',');
+  const caseNames = argValue('--case')?.split(',').filter(Boolean);
+  if (!only && !caseNames && !process.argv.includes('--all')) throw new Error('say what to capture: --only <screens>, --all or --case <gallery cases>');
+  if (caseNames && (only || process.argv.includes('--all'))) throw new Error('--case captures gallery cases alone: run the screens separately');
+  const layers = (argValue('--layers') ?? (caseNames ? 'pixels,dom' : LAYERS.join(','))).split(',');
   if (!layers.length || layers.some((l) => !LAYERS.includes(l))) throw new Error(`--layers is a list of ${LAYERS.join(', ')}`);
+  if (caseNames && layers.includes('meaning')) throw new Error('a gallery case has no meaning layer: --layers pixels,dom or dom');
   const backend = argValue('--backend') ?? 'memory';
   if (!BACKENDS.includes(backend)) throw new Error(`--backend is one of ${BACKENDS.join(', ')}`);
   const tc4 = argValue('--tc4') ?? path.join(REPO, 'target', 'debug', 'tc4');
@@ -123,7 +163,16 @@ async function main() {
   const out = path.resolve(argValue('--out') ?? path.join(REPO, 'parity', 'app'));
   const unknown = (only ?? []).filter((name) => !SCREEN_LIST.some((s) => s.name === name));
   if (unknown.length) throw new Error(`no such screens: ${unknown.join(', ')}`);
-  const selected = SCREEN_LIST.filter((s) => !only || only.includes(s.name));
+  const unknownCases = (caseNames ?? []).filter((name) => !CASES.some((c) => c.name === name));
+  if (unknownCases.length) throw new Error(`no such gallery cases: ${unknownCases.join(', ')}`);
+  const selected = caseNames
+    ? CASES.filter((c) => caseNames.includes(c.name)).map((c) => {
+      const state = stateNamed(c.state);
+      const route = caseRoute(c, state);
+      if (!route) throw new Error(`gallery case ${c.name} has no Rust route: the unit that ports its group (${c.group}) adds \`rust\` to it in parity/view-gallery/cases.mjs`);
+      return { name: c.name, kind: 'case', scenario: state.scenario, locale: state.locale, run: route };
+    })
+    : SCREEN_LIST.filter((s) => !only || only.includes(s.name));
   const masks = JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'app', 'masks.json'), 'utf8')).masks;
 
   const capturesFile = path.join(out, 'captures.json');
@@ -134,7 +183,7 @@ async function main() {
   // One machine's pixels in one file: a partial run from another machine would leave screens
   // of two machines side by side, and the gate compares pixels only within one.
   if (previous?.machine && JSON.stringify(previous.machine) !== JSON.stringify(machine)) {
-    const left = previous.screens.filter((s) => !selected.some((t) => t.name === s.name)).map((s) => s.name);
+    const left = previous.screens.filter((s) => !selected.some((t) => t.name === s.name && (t.kind ?? 'screen') === s.kind)).map((s) => s.name);
     if (left.length) {
       await browser.close();
       throw new Error(`captures.json holds screens of another machine (${JSON.stringify(previous.machine)}); recapture all of them on this one: ${left.join(', ')}`);
@@ -156,18 +205,16 @@ async function main() {
   } finally {
     await browser.close();
   }
-  const byName = new Map((previous?.screens ?? []).map((s) => [s.name, s]));
-  for (const entry of captured) byName.set(entry.name, entry);
   const captures = {
     about: 'The Rust app\'s captures: what capture-rust.mjs saw at each shot. The PNG and DOM files are beside it, in screens/ and dom/.',
     machine,
     build,
     projects: Object.fromEntries(Object.keys(projects).sort().map((k) => [k, projects[k]])),
-    screens: SCREEN_LIST.map((s) => byName.get(s.name)).filter(Boolean),
+    screens: mergeCaptures(previous?.screens ?? [], captured, SCREEN_LIST, CASES),
   };
   fs.writeFileSync(capturesFile, `${JSON.stringify(captures, null, 2)}\n`);
   const bad = captured.filter((e) => e.error || e.pageErrors.length || e.refused.length);
-  console.log(`${captured.length} screens captured, ${bad.length} failed. Next: UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record`);
+  console.log(`${captured.length} ${caseNames ? 'cases' : 'screens'} captured, ${bad.length} failed. Next: UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record`);
   if (bad.length) process.exitCode = 1;
 }
 

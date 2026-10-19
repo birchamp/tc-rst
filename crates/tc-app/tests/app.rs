@@ -30,6 +30,7 @@ mod app {
     mod projects_root;
     mod replies;
     mod reports;
+    mod save_machine;
     mod scenario;
     mod seed;
     mod sessions;

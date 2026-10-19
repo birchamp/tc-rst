@@ -1,0 +1,10 @@
+{
+  "case": "conflict-review-selected",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "loadUnderstand",
+      "args": []
+    }
+  ]
+}

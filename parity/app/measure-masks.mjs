@@ -7,7 +7,8 @@
 //   TC4_ROOT=<tC4 clone> node parity/app/measure-masks.mjs [--only <mask id>[,...]] [--grow <px>] [--port 19998]
 //
 // Needs the tC4 client that capture.mjs builds (parity/tc4-baseline/.cache/tc4-dist) and
-// Playwright from parity/tc4-baseline/node_modules. Run it on the machine that captured the
+// Playwright from parity/tc4-baseline/node_modules. Rectangles named after a gallery case are
+// the gallery capture's (parity/view-gallery/capture.mjs) and are left as they are. Run it on the machine that captured the
 // baseline (manifest.json `machine`). A target that is not found stops the run, naming the mask
 // and the screen. `--grow` pads every rectangle on each side, clipped to the window.
 import fs from 'node:fs';
@@ -35,7 +36,8 @@ async function main() {
   const { chromium } = loadPlaywright();
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   try {
-    for (const scenario of [...new Set(masks.flatMap((m) => Object.keys(m.rects)).map((name) => SCREEN_LIST.find((s) => s.name === name).scenario))]) {
+    const scenarioOf = (name) => SCREEN_LIST.find((s) => s.name === name)?.scenario;
+    for (const scenario of [...new Set(masks.flatMap((m) => Object.keys(m.rects)).map(scenarioOf).filter(Boolean))]) {
       const env = await startTc4Env({ scenario, port });
       const context = await browser.newContext(CONTEXT_OPTIONS);
       await env.prepare(context);

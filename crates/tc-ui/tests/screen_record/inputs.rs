@@ -23,6 +23,8 @@ pub struct Paths {
     pub plan: PathBuf,
     /// tC4's behaviour recordings, `parity/tc4-baseline/behaviour`.
     pub tc4_behaviour: PathBuf,
+    /// The tC4 view-state gallery, `parity/view-gallery`: tC4's side of every case.
+    pub gallery: PathBuf,
 }
 
 impl Paths {
@@ -34,12 +36,8 @@ impl Paths {
             doc: repo.join("docs/APP-DESIGN.md"),
             plan: repo.join("docs/PLAN.md"),
             tc4_behaviour: repo.join("parity/tc4-baseline/behaviour"),
+            gallery: repo.join("parity/view-gallery"),
         }
-    }
-
-    /// `parity/`, which case paths are relative to.
-    pub fn parity(&self) -> PathBuf {
-        self.baseline.join("..")
     }
 }
 
@@ -95,7 +93,7 @@ impl Rect {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Viewport {
     pub width: u32,
     pub height: u32,
@@ -113,7 +111,7 @@ pub struct Manifest {
     pub screens: Vec<BaselineScreen>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Tc4Build {
     pub commit: String,
 }
@@ -325,21 +323,70 @@ pub enum Which {
     Last,
 }
 
+/// `parity/app/cases.json`, written by parity/view-gallery/capture.mjs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Cases {
     pub about: String,
+    /// The tC4 commit the gallery mounted; none while there is no case.
+    pub tc4: Option<Tc4Build>,
+    /// The machine that captured tC4's side of every case: a case's pixels compare only with a
+    /// Rust capture of the same machine.
+    pub machine: Option<Machine>,
     pub cases: Vec<Case>,
 }
 
-/// A case of the tC4 view-state gallery (APP-DESIGN 7.4): tC4's side of it, under `parity/`.
+/// A case of the tC4 view-state gallery (APP-DESIGN 7.4): tC4's side of it, under
+/// `parity/view-gallery`, and the units of its §7.4 group, which capture the Rust side.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Case {
     pub name: String,
+    pub group: String,
+    /// The recorded state of real tC4 the case starts from (parity/view-gallery/states.json).
+    pub state: String,
+    pub scenario: String,
+    pub locale: String,
+    pub viewport: Option<Viewport>,
+    /// The top-level keys of tC4's state the case's patch sets; empty when tC4 drew the
+    /// recorded state itself.
+    pub patch: Vec<String>,
     pub png: String,
+    pub sha256: String,
     pub dom: String,
-    pub until: UnitId,
+    pub dom_sha256: String,
+    pub actions: String,
+    pub actions_sha256: String,
+    pub dom_unit: UnitId,
+    pub pixels_unit: UnitId,
+    /// The dialog a DOM-first case compares until its pixels unit captures it whole.
+    pub scope: Option<Scope>,
+}
+
+impl Case {
+    /// The unit that captures each layer of the case. A case has no meaning layer.
+    pub fn units(&self) -> BTreeMap<Layer, UnitId> {
+        [
+            (Layer::Pixels, self.pixels_unit.clone()),
+            (Layer::Dom, self.dom_unit.clone()),
+        ]
+        .into()
+    }
+
+    /// A case whose DOM is compared before its pixels: the page behind its dialog is not the
+    /// port's yet.
+    pub fn dom_first(&self) -> bool {
+        self.dom_unit != self.pixels_unit
+    }
+
+    /// The case's tC4 files, relative to `parity/view-gallery`, with their sha256.
+    pub fn files(&self) -> [(&str, &str); 3] {
+        [
+            (&self.png, &self.sha256),
+            (&self.dom, &self.dom_sha256),
+            (&self.actions, &self.actions_sha256),
+        ]
+    }
 }
 
 // ---- loading ---------------------------------------------------------------------------------
@@ -418,6 +465,10 @@ impl Record {
 
     pub fn capture(&self, name: &str) -> Option<&Capture> {
         self.captures.screens.iter().find(|c| c.name == name)
+    }
+
+    pub fn case(&self, name: &str) -> Option<&Case> {
+        self.cases.cases.iter().find(|c| c.name == name)
     }
 
     /// The Rust app's project folders of `scenario` as (folder, repo path) pairs, longest
