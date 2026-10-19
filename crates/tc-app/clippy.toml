@@ -32,4 +32,9 @@ disallowed-methods = [
   { path = "tc_journal::fold::FoldState::render", reason = "renders a file: a book's text projects the whole book and conflicts.json walks every conflict; go through CountingSnapshot::render, which counts it" },
   { path = "tc_journal::fold::FoldState::scope_digest", reason = "digests a file's scope, every conflict for conflicts.json: the store's manifest" },
   { path = "tc_journal::fold::FoldState::scope_digests", reason = "digests files' scopes, every conflict for conflicts.json: the store's manifest" },
+  # The store adapter (unit C0) puts tc-store behind the seam; these three of tc-store's own
+  # handle are never called in tc-app.
+  { path = "tc_store::handle::ProjectHandle::mint", reason = "mints from the newest snapshot, which lists heads a screen that read an older one never saw (I4): mint from the Snapshot the screen read" },
+  { path = "tc_store::handle::ProjectHandle::mint_review", reason = "mints from the newest snapshot (I4): mint from the Snapshot the screen read" },
+  { path = "tc_store::handle::ProjectHandle::read_book", reason = "projects a whole book outside CountingSnapshot's counts: go through CountingSnapshot::book_usfm" },
 ]

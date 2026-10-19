@@ -20,7 +20,8 @@ use tc_resources::ResourceStore;
 use tokio::sync::watch;
 
 use crate::account::{Account, AccountState, Keychain, MemKeychain, MemKeychainMode};
-use crate::backend::{NoProjects, ProjectStore};
+use crate::backend::ProjectStore;
+use crate::backend::store::StoreBackend;
 use crate::clock::{Clock, SystemClock};
 use crate::config::{
     AppConfig, ConfigError, HostEnv, ProjectsRoot, RootChoice, choose_projects_root,
@@ -39,6 +40,16 @@ use crate::seed::{self, RESOURCES_FOLDER};
 use crate::session::{ProjectSession, SessionRegistry};
 use crate::startup::Startup;
 
+/// Where the app's projects come from.
+pub enum StoreChoice {
+    /// tc-store over the projects folder [`App::start`] chooses, with the app-data folder
+    /// (unit C0). It is built only once the folder is chosen and checked, the first moment
+    /// it is known, so a named folder that is missing is refused before anything makes it.
+    OnDisk,
+    /// A test's backend, or a parity scenario's (feature `fixture-backend`).
+    Given(Arc<dyn ProjectStore>),
+}
+
 /// What a test replaces when it starts the app. [`AppDeps::production`] is what `tc4 serve`
 /// runs with.
 pub struct AppDeps {
@@ -52,9 +63,9 @@ pub struct AppDeps {
     pub host: HostEnv,
     /// The app-data files `PrefsWriter` writes.
     pub files: Arc<dyn AppDataFiles>,
-    /// The projects: [`NoProjects`] until C0's store adapter; the memory backend in tests and
-    /// parity captures (feature `fixture-backend`).
-    pub store: Arc<dyn ProjectStore>,
+    /// The projects: tc-store on disk; the memory backend in tests and parity captures
+    /// (feature `fixture-backend`).
+    pub store: StoreChoice,
     /// What ends the process at a test crash point.
     #[cfg(feature = "test-hooks")]
     pub ender: Arc<dyn Ender>,
@@ -68,8 +79,9 @@ impl AppDeps {
     /// This computer's clock, folders and variables; no keychain (the operating system's comes
     /// with unit E1a, Q-3: a keychain in memory, which forgets at quit, is not "Stay signed in
     /// on this computer", so the sign-in step hides that box until then, tC4 #496); in-memory
-    /// app data (§4.9: before unit S1); no projects (before unit C0); and, with test hooks, an
-    /// ender that ends the process.
+    /// app data (§4.9: until unit C1a); the projects through tc-store, built by
+    /// [`App::start`]; and, with test hooks, an ender that ends the process. It builds nothing
+    /// itself: `..AppDeps::production()` evaluates it in full.
     pub fn production() -> Self {
         let host = HostEnv::current();
         Self {
@@ -78,7 +90,7 @@ impl AppDeps {
             folders: Arc::new(HostFolders::new(host.clone())),
             host,
             files: Arc::new(MemoryFiles::new()),
-            store: Arc::new(NoProjects),
+            store: StoreChoice::OnDisk,
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),
             #[cfg(feature = "test-hooks")]
@@ -244,6 +256,22 @@ impl App {
                 reason: e.to_string(),
             })?;
         }
+        // Only now: tc-store makes a projects folder that is missing, and a folder someone
+        // named was checked above.
+        let (store, on_disk): (Arc<dyn ProjectStore>, _) = match store {
+            StoreChoice::OnDisk => {
+                let backend = Arc::new(
+                    StoreBackend::on_disk(&config.app_data, &projects.path).map_err(|e| {
+                        StartError::AppData {
+                            path: config.app_data.clone(),
+                            reason: e.to_string(),
+                        }
+                    })?,
+                );
+                (backend.clone(), Some(backend))
+            }
+            StoreChoice::Given(store) => (store, None),
+        };
 
         // Never a weaker source than the system's: the instance tells the UI that its
         // scopes and buffered requests belong to a dead server.
@@ -264,6 +292,10 @@ impl App {
                 now,
                 now,
             );
+        }
+
+        if let Some(backend) = on_disk {
+            crate::backend::store::report_removed_staging(backend, reports.clone(), clock.clone());
         }
 
         // The keychain is read here and nowhere else (but a test relaunch): an

@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::RequestId;
+use crate::ids::{RequestId, Scope};
 use crate::shown::Shown;
 use crate::token::ShownToken;
 
@@ -160,6 +160,21 @@ pub struct FieldStore {
     pub field: String,
     pub shown: ShownToken,
     pub text: String,
+}
+
+/// `test/saveVerse`: a verse save through the real storage seam and store (unit C0), so the
+/// contract cases that run through tc-app go through dispatch, the session's reply cache and
+/// the store before C2's `editor/saveVerse` exists. C2 moves those cases onto its endpoint
+/// and deletes this one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveVerse {
+    pub at: Scope,
+    pub request: RequestId,
+    /// The verse the field displayed.
+    pub shown: ShownToken,
+    pub words: String,
 }
 
 /// `test/fieldLog`: a test field's current value with its token, and every text stored

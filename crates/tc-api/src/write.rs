@@ -85,6 +85,7 @@ pub enum NotSaved {
     /// The change could not be written (B3 `NotWritten`, STORAGE:1422-1424). A retry uses
     /// the same token.
     Disk(String),
+    /// O1 another computer, O4, O5, a second writer, a write that failed at open.
     ReadOnly(ReadOnlyReason),
     /// A resolution over heads that moved since the review was shown (STORAGE:1615-1616).
     LookAgain,
@@ -111,7 +112,9 @@ pub enum SaveRefusal {
     LastBook,
 }
 
-/// Why a project is open read-only (STORAGE §5.0, O1, O4, O5).
+/// Why a project is open read-only (STORAGE §5.0, §6.1, O1, O4, O5). Unit variants only, so
+/// each is a plain string on the wire; the host a lock names and the reason a write failed
+/// stay in the store's facts and notices, which the banners read (C1b).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
@@ -124,4 +127,10 @@ pub enum ReadOnlyReason {
     CloudSynced,
     /// Another installation saves into this folder now.
     SecondWriter,
+    /// O1: the project's lock names another computer; the project may be open there
+    /// (STORAGE §5.0). The person can say that computer is closed (C1b).
+    OpenOnAnotherComputer,
+    /// A write the open needed failed (a full disk, a folder that went read-only): the
+    /// project shows everything it holds, and the next open finishes the work (STORAGE §6.1).
+    FolderNotWritable,
 }

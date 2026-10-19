@@ -9,6 +9,7 @@
 pub mod error;
 pub mod scope;
 pub mod token;
+pub mod write;
 
 /// A value the server made that tc-api cannot carry: a bug. The handler that meets one
 /// reports it and answers `ApiError::Internal`.

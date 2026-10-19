@@ -11,9 +11,11 @@ use tc_api::shown::{PersonLabel, Who};
 use tc_api::write::ReadOnlyReason;
 use tc_api::{ApiError, NotSaved, Refusal};
 use tc_app::backend::memory::{MEMORY_DEVICE, teammates};
-use tc_app::backend::{CommandError, OpenFailure, ProjectStore, StoreCause, Stored};
+use tc_app::backend::{
+    CommandError, OpenFailure, Origin, ProjectStore, RuleRefusal, StoreCause, Stored,
+};
 use tc_app::jobs::ProgressSink;
-use tc_app::wire::error::{command_error, open_failure, stored};
+use tc_app::wire::error::{UnwordedRefusal, command_error, open_failure, stored};
 use tc_app::wire::scope::{
     change_cause, change_scope, person_label, project_id, record_key, record_ref,
 };
@@ -513,26 +515,120 @@ fn a_translation_questions_check_lists_its_record_and_no_check_list() {
 
 #[test]
 fn command_errors_map_to_not_saved() {
+    let mapped = |error| command_error(error).unwrap();
     assert_eq!(
-        command_error(CommandError::NotWritten("full".into())),
+        mapped(CommandError::NotWritten("full".into())),
         ApiError::NotSaved(NotSaved::Disk("full".into()))
     );
     assert_eq!(
-        command_error(CommandError::ReadOnly(ReadOnlyReason::SecondWriter)),
+        mapped(CommandError::ReadOnly(ReadOnlyReason::SecondWriter)),
         ApiError::NotSaved(NotSaved::ReadOnly(ReadOnlyReason::SecondWriter))
     );
     assert_eq!(
-        command_error(CommandError::BadToken(TokenError::BadMac)),
+        mapped(CommandError::BadToken(TokenError::BadMac)),
         ApiError::NotSaved(NotSaved::BadToken)
     );
     assert_eq!(
-        command_error(CommandError::Closed),
+        mapped(CommandError::Closed),
         ApiError::NotSaved(NotSaved::StaleScope)
     );
     assert_eq!(
-        command_error(CommandError::Unavailable),
+        mapped(CommandError::Unavailable),
         ApiError::Unavailable(Feature::Writes)
     );
+}
+
+/// C0: every refusal the store makes reaches the wire as `NotSaved`, or, when no screen has
+/// words for it yet, as the store's own sentence for the handler to report.
+#[test]
+fn command_error_maps_every_store_refusal() {
+    use tc_api::write::SaveRefusal;
+    let mapped = |error| command_error(error).unwrap();
+    assert_eq!(
+        mapped(CommandError::LookAgain),
+        ApiError::NotSaved(NotSaved::LookAgain)
+    );
+    assert_eq!(
+        mapped(CommandError::PlanStale),
+        ApiError::NotSaved(NotSaved::PlanStale)
+    );
+    assert_eq!(
+        mapped(CommandError::Refused(RuleRefusal::Incoherent(
+            "a gap".into()
+        ))),
+        ApiError::NotSaved(NotSaved::Refused(SaveRefusal::IncoherentView))
+    );
+    assert_eq!(
+        mapped(CommandError::Refused(RuleRefusal::LastBook)),
+        ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook))
+    );
+    assert_eq!(
+        mapped(CommandError::Refused(RuleRefusal::WrongTokenKind)),
+        ApiError::NotSaved(NotSaved::BadToken)
+    );
+    assert_eq!(
+        mapped(CommandError::ReadOnly(
+            ReadOnlyReason::OpenOnAnotherComputer
+        )),
+        ApiError::NotSaved(NotSaved::ReadOnly(ReadOnlyReason::OpenOnAnotherComputer))
+    );
+    assert_eq!(
+        mapped(CommandError::ReadOnly(ReadOnlyReason::FolderNotWritable)),
+        ApiError::NotSaved(NotSaved::ReadOnly(ReadOnlyReason::FolderNotWritable))
+    );
+    assert_eq!(
+        command_error(CommandError::Refused(RuleRefusal::NotText)),
+        Err(UnwordedRefusal(RuleRefusal::NotText.to_string()))
+    );
+    assert_eq!(
+        command_error(CommandError::Refused(RuleRefusal::NotText))
+            .unwrap_err()
+            .0,
+        "the verse is not text here; change its structure in the section editor"
+    );
+}
+
+/// AD37: a command of this app is announced as the request that asked for it, so the field
+/// that sent it shows no "changed while you were typing"; the server's own is `System`.
+#[test]
+fn a_command_of_a_request_is_its_local_save() {
+    let id = tc_api::ids::RequestId::from_bytes([7; 16]);
+    let no_label = |_: &DeviceId| None;
+    assert_eq!(
+        change_cause(
+            &StoreCause::Command {
+                origin: Origin::Request(id)
+            },
+            no_label
+        ),
+        ChangeCause::LocalSave { request: id }
+    );
+    assert_eq!(
+        change_cause(
+            &StoreCause::Command {
+                origin: Origin::Server
+            },
+            no_label
+        ),
+        ChangeCause::System
+    );
+}
+
+/// AD8: the open's reports are tc-store's, forwarded: a new phase starts its count again,
+/// and within a phase the count never falls.
+#[test]
+fn forwarded_progress_never_falls_within_a_phase() {
+    use tc_api::jobs::{OpenPhase, Phase};
+    let sink = progress();
+    let reading = Phase::Open(OpenPhase::ReadingChanges);
+    let folding = Phase::Open(OpenPhase::Folding);
+    sink.forward(reading.clone(), 5, Some(10));
+    sink.forward(reading.clone(), 3, Some(10));
+    let now = sink.snapshot();
+    assert_eq!((now.phase, now.done, now.total), (reading, 5, Some(10)));
+    sink.forward(folding.clone(), 0, Some(4));
+    let now = sink.snapshot();
+    assert_eq!((now.phase, now.done, now.total), (folding, 0, Some(4)));
 }
 
 #[test]

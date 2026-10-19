@@ -108,6 +108,7 @@ fn every_scenario_loads_its_bible_project_and_refuses_its_obs_project() {
         let listed: Vec<String> = backend
             .list()
             .unwrap()
+            .projects
             .into_iter()
             .map(|e| e.folder.to_string())
             .collect();
@@ -299,7 +300,7 @@ async fn the_projects_folder_stays_empty() {
     std::fs::create_dir(&projects).unwrap();
     let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
-        deps.store = std::sync::Arc::new(backend);
+        deps.store = tc_app::StoreChoice::Given(std::sync::Arc::new(backend));
     })
     .await;
     let opened = t

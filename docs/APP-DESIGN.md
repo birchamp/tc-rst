@@ -157,7 +157,8 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
    runner. Phase 1 has 15 units: the seed spike B1a can start now on a branch cut from
    `storage`, and the other 14 start when unit C merges *(B1a ran after unit C merged, on a
    branch cut from `app`)*. Phase 2 starts with the store adapter
-   C0, whose size depends on whether S1 provides R4, R5, R14 and R16 (§9.2).
+   C0, whose size depends on whether S1 provides R4, R5, R14 and R16 (§9.2) *(it did: C0 is the
+   thin adapter)*.
 10. **Open questions.** 29 points need the owner (§12). The most urgent is Q-23: ten requests
     this design depends on (R1, R4, R5, R14, R16 and R19 to R23) are in no storage unit's task
     text, and only the owner can add them *(A-5)*. The others with the most weight are feedback sending (Q-2), checkpoints on every
@@ -208,7 +209,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD34 | Checkpoint on every mode switch, as tC4 does (`tC4:src/state.jsx:4031-4038`), until the owner and the storage team rule (Q-5). Before R17 is adopted, unit P measures save latency while a checkpoint runs (R9), and the storage team is asked to keep the long part of a checkpoint off the actor (R21). If the 25 ms save budget still fails, Q-5 offers one checkpoint per mode switch at most every two minutes. *(A-11)* | tC4's J8 asserts it (`tC4:e2e/j08-resume.spec.ts:194`); STORAGE lists only leaving Translate (STORAGE:1723). A checkpoint is an actor step with a 500 ms budget for a whole Bible (STORAGE:1725-1735, 2720; PERF:92), so a checker who switches after each decision would wait behind one each time. | Silently following either. |
 | AD35 | Test hooks exist only under the cargo features `test-hooks` and `fixture-backend`. `release_has_no_test_hooks` checks the release binary. | No hook may ship. | Runtime flags. |
 | AD36 | Teammate changes in parity scenarios are written only through tc-journal's encoders (phase 1) and the store's sealing API (from C1a), never by hand. | The scenario must exercise the real format. | Hand-made packs. |
-| AD37 | An open editor holds its value and its token as one pair, taken when it opened, and taken again when an `Ack` leaves the field clean *(A4b)*. A refresh replaces the pair only while the editor has had no input and no composition since it last took it; otherwise the field keeps its text and token and shows the "changed while you were typing" notice. A `Changed` whose cause is the field's own request shows nothing. Nothing is ever written into a focused field, and texts are compared in NFC. *(A-6)* *(A4b fix: which of two pairs is newer is decided by their open first, then their `ViewSeq`, which counts per open (§6.3).)* | A value and a token that come apart make the next save conflict with itself, or revert a change unseen (STORAGE:1449-1453). The `Ack` and the `Changed` event of one write may arrive in either order (§5.4). NFC reorders Hebrew points and Arabic marks (STORAGE:1445), and writing into a focused field moves the caret and breaks an IME composition. | Following the query in an open editor; never refreshing an open editor. |
+| AD37 | An open editor holds its value and its token as one pair, taken when it opened, and taken again when an `Ack` leaves the field clean *(A4b)*. A refresh replaces the pair only while the editor has had no input and no composition since it last took it; otherwise the field keeps its text and token and shows the "changed while you were typing" notice. A `Changed` whose cause is the field's own request shows nothing. Nothing is ever written into a focused field, and texts are compared in NFC. *(A-6)* *(A4b fix: which of two pairs is newer is decided by their open first, then their `ViewSeq`, which counts per open (§6.3).)* | A value and a token that come apart make the next save conflict with itself, or revert a change unseen (STORAGE:1449-1453). The `Ack` and the `Changed` event of one write may arrive in either order (§5.4). The server knows the cause because each `StoreCommand` carries the request it answers, and the store adapter joins the store's `Committed` to that command (C0). NFC reorders Hebrew points and Arabic marks (STORAGE:1445), and writing into a focused field moves the caret and breaks an IME composition. | Following the query in an open editor; never refreshing an open editor. |
 | AD38 | `SessionRegistry` runs one open per folder at a time; a second caller waits for it and shares the session. The screen session closes when the person goes Home, with tC4's "leaving the project" checkpoint. *(A-8, A-25)* | A second open finds `.tc/lock` held by this same `tc4` and is refused, with `tc4` itself as the holder (STORAGE §6.1 O1). tC4 closes the project at Home (`tC4:src/state.jsx:7286-7328`), and J8 asserts that commit. | Waiting only for a running leave-checkpoint; closing the session only when another project opens. |
 | AD39 | The shell supervises `tc4`. When `tc4` exits without being asked, the shell starts it again and loads Home at the new address; the new page reads the shell's buffer mirror (AD21). `tc4` treats a closed stdin as a quit. The shell starts `tc4` with `detached: true` and `windowsHide: true`: on Windows, Node's plain `spawn` puts the child in libuv's job object, which ends it the moment the shell's process ends, before it can read its closed stdin and quit (G0's "end the shell" rows measure both). A `tc4` that finds `app.lock` held waits up to 10 s for the old process to finish closing, then names it (`app-lock.json` beside the lock records its pid, §5.1). *(A-3)* | Every launch has a new port, so the old page cannot reach a restarted server (§5.2). An orphaned `tc4` would hold `app.lock` and `.tc/lock` and refuse the next launch. When the shell dies, the pipe to `tc4`'s stdin closes. | A quit endpoint for orphans (it would need the old token); restarting in place. |
 
@@ -435,7 +436,10 @@ pub struct ConflictBrief { pub conflict: ConflictRef, pub record: RecordRef, pub
 pub enum NotSaved {                       // the text stays in the editor: "Not saved: <reason>. Retry"
     Refused(SaveRefusal),                 // B1 (STORAGE:1411-1413)
     Disk(String),                         // B3 NotWritten (STORAGE:1422-1424)
-    ReadOnly(ReadOnlyReason),             // O4, O5, SecondWriter
+    ReadOnly(ReadOnlyReason),             // NeedsNewerApp (O4), UnsafeDrive and CloudSynced
+                                          // (O5), SecondWriter; C0 adds OpenOnAnotherComputer
+                                          // (O1) and FolderNotWritable (a write the open
+                                          // needed failed, STORAGE §6.1)
     LookAgain,                            // Resolve over moved heads (STORAGE:1615-1616)
     PlanStale,                            // an upgrade or gateway plan over moved heads (STORAGE:1603-1606)
     StaleScope,                           // the project was closed or reopened under the field; the
@@ -873,7 +877,7 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 
 | Module | Owns |
 |---|---|
-| `lib.rs`, `config.rs`, `app.rs` | `App::start(AppConfig, AppDeps)`, `App::call` (bytes in, bytes out: the one entry tc-server routes to), `App::events`, `App::quit`, `App::sessions`, `App::read` (the request guard of queries), `App::counters`; `AppConfig { app_data, projects: Given(dir) \| Default, door43: ServerUrl, build, test_hooks }` (the UI folder is tc-server's); `AppDeps` holds what a test replaces: the clock, the keychain, the folder check, the app-data files, the project store (`NoProjects` until C0; the memory backend in tests) and, with `test-hooks`, the process ender *(B1b: `AppDeps.sessions` became `AppDeps.store`)* |
+| `lib.rs`, `config.rs`, `app.rs` | `App::start(AppConfig, AppDeps)`, `App::call` (bytes in, bytes out: the one entry tc-server routes to), `App::events`, `App::quit`, `App::sessions`, `App::read` (the request guard of queries), `App::counters`; `AppConfig { app_data, projects: Given(dir) \| Default, door43: ServerUrl, build, test_hooks }` (the UI folder is tc-server's); `AppDeps` holds what a test replaces: the clock, the keychain, the folder check, the app-data files, the project store (`StoreChoice::OnDisk`, tc-store over the projects folder, which `App::start` builds once the folder is chosen and checked; `StoreChoice::Given` for the memory backend in tests) and, with `test-hooks`, the process ender *(B1b: `AppDeps.sessions` became `AppDeps.store`)* *(C0: `NoProjects` is gone. The store is built inside `App::start`, after Q-4's folder is chosen, because that is the first moment the folder is known and tc-store makes a projects folder that is missing: a folder someone named is refused first, and `..AppDeps::production()` builds nothing)* |
 | `dispatch.rs`, `handlers.rs` | `Handle<E>` for every row of `endpoint_table!`, the internet check (AD25), which a write hands to the reply cache so it applies only to an id not yet sent, crash points on every write (§5.8) |
 | `replies.rs` | `ReplyCache` and `BodyDigest` (AD4); one per session for project-scoped writes, and one app-wide for writes of no project (B1b) |
 | `folders.rs` | the cloud-folder check of STORAGE §5.0, a copy of tc-store's until C1a, which deletes it |
@@ -898,8 +902,11 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 ```rust
 // crates/tc-app/src/backend/mod.rs
 pub trait ProjectStore: Send + Sync + 'static {
-    /// Folders with ingredients/tc/project.json. No lock, no fold.
-    fn list(&self) -> Result<Vec<ProjectEntry>, StoreError>;
+    /// The projects, and each folder that holds a project's files (project.json, metadata.json,
+    /// ingredients/ or .tc/) but cannot be opened as one, with its reason (C0: `Listing
+    /// { projects, unusable }`, so no folder that holds someone's work is left off Home, AD12;
+    /// a declared difference from tC4, §4.5). No lock, no fold.
+    fn list(&self) -> Result<Listing, StoreError>;
     /// Derived files only: metadata.json, .tc/sync.json, tc/conflicts.json, the names of the
     /// pack and pending files, materialized.json's size and mtime. No lock, no fold.
     fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError>;
@@ -917,7 +924,7 @@ pub trait ProjectHandle: Send + Sync {
     fn parse_review(&self, token: &tc_api::ReviewToken) -> Result<ReviewToken, TokenError>; // (R19, in tc-journal)
     fn submit(&self, cmd: StoreCommand) -> BoxFuture<Result<StoreReply, CommandError>>; // after B6; never blocks
     fn subscribe(&self) -> UnboundedReceiver<StoreEvent>;           // Committed { seq, delta, cause } | Mode
-    fn offered_drafts(&self) -> Vec<OfferedDraft>;                  // O12 (STORAGE:1857); Verified | Unverifiable *(A-9)*; C1b
+    fn offered_drafts(&self) -> Vec<OfferedDraft>;                  // O12 (STORAGE:1857); Verified | Unverifiable *(A-9)*; C0 (the list); C1b (keep, discard, the offer)
     fn leave(&self, what: Leave);                                   // materialize trigger (STORAGE:1639-1640); B3/D1
     fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome>;
     fn counters(&self) -> StoreCounters;                            // C0
@@ -930,7 +937,10 @@ impl Snapshot {                                                     // tokens co
 impl StoreCommand {                                                 // built only from the token kind it needs
     pub fn save_verse(shown: EditToken, words: String) -> Self;     // each unit adds the constructors it sends
     pub fn resolve(conflict: ConflictId, shown: Vec<ReviewToken>, choice: Choice) -> Self;
+    pub fn requested_by(self, request: RequestId) -> Self;          // C0: the origin its event names (AD37)
 }
+pub enum Origin { Request(RequestId), Server }                     // C0
+pub enum StoreCause { Intake { devices }, Command { origin: Origin }, System }  // Command: C0
 pub struct StoreReply { pub tokens: Vec<(RecordKey, EditToken)>, pub new_conflicts: Vec<ConflictId>,
                         pub stored: Stored, pub seq: u64, pub changes: Vec<ChangeId> }  // Stored::WrittenNotDurable(reason)
 /// tc-journal has one `ShownToken` for both kinds (`storage:crates/tc-journal/src/token.rs:54`).
@@ -939,7 +949,7 @@ pub struct StoreReply { pub tokens: Vec<(RecordKey, EditToken)>, pub new_conflic
 pub struct EditToken(tc_journal::ShownToken);
 pub struct ReviewToken(tc_journal::ShownToken);
 pub enum CommandError { Refused(RuleRefusal), NotWritten(String), LookAgain, PlanStale,   // Refused, LookAgain,
-                        ReadOnly(ReadOnlyReason), BadToken(TokenError), Closed, Unavailable } // PlanStale: C0, C2
+                        ReadOnly(ReadOnlyReason), BadToken(TokenError), Closed, Unavailable } // PlanStale: C0
 
 /// Jobs owned by crates that do not exist yet. Each has a scripted double until its crate lands.
 pub trait SyncPort: Send + Sync { /* sync, share, join */ }
@@ -1045,11 +1055,48 @@ computer) makes every older token fail its MAC; that is how a draft becomes `Unv
   on the store, where `peek` reads the files the product reads. *(A-25)*
 
 **`StoreBackend`** adapts tc-store's `ProjectActor` to the seam. It is its own unit, C0, because
-its size depends on what S1 provides *(A-5)*:
+its size depends on what S1 provides *(A-5)*. *(C0: S1 provides R4, R5, R14 and R16 and both
+things phase 2 waits for, so C0 is the thin layer of the first bullet: no command thread, no own
+`seq`, no frontier check. `crates/tc-store/src/handle.rs` has the handle surface (R4) and the
+snapshot it publishes after every batch under an `RwLock`, which reads take without the actor
+(R5, and the O(1) snapshot: an `Arc` clone); `StoreEvent::Committed { seq, delta, changes }`
+carries each batch's `Delta`; `ProjectHandle::counters` is R14; `StoreReply.seq` and the typed
+`StoreEvent::Notice` are R16. `crates/tc-app/src/backend/store.rs` adds what the store cannot
+know: who asked for a command, since `Committed` names the batch's changes and is sent before the
+reply resolves, so a relay thread records each reply's changes with the command's `Origin` and the
+events thread waits for that record before it passes a `Committed` on (a batch with changes that
+no submit asked for, such as S2's outside edits and E1a's intakes, must not wait for a record:
+the events thread passes it on as `StoreCause::System` as soon as no submit is in flight or the
+relay has settled a stored or unchanged reply the actor gave after it; an error reply (read-only,
+look again, not written, refused) carries no `seq`, so it says nothing of where the batch stands
+in the actor's order and does not end the wait, and behind such replies the batch waits until no
+submit is in flight;
+E1a maps an intake to `Intake` once tc-store's `Committed` names its devices); a close and a drop of
+tc-store's handle, which wait for the actor, on a thread of their own; a listing that reads the
+projects folder itself, because tc-store's `Store::list` keeps only folders with a `project.json`,
+reports every folder that holds a project's files but cannot be opened, a link to one included,
+instead of hiding it, and leaves out tc-store's staging folders; an open by the exact name the
+listing holds; and a record in the report log of each staging folder tc-store's start removed
+(STORAGE §6.4 N1), written from a thread of its own once that cleanup is over, so the start never
+waits for it and "Ask for help" carries it. An import's and a join's are recorded as tC4's start
+records the same moment (`tC4:src/data/journal/opsLog.ts:603-614, 677-691`): `import`, refused
+with `import.write-failed`, and `open-door43`, failed with tC4's sentence, each with the folder,
+`interrupted` and `rolledBack`, so the Feedback dialog says "Report: import, …" as tC4's does. tC4
+makes no staging folder for a create or a copy, so theirs, and a folder whose name does not say its
+work, are this app's `staging-removed`, with the folder and its kind *(after the third
+verification: the first text recorded all four as `staging-removed`, unlike tC4)*.
+E1b tells the person of a join that did not finish and F1 of an import. A create or a copy that
+did not finish is recorded only: it held no typed work (a copy's original is untouched, and a
+create's source files are where the person picked them), and the person sees that the project is
+not there and makes it again. Every fold step S1 makes after an open is a command's or a
+second writer's, and both send `Committed`, so `every_fold_step_reaches_the_seam` (consecutive
+seqs ending at the newest snapshot) stands in for the frontier check. Measurements:
+`docs/evidence/store-adapter-2026-10-19.md`.)*
 
 - If S1 provides R4, R5, R14 and R16 (§9.2), C0 is a thin layer: each `ProjectHandle` method
   calls the matching store API.
-- If it does not, C0 builds them around the actor without a second actor: it runs commands on
+- If it does not, C0 builds them around the actor without a second actor *(C0: not built, S1
+  provides them)*: it runs commands on
   a dedicated thread and answers each `submit` through a oneshot channel; it publishes the fold
   clone the actor hands out after each command and each intake as the snapshot readers take
   (an `ArcSwap`), so reads never queue behind the actor; it turns each command's `Delta` into
@@ -1075,15 +1122,15 @@ case is named after the rule it protects.
 | `minted_token_parses`, `forged_token_is_refused` | both | a screen cannot forge a token (STORAGE:745-754) |
 | `review_token_lists_every_head` | both | STORAGE:1610-1616 |
 | `review_token_text_is_refused_as_an_edit_token` | both | AD3 *(A-7)* |
-| `edit_of_a_verse_in_conflict_keeps_the_conflict` (through HTTP) | store | AD3, I4 *(A-7)* |
-| `review_token_in_a_save_is_refused_by_the_actor` | store, after R19 | AD3 *(A-7)* |
+| `edit_of_a_verse_in_conflict_keeps_the_conflict` (through `App::call`; through HTTP from C2) | store | AD3, I4 *(A-7)* |
+| `review_token_in_a_save_is_refused_by_the_actor` (a unit test in `backend/store.rs`) | store, after R19 | AD3 *(A-7)* |
 | `snapshot_clone_costs_nothing` | both | STORAGE:574-577 |
 | `reads_never_wait_behind_a_long_command` (a held checkpoint) | store | R5 *(A-5)* |
 | `opens_of_one_folder_share_one_session`, in both orders | both | AD38 *(A-8)* |
 | `draft_with_unverifiable_token_is_offered_as_text` | store | §6.6 *(A-9)* |
 | `unchanged_save_writes_nothing` | store | STORAGE:1447 |
 | `reply_token_lists_only_the_new_change` | store | STORAGE:1455 |
-| `stale_token_after_intake_makes_a_conflict_never_a_revert` | store | STORAGE:1449-1453, I4 |
+| `stale_token_after_intake_makes_a_conflict_never_a_revert` (the unseen head made by a save; E1a reruns it with an intake) | store | STORAGE:1449-1453, I4 |
 | `retry_after_lost_reply_is_idempotent` | store (through tc-app) | AD4 |
 | `retry_while_first_attempt_waits_runs_once`, `retry_with_another_body_is_request_reused` | store (through tc-app) | AD4 *(A-2)* |
 | `read_your_writes` | store | `StoreReply.seq` (R16) |
@@ -1093,6 +1140,7 @@ case is named after the rule it protects.
 | `written_not_durable_is_saved_with_warning` | store | STORAGE:1424-1428 |
 | `read_only_refuses_every_command_and_writes_nothing` | store | STORAGE:1893-1899 |
 | `drafts_offered_after_reopen` | store | STORAGE:1750-1759 |
+| `a_save_never_erases_a_newer_draft_of_its_field` (ignored until R26) | store, after R26 | STORAGE §5.14, R26 *(C0)* |
 
 *(B1b: `crates/tc-app/tests/store_contract.rs` runs the "both" cases on the memory backend as
 `store_contract!(memory, crate::memory_fixture)`, with one more token-kind case,
@@ -1104,6 +1152,27 @@ forgeries). `tests/support/counting_store.rs` wraps any backend to count opens, 
 closes and to hold an open or a checkpoint, so C0's `store_contract!(store, crate::store_fixture)`
 reuses it. The two `compile_fail` doctests on `StoreCommand` and wire's
 `a_relabelled_review_token_is_bad_token` are the rest of the token-kind proof.)*
+
+*(C0: `store_contract!(store, crate::store_fixture)` runs the "both" cases on tc-store, over a
+world written through tc-store's own create on its in-memory file system
+(`tests/support/store_world.rs`); `tests/store_contract/store_cases.rs` holds the store-only cases
+and `tests/store_contract/through_app.rs` the cases through tc-app, which send `test/saveVerse`
+(§5.8) until C2's `editor/saveVerse` exists. Three cases run another way than the table first
+said. `edit_of_a_verse_in_conflict_keeps_the_conflict` runs through `App::call`, not HTTP: no
+endpoint opens a project before B3 or saves before C2, and `tc4 serve` on the store needs C1a's
+on-disk scenario projects; `App::call` takes and gives the exact bytes tc-server forwards (A2's
+tests prove tc-server forwards bodies unchanged), so the token's trip through JSON text, the point
+of the case (A-7), is covered, and C2 reruns it through HTTP. S1's only intake is a second
+writer's files, which turn the project read-only, so
+`stale_token_after_intake_makes_a_conflict_never_a_revert` makes the unseen head the way an
+intake would, by a save with a newer token, and E1a reruns it with a real intake.
+`review_token_in_a_save_is_refused_by_the_actor` cannot be written through the seam, whose types
+make the command unbuildable, so it is a unit test in `backend/store.rs` that hands tc-store the
+raw command by the path every submit takes, which proves both the actor's refusal (R19) and the
+wire's `NotSaved::BadToken` for it. Two cases marked C1b run on the store now
+(`draft_with_unverifiable_token_is_offered_as_text`, `drafts_offered_after_reopen`), so C0 adds
+`ProjectHandle::offered_drafts` and `StoreCommand::draft`. The adapter's own cases, a property test
+and a crash test over every write point of a save are in `tests/store_adapter.rs`.)*
 
 ### 4.3 Sessions, epochs and the request guard
 
@@ -1208,6 +1277,24 @@ B1b).
 
 - `ProjectRegistry` lists `<projects>/` through `ProjectStore::list` and orders cards by
   `lastUsed`. Each card comes from `peek` plus a summary file.
+- A folder that holds a project's files but cannot be opened as one (C0's `Listing.unusable`)
+  is shown on Home with its name and the reason, and it opens nothing: a `project.json` that
+  tc-store's open refuses or cannot read; a `project.json` that is missing while the folder
+  holds `metadata.json`, `ingredients/` or `.tc/` (a project that lost the file, whose journal
+  and drafts are still there, or a translationCore 4.0 project copied in, which Import brings
+  in, F1); a name tc-api cannot carry; and a link to such a folder elsewhere, which tc-store
+  never reads as project data (its checks of the lock, the drive and the cloud client would be
+  about the link), so the reason asks the person to move the folder in. A file, an empty folder
+  and a folder with none of those files hold no one's work and are not listed; tc-store's
+  staging folders are left out. Declared differences from tC4, which lists every local
+  repository whose `metadata.json` has a project flavor and nothing else
+  (`tC4:src/data/httpStore.ts:345-351`): a folder with broken or missing metadata, which tC4
+  hides, is shown with its reason, so a folder that holds someone's work never disappears from
+  Home without a word (C0, B2); and a translationCore 4.0 project, which tC4 opens, is shown
+  as unusable until Import brings it in, because this app opens only projects in its own format
+  (STORAGE §3.5, §13). When S2 restores a missing `project.json` from the HEAD tree at open
+  (STORAGE §3.5), the listing must count such a folder a project, as the open does:
+  `a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it` fails until it does.
 - A summary holds per-book drafted and total verses (tC4's `draftPercent`: a span counts every
   verse it covers; `""` and `___` are undrafted; `tC4:src/data/usfm/indexer.ts:216-228`),
   conflict counts by book and kind, the team's labels, OBS story percentages and the in-progress
@@ -1562,8 +1649,11 @@ in Chromium against the real `tc4`, with the request filter of AD11
   with each refresh of the view, which a `Resync` makes. `Notice` is readable through
   `session/notices`. `Received` and `Suggest` follow the same rule, and E2 and B6, which add
   them, say in their rows how each is repaired.
-- **Ordering.** The server publishes a command's events before it sends the command's reply. An
-  `Ack` and a `Changed` event for the same write may still arrive in either order at the UI; both
+- **Ordering.** tc-store emits a command's `Committed` before it resolves the command's reply;
+  the event reaches the bus through the session's event pump, so the UI may see the `Ack` or the
+  `Changed` first and handles both *(C0: the first text said the server publishes the events
+  before it sends the reply, which the pump's task does not promise)*. An
+  `Ack` and a `Changed` event for the same write may arrive in either order at the UI; both
   carry a `ViewSeq`, and the UI keeps the newer. A `Changed` whose cause is
   `LocalSave { request }` for a request the UI has in flight changes no editor and shows no
   notice; the `Ack` settles the field (AD37). `events_reply_order_is_safe` is a property test
@@ -1690,6 +1780,7 @@ show a 401 page.
 | `test/hold`, `test/release` | hold a book read, a checkpoint, a materialize, a save before B3, a draft write, or a sync step (R8); replaces tC4's `e2e/helpers/checkpointHold.ts:14` |
 | `test/crash` | end `tc4` at a named point (after a reply is sent, before B3, while a draft is written) for the reload and relaunch tests of §6.6 *(A-2, A-3)*. The points are in tc-app's write path and apply to every write but the arming hooks (§10 A3): before the handler (`beforeStore`), after it (`beforeReply`), and after the reply, which the server does when `App::call` answers `then: EndProcess`. An arm that can never fire (a query, an arming hook, or `duringDraftWrite` before any write reaches it) is a bad request; the unit that adds draft writes (S1, C1b) accepts it. |
 | `test/fieldStore` | a write endpoint that goes through the real reply cache and records every text it stores, with holds and crash points, so A4b can prove the save machine's no-loss rules before any real save exists *(A-2)*. Its tokens carry the field and its version under a key kept with the fields, so they verify after a restart; a store over an older version is logged as `stale`, and an unchanged text answers with the token it came with, as the store does (STORAGE:1446-1447, STORAGE §5.1 step 4). |
+| `test/saveVerse` | a verse save through the real seam and store (C0): dispatch, the session's reply cache, `ProjectHandle::submit` and tc-store, so the contract cases of §4.2 that run through tc-app (the retries and the conflict case) run before `editor/saveVerse` exists. C2 moves those cases onto `editor/saveVerse` and deletes the hook |
 | `test/fieldLog` | a test field's current value with its token, and every text `test/fieldStore` stored into it, in order, each with the token base it was saved over (`current` or `stale`): what A4b's tests read back *(A1)*; and the newest draft `test/fieldDraft` kept with how many came *(A4b)* |
 | `test/fieldDraft` | a test field's draft, as `editor/draft` will keep a verse's in `.tc/drafts.json`: its token is checked as `fieldStore` checks one, the newest text per field is kept durably beside the stores, and the field's value and stores do not change. It waits at the `DraftWrite` hold before it takes the stores' lane, so a held draft never delays a store (R22). A4b's third panic case shows with it that the server holds the drafts `boot.js` posts (§6.8), before any real draft endpoint exists. `duringDraftWrite` stays refused: the unit that adds real draft writes accepts it *(A4b)* |
 | `test/clock` | a fixed clock for dates in screenshots |
@@ -1868,6 +1959,13 @@ tc-app's tests carry out against `test/fieldStore`.)*
   and its buffer entry is removed; otherwise it stays dirty on the new tokens (tC4's
   version-aware rule, `saveScheduler.ts:214-219`). Comparing with the stored text, not with
   `sent`, is what makes a retry safe after a reload *(A-2)*.
+- An `Ack` that leaves the field dirty sends the field's `Draft` at once, with the reply's tokens,
+  outside the once-a-second limit: the store removed the field's draft entry when the save landed,
+  and with it any draft sent while the save was in flight, which holds text typed after `sent`
+  (R26's fallback, §9.2). C2 adds this rule, on real saves, to the machine A4b builds; its test,
+  `a_draft_sent_during_a_save_survives_a_crash`, holds a verse save at its durability point, types,
+  releases the save, ends `tc4` through `test/crash` once the next `Draft` is answered, and finds
+  the typed text offered at the next open *(C0)*.
 - After a failure nothing saves automatically; only Retry continues (`saveScheduler.ts:314`).
   *(A4b second review: per field, a declared difference. tC4's scheduler holds one failure for
   all its keys, every book's verses or every note, and after it nothing of that scheduler saves
@@ -2065,8 +2163,9 @@ had failed for a cause since gone was not stored when the person left.)*
   none *(A4b)*. A crash of the page,
   of `tc4` or of Electronite leaves the appended lines in the operating system's cache; a power
   cut can lose the last second, and a torn last line is skipped when the log is read. *(A-3)*
-- While a field is dirty, a `Draft` command goes to the server at most once a second; the store
-  writes `.tc/drafts.json` (STORAGE:1752-1759). R22 asks that this write never delays a command
+- While a field is dirty, a `Draft` command goes to the server at most once a second, and at once
+  after an `Ack` that leaves it dirty (§6.5, R26); the store writes `.tc/drafts.json`
+  (STORAGE:1752-1759). R22 asks that this write never delays a command
   *(A-20)*.
 - A section draft holds the whole buffer and every displayed token (STORAGE:1486-1488, 1754-1756).
   Until R6, tc-app sends `text = {"tokens":[…],"buffer":"…"}` under the first verse's token.
@@ -2675,7 +2774,8 @@ tC4's spec assertions are the reference.
   on every worker, or loads on the test thread. The seeding plan runs inline in `App::start`, on
   the caller's thread, and the `Seed` job's counts are taken on its own thread and reported in the
   `seed` report's facts (`contentFilesOpened`, `contentFilesWritten`) *(A9)*.
-- tc-store's counters (R14), or C0's own counts of commands, replies and waits until R14 lands *(A-5)*.
+- tc-store's counters (R14), reachable through `ProjectHandle::counters` since C0 *(A-5; C0: S1
+  provides them, so C0 counts nothing of its own)*.
 - `AppCounters`: `records_read`, `values_decoded`, `items_derived`, `rows_serialized`,
   `chapters_projected`, `book_resource_loads`, `summaries_computed`, `keys_probed`,
   `saves_waiting_behind_a_draft_write` *(A-20, A-21)*, and `conflict_walks`, `books_rendered`,
@@ -2787,7 +2887,7 @@ build. Results go to `docs/evidence/app-<date>.md` with the machine and commit (
 | Unit | Gives the app | App units it unblocks |
 |---|---|---|
 | C | tc-journal and the domain crates in one workspace; one owner per shared type; `Session::open` over the fold; validity read from the fold; the To do and alignment-span disagreements settled | B1b–B11 (the read halves) |
-| S1 | the actor, commands, durable acks, the open with progress, read-only modes, drafts, `atomic_write`, app-data layout | C0, then C1–C8; C0's size depends on R4, R5, R14 and R16 *(A-5)* |
+| S1 | the actor, commands, durable acks, the open with progress, read-only modes, drafts, `atomic_write`, app-data layout; and R4, R5, R14 and R16 (`crates/tc-store/src/handle.rs`, `reply.rs`, `counters.rs`) | C0, then C1–C8; C0's size depends on R4, R5, R14 and R16 *(A-5; C0: S1 provides all four, so C0 is the thin adapter)* |
 | S2 | materialize, checkpoint, outside edits, local git | D1, D2 |
 | P | budgets at whole-Bible scale; R9's save latency during a checkpoint, which decides AD34 *(A-11)* | G2; D1's mode-switch checkpoints |
 | X | sync, share, join, USB exchange, `ExchangeReport` | E1a, E1b, E2 |
@@ -2814,29 +2914,30 @@ it today *(A-5)*.
 | R | Need | Owner | In a task text | Fallback |
 |---|---|---|---|---|
 | R1 | Range reads: one chapter's verses, one (tool, book)'s decisions, one book's alignments and comments, each costing its result. The fold already keeps them per chapter in `ChapterEntry` (`storage:crates/tc-journal/src/fold/state.rs:242-257`), which is crate-private. | C or P | provided: tc-journal `c4b8663`, `fold/ranges.rs` (B1b uses it) | the probes of §4.3, which cost what they show; no project-wide index *(A-21)* |
-| R2 | Create a project in a staging folder and rename it into place without replacing (DELTA:619-624) | S1 | no | create waits; parity projects stay on `MemoryBackend` until then |
+| R2 | Create a project in a staging folder and rename it into place without replacing (DELTA:619-624) | S1 | provided by S1: `crates/tc-store/src/store.rs` (`Store::create`, `staging`, `place`; `Vfs::rename_dir_noreplace`) *(C0)* | create waits; parity projects stay on `MemoryBackend` until then (no longer needed) |
 | R3 | Add a book with imported text (tC4 `addUsfmBooks`) | S1 or I | no | `AddBook` with the imported USFM as `SeedSource`, then one `SaveSection` per chapter on the stub tokens; History shows a seed and an edit |
-| R4 | The `ProjectHandle` surface of §4.2: snapshot with its sequence, mint and parse, an async submit, typed events, drafts, leave, checkpoint, counters, close | S1, S2 | partly: STORAGE specifies the actor and its commands, not this surface | C0 builds the surface around the actor (§4.2). C0 cannot build an O(1) snapshot or a command's `Delta`; without them phase 2 waits *(A-5)* |
-| R5 | A read never waits behind a long actor write; reads use the latest published snapshot | S1 | partly: STORAGE:1339 runs snapshots off the actor's thread | C0 publishes the snapshot after each command and intake, and reads take the published one *(A-5)* |
-| R6 | `Draft` for `DraftField::Section` carries every displayed token (STORAGE:1754-1756; the command has one, `command.rs:113-117`) | S1 | the spec text only | the JSON envelope of §6.6 |
-| R7 | Commands for the §8.3 choices the set cannot express: bulk resolve in one batch, carried-file rename and keep both, a pins choice with its carry-over, the presence-race restore, accept all from the file, act on a held file, dismiss a notice, undo an outside edit, re-key a decision with `MovedTo`, copy a read-only project (with its drafts, §6.6) | S1, S2 | no | the review offers only what exists, and "Later" |
-| R8 | Test-only holds before a book read, a checkpoint, a materialize, a draft write, B3 | S1, S2 | no | delays through `FaultFs` |
+| R4 | The `ProjectHandle` surface of §4.2: snapshot with its sequence, mint and parse, an async submit, typed events, drafts, leave, checkpoint, counters, close | S1, S2 | provided by S1: `crates/tc-store/src/handle.rs` (`ProjectHandle`, `Snapshot`, `Pending`, `StoreEvent::Committed` with each batch's `Delta`) *(C0)* | C0 builds the surface around the actor (§4.2). C0 cannot build an O(1) snapshot or a command's `Delta`; without them phase 2 waits *(A-5)* (not needed: C0 is thin) |
+| R5 | A read never waits behind a long actor write; reads use the latest published snapshot | S1 | provided by S1: `crates/tc-store/src/handle.rs` (`Shared::publish` after every batch; tc-store's `reads_never_wait_behind_a_held_checkpoint`, and C0's `reads_never_wait_behind_a_long_command` through the seam) *(C0)* | C0 publishes the snapshot after each command and intake, and reads take the published one *(A-5)* (not needed) |
+| R6 | `Draft` for `DraftField::Section` carries every displayed token (STORAGE:1754-1756; the command has one, `command.rs:113-117`) | S1 | provided by S1: tc-journal `command.rs` (`Draft.shown: Vec<ShownToken>`, `DraftField::Section`) *(C0)* | the JSON envelope of §6.6 (no longer needed) |
+| R7 | Commands for the §8.3 choices the set cannot express: bulk resolve in one batch, carried-file rename and keep both, a pins choice with its carry-over, the presence-race restore, accept all from the file, act on a held file, dismiss a notice, undo an outside edit, re-key a decision with `MovedTo`, copy a read-only project (with its drafts, §6.6) | S1, S2 | in part, by S1: tc-journal `command.rs` (`ResolveBulk`, `MoveCheck`, `Dismiss`, `ReleaseBatch`, `Choice::RenameCarried`), tc-store `Store::copy_project`, `ProjectHandle::{restore_held, dismiss_notice}` *(C0)* | the review offers only what exists, and "Later" |
+| R8 | Test-only holds before a book read, a checkpoint, a materialize, a draft write, B3 | S1, S2 | provided by S1: `crates/tc-store/src/hooks.rs` (`Point`, feature `test-hooks`) *(C0)* | delays through `FaultFs` (no longer needed) |
 | R9 | Measure save latency during a materialize, a checkpoint, a merge commit and a 150 MB `ApplyUpgrade` (25 ms budget, PERF:74) | P | no | the UI shows "Saving…" and never blocks; mode-switch checkpoints (AD34) are not adopted until this is measured *(A-11)* |
 | R10 | Sync, share and join entry points with progress, cancel, `ExchangeReport`, and `NotShared` (DELTA:645) | X | yes (§9, §10) | `ScriptedSync` |
 | R11 | Import review as a dry run; import job with progress and cancel; tC3 version lookup | I | partly | `ScriptedImport` |
 | R12 | `tc-door43`: `count_repositories(owner, lang)` and a `repos/search` route in the fake | app track, B9b | — | — |
 | R13 | `tc-door43-fake`: a dropped-connection fault and a runnable binary; today's faults are statuses, delays, redirects, archive changes and, for archive and export downloads only, a held, broken-off or unsized body (A11) (`crates/tc-door43-fake/src/lib.rs:171-215`); git smart HTTP has none | X or app track | no | scripted outcome |
-| R14 | tc-store counters reachable from tc-app tests (files opened, fsyncs, actor queue waits). The fold's half exists: `FoldState::counters` is public (`storage:…/fold/state.rs:1830`) | S1 | no | C0 counts commands, replies and waits itself; files opened are counted only if tc-store counts them *(A-5)* |
-| R15 | A `DraftField` for user comments (`command.rs:207-215` has none) | S1 | no | the browser buffer and the shell's mirror *(A-3, A-18)* |
-| R16 | `StoreReply.seq` for read-your-writes; typed notices for `SecondWriter`, `SavedWithDiskError`, a blocked materialize | S1, S2 | no | C0's own `seq`, raised with each published snapshot; notices mapped from tc-store's error types *(A-5)* |
+| R14 | tc-store counters reachable from tc-app tests (files opened, fsyncs, actor queue waits). The fold's half exists: `FoldState::counters` is public (`storage:…/fold/state.rs:1830`) | S1 | provided by S1: `crates/tc-store/src/counters.rs` (`StoreCounters` through `ProjectHandle::counters`), reachable through the seam's `ProjectHandle::counters` *(C0)* | C0 counts commands, replies and waits itself; files opened are counted only if tc-store counts them *(A-5)* (not needed) |
+| R15 | A `DraftField` for user comments (`command.rs:207-215` has none) | S1 | provided by S1: tc-journal `command.rs` (`DraftField::UserComment`) *(C0)* | the browser buffer and the shell's mirror *(A-3, A-18)* (no longer needed) |
+| R16 | `StoreReply.seq` for read-your-writes; typed notices for `SecondWriter`, `SavedWithDiskError`, a blocked materialize | S1, S2 | provided by S1: `crates/tc-store/src/reply.rs` (`StoreReply.seq`), `handle.rs` (`StoreEvent::Notice` with tc-journal's `Notice`) *(C0)* | C0's own `seq`, raised with each published snapshot; notices mapped from tc-store's error types *(A-5)* (not needed) |
 | R17 | A checkpoint on every mode switch with pending batches (amends STORAGE:1723) | S2, owner | no | as STORAGE says today if the owner declines; adopted only after R9 *(A-11)* |
 | R18 | Two settings in one batch (direction and font) | S1 | no | two batches; the dialog says which failed |
 | R19 | The token's kind (edit or review) under its MAC, a purpose byte in the payload or a second derived key, so the actor refuses a review token in a save and an edit token in `Resolve` (STORAGE §2.7) | C, which is editing tc-journal now | provided: tc-journal `token.rs` (`TokenKind`, `"kind"` in the payload under the MAC); tc-app's `parse_edit` and `parse_review` check the MAC, then the kind (B1b) | the seam's two types and the wire prefixes (AD3) *(A-7)* |
-| R20 | A draft whose token fails its MAC is offered as text, and Keep records it as a change with no parents, which stands as a conflict, as STORAGE does for outside edits it cannot place (STORAGE:3637). Stated in §5.14 and O12. | S1 | no | the offer shows the text with "Copy text" and stays until Discard (§6.6) *(A-9)* |
+| R20 | A draft whose token fails its MAC is offered as text, and Keep records it as a change with no parents, which stands as a conflict, as STORAGE does for outside edits it cannot place (STORAGE:3637). Stated in §5.14 and O12. | S1 | provided by S1: `crates/tc-store/src/drafts.rs` (`OfferedDraft.verified`), `commands.rs` (`KeepDraft` of an unverified draft writes no parents) *(C0)* | the offer shows the text with "Copy text" and stays until Discard (§6.6) *(A-9)* (no longer needed) |
 | R21 | Keep a checkpoint's long work off the actor: only the seal and the final reference update are actor steps; materialize, the tree build and `tc_burrito::check` run on a snapshot (STORAGE:1725-1735) | S2, measured by P | no | Q-5's limit of one mode-switch checkpoint every two minutes *(A-11)* |
-| R22 | A draft write never delays a command: drafts are not journal data, so they are written beside the actor, not as one of its steps (STORAGE:1752-1753) | S1 | no | saves that waited behind a draft write are counted (§8.2) *(A-20)* |
-| R23 | `DraftField::Alignment`, so unsaved links survive a crash | S1 | no | the server saves links 2 s after the last change; up to 2 s of links can be lost in a crash (Q-27) *(A-4)* |
-| R24 | A way to revise a comment: a record that replaces the comment the box showed, kept in History | S1, owner (Q-24) | no | each blur after a change adds a comment (§6.5) *(A-18)* |
+| R22 | A draft write never delays a command: drafts are not journal data, so they are written beside the actor, not as one of its steps (STORAGE:1752-1753) | S1 | provided by S1: `crates/tc-store/src/drafts.rs` (`DraftWriter`), `handle.rs` (a draft goes to the writer, not the actor); C0's `a_draft_never_waits_behind_a_long_command` *(C0)* | saves that waited behind a draft write are counted (§8.2) *(A-20)* (no longer needed) |
+| R23 | `DraftField::Alignment`, so unsaved links survive a crash | S1 | provided by S1: tc-journal `command.rs` (`DraftField::Alignment`) *(C0)* | the server saves links 2 s after the last change; up to 2 s of links can be lost in a crash (Q-27) *(A-4)* (no longer needed) |
+| R24 | A way to revise a comment: a record that replaces the comment the box showed, kept in History | S1, owner (Q-24) | provided by S1: tc-journal `command.rs` (`Command::ReviseComment`) *(C0)* | each blur after a change adds a comment (§6.5) *(A-18)* (no longer needed) |
+| R26 | A save never erases a newer draft of its field: a successful save removes the field's `.tc/drafts.json` entry only if the entry's text equals the value the save stored, or the entry was put before the command was submitted (amends STORAGE §5.14, "A successful save of that field removes its entry"). Today tc-store's actor removes the entry by its key whatever its text (`actor.rs`, `drafts.rs` `cleared_by`, `DraftWriter::saved`), so the draft the UI sends while a verse's save waits behind a checkpoint (up to 500 ms, RT-11) is gone when that save lands, and a crash before the next save loses that text everywhere but the browser buffer and the shell's mirror of the same computer *(C0, found by its third verification)* | S1 | no | C2's save machine sends the field's `Draft` at once, with the reply's tokens, after an `Ack` that leaves the field dirty (§6.5), so the entry is back within one round trip; the browser buffer and the shell's mirror keep the text on the same computer meanwhile. `a_save_never_erases_a_newer_draft_of_its_field` (§4.2) is ignored until tc-store provides it |
 
 **Who can add them** *(A-5)*. The task texts of units C, S1, S2 and P
 (`.audit/workflows/storage-chain-B.js:19-22, 30-33`) ask for none of R1, R4's handle surface,
@@ -2847,6 +2948,11 @@ their tests; R21 to S2's; and R9 to P's. For each request left out, C0 is built 
 size or the fallback above applies, and §10 says which unit waits.
 
 A lockless read-only open for Home summaries is not requested: AD13 needs no fold.
+
+*(C0, 2026-10-19: S1's tc-store, merged into main and `app`, provides R2, R4, R5, R6, R8, R14,
+R15, R16, R20, R22, R23 and R24, R7 in part, and R25, the reflow written in the verse's batch
+(`crates/tc-store/src/commands.rs`, `save_verse`); the rows above say where. R3 is not: tc-store's
+`AddBook` seeds tC4's blank book from a source, so imported text still needs R3's fallback.)*
 
 ### 9.3 What can be built when
 
@@ -2918,7 +3024,7 @@ cut from the integration branch `app` after unit C had merged, like every other 
 |---|---|---|---|---|---|
 | B1a Seed spike *(A-16)* | `crates/tc-app/src/backend/seed.rs` only: `tc4_state_seed` and §13.2's check on the `.state` scenarios (`sample`, `en-pins`, `shared`; `build-state.mjs` run on the tC4 checkout): `ProjectMeta`, `Versification`, books through the codec, pins with the schema 1 → 2 migration, settings, decisions, alignments, OBS story records *(B1a: built, with the check in `seed/check.rs` and the strict JSON reader and timestamps in `seed/strict.rs`, behind the feature `fixture-backend`. D1: `Tc4Folder::read` is the one reader; `tc4_state_seed(&Tc4Folder, ProjectId)` builds, seals, folds and checks, and returns the seed only when the check passes, else `SeedRefusal::Mismatches` with every mismatch. D2: every change by `Importer("tc4-seed")`, `cause: Import(Burrito { file_name: <the folder's name> })`, no parents, `seq` its index in its batch, `at` a decision's own `modifiedTimestamp`, else `meta.dateCreated`, else tC4's floor 2020-01-01. D3: one batch for the project, then one per book in canonical order or per story, records in key order, so the seed does not depend on the order of records in a file; batch ids from sha256("tc4-seed-batch\0" ‖ projectId ‖ label). D4: sealed with `pack::seal` under a fixed Local sealer, read back with `read_pack`, folded; never `encode_pending`, which refuses a non-Local device (§4.2). D5: a story's `StoryBase` is its file and nothing else, since `decode_story`'s records cannot give the files back through the fold (§4.2); an OBS project's licence and front and back matter are `CarriedFile` records by git blob id. D6: each tC4 decision gets `importedInvalid` from `invalidated`, `userStatus` from `status` (on an invalidated one only To do, or an Invalid that `userInvalid` marks as the person's own), and `verseTextMd5` from the text its target names in a fold of the project's texts, the text the projection compares. D7: the check reads as tC4 reads (§4.2); an absent `selections` is kept apart from `false`, since tC4's `isDecided` counts it as a selection. D8: a `schemaVersion: 1` `resources.json` migrates as BURRITO-SPEC §5.3 says, adding the bundled `en_twl` pin with its flavor when the file has no links pin. D9: JSON is read with a reader that refuses a repeated key, which serde_json would drop without a word. D10: `fixture_project_id` is the fixture backend's id rule, not an import rule. D11: the cargo tests assemble each scenario's projects from `fixtures/tc4` and the overlay `fixtures/parity-state` and check every file against `parity/app/state.sha256.json`, so they run on the exact bytes without node. D12: the mismatches the storage team owns are asserted exactly, so the test fails the day they are fixed. Outcome, the same in all three scenarios: `sample_burrito` passes (127 changes, three batches); `sample_burrito_obs` is refused with 53 mismatches, handed to the storage team in `docs/evidence/state-seed-check-2026-10-18.md`: frame 0 of every story reads with its number (STORAGE §7.7 against tC4's `TITLE_RE`), `checking/settings.json` is not among an OBS fold's derived files, and the OBS text pin's relationship makes `metadata.json` invalid for both language sets; two OBS edits outside the check (a title edit loses the number; an empty frame's edit takes another layout) are written up there too. B1b cannot load the OBS project of any scenario until the storage team fixes these. Declared differences from tC4 4.0: a `schemaVersion: 1` `resources.json` is migrated where tC4 refuses the project; `verseEdits` is recomputed; a decision with no `modifiedTimestamp` is written with `meta.dateCreated` (else 2020-01-01), where tC4 reads it as changed at each moment it reads it; the check compares tC4's reading of each record where tC4 compares whole documents; `metadata.json`'s free fields are seeded and checked where tC4 leaves them to its server. A seed takes 5-6 ms per project in a release build after the first, which compiles the Burrito schema once, about 20 ms.)* | `storage` (tc-journal); rebased when C merges | C, if a mismatch is a spec question | the seed check on every scenario: USFM and `vrs.json` byte for byte, sidecars field for field | the check passes on every scenario, or each mismatch is written up with the record, the bytes and the rule involved and handed to unit C *(B1a: unit C had merged, so to the storage team)* |
 | B1b tc-app core and MemoryBackend | the seam with `EditToken` and `ReviewToken` *(A-7)*; `MemoryBackend` with scripted outcomes over B1a's seed; scenario loader with resources from `.state`; `SessionRegistry` with one open per folder and the close at Home *(A-8, A-25)*, epochs; the reply cache wired to sessions; `wire` for tokens, scopes and errors (each later unit adds its views); the key probes of §4.3 *(A-21)*; `AppCounters`, `CountingSnapshot`; tc-corpus loading; contract read cases *(B1b: built. R1 and R19 are provided by tc-journal, so the key reads are R1's range reads and the parse checks the kind under the MAC; no fallback is used. Tokens are minted from the `Snapshot` a screen read, not the handle's newest one, and a `StoreCommand` takes the right kind by type. A project the seed check refuses no longer fails its scenario: it is listed with every mismatch and left out, so the OBS sample is refused in every scenario until the storage team's fix, and the Rust Home shows only the Bible card until then. Teammates are not loaded with a scenario (B10 adds them). `Write::at()` lets dispatch check a write's scope before it picks the session's reply cache. The `Opened` outcome and the open job are B3's. A clippy lint keeps whole-fold walks out of tc-app's code. `tc4 serve --scenario` starts the app on a scenario in fixture builds. Measurements: `docs/evidence/memory-backend-2026-10-19.md`.)* | C, B1a, A1, A3 | — | contract read cases, including the token-kind cases; epoch refusal tests; `opens_of_one_folder_share_one_session` in both orders; `probe_finds_every_key_a_scan_finds`; `open_lists_no_key` | the count-test harness runs on Psalms and ten times Psalms |
-| B2 Home and project dialogs | `home/*`; `SummaryCache` (memory); cards, tiles, "—" rules; Resume card; toasts; M1, M2, M3 (server language search, versifications); M4 method step; M5 kind step | B1b, A5, A6b | — | `homeProjectCard` port; language-suggestions (UI part). `home_costs_projects_not_history` moves to C1a *(A-25)* | 11 screens in the report (§7.6) |
+| B2 Home and project dialogs | `home/*`; `SummaryCache` (memory); cards, tiles, "—" rules; Resume card; toasts; the unusable folders of the listing, with words for them (§4.5, a declared difference from tC4); M1, M2, M3 (server language search, versifications); M4 method step; M5 kind step | B1b, A5, A6b | — | `homeProjectCard` port; language-suggestions (UI part). `home_costs_projects_not_history` moves to C1a *(A-25)* | 11 screens in the report (§7.6) |
 | B3 Open and Understand | open job and the S14 overlay with its own 300 ms timer and tC4's three stages *(A-22)*; `editor/book`, `chapters`, `sources`; `helps/*`; `model::take_spans` and the tc-helps block renderer (port of `renderArticleBlocks`); highlights; book rail; helps panel with tabs, slots, article pane, resize; comment box (read) with tC4's selection rule *(A-18)* | B2 | Q-7 for the stage captions | J15 UI with a held open: the overlay shows at 300 ms with no event; `open_book_touches_one_book`; `helps_load_one_book`; `take_spans` differential test | 4 Understand screens |
 | B4a Translate: grid and verse editor *(A-17)* | grid, sections (display), source and original chips, Section/Verse switch, conflict markers (read); the verse editor on scripted saves with the refresh rule of AD37 *(A-6)*; "changed while typing"; `Editing` lock with the rail number button (DELTA:519-523) *(A7: B4a does not build M18, "Remove all the text of section …?": only the section editor draws it (`tC4:src/views/SectionEditor.jsx:244-255`, tC4 #600), so B4b builds it as the #600 question and its gallery case names B4b.)* | B3, A4b | — | save states for every scripted outcome; `chapter_switch_sends_no_request`; the §6.3 refresh tests, with the Arabic IME case in Playwright | `translate-tit1`, `en-translate-tit1`, `en-translate-verse-editor` |
 | B4b ◆ Section editor *(A-1, A-17)* | `model::SectionBuffer` (port of `sectionDraft.js`); the section card with Type and Place, pins and the "To place" bank; Save only, Cancel, the #600 question (M18); section drafts (the envelope of §6.6 until R6); the editing lock for sections | B4a | R6 (fallback: the envelope) | `sectionDraftExits` port; section buffer proptest and its tc-app differential test; `section_editor_saves_only_on_save` (typing, placing pins and blurring send no `editor/saveSection`); Cancel leaves no buffer entry and no draft; the #600 question | `en-translate-section-editor`; J2's section steps on scripted saves |
@@ -2936,10 +3042,10 @@ cut from the integration branch `app` after unit C had merged, like every other 
 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
-| C0 ◆ Store adapter *(A-5)* | `StoreBackend` over S1's `ProjectActor` (§4.2): thin if S1 provides R4, R5, R14 and R16; otherwise the command thread, the published snapshot, events from each `Delta`, its own `seq`, the frontier check | S1, B1b | R4, R5, R14, R16 (fallback: built here); an O(1) snapshot and each command's `Delta` (no fallback: phase 2 waits) | every contract case of §4.2 that runs on the store, including `reads_never_wait_behind_a_long_command` | the contract suite passes on the store through C0, and the adversarial review's findings are fixed |
+| C0 ◆ Store adapter *(A-5)* | `StoreBackend` over S1's `ProjectActor` (§4.2): thin if S1 provides R4, R5, R14 and R16; otherwise the command thread, the published snapshot, events from each `Delta`, its own `seq`, the frontier check *(C0: built thin, because S1 provides R4, R5, R14, R16, the O(1) snapshot and each command's `Delta`; no fallback and no frontier check (every fold step S1 makes after an open sends `Committed`, which `every_fold_step_reaches_the_seam` proves). D1: a command carries its `Origin` and `StoreCause::Command { origin }` reaches the pump, so a person's own save is `LocalSave { request }` (AD37); B1b's plan gave it to C2, but only the adapter can join the store's event to its command. D2: the listing is `Listing { projects, unusable }` and an open needs the exact listed name; staging folders are left out. A folder is a project in the listing exactly when tc-store's open would not refuse it as not a project: the listing reads `project.json`'s four fields as tc-store does. The listing reads the projects folder itself, not tc-store's `Store::list`, which keeps only folders with a `project.json`: every other folder that holds a project's files (`project.json`, `metadata.json`, `ingredients/` or `.tc/`), and every link to a folder that does, is unusable with its reason, and a file or a folder with none of them is not listed *(after the second verification: a folder that had lost only its `project.json`, a translationCore 4.0 project copied in and a link to a project were at first left off without a word)*. Declared differences from tC4 (§4.5): Home shows an unusable folder with its reason (B2), so no one's work is hidden, and a translationCore 4.0 project is unusable until Import brings it in. D3: two unit read-only reasons in tc-api, `OpenOnAnotherComputer` and `FolderNotWritable` (§3.4). D4: `test/saveVerse` (§5.8) runs the contract cases that go through tc-app until C2. D5: three contract cases run another way than the table said (§4.2's note). D6: `AppDeps.store` is `StoreChoice` and `App::start` builds the store (§4.1). D7 *(added after the first verification)*: a batch with changes that no seam submit asked for (S2's outside edits, E1a's intakes) goes on as `StoreCause::System` as soon as it cannot be a submit's: when no submit is in flight, or when the relay settles a stored or unchanged reply the actor gave after it; an error reply carries no `seq` and does not end the wait (§4.2's note; *after the second verification*, which found that the first text, "at most until the actor's next reply", did not hold behind an error reply); and since C0 makes tc-app depend on tc-store, CI's two clippy steps without test hooks build tc-store too and are among the gates (AGENTS.md). D8 *(added after the second verification)*: since C0 builds tc-store at `App::start`, every launch runs tc-store's start cleanup (STORAGE §6.4 N1), which removes the staging folders that a create, copy, join or import cut short left; C0 records each in the report log, an import as `import` refused with `import.write-failed` and a join as `open-door43`, each with facts `folder`, `interrupted` and `rolledBack`, as tC4's start records them, and a create or a copy, which tC4 makes no staging folder for, as `staging-removed` with facts `folder` and `kind` *(after the third verification, which found all four recorded as `staging-removed`)*; E1b tells the person of a removed join and F1 of a removed import, and a removed create or copy is recorded only (§4.2's note). D9 *(added after the third verification)*: tc-store clears a field's draft entry on every successful save of the field, so a draft sent while that save was in flight, which holds newer text, is gone when it lands; C0 asks the storage team for R26 (§9.2), adds `a_save_never_erases_a_newer_draft_of_its_field`, ignored until R26, and gives the fallback to C2 (§6.5). Evidence: `docs/evidence/store-adapter-2026-10-19.md`)* | S1, B1b | R4, R5, R14, R16 (fallback: built here); an O(1) snapshot and each command's `Delta` (no fallback: phase 2 waits) | every contract case of §4.2 that runs on the store, including `reads_never_wait_behind_a_long_command` | the contract suite passes on the store through C0, and the adversarial review's findings are fixed |
 | C1a Move the app onto the store *(A-17)* | app data on `atomic_write`; persisted summaries; parity projects on disk through S1's create and sealing API; the parity environment switched to the store | C0 | — | `home_costs_projects_not_history` on the store *(A-25)*; J15 on real `FaultFs` delays | every phase-1 screen captured so far is recaptured on `store` with the same report; `MemoryBackend` is deleted when the last B unit has moved |
 | C1b ◆ Offers and read-only modes *(A-3, A-9, A-10)* | draft offers at open: `drafts.json`, buffered entries and the shell's mirror, merged and filtered (§6.6); unverifiable drafts as text; read-only banners; `SecondWriter`; the copy offer, which carries the folder's drafts to the copy | C1a | R20 (fallback: "Copy text"); R7's copy command (fallback: the banner without the copy offer) | `relaunch_offers_buffered_and_mirrored_entries`; `draft_with_unverifiable_token_is_offered_as_text`; crash tests through `test/crash` (end the server while typing, relaunch, the text is offered, Keep makes a conflict when the verse changed); the copy carries drafts (with R7) | the tests pass and the adversarial review's findings are fixed |
-| C2 ◆ Translate saves | `saveVerse`, `saveLayout`, `saveSection` (on Save only), `draft`; Retry; `NotWritten`; `SavedWithDiskError`; Resume from saves and drafts | C1b, B4b | R6 (fallback: the envelope); R22 (fallback: saves that waited are counted) | J2; J6 edit part; `save_verse_touches_one_verse`; "Saved" never before B3 (held save); `draft_survives_panic`; `reload_anywhere_stores_the_last_text_once` on real saves *(A-2)* | J2 green |
+| C2 ◆ Translate saves | `saveVerse`, `saveLayout`, `saveSection` (on Save only), `draft`; the `Draft` sent at once after an `Ack` that leaves the field dirty (§6.5, R26's fallback) *(C0)*; Retry; `NotWritten`; `SavedWithDiskError`; Resume from saves and drafts | C1b, B4b | R6 (fallback: the envelope); R22 (fallback: saves that waited are counted) | J2; J6 edit part; `save_verse_touches_one_verse`; "Saved" never before B3 (held save); `draft_survives_panic`; `reload_anywhere_stores_the_last_text_once` on real saves *(A-2)*; `a_draft_sent_during_a_save_survives_a_crash` (R26's fallback, §6.5) *(C0)* | J2 green |
 | C3 ◆ Comments and OBS saves | `addComment` on blur only, with the reply cache and the offer rule *(A-18)*; `saveFrame`, `saveRef`; OBS editing lock | C1b, B3, B7 | R15 (fallback: buffer and mirror); Q-24 and R24 (fallback: each blur adds a comment) | J16, J21, J25; three pauses and a blur add one comment; a teammate's comment in the unit is untouched | green |
 | C4 Check writes | `check/decide` with rows in the `Ack` *(A-12)*; the check comment with its draft *(A-10)*; re-assessment after verse deltas; late draft (DELTA:906-907) | C1b, B5b | Q-25 | J4, J6, J22; check-project-switch, check-returns-draft; `decision_serializes_one_row`; `decision_refetches_no_rail` | green |
 | C5 ◆ Align writes and suggestions | the server's alignment save: 2 s, leaving the verse, replace or close, before the quit checkpoint *(A-4)*; `markValid`; training per testament from one snapshot; suggest, accept, reject | C1b, B6 | R23 (fallback: the 2 s window, Q-27) | J5; `links_saved_when_quitting_within_2_s` (link, quit, reopen, the links are there); `unsaved_links_hold_the_close_guard`; suggestion budget | green, and the adversarial review's findings are fixed |
@@ -2960,14 +3066,14 @@ cut from the integration branch `app` after unit C had merged, like every other 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
 | E1a Sync *(A-17)* | the real `SyncPort` for sync; OS keychain (Q-3); the sync button flow (DELTA:717-738); R13's dropped connection | X, B10, C7a, D1 | R13 (fallback: scripted outcome); Q-3 | J26 with three app-data folders (its check-conflict step once C7b has landed); sync-button; `sync-failed` on a dropped connection | `shared-home`, `sync-failed`, `sync-ok`, `sync-ok-teammates` and `sync-ok-restored` recaptured on real data |
-| E1b Share and open from Door43 *(A-17)* | share create, push, done; open with sign-in on 401 or 404 (Q3) | X, B9b, E1a | Q-21 for the refused sentence | J11, J17, J24 | `share-dialog`, `share-dialog-check` and `open-door43-refused` recaptured on real data |
+| E1b Share and open from Door43 *(A-17)* | share create, push, done; open with sign-in on 401 or 404 (Q3); a join the start cleanup removed (C0's `open-door43` report with `interrupted` and `rolledBack`): Home says `refusal.open-door43.removed`'s words once, where tC4 says them when the person opens that project (`tC4:src/data/journal/opsLog.ts:317-318`), because this app's join never puts a half project at the project's name | X, B9b, E1a | Q-21 for the refused sentence | J11, J17, J24; a join cut short by an ended `tc4` is removed at the next start and Home says so | `share-dialog`, `share-dialog-check` and `open-door43-refused` recaptured on real data |
 | E2 USB exchange | Save work for a teammate (folder, progress, verify, "You can remove the stick"); Receive work from a file (identify, confirm, job, report), never beside a sync of the same project *(A-31)*; the J7 Burrito zip as the exchange file; browser uploads up to 4 GiB *(A-28)*; the `Received` sheet readable again after a `Resync` (§5.4) | X, C1a, D2 | — | USB journey both ways, then a relay through a third person (STORAGE:3819) | green |
 
 ### Phase 5: after I
 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
-| F1 Import | M5 all steps with uploads; tC3 version lookup; name clash; working state with progress and cancel; toast and badge | I, C1a | — | J9a, J9c, J9d; language-suggestions | `memory_seed_equals_tc_import_seed` passes and the local seed is deleted |
+| F1 Import | M5 all steps with uploads; tC3 version lookup; name clash; working state with progress and cancel; toast and badge; an import the start cleanup removed (C0's `import` report refused with `import.write-failed`): Home says the import did not finish and asks the person to import again | I, C1a | — | J9a, J9c, J9d; language-suggestions; an import cut short by an ended `tc4` is removed at the next start and Home says so | `memory_seed_equals_tc_import_seed` passes and the local seed is deleted |
 
 ### Phase 6: shell and performance
 
@@ -3069,13 +3175,25 @@ last.
 18. **Storage requests outside every task text.** R1, R4, R5, R14, R16 and R19 to R23 are in no
     storage unit's task text today. If they stay out, C0 is larger, R9's numbers may come late,
     and three fallbacks (R20, R21, R23) are weaker than the requests. Only the owner can add them
-    (Q-23) *(A-5)*.
+    (Q-23) *(A-5)*. *(C0, 2026-10-19: no longer outside every task: unit C provided R1 and R19,
+    and S1 built R4, R5, R14, R16, R20, R22 and R23 (§9.2). R9 and R21 remain.)*
 19. **Windows-only proofs.** G0, G1's tests and G2's Electronite capture need a Windows machine
     or runner (Q-26). Until G0 runs, the aligner budget, the header probe and the supervision
     design rest on reasoning, not measurement *(A-17)*.
 20. **The shell's mirror** keeps a second copy of typed text in app data until it is saved or
     discarded. It never leaves the computer, and entries are removed when their field is clean;
     a file left by a crash is read at the next launch *(A-3)*.
+21. **A save erases a newer draft of its field** (R26). Until tc-store keeps a draft put while a
+    save of its field was in flight, a crash between that save and the draft C2 sends again
+    after the `Ack` (§6.5) loses the text typed meanwhile from `.tc/drafts.json`; the browser
+    buffer and the shell's mirror still hold it on the same computer, but a folder copied to
+    another computer, or a browser-only run whose storage was cleared, does not *(C0)*.
+22. **A flaky no-loss property in tc-journal.** `mixed_minor_versions_converge` failed about one
+    run in 35 on the third verification of C0, on assertions that a conflict was lost, or added,
+    when some changes carry newer-minor fields; a lost conflict would hide a teammate's version.
+    It is the storage team's (`docs/evidence/store-adapter-2026-10-19.md`); until it is fixed, a
+    workspace test run that fails there is rerun once before the failure is read as a unit's
+    *(C0)*.
 
 ---
 
@@ -3658,7 +3776,7 @@ part was done another way or not taken, and the last column says why, with the e
 | RT-2 | Accepted | AD4; the buffer entry keeps `sent` (§6.6); the reply cache keys a body digest and waits for a request in flight (§4.4, unit A3); `RequestReused` (§3.5); a field is clean only when `Ack.saved` equals its NFC text (§3.4, §6.5); `reload_anywhere_stores_the_last_text_once` in A4b against the test-only `test/fieldStore`, and in C2 on real saves; two contract cases | — |
 | RT-3 | Accepted, with a different mechanism | AD21: the shell appends every buffer change to `drafts-buffer.log` and fsyncs it once a second; AD39: the shell restarts `tc4` and reloads Home; `tc4` quits on a closed stdin; a new `tc4` waits 10 s for `app.lock` (§5.1); entries are offered at the next open (§6.6); AD4's in-place restart branch is removed; G1's crash tests; Q-1 rewritten | (1) "Decide Q-1 before A4": not needed. The mirror is kept under either answer, because Chromium may hold `localStorage` writes in memory before committing them, so even a stable origin would not keep the last keystrokes through a crash of the whole app. With the mirror, A4b's code is the same under both answers, and only G1 waits for Q-1. (2) Reading the old page with `webContents.executeJavaScript` when `tc4` exits: the mirror file already holds the entries and also survives a renderer crash, which `executeJavaScript` cannot read. (3) A pid-and-port record so a new shell can ask an orphan to quit: asking needs the old token. When the shell dies, the pipe to `tc4`'s stdin closes and `tc4` quits by itself; a new `tc4` waits 10 s for the lock and then names the pid. (4) "Keep AD4's restart branch only with a stable origin": removed in both cases. Going Home and offering the entries at the next open resends nothing automatically and has one code path. |
 | RT-4 | Accepted | AD18 and AD22: the server owns the alignment save (2 s, leaving the verse, replace or close, before the quit checkpoint); `AlignSave` in §3.6 and §3.7; the indicator, navigation gate (`align/flush`) and close guard count it (§6.5); §5.1's quit saves links first; R23 and Q-27; B6, C5 with `links_saved_when_quitting_within_2_s` | — |
-| RT-5 | Accepted, as an owner question | §9.2 gains an "In a task text" column for every request; Q-23 asks the owner to add R1, R4, R5, R14, R16 and R19 to R23 to the task texts; C0, a unit of its own, adapts S1's actor and builds R4, R5, R14 and R16 itself if S1 lacks them (§4.2); risk 18 | (1) "Put them into S1's task text now": this revision may change only this file, and the task texts belong to the owner's workflow, so it became Q-23. (2) R14 is half met already: `FoldState::counters` is public (`storage:crates/tc-journal/src/fold/state.rs:1830`); only tc-store's counters remain. (3) C0 cannot build two things around the actor: an O(1) snapshot and each command's `Delta`. Without them phase 2 waits, and §4.2 and C0 now say so. |
+| RT-5 | Accepted, as an owner question | §9.2 gains an "In a task text" column for every request; Q-23 asks the owner to add R1, R4, R5, R14, R16 and R19 to R23 to the task texts; C0, a unit of its own, adapts S1's actor and builds R4, R5, R14 and R16 itself if S1 lacks them (§4.2); risk 18 | (1) "Put them into S1's task text now": this revision may change only this file, and the task texts belong to the owner's workflow, so it became Q-23. (2) R14 is half met already: `FoldState::counters` is public (`storage:crates/tc-journal/src/fold/state.rs:1830`); only tc-store's counters remain. (3) C0 cannot build two things around the actor: an O(1) snapshot and each command's `Delta`. Without them phase 2 waits, and §4.2 and C0 now say so. *(2026-10-19, C0: S1 built R4, R5, R14 and R16, the O(1) snapshot and each command's `Delta` in tc-store, so C0 is the thin adapter and phase 2 did not wait; §9.2 says where each is.)* |
 | RT-6 | Accepted | AD37: an editor's value and token are one pair, replaced together only before any input or composition and never while focused; own-request `Changed` shows nothing; comparisons in NFC (§6.3, §6.4, §5.4); B4a's tests, including an Arabic IME case | — |
 | RT-7 | Accepted, and taken further | AD3: the seam returns two types, `EditToken` and `ReviewToken` (§4.2), so the conversion slip the finding describes needs a type error; wire prefixes `st1.` and `rt1.` (§3.4); the DOM test looks for the prefixes (§6.4); R19 asks tc-journal for a kind under the MAC; three contract cases, one through HTTP | — |
 | RT-8 | Accepted | AD38; §4.3: one open per folder, later callers share it; AD14; `opens_of_one_folder_share_one_session` in both orders; C6's card-click case; a `.tc/lock` held by another process refuses the open and names the holder, and nothing opens read-only for that reason (owner's ruling of 2026-10-18, §4.3) | — |

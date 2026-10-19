@@ -85,7 +85,7 @@ pub async fn scale(project: &MemoryProject) -> Scale {
     let store = Arc::new(backend.clone());
     let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
-        deps.store = store;
+        deps.store = tc_app::StoreChoice::Given(store);
     })
     .await;
     Scale {
