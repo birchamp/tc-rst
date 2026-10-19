@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { appDriver } from '../app/driver.mjs';
 import { buildClient, missingVersionsOf, startTc4Env, tc4Identity, tc4MissingPinCount } from '../app/env-tc4.mjs';
-import { CHROMIUM_ARGS, CONTEXT_OPTIONS, VIEWPORT, captureScreen, trackRequests } from '../app/observe.mjs';
+import { CHROMIUM_ARGS, CONTEXT_OPTIONS, VIEWPORT, captureScreen, machineFingerprint, trackRequests } from '../app/observe.mjs';
 import { BIBLE, SCREEN_LIST } from '../app/screens.mjs';
 import { ABSENT, SCENARIOS } from './fixtures/build-state.mjs';
 
@@ -136,6 +136,9 @@ async function main() {
     tc4: { commit: tc4.commit, commitDate: tc4.commitDate, version: tc4.version, dirtyWorkingTree: tc4.dirty },
     client: `the tC4 commit built as \`npm run build\` builds it (release build: base /clients/uw-tc4/, DEV false), ${helpPages ? 'with' : 'WITHOUT'} the help pages of its pinned tc-website commit, served by the mock server`,
     browser: `Chromium ${browserVersion} (Playwright ${JSON.parse(fs.readFileSync(path.join(HERE, 'node_modules', 'playwright', 'package.json'), 'utf8')).version}), headless`,
+    // The fonts decide the fallback glyphs, so the Rust capture compares pixels only with a
+    // machine of the same fingerprint (APP-DESIGN 7.3 layer 1).
+    machine: machineFingerprint(browserVersion),
     viewport: { ...VIEWPORT, deviceScaleFactor: 1 },
     scenarios: SCENARIOS,
     resources: provenance.resources.map(({ dir, repoPath, version, sha, substitute }) => ({ dir, repoPath, version, sha, ...(substitute ? { substitute } : {}) })),

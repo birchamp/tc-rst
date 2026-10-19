@@ -2059,8 +2059,10 @@ is split as `parity/ds-gallery` was:
 | `parity/app/driver.mjs` | `appDriver` over an environment (`AppEnv`: `load`, `catalog`, `projectId` and the four Door43 steps) |
 | `parity/app/observe.mjs` | the capture rules, `trackRequests`, `settle`, `captureScreen`, `observe`, `domSnapshot` rooted at `#root` |
 | `parity/app/env-tc4.mjs` | today's mock, `.state` and in-browser fake Door43; tC4's catalogs and journal writers |
-| `parity/app/env-rust.mjs` | launches `tc4 serve`; `extraHTTPHeaders` with the token |
+| `parity/app/env-rust.mjs` | launches `tc4 serve` with `--test-hooks`, an empty app-data and projects folder under `target/` and a dead `--door43`; `extraHTTPHeaders` with the token, and a context route that aborts every request to another origin before it is sent, so the token never leaves the machine *(A6b, D10)* |
 | `parity/tc4-baseline/capture.mjs` | a short entry over `env-tc4` |
+| `parity/app/capture-rust.mjs` | the Rust entry over `env-rust`: the same screens, driver and rules, into `parity/app/screens`, `dom` and `captures.json`, each capture naming the unit that made it and the layers it claims *(A6b)* |
+| `parity/app/behaviour.mjs` | the recorder of layer 4: a sequence's steps from a baseline screen, on either environment, with node numbers *(A6b)* |
 
 **Proof the split changed nothing.** The baseline test checked sizes and byte counts only
 (`parity/tc4-baseline/baseline.test.mjs:45-59`). Unit A6a adds a sha256 per PNG to `manifest.json`
@@ -2071,10 +2073,10 @@ The Rust environment's seams:
 
 | Seam | Rust environment |
 |---|---|
-| `home()` | `test/reset` with the scenario's prefs and locale, `localStorage.clear()`, load `/#t=<token>`, wait for both cards and `<html lang>` |
+| `home()` | `test/reset` (prefs back to the seed, holds released, the internet off); `prefs/setLocale` when the screen's language is not English, because `test/reset` carries no locale and there is no scenario seed before B1b; `localStorage` and `sessionStorage` cleared; a load of `/#t=<token>` through `about:blank`, because a `goto` to the address the page already shows only moves to its fragment; then wait for both cards and `<html lang>` *(A6b, D9)* |
 | `card(repo)`, `shareButton(repo)`, `shareCard(repo)` | `projectId` maps `BIBLE` and `OBS` paths to the folder, for the `project-`, `share-` and `share-card-` test ids; screen runs name a project's test ids only through these three |
 | `trackRequests` | counts `/api/v1/` and `/media/`, never `/api/v1/events`; otherwise `settle` never sees 800 ms of quiet and silently waits out 30 s (`capture.mjs:136-155`). Shared since A6a: requests are tracked per document through the DevTools protocol, because Playwright's request events can leave a request of a replaced page "in flight" for good, which made later tC4 screens wait out the deadline |
-| `settle` | also waits for `test/quiet` to answer `{busy:false}`; a screen that hits the deadline fails (in both environments since A6a; with requests tracked per document, no tC4 screen reaches it) |
+| `settle` | also waits for `test/quiet` to answer `{busy:false}` and for the page's `window.__tcIdle`, which also covers the catalogs under `/ui/` that the tracker does not count; once either says busy it is asked at every look, and the quiet counts again from the first idle answer *(A6b, D9)*; a screen that hits the deadline fails (in both environments since A6a; with requests tracked per document, no tC4 screen reaches it), and its error says when the server still answered busy |
 | `routeFakeDoor43` | removed: `tc4 serve --door43 <url>` points at a tc-door43-fake process seeded with `facilitator-zq` and the organisations of `fake-door43.mjs:16-21`; the guard that refuses other origins stays |
 | `pushToDoor43`, `teammatesChangeOneVerse`, `loseFromDoor43`, `dropNextClone` | phase 1: scenario files for the scripted doubles plus teammate heads in the fold; from E1a: real packs written by tc-journal and tc-store into the fake's bare repositories, and R13's dropped connection |
 
@@ -2101,11 +2103,24 @@ The Rust environment's seams:
    whose Chromium is older (Electron 37 uses Chromium 138), so P7's comparison engine is not
    the shipped one. That is a declared residual in `residuals.json`, and G2 adds one capture run
    of the Rust app inside Electronite on the release pipeline, compared with the Chromium 141
-   run of the same build (Q-28). *(A-34)* `pixelmatch` with threshold 0,
-   anti-aliasing counted (`parity/ds-gallery/diff.mjs:47`). Declared masks, each a rectangle in
+   run of the same build (Q-28). *(A-34)* A pixel counts when any of its channel bytes
+   differ, which on these opaque screenshots is exactly what `pixelmatch` counts with threshold
+   0 and anti-aliasing counted (`parity/ds-gallery/diff.mjs:47`); the gate counts in Rust, and
+   on all 62 pairs of the cloud machine's and the Linux PC's baselines it gave pixelmatch's
+   counts *(A6b, D2)*. Declared masks, each a rectangle in
    `parity/app/masks.json` with the ruling it cites: the build line in `about`, the build and
-   platform lines in `feedback`, and the Q2 and Q3 text on the eight `rebuildDiffers` screens
-   (`parity/tc4-baseline/README.md:380-402`).
+   platform lines in `feedback`, and the Q2 and Q3 text on the nine `rebuildDiffers` screens
+   (`parity/tc4-baseline/README.md`, "Where the rebuild differs on purpose"; the ninth,
+   `open-door43-internet-consent`, shows the Q3 note behind its scrim and was added by A6b).
+   Fallback glyphs come from the machine's fonts: on the owner's Linux PC the same tC4 commit,
+   Chromium build and capture gave other pixels than on the cloud machine on 57 of the 62
+   screens and the same DOM on all 62. So both captures record their `machine` (platform,
+   Chromium version, and the count and sha256 of `fc-list`'s sorted lines), the baseline is
+   recaptured on the machine that captures the Rust app (A6b recaptured it on the Linux PC), and
+   pixels are compared only between captures whose fingerprints are equal. A capture with no
+   font list (Windows, macOS) is compared by DOM and meaning only. A fontconfig rule that
+   changes a fallback without changing the list is not caught; `residuals.json` lists it.
+   *(A6b, D3)*
 2. **DOM.** `domSnapshot` (`parity/ds-gallery/protocol.mjs:174-220`) rooted at `#root`. tC4's
    snapshot per screen is recorded once and committed as `parity/tc4-baseline/dom/<screen>.json`,
    with its sha256 in `manifest.json`. Beside `#root` it records the attributes of `<html>`
@@ -2114,13 +2129,31 @@ The Rust environment's seams:
    (`tC4:src/ds/components/primitives/Layer.jsx:62-67`). A style is named by the first 12 hex
    digits of its sha256 and spelled out once per file, which cuts the 62 files from 12.8 MB to
    5.2 MB; two lines are equal exactly when their elements are. The snapshot records values as
-   rendered; the comparison applies the normalizations to both sides, each listed and tested:
-   project test ids through the scenario map; generated ids `tc-[fg]\d+` renumbered by first
-   appearance; hashed asset names; picture `src` by file name; comment nodes skipped (already).
+   rendered; the comparison normalizes them by these rules, each listed and tested, and
+   rewrites nothing else, so a test id, a text, a style or an attribute that differs is a
+   difference: the Rust side's project folders become tC4's repo paths where they end an
+   attribute value, through the scenario map (tC4's ids are the reference, so this rule applies
+   to the Rust side only); same-origin asset paths (`src`, `href` and `poster` values that start
+   with `/`, and `url(/…)` in a style) become their file name without a Vite hash, while other
+   URLs compare as they are, so a wrong external link still shows *(A6b, D5)*; each mask's
+   element and its subtree are taken out and compared as the mask's part; generated ids
+   `tc-(f|g|dlg|cfm|rg)\d+` (the counters of tC4's `Field`, `FieldGroup`, `Modal`,
+   `ConfirmDialog` and `Radio`, which tc-ui mints too) are renumbered per prefix by first
+   appearance, in the rest and in each mask's part on its own, so a masked difference cannot
+   shift the ids after it *(A6b, D4)*; comment nodes are skipped (already). A DOM-first capture
+   (§7.6: a screen whose DOM unit comes before its pixels unit) compares only the subtree that
+   `parity/app/scopes.json` names, the dialog or the account menu's panel, because the Home
+   behind it is not the port's until its pixels unit; a capture that claims pixels compares
+   the whole page *(A6b, D8)*.
 3. **Meaning.** `observe`'s `homeCards` and `syncToast` (`capture.mjs:914-960`) field by field.
    Declared difference: under Q2 the OBS card's action is `sync`, not `upload`.
+   `syncToast.missingVersions` is left out: tC4's capture lists the versions by tC4's own rule,
+   which the Rust capture does not have; their count, `missingPins`, is compared *(A6b)*.
 4. **Behaviour.** `scenarios.mjs`-style sequences on full screens: DOM, focus, scroll lock and node
-   identity after each step (`parity/ds-gallery/scenarios.mjs:137-151`).
+   identity after each step (`parity/ds-gallery/scenarios.mjs:137-151`). Node numbers are
+   renumbered by first appearance on each side, so they compare whatever else the page holds;
+   the masks' elements take no part, and a DOM-first screen's sequence is compared within its
+   scope *(A6b)*.
 
 ### 7.4 The tC4 view-state gallery
 
@@ -2141,14 +2174,34 @@ unavailable states; Home loading, empty and error; the Resume card; the import t
 ### 7.5 Report and gate
 
 `parity/app/report.json` holds, per screen and gallery case: pixel count, diff image, DOM diff,
-meaning diff, masks used, the backend phase (`memory`, `memory+scripted`, `store`), `pending_until`
-(the unit that must recapture a scripted screen), and a status (`same`, `declared`, or `differs`
-with a reason). `crates/tc-ui/tests/screen_record.rs` fails when:
+meaning diff, behaviour, masks used, the backend phase (`memory`, `memory+scripted`, `store`),
+`pending_until` (the unit that must recapture a scripted screen: its Recapture unit in §7.6),
+and a status: `same`; `declared`, every difference inside a mask; `differs`, explained in
+`residuals.json`; `unported`, no layer captured yet, with `missing` naming the unit of §7.6 that
+captures each layer; or `failed`: a capture error, a page error, a view or boot error, a refused
+request, the settle deadline, a screenshot of another size than tC4's, pixels from another
+machine, or a mask or scope the comparison could not find *(A6b, D6, D7, D12)*. The report is
+what `crates/tc-ui/tests/screen_record.rs` computes from the committed captures: every
+`cargo test` recomputes the four layers in Rust from `parity/tc4-baseline` and `parity/app` and
+fails when the committed file differs, so the report cannot be stale or edited by hand, a
+planted difference fails `cargo test` itself, and CI's rust job runs the whole comparison with
+no browser; Node only captures, and
+`UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record` rewrites the report and its diff
+images *(A6b, D1)*. `parity/app/units.json` lists the units that have landed, because CI checks
+out one commit and cannot read that from history. `screen_record.rs` fails when:
 
 - a baseline screen or gallery case has no row;
-- a row is `differs` without an entry in `parity/app/residuals.json`;
-- a row's PNG hash disagrees with the committed capture;
-- a row is still `memory+scripted` after the unit named in `pending_until` has landed.
+- a row is `differs` without an entry in `parity/app/residuals.json`, its entry does not name
+  exactly the layers it differs in (pixels, DOM, meaning, behaviour), or an entry explains a row
+  that does not differ *(A6b, D12)*;
+- a row is `failed`, whatever `residuals.json` says;
+- a row's PNG or DOM hash disagrees with the committed capture, or a file belongs to no capture;
+- a layer is still missing after the unit that captures it has landed, or a capture names a unit
+  that has not landed;
+- a row is still `memory+scripted` after the unit named in `pending_until` has landed;
+- a mask cites a ruling docs/PLAN.md does not list (other than `build`), a screen where the
+  rebuild differs on purpose has no mask citing its ruling, or the rebuild's masked element lies
+  outside the mask's rectangle.
 
 This follows `crates/tc-ui/tests/gallery_record.rs` and meets P7: "a human reviews the
 differences, and the differences are listed" (PLAN:112-115).
@@ -2156,7 +2209,11 @@ differences, and the differences are listed" (PLAN:112-115).
 ### 7.6 The 62 baseline screens
 
 "M" is `MemoryBackend` with real fixture data. "M+S" is a scripted job outcome. "Recapture" is
-the unit that captures the screen again on its final backend.
+the unit that captures the screen again on its final backend; for an M+S screen it is also its
+`pending_until` (the notes repeat it for two of them). The pixels unit also captures what the DOM
+shows. A row that names one unit for the DOM and another for the pixels is DOM-first: until the
+pixels unit captures the screen whole, its DOM is compared within the scope of
+`parity/app/scopes.json` (§7.3 layer 2) *(A6b, D7, D8)*.
 
 | Screen | Scenario | First capture | Recapture | Notes |
 |---|---|---|---|---|
@@ -2214,7 +2271,7 @@ the unit that captures the screen again on its final backend.
 | `share-dialog` | sample | B9b, M + fake | E1b | "Recommended" needs R12 |
 | `share-dialog-check` | sample | B9b, M + fake | E1b | — |
 | `open-door43` | sample | B9b, M | — | Q3 text masked |
-| `open-door43-internet-consent` | sample | A8 DOM; B9b pixels | — | kind `open` |
+| `open-door43-internet-consent` | sample | A8 DOM; B9b pixels | — | kind `open`; Q3 text masked behind the scrim |
 | `shared-home` | shared | B10, M | E1a | Q2 mask |
 | `sync-internet-consent` | shared | B10, M | — | Q2 mask behind the scrim |
 | `open-door43-refused` | sample | B10, M+S | E1b | Q3 text (Q-21); `pending_until: E1b` |
@@ -2281,10 +2338,12 @@ tC4's spec assertions are the reference.
   `--features harness`, beside today's two runs (`.github/workflows/ci.yml:11-25`).
   `screen_record.rs` gates the committed report in `cargo test`.
 - **Later (G2)**: an `app-e2e` job builds the wasm with wasm-bindgen 0.2.129, builds `tc4` with
-  `test-hooks`, installs Chromium build 1194 in a pinned image with this container's fonts, and
-  runs the journeys, the DOM and meaning layers, and the perf specs on Psalms. Pixels gate only on
-  the pinned image, because fallback glyphs come from the machine
-  (`parity/ds-gallery/README.md:294-308`). The whole-Bible perf run is nightly.
+  `test-hooks`, installs Chromium build 1194 in a pinned image with the fonts of the machine
+  that captured the baseline, and runs the journeys, the DOM and meaning layers, and the perf
+  specs on Psalms. Pixels gate only where the machine fingerprint equals the baseline's
+  (§7.3 layer 1), because fallback glyphs come from the machine
+  (`parity/ds-gallery/README.md:294-308`): until the pinned image exists, on the machine that
+  captured the baseline (the owner's Linux PC since A6b). The whole-Bible perf run is nightly.
 
 ---
 
@@ -2497,7 +2556,7 @@ This breakdown was checked again after the red team *(A-16, A-17)*:
 | A4b ◆ tc-ui no-loss core: saves, buffer, panics | the join of A2 and A3 (order paragraph), if no earlier unit made it; the save machine (§6.5: `sent`, the NFC clean rule, retries with the first body *(A-2)*, `StaleScope` *(A-19)*); the refresh rule for open editors (AD37) *(A-6)*; the draft buffer v2 keyed by folder and project id *(A-9)*, with the bridge calls `bufferChanged` and `takeBuffered` *(A-3)*; `boot.js`: capture listener, reload, panic counting by page load, static callout, drafts posted with `fetch` *(A-15)*; panic hook and crash marker; the navigation gate and close guard *(A-26)*; `try_` forms and `clippy::indexing_slicing` in app modules *(A-15)* *(A4b: built as the row says, with these refinements, each written where the design text names it. The join was A3's (`crates/tc4/src/join.rs`). The save machine is `tc_ui::app::save` (D1, §6.5): pure, host-tested, returning commands that `web::saves` carries out in the browser and tc-app's tests carry out against `test/fieldStore`; `FieldSave` gains `Failed(SaveError)` and `Held(Hold)` (D2). The buffer is one `localStorage` item per field, keyed by the `BufferKey` as JSON, and `tc_api::buffer`'s entry and line are what the UI, `boot.js`, the shell and the server read (D3, D4, §3.10, §6.6). The bridge's buffer and close calls are exact (D5, §5.7). `test/fieldDraft` keeps a test field's draft, so the third panic case can show that the server holds the posted drafts (D6, §5.8). AD37's pair is taken again when an `Ack` cleans the field (D7, AD37, §6.3). Only a lost reply keeps its id, and a resend asks `app/hello` for the run first (D8, §6.5). The gate is tC4's `drainSchedulers` loop, never blocked by a section buffer or a held field (D9, §6.5). `boot.js` registers its listeners before a dynamic import of the glue, catches traps from `error`, `unhandledrejection` and a throwing `run_app`, counts page loads that ended in a panic, shows the static callout at once when `sessionStorage` cannot count, sets every text by `textContent`, and writes a field's entry from a template the WebAssembly hands it at focus (D10, §6.6, §6.8). `window.__tcIdle` counts saves (D11, §6.2). NFC is `unicode-normalization` on both sides, about 123 KB of the release wasm (D12). Found by the tests and changed in the design: the offer keeps an entry whose `sent` text the stored value equals over the stored value's token (§6.6, `crash_anywhere_stores_the_last_text_once`); the panic hook keeps the first panic of a page; `boot.js` owns the browser's `beforeunload`, which held its reload after a panic; and after three panics it posts the drafts of the run the page last met, because a panic at boot names no folder (§6.5, §6.8). Declared differences from tC4: a close in the shell drains before the window goes, where tC4 drains best effort on `pagehide` (§5.7); a failure outside `NotSaved` shows Retry; one reload after a WebAssembly panic, then the static callout; a field restored after a reload saves with no editor (AD22). Not built here, by the row: the screens (A5, B4a, B4b), the offer (B1b, C1b, through `Saves::buffered_for`), real saves and drafts (C2, C3, through `FieldWriter`), `align/flush` (B6, C5, through `Saves::add_gate_hook`), and the shell's side of the bridge (G1). Left open: a page that has read no frame cannot tell a restarted server behind a reused port from a reconnect by its event stream (A4a's reader asks `?after=0`, and the new run's ring is empty), so only the resend's `hello` check guards saves there; and G1 should clear other origins' storage after it has read its mirror, since every launch is a new origin. Tests: tc-api's `buffer.rs` and golden files; tc-app's draft tests and `tests/app/save_machine.rs` (8 deterministic cases and the two properties); tc-ui's `buffer`, `save` (the twelve ports of tC4's scheduler tests and the rebuild's rules), `save_refresh` (the AD37 cases), `save_props` (`no_current_is_dropped`, `events_reply_order_is_safe`) and `recovery`; `app/recovery.test.mjs` in node; `app/no-loss.mjs` in Chromium, 87 checks on dev and release. Evidence: `docs/evidence/ui-no-loss-2026-10-18.md`: a keystroke's work 1.3 ms at p95 with 2 KB of text (release), one `localStorage` write and one mirror line per keystroke, no save and ten drafts in ten seconds of typing.)* | A1, A2, A3, A4a | — | port of tC4's scheduler tests; proptest: no `current` dropped; `reload_anywhere_stores_the_last_text_once` against `test/fieldStore`, with reloads and `test/crash` at every point; the AD37 refresh cases; Playwright: a panic in an input handler keeps the keystroke, one panic with trapping closures reloads once, three panics show the static callout and post the drafts | the tests pass and the adversarial review's findings are fixed |
 | A5 Shell chrome and static surfaces | `App`, TopBar (X1), save indicator (X2), account menu (X6), M15, M16 with preview, M17 with License, M14 compose, S13 with vendored help pages (AD29) and the page-swap shim, S15 | A3, A4a, A4b, A6b | — | scenarios: account-menu keyboard, M16 preview and restore, help a–i (no internet case yet) | dialog DOM parity for `account-menu`, `app-language`, `help`, `about`, `feedback` (layer 2, through A6b) |
 | A6a Parity harness: tC4 side *(A-17)* | the `capture.mjs` split (`screens`, `driver`, `observe`, `env-tc4`); sha256 per PNG in `manifest.json` and its check; tC4 DOM snapshots for all 62 screens; `state.mjs` from the repository's fixtures | — (the tC4 checkout) | — | `state_from_repo_equals_state_from_tc4`; the baseline test fails on a changed PNG | a tC4 recapture after the split has identical hashes; the 62 DOM snapshots are committed |
-| A6b Parity harness: Rust side and gate *(A-17)* | `env-rust.mjs` (`tc4 serve`, token header, `test/reset`, `test/quiet`, event stream left out of `trackRequests`); the four-layer compare tool; `masks.json`, `report.json`, `residuals.json`; `screen_record.rs` | A6a, A2, A4a | — | the gate fails on a planted pixel, DOM and meaning difference; a screen that reaches the settle deadline fails | the gate runs in `cargo test`, and the planted differences fail it |
+| A6b Parity harness: Rust side and gate *(A-17)* | `env-rust.mjs` (`tc4 serve`, token header, `test/reset`, `test/quiet`, event stream left out of `trackRequests`); the four-layer compare tool; `masks.json`, `report.json`, `residuals.json`; `screen_record.rs` *(A6b: built. D1: the four-layer compare is Rust code inside the gate, `crates/tc-ui/tests/screen_record/`, which recomputes every layer from the committed captures on each `cargo test` and fails when the committed `report.json` differs (`UPDATE_REPORT=1` rewrites it), so a planted difference fails `cargo test` itself and the report cannot be stale; Node only captures (`capture-rust.mjs`, `behaviour.mjs`) (§7.1, §7.5). D2: a pixel counts when any channel byte differs, which is pixelmatch's count at threshold 0 on opaque screenshots and equalled it on all 62 cloud/Linux pairs (§7.3). D3: the committed baseline did not reproduce on the Linux PC (57 of 62 PNGs differ by fonts, no DOM differs), so A6b recaptured it there, and both captures record a machine fingerprint (platform, Chromium, the sha256 of the sorted `fc-list` lines); pixels compare only between equal fingerprints (§7.3, §7.9, risk 8). D4: generated ids are `tc-(f\|g\|dlg\|cfm\|rg)N`, tC4's five counters; `tc-[fg]N` missed `tc-dlg`, on every dialog (§7.3). D5: only same-origin asset paths are reduced to their file name, so a wrong external link still shows (§7.3). D6: two more statuses, `unported` (with the unit that captures each missing layer, from §7.6) and `failed` (nothing excuses it), and `parity/app/units.json` lists the landed units because CI checks out one commit; the gate fails a layer still missing after its unit landed (§7.5). D7: `pending_until` of an M+S screen is its Recapture unit; §7.6's notes gave it for two of the five (§7.5, §7.6). D8: a DOM-first capture compares only the subtree that `scopes.json` names, because the Home behind its dialog is not ported until its pixels unit (§7.3, §7.6). D9: the Rust `home()` is `test/reset`, `prefs/setLocale` for another language, cleared storage and a load through `about:blank`, and `settle` also asks `test/quiet` and `__tcIdle`, polling them once busy (§7.1). D10: the context aborts every request to another origin, so the token in `extraHTTPHeaders` never leaves the machine (§7.1). D11: `open-door43-internet-consent` shows the Q3 note behind its scrim, so it now cites Q3 in the baseline and the `q3-where` mask covers it: nine `rebuildDiffers` screens, eleven masked screens (§7.3, §7.6). D12 (verification): a residual names exactly the layers its row differs in, behaviour among them, so a later difference on another layer of an explained row still fails; and a Rust screenshot of another size than tC4's, a shot at the wrong viewport, is a failed capture that no residual excuses (§7.5). Masks are taken out before ids are renumbered, behaviour node numbers are renumbered per side, the masks' elements take no part in a sequence, `syncToast` is compared field by field (each with a planted test that fails when the rule is broken), and a diff image must be committed and equal what the gate draws. No baseline screen can be captured on the Rust side before B2's Home, so all 62 rows are `unported`; the planted tests prove the gate on the real baseline. Evidence: `docs/evidence/parity-harness-2026-10-18.md`.)* | A6a, A2, A4a | — | the gate fails on a planted pixel, DOM and meaning difference; a screen that reaches the settle deadline fails | the gate runs in `cargo test`, and the planted differences fail it |
 | A7 tC4 view-state gallery | Vite app with the `state.jsx` stub; case format; action recorder; the §7.4 cases | A6a, A6b | — | every case renders with no console error; two runs are byte-identical | the cases are rows in `report.json` |
 | A8 Door43 account and internet consent | `account` service: sign-in with `mint_token` against tc-door43-fake, keep, resume, forget; `cancelSignIn`; "no keychain"; M12; the internet question flow (`InternetFlow`, `Pending`) | A3, A5 | — | sign-in cases of J11; internet-consent a–j that need no project | DOM parity for `share-signin`, `share-internet-consent`, `open-door43-internet-consent` |
 | A9 First-launch seeding | the join of A2 and A3 (order paragraph), if no earlier unit made it; **tc-resources**: progress and cancel hooks in bundle seeding, with that crate's own tests; the `Seed` job; `Startup` events; `/prepare.html` with English text and the other nine languages listed as pending (Q-10) *(A-17, A-32)* *(A9: built. D1: the plan is made at start, from receipts alone, inline in `App::start`, so `hello.startup` is exact from the first request (`Ready`, with no job, frame or report, when nothing is missing; `Preparing { 0, total }`; `Failed`), and without `--bundle` nothing is seeded. D2: tc-resources gets `seed_plan`, `seed(plan, &dyn SeedWatch)`, `Seeding::{Finished, Cancelled}` and `content_files_written()`; `seed_from` is the same two steps with a watch that never stops. D3: the count is content files, not tC4's 16 resources (declared difference, §3.6). D4: the `Startup` frames follow the `Seed` job's reports through `JobRegistry::watch` and only move forward, and the ring keeps the newest `Startup(Preparing)`. D5: Close is a quit, and `App::quit` cancels the seed and waits for it; a stop leaves whole copies, and the copy being made stays in `.partial/` until the next start. D6: a bundled install that fails its own check, a copy that cannot be trusted, a bundle that cannot be read and a bundle that lacks an install its manifest lists (D12) end the start `Failed`, and the window shows tC4's failure words with the reason; tC4 shows a native error box and exits, so this is a declared difference, and the screenshot goes to the owner under Q-9; tc-resources keeps its rule that a refused install does not stop `seed_from`. D7: `/prepare.html` is one file, `crates/tc-ui/app/prepare.html`, holding the `prepare.*` text of all ten languages (nine pending, Q-10) and one script that its own CSP allows by hash; `crates/tc-ui/tests/prepare_page.rs` keeps both equal to the rebuild files. D8: `tc4 serve --bundle <dir>`, and with `test-hooks` `--test-seed-pace <ms>`. D9: the installer still ships an expanded store, built from `bundle/en` by `crates/tc-app/examples/bundle_store`, which also writes the store's `BUNDLE-MANIFEST.json` (D12); seeding from the archives stays DELTA §3.6 item 3. D10: the shell (G1) opens the window only when `hello.startup` is still `Preparing` 300 ms after launch, so a repeat launch shows none, a declared difference from tC4, which shows it on every launch; A5's `App` sends a page that boots while it is not `Ready` to `/prepare.html` (§5.3). D11 *(added after the first verification)*: `App::start` opens the resource store with `ResourceStore::open_keeping_leftovers`, so a `.partial/` leftover that cannot be removed is a `resources` report and not a refusal to start (§4.9); `ResourceStore::open` still refuses it for other callers, except a leftover that a scanner still holds after the waits of STORAGE §3.7, which it keeps for the next open. D12 *(added after the first verification)*: a bundle says what it holds. The build of the bundle writes `BUNDLE-MANIFEST.json`, naming each install by repository and commit, and the plan compares it with the folders (§4.6): a listed install that is neither in the bundle nor on this computer, or a folder with no usable manifest, ends the start `Failed` at once and copies nothing. tC4 does the same with its `BUILD-MANIFEST.json` (`tC4:scripts/desktop-bootstrap.cjs:230-290`), so this is no declared difference; without it a lost install folder, or a `--bundle` that named the wrong folder, ended `Ready` and opened projects that could not find their helps. D13 *(added when A9 merged with windows-hazards)*: a seeded copy is an install like a download, through the same `install_until`: every file name is checked by `tc_door43::check_names` (STORAGE §3.7), a file is written with `create_new`, and the rename into place waits while a scanner holds a file, unless the same install has landed meanwhile. A bundled install with a file name Windows would rename or merge is therefore refused, left out of the store and named in `refused`, which ends the start `Failed` (D6). `seed_plan` runs the same check of paths and names on the receipt of each bundled install it will copy, and refuses it the same way before any of its files is read, so a device name in a receipt is never opened as the device and a `../` path never reads a file outside the bundle. The staging folder of an install that `create_new` refuses is removed with the same waits as the rename. An install that finds the same install landed first tries once to remove its staging folder and does not wait, since the install it lost to is in place; what a scanner holds then stays in `.partial/` until a later open removes it. `open_keeping_leftovers` removes `.partial/` with the same waits, and a leftover a scanner holds even then comes back as a `resources` report (D11). Evidence: `docs/evidence/first-launch-seeding-2026-10-18.md` (on the Linux PC: first launch 14.8 s median, repeat launch 4.1 ms, `App::quit` in a seed 4.6 ms; the Windows figure is G1's and G2's) and `crates/tc-ui/app/prepare-smoke.mjs`. A4a merged after A9 and added to `crates/tc-ui/build-app.sh` the copy of `app/prepare.html` to `OUT/prepare.html`, which A4a's smoke checks byte for byte through `tc4 serve`; A4a's key scan checks only that each key the Rust source names exists, never that each rebuild key is used, so the page's `prepare.*` keys need no entry there, and `prepare_page.rs` keeps them equal to the rebuild files.)* | A2, A3 | Q-10 for the translations | seeding count targets (PERF:133-138); cancel leaves a resumable state; tc-resources' tests stay green | Playwright: the window shows "Preparing resources: n of total" and Close cancels |
@@ -2625,7 +2684,10 @@ last.
    fixture screens; rebuild-only DOM has no reference.
 7. **Silent settle timeouts** would give screenshots that look valid. The event stream is excluded,
    `test/quiet` is added, and a screen that hits the deadline fails.
-8. **Machine-dependent glyphs.** Both captures run on one image until CI has a pinned one.
+8. **Machine-dependent glyphs.** Both captures run on one image until CI has a pinned one. Each
+   capture records its machine's fingerprint, and pixels are compared only between equal
+   fingerprints (§7.3 layer 1), so a capture from another machine fails the gate instead of
+   showing the machine's fonts as differences of the port.
 9. **Header injection** may miss a request type in Electronite v37. G0 probes every type early
    and G1 again; the fallback is capability URLs.
 10. **A panic** loses a navigation that was in flight when it happened. Typed text is not lost:

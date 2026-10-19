@@ -3,9 +3,10 @@
 //
 //   node --test parity/app/observe.test.mjs
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
-import { settle, trackRequests } from './observe.mjs';
+import { machineFingerprint, settle, trackRequests } from './observe.mjs';
 
 /** A page whose DevTools session the test drives (`cdp.emit(method, params)`), and its clock:
  * `Date.now()` reads `clock.now`, which only the page's waits move, and `clock.at(ms, event)`
@@ -111,4 +112,44 @@ test('a screen whose app never goes quiet fails at the deadline and names what i
   send(cdp, 'r1', 'doc1', '/api/never-answered');
   await assert.rejects(settle(page, inFlight, { quietMs: 40, deadlineMs: 150 }),
     /did not go quiet for 40 ms within 0\.15 s; in flight: GET http:\/\/127\.0\.0\.1:1\/api\/never-answered \(\d+ ms\)/);
+});
+
+test('settle waits while the server answers busy, and counts the quiet from when it stops', async (t) => {
+  const { page } = fakePage(t);
+  const inFlight = await trackRequests(page, api);
+  await settle(page, inFlight, { quietMs: 40, deadlineMs: 2_000, busy: async () => Date.now() < 300 });
+  assertQuietFor(40, 300);
+});
+
+test('a screen whose server stays busy fails at the deadline and says so', async (t) => {
+  const { page } = fakePage(t);
+  const inFlight = await trackRequests(page, api);
+  await assert.rejects(settle(page, inFlight, { quietMs: 40, deadlineMs: 150, busy: async () => true }),
+    /did not go quiet for 40 ms within 0\.15 s; in flight: nothing now; the server answered busy \(test\/quiet\)/);
+});
+
+test('busy is asked only once the requests are quiet', async (t) => {
+  const { page, cdp, clock } = fakePage(t);
+  const inFlight = await trackRequests(page, api);
+  commit(cdp, 'main', 'doc1');
+  send(cdp, 'r1', 'doc1', '/api/a');
+  clock.at(100, () => cdp.emit('Network.loadingFinished', { requestId: 'r1' }));
+  const asked = [];
+  await settle(page, inFlight, { quietMs: 40, deadlineMs: 2_000, busy: async () => { asked.push(Date.now()); return false; } });
+  assert.equal(asked.length, 1, `busy was asked ${asked.length} times`);
+  assert.ok(asked[0] >= 100 + 40, `busy was asked at ${asked[0]} ms, before the requests had been quiet for 40 ms`);
+  assertQuietFor(40, 100);
+});
+
+test('the machine fingerprint hashes the sorted font list', () => {
+  const lines = ['/usr/share/fonts/b.ttf\t0\t65536', '/usr/share/fonts/a.ttf\t1\t131072'];
+  const print = machineFingerprint('141.0.7390.37', { run: () => `${lines.join('\n')}\n` });
+  const sorted = `${[...lines].sort().join('\n')}\n`;
+  assert.deepEqual(print, {
+    platform: `${process.platform}-${process.arch}`,
+    chromium: '141.0.7390.37',
+    fonts: { count: 2, sha256: crypto.createHash('sha256').update(sorted).digest('hex') },
+  });
+  const blind = machineFingerprint('141.0.7390.37', { run: () => { throw new Error('fc-list: not found'); } });
+  assert.equal(blind.fonts, null);
 });

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "capture": "node capture.mjs",
-    "check": "node --test baseline.test.mjs mock-server/server.test.mjs ../app/state.test.mjs ../app/observe.test.mjs",
+    "check": "node --test baseline.test.mjs mock-server/server.test.mjs ../app/state.test.mjs ../app/observe.test.mjs ../app/env-rust.test.mjs",
     "client": "node capture.mjs --build-only",
     "state": "node fixtures/build-state.mjs",
     "serve": "node mock-server/server.mjs",
