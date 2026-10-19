@@ -40,7 +40,8 @@ pub enum InternetFlow {
     Idle,
     /// The question is open.
     Asking { kind: NetKind, then: Pending },
-    /// "Turn on internet" was chosen; `net/set` is on its way. The question stays on screen.
+    /// "Turn on internet" was chosen; `net/set` is on its way. The question has closed, as
+    /// tC4's `answerAsk` closes it at once, and the step waits for the switch.
     TurningOn { kind: NetKind, then: Pending },
     /// "tC4 could not use the internet".
     Failed,
@@ -54,14 +55,16 @@ pub enum NetStep {
     /// The step will not run: nothing is sent, and its own state goes back (Feedback's
     /// `sending` ends).
     Dropped(Pending),
-    /// Send `net/set { on: true }`, then call [`InternetFlow::turned_on`].
+    /// Ask for the switch on ([`SwitchRequests::ask`]), then call [`InternetFlow::turned_on`]
+    /// when the requests settle.
     TurnOn,
     /// Nothing to do.
     Nothing,
 }
 
 impl InternetFlow {
-    /// Whether the question or its failure is on screen.
+    /// Whether a question is under way: on screen, waiting for the switch, or failed. A step
+    /// that asks meanwhile is dropped.
     pub fn is_open(&self) -> bool {
         !matches!(self, Self::Idle)
     }
@@ -69,8 +72,8 @@ impl InternetFlow {
     /// The question on screen, if any.
     pub fn asking(&self) -> Option<NetKind> {
         match self {
-            Self::Asking { kind, .. } | Self::TurningOn { kind, .. } => Some(*kind),
-            Self::Idle | Self::Failed => None,
+            Self::Asking { kind, .. } => Some(*kind),
+            Self::Idle | Self::TurningOn { .. } | Self::Failed => None,
         }
     }
 
@@ -144,5 +147,58 @@ impl InternetFlow {
             return NetStep::Dropped(then);
         }
         self.ask(false, then)
+    }
+}
+
+/// The `net/set` requests of the menu's switch and of "Turn on internet", one at a time. tC4's
+/// `setInternet` changes the switch before anything else, so a double-click on the menu's row
+/// turns it on and off again; here the server holds the switch, so a press turns away from the
+/// state last asked for, not the one the server has confirmed. A request waits for the one on
+/// its way, and only the last state asked for meanwhile goes after it, so the server ends at
+/// the person's last choice whatever order two requests would reach it in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SwitchRequests {
+    /// The state the request on its way asks for.
+    sent: Option<bool>,
+    /// The state last asked for while it was on its way.
+    next: Option<bool>,
+}
+
+/// What the caller does after a reply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SwitchStep {
+    /// Send `net/set` with this state.
+    Send(bool),
+    /// No request is on its way: the server's last answer (`None` when the last request
+    /// failed). "Turn on internet" goes on from here ([`InternetFlow::turned_on`]).
+    Settled(Option<bool>),
+}
+
+impl SwitchRequests {
+    /// The state a press of the switch turns away from.
+    pub fn base(&self, confirmed: bool) -> bool {
+        self.next.or(self.sent).unwrap_or(confirmed)
+    }
+
+    /// The person asks for `on`: the request to send now, unless one is on its way.
+    pub fn ask(&mut self, on: bool) -> Option<bool> {
+        if self.sent.is_some() {
+            self.next = Some(on);
+            return None;
+        }
+        self.sent = Some(on);
+        Some(on)
+    }
+
+    /// The reply of the request on its way: the server's state, or `None` when it failed.
+    pub fn answered(&mut self, state: Option<bool>) -> SwitchStep {
+        self.sent = None;
+        match self.next.take() {
+            Some(on) if state != Some(on) => {
+                self.sent = Some(on);
+                SwitchStep::Send(on)
+            }
+            _ => SwitchStep::Settled(state),
+        }
     }
 }

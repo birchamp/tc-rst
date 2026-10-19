@@ -71,6 +71,46 @@ browserTest('the_internet_row_stays_open_and_switches', async () => {
   });
 });
 
+// tC4's switch changes before anything else, so a real double-click turns it on and off again.
+// Here the server holds it: the second press must turn away from the state the first asked for,
+// and its request must not overtake the first. Each reply is held back, so both presses come
+// before the first reply, as they can on a busy computer.
+browserTest('a_double_click_on_the_internet_row_turns_it_on_and_off_again', async () => {
+  await withApp(async ({ page, env }) => {
+    const asked = [];
+    let onTheirWay = 0;
+    let most = 0;
+    await page.route('**/api/v1/net/set', async (route) => {
+      asked.push(JSON.parse(route.request().postData()).on);
+      onTheirWay += 1;
+      most = Math.max(most, onTheirWay);
+      await sleep(250);
+      await route.fallback();
+      onTheirWay -= 1;
+    });
+    await openMenu(page);
+    const row = page.getByTestId('account-internet');
+    const box = await row.boundingBox();
+    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    await until('two requests answered', async () => asked.length === 2 && onTheirWay === 0);
+    await sleep(300);
+    assert.deepEqual(asked, [true, false], 'on, then off');
+    assert.equal(most, 1, 'one request at a time');
+    assert.equal(await trigger(page).getAttribute('data-internet'), 'off');
+    assert.equal(await row.getAttribute('aria-checked'), 'false');
+    assert.equal((await env.call('net/state', {})).on, false);
+    // Three presses before any reply end on, with the last choice sent after the first.
+    asked.length = 0;
+    await row.click({ clickCount: 3 });
+    await until('on', async () => (await trigger(page).getAttribute('data-internet')) === 'on' && onTheirWay === 0);
+    await sleep(600);
+    assert.equal(onTheirWay, 0);
+    assert.equal(await trigger(page).getAttribute('data-internet'), 'on');
+    assert.equal((await env.call('net/state', {})).on, true);
+    assert.equal(asked.at(-1), true, 'the last request is the last choice');
+  });
+});
+
 browserTest('opening_the_menu_sends_nothing', async () => {
   await withApp(async ({ page }) => {
     const requests = recordRequests(page);

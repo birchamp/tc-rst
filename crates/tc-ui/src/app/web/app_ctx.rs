@@ -26,7 +26,7 @@ use wasm_bindgen_futures::spawn_local;
 use super::{Runtime, ServerState, bridge, js};
 use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
-use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending};
+use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
 use crate::app::save::indicator::Retry;
 use crate::app::shell::{CurrentProject, Editing, View};
 use crate::i18n::show_locale;
@@ -119,6 +119,8 @@ struct Inner {
     compose: Cell<u64>,
     /// The step that ran after a question already met `NeedsInternet` once (AD25).
     reasked: Cell<bool>,
+    /// The `net/set` requests, one at a time.
+    switch: Cell<SwitchRequests>,
 }
 
 /// tC4's `actions`, the ones the shell owns. Cheap to clone. The wrapper lets views capture
@@ -134,6 +136,7 @@ impl Actions {
             sending: Cell::new(false),
             compose: Cell::new(0),
             reasked: Cell::new(false),
+            switch: Cell::new(SwitchRequests::default()),
         })))
     }
 
@@ -188,16 +191,51 @@ impl Actions {
 
     // ---- the internet switch (5.6) -------------------------------------------------------
 
-    /// The menu's switch and "Turn on internet". The reply and the `Internet` event both set
-    /// the state the menu shows.
-    pub fn set_internet(&self, on: bool) {
-        let this = self.clone();
-        spawn_local(async move {
-            let _ = this.turn_internet(on).await;
-        });
+    /// The menu's switch: it turns away from the state last asked for, so a second press
+    /// before the server's reply turns it back, as tC4's does.
+    pub fn toggle_internet(&self) {
+        let confirmed = self.s().server.internet.get_untracked();
+        let on = !self.0.switch.get().base(confirmed);
+        self.set_internet(on);
     }
 
-    async fn turn_internet(&self, on: bool) -> bool {
+    /// Asks the server for the switch at `on`, after the request on its way if there is one.
+    /// The reply and the `Internet` event both set the state the menu shows.
+    pub fn set_internet(&self, on: bool) {
+        let mut switch = self.0.switch.get();
+        let send = switch.ask(on);
+        self.0.switch.set(switch);
+        if let Some(on) = send {
+            let this = self.clone();
+            spawn_local(async move { this.send_switch(on).await });
+        }
+    }
+
+    /// Sends `net/set` until no state asked for is left, then lets "Turn on internet" go on.
+    async fn send_switch(&self, mut on: bool) {
+        loop {
+            let state = self.net_set(on).await;
+            let mut switch = self.0.switch.get();
+            let step = switch.answered(state);
+            self.0.switch.set(switch);
+            match step {
+                SwitchStep::Send(next) => on = next,
+                SwitchStep::Settled(state) => {
+                    let next = self
+                        .s()
+                        .layers
+                        .internet
+                        .try_update(|flow| flow.turned_on(state == Some(true)))
+                        .unwrap_or(NetStep::Nothing);
+                    self.carry_out(next);
+                    return;
+                }
+            }
+        }
+    }
+
+    /// One `net/set`: the server's state, or `None` when it did not answer with one.
+    async fn net_set(&self, on: bool) -> Option<bool> {
         let request = NetSet {
             request: js::random_request_id(),
             on,
@@ -205,11 +243,11 @@ impl Actions {
         match self.0.runtime.api().call(&request).await {
             Ok(view) => {
                 self.s().server.internet.try_set(view.on);
-                view.on == on
+                Some(view.on)
             }
             Err(error) => {
                 console_error(&format!("tc4: net/set: {error}"));
-                false
+                None
             }
         }
     }
@@ -260,19 +298,7 @@ impl Actions {
         match step {
             NetStep::Run(then) => self.run_pending(then),
             NetStep::Dropped(then) => self.drop_pending(then),
-            NetStep::TurnOn => {
-                let this = self.clone();
-                spawn_local(async move {
-                    let ok = this.turn_internet(true).await;
-                    let next = this
-                        .s()
-                        .layers
-                        .internet
-                        .try_update(|flow| flow.turned_on(ok))
-                        .unwrap_or(NetStep::Nothing);
-                    this.carry_out(next);
-                });
-            }
+            NetStep::TurnOn => self.set_internet(true),
             NetStep::Nothing => {}
         }
     }

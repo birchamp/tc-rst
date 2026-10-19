@@ -636,7 +636,7 @@ fn menu_rows_view(
         let mut row = Row::new(
             "account-internet",
             || t(keys::account::INTERNET, &[]),
-            move || actions.set_internet(!online.get_untracked()),
+            move || actions.toggle_internet(),
         )
         .sub(move || {
             if online.get() {
@@ -989,10 +989,10 @@ pub fn InternetDialog() -> impl IntoView {
     };
     let flow = s.layers.internet.clone();
     let shown = Memo::new(move |_| {
-        flow.with(|flow| match flow {
-            InternetFlow::Asking { kind, .. } => NetDialog::Ask(*kind),
-            InternetFlow::Failed => NetDialog::Failed,
-            InternetFlow::Idle | InternetFlow::TurningOn { .. } => NetDialog::None,
+        flow.with(|flow| match (flow, flow.asking()) {
+            (InternetFlow::Failed, _) => NetDialog::Failed,
+            (_, Some(kind)) => NetDialog::Ask(kind),
+            (_, None) => NetDialog::None,
         })
     });
     (move || match shown.get() {
