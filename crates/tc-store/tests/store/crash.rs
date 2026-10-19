@@ -348,10 +348,7 @@ fn crash_checkpoint_into_a_months_folder_that_does_not_exist_yet() {
             .iter()
             .filter(|op| {
                 op.kind == tc_store::fault::OpKind::CreateDir
-                    && op
-                        .path
-                        .to_string_lossy()
-                        .contains("/ingredients/tc/changes/")
+                    && is_inside(&op.path, &["ingredients", "tc", "changes"])
             })
             .count();
         assert!(

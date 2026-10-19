@@ -569,6 +569,7 @@ impl Drop for Held {
     }
 }
 
+#[cfg(unix)]
 fn resources_reports(app: &App) -> Vec<OperationReport> {
     app.reports()
         .all()

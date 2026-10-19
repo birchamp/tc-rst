@@ -12,6 +12,9 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+#[path = "support/plan_rulings.rs"]
+mod plan_rulings;
+
 mod screen_record {
     pub mod behaviour;
     pub mod design;
@@ -141,9 +144,7 @@ fn section_7_6_names_every_baseline_screen_with_its_units() {
             "help",
             "about",
             "feedback",
-            "share-internet-consent",
-            "share-signin",
-            "open-door43-internet-consent"
+            "share-signin"
         ]
     );
     for unit in ["A1", "A4a", "A6b", "B1a", "C7b", "E1a", "G0", "G2"] {

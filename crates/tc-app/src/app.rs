@@ -15,12 +15,13 @@ use serde_json::{Map, Value, json};
 use tc_api::event::{Event, StartupState};
 use tc_api::ids::{JobId, ServerInstance};
 use tc_api::{ApiError, Endpoint, Reply, ReplyOf};
-use tc_door43::InternetSwitch;
+use tc_door43::{Door43Client, InternetSwitch};
 use tc_resources::ResourceStore;
 use tokio::sync::watch;
 
-use crate::account::{AccountState, Keychain, MemKeychain};
-use crate::backend::{NoProjects, ProjectStore};
+use crate::account::{Account, AccountState, Keychain, MemKeychain, MemKeychainMode};
+use crate::backend::ProjectStore;
+use crate::backend::store::StoreBackend;
 use crate::clock::{Clock, SystemClock};
 use crate::config::{
     AppConfig, ConfigError, HostEnv, ProjectsRoot, RootChoice, choose_projects_root,
@@ -32,48 +33,78 @@ use crate::folders::{FolderCheck, HostFolders};
 #[cfg(feature = "test-hooks")]
 use crate::hooks::{Ender, ExitProcess, TestHooks};
 use crate::jobs::JobRegistry;
-use crate::prefs::{AppDataFiles, MemoryFiles, PrefsWriter};
+use crate::prefs::{AppDataFiles, DiskFiles, PrefsWriter, read_reports};
 use crate::replies::ReplyCache;
 use crate::reports::{ReportLog, ReportOp, ReportOutcome, facts};
 use crate::seed::{self, RESOURCES_FOLDER};
 use crate::session::{ProjectSession, SessionRegistry};
 use crate::startup::Startup;
 
+/// Where the app's projects come from.
+pub enum StoreChoice {
+    /// tc-store over the projects folder [`App::start`] chooses, with the app-data folder
+    /// (unit C0). It is built only once the folder is chosen and checked, the first moment
+    /// it is known, so a named folder that is missing is refused before anything makes it.
+    OnDisk,
+    /// A test's backend, or a parity scenario's (feature `fixture-backend`).
+    Given(Arc<dyn ProjectStore>),
+}
+
+/// Where the app-data files are kept.
+pub enum FilesChoice {
+    /// The app-data folder on this computer's disk, each file written by
+    /// `tc_store::atomic_write` (unit C1a). Built by [`App::start`], which first makes the
+    /// folder.
+    OnDisk,
+    /// A test's files.
+    Given(Arc<dyn AppDataFiles>),
+}
+
 /// What a test replaces when it starts the app. [`AppDeps::production`] is what `tc4 serve`
 /// runs with.
 pub struct AppDeps {
     /// Stamps what people or reports see. Timers use `tokio::time`.
     pub clock: Arc<dyn Clock>,
+    /// Where "Stay signed in" keeps a Door43 token.
     pub keychain: Arc<dyn Keychain>,
     /// Which folders exist and which a cloud client copies, for the projects folder (Q-4).
     pub folders: Arc<dyn FolderCheck>,
     /// The computer's home folder, local data folder and kind.
     pub host: HostEnv,
-    /// The app-data files `PrefsWriter` writes.
-    pub files: Arc<dyn AppDataFiles>,
-    /// The projects: [`NoProjects`] until C0's store adapter; the memory backend in tests and
-    /// parity captures (feature `fixture-backend`).
-    pub store: Arc<dyn ProjectStore>,
+    /// The app-data files `PrefsWriter` writes: the app-data folder on disk, or a test's.
+    pub files: FilesChoice,
+    /// The projects: tc-store on disk; the memory backend in tests and parity captures
+    /// (feature `fixture-backend`).
+    pub store: StoreChoice,
     /// What ends the process at a test crash point.
     #[cfg(feature = "test-hooks")]
     pub ender: Arc<dyn Ender>,
+    /// The keychain the test hooks set (`test/keychain`, A8). When it is given and the hooks
+    /// are on (`--test-hooks`), it is the app's keychain in place of `keychain`.
+    #[cfg(feature = "test-hooks")]
+    pub test_keychain: Option<Arc<MemKeychain>>,
 }
 
 impl AppDeps {
-    /// This computer's clock, folders and variables; an in-memory keychain (the operating
-    /// system's comes with unit E1a, Q-3); in-memory app data (§4.9: before unit S1); no
-    /// projects (before unit C0); and, with test hooks, an ender that ends the process.
+    /// This computer's clock, folders and variables; no keychain (the operating system's comes
+    /// with unit E1a, Q-3: a keychain in memory, which forgets at quit, is not "Stay signed in
+    /// on this computer", so the sign-in step hides that box until then, tC4 #496); the
+    /// app-data folder and the projects through tc-store, both built by [`App::start`]; and,
+    /// with test hooks, an ender that ends the process. It builds nothing itself:
+    /// `..AppDeps::production()` evaluates it in full.
     pub fn production() -> Self {
         let host = HostEnv::current();
         Self {
             clock: Arc::new(SystemClock),
-            keychain: Arc::new(MemKeychain::new()),
+            keychain: Arc::new(MemKeychain::with_mode(MemKeychainMode::NoKeychain)),
             folders: Arc::new(HostFolders::new(host.clone())),
             host,
-            files: Arc::new(MemoryFiles::new()),
-            store: Arc::new(NoProjects),
+            files: FilesChoice::OnDisk,
+            store: StoreChoice::OnDisk,
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),
+            #[cfg(feature = "test-hooks")]
+            test_keychain: None,
         }
     }
 }
@@ -142,7 +173,7 @@ pub(crate) struct Inner {
     /// `net/set` turns the switch and publishes under this lock, so the last `Internet` frame
     /// is always the switch's state.
     pub(crate) net_lock: Mutex<()>,
-    pub(crate) account: Mutex<AccountState>,
+    pub(crate) account: Account,
     pub(crate) bus: EventBus,
     pub(crate) jobs: JobRegistry,
     pub(crate) flows: FlowGate,
@@ -203,12 +234,28 @@ impl App {
             store,
             #[cfg(feature = "test-hooks")]
             ender,
+            #[cfg(feature = "test-hooks")]
+            test_keychain,
         } = deps;
+        // The test hooks set the test keychain; without them it is never the app's.
+        #[cfg(feature = "test-hooks")]
+        let test_keychain = test_keychain.filter(|_| config.test_hooks);
+        #[cfg(feature = "test-hooks")]
+        let keychain: Arc<dyn Keychain> = match &test_keychain {
+            Some(test) => test.clone(),
+            None => keychain,
+        };
 
         std::fs::create_dir_all(&config.app_data).map_err(|e| StartError::AppData {
             path: config.app_data.clone(),
             reason: e.to_string(),
         })?;
+        let files: Arc<dyn AppDataFiles> = match files {
+            FilesChoice::OnDisk => {
+                Arc::new(DiskFiles::open(Arc::new(tc_store::StdFs), &config.app_data))
+            }
+            FilesChoice::Given(files) => files,
+        };
 
         let projects = choose_projects_root(&config.projects, &host, folders.as_ref())?;
         if projects.chosen == RootChoice::Given && !folders.is_folder(&projects.path) {
@@ -225,6 +272,22 @@ impl App {
                 reason: e.to_string(),
             })?;
         }
+        // Only now: tc-store makes a projects folder that is missing, and a folder someone
+        // named was checked above.
+        let (store, on_disk): (Arc<dyn ProjectStore>, _) = match store {
+            StoreChoice::OnDisk => {
+                let backend = Arc::new(
+                    StoreBackend::on_disk(&config.app_data, &projects.path).map_err(|e| {
+                        StartError::AppData {
+                            path: config.app_data.clone(),
+                            reason: e.to_string(),
+                        }
+                    })?,
+                );
+                (backend.clone(), Some(backend))
+            }
+            StoreChoice::Given(store) => (store, None),
+        };
 
         // Never a weaker source than the system's: the instance tells the UI that its
         // scopes and buffered requests belong to a dead server.
@@ -235,8 +298,22 @@ impl App {
         let instance = ServerInstance::from_bytes(bytes);
 
         let bus = EventBus::new(instance);
-        let reports = ReportLog::new();
+        // The reports an earlier launch kept come first, so this launch's ids follow theirs.
+        let kept = read_reports(files.as_ref());
+        let reports = ReportLog::with_kept(kept.reports, kept.last_id);
         let now = clock.now();
+        if let Some(problem) = kept.problem {
+            let file = crate::prefs::AppDataPath::reports();
+            reports.add(
+                ReportOp::PrefsWrite,
+                ReportOutcome::Failed {
+                    reason: format!("{} {problem}", file.as_str()),
+                },
+                facts(json!({ "file": file.as_str() })),
+                now,
+                now,
+            );
+        }
         if let Some(record) = projects_folder_record(&projects) {
             reports.add(
                 ReportOp::ProjectsFolder,
@@ -247,9 +324,13 @@ impl App {
             );
         }
 
-        // The keychain is read here and nowhere else: an operating-system keychain can
-        // prompt the person.
-        let (account, unreadable) = AccountState::at_start(keychain.read());
+        if let Some(backend) = on_disk {
+            crate::backend::store::report_removed_staging(backend, reports.clone(), clock.clone());
+        }
+
+        // The keychain is read here and nowhere else (but a test relaunch): an
+        // operating-system keychain can prompt the person.
+        let (account, unreadable) = AccountState::at_start(keychain.read(), &config.door43);
         if let Some(reason) = unreadable {
             reports.add(
                 ReportOp::Keychain,
@@ -263,7 +344,10 @@ impl App {
         // Without the flag no `test-hooks/` folder is made.
         #[cfg(feature = "test-hooks")]
         let hooks = if config.test_hooks {
-            Some(TestHooks::new(&config.app_data, ender).map_err(StartError::TestFields)?)
+            Some(
+                TestHooks::new(&config.app_data, ender, test_keychain, store.store_hooks())
+                    .map_err(StartError::TestFields)?,
+            )
         } else {
             None
         };
@@ -307,14 +391,19 @@ impl App {
             tokio::runtime::Handle::current(),
         );
         let startup = Startup::new(seed::initial_state(&seed_start), bus.clone());
+        // One client for every account call, on the server the build names (§5.6 item 9). The
+        // switch is the app's own, so turning it off stops the client's next request.
+        let internet = InternetSwitch::new();
+        let door43 =
+            Door43Client::new(config.door43.clone(), internet.clone()).map_err(|e| e.to_string());
         let inner = Inner {
             config,
             projects,
             instance,
             clock,
-            internet: InternetSwitch::new(),
+            internet,
             net_lock: Mutex::new(()),
-            account: Mutex::new(account),
+            account: Account::new(account, keychain, door43),
             bus,
             jobs,
             flows: FlowGate::default(),

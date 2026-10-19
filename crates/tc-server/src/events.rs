@@ -17,7 +17,7 @@ use tokio::time::{Interval, MissedTickBehavior};
 
 use crate::backend::{Backend, EventSource, Next};
 use crate::log::warn;
-use crate::state::AppState;
+use crate::state::{AppState, Phase};
 
 #[derive(Deserialize)]
 pub(crate) struct EventsQuery {
@@ -28,7 +28,7 @@ pub(crate) async fn stream<B: Backend>(
     State(state): State<AppState<B>>,
     Query(query): Query<EventsQuery>,
 ) -> Response {
-    if state.shared.is_closing() {
+    if state.shared.phase.get() != Phase::Serving {
         return crate::lifecycle::closing_response();
     }
     let heartbeat = state.shared.limits.heartbeat;

@@ -12,7 +12,7 @@ use tc_journal::fold::Delta;
 use tc_journal::record::CommentTarget;
 use tc_journal::{BookId, CheckKey, CheckTarget, DeviceId, RecordKey, ToolId};
 
-use crate::backend::StoreCause;
+use crate::backend::{Origin, StoreCause};
 
 /// A record as tc-api names it: the canonical JSON of its key. `None` for a key whose JSON
 /// is longer than a `RecordRef` holds (4,096 bytes).
@@ -62,7 +62,9 @@ pub fn person_label(label: &tc_journal::fold::PersonLabel) -> PersonLabel {
     }
 }
 
-/// Who a change came from, by the labels of its devices: each person once, in device order.
+/// Who a change came from: the request of this app that asked for it (so the field that sent
+/// it shows no notice, AD37), or by the labels of its devices, each person once, in device
+/// order.
 pub fn change_cause(
     cause: &StoreCause,
     label: impl Fn(&DeviceId) -> Option<PersonLabel>,
@@ -77,7 +79,13 @@ pub fn change_cause(
             }
             ChangeCause::Intake { from }
         }
-        StoreCause::System => ChangeCause::System,
+        StoreCause::Command {
+            origin: Origin::Request(request),
+        } => ChangeCause::LocalSave { request: *request },
+        StoreCause::Command {
+            origin: Origin::Server,
+        }
+        | StoreCause::System => ChangeCause::System,
     }
 }
 

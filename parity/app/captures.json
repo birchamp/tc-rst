@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "71e4a7c9e82fb4cb",
+    "ui": "819d225a3c3bfded",
     "commit": "dev",
     "api": 1
   },
@@ -21,12 +21,40 @@
   },
   "screens": [
     {
+      "name": "share-signin",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "C1a",
+      "backend": "store",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {
+        "signin-server": {
+          "x": 404,
+          "y": 224,
+          "width": 472,
+          "height": 20
+        }
+      },
+      "png": "screens/share-signin.png",
+      "sha256": "fd452e64bb7138f897bb15b29338b544864cb33f8d7ca35b391f90014c2259a6",
+      "dom": "dom/share-signin.json",
+      "domSha256": "4920efdd5acd141e756d0284e019346efd06b18affe1229fb5e757a1997c3e20"
+    },
+    {
       "name": "account-menu",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -39,15 +67,15 @@
       "png": "screens/account-menu.png",
       "sha256": "7bc2b05f7c74769001a55c931bf5c193f3a01fdb6d1fdc18ab9e7ab5d10401a4",
       "dom": "dom/account-menu.json",
-      "domSha256": "0103f8f43b98d492a5b044084b9bdc6c360b0a99347a5863d395bdb072fa8ff5"
+      "domSha256": "cf4f38f259a9927a20be7ef890a6ce9521804328053ce62748a22cd6df7ac567"
     },
     {
       "name": "app-language",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -60,15 +88,15 @@
       "png": "screens/app-language.png",
       "sha256": "4f8c1f7a586efc1534dc51f0b0cae018135ece1c8b5e84bf5d1213ebb46aa5db",
       "dom": "dom/app-language.json",
-      "domSha256": "11b36d460f298f998b05da7793f5b26e6802fb0b5ca4341eb7fc287f16d4bb9b"
+      "domSha256": "77ce7b1373922cc5973e30f94fa55eeab2be141b670b6b7f603312b2e47ad3e8"
     },
     {
       "name": "help",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -81,15 +109,15 @@
       "png": "screens/help.png",
       "sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
       "dom": "dom/help.json",
-      "domSha256": "026b481b7e214d2387c4ffdbc54f4534f829de2c5acc155694c0a86394f5ef4a"
+      "domSha256": "3403581a2650c3866f98bcf1bcfc90d8470d4d0e0dfbc92d4accbecf53064ef4"
     },
     {
       "name": "about",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -109,15 +137,15 @@
       "png": "screens/about.png",
       "sha256": "4e7c4cf21a8ef1b94e87aea240bf822666aeb93a29bc122e842d092381c8b7e3",
       "dom": "dom/about.json",
-      "domSha256": "5e929b3f56697b62fd05f6a43a76b69af83a7676fc7ddfb6a524c4d9dc9186d7"
+      "domSha256": "062fdc4fb95096ec45adfcb357e48fc816134ecdb914cdfe1bb2a0480bd6de57"
     },
     {
       "name": "feedback",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -137,15 +165,15 @@
       "png": "screens/feedback.png",
       "sha256": "06d58c8808c2dc61d51453a057b09245836f7965a60c81ff2a248cf7ff4879dd",
       "dom": "dom/feedback.json",
-      "domSha256": "8d8210dfc1b7c6db1a4d378027e8a37fe1c837ee3c984f5a8a45ff80cf09d014"
+      "domSha256": "2be5aab1319db9c7392c911eaffaef52a91db086c845871492ff28894f5a9a97"
     },
     {
       "name": "license",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "A5",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -158,7 +186,56 @@
       "png": "screens/license.png",
       "sha256": "7679f56a695faf00203fa7f5e6092ed563decba27e4c69a2a8d9a77ec856749b",
       "dom": "dom/license.json",
-      "domSha256": "41cdd8ac9b12b0bfac5fdc227f3490ac803096a9d76671c3e98d1c390cf61930"
+      "domSha256": "2218560ee9cded6f0ff8ff9b31a547eaa22bc4b1d6cdddd0abb7a76bd67c8802"
+    },
+    {
+      "name": "net-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "C1a",
+      "backend": "store",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/net-failed.png",
+      "sha256": "5a220510a31831e3f9801f169691330697f9e0931189aa178f810332b1da7bce",
+      "dom": "dom/net-failed.json",
+      "domSha256": "6b744235dfec824bea5a6ce9d6c6aaa74c251d5efa2715159f91e86faadb1e77"
+    },
+    {
+      "name": "signin-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "C1a",
+      "backend": "store",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {
+        "signin-server": {
+          "x": 404,
+          "y": 192,
+          "width": 472,
+          "height": 21
+        }
+      },
+      "png": "screens/signin-error.png",
+      "sha256": "2e29ca8201721bb65de996ee39cb2afa153d681871c2d93310f84646919fbb92",
+      "dom": "dom/signin-error.json",
+      "domSha256": "a75105df29c3da7d97019b07d0267220b09591f74b544f209600fff184f0884e"
     }
   ]
 }

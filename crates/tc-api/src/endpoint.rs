@@ -167,12 +167,15 @@ unscoped!(
     crate::account::SignOut,
 );
 #[cfg(feature = "test-hooks")]
+scoped!(crate::test::SaveVerse);
+#[cfg(feature = "test-hooks")]
 unscoped!(
     crate::test::Crash,
     crate::test::Hold,
     crate::test::Release,
     crate::test::FieldStore,
     crate::test::FieldDraft,
+    crate::test::Keychain,
     crate::test::Reset,
 );
 

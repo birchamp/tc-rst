@@ -6,8 +6,10 @@
 //
 // Writes diff-report.json: per case, the number of pixels that differ at all (pixelmatch with
 // threshold 0 and anti-aliased pixels counted), and the explanation from residuals.json for a
-// case that does not reach 0. For each case that differs, diffs/<C>/<s>.png shows where.
-// Exit code 1 when a case differs and residuals.json does not explain it.
+// case that does not reach 0 (an entry there is a string, or an object whose `why` it is: a
+// declared difference also names its ruling, its layers and its DOM lines, which
+// crates/tc-ui/tests/gallery_record.rs checks). For each case that differs, diffs/<C>/<s>.png
+// shows where. Exit code 1 when a case differs and residuals.json does not explain it.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,7 +51,7 @@ export function diff(only) {
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, PNG.sync.write(d));
     }
-    kept.set(c.id, { ...row, mismatched, ...(mismatched && residuals[c.id] ? { why: residuals[c.id] } : null) });
+    kept.set(c.id, { ...row, mismatched, ...(mismatched && residuals[c.id] ? { why: typeof residuals[c.id] === 'string' ? residuals[c.id] : residuals[c.id].why } : null) });
   }
   const cases = spec.cases.map((c) => kept.get(c.id) ?? { id: c.id, mismatched: null, error: 'not compared' });
   const zero = cases.filter((r) => r.mismatched === 0).length;

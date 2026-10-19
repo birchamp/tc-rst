@@ -1,7 +1,7 @@
 //! The shell's decisions (tC4's `App.jsx`, unit A5): the project chip's initials, the account
 //! button's state, the screen each view draws, and where a reload returns to.
 
-use tc_api::account::{AccountView, KeepState};
+use tc_api::account::{AccountView, KeepState, KeychainState};
 use tc_api::app::{AppPrefsView, BuildInfo, HelloView, OpenSession, SessionRole};
 use tc_api::event::{SessionMode, StartupProgress, StartupState};
 use tc_api::ids::{Epoch, LocaleId, ProjectId, ProjectRef, Scope, ServerInstance};
@@ -62,6 +62,8 @@ fn account_states_follow_tc4() {
         user: user.map(str::to_owned),
         kept,
         notice: None,
+        server: "git.door43.org".to_owned(),
+        keychain: KeychainState::Works,
     };
     let signed_in = view(Some("jdoe"), KeepState::Kept);
     assert_eq!(account_state(&signed_in), AccountState::In("jdoe"));
@@ -155,6 +157,8 @@ fn hello(instance: ServerInstance, sessions: Vec<OpenSession>) -> HelloView {
             user: None,
             kept: KeepState::NotKept,
             notice: None,
+            server: "git.door43.org".to_owned(),
+            keychain: KeychainState::Works,
         },
         sessions,
         prefs: AppPrefsView {

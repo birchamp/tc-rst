@@ -496,9 +496,10 @@ pub async fn try_start(
         keychain: parts.keychain.clone(),
         folders: Arc::new(HostFolders::new(host.clone())),
         host,
-        files: parts.files.clone(),
-        store: parts.store.clone(),
+        files: tc_app::FilesChoice::Given(parts.files.clone()),
+        store: tc_app::StoreChoice::Given(parts.store.clone()),
         ender: parts.ender.clone(),
+        test_keychain: Some(parts.keychain.clone()),
     };
     edit(&mut config, &mut deps);
     App::start(config, deps).await

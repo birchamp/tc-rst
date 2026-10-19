@@ -31,6 +31,8 @@ zip.workspace = true
 proxy-watch = { workspace = true, features = ["pac-windows-native"] }
 
 [dev-dependencies]
+# The libgit2 that STORAGE.md §9 names for the sync's push.
+git2.workspace = true
 proptest.workspace = true
 tc-door43-fake = { path = "../tc-door43-fake" }
 tempfile.workspace = true

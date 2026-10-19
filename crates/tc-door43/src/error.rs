@@ -19,12 +19,39 @@ pub enum Door43Error {
         route: String,
         cause: UnreachableCause,
     },
-    /// 401 or 403: the password or token was refused, or the token lacks a scope.
+    /// 401 or 403 from the REST API: the password or token was refused, or the token lacks
+    /// a scope. Door43 refuses a git push from an account that may read the repository but
+    /// not write to it inside an HTTP 200, by its pre-receive hook (`NoWriteAccess`).
+    /// STORAGE.md §9.5 says what an HTTP 403 on a push means.
     #[error("{route}: Door43 refused the sign-in ({status}): {message}")]
     AuthFailed {
         route: String,
         status: AuthStatus,
         message: String,
+    },
+    /// A push refused because the account may not write to the repository. Door43 says so
+    /// with HTTP 200 and a ref its pre-receive hook declined; `server_message` is the hook's
+    /// text. See [`crate::refused_push`].
+    #[error("{route}: this account may not write to the repository: {server_message}")]
+    NoWriteAccess {
+        route: String,
+        server_message: String,
+    },
+    /// A push whose ref Door43 refused for another reason, such as a protected branch or
+    /// another server hook. `server_message` is Door43's text and the ref's status.
+    #[error("{route}: Door43 refused the push: {server_message}")]
+    RefRejected {
+        route: String,
+        server_message: String,
+    },
+    /// A push whose ref Door43 could not move because another push moved, created, deleted or
+    /// held the branch after this push read it; [`crate::refused_push`] lists the statuses.
+    /// Fetch again and retry, as for a push that is not a fast-forward (STORAGE.md §9.5).
+    /// `server_message` is Door43's text and the ref's status.
+    #[error("{route}: another push moved the branch first: {server_message}")]
+    RefMoved {
+        route: String,
+        server_message: String,
     },
     #[error("{route}: not found: {message}")]
     NotFound { route: String, message: String },

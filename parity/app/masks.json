@@ -175,6 +175,30 @@
         }
       },
       "meaning": null
+    },
+    {
+      "id": "signin-server",
+      "ruling": "build",
+      "why": "The line names the Door43 server the build signs in to (tC4's dcsServer rule, #120): git.door43.org in tC4's capture, the loopback test Door43 tc4 serve was started with in the rebuild's, so that nothing leaves the machine.",
+      "target": {
+        "testid": "signin-server"
+      },
+      "rust": null,
+      "rects": {
+        "share-signin": {
+          "x": 404,
+          "y": 224,
+          "width": 472,
+          "height": 20
+        },
+        "signin-error": {
+          "x": 404,
+          "y": 192,
+          "width": 472,
+          "height": 21
+        }
+      },
+      "meaning": null
     }
   ]
 }

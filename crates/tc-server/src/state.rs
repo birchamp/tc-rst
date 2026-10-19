@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 
 use axum::extract::FromRef;
 use tokio::sync::watch;
@@ -27,16 +27,41 @@ pub(crate) struct Shared {
     #[cfg(feature = "test-hooks")]
     pub ender: Arc<dyn crate::hooks::Ender>,
     pub test_hooks: AtomicBool,
-    /// Set when the quit sequence begins: new requests get 503.
-    pub closing: AtomicBool,
+    pub phase: PhaseCell,
     pub in_flight: AtomicUsize,
     /// `true` once the event streams must end.
     pub streams_end: watch::Sender<bool>,
 }
 
-impl Shared {
-    pub(crate) fn is_closing(&self) -> bool {
-        self.closing.load(Ordering::SeqCst)
+/// Where a run is in its life (APP-DESIGN §5.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Phase {
+    Serving,
+    /// The quit began: new requests get 503, and the requests already accepted finish.
+    Draining,
+    /// The drain is over and the backend's quit work runs: no backend call starts.
+    Closing,
+}
+
+/// The run's [`Phase`], which the quit sequence moves forward and every request reads.
+pub(crate) struct PhaseCell(AtomicU8);
+
+impl PhaseCell {
+    pub(crate) fn new() -> Self {
+        Self(AtomicU8::new(Phase::Serving as u8))
+    }
+
+    pub(crate) fn get(&self) -> Phase {
+        match self.0.load(Ordering::SeqCst) {
+            0 => Phase::Serving,
+            1 => Phase::Draining,
+            // Only `enter` stores, and only a `Phase`.
+            _ => Phase::Closing,
+        }
+    }
+
+    pub(crate) fn enter(&self, phase: Phase) {
+        self.0.store(phase as u8, Ordering::SeqCst);
     }
 }
 

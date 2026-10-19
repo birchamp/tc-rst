@@ -1,0 +1,33 @@
+{
+  "path": "test/keychain",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "13131313131313131313131313131313",
+    "mode": "failingForget",
+    "holds": {
+      "type": "token",
+      "value": "kept-token"
+    },
+    "relaunch": true
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "mode": "failingForget",
+      "holds": true,
+      "keeps": 0,
+      "reads": 1,
+      "forgets": 0
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
