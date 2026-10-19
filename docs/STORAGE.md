@@ -1987,7 +1987,10 @@ M2  Build metadata.json for the planned result (total, §3.4) and run tc_burrito
     (`project.json`, `format.json`), the carried files and the held files by the manifest while
     they are clean by stat and otherwise by a read; bytes there that the app did not write are
     held with a copy and a notice (§6.2) and listed as they are, so the list never states the
-    md5 and size of bytes that are not in the folder.
+    md5 and size of bytes that are not in the folder. A carried file is listed until the job of
+    the carried files removes it from the folder, also once the fold no longer places it (a
+    removed file, a version moved apart), and one waiting for the actor to record it is listed
+    with the md5 and size it was stored with: the writer keeps no carried bytes in memory.
 M3  atomic_write(.tc, "materialize.intent.json", {writes: [{path, oldMd5, newMd5}], removes: X})
 M4  For each p in D: write a temp, fsync, then **look at p once more** and rename (directory
     fsync deferred); then atomic_write its heads file. For each p in X: unlink (directory
@@ -4906,6 +4909,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the heads file written again for a converged file (checked after a restart, which loses the session's memory) | `a_retry_that_finds_the_file_converged_writes_its_heads_file` |
 | O9 writing the heads file of a file equal to its projection whose entry or intent says the heads file lags (refresh the entry only) | `a_crash_after_a_rename_leaves_no_stale_heads_file_for_a_later_edit`, `a_close_while_the_heads_file_is_held_leaves_no_stale_heads_file_for_a_later_edit` |
 | the manifest's `headsDue` (keep the lag in memory only) | `a_heads_file_the_open_could_not_write_is_written_by_a_later_open` |
+| the stored size of a carried file waiting to be recorded (the size of the bytes kept in memory, none) | `a_carried_file_waiting_to_be_recorded_is_listed_as_it_is` |
+| the listing of a carried file the fold no longer places (list the fold's placements only) | `a_removed_carried_file_is_listed_until_its_job_removes_it` |
 | a read of a path whose heads file is held in memory (take a settled entry as unchanged) | `a_file_with_an_unwritten_heads_file_is_not_taken_as_unchanged_when_its_entry_settles` |
 | the heads file of `metadata.json` due after its rename (take the file as current) | `a_retry_after_metadata_json_was_renamed_writes_its_heads_file` |
 | the entry of `metadata.json` naming the bytes M6 wrote (the md5 M2 checked) | `the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote` |

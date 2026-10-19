@@ -212,6 +212,9 @@ fn a_removed_carried_file_that_was_edited_outside_is_not_deleted() {
     rig.fs.put(&folder.join(AUDIO), &bytes, None);
     record_carried(&handle, &bytes);
     leave(&handle);
+    // The writer's jobs are over, and so is the rig's look at the folder after each: the edit
+    // below is the next look's to find, not a change under a job that listed the bytes before.
+    handle.wait_idle();
     rig.fs
         .put(&folder.join(AUDIO), b"audio bytes, edited", None);
     let key = RecordKey::CarriedFile(RepoPath::parse(AUDIO).unwrap());

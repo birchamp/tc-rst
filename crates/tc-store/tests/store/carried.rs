@@ -820,3 +820,89 @@ fn a_checkpoint_job_keeps_a_carried_file_recorded_during_its_seal() {
     handle.close().unwrap();
     assert_commits_valid(&rig.fs, &folder);
 }
+
+/// I7, §11.4: `metadata.json` lists every carried file as it is in the folder. A file waiting
+/// for the actor to record it is listed with the size it was stored with (the writer keeps
+/// none of its bytes in memory), and a file the fold no longer places is listed until the job
+/// of the carried files removes it. Here a look records an edit of a placed file while the
+/// person removes the file by the command, and the jobs that follow list it before the actor
+/// has recorded the edit.
+#[test]
+fn a_carried_file_waiting_to_be_recorded_is_listed_as_it_is() {
+    use tc_store::Point;
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    arrive(&rig, &handle, &folder, SONG, b"my recording of the song");
+    leave(&handle);
+    handle.wait_idle();
+    let hooks = rig.store.hooks().clone();
+    // The writer's next job waits, so the look and the removal's job queue behind it.
+    hooks.hold(Point::BeforeMaterialize);
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    let first = handle.leave(Leave::Book(TIT));
+    hooks.wait_reached(Point::BeforeMaterialize, 1);
+    let edited = b"my recording of the song, edited and longer".to_vec();
+    rig.fs.put_unseen(&folder.join(SONG), &edited, None);
+    let looked = handle.focus();
+    handle
+        .submit(Command::RemoveCarriedFile {
+            shown: handle.mint(&song_key(), None).unwrap(),
+        })
+        .wait()
+        .unwrap();
+    let second = handle.leave(Leave::Book(TIT));
+    // The actor waits before it makes the recorded edit durable: the jobs list the file while
+    // it waits to be recorded.
+    hooks.hold(Point::BeforeDurablePending);
+    hooks.release(Point::BeforeMaterialize);
+    first.wait().unwrap();
+    let found = looked.wait().unwrap().found;
+    second.wait().unwrap();
+    let problems = burrito_problems(&rig.fs, &folder);
+    hooks.release(Point::BeforeDurablePending);
+    assert_eq!(found, vec![SONG.to_owned()], "the look found the edit");
+    assert!(problems.is_empty(), "{problems:#?}");
+    handle.wait_idle();
+    assert_eq!(
+        rig.fs.peek(&folder.join(SONG)),
+        Some(edited),
+        "the person's bytes stay"
+    );
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+}
+
+/// I7: a carried file the person removed by the command stays in the folder until the job of
+/// the carried files removes it, and `metadata.json` lists it until then: a look at the folder
+/// that writes another file meanwhile (here a book file that was deleted) never leaves it out.
+#[test]
+fn a_removed_carried_file_is_listed_until_its_job_removes_it() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let bytes = b"my recording of the song".to_vec();
+    arrive(&rig, &handle, &folder, SONG, &bytes);
+    leave(&handle);
+    handle.wait_idle();
+    handle
+        .submit(Command::RemoveCarriedFile {
+            shown: handle.mint(&song_key(), None).unwrap(),
+        })
+        .wait()
+        .unwrap();
+    // Before the job of the removal (3 s after it), a look finds a book file gone and writes it.
+    let usfm = folder.join("ingredients/TIT.usfm");
+    rig.fs.delete(&usfm).unwrap();
+    handle.focus().wait().unwrap();
+    assert!(rig.fs.peek(&usfm).is_some(), "the look wrote the book file");
+    assert_eq!(rig.fs.peek(&folder.join(SONG)), Some(bytes));
+    assert_valid_burrito(&rig.fs, &folder);
+    leave(&handle);
+    handle.wait_idle();
+    assert_eq!(
+        rig.fs.peek(&folder.join(SONG)),
+        None,
+        "the removal's job removed it"
+    );
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+}

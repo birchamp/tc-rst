@@ -1766,9 +1766,15 @@ impl Writer {
                 // them; the list says what is there (I7).
                 None if self.pending_record.contains_key(&path) => {
                     let (md5, bytes) = &self.pending_record[&path];
+                    // A carried file's bytes are never kept in memory: its size is the one
+                    // it was stored with (§11.4).
+                    let size = self
+                        .pending_carried
+                        .get(&path)
+                        .map_or(bytes.len() as u64, |(_, size)| *size);
                     (
                         *md5,
-                        bytes.len() as u64,
+                        size,
                         derived
                             .as_ref()
                             .filter(|f| is_text(f))
@@ -1834,25 +1840,24 @@ impl Writer {
                 );
             }
         }
-        // Carried files, as they are on disk (the writer places their bytes, §11.4): the
-        // fold's placements, and in a checkpoint's job on an older fold, the paths a newer
-        // fold placed or recorded, as their entries say, with the blob the entry names.
+        // Carried files, as they are on disk (the writer places their bytes, §11.4). Every
+        // path the app placed or recorded is listed until the job of the carried files removes
+        // its file: one the fold no longer places (a removed file, a version moved apart) is
+        // still in the folder until then. The fold's placements give the blob of the rest,
+        // but a path a newer fold placed or recorded (seen by a checkpoint's job on an older
+        // fold) keeps the blob its entry names.
         let mut carried: BTreeMap<String, Option<String>> = self
-            .fold
-            .carried_files()
-            .into_iter()
-            .filter(|p| !self.written_from_newer_fold(&p.path))
-            .map(|p| (p.path, Some(p.oid.to_hex())))
+            .manifest
+            .paths
+            .iter()
+            .filter(|(_, e)| e.oid.is_some() && e.held.is_none())
+            .map(|(path, e)| (path.clone(), e.oid.clone()))
             .collect();
-        carried.extend(
-            self.manifest
-                .paths
-                .iter()
-                .filter(|(path, e)| {
-                    e.oid.is_some() && e.held.is_none() && self.written_from_newer_fold(path)
-                })
-                .map(|(path, e)| (path.clone(), e.oid.clone())),
-        );
+        for p in self.fold.carried_files() {
+            if !self.written_from_newer_fold(&p.path) {
+                carried.insert(p.path, Some(p.oid.to_hex()));
+            }
+        }
         for (path, oid) in carried {
             if listed.contains(&path)
                 || !path.starts_with("ingredients/")
