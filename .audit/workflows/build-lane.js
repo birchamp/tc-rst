@@ -69,7 +69,8 @@ const FIX_UNITS = [
 ]
 const A8 = { key: 'a8', id: 'A8', deps: ['a3', 'a5'], critical: false, task: 'Build design unit A8 (Door43 account and the internet question) exactly as its row in docs/APP-DESIGN.md §10 says, against tc-door43-fake only.' }
 const OWNERQ = ' If your row waits for an owner question (Q-n) that is not answered, build the fallback when there is one; otherwise build the rest and end your final answer with a section OWNER QUESTION in plain words a translator would understand, with your recommendation. A storage request (R-n) main does not provide uses the row\'s fallback.'
-const UNITS = [A8, ...DESIGN_UNITS.filter(u => !['b1a', 'b1b', 'c0'].includes(u.key)), ...FIX_UNITS].map(u => ({ ...u, task: u.task.includes('OWNER QUESTION') ? u.task : u.task + OWNERQ }))
+// args.skip: units another run handles; their dependents wait unless they are in done.
+const UNITS = [A8, ...DESIGN_UNITS.filter(u => !['b1a', 'b1b', 'c0'].includes(u.key)), ...FIX_UNITS].filter(u => !(A.skip || []).includes(u.key)).map(u => ({ ...u, task: u.task.includes('OWNER QUESTION') ? u.task : u.task + OWNERQ }))
 const REFS = (A.refs || []).map(r => ({ ...r, deps: r.deps || [] }))
 const DONE = new Set(A.done || [])
 const CONT = A.cont || {}

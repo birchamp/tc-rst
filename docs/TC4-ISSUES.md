@@ -315,7 +315,7 @@ Other findings from the verifiers that are not bugs in shipped behavior:
 | #657 | Mirror the interface for a right-to-left language | unit todo | A5, B3, B4a | tC4 app-language cases h and i | Window-control room stays on the physical side. |
 | #642 | Remove the Linux native title bar | unit todo | G1 | `linux_window_keeps_native_frame` | Match 4.0. |
 | #613 | Bundle a Devanagari interface font | unit todo | A5 | `hindi_label_renders_in_the_bundled_face_offline` | Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
-| #606 | Third-party licenses in About | unit todo | G1 (A5 if tC4 ships it) | release check: every crate in `Cargo.lock` has a notice | Generate notices from `Cargo.lock`, fonts, vendored tC4 assets, Electronite and resources. |
+| #606 | Third-party licenses in About | unit todo | G1 (A5 if tC4 ships it) | release check: every crate in `Cargo.lock` has a notice | Generate notices from `Cargo.lock`, fonts, vendored tC4 assets, Electronite and resources. Include the crates' own `NOTICE` files: `crates/tc-align/NOTICE`, and `crates/tc-door43/NOTICE` (proxy-watch's MIT notice, Windows builds). |
 | #569 | Keyboard shortcuts for Understand, Translate and Check | unit todo | A5 | the Switcher key port | Match 4.0 (no shortcuts). Port tC4's if it adds them. |
 | #525 | Choose the app language automatically | covered | tc-app | `hello_answers_real_state` | C1a adds a relaunch test that the saved language survives. |
 | #523 | Collect translation corrections in Weblate | not applicable | tc-ui | — | They arrive with the next vendoring. |

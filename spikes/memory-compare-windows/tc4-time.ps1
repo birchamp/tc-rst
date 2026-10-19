@@ -10,7 +10,8 @@ param(
   [string] $Label = 'tC4 4.0.0-rc.2',
   [switch] $NoLaunch,
   [int] $Timeout = 120,
-  [string] $Out = 'C:\tc4-g0\memory\startup.jsonl'
+  [string] $Out = 'C:\tc4-g0\memory\startup.jsonl',
+  [string] $Shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\translationCore4.lnk"
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'startup-lib.ps1')
@@ -43,12 +44,44 @@ function Wait-For($check, $sw) {
   $null
 }
 $t = [ordered]@{ window_ms = $null; painted_ms = $null; home_ms = $null; project_ms = $null; translate_ms = $null; text_ms = $null }
-$clickHome = $null; $clickTranslate = $null; $resume = $null
+$clickHome = $null; $clickTranslate = $null; $resume = $null; $launch = $null
 $before = Get-Conditions
 $sw = [Diagnostics.Stopwatch]::StartNew()
 if (-not $NoLaunch) {
   if (Get-Process electron -ErrorAction SilentlyContinue) { throw 'tC4 is already running; a start must begin with it closed.' }
-  Start-Process -FilePath "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\translationCore4.lnk"
+  try {
+    Start-Process -FilePath $Shortcut -ErrorAction Stop
+    $launch = 'shortcut'
+  } catch {
+    # The first start after a reboot once failed here with "The system cannot find the file
+    # specified", for a shortcut that exists and had started tC4 about twenty times that morning.
+    # Record what was on disk, then start what the shortcut starts, so the run still measures
+    # tC4 and not the shell's lookup of the shortcut. The clock restarts at that launch, and the
+    # row says how tC4 was started.
+    $why = $_.Exception.Message
+    $link = (New-Object -ComObject WScript.Shell).CreateShortcut($Shortcut)
+    $seen = [ordered]@{
+      at = (Get-Date).ToString('s'); error = $why; shortcut = $Shortcut
+      shortcut_exists = (Test-Path -LiteralPath $Shortcut)
+      target = $link.TargetPath; target_exists = [bool]($link.TargetPath -and (Test-Path -LiteralPath $link.TargetPath))
+      arguments = $link.Arguments; workdir = $link.WorkingDirectory
+      workdir_exists = [bool]($link.WorkingDirectory -and (Test-Path -LiteralPath $link.WorkingDirectory))
+      minutes_since_boot = $before.minutes_since_boot
+    }
+    ($seen | ConvertTo-Json -Compress) | Out-File -Append -Encoding utf8 (Join-Path (Split-Path -Parent $Out) 'launch-failures.jsonl')
+    # Two minutes after a boot the shortcut was not there at all (shortcut_exists false), and it
+    # is again later with its old timestamp. Then use what it holds: the installed tC4 and its
+    # app folder, as the shortcut names them.
+    $home4 = "$env:LOCALAPPDATA\Programs\translationCore4"
+    $target = if ($link.TargetPath) { $link.TargetPath } else { "$home4\electronite\electron.exe" }
+    $arguments = if ($link.Arguments) { $link.Arguments } else { "`"$home4\electron`"" }
+    $workdir = if ($link.WorkingDirectory) { $link.WorkingDirectory } else { $home4 }
+    if (-not (Test-Path -LiteralPath $target)) { throw "tC4 did not start: $why, and its program $target is missing too." }
+    $start = @{ FilePath = $target; ArgumentList = $arguments; WorkingDirectory = $workdir; ErrorAction = 'Stop' }
+    $sw.Restart()
+    Start-Process @start
+    $launch = 'target (the shortcut failed)'
+  }
   while ($sw.Elapsed.TotalSeconds -lt $Timeout -and $null -eq $t.painted_ms) {
     $win = Get-Window electron
     if ($win) {
@@ -73,7 +106,7 @@ if ($null -ne $t.home_ms) {
   }
 }
 $row = [pscustomobject]@{
-  label = $Label; at = (Get-Date).ToString('s'); launched = (-not $NoLaunch)
+  label = $Label; at = (Get-Date).ToString('s'); launched = (-not $NoLaunch); launch = $launch
   window_ms = $t.window_ms; painted_ms = $t.painted_ms; home_ms = $t.home_ms
   home_has_resume = $resume; psalms_click_ms = $clickHome; project_ms = $t.project_ms
   translate_click_ms = $clickTranslate; translate_ms = $t.translate_ms
