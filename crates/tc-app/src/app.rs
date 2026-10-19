@@ -240,16 +240,19 @@ impl App {
         }
         // Only now: tc-store makes a projects folder that is missing, and a folder someone
         // named was checked above.
-        let store: Arc<dyn ProjectStore> = match store {
-            StoreChoice::OnDisk => Arc::new(
-                StoreBackend::on_disk(&config.app_data, &projects.path).map_err(|e| {
-                    StartError::AppData {
-                        path: config.app_data.clone(),
-                        reason: e.to_string(),
-                    }
-                })?,
-            ),
-            StoreChoice::Given(store) => store,
+        let (store, on_disk): (Arc<dyn ProjectStore>, _) = match store {
+            StoreChoice::OnDisk => {
+                let backend = Arc::new(
+                    StoreBackend::on_disk(&config.app_data, &projects.path).map_err(|e| {
+                        StartError::AppData {
+                            path: config.app_data.clone(),
+                            reason: e.to_string(),
+                        }
+                    })?,
+                );
+                (backend.clone(), Some(backend))
+            }
+            StoreChoice::Given(store) => (store, None),
         };
 
         // Never a weaker source than the system's: the instance tells the UI that its
@@ -271,6 +274,10 @@ impl App {
                 now,
                 now,
             );
+        }
+
+        if let Some(backend) = on_disk {
+            crate::backend::store::report_removed_staging(backend, reports.clone(), clock.clone());
         }
 
         // The keychain is read here and nowhere else: an operating-system keychain can

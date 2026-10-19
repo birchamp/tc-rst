@@ -210,6 +210,69 @@ async fn a_link_to_a_project_elsewhere_is_listed_as_unusable() {
     ));
 }
 
+/// tc-store's start removes the staging folders that an interrupted create, copy, join or
+/// import left (STORAGE §6.4 N1). The app records each in the report log, so "Ask for help"
+/// carries it and E1b and F1 can tell the person; a project beside them is untouched.
+#[tokio::test]
+async fn a_staging_folder_removed_at_start_is_reported() {
+    use tc_app::reports::{ReportOp, ReportOutcome};
+    let disk = OnDisk::new();
+    make_project(&disk.app_data(), &disk.projects, "titus_on_disk");
+    let join = disk.projects.join(".staging-join-feedfacefeedface");
+    std::fs::create_dir_all(join.join("ingredients")).unwrap();
+    std::fs::write(join.join("ingredients/TIT.usfm"), b"\\id TIT\n").unwrap();
+    let import = disk.projects.join(".staging-import-0123456789abcdef");
+    std::fs::create_dir(&import).unwrap();
+    let t = disk.start().await;
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let removed = loop {
+        let removed: Vec<_> = t
+            .app
+            .reports()
+            .all()
+            .into_iter()
+            .filter(|r| r.op == ReportOp::StagingRemoved)
+            .collect();
+        if removed.len() >= 2 || std::time::Instant::now() > deadline {
+            break removed;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    };
+    let mut seen: Vec<(String, String)> = removed
+        .iter()
+        .map(|r| {
+            assert!(
+                matches!(&r.outcome, ReportOutcome::Failed { reason } if reason.contains("did not finish")),
+                "{:?}",
+                r.outcome
+            );
+            (
+                r.facts["folder"].as_str().unwrap().to_owned(),
+                r.facts["kind"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    seen.sort();
+    assert_eq!(
+        seen,
+        [
+            (
+                ".staging-import-0123456789abcdef".to_owned(),
+                "import".to_owned()
+            ),
+            (
+                ".staging-join-feedfacefeedface".to_owned(),
+                "join".to_owned()
+            ),
+        ]
+    );
+    assert!(!join.exists() && !import.exists());
+    let listing = t.app.sessions().store().list().unwrap();
+    let names: Vec<&str> = listing.projects.iter().map(|e| e.folder.as_str()).collect();
+    assert_eq!(names, ["titus_on_disk"]);
+}
+
 #[tokio::test]
 async fn the_app_starts_when_the_projects_folder_holds_no_project() {
     let disk = OnDisk::new();

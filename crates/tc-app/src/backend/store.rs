@@ -4,8 +4,8 @@
 //! snapshot that reads never wait behind, an asynchronous submit whose reply comes after the
 //! durability point with the sequence number of the snapshot that holds it, typed events with
 //! each batch's `Delta`, drafts beside the actor, counters and close. So this adapter is thin:
-//! each seam method calls the matching store method and maps its types. It adds three things
-//! the store cannot know:
+//! each seam method calls the matching store method and maps its types. It adds what the
+//! store cannot know:
 //!
 //! - **Who asked for a command.** The store's `Committed` names the batch's changes, not the
 //!   request, and it is sent before the reply resolves. The relay thread waits for every
@@ -21,6 +21,9 @@
 //!   a folder that has lost that file, a translationCore 4.0 project copied in, and a link to
 //!   a project elsewhere are listed as unusable with the reason. It opens only the exact
 //!   names it lists.
+//! - **What the start removed is recorded.** tc-store's start removes the staging folders a
+//!   create, copy, join or import cut short left; each goes into the report log
+//!   (`report_removed_staging`), for "Ask for help" and for the units that tell the person.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -29,7 +32,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError, RwLock};
 
 use serde::Deserialize;
 use tc_api::event::{CheckpointOutcome, SessionMode};
-use tc_api::ids::ProjectRef;
+use tc_api::ids::{ProjectRef, WallMs};
 use tc_api::jobs::{OpenPhase, Phase};
 use tc_api::write::ReadOnlyReason;
 use tc_journal::command::Command;
@@ -45,12 +48,14 @@ use super::{
     Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
     UnusableFolder,
 };
+use crate::clock::Clock;
 use crate::jobs::ProgressSink;
+use crate::reports::{ReportLog, ReportOp, ReportOutcome};
 
 /// The prefix of the staging folders tc-store builds a project in before it renames it into
 /// place (tc-store's private `STAGING`, `store.rs`). Such a folder holds a project's files
 /// while a create, copy, join or import still writes them; tc-store's start removes those a
-/// crash left (STORAGE §6.4 N1).
+/// crash left (STORAGE §6.4 N1), and `report_removed_staging` records each.
 const STAGING: &str = ".staging-";
 
 /// `ingredients/tc/project.json`, relative to a project folder (STORAGE §3.5).
@@ -170,6 +175,12 @@ impl StoreBackend {
     /// The projects folder.
     pub fn projects(&self) -> &Path {
         &self.projects
+    }
+
+    /// The staging folders tc-store's start removed (STORAGE §6.4 N1). It waits for that
+    /// cleanup, which runs on a thread of tc-store's own.
+    pub fn removed_at_start(&self) -> Vec<tc_store::RemovedStaging> {
+        self.store.removed_at_start()
     }
 
     /// The folder's entry in the projects folder, by the exact name the listing holds: on a
@@ -325,6 +336,57 @@ impl ProjectStore for StoreBackend {
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError> {
         Ok(())
+    }
+}
+
+/// Records in the report log each staging folder tc-store's start removed (STORAGE §6.4 N1):
+/// a create, copy, join or import that a crash or a quit cut short. tc-store removes them on a
+/// thread of its own, so the reports are written from another, and the start never waits for
+/// them. "Ask for help" attaches them; E1b tells the person of a join that did not finish, and
+/// F1 of an import (APP-DESIGN §10).
+pub(crate) fn report_removed_staging(
+    backend: Arc<StoreBackend>,
+    reports: ReportLog,
+    clock: Arc<dyn Clock>,
+) {
+    fn record(backend: &StoreBackend, reports: &ReportLog, clock: &dyn Clock, started: WallMs) {
+        for removed in backend.removed_at_start() {
+            let (kind, work) = staging_work(removed.kind);
+            reports.add(
+                ReportOp::StagingRemoved,
+                ReportOutcome::Failed {
+                    reason: format!("{work} did not finish, so its part copy was removed"),
+                },
+                crate::reports::facts(
+                    serde_json::json!({ "folder": removed.folder, "kind": kind }),
+                ),
+                started,
+                clock.now(),
+            );
+        }
+    }
+    let started = clock.now();
+    let spawned = {
+        let (backend, reports, clock) = (backend.clone(), reports.clone(), clock.clone());
+        spawn("tc-app staging report", move || {
+            record(&backend, &reports, clock.as_ref(), started);
+        })
+    };
+    if spawned.is_none() {
+        // No thread to be had: wait for the cleanup here rather than lose the reports.
+        record(&backend, &reports, clock.as_ref(), started);
+    }
+}
+
+/// A staging folder's kind as a report names it, and the work it was for.
+fn staging_work(kind: Option<tc_store::StagingKind>) -> (Option<&'static str>, &'static str) {
+    use tc_store::StagingKind;
+    match kind {
+        Some(StagingKind::Create) => (Some("create"), "creating a project"),
+        Some(StagingKind::Copy) => (Some("copy"), "copying a project"),
+        Some(StagingKind::Join) => (Some("join"), "opening a project from Door43"),
+        Some(StagingKind::Import) => (Some("import"), "importing a project"),
+        None => (None, "work in the projects folder"),
     }
 }
 

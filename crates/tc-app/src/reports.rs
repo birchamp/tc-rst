@@ -44,6 +44,9 @@ pub enum ReportOp {
     Resources,
     /// A project's close that failed; the session is gone all the same.
     Close,
+    /// A staging folder that an interrupted create, copy, join or import left, which
+    /// tc-store's start removed (STORAGE §6.4 N1).
+    StagingRemoved,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
