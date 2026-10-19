@@ -11,8 +11,9 @@ use common::{START, Tc4, http};
 use tempfile::TempDir;
 
 /// The words no release binary may hold: every endpoint name of the test service, the
-/// application's and the stand-in's alike, and every flag only a test build has.
-const HOOK_TEXT: [&str; 9] = [
+/// application's and the stand-in's alike, every flag only a test build has, and the batch
+/// tag of the fixture backend's seed (feature `fixture-backend`).
+const HOOK_TEXT: [&str; 10] = [
     "test/crash",
     "test/fieldStore",
     "test/fieldLog",
@@ -22,6 +23,7 @@ const HOOK_TEXT: [&str; 9] = [
     "test/release",
     "test/reset",
     "--test-seed-pace",
+    "tc4-seed-batch",
 ];
 
 fn release_binary() -> PathBuf {
