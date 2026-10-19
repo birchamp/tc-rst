@@ -61,8 +61,13 @@ fn tc4_serve_with_a_scenario_loads_its_projects_and_installs_its_resources() {
         stderr.contains("loaded sample_burrito (3 declared differences)"),
         "{stderr}"
     );
+    // The whole line, so a format string that lost a continuation fails here.
+    let refused =
+        "refused sample_burrito_obs, 53 mismatches (docs/evidence/state-seed-check-2026-10-18.md):";
     assert!(
-        stderr.contains("refused sample_burrito_obs, 53 mismatches"),
+        stderr
+            .lines()
+            .any(|line| line == format!("tc4: scenario {}: {refused}", state.display())),
         "{stderr}"
     );
     assert!(stderr.contains("12 resources installed"), "{stderr}");

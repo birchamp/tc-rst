@@ -105,7 +105,8 @@ fn scenario_deps(dir: &std::path::Path, app_data: &std::path::Path) -> Result<Ap
         match refusal {
             SeedRefusal::Mismatches(mismatches) => {
                 eprintln!(
-                    "tc4: scenario {at}: refused {folder}, {} mismatches                      (docs/evidence/state-seed-check-2026-10-18.md):",
+                    "tc4: scenario {at}: refused {folder}, {} mismatches \
+                     (docs/evidence/state-seed-check-2026-10-18.md):",
                     mismatches.len()
                 );
                 for mismatch in mismatches {
