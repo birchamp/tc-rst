@@ -85,6 +85,36 @@ fn states_go_saved_dirty_saving_saved_in_order() {
     );
 }
 
+/// A verse save writes the verse's reflowed alignment in the same batch (R25, Q-6): its `Ack`
+/// carries both tokens, and the field takes its own value's, so the next save names the verse.
+#[test]
+fn an_ack_with_the_reflowed_alignments_token_saves_the_field_on_its_own_token() {
+    let mut page = Page::new();
+    let k = key("a");
+    page.open(&k, "", 1);
+    page.focus(&k);
+    page.type_text(&k, "con la esperanza");
+    page.blur(&k);
+    let mut ack = super::save_kit::ack("con la esperanza", 7, 2);
+    ack.tokens.insert(
+        0,
+        tc_api::write::TokenUpdate {
+            record: tc_api::ids::RecordRef::parse(r#"{"kind":"alignment"}"#).unwrap(),
+            token: super::save_kit::tok(8),
+        },
+    );
+    page.deliver(Answered::Acked(ack));
+    assert_eq!(worst(&page), Worst::Saved);
+    page.focus(&k);
+    page.type_text(&k, "con la esperanza de la vida");
+    page.blur(&k);
+    let sends = page.sends();
+    assert_eq!(
+        sends.last().map(|(_, base, _)| base.clone()),
+        Some(vec![super::save_kit::tok(7)])
+    );
+}
+
 /// "keeps the dirty buffer, surfaces 'error', and retains the failed payload"
 #[test]
 fn a_failure_keeps_the_text_and_the_error() {
