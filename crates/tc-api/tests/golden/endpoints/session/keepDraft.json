@@ -1,0 +1,49 @@
+{
+  "path": "session/keepDraft",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e",
+    "kind": "words",
+    "shown": [
+      "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+    ],
+    "text": "To Titus, a true son",
+    "discard": [
+      1
+    ]
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "view": 42,
+      "stored": "written",
+      "newConflicts": [
+        {
+          "conflict": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "record": "{\"book\":\"TIT\",\"chapter\":1,\"kind\":\"verse\",\"verse\":4}",
+          "by": {
+            "who": {
+              "type": "username",
+              "value": "juan"
+            },
+            "computer": null
+          }
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

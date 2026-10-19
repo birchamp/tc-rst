@@ -10,9 +10,9 @@ use std::sync::{Arc, Condvar, Mutex};
 use tc_api::event::CheckpointOutcome;
 use tc_api::ids::ProjectRef;
 use tc_app::backend::{
-    BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
-    ProjectFacts, ProjectHandle, ProjectPeek, ProjectStore, ReviewToken, Snapshot, StoreCommand,
-    StoreCounters, StoreError, StoreEvent, StoreReply, SummaryFiles, SummaryWatch,
+    BoxFuture, CheckpointReason, CommandError, CopyFailure, EditToken, Listing, OfferedDraft,
+    OpenFailure, ProjectFacts, ProjectHandle, ProjectPeek, ProjectStore, ReviewToken, Snapshot,
+    StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, SummaryFiles, SummaryWatch,
 };
 use tc_app::jobs::ProgressSink;
 use tc_journal::token::TokenError;
@@ -141,6 +141,18 @@ impl<S: ProjectStore> ProjectStore for CountingStore<S> {
         }))
     }
 
+    fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
+        self.inner.copy(folder, name)
+    }
+
+    fn trust_lock(&self, folder: &ProjectRef) {
+        self.inner.trust_lock(folder);
+    }
+
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        self.inner.name_run(run);
+    }
+
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError> {
         self.inner.reset()
@@ -210,6 +222,21 @@ impl ProjectHandle for CountingHandle {
         self.inner.offered_drafts()
     }
 
+    fn discard_draft(&self, id: u64) -> bool {
+        self.inner.discard_draft(id)
+    }
+
+    fn offer_draft(
+        &self,
+        field: tc_journal::command::DraftField,
+        shown: Vec<tc_app::backend::DraftToken>,
+        text: String,
+        verified: bool,
+        at: tc_journal::WallTime,
+    ) -> Option<u64> {
+        self.inner.offer_draft(field, shown, text, verified, at)
+    }
+
     #[cfg(feature = "test-hooks")]
     fn wait_idle(&self) {
         self.inner.wait_idle();
@@ -256,6 +283,18 @@ impl ProjectStore for SharedStore {
         progress: ProgressSink,
     ) -> Result<Arc<dyn ProjectHandle>, OpenFailure> {
         self.0.open(folder, progress)
+    }
+
+    fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
+        self.0.copy(folder, name)
+    }
+
+    fn trust_lock(&self, folder: &ProjectRef) {
+        self.0.trust_lock(folder);
+    }
+
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        self.0.name_run(run);
     }
 
     #[cfg(feature = "test-hooks")]

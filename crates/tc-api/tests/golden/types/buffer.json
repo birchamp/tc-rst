@@ -127,6 +127,21 @@
         },
         "instance": "abababababababababababababababab"
       }
+    },
+    {
+      "type": "removed",
+      "value": {
+        "key": {
+          "project": "en_ult | draft \"2\"",
+          "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+          "field": {
+            "kind": "verse",
+            "place": "TIT 1:4"
+          }
+        },
+        "instance": "abababababababababababababababab",
+        "text": "Paul, a servant"
+      }
     }
   ]
 }

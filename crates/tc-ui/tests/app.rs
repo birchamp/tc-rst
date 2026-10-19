@@ -8,6 +8,7 @@ mod app {
     mod buffer;
     mod cache;
     mod client;
+    mod draft_machine;
     mod effects;
     mod feedback;
     mod forms;
@@ -15,6 +16,7 @@ mod app {
     mod indicator;
     mod internet;
     mod language;
+    mod offer;
     mod recovery;
     mod save;
     pub mod save_kit;

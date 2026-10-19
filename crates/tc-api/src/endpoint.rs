@@ -155,6 +155,11 @@ scoped!(
     crate::prefs::SetAlignSuggestions,
     crate::prefs::RecordPlace,
     crate::session::Close,
+    crate::session::Drafts,
+    crate::session::KeepDraft,
+    crate::session::DiscardDraft,
+    crate::session::CopyProject,
+    crate::session::OtherComputerClosed,
 );
 unscoped!(
     crate::app::Quit,

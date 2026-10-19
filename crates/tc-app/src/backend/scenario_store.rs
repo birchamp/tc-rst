@@ -394,6 +394,18 @@ impl ProjectStore for ScenarioStore {
         self.backend.open(folder, progress)
     }
 
+    fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), super::CopyFailure> {
+        self.backend.copy(folder, name)
+    }
+
+    fn trust_lock(&self, folder: &ProjectRef) {
+        self.backend.trust_lock(folder);
+    }
+
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        self.backend.name_run(run);
+    }
+
     /// Every written project opened or given teammates since it was written is written
     /// again, and every other entry of the projects folder (a project a journey created) is
     /// removed. The registry has closed every session, and each close waited for the store's

@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex, Weak};
 
 use serde_json::json;
 use tc_api::app::{OpenSession, SessionRole};
-use tc_api::event::{CheckpointOutcome, Event, SessionEvent};
+use tc_api::event::{CheckpointOutcome, Event, SessionEvent, SessionMode};
 use tc_api::ids::{Epoch, ProjectId, ProjectRef, Scope, ViewSeq};
 use tc_api::{ApiError, Message};
 use tc_journal::record::CommentTarget;
@@ -150,6 +150,10 @@ struct Slot {
     screen: Screen,
     side: u32,
     writes: u32,
+    /// The person went Home from this session's screen. A read-only session that was left is
+    /// never joined by a screen open again: the person may have dealt with what made it
+    /// read-only ("That computer is closed", C1b), and only a fresh open looks again.
+    left: bool,
 }
 
 /// A leave of the screen that has begun: the "leaving the project" checkpoint is to run
@@ -183,6 +187,15 @@ impl Slot {
         !self.has_screen() && self.side == 0 && self.writes == 0
     }
 
+    /// A read-only session the person left: a screen open waits for its close and opens the
+    /// folder afresh, never joins it.
+    fn left_read_only(&self) -> bool {
+        self.left
+            && self.session().is_some_and(|session| {
+                matches!(session.handle.facts().mode, SessionMode::ReadOnly(_))
+            })
+    }
+
     /// The leave checkpoint or the close a caller waits for before it can join the folder.
     fn settling(&self) -> Option<watch::Receiver<bool>> {
         match &self.phase {
@@ -207,6 +220,7 @@ impl Slot {
         else {
             return None;
         };
+        self.left = true;
         let session = session.clone();
         let (done, rx) = watch::channel(false);
         self.phase = Phase::Open {
@@ -258,6 +272,9 @@ enum Step {
     Settle(watch::Receiver<bool>),
     /// Another folder's screen open runs: a screen open waits for it, then leaves it.
     OtherScreen(ProjectRef),
+    /// A read-only session the person left still has users: a screen open waits until it
+    /// closes, then looks again.
+    Closing,
 }
 
 /// A user of a slot that leaves the slot when dropped, unless it was handed on.
@@ -404,6 +421,11 @@ impl SessionRegistry {
     ) -> Result<(Arc<ProjectSession>, UserGuard), OpenFailure> {
         loop {
             let mut leaves = Vec::new();
+            // Armed before the look, so a close that ends right after it still wakes this
+            // caller.
+            let changed = self.inner.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
             let step = {
                 let mut slots = lock(&self.inner.slots);
                 self.enter(&mut slots, folder, role, &progress, &mut leaves)
@@ -418,6 +440,7 @@ impl SessionRegistry {
                     let _ = done.wait_for(|done| *done).await;
                 }
                 Step::OtherScreen(other) => self.settled(&other).await,
+                Step::Closing => changed.await,
                 Step::Open(mut rx, guard) => {
                     let outcome = match rx.wait_for(Option::is_some).await {
                         Ok(outcome) => outcome.clone(),
@@ -483,6 +506,7 @@ impl SessionRegistry {
                     screen: Screen::Free,
                     side: 0,
                     writes: 0,
+                    left: false,
                 };
                 let guard = self.register(&mut slot, folder, role);
                 slots.insert(folder.clone(), slot);
@@ -493,6 +517,11 @@ impl SessionRegistry {
                 Phase::Opening(rx) => {
                     let rx = rx.clone();
                     Step::Open(rx, self.register(slot, folder, role))
+                }
+                Phase::Open { leaving: None, .. }
+                    if role == Role::Screen && slot.left_read_only() =>
+                {
+                    Step::Closing
                 }
                 Phase::Open {
                     session,
@@ -979,7 +1008,7 @@ async fn pump(
                 }
             }
             StoreEvent::Mode(mode) => SessionEvent::Mode(mode),
-            // Shown by C1b (`session/notices` reads the store's list) and D1 (what could not
+            // Shown by `session/notices`, which reads the store's list, and D1 (what could not
             // be written); a skipped event never ends the pump.
             StoreEvent::Notice(_) | StoreEvent::Materialized { .. } => continue,
         };

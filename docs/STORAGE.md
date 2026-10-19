@@ -2041,6 +2041,21 @@ leaves unchanged is not written again. A read-only open
 offers nothing and writes no draft; a copy of the project (§5.0) carries its `drafts.json`, and
 the copy's first open offers them.
 
+*(APP-DESIGN C1b, built in tc-store by the app's unit C1b, 2026-10-19: the file holds two kinds
+of entry. A* current *entry is the newest draft of a field this session typed, and a successful
+save of the field removes it; `KeepDraft` does not. An* offered *entry is a text an open offered
+(`offered: true` in the file), from the last session's entries or taken in from the page's
+buffer (`ProjectHandle::offer_draft`, written before it returns its number): only `KeepDraft` of
+its text or `discard_draft` of its number removes it, and `discard_draft` is written before it
+returns, so a save of the field, the field's typing since or a reload never takes another text
+of it, and a discarded text never comes back after a crash. An entry records the app's run that
+typed it (`run`, from `OpenOptions::run`). At open, an entry whose text the record holds now (any
+head), or, for one no open offered yet, the value its token stands for, goes; an entry of the
+opening run itself stays that run's current entry; every other becomes offered, and the file is
+written before the open returns. Whether a later save of its session superseded a draft is the
+app's to judge, with the page's buffer and the shell's mirror (APP-DESIGN §6.6, the draft
+machine).)*
+
 ### 5.15 OBS frames
 
 `SaveFrame { shown, text }` writes one `Frame` change; `SaveStoryRef` one `StoryRef` change. The

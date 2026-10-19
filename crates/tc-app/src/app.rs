@@ -300,6 +300,7 @@ impl App {
             .fill(&mut bytes)
             .map_err(|_| StartError::Random)?;
         let instance = ServerInstance::from_bytes(bytes);
+        store.name_run(instance);
 
         let bus = EventBus::new(instance);
         // The reports an earlier launch kept come first, so this launch's ids follow theirs.

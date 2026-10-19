@@ -245,11 +245,14 @@ fn a_draft_is_kept_and_offered_at_the_next_open_until_saved() {
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     let shown = handle.mint(&verse(1, 7), None).unwrap();
     handle
-        .submit(Command::Draft(Draft {
-            field: DraftField::Words,
-            shown: vec![shown],
-            text: "unsaved words".into(),
-        }))
+        .submit(Command::Draft {
+            draft: Draft {
+                field: DraftField::Words,
+                shown: vec![shown],
+                text: "unsaved words".into(),
+            },
+            at: tc_journal::WallTime(0),
+        })
         .wait()
         .unwrap();
     handle.wait_idle();
@@ -289,11 +292,14 @@ fn a_draft_whose_token_no_longer_verifies_is_offered_as_text_and_kept_without_pa
     save_verse(&handle, 1, 8, "hospitable").unwrap();
     let shown = handle.mint(&verse(1, 8), None).unwrap();
     handle
-        .submit(Command::Draft(Draft {
-            field: DraftField::Words,
-            shown: vec![shown],
-            text: "a lover of good".into(),
-        }))
+        .submit(Command::Draft {
+            draft: Draft {
+                field: DraftField::Words,
+                shown: vec![shown],
+                text: "a lover of good".into(),
+            },
+            at: tc_journal::WallTime(0),
+        })
         .wait()
         .unwrap();
     handle.wait_idle();

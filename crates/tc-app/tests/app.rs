@@ -21,6 +21,7 @@ mod app {
     pub mod common;
     mod dispatch;
     mod drafted;
+    mod drafts;
     mod events;
     mod feedback;
     mod field_store;

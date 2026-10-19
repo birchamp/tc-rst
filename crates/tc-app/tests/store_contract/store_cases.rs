@@ -425,6 +425,7 @@ async fn read_only_refuses_every_command_and_writes_nothing() {
             DraftField::Words,
             vec![token(handle.as_ref(), &tit(1, 3))],
             "typed".to_owned(),
+            tc_journal::WallTime(0),
         ))
         .await;
     assert_eq!(drafted.unwrap_err(), read_only);
@@ -477,6 +478,7 @@ async fn drafts_offered_after_reopen() {
             DraftField::Words,
             vec![token(handle.as_ref(), &key)],
             "typed, not saved".to_owned(),
+            tc_journal::WallTime(0),
         ))
         .await
         .unwrap();
@@ -505,6 +507,7 @@ async fn draft_with_unverifiable_token_is_offered_as_text() {
             DraftField::Words,
             vec![token(handle.as_ref(), &key)],
             "hospitable, typed".to_owned(),
+            tc_journal::WallTime(0),
         ))
         .await
         .unwrap();
@@ -550,6 +553,7 @@ async fn a_save_never_erases_a_newer_draft_of_its_field() {
             DraftField::Words,
             vec![shown],
             "first words, then more typed".to_owned(),
+            tc_journal::WallTime(0),
         ))
         .await
         .unwrap();

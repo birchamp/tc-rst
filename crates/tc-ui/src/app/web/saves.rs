@@ -381,13 +381,20 @@ impl Saves {
             .collect()
     }
 
-    /// The copy of a read-only project takes its folder's entries (A-10).
-    pub fn rekey(
+    /// The copy of a read-only project takes its folder's entries, the page's and the
+    /// shell's mirror's (A-10, 6.6, `offer::copy`). Returns the slots whose item the storage
+    /// would not take under the copy: they stay with the original, and the mirror has them.
+    pub async fn rekey(
         &self,
         from: (&ProjectRef, &ProjectId),
         to: (&ProjectRef, &ProjectId),
-    ) -> Result<usize, StoreError> {
-        buffer::rekey(&mut LocalStore::open(), from, to)
+    ) -> Vec<tc_api::session::BufferSlot> {
+        let mirror = bridge::take_buffered().await;
+        let copied = crate::app::offer::copy(&mut LocalStore::open(), &mirror, from, to);
+        for line in &copied.lines {
+            bridge::buffer_changed(line);
+        }
+        copied.stayed
     }
 
     /// After a reload in the same run (AD22, 6.6): each entry of this run whose project is open
