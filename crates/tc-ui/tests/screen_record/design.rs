@@ -1,7 +1,7 @@
-//! What docs/APP-DESIGN.md says the gate must know: the work units of §10; for each of the
-//! 62 baseline screens of §7.6, which unit captures which layer, on which backend, and which
-//! unit captures it again; and for each group of gallery cases in §7.4, which units capture its
-//! DOM and its pixels.
+//! What docs/APP-DESIGN.md says the gate must know: the work units of §10 and the scope each
+//! builds; for each of the 62 baseline screens of §7.6, which unit captures which layer, on
+//! which backend, and which unit captures it again; and for each group of gallery cases in
+//! §7.4, which units capture its DOM and its pixels.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -129,9 +129,27 @@ pub struct GalleryGroup {
     pub pixels: UnitId,
 }
 
+/// A unit of §10 and its scope cell, with the italic notes `*(…)*` left out: what the unit
+/// builds, not what a note says about it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnitScope {
+    pub unit: UnitId,
+    pub scope: String,
+}
+
+impl UnitScope {
+    /// True when the scope names `id` as a whole word (`M18`, never `M180`).
+    pub fn names(&self, id: &str) -> bool {
+        self.scope
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|word| word == id)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Design {
     pub units: BTreeSet<UnitId>,
+    pub scopes: Vec<UnitScope>,
     pub screens: Vec<ScreenPlan>,
     pub gallery: Vec<GalleryGroup>,
 }
@@ -163,6 +181,23 @@ fn section<'a>(doc: &'a str, heading: &str) -> Result<Vec<&'a str>, String> {
         .collect())
 }
 
+/// `text` without its italic notes, each from `*(` to the next `)*`.
+fn without_notes(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("*(") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find(")*") {
+            Some(end) => rest = &rest[start + end + 2..],
+            None => {
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn cells(line: &str) -> Vec<&str> {
     let inner = line.trim().trim_start_matches('|').trim_end_matches('|');
     inner.split('|').map(str::trim).collect()
@@ -189,11 +224,20 @@ fn named_unit(
 /// does not parse is an error naming the line.
 pub fn parse(doc: &str) -> Result<Design, String> {
     let mut units = BTreeSet::new();
+    let mut scopes = Vec::new();
     for line in section(doc, "## 10. Work breakdown")? {
         if let Some(rest) = line.strip_prefix("| ")
             && let Some(first) = rest.split(' ').next()
             && let Ok(unit) = UnitId::parse(first)
         {
+            let scope = cells(line)
+                .get(1)
+                .map(|cell| without_notes(cell))
+                .ok_or_else(|| format!("§10 line {line:?} has no scope cell"))?;
+            scopes.push(UnitScope {
+                unit: unit.clone(),
+                scope,
+            });
             units.insert(unit);
         }
     }
@@ -295,6 +339,7 @@ pub fn parse(doc: &str) -> Result<Design, String> {
     }
     Ok(Design {
         units,
+        scopes,
         screens,
         gallery,
     })

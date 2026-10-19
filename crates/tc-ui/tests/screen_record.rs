@@ -155,6 +155,44 @@ fn section_7_6_names_every_baseline_screen_with_its_units() {
     assert_eq!(design.units.len(), 48);
 }
 
+/// A gallery group named for a screen or dialog of the screen map (`S4`, `M18`) is built by the
+/// units §7.4 gives it, so no other unit of §10 lists that id in its scope: a unit that did
+/// would build a screen whose gallery case another unit captures.
+#[test]
+fn only_a_gallery_screens_own_units_list_it_in_their_scope() {
+    let design = doc(&Paths::committed());
+    let mut screens = Vec::new();
+    for group in &design.gallery {
+        let mut chars = group.name.chars();
+        let screen_id = chars.next().is_some_and(|c| "SMX".contains(c))
+            && chars.as_str().parse::<u32>().is_ok();
+        if !screen_id {
+            continue;
+        }
+        screens.push(group.name.as_str());
+        for scope in design.scopes.iter().filter(|s| s.names(&group.name)) {
+            assert!(
+                scope.unit == group.dom || scope.unit == group.pixels,
+                "§10: {}'s scope lists {}, which §7.4 gives to {} (DOM) and {} (pixels)",
+                scope.unit,
+                group.name,
+                group.dom,
+                group.pixels
+            );
+        }
+    }
+    assert_eq!(screens, ["S4", "S12", "S14", "M9", "M10", "M18"]);
+    let b4b = design
+        .scopes
+        .iter()
+        .find(|s| s.unit.as_str() == "B4b")
+        .unwrap();
+    assert!(
+        b4b.names("M18"),
+        "§10: B4b, which builds M18, does not list it"
+    );
+}
+
 #[test]
 fn section_7_4_names_every_gallery_group_with_its_units() {
     let paths = Paths::committed();
