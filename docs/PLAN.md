@@ -129,6 +129,16 @@ check in CI that can fail.
   - a torn `metadata.json`;
   - the stamps that the platform writes into `metadata.json`.
 
+- **P10. Old projects keep working.** Every format version, once frozen, leaves a set of
+  sample projects written by that version, which nobody may change afterwards. CI opens every
+  one with the current build and shows that every verse, alignment, check decision, comment,
+  conflict and history entry is still there and unchanged, that the project still validates,
+  and that it can still be edited, saved and exchanged. CI also has the last frozen version
+  open projects the current build wrote: it edits them, opens them read-only with a clear
+  message, or refuses a newer major before writing, and never calls them damaged. A test that
+  pins the format's bytes fails when the format changes without a new version and new sample
+  projects (owner request, 2026-10-18; STORAGE §12, storage unit V).
+
 ## Scope
 
 tC4 is about 43,000 lines of product code, made up of these parts:

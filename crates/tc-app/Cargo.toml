@@ -1,0 +1,48 @@
+[package]
+name = "tc-app"
+description = "The application services of the tC4 rebuild: the operations behind every screen, background jobs and their progress, events, one-at-a-time flows, this computer's preferences, the operation reports and the reply cache."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+# The `test` service of APP-DESIGN §5.8 (AD35): test/fieldStore, crash points, holds.
+# Release builds never enable it.
+test-hooks = ["tc-api/test-hooks"]
+# The fixture backend and its seed (APP-DESIGN AD6, AD7, AD35): STORAGE §13.2's state seed of
+# the parity projects, checked against their files. Release builds never enable it.
+fixture-backend = []
+
+[dependencies]
+tc-api = { path = "../tc-api", features = ["server"] }
+tc-core = { path = "../tc-core" }
+tc-burrito = { path = "../tc-burrito" }
+tc-door43 = { path = "../tc-door43" }
+tc-journal = { path = "../tc-journal" }
+tc-obs = { path = "../tc-obs" }
+tc-resources = { path = "../tc-resources" }
+tc-usfm = { path = "../tc-usfm" }
+base64.workspace = true
+ring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+unicode-normalization.workspace = true
+
+[dev-dependencies]
+# The integration tests use the test hooks and the fixture backend's seed, as tc-api's own
+# tests enable its features.
+tc-app = { path = ".", features = ["test-hooks", "fixture-backend"] }
+tc-api = { path = "../tc-api", features = ["server", "test-hooks", "proptest"] }
+proptest.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "sync", "time", "test-util"] }
+
+[[example]]
+name = "state_seed_bench"
+required-features = ["fixture-backend"]
+
+[lints]
+workspace = true

@@ -1,0 +1,1016 @@
+[
+  {
+    "wire": {
+      "type": "open",
+      "value": {
+        "type": "newerFormat",
+        "value": {
+          "format": 2
+        }
+      }
+    },
+    "code": null,
+    "key": "refusal.open.newer-format",
+    "vars": {
+      "format": "2"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "open",
+      "value": {
+        "type": "notAProject"
+      }
+    },
+    "code": "open.not-a-project",
+    "key": "refusal.open.not-a-project",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "open",
+      "value": {
+        "type": "unreadable",
+        "value": {
+          "reason": "Access is denied. (os error 5)"
+        }
+      }
+    },
+    "code": null,
+    "key": "home.openError",
+    "vars": {},
+    "detail": "Access is denied. (os error 5)"
+  },
+  {
+    "wire": {
+      "type": "open",
+      "value": {
+        "type": "lockHeld",
+        "value": {
+          "holder": {
+            "host": "DESKTOP-7Q2",
+            "pid": 4242
+          }
+        }
+      }
+    },
+    "code": null,
+    "key": "refusal.open.lock-held",
+    "vars": {
+      "pid": "4242",
+      "host": "DESKTOP-7Q2"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "open",
+      "value": {
+        "type": "lockHeld",
+        "value": {
+          "holder": null
+        }
+      }
+    },
+    "code": null,
+    "key": "refusal.open.lock-held-unnamed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "create",
+      "value": {
+        "type": "nameInUse",
+        "value": {
+          "abbr": "kr_ulb"
+        }
+      }
+    },
+    "code": null,
+    "key": "wizard.nameInUse",
+    "vars": {
+      "abbr": "kr_ulb"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "create",
+      "value": {
+        "type": "failed",
+        "value": {
+          "reason": "No space left on device (os error 28)"
+        }
+      }
+    },
+    "code": null,
+    "key": "wizard.error",
+    "vars": {},
+    "detail": "No space left on device (os error 28)"
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": "writeFailed"
+    },
+    "code": "import.write-failed",
+    "key": "refusal.import.write-failed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": "nameExists"
+    },
+    "code": "import.name-exists",
+    "key": "refusal.import.name-exists",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "export",
+      "value": "checkpointFailed"
+    },
+    "code": "export.checkpoint-failed",
+    "key": "refusal.export.checkpoint-failed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "export",
+      "value": "readFailed"
+    },
+    "code": "export.read-failed",
+    "key": "refusal.export.read-failed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "export",
+      "value": "printFailed"
+    },
+    "code": "export.print-failed",
+    "key": "refusal.export.print-failed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "export",
+      "value": "printFailedPictures"
+    },
+    "code": "export.print-failed-pictures",
+    "key": "refusal.export.print-failed-pictures",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "export",
+      "value": "nothingDrafted"
+    },
+    "code": "export.nothing-drafted",
+    "key": "refusal.export.nothing-drafted",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "blocked",
+        "value": {
+          "type": "notShared"
+        }
+      }
+    },
+    "code": "sync.not-shared",
+    "key": "syncResult.error.notShared",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "blocked",
+        "value": {
+          "type": "projectMismatch"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.projectMismatch",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "blocked",
+        "value": {
+          "type": "needsNewerApp",
+          "value": {
+            "major": 2,
+            "minReaderMinor": 0
+          }
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.needsNewerApp",
+    "vars": {
+      "format": "2"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "blocked",
+        "value": {
+          "type": "tc4TeamRepository"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.tc4TeamRepository",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "offline"
+        }
+      }
+    },
+    "code": "sync.offline",
+    "key": "syncResult.error.offline",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "notSignedIn"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.authFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "authFailed"
+        }
+      }
+    },
+    "code": "sync.auth-failed",
+    "key": "syncResult.error.authFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "noWriteAccess",
+          "value": {
+            "serverMessage": "user does not have write access"
+          }
+        }
+      }
+    },
+    "code": "sync.no-write-access",
+    "key": "syncResult.error.noWriteAccess",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "refRejected",
+          "value": {
+            "serverMessage": "protected branch hook declined"
+          }
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.other",
+    "vars": {
+      "reason": "protected branch hook declined"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "busy",
+          "value": {
+            "attempts": 3
+          }
+        }
+      }
+    },
+    "code": "sync.non-fast-forward",
+    "key": "syncResult.error.nonFastForward",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "remoteMissing"
+        }
+      }
+    },
+    "code": "sync.clone-failed",
+    "key": "syncResult.error.cloneFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "unreachable"
+        }
+      }
+    },
+    "code": "sync.clone-failed",
+    "key": "syncResult.error.cloneFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "readOnly"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.readOnly",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "io",
+          "value": {
+            "reason": "No space left on device (os error 28)"
+          }
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.other",
+    "vars": {
+      "reason": "No space left on device (os error 28)"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "offline"
+        }
+      }
+    },
+    "code": "sync.offline",
+    "key": "syncResult.error.offline",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "notSignedIn"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.authFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "authFailed"
+        }
+      }
+    },
+    "code": "sync.auth-failed",
+    "key": "syncResult.error.authFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "noWriteAccess",
+          "value": {
+            "serverMessage": "user does not have write access"
+          }
+        }
+      }
+    },
+    "code": "sync.no-write-access",
+    "key": "syncResult.error.noWriteAccess",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "refRejected",
+          "value": {
+            "serverMessage": "protected branch hook declined"
+          }
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.other",
+    "vars": {
+      "reason": "protected branch hook declined"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "busy",
+          "value": {
+            "attempts": 3
+          }
+        }
+      }
+    },
+    "code": "sync.non-fast-forward",
+    "key": "syncResult.error.nonFastForward",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "remoteMissing"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.notSent",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "unreachable"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.notSent",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "readOnly"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.readOnly",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "io",
+          "value": {
+            "reason": "No space left on device (os error 28)"
+          }
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.keptStopped",
+    "vars": {
+      "reason": "No space left on device (os error 28)"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "share",
+      "value": {
+        "type": "nameExists"
+      }
+    },
+    "code": "share.name-exists",
+    "key": "shareDialog.error.name-exists",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "share",
+      "value": {
+        "type": "offline"
+      }
+    },
+    "code": "share.offline",
+    "key": "shareDialog.error.offline",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "share",
+      "value": {
+        "type": "authFailed"
+      }
+    },
+    "code": "share.auth-failed",
+    "key": "shareDialog.error.auth-failed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "share",
+      "value": {
+        "type": "createRejected",
+        "value": {
+          "serverMessage": "repository quota exceeded"
+        }
+      }
+    },
+    "code": "share.create-rejected",
+    "key": "shareDialog.error.create-rejected",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "share",
+      "value": {
+        "type": "pushFailed",
+        "value": {
+          "reason": "the connection was reset"
+        }
+      }
+    },
+    "code": "share.push-failed",
+    "key": "shareDialog.error.push-failed",
+    "vars": {
+      "reason": "the connection was reset"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "openDoor43",
+      "value": "nameExists"
+    },
+    "code": "open-door43.name-exists",
+    "key": "refusal.open-door43.name-exists",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "openDoor43",
+      "value": "noJournal"
+    },
+    "code": "open-door43.no-journal",
+    "key": "refusal.open-door43.no-journal",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "openDoor43",
+      "value": "removed"
+    },
+    "code": "open-door43.removed",
+    "key": "refusal.open-door43.removed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "signIn",
+      "value": {
+        "type": "authFailed"
+      }
+    },
+    "code": "share.auth-failed",
+    "key": "signIn.error.auth-failed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "signIn",
+      "value": {
+        "type": "offline"
+      }
+    },
+    "code": "share.offline",
+    "key": "signIn.error.offline",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "signIn",
+      "value": {
+        "type": "serverUnavailable"
+      }
+    },
+    "code": "share.server-unavailable",
+    "key": "signIn.error.server-unavailable",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "signIn",
+      "value": {
+        "type": "rejected",
+        "value": {
+          "reason": "a token with this name exists"
+        }
+      }
+    },
+    "code": "share.sign-in-rejected",
+    "key": "signIn.error.sign-in-rejected",
+    "vars": {
+      "reason": "a token with this name exists"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "resources",
+      "value": {
+        "type": "catalogUnreadable",
+        "value": {
+          "reason": "the catalog answered 502"
+        }
+      }
+    },
+    "code": null,
+    "key": "sources.catalogError",
+    "vars": {
+      "reason": "the catalog answered 502"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "resources",
+      "value": {
+        "type": "someFailed",
+        "value": {
+          "list": "en_ult, en_tn"
+        }
+      }
+    },
+    "code": null,
+    "key": "sources.someFailed",
+    "vars": {
+      "list": "en_ult, en_tn"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "resources",
+      "value": {
+        "type": "fixFailed",
+        "value": {
+          "reason": "the archive is damaged"
+        }
+      }
+    },
+    "code": null,
+    "key": "fix.failed",
+    "vars": {
+      "reason": "the archive is damaged"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "resources",
+      "value": {
+        "type": "updateCheckFailed",
+        "value": {
+          "reason": "the catalog answered 502"
+        }
+      }
+    },
+    "code": null,
+    "key": "upgrade.checkFailed",
+    "vars": {
+      "reason": "the catalog answered 502"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "resources",
+      "value": {
+        "type": "upgradeFailed",
+        "value": {
+          "reason": "the archive is damaged"
+        }
+      }
+    },
+    "code": null,
+    "key": "upgrade.failed",
+    "vars": {
+      "reason": "the archive is damaged"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "resources",
+      "value": {
+        "type": "gatewayFailed"
+      }
+    },
+    "code": null,
+    "key": "gateway.failed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "resources",
+      "value": {
+        "type": "gatewayBlocked",
+        "value": {
+          "books": "Titus, Ruth"
+        }
+      }
+    },
+    "code": null,
+    "key": "gateway.blockedError",
+    "vars": {
+      "books": "Titus, Ruth"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "resources",
+      "value": {
+        "type": "adoptFailed",
+        "value": {
+          "error": "resources.json is read-only"
+        }
+      }
+    },
+    "code": null,
+    "key": "sources.adoptFailed",
+    "vars": {
+      "error": "resources.json is read-only"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "damaged"
+      }
+    },
+    "code": null,
+    "key": "exchange.error.damaged",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "newerFormat",
+        "value": {
+          "format": 2
+        }
+      }
+    },
+    "code": null,
+    "key": "exchange.error.newerFormat",
+    "vars": {
+      "format": "2"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "verifyFailed"
+      }
+    },
+    "code": null,
+    "key": "exchange.error.verifyFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "notWritten",
+        "value": {
+          "reason": "the drive is full"
+        }
+      }
+    },
+    "code": null,
+    "key": "exchange.error.notWritten",
+    "vars": {
+      "reason": "the drive is full"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "unreadable",
+        "value": {
+          "reason": "the drive was removed"
+        }
+      }
+    },
+    "code": null,
+    "key": "exchange.error.unreadable",
+    "vars": {
+      "reason": "the drive was removed"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "feedback",
+      "value": "noDesktop"
+    },
+    "code": null,
+    "key": "feedback.reason.no-desktop",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "feedback",
+      "value": "notConfigured"
+    },
+    "code": null,
+    "key": "feedback.reason.not-configured",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "feedback",
+      "value": "offline"
+    },
+    "code": null,
+    "key": "feedback.reason.offline",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "feedback",
+      "value": "timeout"
+    },
+    "code": null,
+    "key": "feedback.reason.timeout",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "feedback",
+      "value": "refused"
+    },
+    "code": null,
+    "key": "feedback.reason.refused",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "prefs",
+      "value": "localeNotSaved"
+    },
+    "code": null,
+    "key": "language.saveFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "upload",
+      "value": {
+        "type": "notWritten",
+        "value": {
+          "reason": "No space left on device (os error 28)"
+        }
+      }
+    },
+    "code": null,
+    "key": "upload.notWritten",
+    "vars": {
+      "reason": "No space left on device (os error 28)"
+    },
+    "detail": null
+  }
+]

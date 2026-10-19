@@ -1,0 +1,22 @@
+{
+  "path": "jobs/cancel",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "08080808080808080808080808080808",
+    "job": 9
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

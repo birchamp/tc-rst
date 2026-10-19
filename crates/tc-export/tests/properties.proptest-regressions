@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 185b38a3a427ffccf163b790f423ea2d5b507263a3cb858cc13eeb1e41b38e3d # shrinks to text = "aa", cut = Index(0), setup = PageSetup { columns: One, chapter_opening: Heading, verse_numbers: Shown, spacing: Single, paper: A4, pictures: Hidden, obs_layout: Above }
+cc e22ab831151344982f806a12349d66ff903b9a56586f1f2f89a9b666c5dd0543 # shrinks to chapters = [BookChapter { number: 1, verses: [] }, BookChapter { number: 2, verses: [BookVerse { label: "1", drafted: true, text: "a" }] }], setup = PageSetup { columns: One, chapter_opening: Heading, verse_numbers: Hidden, spacing: Single, paper: A4, pictures: Hidden, obs_layout: Above }, dir = Ltr
+cc c971ec3226333ef15015363919838f380f341da2e0a777baa48eafb9b388a986 # shrinks to stories = [ObsStory { number: 1, title: "", frames: [ObsFrame { image: ObsImage { alt: "", url: "" }, text: " " }], reference: None }], setup = PageSetup { columns: One, chapter_opening: Heading, verse_numbers: Hidden, spacing: Single, paper: A4, pictures: Shown, obs_layout: Wrapped }, dir = Ltr

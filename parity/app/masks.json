@@ -1,0 +1,144 @@
+{
+  "about": "Declared differences (APP-DESIGN §7.3): each mask names the element that may differ, the screens it applies to, the rectangle it covers in tC4's screenshot of each, and the ruling it cites (`build`, or an owner ruling that docs/PLAN.md lists under \"Where the rebuild differs from tC4 4.0 on purpose\"). `target` is tC4's element; `rust` is the rebuild's when it differs, null meaning the same as `target`; `<OBS>` and `<BIBLE>` stand for the two projects. `meaning` lists the values of what the DOM shows that may differ, as [tC4, rebuild] pairs. Rectangles are measured on tC4 by measure-masks.mjs on the baseline's machine; the gate fails a capture whose masked element lies outside its rectangle.",
+  "masks": [
+    {
+      "id": "about-build",
+      "ruling": "build",
+      "why": "The line names the program that runs: tC4 4.0.0-rc.1 (d310bf3) there, the rebuild's own version and build here.",
+      "target": {
+        "testid": "about-version"
+      },
+      "rust": null,
+      "rects": {
+        "about": {
+          "x": 482,
+          "y": 314,
+          "width": 124,
+          "height": 17
+        }
+      },
+      "meaning": null
+    },
+    {
+      "id": "feedback-attachment",
+      "ruling": "build",
+      "why": "The attachment names the program and the platform that send the report: tC4's build and Linux x86_64 there, the rebuild's own here.",
+      "target": {
+        "testid": "feedback-attachment"
+      },
+      "rust": null,
+      "rects": {
+        "feedback": {
+          "x": 364,
+          "y": 585,
+          "width": 552,
+          "height": 59
+        }
+      },
+      "meaning": null
+    },
+    {
+      "id": "q2-obs-card",
+      "ruling": "Q2",
+      "why": "The rebuild syncs OBS projects, so the shared OBS card reads \"Sync with Door43\" where tC4 reads \"Upload changes\".",
+      "target": {
+        "testid": "share-card-<OBS>"
+      },
+      "rust": null,
+      "rects": {
+        "shared-home": {
+          "x": 866,
+          "y": 236,
+          "width": 138,
+          "height": 31
+        },
+        "sync-internet-consent": {
+          "x": 866,
+          "y": 236,
+          "width": 138,
+          "height": 31
+        },
+        "sync-failed": {
+          "x": 866,
+          "y": 236,
+          "width": 138,
+          "height": 31
+        },
+        "sync-ok": {
+          "x": 866,
+          "y": 236,
+          "width": 138,
+          "height": 31
+        },
+        "sync-ok-teammates": {
+          "x": 866,
+          "y": 236,
+          "width": 138,
+          "height": 31
+        },
+        "sync-ok-restored": {
+          "x": 866,
+          "y": 236,
+          "width": 138,
+          "height": 31
+        }
+      },
+      "meaning": {
+        "homeCards": {
+          "<OBS>": [
+            "upload",
+            "sync"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q3-where",
+      "ruling": "Q3",
+      "why": "The rebuild opens private repositories after sign-in, so its note has no sentence that only public repositories can be opened; a new key replaces openDoor43.where. tC4's note has no test id: the unit that captures these screens sets `rust` to the rebuild's element.",
+      "target": {
+        "text": "The project opens from"
+      },
+      "rust": null,
+      "rects": {
+        "open-door43": {
+          "x": 417,
+          "y": 242,
+          "width": 400,
+          "height": 38
+        },
+        "open-door43-internet-consent": {
+          "x": 417,
+          "y": 242,
+          "width": 400,
+          "height": 38
+        },
+        "open-door43-refused": {
+          "x": 417,
+          "y": 185,
+          "width": 400,
+          "height": 39
+        }
+      },
+      "meaning": null
+    },
+    {
+      "id": "q3-refused",
+      "ruling": "Q3",
+      "why": "tC4's refusal says to make sure that the repository is public; the rebuild opens private repositories, so its sentence must not say this (the new text is not decided yet). The unit that captures the screen sets `rust` to the rebuild's element.",
+      "target": {
+        "text": "tC4 could not get the project from Door43."
+      },
+      "rust": null,
+      "rects": {
+        "open-door43-refused": {
+          "x": 417,
+          "y": 509,
+          "width": 446,
+          "height": 37
+        }
+      },
+      "meaning": null
+    }
+  ]
+}

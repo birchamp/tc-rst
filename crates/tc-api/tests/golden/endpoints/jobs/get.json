@@ -1,0 +1,37 @@
+{
+  "path": "jobs/get",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "job": 9
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "id": 9,
+      "kind": "open",
+      "project": "kr_ulb",
+      "state": {
+        "type": "running",
+        "value": {
+          "phase": {
+            "type": "open",
+            "value": "readingChanges"
+          },
+          "done": 312,
+          "total": 1890,
+          "item": null
+        }
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

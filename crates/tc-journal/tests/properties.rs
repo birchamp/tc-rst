@@ -27,6 +27,12 @@ use tc_journal::{BookId, Cause, Change, ChangeId, DeviceId, Record, RecordKey, T
 /// step, so a case is a few hundred folds.
 const CASES: u32 = 64;
 
+/// Cases per property of [`team`]. Its census counts a view that holds a change whose parent
+/// has not arrived (`VIEW_STATES`), and only about one script in eighteen reaches one (66 of
+/// 1,152 measured): in 64 cases the census misses it about one run in forty, in 256 less
+/// than one in a million. A property that counts it must not choose fewer.
+const VIEW_CASES: u32 = 256;
+
 /// `TC_PROPERTY_CASES` runs more cases, for a long sweep.
 fn cases() -> u32 {
     std::env::var("TC_PROPERTY_CASES")
@@ -283,15 +289,26 @@ fn states(extra: &'static [&'static str], view: bool) -> &'static [&'static str]
     )
 }
 
+/// How many cases [`team`] runs: [`VIEW_CASES`], or more for a long sweep.
+fn team_cases() -> u32 {
+    VIEW_CASES.max(cases())
+}
+
+/// Fails if a property that counts a view's missing parent runs too few cases to reach one
+/// every time: the census failed two full runs on Windows, each after all its cases passed.
+#[test]
+fn a_view_property_runs_enough_cases_to_reach_a_missing_parent() {
+    assert!(team_cases() >= 256, "{} cases", team_cases());
+}
+
 /// A property of one device's view, asserted on the view before the last exchange of the
 /// device with the most defects, and on a device's view once everyone holds everything.
 fn team(
-    cases: u32,
     extra: &'static [&'static str],
     test: impl Fn(&View, &Census) -> Result<(), TestCaseError>,
 ) {
     run_with_census(
-        cases.max(self::cases()),
+        team_cases(),
         arb_script(),
         states(extra, true),
         |script, census| {
@@ -372,7 +389,7 @@ fn fold_converges_under_any_union() {
 /// Fails if a change disappears, or an automated writer names a parent it did not hold.
 #[test]
 fn conservation() {
-    team(CASES, &[], |view, _| {
+    team(&[], |view, _| {
         let (sim, state) = (view.sim, view.state);
         let candidates: BTreeSet<ChangeId> = state
             .conflicts()
@@ -520,10 +537,7 @@ fn is_seed_stub(state: &FoldState, id: &ChangeId) -> bool {
 /// hides that a version continues a change that has not arrived (§7.4).
 #[test]
 fn concurrent_differences_are_visible() {
-    // A view that holds a change whose parent has not arrived comes from about one script in
-    // eighteen (66 of 1,152 measured): in 64 cases the census misses it about one run in
-    // forty, in 256 less than one in a million.
-    team(CASES * 4, &["incomplete history"], differences_are_visible);
+    team(&["incomplete history"], differences_are_visible);
 }
 
 fn differences_are_visible(view: &View, census: &Census) -> Result<(), TestCaseError> {
@@ -892,7 +906,7 @@ fn leaves(json: Option<&Json>, path: &mut Vec<String>, out: &mut BTreeMap<String
 /// is the value every head that changed it (relative to every base) wrote.
 #[test]
 fn merge_units_sound() {
-    team(CASES, &[], |view, census| {
+    team(&[], |view, census| {
         let state = view.state;
         for key in state.record_keys() {
             let Some(Resolved::Merged {
@@ -1444,7 +1458,6 @@ fn generated_word(token: &str) -> bool {
 #[test]
 fn provisional_usfm_never_drops_words() {
     team(
-        CASES,
         &["structure issue", "stray covered verse"],
         |view, census| {
             let state = view.state;
@@ -1554,7 +1567,7 @@ fn provisional_usfm_never_drops_words() {
 /// Fails if an attached record is left on an identity no screen shows.
 #[test]
 fn every_head_reachable_from_a_screen() {
-    team(CASES, &[], |view, _| {
+    team(&[], |view, _| {
         let state = view.state;
         let candidates: BTreeSet<ChangeId> = state
             .conflicts()
@@ -1666,7 +1679,6 @@ fn every_head_reachable_from_a_screen() {
 #[test]
 fn book_removal_hides_nothing_unseen() {
     team(
-        CASES,
         &["removed with unseen work", "removed, all seen"],
         |view, census| {
             let (sim, state) = (view.sim, view.state);

@@ -217,6 +217,11 @@ export const PROJECTS = [
 
 const md5 = (bytes) => crypto.createHash('md5').update(bytes).digest('hex');
 
+/** The file to read for `rel`, a path in tC4. `tc4` is a tC4 checkout's root, or a function
+ * from such a path to the file to read (parity/app/state.mjs maps them to this repository's
+ * copies in fixtures/tc4). */
+const tc4File = (tc4, rel) => (typeof tc4 === 'function' ? tc4(rel) : path.join(tc4, rel));
+
 /** Every file under `dir`, as `/`-joined paths relative to it. */
 function listFiles(dir, rel = '') {
   if (!fs.existsSync(dir)) throw new Error(`${dir} is missing: run \`node fixtures/vendor/make-vendor.mjs\``);
@@ -235,7 +240,7 @@ function copyTree(from, to) {
 }
 
 function buildResource(tc4, reposRoot, spec) {
-  const meta = JSON.parse(fs.readFileSync(path.join(tc4, spec.metadata), 'utf8'));
+  const meta = JSON.parse(fs.readFileSync(tc4File(tc4, spec.metadata), 'utf8'));
   const dcs = meta.identification.primary.dcs;
   const [fixtureKey] = Object.keys(dcs);
   const fixtureRevision = dcs[fixtureKey].revision;
@@ -261,7 +266,7 @@ function buildResource(tc4, reposRoot, spec) {
   for (const [ipath, source] of Object.entries(sources).sort(([a], [b]) => a.localeCompare(b))) {
     const fromVendor = typeof source === 'object';
     const fixture = fromVendor ? `fixtures/vendor/${source.vendor}` : source;
-    const bytes = fs.readFileSync(fromVendor ? path.join(VENDOR, source.vendor) : path.join(tc4, source));
+    const bytes = fs.readFileSync(fromVendor ? path.join(VENDOR, source.vendor) : tc4File(tc4, source));
     const recorded = meta.ingredients[ipath]?.checksum?.md5 ?? null;
     if (spec.rename || (fromVendor && recorded !== md5(bytes))) {
       // The metadata describes the bytes this burrito actually carries.
@@ -380,7 +385,7 @@ export function buildState({ tc4 = DEFAULT_TC4, scenario = 'sample', out = state
   fs.rmSync(out, { recursive: true, force: true });
   const repos = path.join(out, 'repos');
   for (const project of PROJECTS) {
-    copyTree(path.join(tc4, project.from), path.join(repos, '_local_', '_local_', project.dir));
+    copyTree(tc4File(tc4, project.from), path.join(repos, '_local_', '_local_', project.dir));
   }
   const installed = {};
   const provenance = [];
@@ -402,12 +407,15 @@ export function buildState({ tc4 = DEFAULT_TC4, scenario = 'sample', out = state
     `${JSON.stringify({ installedResources: installed }, null, 2)}\n`,
   );
   fs.mkdirSync(path.join(out, 'vrs'), { recursive: true });
-  for (const name of fs.readdirSync(path.join(tc4, 'test/fixtures/vrs'))) {
-    if (name.endsWith('.json')) fs.copyFileSync(path.join(tc4, 'test/fixtures/vrs', name), path.join(out, 'vrs', name));
+  const vrs = tc4File(tc4, 'test/fixtures/vrs');
+  for (const name of fs.readdirSync(vrs)) {
+    if (name.endsWith('.json')) fs.copyFileSync(path.join(vrs, name), path.join(out, 'vrs', name));
   }
+  // Fixtures are named by their path in tC4, whichever copy was read, so a state built from
+  // this repository's copies is byte-identical to one built from a tC4 checkout.
   fs.writeFileSync(
     path.join(out, 'provenance.json'),
-    `${JSON.stringify({ tc4, scenario, projects: PROJECTS, resources: provenance, absent: ABSENT }, null, 2)}\n`,
+    `${JSON.stringify({ scenario, projects: PROJECTS, resources: provenance, absent: ABSENT }, null, 2)}\n`,
   );
   return { out, installed, provenance };
 }

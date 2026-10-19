@@ -1,0 +1,36 @@
+{
+  "path": "test/echo",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "size": 20480
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "words": [
+        {
+          "text": "בְּרֵאשִׁ֖ית",
+          "occurrence": 1,
+          "occurrences": 1,
+          "index": 0
+        },
+        {
+          "text": "בָּרָ֣א",
+          "occurrence": 1,
+          "occurrences": 2,
+          "index": 1
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

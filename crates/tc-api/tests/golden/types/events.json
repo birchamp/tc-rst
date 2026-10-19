@@ -1,0 +1,60 @@
+[
+  {
+    "type": "resync"
+  },
+  {
+    "type": "internet",
+    "value": {
+      "on": true
+    }
+  },
+  {
+    "type": "account",
+    "value": {
+      "user": "jdoe",
+      "kept": "kept",
+      "notice": null
+    }
+  },
+  {
+    "type": "job",
+    "value": {
+      "id": 9,
+      "kind": "seed",
+      "project": null,
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "finished"
+        }
+      }
+    }
+  },
+  {
+    "type": "projectsChanged"
+  },
+  {
+    "type": "homeCard",
+    "value": {
+      "project": "kr_ulb"
+    }
+  },
+  {
+    "type": "session",
+    "value": {
+      "at": {
+        "project": "kr_ulb",
+        "epoch": 3
+      },
+      "event": {
+        "type": "opened"
+      }
+    }
+  },
+  {
+    "type": "startup",
+    "value": {
+      "type": "ready"
+    }
+  }
+]

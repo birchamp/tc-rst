@@ -1,6 +1,10 @@
 use crate::catalog::{CatalogEntry, CatalogQuery, RawCatalogEntry, RawSearchResults};
-use crate::error::{AuthStatus, Door43Error, UnreachableCause};
+use crate::download::{
+    DownloadTo, DownloadWatch, DownloadedZip, STOP_CHECK_INTERVAL, Writing, disk,
+};
+use crate::error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 use crate::git_tree::ObjectId;
+use crate::http::{Http, HttpSpec, ProxyFinder, system_proxy_finder};
 use crate::internet::InternetSwitch;
 use crate::listing::Listing;
 use crate::names::{
@@ -13,13 +17,17 @@ use crate::repos::{
     RepoInfo, Tag,
 };
 use crate::secret::{Credentials, Session, Token};
-use crate::verify::{VerifiedArchive, VerifiedSbExport, verify_archive, verify_sb_export};
+use crate::verify::{
+    VerifiedArchive, VerifiedSbExport, verify_archive_from, verify_sb_export_from,
+};
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderValue, RETRY_AFTER};
 use reqwest::{Method, StatusCode};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::fmt;
+use std::fs::File;
+use std::io::BufReader;
 use std::time::{Duration, SystemTime};
 use url::Url;
 
@@ -37,10 +45,11 @@ const PAGE_LIMIT: u32 = 50;
 const MAX_PAGES: u32 = 40;
 const MAX_REDIRECTS: usize = 5;
 
-/// Timeouts and size caps. A download is held in memory while it is checked, so the caps
-/// bound the memory one download takes. The defaults suit a slow field connection on a
-/// low-memory laptop and leave room over the largest real resource (en_ult v89 is 7.7 MB
-/// zipped); raise them for something bigger.
+/// Timeouts and size caps. A download is streamed to a file and checked from there, and
+/// its unpacked files are held in memory, so `max_unpacked_bytes` bounds the memory one
+/// download takes and `max_download_bytes` the disk. The defaults suit a slow field
+/// connection on a low-memory laptop and leave room over the largest real resource (en_ult
+/// v89 is 7.7 MB zipped); raise them for something bigger.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Limits {
     pub connect_timeout: Duration,
@@ -65,13 +74,14 @@ impl Default for Limits {
 
 /// The one HTTP client for Door43. Every call reads the internet switch before it sends
 /// anything and refuses with [`Door43Error::Offline`] while the switch is off; a download
-/// in progress stops at its next chunk when the switch goes off.
+/// in progress stops at its next chunk when the switch goes off, or within
+/// [`STOP_CHECK_INTERVAL`] while it waits for one ([`crate::download`]).
 ///
 /// Secrets go only in the `Authorization` (and `X-GITEA-OTP`) header, marked sensitive.
 /// No URL carries one, and the log lines name only the method, path and status.
 #[derive(Clone)]
 pub struct Door43Client {
-    http: reqwest::Client,
+    http: Http,
     server: ServerUrl,
     internet: InternetSwitch,
     limits: Limits,
@@ -165,6 +175,17 @@ impl Door43Client {
         internet: InternetSwitch,
         limits: Limits,
     ) -> Result<Self, Door43Error> {
+        Self::with_proxy_finder(server, internet, limits, system_proxy_finder())
+    }
+
+    /// A client whose proxy `finder` names, asked only while the internet is on
+    /// ([`crate::http`]). `None` leaves the system's own proxy settings.
+    pub fn with_proxy_finder(
+        server: ServerUrl,
+        internet: InternetSwitch,
+        limits: Limits,
+        finder: Option<std::sync::Arc<dyn ProxyFinder>>,
+    ) -> Result<Self, Door43Error> {
         let origin = server.clone();
         // A redirect to another host would carry the request off the configured server;
         // only same-origin redirects are followed.
@@ -177,21 +198,19 @@ impl Door43Client {
                 attempt.error("a redirect to another server")
             }
         });
-        let builder = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .connect_timeout(limits.connect_timeout)
-            .read_timeout(limits.read_timeout)
-            .redirect(redirects)
-            .referer(false);
-        // A loopback server is the test fake; a system proxy must not see that traffic.
-        let builder = if server.is_loopback() {
-            builder.no_proxy()
-        } else {
-            builder.https_only(true)
+        let spec = HttpSpec {
+            user_agent: USER_AGENT,
+            connect_timeout: limits.connect_timeout,
+            read_timeout: limits.read_timeout,
+            redirects,
+            origins: vec![server.as_url().clone()],
+            // A loopback server is the test fake; a system proxy must not see that traffic.
+            loopback: server.is_loopback(),
         };
-        let http = builder.build().map_err(|e| Door43Error::Setup {
-            reason: e.to_string(),
-        })?;
+        let http =
+            Http::with_finder(spec, internet.clone(), finder).map_err(|e| Door43Error::Setup {
+                reason: e.to_string(),
+            })?;
         Ok(Self {
             http,
             server,
@@ -315,41 +334,54 @@ impl Door43Client {
     }
 
     /// Download the repository at exactly `commit` and return its files only after they
-    /// are shown to be that commit's content. See [`crate::verify`] for the checks.
+    /// are shown to be that commit's content. See [`crate::verify`] for the checks, and
+    /// [`crate::download`] for how the bytes travel and how the download is stopped.
     pub async fn download_archive(
         &self,
         repo: &RepoRef,
         commit: &GitOid,
+        to: DownloadTo<'_>,
     ) -> Result<VerifiedArchive, Door43Error> {
-        Ok(self.download_archive_zip(repo, commit).await?.1)
+        Ok(self.download_archive_zip(repo, commit, to).await?.1)
     }
 
     /// [`Door43Client::download_archive`], also returning the zip as it was downloaded,
     /// for a caller that records which download its files came from (a repackaged
-    /// lexicon names its archive's SHA-256).
+    /// lexicon names its archive's SHA-256). The zip stays on disk until it is dropped.
     pub async fn download_archive_zip(
         &self,
         repo: &RepoRef,
         commit: &GitOid,
-    ) -> Result<(Vec<u8>, VerifiedArchive), Door43Error> {
-        let tree = self.commit_tree(repo, commit).await?;
+        to: DownloadTo<'_>,
+    ) -> Result<(DownloadedZip, VerifiedArchive), Door43Error> {
         let file = format!("{commit}.zip");
         let url = self.repo_api(repo, &["archive", &file]);
         let route = route_of(&Method::GET, &url);
-        let bytes = self.download(url).await?;
-        let archive = verify_archive(&bytes, commit, &tree, self.limits.max_unpacked_bytes)
-            .map_err(|source| Door43Error::Verification { route, source })?;
-        Ok((bytes, archive))
+        // Before the commit lookup, so a cancelled download sends nothing.
+        self.check_stop(&route, to.watch)?;
+        // The lookup is part of the download: a stall here must not hold a Cancel either.
+        let looked_up = self.commit_tree(repo, commit);
+        let tree = self.unless_stopped(&route, to.watch, looked_up).await??;
+        let (route, zip) = self.download(url, to).await?;
+        let (commit, max) = (*commit, self.limits.max_unpacked_bytes);
+        let archive = check_in_background(&route, &zip, move |reader| {
+            verify_archive_from(reader, &commit, &tree, max)
+        })
+        .await?;
+        self.check_stop(&route, to.watch)?;
+        Ok((zip, archive))
     }
 
     /// Download the DCS Scripture Burrito export of `tag` and return it only when its
     /// metadata declares `expected` as its revision. `expected` must come from the pin or
-    /// from [`Door43Client::tag_commit`], never from the zip.
+    /// from [`Door43Client::tag_commit`], never from the zip. The zip is removed before
+    /// this returns.
     pub async fn download_sb_export(
         &self,
         repo: &RepoRef,
         tag: &TagName,
         expected: &GitOid,
+        to: DownloadTo<'_>,
     ) -> Result<VerifiedSbExport, Door43Error> {
         let mut file: Vec<String> = tag.segments().map(str::to_owned).collect();
         if let Some(last) = file.last_mut() {
@@ -358,10 +390,14 @@ impl Door43Client {
         let mut segments = vec![repo.owner.as_str(), repo.name.as_str(), "sb"];
         segments.extend(file.iter().map(String::as_str));
         let url = self.server.url_with_path(segments);
-        let route = route_of(&Method::GET, &url);
-        let bytes = self.download(url).await?;
-        verify_sb_export(&bytes, expected, self.limits.max_unpacked_bytes)
-            .map_err(|source| Door43Error::Verification { route, source })
+        let (route, zip) = self.download(url, to).await?;
+        let (expected, max) = (*expected, self.limits.max_unpacked_bytes);
+        let export = check_in_background(&route, &zip, move |reader| {
+            verify_sb_export_from(reader, &expected, max)
+        })
+        .await?;
+        self.check_stop(&route, to.watch)?;
+        Ok(export)
     }
 
     /// Sign in and mint a token named `name` with `scopes`. Door43 lists tokens without
@@ -509,12 +545,77 @@ impl Door43Client {
             .map_err(|()| unexpected(&route, "the commit's tree id is not a sha"))
     }
 
-    async fn download(&self, url: Url) -> Result<Vec<u8>, Door43Error> {
-        let (route, response) = self
-            .send(Method::GET, url, Auth::Anonymous, ZIP, None)
-            .await?;
-        self.read_body(&route, response, self.limits.max_download_bytes)
-            .await
+    /// GET `url` into a new file in `to`'s folder. See [`crate::download`].
+    async fn download(
+        &self,
+        url: Url,
+        to: DownloadTo<'_>,
+    ) -> Result<(String, DownloadedZip), Door43Error> {
+        let route = route_of(&Method::GET, &url);
+        self.check_stop(&route, to.watch)?;
+        let sent = self.send(Method::GET, url, Auth::Anonymous, ZIP, None);
+        let (route, mut response) = self.unless_stopped(&route, to.watch, sent).await??;
+        let limit = self.limits.max_download_bytes;
+        let too_large = || Door43Error::TooLarge {
+            route: route.clone(),
+            limit,
+        };
+        let announced = response.content_length();
+        if announced.is_some_and(|len| len > limit) {
+            return Err(too_large());
+        }
+        let mut writing = Writing::create(to.folder, &route)?;
+        let mut received: u64 = 0;
+        loop {
+            let next = self.unless_stopped(&route, to.watch, response.chunk());
+            let Some(chunk) = next.await?.map_err(|e| transport_error(&route, e))? else {
+                break;
+            };
+            self.check_stop(&route, to.watch)?;
+            received += chunk.len() as u64;
+            if received > limit {
+                return Err(too_large());
+            }
+            writing.write(&route, &chunk)?;
+            to.watch.received(received, announced);
+        }
+        let zip = writing.finish(&route)?;
+        Ok((route, zip))
+    }
+
+    /// `Err` when the internet switch is off ([`Door43Error::Offline`]) or the watch has
+    /// cancelled ([`Door43Error::Cancelled`]).
+    fn check_stop(&self, route: &str, watch: &dyn DownloadWatch) -> Result<(), Door43Error> {
+        if self.internet.check().is_err() {
+            tracing::debug!(%route, "door43 download stopped: the internet is off");
+            return Err(Door43Error::Offline {
+                route: route.to_owned(),
+            });
+        }
+        if watch.cancelled() {
+            tracing::debug!(%route, "door43 download cancelled");
+            return Err(Door43Error::Cancelled {
+                route: route.to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Waits for `future`, and every [`STOP_CHECK_INTERVAL`] meanwhile asks
+    /// [`Door43Client::check_stop`]; a stop drops the future, which ends its request.
+    async fn unless_stopped<F: Future>(
+        &self,
+        route: &str,
+        watch: &dyn DownloadWatch,
+        future: F,
+    ) -> Result<F::Output, Door43Error> {
+        let mut future = std::pin::pin!(future);
+        loop {
+            match tokio::time::timeout(STOP_CHECK_INTERVAL, future.as_mut()).await {
+                Ok(output) => return Ok(output),
+                Err(_) => self.check_stop(route, watch)?,
+            }
+        }
     }
 
     fn api(&self, segments: &[&str]) -> Url {
@@ -586,12 +687,12 @@ impl Door43Client {
         body: Option<Vec<u8>>,
     ) -> Result<(String, reqwest::Response), Door43Error> {
         let route = route_of(&method, &url);
-        if self.internet.check().is_err() {
+        let Ok(http) = self.http.client().await else {
             tracing::debug!(%route, "door43 request refused: the internet is off");
             return Err(Door43Error::Offline { route });
-        }
+        };
         let headers = AuthHeaders::of(auth);
-        let mut request = self.http.request(method, url).header(ACCEPT, accept);
+        let mut request = http.request(method, url).header(ACCEPT, accept);
         if let Some(value) = &headers.authorization {
             request = request.header(AUTHORIZATION, value.clone());
         }
@@ -651,6 +752,32 @@ impl Door43Client {
             body.extend_from_slice(&chunk);
         }
         Ok(body)
+    }
+}
+
+/// Runs a check of the downloaded zip on the blocking pool: it reads the file and unpacks
+/// and hashes every entry, which would hold up the async tasks for as long as it takes.
+async fn check_in_background<T: Send + 'static>(
+    route: &str,
+    zip: &DownloadedZip,
+    check: impl FnOnce(BufReader<File>) -> Result<T, VerificationError> + Send + 'static,
+) -> Result<T, Door43Error> {
+    let (owned, path) = (route.to_owned(), zip.path().to_owned());
+    let task = tokio::task::spawn_blocking(move || {
+        let file = File::open(&path).map_err(|e| disk(&owned, &path, e))?;
+        check(BufReader::new(file)).map_err(|source| Door43Error::Verification {
+            route: owned,
+            source,
+        })
+    });
+    match task.await {
+        Ok(checked) => checked,
+        // A panic in the check is raised here, as if it had run on this task.
+        Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+        // The runtime is shutting down.
+        Err(_) => Err(Door43Error::Cancelled {
+            route: route.to_owned(),
+        }),
     }
 }
 

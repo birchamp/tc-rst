@@ -1,6 +1,7 @@
 use crate::git_tree::ObjectId;
 use crate::names::GitOid;
 use std::fmt;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Why a Door43 call failed. `route` is the method and path, such as
@@ -64,6 +65,18 @@ pub enum Door43Error {
         #[source]
         source: VerificationError,
     },
+    /// The download's watch asked it to stop. Nothing of it was kept.
+    #[error("{route}: the download was cancelled")]
+    Cancelled { route: String },
+    /// A download could not be written to its file, or read back for its check. Nothing of
+    /// it was kept.
+    #[error("{route}: the download could not be kept in {path}: {source}")]
+    Disk {
+        route: String,
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     /// The HTTP client could not be built (for example, no TLS backend).
     #[error("the Door43 client could not start: {reason}")]
     Setup { reason: String },
@@ -121,8 +134,8 @@ pub enum VerificationError {
     #[error("two entries unpack to {0:?}")]
     DuplicateEntry(String),
     /// The names differ, but a case-insensitive or normalization-insensitive file system
-    /// (the Windows and macOS defaults), or Windows' removal of trailing dots and spaces,
-    /// would make them one file or folder, and writing both would lose one.
+    /// (the Windows and macOS defaults) would make them one file or folder, and writing
+    /// both would lose one.
     #[error("entries {first:?} and {second:?} would be one file on Windows or macOS")]
     CollidingNames { first: String, second: String },
     #[error("entry {path:?} cannot be written on every platform: {reason}")]
