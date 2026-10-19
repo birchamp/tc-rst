@@ -561,6 +561,8 @@ impl Project {
                     }
                     if removed {
                         run.report.removed.push(rel);
+                    } else {
+                        self.journal.left.insert(rel);
                     }
                 }
                 if run.files.is_empty() {
@@ -675,6 +677,8 @@ impl Project {
                     }
                     if removed {
                         gone.push(rel.clone());
+                    } else {
+                        self.journal.left.insert(rel.clone());
                     }
                 }
                 dirs.sync(&*self.vfs)?;
@@ -697,6 +701,7 @@ impl Project {
                 JournalKind::Pending => !self.journal.pending.contains_key(&f.rel),
             })
             .filter(|f| !self.journal.unreadable.contains(&f.rel))
+            .filter(|f| !self.journal.left.contains(&f.rel))
             .collect())
     }
 }

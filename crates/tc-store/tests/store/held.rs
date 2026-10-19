@@ -264,6 +264,81 @@ fn an_open_never_removes_a_temp_it_cannot_read() {
     handle.close().unwrap();
 }
 
+/// A seal whose pending file another program holds keeps the file; the session knows it sealed
+/// it, so the next checkpoint finds no second writer in it (the project stays writable and
+/// commits), and the next open removes it.
+#[test]
+fn a_pending_file_the_seal_could_not_remove_is_no_second_writer() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "sealed while the file is held").unwrap();
+    let held = pending_files(&rig.fs, &folder);
+    let abs = folder.join(&held[0]);
+    rig.fs.set_busy(&abs, true);
+    let first = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(first.commit.is_some(), "{first:?}");
+    assert!(rig.fs.peek(&abs).is_some(), "the held file stays");
+    save_verse(&handle, 1, 2, "a save after the seal").unwrap();
+    let second = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert_eq!(second.skipped, None, "{second:?}: {:?}", notices(&handle));
+    assert!(second.commit.is_some(), "{second:?}");
+    assert!(
+        !notices(&handle)
+            .iter()
+            .any(|n| matches!(n, Notice::SecondWriter { .. })),
+        "{:?}",
+        notices(&handle)
+    );
+    save_verse(&handle, 1, 3, "the project is still writable").unwrap();
+    handle.close().unwrap();
+    rig.fs.set_busy(&abs, false);
+    let handle = open(&rig, &folder);
+    assert!(rig.fs.peek(&abs).is_none(), "the next open removes it");
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("the project is still writable")
+    );
+    handle.close().unwrap();
+}
+
+/// The same at the open: O7 finds a pending file a valid pack holds every change of, and
+/// another program still holds it, so it stays; the session's first checkpoint finds no second
+/// writer in it.
+#[test]
+fn a_pending_file_the_open_could_not_remove_is_no_second_writer() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "sealed while the file is held").unwrap();
+    let held = pending_files(&rig.fs, &folder);
+    let abs = folder.join(&held[0]);
+    rig.fs.set_busy(&abs, true);
+    let sealed = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(sealed.commit.is_some(), "{sealed:?}");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    rig.fs.set_busy(&abs, true);
+    let handle = open(&rig, &folder);
+    assert!(rig.fs.peek(&abs).is_some(), "the held file stays");
+    save_verse(&handle, 1, 2, "a save after the open").unwrap();
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert_eq!(report.skipped, None, "{report:?}: {:?}", notices(&handle));
+    assert!(report.commit.is_some(), "{report:?}");
+    handle.close().unwrap();
+}
+
 /// A seal whose pending file is held keeps the file; the pack has its changes, and the next
 /// open removes the file without folding anything twice.
 #[test]

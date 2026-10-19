@@ -1134,11 +1134,14 @@ impl Project {
             if self.relocate_to_packs(&rel, JournalKind::Pending, info.number, &holders)? {
                 // A file a scanner still holds stays for the next open: the open never
                 // fails for it.
-                atomic_remove_if_free(
+                let removed = atomic_remove_if_free(
                     &*self.vfs,
                     &self.folder.path(&rel),
                     SyncDir::Deferred(&mut dirs),
                 )?;
+                if !removed {
+                    self.journal.left.insert(rel.clone());
+                }
                 self.journal.pending.remove(&rel);
                 if self.index.sections.remove(&rel).is_some() {
                     self.index.changed = true;
@@ -1181,7 +1184,9 @@ impl Project {
                 let holders = BTreeSet::from([by_rel.clone()]);
                 self.flush_holders(&holders, &mut flushed)?;
                 if self.relocate_to_packs(&rel, JournalKind::Pack, number, &holders)? {
-                    atomic_remove_if_free(&*self.vfs, &abs, SyncDir::Deferred(&mut dirs))?;
+                    if !atomic_remove_if_free(&*self.vfs, &abs, SyncDir::Deferred(&mut dirs))? {
+                        self.journal.left.insert(rel.clone());
+                    }
                     self.journal.packs.remove(&rel);
                     if self.index.sections.remove(&rel).is_some() {
                         self.index.changed = true;

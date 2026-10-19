@@ -69,6 +69,10 @@ pub(crate) struct Journal {
     pub unreadable: BTreeSet<String>,
     /// Expected packs (§4.4) missing from the working tree with no copy to restore.
     pub missing: BTreeSet<String>,
+    /// Journal files this session made redundant (a sealed pending file, a replaced pack) whose
+    /// removal another program refused: they stay for the next open (O7), and the session that
+    /// left them never takes them for a second writer's (§5.0).
+    pub left: BTreeSet<String>,
 }
 
 impl Journal {

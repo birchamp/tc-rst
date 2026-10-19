@@ -1579,7 +1579,10 @@ the project switches to read-only with `SecondWriter` and the copy offer above. 
 already written by either installation is kept: pending names never collide (§4.2), and the fold
 takes both. The watcher (§11.1) also watches `.tc/pending/` and `ingredients/tc/changes/` and
 tells the actor to list them; a checkpoint lists the journal folders before it seals as well,
-and a file this session does not know is folded and turns the project read-only.
+and a file this session does not know is folded and turns the project read-only. A file this
+session made redundant and could not remove because another program held it (a pending file K4
+sealed, a pack Q4 replaced, a file O7 found redundant) is one it knows: it stays for the next
+open's O7, and is no second writer's.
 
 **`commit_batch`**, used by every write path below:
 
@@ -4955,6 +4958,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the heads of an outside edit's base cut to those the fold holds (compare with a digest of a version the journal lost) | `a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_next_open`, `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded` |
 | the open's look at the stat of a path whose intent names its old bytes (take `d == m` or `d == o` as the app's own whatever the stat) | `a_revert_made_while_the_app_is_closed_after_a_crash_past_the_rename_is_recorded`, `a_revert_the_open_could_not_read_is_recorded_by_the_first_compare_and_swap` |
 | the manifest's `aheadOfJournal`, marked by a seal that lost changes for good | `a_book_file_a_seal_marked_is_recorded_even_when_its_heads_file_lags` |
+| the journal files a session left because another program held them (list them as unknown: a second writer) | `a_pending_file_the_seal_could_not_remove_is_no_second_writer`, `a_pending_file_the_open_could_not_remove_is_no_second_writer` |
 | K4 taking a pending file another program removed after K1 as removed (fail the seal with the removal's error) | `a_pending_file_removed_outside_during_the_seal_ends_the_seal_as_removed` |
 | the values of a pending file that lost lines left where the fold reads them (move them to the pack's offsets) | `a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle` |
 | the checkpoint job's carried placements leaving a path a newer snapshot placed or recorded (place the older version) | `a_checkpoint_job_never_places_an_older_version_over_a_newer_edit` |
