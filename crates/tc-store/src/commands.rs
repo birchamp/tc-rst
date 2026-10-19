@@ -172,6 +172,12 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             unchanged_or(ctx, &shown, record, Cause::Edit)?
         }
         Command::AddBook { book, scope, seed } => add_book(ctx, *book, scope, &seed.usfm)?,
+        Command::AddBookText {
+            book,
+            scope,
+            usfm,
+            file_name,
+        } => add_book_text(ctx, *book, scope, usfm, file_name)?,
         Command::RemoveBook {
             book,
             presence_shown,
@@ -944,6 +950,86 @@ fn add_book(ctx: &Ctx<'_>, book: BookId, scope: &Scope, source: &str) -> R<Vec<P
     )];
     for record in tc_journal::fold::records_from_usfm(book, &parts) {
         out.push(change(record, &[], Cause::Seed));
+    }
+    Ok(out)
+}
+
+/// A book with its text, all in one batch: the presence, the book's records and the
+/// alignments split from the verses that carry them (§13.5). A verse whose markup does not
+/// read apart keeps its text as written. The file is refused before anything is written when
+/// it does not cut into chapters and verses.
+fn add_book_text(
+    ctx: &Ctx<'_>,
+    book: BookId,
+    scope: &Scope,
+    usfm: &str,
+    file_name: &str,
+) -> R<Vec<PlannedChange>> {
+    use tc_journal::alignment::split_aligned;
+    use tc_journal::{ImportSource, VerseNo};
+    use tc_usfm::codec::{self, VersePart};
+
+    ctx.require_kind(ProjectKind::Bible)?;
+    if !ctx.fold.heads(&RecordKey::BookPresence(book)).is_empty() {
+        return Err(refused(Refusal::Book(format!(
+            "{} is already in the project, or was removed: restore it instead",
+            book.english_name()
+        ))));
+    }
+    check_scope(ctx, book, scope)?;
+    let mut parts = codec::decompose(usfm)
+        .map_err(|e| refused(Refusal::Book(format!("the file does not read: {e}"))))?;
+    let cause = Cause::Import(ImportSource::Usfm {
+        file_name: file_name.into(),
+    });
+    if parts.chapters.is_empty() {
+        return Err(refused(Refusal::Book(
+            "the file has no chapters or verses to add".into(),
+        )));
+    }
+    let mut alignments = Vec::new();
+    for (&c, chapter) in parts.chapters.iter_mut() {
+        let Some(chapter_no) = ChapterNo::new(c) else {
+            continue;
+        };
+        for (&v, part) in chapter.verses.iter_mut() {
+            let VersePart::Text(verse) = part else {
+                continue;
+            };
+            let (Some(verse_no), Some(last)) = (VerseNo::new(v), VerseNo::new(verse.last)) else {
+                continue;
+            };
+            let content = codec::join_verse(&verse.words, &verse.layout);
+            let Some((plain, value)) = split_aligned(&content, last) else {
+                continue;
+            };
+            let (words, layout) = codec::split_verse(&plain);
+            verse.words = words.to_owned();
+            verse.layout = layout.to_owned();
+            alignments.push(Record::Alignment {
+                book,
+                chapter: chapter_no,
+                verse: verse_no,
+                value,
+            });
+        }
+    }
+    let mut out = vec![change(
+        Record::BookPresence {
+            book,
+            value: BookPresence::Present {
+                scope: scope.clone(),
+                how: PresentHow::Added,
+            },
+        },
+        &[],
+        cause.clone(),
+    )];
+    for record in tc_journal::fold::records_from_usfm(book, &parts)
+        .into_iter()
+        .chain(alignments)
+    {
+        out.push(change(record, &[], cause.clone()));
     }
     Ok(out)
 }

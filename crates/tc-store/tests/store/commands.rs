@@ -21,8 +21,8 @@ use tc_journal::record::{
 };
 use tc_journal::{
     BatchId, BatchRef, BookId, Cause, Change, ChangeBody, ChangeId, ChapterNo, DeviceId, DeviceSeq,
-    FORMAT_MINOR, GitOid, Json, JsonMap, Md5, MetaField, ProjectId, Record, RecordKey, RepoPath,
-    ShownToken, SlotName, Verified, VerseNo, WallTime,
+    FORMAT_MINOR, GitOid, ImportSource, Json, JsonMap, Md5, MetaField, ProjectId, Record,
+    RecordKey, RepoPath, ShownToken, SlotName, Verified, VerseNo, WallTime,
 };
 use tc_store::fault::FaultFs;
 use tc_store::{CommandError, OpenOptions, ProjectHandle, Refusal, Stored};
@@ -527,6 +527,15 @@ fn every_command(handle: &ProjectHandle) -> Vec<(&'static str, Command)> {
         },
     ));
     out.push((
+        "AddBookText",
+        Command::AddBookText {
+            book: BookId::SecondJohn,
+            scope: Scope::Whole,
+            usfm: ult("TIT"),
+            file_name: "2JN.usfm".into(),
+        },
+    ));
+    out.push((
         "RemoveBook",
         Command::RemoveBook {
             book: PHM,
@@ -969,6 +978,179 @@ fn a_book_is_added_with_stubs_removed_with_what_was_seen_and_restored_either_way
     assert!(matches!(restarted.cause, Cause::StartOver));
     assert_eq!(restarted.parents, jude_heads);
     handle.close().unwrap();
+}
+
+fn add_text(book: BookId, usfm: String) -> Command {
+    Command::AddBookText {
+        book,
+        scope: Scope::Whole,
+        usfm,
+        file_name: format!("{}.usfm", book.code()),
+    }
+}
+
+/// The keys of every record of `book` the fold holds.
+fn book_keys(handle: &ProjectHandle, book: BookId) -> Vec<RecordKey> {
+    handle
+        .snapshot()
+        .fold()
+        .record_keys()
+        .into_iter()
+        .filter(|k| k.book() == Some(book))
+        .collect()
+}
+
+/// tC4 #767 (`addUsfmBooks`): the presence, the verses and the alignments are one batch. A
+/// kill at any write point leaves no book, or the whole book with its alignments; never the
+/// stub book tC4 left, which every retry refused as "already in the project".
+#[test]
+fn adding_a_book_from_usfm_is_one_batch_whole_or_absent() {
+    let (base, folder) = rich();
+    let book = BookId::SecondJohn;
+    let whole = {
+        let (_rig, handle) = open(&base.copy(), &folder);
+        submit(&handle, add_text(book, ult("TIT"))).unwrap();
+        book_keys(&handle, book)
+    };
+    assert!(whole.len() > 46 + 46, "{}", whole.len());
+    let points = kill_everywhere(
+        &base,
+        &folder,
+        &|handle| outcome_of(submit(handle, add_text(book, ult("TIT")))),
+        &|handle, outcome| {
+            let got = book_keys(handle, book);
+            if outcome == Outcome::Saved {
+                assert_eq!(got, whole, "a saved book is gone");
+            }
+            assert!(got.is_empty() || got == whole, "half a book: {}", got.len());
+            if got.is_empty() {
+                let fold = handle.snapshot().fold().clone();
+                assert!(
+                    fold.heads(&RecordKey::BookPresence(book)).is_empty(),
+                    "no presence, so a retry is not refused"
+                );
+            }
+        },
+    );
+    assert!(points >= 4, "{points} kill points");
+}
+
+/// tC4 #553: an aligned file keeps its alignments. Every verse of en_ult Titus splits into its
+/// plain text and an alignment record, and no verse keeps inline `\zaln` markup.
+#[test]
+fn aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records() {
+    let (base, folder) = rich();
+    let (_rig, handle) = open(&base, &folder);
+    let book = BookId::SecondJohn;
+    let reply = submit(&handle, add_text(book, ult("TIT"))).unwrap();
+    let fold = handle.snapshot().fold().clone();
+    let (mut alignments, mut verses) = (0, 0);
+    for key in book_keys(&handle, book) {
+        match fold.projected(&key) {
+            Some(Record::Alignment {
+                value,
+                chapter,
+                verse,
+                ..
+            }) => {
+                alignments += 1;
+                let Some(Record::Verse {
+                    value: VerseValue::Text { words, layout, .. },
+                    ..
+                }) = fold.projected(&vkey(book, chapter.get(), verse.get()))
+                else {
+                    continue;
+                };
+                assert_eq!(
+                    value.target_verse_md5,
+                    tc_journal::decision::verse_text_md5_v1(&tc_usfm::codec::join_verse(
+                        &words, &layout
+                    ))
+                );
+            }
+            Some(Record::Verse {
+                value: VerseValue::Text { words, layout, .. },
+                ..
+            }) => {
+                verses += 1;
+                assert!(
+                    !words.contains("\\zaln") && !layout.contains("\\zaln"),
+                    "{words}"
+                );
+            }
+            _ => {}
+        }
+    }
+    assert_eq!((alignments, verses), (46, 46));
+    for id in &reply.changes {
+        let body = fold.body(id).unwrap();
+        assert!(
+            matches!(&body.cause, Cause::Import(ImportSource::Usfm { file_name }) if &**file_name == "2JN.usfm"),
+            "{:?}",
+            body.cause
+        );
+    }
+    // The text and the alignment are the file's: nothing the file said is dropped.
+    let (words, layout) = match fold.projected(&vkey(book, 1, 1)) {
+        Some(Record::Verse {
+            value: VerseValue::Text { words, layout, .. },
+            ..
+        }) => (words, layout),
+        other => panic!("{other:?}"),
+    };
+    assert!(tc_usfm::codec::join_verse(&words, &layout).starts_with("Paul, a servant"));
+}
+
+/// §13.5: a verse whose markup does not read apart keeps its text as written, and the rest
+/// of the book still adds.
+#[test]
+fn a_verse_whose_alignment_does_not_read_apart_keeps_its_text_as_written() {
+    let (base, folder) = rich();
+    let (_rig, handle) = open(&base, &folder);
+    let odd = "\\zaln-s |x-strong=\"G1\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"a\"\\*\\w Paul|x-occurrence=\"1\" x-occurrences=\"1\" x-lemma=\"p\"\\w*\\zaln-e\\*";
+    let usfm = format!("\\id 2JN\n\\c 1\n\\p\n\\v 1 {odd}\n\\v 2 plain words\n");
+    submit(&handle, add_text(BookId::SecondJohn, usfm)).unwrap();
+    let fold = handle.snapshot().fold().clone();
+    match fold.projected(&vkey(BookId::SecondJohn, 1, 1)) {
+        Some(Record::Verse {
+            value: VerseValue::Text { words, layout, .. },
+            ..
+        }) => assert!(
+            tc_usfm::codec::join_verse(&words, &layout).contains("\\zaln-s"),
+            "{words}"
+        ),
+        other => panic!("{other:?}"),
+    }
+    assert!(
+        book_keys(&handle, BookId::SecondJohn)
+            .iter()
+            .all(|k| !matches!(k, RecordKey::Alignment(..)))
+    );
+    assert!(matches!(
+        fold.projected(&vkey(BookId::SecondJohn, 1, 2)),
+        Some(Record::Verse { .. })
+    ));
+}
+
+/// tC4 #484: a book the project holds, or removed, is refused with nothing written; a file
+/// that does not cut into chapters and verses is refused before anything is written.
+#[test]
+fn a_book_from_a_file_is_refused_when_present_or_when_the_file_does_not_read() {
+    let (base, folder) = rich();
+    let (_rig, handle) = open(&base, &folder);
+    let before = handle.snapshot().fold().record_keys().len();
+    for (book, usfm) in [
+        (PHM, source("PHM")),
+        (JUD, source("JUD")),
+        (BookId::SecondJohn, "not a USFM file at all".to_owned()),
+    ] {
+        let result = submit(&handle, add_text(book, usfm));
+        assert!(
+            matches!(result, Err(CommandError::Refused(Refusal::Book(_)))),
+            "{book:?}: {result:?}"
+        );
+    }
+    assert_eq!(handle.snapshot().fold().record_keys().len(), before);
 }
 
 #[test]
