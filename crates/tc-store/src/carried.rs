@@ -127,7 +127,7 @@ impl Writer {
             && p.md5 == md5
         {
             // The bytes the project places, and the entry has not caught up with them.
-            self.set_carried_entry(rel, md5, size, p.oid);
+            self.set_carried_entry(rel, md5, size, p.oid, self.seq);
             return Ok(());
         }
         // Bytes the app did not place: an edit of a placed file, or a new one.
@@ -240,17 +240,36 @@ impl Writer {
         }
     }
 
-    /// A carried path's entry: the bytes the app holds there, with their blob.
-    pub(crate) fn set_carried_entry(&mut self, rel: &str, md5: Md5, size: u64, oid: GitOid) {
+    /// A carried path's entry: the bytes the app holds there, with their blob, placed or found
+    /// equal from the fold of sequence number `seq` (a checkpoint's job on an older fold
+    /// leaves the path alone, [`Writer::written_from_newer_fold`]). The carried files are
+    /// listed again only when what `metadata.json` says of the path changed.
+    pub(crate) fn set_carried_entry(
+        &mut self,
+        rel: &str,
+        md5: Md5,
+        size: u64,
+        oid: GitOid,
+        seq: u64,
+    ) {
         let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
         let mtime = meta.map_or(0, |m| m.mtime_ns);
         let settled = meta.is_some() && self.settles(mtime);
         let mut entry = Entry::of(md5.to_hex(), size, mtime, settled);
         entry.oid = Some(oid.to_hex());
+        let listed_differently = self
+            .manifest
+            .paths
+            .get(rel)
+            .is_none_or(|e| e.md5 != entry.md5 || e.size != size || e.oid != entry.oid);
         self.manifest.paths.insert(rel.to_owned(), entry);
         self.manifest_changed = true;
         self.shared.remove_notices_of(rel);
-        self.dirty.carried = true;
+        let seen = self.written_seq.entry(rel.to_owned()).or_insert(seq);
+        *seen = (*seen).max(seq);
+        if listed_differently {
+            self.dirty.carried = true;
+        }
     }
 
     /// Stores the bytes of `rel` as a blob (the same pass takes their md5 again) and hands a
@@ -397,6 +416,9 @@ impl Writer {
         for placement in self.fold.carried_files() {
             if !placement.path.starts_with("ingredients/")
                 || self.pending_record.contains_key(&placement.path)
+                // A checkpoint's job on an older fold never puts an older version back over
+                // one a newer fold placed or recorded (§5.13 C2).
+                || self.written_from_newer_fold(&placement.path)
             {
                 continue;
             }
@@ -431,7 +453,7 @@ impl Writer {
                     }
                 };
                 if md5 == p.md5 {
-                    self.set_carried_entry(&p.path, md5, size, p.oid);
+                    self.set_carried_entry(&p.path, md5, size, p.oid, self.seq);
                     return Ok(());
                 }
                 if entry.as_ref().is_some_and(|e| e.held.is_some()) {
@@ -504,7 +526,7 @@ impl Writer {
         match wrote {
             Ok(Written::Renamed) => {
                 self.counters.add(&self.counters.derived_written, 1);
-                self.set_carried_entry(&p.path, p.md5, p.size, p.oid);
+                self.set_carried_entry(&p.path, p.md5, p.size, p.oid, self.seq);
                 report.written.push(p.path.clone());
             }
             Ok(Written::Refused) => {
@@ -530,8 +552,9 @@ impl Writer {
     }
 
     /// The writer's acceptance of a carried version the actor recorded (D7): the entry names
-    /// the blob and the bytes of the file.
+    /// the blob and the bytes of the file, which the newest snapshot holds.
     pub(crate) fn accept_carried(&mut self, rel: &str, md5: Md5, size: u64, oid: GitOid) {
-        self.set_carried_entry(rel, md5, size, oid);
+        let seq = self.newest_seq();
+        self.set_carried_entry(rel, md5, size, oid, seq);
     }
 }

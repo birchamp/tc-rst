@@ -727,6 +727,12 @@ impl Writer {
             .is_some_and(|written| *written > self.seq)
     }
 
+    /// The sequence number of the newest snapshot, which holds every batch the actor has
+    /// answered for: the fold a version the writer accepts now stands for.
+    pub(crate) fn newest_seq(&self) -> u64 {
+        self.shared.snapshot().seq().max(self.seq)
+    }
+
     /// M0 to M8 for one group.
     fn run_group(
         &mut self,
@@ -1819,18 +1825,34 @@ impl Writer {
                 );
             }
         }
-        // Carried files, as they are on disk (the writer places their bytes, §11.4).
-        for placement in self.fold.carried_files() {
-            if listed.contains(&placement.path)
-                || !placement.path.starts_with("ingredients/")
-                || removed.contains(placement.path.as_str())
+        // Carried files, as they are on disk (the writer places their bytes, §11.4): the
+        // fold's placements, and in a checkpoint's job on an older fold, the paths a newer
+        // fold placed or recorded, as their entries say, with the blob the entry names.
+        let mut carried: BTreeMap<String, Option<String>> = self
+            .fold
+            .carried_files()
+            .into_iter()
+            .filter(|p| !self.written_from_newer_fold(&p.path))
+            .map(|p| (p.path, Some(p.oid.to_hex())))
+            .collect();
+        carried.extend(
+            self.manifest
+                .paths
+                .iter()
+                .filter(|(path, e)| {
+                    e.oid.is_some() && e.held.is_none() && self.written_from_newer_fold(path)
+                })
+                .map(|(path, e)| (path.clone(), e.oid.clone())),
+        );
+        for (path, oid) in carried {
+            if listed.contains(&path)
+                || !path.starts_with("ingredients/")
+                || removed.contains(path.as_str())
             {
                 continue;
             }
-            if let Some((md5, size)) =
-                self.listing_of_file(&placement.path, Some(placement.oid.to_hex()))?
-            {
-                push(&mut entries, &placement.path, md5, size, None, None);
+            if let Some((md5, size)) = self.listing_of_file(&path, oid)? {
+                push(&mut entries, &path, md5, size, None, None);
             }
         }
         self.assemble_metadata(&entries, nfc)

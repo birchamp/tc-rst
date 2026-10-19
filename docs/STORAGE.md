@@ -2168,7 +2168,8 @@ C2  On the writer: materialize (§5.10) from that snapshot. The new packs are no
     retry or a look at the folder wrote meanwhile from a newer snapshot (it holds a save served
     between the seal's steps) is left as it is in M1: the job never writes an older projection
     over the person's newer save, and the job that follows the served saves finds the file equal
-    to its projection. `metadata.json` is listed and written from the job's snapshot, so the
+    to its projection. The same holds for a carried file placed or recorded from a newer
+    snapshot (§11.4): its newer version stays in the folder, and is listed as it is. `metadata.json` is listed and written from the job's snapshot, so the
     project details of such a newer write show their older values in the folder, never in the
     tree or the journal, until that job (about 3 s).
 C3  On the writer. If the seal failed, or finished with a pending file unsealed (K1: the snapshot
@@ -4106,7 +4107,15 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
   (I8). Bytes the app did not place are the person's: they are recorded, not overwritten. A
   blob missing here leaves the file as it is and lists `CarriedBytesMissing`. A file the
   project no longer places at that path (the copy of a version that was kept apart, moved or
-  removed) is removed after the same compare-and-swap.
+  removed) is removed after the same compare-and-swap. Each carried path remembers the
+  sequence number of the fold it was last placed, found equal or recorded from (a recorded
+  version stands for the newest snapshot, which holds its batch). A checkpoint's job, which
+  runs on the older snapshot its packs stand for (§5.13 C2), leaves such a path as it is:
+  it neither places an older version over it nor removes a file its fold has no place for,
+  and `metadata.json` lists the path as its entry says, with the entry's blob. The entry's
+  blob is the base of the person's next edit, so it never names an older snapshot's version
+  of bytes it does not hold. The carried group is marked for a new listing only when what
+  `metadata.json` says of the path changed.
 - **A missing file is never a removal.** It is restored from the object database, or reported as
   `CarriedBytesMissing` if the blob is not there. Removal is the explicit `RemoveCarriedFile`
   command (§5.16). An antivirus quarantine or a cloud client freeing space never deletes a file
@@ -4897,6 +4906,9 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_commit_waits_for_a_pending_file_that_no_longer_verifies`, `a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit` |
 | K1's comparison with the ids the fold took from a pending file (drop a removed file, seal what a cut file holds) | `a_pending_file_deleted_outside_is_sealed_from_memory`, `a_pending_file_cut_short_at_a_line_is_sealed_from_memory`, `a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle` |
 | the values of a pending file that lost lines left where the fold reads them (move them to the pack's offsets) | `a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle` |
+| the checkpoint job's carried placements leaving a path a newer snapshot placed or recorded (place the older version) | `a_checkpoint_job_never_places_an_older_version_over_a_newer_edit` |
+| the checkpoint job's carried listing from the entries of a newer snapshot (list the older placement's blob) | `a_checkpoint_listing_keeps_the_placed_version_of_a_newer_edit`, `a_checkpoint_job_never_places_an_older_version_over_a_newer_edit` |
+| the checkpoint job's removals leaving a carried file a newer snapshot recorded (remove what the older fold does not place) | `a_checkpoint_job_keeps_a_carried_file_recorded_during_its_seal` |
 | a pending file of a newer format left out of the unsealed (stop the commit for it) | `a_pending_file_of_a_newer_format_does_not_stop_a_commit` |
 | the `reconciles` path of a pending header read as the path of an outside edit's file (as an ingredient's, which `metadata.json` cannot be) | `a_pending_file_that_reconciles_metadata_json_verifies_and_caches_like_any_other` (`tc-journal/tests/index.rs`), `an_outside_edit_of_metadata_json_is_sealed_and_committed_with_its_packs`, `arbitrary_meta_never_blocks_commit` |
 | the heads file kept in memory while it cannot be written (read the one in the folder) | `an_outside_edit_of_the_bytes_a_stopped_group_left_continues_them`, `edits_made_while_the_heads_file_cannot_be_written_make_no_conflict` |

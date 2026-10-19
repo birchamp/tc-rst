@@ -660,3 +660,163 @@ fn a_held_carried_file_can_be_taken_in() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// A checkpoint whose seal serves a recorded edit of a carried file: V1 is recorded, and while
+/// the seal runs the person saves V2 and a look at the folder records it. Returns the bytes in
+/// the folder while the seal ran and the checkpoint's report.
+fn checkpoint_serving_a_carried_edit(
+    rig: &Rig,
+    folder: &Path,
+    handle: &std::sync::Arc<ProjectHandle>,
+    v2: &[u8],
+) -> (Option<Vec<u8>>, tc_store::CheckpointReport) {
+    checkpoint_serving_a_carried_file(rig, folder, handle, SONG, v2)
+}
+
+/// [`checkpoint_serving_a_carried_edit`] for the file at `rel`.
+fn checkpoint_serving_a_carried_file(
+    rig: &Rig,
+    folder: &Path,
+    handle: &std::sync::Arc<ProjectHandle>,
+    rel: &str,
+    v2: &[u8],
+) -> (Option<Vec<u8>>, tc_store::CheckpointReport) {
+    use std::sync::{Arc, Mutex};
+    let steps = Arc::new(Mutex::new(0));
+    let during = Arc::new(Mutex::new(None));
+    let looked: Arc<Mutex<Vec<tc_store::Pending<_>>>> = Arc::new(Mutex::new(Vec::new()));
+    {
+        let (handle, steps, fs, during, looked) = (
+            handle.clone(),
+            steps.clone(),
+            rig.fs.clone(),
+            during.clone(),
+            looked.clone(),
+        );
+        let (song, v2) = (folder.join(rel), v2.to_vec());
+        rig.store.hooks().at_seal_step(move || {
+            let mut steps = steps.lock().unwrap();
+            *steps += 1;
+            match *steps {
+                1 => {
+                    fs.put_unseen(&song, &v2, None);
+                    looked.lock().unwrap().push(handle.focus());
+                }
+                // The writer hands the actor the new version, which records it after this step,
+                // and the writer takes the actor's answer before the next.
+                2 | 3 => std::thread::sleep(std::time::Duration::from_millis(500)),
+                4 => *during.lock().unwrap() = fs.peek(&song),
+                _ => {}
+            }
+        });
+    }
+    let report = handle
+        .checkpoint(CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    rig.store.hooks().at_seal_step(|| {});
+    for look in looked.lock().unwrap().drain(..) {
+        look.wait().unwrap();
+    }
+    let during = during.lock().unwrap().take();
+    (during, report)
+}
+
+/// §5.13 C2 for carried files: a checkpoint's job runs on the snapshot its packs stand for, so
+/// it never puts an older version of a carried file back over a newer one recorded while its
+/// seal ran, and the person's next save continues the version in the folder: no conflict
+/// between their own two edits.
+#[test]
+fn a_checkpoint_job_never_places_an_older_version_over_a_newer_edit() {
+    let (rig, folder) = titus();
+    let handle = std::sync::Arc::new(open(&rig, &folder));
+    let v1 = b"version one of the song".to_vec();
+    let v2 = b"version two of the song, longer".to_vec();
+    let v3 = b"version three of the song, continuing two".to_vec();
+    arrive(&rig, &handle, &folder, SONG, &v1);
+    let (during, report) = checkpoint_serving_a_carried_edit(&rig, &folder, &handle, &v2);
+    assert_eq!(during.as_ref(), Some(&v2), "the seal served the edit");
+    assert_eq!(
+        rig.fs.peek(&folder.join(SONG)),
+        Some(v2.clone()),
+        "the checkpoint left the newer version in the folder"
+    );
+    // The commit holds what its packs hold: V1.
+    let repo = repo_of(&rig.fs, &folder);
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    assert_eq!(commit_files(&repo, commit).get(SONG), Some(&v1));
+    // At once, the person's program saves V3 over V2.
+    rig.fs.put_unseen(&folder.join(SONG), &v3, None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    let fold = handle.snapshot().fold().clone();
+    assert_eq!(
+        fold.conflicts_of(ConflictKind::CarriedFile).count(),
+        0,
+        "V3 continues V2"
+    );
+    assert_eq!(fold.heads(&song_key()).len(), 1);
+    assert_eq!(rig.fs.peek(&folder.join(SONG)), Some(v3));
+    assert_valid_burrito(&rig.fs, &folder);
+    let handle = std::sync::Arc::try_unwrap(handle).unwrap_or_else(|_| panic!("no other owner"));
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// The same with a checkpoint whose marks name only a book: its `metadata.json` lists the
+/// carried file as it is in the folder, and its listing never makes the entry name the older
+/// version, so the person's next save is no conflict either.
+#[test]
+fn a_checkpoint_listing_keeps_the_placed_version_of_a_newer_edit() {
+    let (rig, folder) = titus();
+    let handle = std::sync::Arc::new(open(&rig, &folder));
+    let v1 = b"version one of the song".to_vec();
+    let v2 = b"version two of the song, longer".to_vec();
+    let v3 = b"version three of the song, continuing two".to_vec();
+    arrive(&rig, &handle, &folder, SONG, &v1);
+    // The carried group was written; the checkpoint's marks are a save of a verse.
+    rig.fs.advance(std::time::Duration::from_secs(10));
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    let (during, _report) = checkpoint_serving_a_carried_edit(&rig, &folder, &handle, &v2);
+    assert_eq!(during.as_ref(), Some(&v2), "the seal served the edit");
+    assert_eq!(rig.fs.peek(&folder.join(SONG)), Some(v2.clone()));
+    assert_valid_burrito(&rig.fs, &folder);
+    rig.fs.put_unseen(&folder.join(SONG), &v3, None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    let fold = handle.snapshot().fold().clone();
+    assert_eq!(
+        fold.conflicts_of(ConflictKind::CarriedFile).count(),
+        0,
+        "V3 continues V2"
+    );
+    assert_valid_burrito(&rig.fs, &folder);
+    let handle = std::sync::Arc::try_unwrap(handle).unwrap_or_else(|_| panic!("no other owner"));
+    handle.close().unwrap();
+}
+
+/// A carried file new to the project, recorded while a checkpoint's seal runs: the checkpoint's
+/// job, whose fold has no place for it, neither removes it from the folder nor leaves it out of
+/// `metadata.json`.
+#[test]
+fn a_checkpoint_job_keeps_a_carried_file_recorded_during_its_seal() {
+    let (rig, folder) = titus();
+    let handle = std::sync::Arc::new(open(&rig, &folder));
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    let bytes = b"a recording that arrived while the seal ran".to_vec();
+    let (during, report) = checkpoint_serving_a_carried_file(&rig, &folder, &handle, SONG, &bytes);
+    assert_eq!(during.as_ref(), Some(&bytes), "the seal served the edit");
+    assert!(report.commit.is_some(), "{report:?}");
+    assert_eq!(
+        rig.fs.peek(&folder.join(SONG)),
+        Some(bytes.clone()),
+        "the checkpoint's job left the new file in the folder"
+    );
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.wait_idle();
+    assert_eq!(placements(&handle).len(), 1);
+    assert_eq!(rig.fs.peek(&folder.join(SONG)), Some(bytes));
+    let handle = std::sync::Arc::try_unwrap(handle).unwrap_or_else(|_| panic!("no other owner"));
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
