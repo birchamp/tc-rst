@@ -122,6 +122,20 @@ impl Parts {
         }
     }
 
+    /// A book's text changed: each check of the book reads its verse's text, and a check
+    /// whose selections the new text no longer holds is invalidated, so every tN and tW
+    /// list of the book may have rows that changed. tc-journal's delta names the verse, not
+    /// the checks whose assessment moved, so both lists are named, and an open rail asks only
+    /// for its rows changed since its view (AD17).
+    fn text(&mut self, book: BookId) {
+        for tool in [Tool::TranslationNotes, Tool::TranslationWords] {
+            self.checks.insert(CheckListRef {
+                tool,
+                unit: CheckUnit::Book(book),
+            });
+        }
+    }
+
     /// The parts a change to `key` touches. One `match` over every kind with no catch-all, so
     /// a new kind does not compile until someone decides its parts.
     fn key(
@@ -137,9 +151,13 @@ impl Parts {
             | RecordKey::BookLayout(book) => {
                 self.books.insert(*book);
             }
-            RecordKey::ChapterFront(book, chapter)
-            | RecordKey::Verse(book, chapter, _)
-            | RecordKey::Alignment(book, chapter, _) => self.chapter(*book, chapter.get()),
+            // A check can target a chapter's front as well as a verse.
+            RecordKey::ChapterFront(book, chapter) | RecordKey::Verse(book, chapter, _) => {
+                self.chapter(*book, chapter.get());
+                self.text(*book);
+            }
+            // An alignment links words; no check reads it.
+            RecordKey::Alignment(book, chapter, _) => self.chapter(*book, chapter.get()),
             RecordKey::Check(check) => self.check(check),
             // A comment's place is in its value, not its key: one read of the record.
             RecordKey::Comment(_) => match comment_target(key).ok_or(Everything)? {

@@ -618,7 +618,13 @@ a first decision, against AD17 and C4's `decision_refetches_no_rail`. So `books`
 key, so the event pump reads each comment of a delta once to name its chapter, check list or story;
 a comment it cannot read makes the scope `Everything`. A `Versification` key, a key whose
 `RecordRef` would pass 4,096 bytes, and a story number tc-api cannot carry make it `Everything` too.
-The mapping is one `match` over every `RecordKey` kind with no catch-all.)*
+The mapping is one `match` over every `RecordKey` kind with no catch-all. A `Verse` or
+`ChapterFront` key also names the book's tN and tW lists in `checks`: a check is assessed against
+its verse's text, so a text edit can invalidate checks whose records the delta does not hold, and
+an open rail that missed it would show an invalidated check as valid. The delta does not say which
+checks moved, so both lists are named, which costs one `check/rows { since }` per open rail of the
+book (AD17); C4, which re-assesses a verse's checks, may narrow it to the lists it re-assessed. An
+`Alignment` key names none: no check reads alignments.)*
 
 What unit A1 built *(A1)*: the frame, `Event`, and the session events `Opened`, `Closed`, `Mode`,
 `Changed`, `Checkpoint`, `MaterializeBlocked` and `AlignSave`; `ChangeScope::bounded` turns a

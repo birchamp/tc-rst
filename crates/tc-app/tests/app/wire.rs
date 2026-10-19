@@ -5,6 +5,7 @@ use tc_api::check::{CheckListRef, CheckUnit, Tool};
 use tc_api::error::Feature;
 use tc_api::event::{Aspect, ChangeCause, ChangeParts, ChangeScope, ChapterRef};
 use tc_api::ids::StoryNo as WireStory;
+use tc_api::query::QueryKey;
 use tc_api::refusal::{LockHolder, OpenRefusal};
 use tc_api::shown::{PersonLabel, Who};
 use tc_api::write::ReadOnlyReason;
@@ -19,6 +20,7 @@ use tc_app::wire::scope::{
 use tc_app::wire::token::{edit_token, review, review_token, shown, token_update};
 use tc_journal::fold::{Delta, PersonLabel as Label};
 use tc_journal::keys::{MetaField, PinGroup, ResourcesKey, ResourcesLevel, SettingKey, UnknownKey};
+use tc_journal::pins::Collection;
 use tc_journal::record::CommentTarget;
 use tc_journal::token::TokenError;
 use tc_journal::{
@@ -169,7 +171,9 @@ async fn change_scope_of_two_teammates_editing_titus_1_1() {
         panic!("{scope:?}")
     };
     assert_eq!(parts.chapters, [chapter(BookId::Titus, 1)]);
-    assert!(parts.books.is_empty() && parts.stories.is_empty() && parts.checks.is_empty());
+    assert!(parts.books.is_empty() && parts.stories.is_empty());
+    // The verse's checks are assessed against its new text: both of Titus's lists.
+    assert_eq!(parts.checks, titus_lists());
     assert_eq!(parts.aspects, [Aspect::Conflicts]);
     assert_eq!(parts.records.len(), 1);
     assert_eq!(parts.records[0].record, record_ref(&tit(1, 1)).unwrap());
@@ -204,6 +208,60 @@ async fn change_scope_of_two_teammates_editing_titus_1_1() {
     );
 }
 
+/// Titus's tN and tW check lists.
+fn titus_lists() -> Vec<CheckListRef> {
+    [Tool::TranslationNotes, Tool::TranslationWords]
+        .into_iter()
+        .map(|tool| CheckListRef {
+            tool,
+            unit: CheckUnit::Book(BookId::Titus),
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn a_verse_edit_that_invalidates_checks_refreshes_its_books_check_lists() {
+    let backend = sample_backend();
+    let project = folder("sample_burrito");
+    let handle = backend.open(&project, progress()).unwrap();
+    let before = handle.snapshot();
+    let changes = backend
+        .teammates_edit_verse(&project, &tit(1, 1), &["a teammate's words"])
+        .unwrap();
+    let delta = backend.teammate_edits(&project, changes).unwrap();
+    let after = handle.snapshot();
+    // The edit took the selected words out of the verse: decisions that held now do not.
+    let mut invalidated = Vec::new();
+    for tool in [ToolId::TranslationNotes, ToolId::TranslationWords] {
+        let collection = Collection::Book(BookId::Titus);
+        let was = before.fold().decisions(tool, collection);
+        let now = after.fold().decisions(tool, collection);
+        for (was, now) in was.iter().zip(&now) {
+            assert_eq!(was.key, now.key);
+            if was.assessment.invalidation.is_none() && now.assessment.invalidation.is_some() {
+                invalidated.push(tool);
+            }
+        }
+    }
+    assert!(
+        invalidated.contains(&ToolId::TranslationNotes)
+            && invalidated.contains(&ToolId::TranslationWords),
+        "{invalidated:?}"
+    );
+    let conflicts_changed = before.fold().conflict_counts() != after.fold().conflict_counts();
+    let scope = change_scope(&delta, conflicts_changed, |_| None, |_| None);
+    // An open rail of either list refreshes, so it never shows those checks as still valid.
+    for list in titus_lists() {
+        assert!(QueryKey::CheckList(list).depends_on(&scope), "{list:?}");
+    }
+    // Another book's lists do not.
+    let jonah = CheckListRef {
+        tool: Tool::TranslationNotes,
+        unit: CheckUnit::Book(BookId::Jonah),
+    };
+    assert!(!QueryKey::CheckList(jonah).depends_on(&scope));
+}
+
 #[test]
 fn every_record_kind_maps_to_its_change_part() {
     let tit = BookId::Titus;
@@ -225,6 +283,11 @@ fn every_record_kind_maps_to_its_change_part() {
         chapters(RecordKey::Alignment(tit, ch(3), vn(1))),
         [chapter(tit, 3)]
     );
+    // A text change names the book's check lists; an alignment none.
+    let checks = |key| parts(vec![key]).checks;
+    assert_eq!(checks(RecordKey::ChapterFront(tit, ch(2))), titus_lists());
+    assert_eq!(checks(RecordKey::Verse(tit, ch(2), vn(3))), titus_lists());
+    assert!(checks(RecordKey::Alignment(tit, ch(3), vn(1))).is_empty());
 
     let tn = parts(vec![RecordKey::Check(check(
         ToolId::TranslationNotes,
