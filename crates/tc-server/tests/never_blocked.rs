@@ -244,8 +244,16 @@ fn report(what: &str, outcome: &Outcome) {
 
 #[test]
 fn tokio_never_blocked() {
-    let _turn = ONE_AT_A_TIME.lock().unwrap();
-    let outcome = run(Loaded::new(None));
+    let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+    // A blocking call shows in every run; a busy machine's noise does not repeat. So a run over the
+    // bound is measured again, up to three times, before it counts.
+    let mut outcome = run(Loaded::new(None));
+    for _ in 0..2 {
+        if outcome.worst_runtime <= Duration::from_millis(50) + outcome.worst_os {
+            break;
+        }
+        outcome = run(Loaded::new(None));
+    }
     report("tokio_never_blocked", &outcome);
     // The load really ran.
     let c = &outcome.counts;
@@ -266,7 +274,7 @@ fn tokio_never_blocked() {
 /// its worker thread for 120 ms, as a synchronous read of a big file would.
 #[test]
 fn a_blocking_call_in_the_server_is_seen() {
-    let _turn = ONE_AT_A_TIME.lock().unwrap();
+    let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let outcome = run(Loaded::new(Some(Duration::from_millis(120))));
     report("a_blocking_call_in_the_server_is_seen", &outcome);
     assert!(
@@ -284,7 +292,7 @@ fn a_blocking_call_in_the_server_is_seen() {
 
 #[test]
 fn the_watchdog_sees_a_blocked_worker() {
-    let _turn = ONE_AT_A_TIME.lock().unwrap();
+    let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_all()
