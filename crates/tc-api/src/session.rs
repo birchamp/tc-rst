@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
 use crate::app::OpenSession;
+use crate::check::Tool;
 use crate::home::ProjectKind;
 use crate::ids::{ProjectRef, RequestId, Scope, StoryNo};
 use crate::prefs::{DraftUnit, PlaceMode};
@@ -65,13 +66,15 @@ pub struct OpenedProject {
     pub place: Option<KeptPlace>,
 }
 
-/// A place a Home tile returns to: the mode and the chapter (or story).
+/// A place a Home tile returns to: the mode, the chapter (or story) and the Check tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct KeptPlace {
     pub mode: PlaceMode,
     pub chapter: u16,
+    /// The tool open when the person left Check (tC4's `resumeCheckTool`, B5a).
+    pub tool: Option<Tool>,
 }
 
 /// `session/close`: the person went Home. The screen's session closes after its "leaving the

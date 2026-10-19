@@ -39,6 +39,8 @@ fn row(index: usize, place: CheckPlace) -> RailRowPatch {
             flags: RowFlags {
                 dot: Dot::Todo,
                 decided: false,
+                invalidated: false,
+                invalid: false,
                 bookmarked: false,
                 commented: false,
             },
@@ -166,8 +168,8 @@ fn the_psalms_forms_that_a_numeric_reference_refused_read_back_as_written() {
                 "index": 0,
                 "place": place,
                 "title": "a check",
-                "flags": {"dot": "todo", "decided": false, "bookmarked": false,
-                          "commented": false},
+                "flags": {"dot": "todo", "decided": false, "invalidated": false,
+                          "invalid": false, "bookmarked": false, "commented": false},
                 "term": null, "category": null, "marker": null,
             }})
         })

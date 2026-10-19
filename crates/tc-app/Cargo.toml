@@ -18,6 +18,9 @@ fixture-backend = ["dep:zip"]
 
 [dependencies]
 tc-api = { path = "../tc-api", features = ["server"] }
+# The Check screen's lists, preflight and rail, and the Align card's verse states (B5a).
+tc-align = { path = "../tc-align" }
+tc-check = { path = "../tc-check" }
 tc-core = { path = "../tc-core" }
 tc-burrito = { path = "../tc-burrito" }
 tc-door43 = { path = "../tc-door43" }

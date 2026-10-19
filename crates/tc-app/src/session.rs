@@ -72,6 +72,8 @@ pub struct ProjectSession {
     view: AtomicU64,
     /// The books whose resources this open has read (B3).
     books: crate::understand::BookCache,
+    /// The check lists this open has derived (B5a).
+    checks: crate::check::CheckCache,
 }
 
 impl ProjectSession {
@@ -94,6 +96,10 @@ impl ProjectSession {
 
     pub(crate) fn books(&self) -> &crate::understand::BookCache {
         &self.books
+    }
+
+    pub(crate) fn checks(&self) -> &crate::check::CheckCache {
+        &self.checks
     }
 
     pub fn view(&self) -> ViewSeq {
@@ -585,6 +591,7 @@ impl SessionRegistry {
             counters: self.inner.counters.clone(),
             view: AtomicU64::new(first.seq()),
             books: Default::default(),
+            checks: Default::default(),
         });
         // Subscribed before the slot is open, so no step of the store is missed.
         let events = handle.subscribe();

@@ -15,7 +15,7 @@ use tc_journal::record::VersificationValue;
 use tc_versification::{self as vrs, MapOutcome, RowReference, Scheme, StandardScheme};
 
 /// The scheme every source text and help is numbered in (tC4's `RESOURCE_FRAME`).
-const SOURCES: StandardScheme = StandardScheme::Eng;
+pub(crate) const SOURCES: StandardScheme = StandardScheme::Eng;
 
 /// How a project numbers its verses.
 #[derive(Debug, Clone, Copy)]
@@ -29,6 +29,15 @@ pub(crate) enum Numbering {
 }
 
 impl Numbering {
+    /// The project's scheme, when it is established.
+    pub(crate) fn project_scheme(self) -> Option<&'static Scheme> {
+        match self {
+            Self::Same => Some(SOURCES.scheme()),
+            Self::Other(scheme) => Some(scheme),
+            Self::Unknown => None,
+        }
+    }
+
     /// tC4's `resolveProjectFrame`: the recorded name when it is a scheme the app has, else the
     /// scheme whose document means what the project's `vrs.json` means, else unknown.
     pub(crate) fn of(register: Option<&VersificationValue>) -> Self {

@@ -45,6 +45,11 @@ const PHASE_0: &[&str] = &[
     "account/repoLink",
     "account/orgs",
     "door43/open",
+    // B5a: the Check tool picker, a tool's rail and the guided fix.
+    "check/picker",
+    "check/open",
+    "check/rows",
+    "resources/fixState",
     "test/quiet",
     "test/echo",
     "test/crash",

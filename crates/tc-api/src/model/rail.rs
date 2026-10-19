@@ -1,0 +1,215 @@
+//! The Check rail's filter chips, sort modes and groups, and the patch of its rows (tC4
+//! `checkFilters.js` and `railGroupsOf`, APP-DESIGN §3.8, AD17).
+//!
+//! The rows arrive in the order By verse lists them, so a filter keeps that order and a
+//! grouping needs no sort: rows go into buckets by term index (By word) or by category in
+//! order of first appearance among the rows shown (By category), in one pass over the rows
+//! the filter keeps (A-13). tc-app holds this to `tc_check::rail::groups`, which filters,
+//! sorts and groups as tC4 does, for every filter and mode on Titus and Psalms.
+
+use crate::check::{Category, Dot, RailRow, RailRowPatch, RowFlags, Tool};
+
+/// The rail's filter chips, in the order they appear.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Filter {
+    All,
+    /// Not decided (tC4 `isDecided`).
+    ToDo,
+    /// The status shown is Invalid.
+    Invalid,
+    Bookmarked,
+    Commented,
+}
+
+impl Filter {
+    pub const ORDER: [Filter; 5] = [
+        Filter::All,
+        Filter::ToDo,
+        Filter::Invalid,
+        Filter::Bookmarked,
+        Filter::Commented,
+    ];
+
+    /// One predicate per chip: the counts and the rows shown come from it.
+    pub fn matches(self, flags: &RowFlags) -> bool {
+        match self {
+            Self::All => true,
+            Self::ToDo => !flags.decided,
+            Self::Invalid => flags.invalid,
+            Self::Bookmarked => flags.bookmarked,
+            Self::Commented => flags.commented,
+        }
+    }
+
+    /// tC4's chip id, which its test ids and catalog keys use.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::ToDo => "todo",
+            Self::Invalid => "invalid",
+            Self::Bookmarked => "bookmarked",
+            Self::Commented => "commented",
+        }
+    }
+}
+
+/// Each chip's count, in chip order.
+pub fn counts(rows: &[RailRow]) -> [(Filter, u32); 5] {
+    Filter::ORDER.map(|f| {
+        let n = rows.iter().filter(|r| f.matches(&r.flags)).count();
+        (f, u32::try_from(n).unwrap_or(u32::MAX))
+    })
+}
+
+/// Decided rows: the progress the rail's header shows.
+pub fn decided(rows: &[RailRow]) -> u32 {
+    let n = rows.iter().filter(|r| r.flags.decided).count();
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+/// How the rail orders the checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SortMode {
+    /// One group in reference order ("By frame" for a story).
+    ByVerse,
+    /// Grouped by term, terms in the order of the session's `terms` (tW).
+    ByWord,
+    /// Grouped by category, in order of first appearance among the rows shown (tN).
+    ByCategory,
+}
+
+impl SortMode {
+    /// The modes a tool offers; the first is its default (tC4's `SORTS`).
+    pub fn modes(tool: Tool) -> &'static [SortMode] {
+        match tool {
+            Tool::TranslationWords => &[SortMode::ByWord, SortMode::ByVerse],
+            Tool::TranslationNotes => &[SortMode::ByVerse, SortMode::ByCategory],
+        }
+    }
+
+    pub fn default_for(tool: Tool) -> Self {
+        Self::modes(tool)[0]
+    }
+
+    /// tC4's mode id, which its test ids and catalog keys use.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::ByVerse => "byVerse",
+            Self::ByWord => "byWord",
+            Self::ByCategory => "byCategory",
+        }
+    }
+}
+
+/// The heading over a group of rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GroupLabel {
+    /// The book or story name, which the screen supplies; also the heading of rows a
+    /// grouping has no key for.
+    Unit,
+    /// A tW term: an index into the session's terms.
+    Term(u32),
+    Category(Category),
+}
+
+/// A group of the rail: positions into the rows it was made from, in rail order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RailGroup {
+    pub label: GroupLabel,
+    pub rows: Vec<usize>,
+}
+
+/// The groups of the rows `filter` keeps, in the order the rail shows them, which is also the
+/// order the arrow keys move through. `rows` is the rail in By verse order; `terms` is the
+/// number of the session's terms. Each row is read once.
+pub fn groups<'a>(
+    rows: impl IntoIterator<Item = &'a RailRow>,
+    terms: usize,
+    filter: Filter,
+    mode: SortMode,
+) -> Vec<RailGroup> {
+    let kept = rows
+        .into_iter()
+        .enumerate()
+        .filter(|(_, row)| filter.matches(&row.flags));
+    match mode {
+        SortMode::ByVerse => vec![RailGroup {
+            label: GroupLabel::Unit,
+            rows: kept.map(|(at, _)| at).collect(),
+        }],
+        SortMode::ByWord => {
+            let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); terms];
+            let mut unkeyed = Vec::new();
+            for (at, row) in kept {
+                match row
+                    .term
+                    .and_then(|t| buckets.get_mut(usize::try_from(t).ok()?))
+                {
+                    Some(bucket) => bucket.push(at),
+                    None => unkeyed.push(at),
+                }
+            }
+            let mut out: Vec<RailGroup> = buckets
+                .into_iter()
+                .enumerate()
+                .filter(|(_, rows)| !rows.is_empty())
+                .map(|(term, rows)| RailGroup {
+                    label: GroupLabel::Term(u32::try_from(term).unwrap_or(u32::MAX)),
+                    rows,
+                })
+                .collect();
+            if !unkeyed.is_empty() {
+                out.push(RailGroup {
+                    label: GroupLabel::Unit,
+                    rows: unkeyed,
+                });
+            }
+            out
+        }
+        SortMode::ByCategory => {
+            let mut out: Vec<RailGroup> = Vec::new();
+            for (at, row) in kept {
+                let label = row.category.map_or(GroupLabel::Unit, GroupLabel::Category);
+                // Six tN categories at most, so finding a group is a walk of six.
+                match out.iter_mut().find(|g| g.label == label) {
+                    Some(group) => group.rows.push(at),
+                    None => out.push(RailGroup {
+                        label,
+                        rows: vec![at],
+                    }),
+                }
+            }
+            out
+        }
+    }
+}
+
+/// Replaces each row a patch names, by its index. False when a patch names a row the rail
+/// does not hold: the rail is of another session, and the UI opens the tool again.
+pub fn patch(rows: &mut [RailRow], patches: &[RailRowPatch]) -> bool {
+    if patches.is_empty() {
+        return true;
+    }
+    let at: std::collections::HashMap<u32, usize> = rows
+        .iter()
+        .enumerate()
+        .map(|(position, row)| (row.index, position))
+        .collect();
+    let mut all = true;
+    for p in patches {
+        match at.get(&p.row.index).copied().and_then(|i| rows.get_mut(i)) {
+            Some(row) => *row = p.row.clone(),
+            None => all = false,
+        }
+    }
+    all
+}
+
+/// The dot's state as tC4's row writes it in `data-status`.
+pub fn dot_id(dot: Dot) -> &'static str {
+    match dot {
+        Dot::Valid => "valid",
+        Dot::Invalid => "invalid",
+        Dot::Todo => "todo",
+    }
+}

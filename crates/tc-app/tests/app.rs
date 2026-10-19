@@ -18,6 +18,7 @@ mod app {
     mod account;
     mod app_data;
     mod app_start;
+    mod check;
     pub mod common;
     mod dispatch;
     mod drafted;
@@ -46,6 +47,6 @@ mod app {
     pub mod state_seed;
     mod store;
     mod store_scenario;
-    mod understand;
+    pub mod understand;
     mod wire;
 }

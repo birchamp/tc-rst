@@ -1,0 +1,75 @@
+{
+  "path": "check/picker",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "tools": [
+        {
+          "tool": "translationWords",
+          "state": "fetch",
+          "pin": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_twl",
+            "version": "v18",
+            "sha": "cccccccccccccccccccccccccccccccccccccccc"
+          },
+          "rung": "primary",
+          "fallbackFor": null,
+          "progress": null
+        },
+        {
+          "tool": "translationNotes",
+          "state": "ready",
+          "pin": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_tn",
+            "version": "v20",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "rung": "primary",
+          "fallbackFor": null,
+          "progress": {
+            "type": "counted",
+            "value": {
+              "decided": 1,
+              "total": 112,
+              "dropped": {
+                "count": 2,
+                "scheme": "rsc"
+              },
+              "next": {
+                "title": "knowledge",
+                "place": "TIT 1:1"
+              }
+            }
+          }
+        }
+      ],
+      "align": {
+        "type": "counted",
+        "value": {
+          "done": 0,
+          "total": 5,
+          "next": "1:1"
+        }
+      },
+      "oldTwl": null
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

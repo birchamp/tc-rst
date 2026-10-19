@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod rail;
+
 /// What a block is: tC4's `kind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]

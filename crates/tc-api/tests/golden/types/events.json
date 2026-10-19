@@ -64,8 +64,9 @@
             ],
             "draftUnit": "section",
             "place": {
-              "mode": "read",
-              "chapter": 2
+              "mode": "check",
+              "chapter": 2,
+              "tool": "translationNotes"
             }
           }
         }

@@ -1,0 +1,88 @@
+{
+  "path": "check/open",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "list": {
+      "tool": "translationNotes",
+      "unit": {
+        "type": "book",
+        "value": "TIT"
+      }
+    },
+    "since": {
+      "session": 3,
+      "view": 40
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "session": 3,
+      "list": {
+        "tool": "translationNotes",
+        "unit": {
+          "type": "book",
+          "value": "TIT"
+        }
+      },
+      "view": 41,
+      "rows": {
+        "type": "full",
+        "value": [
+          {
+            "index": 7,
+            "place": "TIT 1:4",
+            "title": "faith",
+            "flags": {
+              "dot": "valid",
+              "decided": true,
+              "invalidated": false,
+              "invalid": false,
+              "bookmarked": false,
+              "commented": true
+            },
+            "term": 2,
+            "category": {
+              "type": "note",
+              "value": "figures"
+            },
+            "marker": {
+              "conflict": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "versions": 2
+            }
+          }
+        ]
+      },
+      "terms": [],
+      "progress": {
+        "decided": 1,
+        "total": 112
+      },
+      "citation": {
+        "pin": {
+          "repoPath": "git.door43.org/es-419_gl/es-419_tn",
+          "version": "v20",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "rung": "primary"
+      },
+      "dropped": null,
+      "empty": "allDropped",
+      "start": 7
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

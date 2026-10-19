@@ -1,0 +1,46 @@
+{
+  "path": "resources/fixState",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "list": {
+      "tool": "translationWords",
+      "unit": {
+        "type": "book",
+        "value": "TIT"
+      }
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "tool": "translationWords",
+      "pin": {
+        "repoPath": "git.door43.org/es-419_gl/es-419_twl",
+        "version": "v18",
+        "sha": "cccccccccccccccccccccccccccccccccccccccc"
+      },
+      "rung": "primary",
+      "candidates": [
+        {
+          "repoPath": "git.door43.org/es-419_gl/es-419_twl",
+          "version": null,
+          "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
