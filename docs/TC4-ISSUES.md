@@ -431,6 +431,18 @@ closed in tC4, before d310bf3. Each needs a row in the next sweep.
 The unit-todo rows above, grouped by the unit that must act. Reference changes and covered
 rows also carry notes for builders; see their rows.
 
+Follow-ups the fix units left (2026-10-19):
+
+- **T (storage):** the fold's `invalid` flag for an alignment checks only the text hash, so the
+  alignment files can call a record valid that the rail calls Invalid: use
+  `tc_align::needs_review` for both. tc-store's two reflow call sites should call
+  `tc_align::reflow_edit(value, before, after)`, which follows each link by position (Q30 a).
+- **B5a, C4 (Check):** the Check screen still picks its selectable target words from the shown
+  text; take them from `tc_usfm::target_words`, as the aligner and the export do (FIX-text), so an
+  unknown marker's `|attributes` never show as words.
+- **D2 (export):** the export and the aligner share `tc_usfm::target_words` and
+  `tc_align::needs_review`; keep it that way.
+
 - **A1 (tc-api):** never pass an absolute path into a sync error's `{reason}` (#724, Q36).
 - **A4b:** a refusal that can never succeed lets Home proceed and keeps the text as a draft;
   a `StaleScope` save keeps its text and leaves Home in one click (#801).
