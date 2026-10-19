@@ -15,11 +15,11 @@ use serde_json::{Map, Value, json};
 use tc_api::event::{Event, StartupState};
 use tc_api::ids::{JobId, ServerInstance};
 use tc_api::{ApiError, Endpoint, Reply, ReplyOf};
-use tc_door43::InternetSwitch;
+use tc_door43::{Door43Client, InternetSwitch};
 use tc_resources::ResourceStore;
 use tokio::sync::watch;
 
-use crate::account::{AccountState, Keychain, MemKeychain};
+use crate::account::{Account, AccountState, Keychain, MemKeychain, MemKeychainMode};
 use crate::backend::{NoProjects, ProjectStore};
 use crate::clock::{Clock, SystemClock};
 use crate::config::{
@@ -44,6 +44,7 @@ use crate::startup::Startup;
 pub struct AppDeps {
     /// Stamps what people or reports see. Timers use `tokio::time`.
     pub clock: Arc<dyn Clock>,
+    /// Where "Stay signed in" keeps a Door43 token.
     pub keychain: Arc<dyn Keychain>,
     /// Which folders exist and which a cloud client copies, for the projects folder (Q-4).
     pub folders: Arc<dyn FolderCheck>,
@@ -57,23 +58,31 @@ pub struct AppDeps {
     /// What ends the process at a test crash point.
     #[cfg(feature = "test-hooks")]
     pub ender: Arc<dyn Ender>,
+    /// The keychain the test hooks set (`test/keychain`, A8). When it is given and the hooks
+    /// are on (`--test-hooks`), it is the app's keychain in place of `keychain`.
+    #[cfg(feature = "test-hooks")]
+    pub test_keychain: Option<Arc<MemKeychain>>,
 }
 
 impl AppDeps {
-    /// This computer's clock, folders and variables; an in-memory keychain (the operating
-    /// system's comes with unit E1a, Q-3); in-memory app data (§4.9: before unit S1); no
-    /// projects (before unit C0); and, with test hooks, an ender that ends the process.
+    /// This computer's clock, folders and variables; no keychain (the operating system's comes
+    /// with unit E1a, Q-3: a keychain in memory, which forgets at quit, is not "Stay signed in
+    /// on this computer", so the sign-in step hides that box until then, tC4 #496); in-memory
+    /// app data (§4.9: before unit S1); no projects (before unit C0); and, with test hooks, an
+    /// ender that ends the process.
     pub fn production() -> Self {
         let host = HostEnv::current();
         Self {
             clock: Arc::new(SystemClock),
-            keychain: Arc::new(MemKeychain::new()),
+            keychain: Arc::new(MemKeychain::with_mode(MemKeychainMode::NoKeychain)),
             folders: Arc::new(HostFolders::new(host.clone())),
             host,
             files: Arc::new(MemoryFiles::new()),
             store: Arc::new(NoProjects),
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),
+            #[cfg(feature = "test-hooks")]
+            test_keychain: None,
         }
     }
 }
@@ -142,7 +151,7 @@ pub(crate) struct Inner {
     /// `net/set` turns the switch and publishes under this lock, so the last `Internet` frame
     /// is always the switch's state.
     pub(crate) net_lock: Mutex<()>,
-    pub(crate) account: Mutex<AccountState>,
+    pub(crate) account: Account,
     pub(crate) bus: EventBus,
     pub(crate) jobs: JobRegistry,
     pub(crate) flows: FlowGate,
@@ -203,7 +212,17 @@ impl App {
             store,
             #[cfg(feature = "test-hooks")]
             ender,
+            #[cfg(feature = "test-hooks")]
+            test_keychain,
         } = deps;
+        // The test hooks set the test keychain; without them it is never the app's.
+        #[cfg(feature = "test-hooks")]
+        let test_keychain = test_keychain.filter(|_| config.test_hooks);
+        #[cfg(feature = "test-hooks")]
+        let keychain: Arc<dyn Keychain> = match &test_keychain {
+            Some(test) => test.clone(),
+            None => keychain,
+        };
 
         std::fs::create_dir_all(&config.app_data).map_err(|e| StartError::AppData {
             path: config.app_data.clone(),
@@ -247,9 +266,9 @@ impl App {
             );
         }
 
-        // The keychain is read here and nowhere else: an operating-system keychain can
-        // prompt the person.
-        let (account, unreadable) = AccountState::at_start(keychain.read());
+        // The keychain is read here and nowhere else (but a test relaunch): an
+        // operating-system keychain can prompt the person.
+        let (account, unreadable) = AccountState::at_start(keychain.read(), &config.door43);
         if let Some(reason) = unreadable {
             reports.add(
                 ReportOp::Keychain,
@@ -263,7 +282,10 @@ impl App {
         // Without the flag no `test-hooks/` folder is made.
         #[cfg(feature = "test-hooks")]
         let hooks = if config.test_hooks {
-            Some(TestHooks::new(&config.app_data, ender).map_err(StartError::TestFields)?)
+            Some(
+                TestHooks::new(&config.app_data, ender, test_keychain)
+                    .map_err(StartError::TestFields)?,
+            )
         } else {
             None
         };
@@ -307,14 +329,19 @@ impl App {
             tokio::runtime::Handle::current(),
         );
         let startup = Startup::new(seed::initial_state(&seed_start), bus.clone());
+        // One client for every account call, on the server the build names (§5.6 item 9). The
+        // switch is the app's own, so turning it off stops the client's next request.
+        let internet = InternetSwitch::new();
+        let door43 =
+            Door43Client::new(config.door43.clone(), internet.clone()).map_err(|e| e.to_string());
         let inner = Inner {
             config,
             projects,
             instance,
             clock,
-            internet: InternetSwitch::new(),
+            internet,
             net_lock: Mutex::new(()),
-            account: Mutex::new(account),
+            account: Account::new(account, keychain, door43),
             bus,
             jobs,
             flows: FlowGate::default(),

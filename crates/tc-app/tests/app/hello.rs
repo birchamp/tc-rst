@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use tc_api::Reply;
-use tc_api::account::{AccountView, KeepState};
+use tc_api::account::{AccountView, KeepState, KeychainState};
 use tc_api::app::{AppPrefsView, Hello, HelloView};
 use tc_api::event::{Event, StartupState};
 use tc_api::ids::{JobId, LocaleId};
@@ -46,7 +46,9 @@ async fn hello_answers_real_state() {
         AccountView {
             user: None,
             kept: KeepState::Kept,
-            notice: None
+            notice: None,
+            server: "127.0.0.1:9".to_owned(),
+            keychain: KeychainState::Works,
         }
     );
     assert_eq!(hello.sessions, vec![open]);
@@ -69,7 +71,10 @@ async fn hello_answers_real_state() {
     assert_eq!(json["value"]["internet"], false);
     assert_eq!(
         json["value"]["account"],
-        json!({"user": null, "kept": "kept", "notice": null})
+        json!({
+            "user": null, "kept": "kept", "notice": null,
+            "server": "127.0.0.1:9", "keychain": "works",
+        })
     );
     assert_eq!(json["value"]["sessions"][0]["role"], "screen");
     assert_eq!(json["value"]["prefs"], json!({"appLocale": "en"}));

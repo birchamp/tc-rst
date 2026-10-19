@@ -14,8 +14,8 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tc_api::account::{
-    AccountNotice, AccountView, CancelSignIn, HelpLink, KeepState, LinkView, ProfileLink, Resume,
-    ResumeOutcome, ResumeView, SignIn, SignOut, State as AccountState, WebUrl,
+    AccountNotice, AccountView, CancelSignIn, HelpLink, KeepState, KeychainState, LinkView,
+    ProfileLink, Resume, ResumeOutcome, ResumeView, SignIn, SignOut, State as AccountState, WebUrl,
 };
 use tc_api::align::AlignSave;
 use tc_api::app::{
@@ -50,7 +50,8 @@ use tc_api::refusal::Message;
 use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
-    Hold, HoldPoint, Quiet, QuietView, Release, Reset, StoredDraft, StoredText, TokenBase,
+    Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, Quiet, QuietView,
+    Release, Reset, StoredDraft, StoredText, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -88,6 +89,8 @@ fn account() -> AccountView {
         user: Some("jdoe".into()),
         kept: KeepState::Kept,
         notice: None,
+        server: "git.door43.org".into(),
+        keychain: KeychainState::Works,
     }
 }
 
@@ -358,6 +361,7 @@ impl Example for CancelSignIn {
     fn example() -> Self {
         CancelSignIn {
             request: request(11),
+            sign_in: request(10),
         }
     }
 }
@@ -378,6 +382,8 @@ impl Example for ResumeView {
                 user: None,
                 kept: KeepState::NotKept,
                 notice: Some(AccountNotice::SavedRefused),
+                server: "git.door43.org".into(),
+                keychain: KeychainState::Works,
             },
         }
     }
@@ -553,6 +559,29 @@ impl Example for FieldDraft {
             field: "verse-1".into(),
             shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
             text: "Paul, a servant of God and".into(),
+        }
+    }
+}
+
+impl Example for Keychain {
+    fn example() -> Self {
+        Keychain {
+            request: request(19),
+            mode: Some(KeychainMode::FailingForget),
+            holds: Some(KeychainHolds::Token("kept-token".into())),
+            relaunch: true,
+        }
+    }
+}
+
+impl Example for KeychainView {
+    fn example() -> Self {
+        KeychainView {
+            mode: KeychainMode::FailingForget,
+            holds: true,
+            keeps: 0,
+            reads: 1,
+            forgets: 0,
         }
     }
 }

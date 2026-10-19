@@ -3,9 +3,8 @@
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use tc_api::account::{AccountView, HelpLink, KeepState, LinkView, SignIn};
+use tc_api::account::{AccountView, HelpLink, KeepState, KeychainState, LinkView, SignIn};
 use tc_api::app::{ClientError, Quit};
-use tc_api::error::Feature;
 use tc_api::ids::{JobId, LocaleId, ProjectId, ProjectRef, WallMs};
 use tc_api::jobs::{Cancel, Get, JobKind, JobOutcome, JobState, Phase};
 use tc_api::net::Set;
@@ -13,7 +12,7 @@ use tc_api::prefs::{
     DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetAlignSuggestions, SetDraftUnit,
     SetLocale,
 };
-use tc_api::refusal::PrefsRefusal;
+use tc_api::refusal::{PrefsRefusal, SignInRefusal};
 use tc_api::{ALL, ApiError, NotSaved, Refusal, Reply};
 use tc_app::events::Next;
 use tc_app::jobs::JobSpec;
@@ -482,13 +481,15 @@ async fn account_state_answers_from_memory() {
         AccountView {
             user: None,
             kept: KeepState::NotKept,
-            notice: None
+            notice: None,
+            server: "127.0.0.1:9".to_owned(),
+            keychain: KeychainState::Works,
         }
     );
 }
 
 #[tokio::test]
-async fn the_account_rows_a_later_unit_builds_say_so() {
+async fn a_sign_in_to_an_unreachable_door43_says_door43_cannot_be_reached() {
     let (_dir, t) = started().await;
     t.app
         .request(&Set {
@@ -505,7 +506,7 @@ async fn the_account_rows_a_later_unit_builds_say_so() {
     };
     assert_eq!(
         t.app.request(&sign_in).await.unwrap().into_result(),
-        Err(ApiError::Unavailable(Feature::Account))
+        Err(ApiError::Refused(Refusal::SignIn(SignInRefusal::Offline)))
     );
 }
 

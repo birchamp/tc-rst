@@ -13,6 +13,7 @@
 mod counting_store;
 
 mod app {
+    mod account;
     mod app_start;
     pub mod common;
     mod dispatch;

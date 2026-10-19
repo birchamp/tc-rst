@@ -499,6 +499,7 @@ pub async fn try_start(
         files: parts.files.clone(),
         store: parts.store.clone(),
         ender: parts.ender.clone(),
+        test_keychain: Some(parts.keychain.clone()),
     };
     edit(&mut config, &mut deps);
     App::start(config, deps).await

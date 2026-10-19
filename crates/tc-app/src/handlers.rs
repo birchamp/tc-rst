@@ -1,14 +1,10 @@
 //! One handler per product endpoint of phase 0 (APP-DESIGN §3.9). `dispatch` routes to them,
-//! and an endpoint row without a handler here does not compile.
-//!
-//! The account rows that unit A8 builds answer `Unavailable` until then.
+//! and an endpoint row without a handler here does not compile. The Door43 account's handlers
+//! are in [`crate::account`].
 
 use serde_json::json;
-use tc_api::account::{
-    AccountView, CancelSignIn, HelpLink, LinkView, ProfileLink, Resume, ResumeView, SignIn, SignOut,
-};
+use tc_api::account::{HelpLink, LinkView};
 use tc_api::app::{AppPrefsView, ClientError, Hello, HelloView, Quit};
-use tc_api::error::Feature;
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::jobs::{Cancel, Get, JobView};
 use tc_api::net::{NetView, Set};
@@ -16,7 +12,7 @@ use tc_api::prefs::{RecordPlace, SetAlignSuggestions, SetDraftUnit, SetLocale};
 use tc_api::refusal::PrefsRefusal;
 use tc_api::{API_VERSION, ApiError, NotSaved, Refusal};
 
-use crate::app::{App, lock};
+use crate::app::App;
 use crate::dispatch::Handle;
 use crate::feedback;
 use crate::reports::{ReportOp, ReportOutcome, facts};
@@ -56,7 +52,7 @@ impl App {
 impl Handle<Hello> for App {
     async fn handle(&self, _req: Hello) -> Result<HelloView, ApiError> {
         let inner = &self.inner;
-        let account = lock(&inner.account).view();
+        let account = inner.account.view();
         let startup = inner.startup.get();
         Ok(HelloView {
             api: API_VERSION,
@@ -173,48 +169,11 @@ impl Handle<Cancel> for App {
     }
 }
 
-impl Handle<tc_api::account::State> for App {
-    /// From memory: it reaches neither Door43 nor the keychain.
-    async fn handle(&self, _req: tc_api::account::State) -> Result<AccountView, ApiError> {
-        Ok(lock(&self.inner.account).view())
-    }
-}
-
 impl Handle<HelpLink> for App {
     /// The internet check already ran. The shell opens the link; tC4's help panel hands it to
     /// `openDoor43Page('helpLink', url)`.
     async fn handle(&self, req: HelpLink) -> Result<LinkView, ApiError> {
         Ok(LinkView { url: req.url })
-    }
-}
-
-impl Handle<SignIn> for App {
-    async fn handle(&self, _req: SignIn) -> Result<AccountView, ApiError> {
-        Err(ApiError::Unavailable(Feature::Account))
-    }
-}
-
-impl Handle<CancelSignIn> for App {
-    async fn handle(&self, _req: CancelSignIn) -> Result<(), ApiError> {
-        Err(ApiError::Unavailable(Feature::Account))
-    }
-}
-
-impl Handle<Resume> for App {
-    async fn handle(&self, _req: Resume) -> Result<ResumeView, ApiError> {
-        Err(ApiError::Unavailable(Feature::Account))
-    }
-}
-
-impl Handle<SignOut> for App {
-    async fn handle(&self, _req: SignOut) -> Result<AccountView, ApiError> {
-        Err(ApiError::Unavailable(Feature::Account))
-    }
-}
-
-impl Handle<ProfileLink> for App {
-    async fn handle(&self, _req: ProfileLink) -> Result<LinkView, ApiError> {
-        Err(ApiError::Unavailable(Feature::Account))
     }
 }
 

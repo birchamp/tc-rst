@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use proptest::prelude::*;
 use proptest::test_runner::{Config, TestCaseError, TestRunner};
-use tc_api::account::{AccountView, KeepState};
+use tc_api::account::{AccountView, KeepState, KeychainState};
 use tc_api::align::AlignSave;
 use tc_api::app::{OpenSession, SessionRole};
 use tc_api::event::{
@@ -91,6 +91,8 @@ fn values_that_events_carry_whole_become_effects() {
         user: Some("ann".into()),
         kept: KeepState::Kept,
         notice: None,
+        server: "git.door43.org".into(),
+        keychain: KeychainState::Works,
     };
     assert_eq!(
         react(&frame(Event::Account(account.clone()))),

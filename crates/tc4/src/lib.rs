@@ -180,6 +180,20 @@ fn serve(args: &Args) -> ExitCode {
     };
     #[cfg(not(feature = "fixture-backend"))]
     let deps = AppDeps::production();
+    // A test build's journeys sign in with "Stay signed in" and set what the keychain holds
+    // (`test/keychain`), so with the hooks on the app keeps its sign-in in a test keychain.
+    // The product has none until E1a (`AppDeps::production`).
+    #[cfg(feature = "test-hooks")]
+    let deps = if args.test_hooks {
+        let keychain = Arc::new(tc_app::account::MemKeychain::new());
+        AppDeps {
+            keychain: keychain.clone(),
+            test_keychain: Some(keychain),
+            ..deps
+        }
+    } else {
+        deps
+    };
     // The app starts before the address line, so a start that fails (a `--projects` folder
     // that is not there, say) prints its one error line and nothing else: the shell reads the
     // first line, and an address followed by an error would send it to a server that is gone.

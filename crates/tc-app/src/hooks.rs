@@ -38,13 +38,15 @@ use tc_api::ids::{ConflictRef, RecordRef, ViewSeq};
 use tc_api::shown::{PersonLabel, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, FieldDraft, FieldLog, FieldLogView, FieldStore, Hold,
-    HoldPoint, MAX_ECHO, Quiet, QuietView, Release, Reset, StoredDraft, StoredText, TokenBase,
+    HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, MAX_ECHO, Quiet, QuietView,
+    Release, Reset, StoredDraft, StoredText, TokenBase,
 };
 use tc_api::write::{Ack, ConflictBrief, SavedValue, Stored, TokenUpdate};
 use tc_api::{ALL, ApiError, NotSaved, Shown, ShownToken};
 use tokio::sync::Notify;
 use unicode_normalization::UnicodeNormalization;
 
+use crate::account::{MemKeychain, MemKeychainMode};
 use crate::app::{App, lock};
 use crate::dispatch::Handle;
 use crate::replies::Outcome;
@@ -97,7 +99,13 @@ impl Ender for RecordingEnder {
 /// The hooks that arm or release something. A crash never fires on them, and none can be
 /// the `path` of an armed crash: a crash that fired on the request that armed it, or on its
 /// own reset, would end every test at once.
-const ARMING_HOOKS: [&str; 4] = ["test/crash", "test/hold", "test/release", "test/reset"];
+const ARMING_HOOKS: [&str; 5] = [
+    "test/crash",
+    "test/hold",
+    "test/release",
+    "test/keychain",
+    "test/reset",
+];
 
 fn is_arming_hook(path: &str) -> bool {
     ARMING_HOOKS.contains(&path)
@@ -112,16 +120,23 @@ pub(crate) struct TestHooks {
     holds: Holds,
     fields: TestFields,
     ender: Arc<dyn Ender>,
+    /// The app's keychain, when the test set it (`test/keychain`).
+    keychain: Option<Arc<MemKeychain>>,
 }
 
 impl TestHooks {
-    pub(crate) fn new(app_data: &Path, ender: Arc<dyn Ender>) -> Result<Self, String> {
+    pub(crate) fn new(
+        app_data: &Path,
+        ender: Arc<dyn Ender>,
+        keychain: Option<Arc<MemKeychain>>,
+    ) -> Result<Self, String> {
         Ok(Self {
             dead: AtomicBool::new(false),
             crash: Mutex::new(None),
             holds: Holds::default(),
             fields: TestFields::load(app_data)?,
             ender,
+            keychain,
         })
     }
 
@@ -726,11 +741,73 @@ impl Handle<FieldLog> for App {
     }
 }
 
+fn mode_of(mode: KeychainMode) -> MemKeychainMode {
+    match mode {
+        KeychainMode::Working => MemKeychainMode::Working,
+        KeychainMode::None => MemKeychainMode::NoKeychain,
+        KeychainMode::FailingKeep => MemKeychainMode::FailingKeep,
+        KeychainMode::FailingForget => MemKeychainMode::FailingForget,
+        KeychainMode::Unreadable => MemKeychainMode::Unreadable,
+    }
+}
+
+fn mode_view(mode: MemKeychainMode) -> KeychainMode {
+    match mode {
+        MemKeychainMode::Working => KeychainMode::Working,
+        MemKeychainMode::NoKeychain => KeychainMode::None,
+        MemKeychainMode::FailingKeep => KeychainMode::FailingKeep,
+        MemKeychainMode::FailingForget => KeychainMode::FailingForget,
+        MemKeychainMode::Unreadable => KeychainMode::Unreadable,
+    }
+}
+
+impl Handle<Keychain> for App {
+    /// The test keychain's mode and contents; with `relaunch`, the account as a launch finds
+    /// it, with the internet off as a launch has it. The journeys use it where tC4's use a fake
+    /// keychain and a reload.
+    async fn handle(&self, req: Keychain) -> Result<KeychainView, ApiError> {
+        let hooks = self.hooks()?;
+        let Some(keychain) = hooks.keychain.as_ref() else {
+            return Err(ApiError::BadRequest {
+                field: "keychain".to_owned(),
+                reason: "this app has no test keychain".to_owned(),
+            });
+        };
+        if let Some(mode) = req.mode {
+            keychain.set_mode(mode_of(mode));
+        }
+        match req.holds {
+            Some(KeychainHolds::Nothing) => keychain.clear(),
+            Some(KeychainHolds::Token(text)) => {
+                let token = tc_door43::Token::new(text).map_err(|e| ApiError::BadRequest {
+                    field: "holds".to_owned(),
+                    reason: e.to_string(),
+                })?;
+                keychain.seed(token);
+            }
+            None => {}
+        }
+        if req.relaunch {
+            self.relaunch_account().await;
+            self.set_internet(false);
+        }
+        let calls = keychain.calls();
+        Ok(KeychainView {
+            mode: mode_view(keychain.mode()),
+            holds: keychain.holds(),
+            keeps: calls.keeps,
+            reads: calls.reads,
+            forgets: calls.forgets,
+        })
+    }
+}
+
 impl Handle<Reset> for App {
     /// The parity harness's `home()`: every session closed, the projects and the preferences
     /// and reports back to the seed, the crash disarmed, every hold released, the kept
     /// replies forgotten (a write still running is
-    /// kept, so its retry waits for it) and the internet off as a launch finds it (tC4's
+    /// kept, so its retry waits for it), the account as a launch finds it with the test
+    /// keychain working and empty (A8), and the internet off as a launch finds it (tC4's
     /// switch is page state that a reload turns off). The test fields are kept: tests name
     /// their own. The reset's own reply is not kept either (`dispatch::kept_reply`), so the
     /// next scenario's reset may carry the same id and still run.
@@ -751,6 +828,12 @@ impl Handle<Reset> for App {
         // A launch starts with no kept replies, so a request id may be used again.
         self.inner.replies.forget_settled();
         self.inner.prefs.reset().await;
+        // The account as a launch finds it, on a computer whose keychain works and holds
+        // nothing, so one captured screen's sign-in cannot reach the next.
+        if let Some(keychain) = &hooks.keychain {
+            keychain.reset();
+        }
+        self.relaunch_account().await;
         self.inner.reports.clear();
         self.set_internet(false);
         Ok(())
