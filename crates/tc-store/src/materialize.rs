@@ -963,6 +963,7 @@ impl Writer {
                 &self.folder.path(path),
                 SyncDir::Deferred(&mut dirs),
             )?;
+            self.heads_unwritten.remove(path);
             let heads = self.folder.path(&layout::heads_file(path));
             if self.vfs.metadata(&heads).is_ok() {
                 atomic_remove(&*self.vfs, &heads, SyncDir::Deferred(&mut dirs))?;
@@ -1023,23 +1024,59 @@ impl Writer {
     /// every record the file was built from, the heads its bytes stand for and how it shows
     /// the record (§3.6). Its directory exists.
     fn write_heads(
-        &self,
+        &mut self,
         rel: &str,
         file: &DerivedFile,
         digests: &[(RecordKey, tc_journal::outside::ShownDigest)],
         sync: SyncDir<'_>,
     ) -> Result<(), StoreError> {
         let heads = HeadsFile::of(&self.fold.file_heads(file), digests);
+        self.put_heads(rel, heads, sync)
+    }
+
+    /// Writes the heads file of `rel`. When that fails the bytes the path now holds still stand
+    /// for `heads`, so the writer keeps them ([`Writer::heads_of`]) until a write goes through:
+    /// an edit of those bytes made in the meantime is compared with them (§11.1 D7). The
+    /// directory of the heads files exists.
+    pub(crate) fn put_heads(
+        &mut self,
+        rel: &str,
+        heads: HeadsFile,
+        sync: SyncDir<'_>,
+    ) -> Result<(), StoreError> {
         let name = layout::heads_file(rel);
         let name = name.rsplit('/').next().unwrap_or_default();
-        atomic_write(
+        let written = atomic_write(
             &*self.vfs,
             &self.folder.path(HEADS),
             name,
             &heads.to_bytes(),
             sync,
         )
-        .map_err(|e| e.into_inner())
+        .map_err(|e| e.into_inner());
+        match written {
+            Ok(()) => {
+                self.heads_unwritten.remove(rel);
+                Ok(())
+            }
+            Err(e) => {
+                self.heads_unwritten.insert(rel.to_owned(), heads);
+                Err(e)
+            }
+        }
+    }
+
+    /// The heads file of `rel` as it should be: the one a write could not put on disk, else the
+    /// file in the folder. `None` when there is none or it does not read.
+    pub(crate) fn heads_of(&self, rel: &str) -> Option<HeadsFile> {
+        if let Some(heads) = self.heads_unwritten.get(rel) {
+            return Some(heads.clone());
+        }
+        let bytes = self
+            .vfs
+            .read(&self.folder.path(&layout::heads_file(rel)))
+            .ok()?;
+        HeadsFile::parse(&bytes)
     }
 
     /// M8: the intent file names `left`, or goes when nothing is left. The md5s of a path
@@ -1126,11 +1163,12 @@ impl Writer {
             // names: after a write that stopped between its rename and its heads file, or a
             // projection that changed with the same bytes, it is stale, and a later edit
             // would be compared with a base the file was never made from (§11.1 D7).
-            let stale = self
-                .manifest
-                .paths
-                .get(&path)
-                .is_none_or(|e| e.md5 != md5 || e.scope != digest);
+            let stale = self.heads_unwritten.contains_key(&path)
+                || self
+                    .manifest
+                    .paths
+                    .get(&path)
+                    .is_none_or(|e| e.md5 != md5 || e.scope != digest);
             if stale {
                 let dir = self.folder.path(HEADS);
                 atomic_create_dirs(&*self.vfs, &dir)?;

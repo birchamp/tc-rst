@@ -50,8 +50,7 @@ impl Writer {
     /// none or it does not read (§6.2).
     fn read_base(&self, rel: &str) -> Base {
         self.counters.add(&self.counters.heads_read, 1);
-        let path = self.folder.path(&layout::heads_file(rel));
-        let Some(file) = self.vfs.read(&path).ok().and_then(|b| HeadsFile::parse(&b)) else {
+        let Some(file) = self.heads_of(rel) else {
             // With no manifest entry either, `.tc/` is gone (a folder copied away): what the
             // last commit of this app holds says what the file was made from (§6.2).
             if !self.manifest.paths.contains_key(rel) {
@@ -655,12 +654,8 @@ impl Writer {
                 .map(|j| j.to_canonical_string())
                 .unwrap_or_default()
         };
-        let path = self.folder.path(&layout::heads_file(rel));
         let mut records: std::collections::BTreeMap<String, HeadsRecord> = self
-            .vfs
-            .read(&path)
-            .ok()
-            .and_then(|bytes| HeadsFile::parse(&bytes))
+            .heads_of(rel)
             .unwrap_or_else(|| HeadsFile::of(&self.fold.file_heads(&file), &[]))
             .records
             .into_iter()
@@ -691,17 +686,11 @@ impl Writer {
         let heads = HeadsFile {
             records: records.into_values().collect(),
         };
-        let name = layout::heads_file(rel);
-        let name = name.rsplit('/').next().unwrap_or_default();
         let dir = self.folder.path(layout::HEADS);
         if crate::atomic::atomic_create_dirs(&*self.vfs, &dir).is_ok() {
-            let _ = crate::atomic::atomic_write(
-                &*self.vfs,
-                &dir,
-                name,
-                &heads.to_bytes(),
-                crate::atomic::SyncDir::Now,
-            );
+            let _ = self.put_heads(rel, heads, crate::atomic::SyncDir::Now);
+        } else {
+            self.heads_unwritten.insert(rel.to_owned(), heads);
         }
     }
 

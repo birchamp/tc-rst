@@ -2015,7 +2015,15 @@ watcher) and in a storage check, as they are at the open (§6.2): the retry, the
 focus never record the app's own bytes as an outside edit, and no false conflict follows. A file M1
 finds equal to the projection while its entry names other bytes or another scope (the group
 stopped between the rename and the heads file) gets its heads file written again, so a later
-outside edit has the right base (§11.1 X3).
+outside edit has the right base (§11.1 X3). Until a write of the heads file goes through (the
+disk is full, a program holds `.tc/heads/…`), the session keeps in memory the heads file the
+bytes it renamed stand for, and every look at an outside edit of those bytes (the focus's, the
+watcher's, a retry's M1) takes that file as the base, not the one in the folder, which describes
+the bytes before: the person's edit of the app's save continues it and is no conflict with it,
+for as long as the writer fails. The same memory holds the heads file of a recorded outside edit
+that could not be written (§11.1 D7). A process that stops in that window loses the memory, and
+the next open finds the older heads file (§6.4 M6): an edit made in the window is then a conflict
+with the app's last save, kept and never replacing it.
 
 The burrito is valid before M4 and after M6; in between, `metadata.json` lags by milliseconds. A
 crash there is repaired at open (§6.4, rows M1 to M6).
@@ -3925,7 +3933,10 @@ gives them from its pending file), a record it left alone keeps its base, and th
 those of the bytes found (kept from the examination, so the file is decoded once). A program that
 keeps the file open (Paratext on Windows) may save it again from these bytes while the app cannot
 write the file back; that save is an edit of the recorded bytes, not of the version the app wrote
-before, so the person's two saves are one line of changes and no conflict. The same acceptance follows
+before, so the person's two saves are one line of changes and no conflict. A heads file that
+cannot be written (a full disk, a program holding `.tc/heads/…`) stays in the writer's memory
+until a write goes through, here and after a group of §5.10 that stopped after its rename, and
+the next examination of that path takes it as the base; a restart loses it (§6.4 M6). The same acceptance follows
 a plan that records nothing (a rewrite of line ends only, or a file whose records all equal
 what the project shows) and a file that could not be decoded; if the disk refused the batch,
 nothing is accepted and the file is looked at again with the next job. A decoded record that
@@ -4825,6 +4836,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the intent kept by the session after a group stopped (forget it once M4 fails) | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit`, `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit` |
 | the intent at the open (read the md5s of the intent as no one's) | `crash_materialize_intent_tells_its_bytes_from_an_outside_edit` |
 | the heads file written again for a converged file | `a_retry_that_finds_the_file_converged_writes_its_heads_file` |
+| the heads file kept in memory while it cannot be written (read the one in the folder) | `an_outside_edit_of_the_bytes_a_stopped_group_left_continues_them`, `edits_made_while_the_heads_file_cannot_be_written_make_no_conflict` |
 | the heads file written when an outside edit is durable | `two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict` |
 | the parents of a carried file's edit (the newest head instead of the placed version) | `an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version` |
 | the snapshot taken when the seal starts (hand the writer the newest) | `a_commit_made_while_a_save_is_served_shows_only_what_its_packs_hold` |

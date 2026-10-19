@@ -221,6 +221,12 @@ pub(crate) struct Writer {
     /// the actor answers.
     pub shown_by_path:
         BTreeMap<String, Vec<(tc_journal::RecordKey, tc_journal::outside::ShownDigest)>>,
+    /// The heads file a path should have and the folder lacks: a write of the bytes (or the
+    /// recording of an outside edit) went through, and the heads file that stands for them
+    /// could not be written. The bytes in the folder stand for these heads, so an outside edit
+    /// of them is compared with these, not with the file on disk, which describes the bytes
+    /// before (§5.10, §11.1 D7). Gone when the file is written, or the path removed.
+    pub heads_unwritten: BTreeMap<String, crate::manifest::HeadsFile>,
     /// The bytes of `metadata.json`'s heads file as this writer last wrote them.
     pub metadata_heads_written: Option<Vec<u8>>,
     /// Carried files handed to the actor to be recorded, with the blob and size they were
@@ -710,6 +716,7 @@ mod tests {
             wrote_group: false,
             pending_record: BTreeMap::new(),
             shown_by_path: BTreeMap::new(),
+            heads_unwritten: BTreeMap::new(),
             metadata_heads_written: None,
             pending_carried: BTreeMap::new(),
             deferred_paths: Vec::new(),

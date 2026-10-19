@@ -679,3 +679,83 @@ fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// What a person does to the file a stopped group left: a program that has it open saves
+/// the verse again.
+fn mend_outside(rig: &Rig, folder: &Path) {
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let edited = String::from_utf8(rig.fs.peek(&usfm).unwrap())
+        .unwrap()
+        .replace("second save", "second save, mended outside");
+    rig.fs.put_unseen(&usfm, edited.as_bytes(), None);
+}
+
+/// §5.10, §11.1 D7: a group that stopped after its rename left the heads file describing the
+/// bytes before it. The person's edit of the bytes it left, made before anything converged the
+/// file, started from the app's save: the writer compares it with the heads the stopped group
+/// stood for, so it continues that save and makes no conflict with it.
+#[test]
+fn an_outside_edit_of_the_bytes_a_stopped_group_left_continues_them() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    rig.fs.fail_op(k, std::io::ErrorKind::StorageFull);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    mend_outside(&rig, &folder);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        outside_edit_notices(&handle),
+        vec![(1, false)],
+        "recorded with the base the file showed"
+    );
+    assert_eq!(
+        verse_text_conflicts(&handle),
+        0,
+        "the edit conflicts with the save it started from"
+    );
+    assert_eq!(
+        words_of(&handle, &verse(1, 1)),
+        "second save, mended outside"
+    );
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    assert!(
+        String::from_utf8_lossy(&rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap())
+            .contains("second save, mended outside")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The same while the heads file keeps failing (a program holds `.tc/heads/…`): every try of
+/// the writer fails at the heads file, and the edits made meanwhile are still the person's
+/// continuation of the app's save.
+#[test]
+fn edits_made_while_the_heads_file_cannot_be_written_make_no_conflict() {
+    let (rig, folder, handle, _k) = fail_after_the_rename();
+    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
+    rig.fs.set_busy(&heads, true);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    mend_outside(&rig, &folder);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(outside_edit_notices(&handle), vec![(1, false)]);
+    assert_eq!(verse_text_conflicts(&handle), 0);
+    // The program saves again, from what the person made.
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let again = String::from_utf8(rig.fs.peek(&usfm).unwrap())
+        .unwrap()
+        .replace("mended outside", "mended outside twice");
+    rig.fs.put_unseen(&usfm, again.as_bytes(), None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(verse_text_conflicts(&handle), 0);
+    assert_eq!(
+        words_of(&handle, &verse(1, 1)),
+        "second save, mended outside twice"
+    );
+    rig.fs.set_busy(&heads, false);
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(verse_text_conflicts(&handle), 0);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}

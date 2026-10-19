@@ -641,6 +641,7 @@ fn open_inner(
         wrote_group: false,
         pending_record: BTreeMap::new(),
         shown_by_path: BTreeMap::new(),
+        heads_unwritten: BTreeMap::new(),
         metadata_heads_written: None,
         pending_carried: BTreeMap::new(),
         deferred_paths: Vec::new(),
