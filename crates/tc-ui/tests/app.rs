@@ -20,6 +20,7 @@ mod app {
     pub mod save_kit;
     mod save_props;
     mod save_refresh;
+    mod share;
     mod shell;
     mod sse;
     mod understand;

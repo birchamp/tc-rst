@@ -14,13 +14,18 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 use tc_api::ApiError;
-use tc_api::account::{CancelSignIn, HelpLink, ProfileLink, Resume, SignOut, WebUrl};
+use tc_api::account::{
+    CancelSignIn, HelpLink, Orgs, ProfileLink, RepoLink, Resume, SignOut, WebUrl,
+};
+use tc_api::door43::OpenDoor43;
 use tc_api::feedback::Compose;
 use tc_api::home::{HomeCard, LanguageSuggestion};
 use tc_api::ids::{LocaleId, ProjectRef, ReportId};
+use tc_api::jobs::{JobOutcome, JobState};
 use tc_api::net::Set as NetSet;
 use tc_api::prefs::SetLocale;
 use tc_api::refusal::FeedbackRefusal;
+use tc_api::refusal::Message;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
 
@@ -30,13 +35,14 @@ use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
 use crate::app::forms::{AddBookForm, AddBookStep, ImportForm, ImportKind, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
+use crate::app::open_door43::OpenForm;
 use crate::app::save::indicator::Retry;
+use crate::app::share::{ShareForm, ShareProject, ShareStep, Target};
 use crate::app::shell::{CurrentProject, Editing, View};
 use crate::i18n::show_locale;
 
 /// The dialogs `s.modal` names (tC4 `tC4:src/state.jsx:476`). The units that port the others
-/// add theirs: OpenFromDoor43, Share (B9b, E1b), ProjectSettings, SourceTexts (B9a), GuidedFix
-/// (B5a).
+/// add theirs: ProjectSettings, SourceTexts (B9a), GuidedFix (B5a).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialog {
     Feedback,
@@ -52,6 +58,10 @@ pub enum Dialog {
     AddBook,
     /// Import (M5); its form is `im`.
     Import,
+    /// Open a project from Door43 (M6); its form is `od`.
+    OpenDoor43,
+    /// Share on Door43; its form is `sh`.
+    Share,
 }
 
 /// A banner on Home: its text, and the "Ask for help" it offers (tC4 #378).
@@ -102,6 +112,10 @@ pub struct AppState {
     pub ab: ArcRwSignal<Option<AddBookForm>>,
     /// Import's form (tC4 `im`).
     pub im: ArcRwSignal<Option<ImportForm>>,
+    /// The share dialog's form (tC4 `sh`, B9b).
+    pub sh: ArcRwSignal<Option<ShareForm>>,
+    /// Open a project from Door43's form (tC4 `od`, B9b).
+    pub od: ArcRwSignal<Option<OpenForm>>,
     /// A refused open, on Home (tC4 `bookError`; B3 sets it).
     pub book_error: ArcRwSignal<Option<HomeBanner>>,
     /// The checkpoint of the project just left failed (tC4 `commitError`; D1 sets it).
@@ -144,6 +158,8 @@ impl AppState {
             np: ArcRwSignal::new(None),
             ab: ArcRwSignal::new(None),
             im: ArcRwSignal::new(None),
+            sh: ArcRwSignal::new(None),
+            od: ArcRwSignal::new(None),
             book_error: ArcRwSignal::new(None),
             commit_error: ArcRwSignal::new(None),
             syncing: ArcRwSignal::new(None),
@@ -191,6 +207,9 @@ struct Inner {
     switch: Cell<SwitchRequests>,
     /// Counts the openings of the sign-in step, so a reply lands only in the one it came from.
     sign_in_flows: Cell<u64>,
+    /// Counts the share flows (tC4's `startShareFlow`): a new Share or a closed dialog ends the
+    /// one before, whose late answers then do nothing.
+    share_flows: Cell<u64>,
 }
 
 /// tC4's `actions`, the ones the shell owns. Cheap to clone. The wrapper lets views capture
@@ -208,6 +227,7 @@ impl Actions {
             reasked: Cell::new(false),
             switch: Cell::new(SwitchRequests::default()),
             sign_in_flows: Cell::new(0),
+            share_flows: Cell::new(0),
         })))
     }
 
@@ -391,8 +411,10 @@ impl Actions {
             Pending::SignIn { flow } => self.send_sign_in(flow),
             Pending::CheckSignIn => self.check_now(),
             Pending::Profile => self.profile_now(),
-            // B9b runs the share after its question; B10 the sync.
-            Pending::Share(_) | Pending::Sync(_) => {}
+            Pending::Share(project) => self.share_now(*project),
+            Pending::OpenDoor43 => self.open_door43_now(),
+            // B10 runs the sync after its question.
+            Pending::Sync(_) => {}
         }
     }
 
@@ -405,6 +427,14 @@ impl Actions {
                     }
                 });
                 self.0.sending.set(false);
+            }
+            // Not now: nothing was sent, and the dialog can be changed again.
+            Pending::OpenDoor43 => {
+                self.s().od.try_update(|od| {
+                    if let Some(od) = od {
+                        od.busy = false;
+                    }
+                });
             }
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
             Pending::Link(..)
@@ -438,14 +468,17 @@ impl Actions {
     fn open_link(&self, kind: LinkKind, url: WebUrl) {
         let this = self.clone();
         spawn_local(async move {
-            let LinkKind::Help = kind;
-            let request = HelpLink { url: url.clone() };
-            match this.0.runtime.api().call(&request).await {
+            let api = this.0.runtime.api();
+            let answer = match kind {
+                LinkKind::Help => api.call(&HelpLink { url: url.clone() }).await,
+                LinkKind::Repo => api.call(&RepoLink { url: url.clone() }).await,
+            };
+            match answer {
                 Ok(link) => bridge::open_external(link.url.as_str()),
                 Err(CallError::Api(ApiError::NeedsInternet(_))) => {
                     this.ask_again(Pending::Link(kind, url));
                 }
-                Err(error) => console_error(&format!("tc4: a help link did not open: {error}")),
+                Err(error) => console_error(&format!("tc4: a link did not open: {error}")),
             }
         });
     }
@@ -689,14 +722,17 @@ impl Actions {
         });
     }
 
-    /// Cancel, Close, the ✕ and Escape of Home's dialogs (tC4 `closeModal`). B9b adds the end
-    /// of a share flow.
+    /// Cancel, Close, the ✕ and Escape of Home's dialogs (tC4 `closeModal`), which also ends
+    /// the share flow: an answer that comes for it later does nothing.
     pub fn close_modal(&self) {
         let s = self.s();
         s.layers.dialog.try_set(None);
         s.np.try_set(None);
         s.ab.try_set(None);
         s.im.try_set(None);
+        s.sh.try_set(None);
+        s.od.try_set(None);
+        self.0.share_flows.set(self.0.share_flows.get() + 1);
     }
 
     /// The languages that match `query` (`home/languages`, ranked on the server, offline).
@@ -716,10 +752,9 @@ impl Actions {
         if self.s().syncing.get_untracked().is_some() {
             return;
         }
-        let project = card.project.clone();
         self.internet_task(match card.door43 {
-            tc_api::home::Door43Card::Shared { .. } => Pending::Sync(project),
-            tc_api::home::Door43Card::Local => Pending::Share(project),
+            tc_api::home::Door43Card::Shared { .. } => Pending::Sync(card.project.clone()),
+            tc_api::home::Door43Card::Local => Pending::Share(Box::new(ShareProject::of(card))),
         });
     }
 
@@ -741,11 +776,256 @@ impl Actions {
     /// Import's kind step: F1 draws the files step it leads to.
     pub fn import_pick_kind(&self, _kind: ImportKind) {}
 
-    /// "Open a project from Door43": B9b.
-    pub fn open_door43_dialog(&self) {}
+    /// "Open a project from Door43", the fourth card of Add a project (tC4 `openDoor43Dialog`).
+    pub fn open_door43_dialog(&self) {
+        let s = self.s();
+        s.od.try_set(Some(OpenForm::default()));
+        s.layers.dialog.try_set(Some(Dialog::OpenDoor43));
+    }
+
+    pub fn patch_od(&self, patch: impl FnOnce(&mut OpenForm)) {
+        self.s().od.try_update(|od| {
+            if let Some(od) = od {
+                patch(od);
+            }
+        });
+    }
+
+    /// "Open project" (tC4 `openDoor43Run`): the name check is the dialog's and comes first;
+    /// then, with the internet off, the question; Not now sends nothing.
+    pub fn open_door43_run(&self) {
+        let ready = self.s().od.try_update(|od| {
+            let od = od.as_mut()?;
+            if od.busy {
+                return None;
+            }
+            od.busy = true;
+            od.error = None;
+            Some(())
+        });
+        if ready.flatten().is_some() {
+            self.internet_task(Pending::OpenDoor43);
+        }
+    }
+
+    /// The open of the form as it stands: `door43/open`, then its job's end. A refusal shows
+    /// in the dialog, and no project was added; a project opened goes to the top of Home.
+    fn open_door43_now(&self) {
+        let host = self.s().server.account.with_untracked(|a| a.server.clone());
+        let Some(Some((repo, name))) = self.s().od.with_untracked(|od| {
+            od.as_ref().map(|od| {
+                Some((
+                    od.source(&host)?,
+                    tc_api::door43::ProjectName::parse(&od.name).ok()?,
+                ))
+            })
+        }) else {
+            self.drop_pending(Pending::OpenDoor43);
+            return;
+        };
+        // After a sign-in step took its place, the dialog shows again for the open's end.
+        self.patch_od(|od| od.busy = true);
+        self.s().layers.dialog.try_set(Some(Dialog::OpenDoor43));
+        let this = self.clone();
+        spawn_local(async move {
+            let request = OpenDoor43 {
+                request: js::random_request_id(),
+                repo,
+                name: name.clone(),
+            };
+            let ended = match this.0.runtime.api().call(&request).await {
+                Ok(job) => this.job_end(job).await,
+                Err(CallError::Api(error)) => Err(error),
+                Err(other) => Err(ApiError::BadRequest {
+                    field: "door43/open".into(),
+                    reason: other.to_string(),
+                }),
+            };
+            match ended {
+                Ok(JobOutcome::Created { project }) => {
+                    this.close_modal();
+                    this.s().import_toast.try_set(Some(ImportToast {
+                        message: crate::i18n::t(
+                            crate::i18n::keys::open_door43::DONE,
+                            &[("name", &name.as_str())],
+                        ),
+                    }));
+                    this.s().imported_repo.try_set(Some(project));
+                    this.refresh_projects();
+                }
+                Ok(_) => this.open_refused(None, String::new()),
+                Err(ApiError::NeedsInternet(_)) => this.ask_again(Pending::OpenDoor43),
+                Err(ApiError::NeedsSignIn(_)) => {
+                    this.patch_od(|od| od.busy = false);
+                    this.needs_sign_in(Pending::OpenDoor43);
+                }
+                Err(ApiError::Refused(refusal)) => {
+                    let reason = refusal
+                        .vars()
+                        .into_iter()
+                        .map(|(_, v)| v)
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    this.open_refused(refusal.code(), reason);
+                }
+                Err(other) => this.open_refused(None, other.to_string()),
+            }
+        });
+    }
+
+    fn open_refused(&self, code: Option<&str>, reason: String) {
+        self.patch_od(|od| od.refused(code, reason));
+    }
+
+    /// The end of a job this page started: its outcome, or why it did not finish. Its state
+    /// comes with the event stream, which the runtime reads again after a gap; a job the page
+    /// has not heard of for a second is asked for, and one the server no longer knows (a new
+    /// server run) ended without an outcome.
+    async fn job_end(&self, job: tc_api::ids::JobId) -> Result<JobOutcome, ApiError> {
+        let mut unheard = 0u32;
+        loop {
+            let mut state = self
+                .s()
+                .server
+                .jobs
+                .with_untracked(|jobs| jobs.get(&job).map(|view| view.state.clone()));
+            if state.is_none() {
+                unheard += 1;
+                if unheard.is_multiple_of(20) {
+                    match self.0.runtime.api().call(&tc_api::jobs::Get { job }).await {
+                        Ok(Some(view)) => state = Some(view.state),
+                        Ok(None) => {
+                            return Err(ApiError::Unavailable(tc_api::error::Feature::Sync));
+                        }
+                        Err(_) => {}
+                    }
+                }
+            }
+            match state {
+                Some(JobState::Done(outcome)) => return Ok(outcome),
+                Some(JobState::Failed(error)) => return Err(error),
+                Some(JobState::Cancelled) => {
+                    return Err(ApiError::Unavailable(tc_api::error::Feature::Sync));
+                }
+                Some(JobState::Queued | JobState::Running(_) | JobState::Cancelling) | None => {
+                    js::sleep(50).await;
+                }
+            }
+        }
+    }
 
     pub fn dismiss_import_toast(&self) {
         self.s().import_toast.try_set(None);
+    }
+
+    // ---- Share on Door43 (B9b; the run is E1b's) --------------------------------------------
+
+    /// tC4's `startShare` after the question. With a sign-in held, the dialog opens at once on
+    /// its where-it-goes step and reads the organizations; without one, the organizations' read
+    /// resumes a kept sign-in or answers `NeedsSignIn`, and the sign-in step comes first, then
+    /// this step again.
+    fn share_now(&self, project: ShareProject) {
+        let flow = self.0.share_flows.get() + 1;
+        self.0.share_flows.set(flow);
+        let opened = self.s().server.account.with_untracked(|a| a.user.is_some());
+        if opened {
+            self.open_share(&project);
+        }
+        let this = self.clone();
+        spawn_local(async move {
+            let request = Orgs {
+                language: project.language.clone(),
+            };
+            let reply = this.0.runtime.api().call(&request).await;
+            if this.0.share_flows.get() != flow {
+                return;
+            }
+            let dialog = this.s().layers.dialog.get_untracked();
+            match reply {
+                Err(CallError::Api(ApiError::NeedsInternet(_))) => {
+                    this.end_share();
+                    this.ask_again(Pending::Share(Box::new(project)));
+                }
+                Err(CallError::Api(ApiError::NeedsSignIn(_))) => {
+                    this.end_share();
+                    this.needs_sign_in(Pending::Share(Box::new(project)));
+                }
+                reply => {
+                    // The answer goes to this flow's dialog only; one that opened meanwhile
+                    // over Home takes its place only when nothing else is open.
+                    match (opened, dialog) {
+                        (true, Some(Dialog::Share)) => {}
+                        (false, None) => this.open_share(&project),
+                        _ => return,
+                    }
+                    let read = reply.map_err(|error| share_problem(&error));
+                    this.patch_sh(|sh| sh.choices_read(read));
+                }
+            }
+        });
+    }
+
+    fn open_share(&self, project: &ShareProject) {
+        let s = self.s();
+        s.sh.try_set(Some(ShareForm::open(project.clone())));
+        s.layers.dialog.try_set(Some(Dialog::Share));
+    }
+
+    /// The share dialog closes for a step that takes its place.
+    fn end_share(&self) {
+        let s = self.s();
+        s.layers.dialog.try_update(|dialog| {
+            if *dialog == Some(Dialog::Share) {
+                *dialog = None;
+            }
+        });
+        s.sh.try_set(None);
+    }
+
+    pub fn patch_sh(&self, patch: impl FnOnce(&mut ShareForm)) {
+        self.s().sh.try_update(|sh| {
+            if let Some(sh) = sh {
+                patch(sh);
+            }
+        });
+    }
+
+    /// Next and Back (tC4 `shareStep`).
+    pub fn share_step(&self, step: ShareStep) {
+        self.patch_sh(|sh| sh.go(step));
+    }
+
+    pub fn pick_share_target(&self, target: Target) {
+        self.patch_sh(|sh| sh.pick(target));
+    }
+
+    /// The check step's Share: the run is unit E1b's (`door43/share`).
+    pub fn share_run(&self) {}
+
+    /// "Change" (D86 point 7): signs out, then the sign-in step, then the dialog again.
+    pub fn change_sign_in(&self) {
+        let Some(project) = self
+            .s()
+            .sh
+            .with_untracked(|sh| sh.as_ref().map(|sh| sh.project.clone()))
+        else {
+            return;
+        };
+        self.0.share_flows.set(self.0.share_flows.get() + 1);
+        self.end_share();
+        let this = self.clone();
+        spawn_local(async move {
+            let request = SignOut {
+                request: js::random_request_id(),
+            };
+            match this.0.runtime.api().call(&request).await {
+                Ok(account) => {
+                    this.s().server.account.try_set(account);
+                }
+                Err(error) => console_warn(&format!("tc4: sign-out: {error}")),
+            }
+            this.needs_sign_in(Pending::Share(Box::new(project)));
+        });
     }
 
     // ---- the Door43 account (A8) ------------------------------------------------------------
@@ -924,4 +1204,12 @@ fn console_warn(message: &str) {
 
 fn console_error(message: &str) {
     web_sys::console::error_1(&JsValue::from_str(message));
+}
+
+/// Why the organizations could not be read, in the shown language.
+fn share_problem(error: &CallError) -> String {
+    match error {
+        CallError::Api(ApiError::Refused(refusal)) => crate::i18n::t_dyn(refusal.key(), &[], None),
+        other => other.to_string(),
+    }
 }

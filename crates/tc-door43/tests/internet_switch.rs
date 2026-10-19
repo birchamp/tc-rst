@@ -69,6 +69,13 @@ async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off()
         ),
         ("list_orgs", client.list_orgs(&session).await.map(drop)),
         (
+            "count_repositories",
+            client
+                .count_repositories(Some(&session), &"Equipo-Ejemplo".parse().unwrap(), "es-419")
+                .await
+                .map(drop),
+        ),
+        (
             "create_repo",
             client
                 .create_repo(

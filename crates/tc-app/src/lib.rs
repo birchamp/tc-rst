@@ -34,6 +34,7 @@ pub mod replies;
 pub mod reports;
 mod seed;
 pub mod session;
+pub mod share;
 pub mod sources;
 mod startup;
 mod understand;

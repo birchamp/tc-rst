@@ -529,7 +529,7 @@ impl App {
         &self.inner.account
     }
 
-    fn door43(&self) -> Result<&Door43Client, ApiError> {
+    pub(crate) fn door43(&self) -> Result<&Door43Client, ApiError> {
         self.account().door43.as_ref().map_err(|reason| {
             self.internal(
                 "the Door43 client could not start",
@@ -900,7 +900,7 @@ impl App {
         }
     }
 
-    fn held_session(&self) -> Option<Session> {
+    pub(crate) fn held_session(&self) -> Option<Session> {
         lock(&self.account().state)
             .session
             .as_ref()

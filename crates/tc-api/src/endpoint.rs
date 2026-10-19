@@ -167,6 +167,7 @@ unscoped!(
     crate::account::Resume,
     crate::account::SignOut,
     crate::session::Open,
+    crate::door43::OpenDoor43,
 );
 #[cfg(feature = "test-hooks")]
 scoped!(crate::test::SaveVerse);

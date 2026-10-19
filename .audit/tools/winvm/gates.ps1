@@ -3,6 +3,8 @@
 $logs = 'C:\src\logs'; New-Item -ItemType Directory -Force $logs | Out-Null
 $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
 $env:RUST_TEST_THREADS = '4'
+# The VM's 80 GB disk filled with incremental caches; a gate run gains little from them.
+$env:CARGO_INCREMENTAL = '0'
 $gates = [ordered]@{
   fmt    = 'cargo fmt --all -- --check'
   clippy = 'cargo clippy --workspace --all-targets --keep-going -- -D warnings'

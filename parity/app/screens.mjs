@@ -176,14 +176,6 @@ export const SCREEN_LIST = [
       await app.page.getByTestId('net-confirm').click();
       await app.page.getByTestId('share-signin').waitFor();
     },
-    // A8: the account menu's "Sign in to Door43" opens the same M12; B9b's card reaches it the
-    // tC4 way (Share, then Turn on internet) and deletes this route when it captures the pixels.
-    rust: async (app) => {
-      await app.home();
-      await app.page.getByTestId('account-menu').click();
-      await app.page.getByTestId('account-sign-in').click();
-      await app.page.getByTestId('share-signin').waitFor();
-    },
   },
   {
     name: 'share-dialog', scenario: 'sample', view: 'home', modal: 'share',

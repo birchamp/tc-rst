@@ -15,7 +15,8 @@
 //!   `GET /api/v1/user`, `GET /api/v1/user/orgs`, `POST /api/v1/user/repos`,
 //!   `POST /api/v1/orgs/{org}/repos`, `GET|POST /api/v1/users/{user}/tokens`,
 //!   `DELETE /api/v1/users/{user}/tokens/{id-or-name}`,
-//!   `GET /api/v1/users/{user}/orgs/{org}/permissions`, `GET /api/v1/repos/{owner}/{repo}`,
+//!   `GET /api/v1/users/{user}/orgs/{org}/permissions`, `GET /api/v1/repos/search` (by
+//!   `owner` and `lang`, the count in `X-Total-Count`), `GET /api/v1/repos/{owner}/{repo}`,
 //!   `.../tags`, `.../tags/{tag}`, `.../releases`, `.../releases/latest`,
 //!   `.../git/commits/{ref}`, `.../archive/{ref}.zip|.tar.gz`.
 //! - Web: `GET /{owner}/{repo}/archive/{ref}.zip`, `GET /{owner}/{repo}/sb/{tag}.zip` (the

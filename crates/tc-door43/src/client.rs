@@ -482,6 +482,34 @@ impl Door43Client {
         Ok(orgs)
     }
 
+    /// How many repositories `owner` has in the language `language` (APP-DESIGN R12, tC4
+    /// `countRepositories`): Door43's `X-Total-Count` of a search for them, with `limit=1` so
+    /// no listing is read. An answer without the header, or with one that is not a count, is
+    /// unexpected.
+    pub async fn count_repositories(
+        &self,
+        session: Option<&Session>,
+        owner: &AccountName,
+        language: &str,
+    ) -> Result<u64, Door43Error> {
+        let mut url = self.api(&["repos", "search"]);
+        url.query_pairs_mut()
+            .append_pair("owner", owner.as_str())
+            .append_pair("lang", language)
+            .append_pair("limit", "1");
+        let (route, response) = self
+            .send(Method::GET, url, auth_of(session), JSON, None)
+            .await?;
+        let count = response
+            .headers()
+            .get("x-total-count")
+            .and_then(|v| v.to_str().ok())
+            .filter(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()))
+            .and_then(|v| v.parse::<u64>().ok());
+        self.read_body(&route, response, MAX_JSON_BYTES).await?;
+        count.ok_or_else(|| unexpected(&route, "the answer carries no X-Total-Count"))
+    }
+
     /// Create an empty repository with a `main` default branch. 409 becomes `NameExists`.
     pub async fn create_repo(
         &self,
