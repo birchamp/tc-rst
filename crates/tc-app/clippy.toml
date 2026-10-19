@@ -6,7 +6,10 @@ allow-panic-in-tests = true
 allow-dbg-in-tests = true
 
 # No read in tc-app may cost the whole project (APP-DESIGN §4.3, §8.1, PERFORMANCE rule 1). These
-# walk every key, change, book or batch of a fold. The counted walks go through
+# are the public reads of `FoldState` that walk every key, change, book, batch or conflict of a
+# fold, or project every book; `tests/op_counts/lint.rs` names the same list, so a method dropped
+# from here fails a test. A fold read that walks less (a book, a chapter, the books, the device
+# list, the anomaly or detached list) is not listed. The counted walks go through
 # `counters::CountingSnapshot`, the one place allowed to call them; the seed check of the fixture
 # backend reads a whole fold once when a fixture loads, with an `#[expect]` saying so. Test
 # crates allow the lint: tests read whole folds to check results.
@@ -18,6 +21,10 @@ disallowed-methods = [
   { path = "tc_journal::fold::FoldState::batch_changes", reason = "walks every batch of the project" },
   { path = "tc_journal::fold::FoldState::conflicts", reason = "walks the whole conflict list: go through CountingSnapshot::conflicts, which counts it" },
   { path = "tc_journal::fold::FoldState::conflicts_of", reason = "walks the whole conflict list, as conflicts does" },
+  { path = "tc_journal::fold::FoldState::unreadable_records", reason = "walks the whole conflict list, as conflicts does; listing unreadable records is the store's" },
+  { path = "tc_journal::fold::FoldState::retry_unreadable", reason = "walks the whole conflict list to judge every unreadable record again; the store's" },
+  { path = "tc_journal::fold::FoldState::conflicts_rebuilt", reason = "builds every record's conflict again: the store's background check" },
+  { path = "tc_journal::fold::FoldState::metadata_source", reason = "projects every book to tell whether the text is NFC; metadata.json is the store's" },
   { path = "tc_journal::fold::FoldState::render_book", reason = "renders every file of a book: go through CountingSnapshot::render_book, which counts it" },
   { path = "tc_journal::fold::FoldState::book_usfm", reason = "projects a whole book: go through CountingSnapshot::book_usfm, which counts it" },
 ]

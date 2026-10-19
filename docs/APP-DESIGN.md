@@ -2386,12 +2386,17 @@ tC4's spec assertions are the reference.
 - `CountingSnapshot` wraps every snapshot a query gets. It counts the records it reads, the keys
   R1's range reads return (`keys_probed`), full conflict-list walks, `render_book` and `book_usfm`
   *(A-21)*. *(B1b: `crates/tc-app/clippy.toml` refuses `record_keys`, `frontier`, `device_stats`,
-  `derived_files`, `batch_changes`, `conflicts`, `conflicts_of`, `render_book` and `book_usfm`
+  `derived_files`, `batch_changes`, `conflicts`, `conflicts_of`, `unreadable_records`,
+  `retry_unreadable`, `conflicts_rebuilt`, `metadata_source`, `render_book` and `book_usfm`
   anywhere in tc-app's code but `counters.rs`, whose counted wrappers carry an `#[expect]`, and B1a's
-  seed check, which reads a whole fold once when a fixture loads. A count fails only on a path a
-  test runs; the lint fails every path. B1b proved it fires on each path through the re-export
-  `tc_journal::fold::FoldState`. Test crates allow it, because tests read whole folds to check
-  results.)*
+  seed check, which reads a whole fold once when a fixture loads. These are the public reads of
+  `FoldState` that walk every key, change, book, batch or conflict, or project every book; reads
+  that walk less (one book, the books, the devices, the anomaly or detached list) are not refused,
+  and `tests/op_counts/lint.rs` fails when one of the thirteen leaves the list. A count fails only
+  on a path a test runs; the lint fails every path. B1b proved it fires on each path through the
+  re-export `tc_journal::fold::FoldState`; the first list missed the four conflict-list and
+  every-book walks after `conflicts_of`. Test crates allow it, because tests read whole folds to
+  check results.)*
 
 Every count test runs the action on tc-corpus Psalms and on ten times Psalms and fails if a count
 grows (PERF:20-24). From B1b to C1a they run on `MemoryBackend`; from C1a on, on `StoreBackend` too.

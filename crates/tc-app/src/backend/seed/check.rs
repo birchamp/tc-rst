@@ -805,6 +805,10 @@ impl Checker<'_> {
     }
 
     /// Rule 9: every free field of `metadata.json` is what `metadata.json` is built from.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the seed check reads the whole fold once, when a fixture loads; no interactive path runs it"
+    )]
     fn metadata(&mut self) {
         let source = self
             .built

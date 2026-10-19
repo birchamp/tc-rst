@@ -17,6 +17,7 @@ mod common;
 mod op_counts {
     pub mod corpus;
     pub mod harness;
+    mod lint;
     mod probes;
     mod session;
 }
