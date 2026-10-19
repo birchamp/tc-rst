@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "25526e841227c2e9",
+      "ui": "843b1b5fd80587ef",
       "commit": "dev",
       "api": 1
     }
@@ -30,8 +30,8 @@
     "rows": 130,
     "same": 1,
     "declared": 0,
-    "differs": 22,
-    "unported": 107,
+    "differs": 29,
+    "unported": 100,
     "failed": 0
   },
   "rows": [
@@ -909,11 +909,41 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B10",
-        "dom": "B10",
-        "meaning": "B10"
+      "status": "differs",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "pendingUntil": "E1b",
+      "pixels": {
+        "tc4Sha256": "b0b464938b644360ba68430e8b13eb2e3936b49e0b834597769798ff818738f2",
+        "rustSha256": "4322217dbf8e5d36927169787fcafc68438aa696d8f6774e7329f7402d874f28",
+        "mismatched": 285176,
+        "outsideMasks": 274802,
+        "masks": [
+          "q3-where",
+          "q3-refused"
+        ],
+        "diff": "diffs/open-door43-refused.png"
+      },
+      "dom": {
+        "tc4Sha256": "853b8faa7d58888cae07d6249ebb77041f73a811e52eacf92a68f7180a05f882",
+        "rustSha256": "f0946e51655a18ddfe7bd804e875e1411da26055c24cff28bbdfa47e550e2b6e",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 33: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 40: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 41: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 42: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 43: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
+      },
+      "meaning": {
+        "same": false,
+        "declared": [],
+        "diffs": [
+          "homeCards[_local_/_local_/sample_burrito_obs]: tC4 share, rust none"
+        ]
       }
     },
     {
@@ -1185,11 +1215,39 @@
       "kind": "screen",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B10",
-        "dom": "B10",
-        "meaning": "B10"
+      "status": "differs",
+      "by": "B10",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "c78f2bacdab899a9c7ff2810a42b788a3ff458a24c158cef32693dd1952bd00d",
+        "rustSha256": "186e04fe56c2e793306b6621b73b6c77cc00f84562473a152eec15ca354144fb",
+        "mismatched": 253452,
+        "outsideMasks": 252484,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/shared-home.png"
+      },
+      "dom": {
+        "tc4Sha256": "68fada25af73568dd6dcd2396f409970e002f12d12b559bf08701e9e9659b64f",
+        "rustSha256": "9d4a3ae47cbfd9c8d5e4d0350bde996aaf2bb7b6e119ba9a03aaaae9dd9f9a0a",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 32: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 39: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 40: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 41: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 42: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
+      },
+      "meaning": {
+        "same": false,
+        "declared": [],
+        "diffs": [
+          "homeCards[_local_/_local_/sample_burrito_obs]: tC4 upload, rust none"
+        ]
       }
     },
     {
@@ -1197,11 +1255,39 @@
       "kind": "screen",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B10",
-        "dom": "B10",
-        "meaning": "B10"
+      "status": "differs",
+      "by": "B10",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b5fa1c58f7192dc0bcf87fd68684f66b005f9ca2c0372d4643d9ec461ce862a1",
+        "rustSha256": "0502905e0021b815ad40c881270ae32fb4accea777b0af1176c6569cd4cb2e3a",
+        "mismatched": 155982,
+        "outsideMasks": 155020,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-internet-consent.png"
+      },
+      "dom": {
+        "tc4Sha256": "db3fd86171d31f6bb125af94b71d35fac6b59fd350f986d7ba26899a58ba0f87",
+        "rustSha256": "63b164f342ed46e504430cebfdc2b0ff16996f27dc05f1501e418ad8f219b0d6",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 32: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 39: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 40: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 41: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 42: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
+      },
+      "meaning": {
+        "same": false,
+        "declared": [],
+        "diffs": [
+          "homeCards[_local_/_local_/sample_burrito_obs]: tC4 upload, rust none"
+        ]
       }
     },
     {
@@ -1209,11 +1295,40 @@
       "kind": "screen",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B10",
-        "dom": "B10",
-        "meaning": "B10"
+      "status": "differs",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "pendingUntil": "E1a",
+      "pixels": {
+        "tc4Sha256": "6f2438fd358bb7cd386b615e62c4ee22b3ae91f08d0cff3cfe6feb1b90136b68",
+        "rustSha256": "bb430471b9bfe80a530bf26e3dc82f872045bb452b801abddcf73fc4b9703e25",
+        "mismatched": 253452,
+        "outsideMasks": 252484,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-failed.png"
+      },
+      "dom": {
+        "tc4Sha256": "aa5bed6dff1d4c21266ca6260597407c50a870452b14333abe6bce3c36477a54",
+        "rustSha256": "14fa7f211cccbc36e96661392fbbc6735115d32cba90f3a4edb642d50f15d1de",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 31: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 38: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 39: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 40: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 41: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
+      },
+      "meaning": {
+        "same": false,
+        "declared": [],
+        "diffs": [
+          "homeCards[_local_/_local_/sample_burrito_obs]: tC4 upload, rust none"
+        ]
       }
     },
     {
@@ -1221,11 +1336,40 @@
       "kind": "screen",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B10",
-        "dom": "B10",
-        "meaning": "B10"
+      "status": "differs",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "pendingUntil": "E1a",
+      "pixels": {
+        "tc4Sha256": "a18ee79d4176c0a2240fb882329d82e973acb160ff2ceddb0c6f6987c20d3fd0",
+        "rustSha256": "55b3245ee896d8bfcab798f15fb9604cf1fc01f3d4f02f9b3c556f2d6a0a783e",
+        "mismatched": 253452,
+        "outsideMasks": 252484,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-ok.png"
+      },
+      "dom": {
+        "tc4Sha256": "9bb43af701a303f5c82c6100319ca7eee7fc0b41fda0c7d1f499e60622409b4b",
+        "rustSha256": "84737935b934ba9d260840ab41981d6284d15d039a4a21bb97e08b888d40e114",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 31: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 38: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 39: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 40: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 41: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
+      },
+      "meaning": {
+        "same": false,
+        "declared": [],
+        "diffs": [
+          "homeCards[_local_/_local_/sample_burrito_obs]: tC4 upload, rust none"
+        ]
       }
     },
     {
@@ -1233,11 +1377,40 @@
       "kind": "screen",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B10",
-        "dom": "B10",
-        "meaning": "B10"
+      "status": "differs",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "pendingUntil": "E1a",
+      "pixels": {
+        "tc4Sha256": "0910d21244995a259b69876e04c6ade16a8296414b04e46fe299471a58b563a6",
+        "rustSha256": "a838a7cdb486a4ab23966dd42ee7737049bc9b9a0dc9e4d440d708c5e2f95b10",
+        "mismatched": 253014,
+        "outsideMasks": 252046,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-ok-teammates.png"
+      },
+      "dom": {
+        "tc4Sha256": "a01069bc139151d47812a1d8b0706c14687eb6d5ac41e375521ea33ffff000e1",
+        "rustSha256": "c3e8b13bce489f96613e9b006a1990b72dc1afe67f85734508ca33ae26b889f4",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 31: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 38: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 39: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 40: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 41: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
+      },
+      "meaning": {
+        "same": false,
+        "declared": [],
+        "diffs": [
+          "homeCards[_local_/_local_/sample_burrito_obs]: tC4 upload, rust none"
+        ]
       }
     },
     {
@@ -1245,11 +1418,40 @@
       "kind": "screen",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B10",
-        "dom": "B10",
-        "meaning": "B10"
+      "status": "differs",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "pendingUntil": "E1a",
+      "pixels": {
+        "tc4Sha256": "79183c1b8105b97bec2b3ff79071306cbd292a923a453220759c28a5ca0c0d39",
+        "rustSha256": "f8c3159f6bcd6f40fb1ef3ccf8888fbced72625a9e19f81c0e8cdaf0d659b33b",
+        "mismatched": 253014,
+        "outsideMasks": 252046,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-ok-restored.png"
+      },
+      "dom": {
+        "tc4Sha256": "35e4ede29d07ee4426b6e7e78385e8ff8d960a9153b455ef8a5a5b2baca173fe",
+        "rustSha256": "a45642622da7e3cab0122397062b9890e8e08c07fd61fb1ae1047acd591164f8",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 31: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 38: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 39: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 40: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 41: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
+      },
+      "meaning": {
+        "same": false,
+        "declared": [],
+        "diffs": [
+          "homeCards[_local_/_local_/sample_burrito_obs]: tC4 upload, rust none"
+        ]
       }
     },
     {

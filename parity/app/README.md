@@ -38,8 +38,9 @@ git diff parity/app/report.json                  # review every row that changed
 DOM unit comes before its pixels unit (§7.6), compared within its `scopes.json` scope until the
 pixels unit captures it whole. Screens are captured on the store, the default since C1a: the
 gate fails a capture on `--backend memory` once C1a has landed (APP-DESIGN §7.5).
-`--backend memory+scripted` marks a screen captured on scripted job outcomes (on the memory
-backend, until its recapture unit lands). `--case <names>` captures gallery cases instead
+`--backend memory+scripted` marks a screen captured on scripted job outcomes, until its
+recapture unit lands: the environment's Door43 steps set them through `test/script`, and the app
+runs on the store, as every screen does since C1a (B10). `--case <names>` captures gallery cases instead
 (below). Playwright comes from
 `parity/tc4-baseline/node_modules` (`npm ci` there).
 

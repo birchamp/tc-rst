@@ -306,6 +306,7 @@ fn compare(
             id: m.id.clone(),
             tc4: resolve_target(&m.target),
             rust: resolve_target(m.rust_target()),
+            rust_absent: m.rust_absent.is_some(),
         })
         .collect();
     if capture.claims(Layer::Dom) {

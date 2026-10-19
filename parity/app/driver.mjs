@@ -29,6 +29,12 @@ import { BIBLE, OBS } from './screens.mjs';
  *   Titus 1:1 on Door43 `main` from the same version; answers each teammate's segment.
  * @property {(repo: string, segment: string) => unknown} loseFromDoor43 Door43 `main` loses
  *   one of those segments, as when someone replaces main with an older copy.
+ * @property {(repo: string) => unknown} door43Lacks Door43 has no repository `repo`, so a clone
+ *   of it fails.
+ * @property {boolean} journalAtFirstOpen The app writes a project's journal the first time it
+ *   opens it, and a sync needs that journal on Door43 (tC4, its README: "The project is opened
+ *   once before it is pushed"). An app whose projects hold their history from the start has
+ *   nothing to write.
  */
 
 /** Helpers each screen's `run` receives, over the environment `env` (see AppEnv). */
@@ -90,6 +96,14 @@ export function appDriver({ page, env }) {
     dropNextClone: (repo) => env.dropNextClone(repo),
     teammatesChangeOneVerse: (repo) => env.teammatesChangeOneVerse(repo),
     loseFromDoor43: (repo, segment) => env.loseFromDoor43(repo, segment),
+    door43Lacks: (repo) => env.door43Lacks(repo),
+    /** Open the Bible sample once and go Home, where the app writes the journal its push needs
+     * at that open (`journalAtFirstOpen`); elsewhere there is nothing to do. */
+    async openOnceBeforePush() {
+      if (!env.journalAtFirstOpen) return;
+      await this.openTitus();
+      await this.home();
+    },
     /** Sync with Door43 from the project card: the internet question, then the sign-in. */
     async syncFromHome(repo) {
       await this.shareButton(repo).click();

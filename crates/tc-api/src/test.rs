@@ -348,8 +348,7 @@ pub struct KeychainView {
 }
 
 /// `test/script`: how the next job of a kind ends, until units X and E1b bring the real Door43
-/// open and sync (AD6, B10). Outcomes wait in order; a job with none answers
-/// `Unavailable(Sync)`.
+/// open and sync (AD6, B10). A job with nothing scripted answers `Unavailable(Sync)`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -368,10 +367,11 @@ pub struct Script {
     deny_unknown_fields
 )]
 pub enum Scripted {
-    /// The next `door43/open` fails so, as a clone from Door43 fails (tC4 refuses an open with
-    /// the sync's codes).
+    /// A `door43/open` fails so, as a clone from Door43 fails (tC4 refuses an open with the
+    /// sync's codes). Scripted opens wait in order.
     OpenDoor43Fails(crate::refusal::SyncFailure),
-    /// The next `door43/sync` of `project` ends so.
+    /// The next `door43/sync` of `project` ends so, whatever was scripted for it before: a
+    /// test scripts what Door43 holds now.
     Sync {
         project: ProjectRef,
         outcome: ScriptedSync,

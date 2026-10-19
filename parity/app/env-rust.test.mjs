@@ -15,7 +15,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { recordSequence } from './behaviour.mjs';
 import { caseRoute, mergeCaptures, screenRoute } from './capture-rust.mjs';
-import { REPO, newRequestId, notYet, rustTracks, scenarioArgs, startDoor43Fake, startRustEnv } from './env-rust.mjs';
+import { REPO, newRequestId, rustTracks, scenarioArgs, startDoor43Fake, startRustEnv } from './env-rust.mjs';
 import { CHROMIUM_ARGS, captureScreen, settle, trackRequests } from './observe.mjs';
 import { designUnits } from './units.mjs';
 
@@ -28,12 +28,6 @@ test('rustTracks counts the API and pictures and never the event stream', () => 
   assert.equal(rustTracks(at('/media/obs/x/01-01.jpg')), true);
   assert.equal(rustTracks(at('/ui/abcd/i18n/ar.json')), false);
   assert.equal(rustTracks(at('/')), false);
-});
-
-test('every Door43 step names the unit that brings it', async () => {
-  for (const [step, unit] of [['pushToDoor43', 'B9b'], ['dropNextClone', 'E1a'], ['teammatesChangeOneVerse', 'B10'], ['loseFromDoor43', 'B10']]) {
-    await assert.rejects(notYet(step, unit)('_local_/_local_/sample_burrito'), new RegExp(`^Error: ${step} needs the fake Door43 in the Rust environment, which unit ${unit} adds`));
-  }
 });
 
 test('a scenario reaches tc4 as the state folder it was built into', () => {

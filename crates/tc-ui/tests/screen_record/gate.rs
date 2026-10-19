@@ -662,6 +662,8 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
                     Rule::MaskMoved,
                     format!("the element of mask {} is at {rect:?}, outside its rectangle {:?}: widen the mask in masks.json, citing its ruling", mask.id, mask.rects[&row.name]),
                 ),
+                // The DOM layer fails the row once the rebuild draws it.
+                None if mask.rust_absent.is_some() => {}
                 None => out.add(Some(&row.name), Rule::MaskTargetMissing, format!("the capture did not find the element of mask {} on the Rust page: set the mask's `rust` target", mask.id)),
             }
         }

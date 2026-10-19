@@ -50,10 +50,16 @@ struct WrittenProject {
     packs: Vec<EncodedPack>,
     /// Carried files: the path in the folder and the bytes.
     carried: Vec<(String, Vec<u8>)>,
+    /// The Door43 repository a shared project syncs with (the scenario's `origin`).
+    remote: Option<super::Door43Remote>,
 }
 
 impl WrittenProject {
-    fn of(folder: ProjectRef, seed: &StateSeed) -> Result<Self, ScenarioError> {
+    fn of(
+        folder: ProjectRef,
+        seed: &StateSeed,
+        remote: Option<super::Door43Remote>,
+    ) -> Result<Self, ScenarioError> {
         let mut carried = Vec::new();
         for placement in seed.fold.carried_files() {
             let bytes = seed
@@ -72,6 +78,7 @@ impl WrittenProject {
             created: seed.created,
             packs: seed.packs.clone(),
             carried,
+            remote,
         })
     }
 
@@ -112,6 +119,15 @@ impl WrittenProject {
                 .map(|pack| (pack.path.to_string(), pack.bytes.clone())),
         );
         files.extend(self.carried.iter().cloned());
+        // A shared project's last confirmed Door43 state (STORAGE §3.2): its remote and branch,
+        // which Home reads for "On Door43" and the Sync button. No sync has confirmed a commit.
+        if let Some(remote) = &self.remote {
+            let sync = serde_json::json!({
+                "remoteUrl": format!("https://{}/{}/{}.git", remote.host, remote.owner, remote.repo),
+                "branch": "main",
+            });
+            files.push((".tc/sync.json".to_owned(), format!("{sync}\n").into_bytes()));
+        }
         files
     }
 }
@@ -220,7 +236,8 @@ impl ScenarioStore {
                 .and_then(|tc4| tc4_state_seed(&tc4, fixture_project_id(project.folder.as_str())));
             match seeded {
                 Ok(seed) => {
-                    let one = WrittenProject::of(project.folder.clone(), &seed)?;
+                    let one =
+                        WrittenProject::of(project.folder.clone(), &seed, project.remote.clone())?;
                     write_project(&backend, &one)?;
                     written.push(one);
                     report.loaded.push((project.folder, seed.report));

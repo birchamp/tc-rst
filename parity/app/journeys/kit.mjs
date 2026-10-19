@@ -63,15 +63,16 @@ export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
 
 /**
  * A browser, a `tc4` and a page, Home loaded in `locale` (the probe page with `probe`; with
- * `seed(folder)`, tc-store over a projects folder it fills instead of the sample scenario), then
+ * `seed(folder)`, tc-store over a projects folder it fills instead of the sample scenario, and
+ * with `scenario`, another parity scenario), then
  * `body({ env, page, context, errors, allow })`. `init(context, env)` runs before the page
  * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass. With
  * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`).
  */
-export async function withApp(body, { locale = 'en', probe = false, init, seed, door43: fake = false } = {}) {
+export async function withApp(body, { locale = 'en', probe = false, init, seed, scenario: named = 'sample', door43: fake = false } = {}) {
   const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });
   const door43 = fake ? await startDoor43Fake(setup.door43) : undefined;
-  const scenario = seed ? 'store' : 'sample';
+  const scenario = seed ? 'store' : named;
   let env;
   try {
     env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe ? setup.hooks : setup.ui, door43 });

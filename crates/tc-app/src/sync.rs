@@ -1,6 +1,6 @@
 //! Sync with Door43 from a Home card (unit B10; tC4 #678): the `door43/sync` job and what its
-//! toast shows. The sync's own steps are unit X's: until X lands, the outcomes a test scripted
-//! answer for it (AD6, `test/script`), and a sync with none answers `Unavailable(Sync)`.
+//! toast shows. The sync's own steps are unit X's: until X lands, the outcome a test scripted
+//! answers for it (AD6, `test/script`), and a sync with none answers `Unavailable(Sync)`.
 //!
 //! A scripted sync that receives teammates' changes writes them into the project as X's intake
 //! will, then reads the project again, so the toast, the card's conflict chip and the tiles'
@@ -110,46 +110,38 @@ fn missing_pins(snapshot: &CountingSnapshot, installed: &dyn Fn(&ResourcePin) ->
     })
 }
 
-/// The sync before unit X: the outcomes a test scripted for each project, in order.
+/// The sync before unit X: how the next sync of each project ends, as a test set it. A test
+/// sets it from what Door43 holds, so each setting replaces the one before, as a change on
+/// Door43 changes what the next sync finds.
 #[cfg(feature = "test-hooks")]
 #[derive(Default)]
 pub(crate) struct ScriptedSync {
-    scripted: std::sync::Mutex<
-        std::collections::HashMap<
-            ProjectRef,
-            std::collections::VecDeque<tc_api::test::ScriptedSync>,
-        >,
-    >,
+    next: std::sync::Mutex<std::collections::HashMap<ProjectRef, tc_api::test::ScriptedSync>>,
 }
 
 #[cfg(feature = "test-hooks")]
 impl ScriptedSync {
-    fn next(&self, project: &ProjectRef) -> Option<tc_api::test::ScriptedSync> {
-        crate::app::lock(&self.scripted)
-            .get_mut(project)
-            .and_then(std::collections::VecDeque::pop_front)
+    fn take(&self, project: &ProjectRef) -> Option<tc_api::test::ScriptedSync> {
+        crate::app::lock(&self.next).remove(project)
     }
 
     pub(crate) fn clear(&self) {
-        crate::app::lock(&self.scripted).clear();
+        crate::app::lock(&self.next).clear();
     }
 }
 
 impl App {
-    /// The next `door43/sync` of `project` ends with `outcome`.
+    /// The next `door43/sync` of `project` ends with `outcome`, whatever was set before.
     #[cfg(feature = "test-hooks")]
     pub fn script_sync(&self, project: ProjectRef, outcome: tc_api::test::ScriptedSync) {
-        crate::app::lock(&self.inner.sync.scripted)
-            .entry(project)
-            .or_default()
-            .push_back(outcome);
+        crate::app::lock(&self.inner.sync.next).insert(project, outcome);
     }
 
     /// One sync of `folder`, after the checkpoint of the project just left (tC4 `syncRun`).
     async fn sync_job(&self, folder: ProjectRef) -> Result<JobOutcome, JobEnd> {
         self.inner.sessions.settled(&folder).await;
         #[cfg(feature = "test-hooks")]
-        if let Some(outcome) = self.inner.sync.next(&folder) {
+        if let Some(outcome) = self.inner.sync.take(&folder) {
             return self.scripted_sync(folder, outcome).await;
         }
         Err(JobEnd::Failed(ApiError::Unavailable(Feature::Sync)))

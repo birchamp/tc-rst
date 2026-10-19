@@ -180,6 +180,7 @@ export async function startTc4Env({ scenario, port }) {
     /** tC4 seeds the journal of a conformance sample when it first opens it, so the project
      * must be opened before it is pushed, as tC4's e2e/sync-button.spec.ts opens it before it
      * shares it. Without the journal on Door43, the sync stops at sync.verify-failed. */
+    journalAtFirstOpen: true,
     pushToDoor43: (repo) => mock.door43.push(repo),
     dropNextClone: (repo) => mock.door43.dropNextClone(repo),
     teammatesChangeOneVerse: (repo) => teammatesChangeOneVerse(mock.door43.push(repo)),
@@ -190,6 +191,8 @@ export async function startTc4Env({ scenario, port }) {
       fs.rmSync(segment);
       for (let dir = path.dirname(segment); dir !== journal && fs.readdirSync(dir).length === 0; dir = path.dirname(dir)) fs.rmdirSync(dir);
     },
+    /** The mock's Door43 holds only the repositories the scenario pushes. */
+    door43Lacks: () => {},
     /** A mark in the mock's request log, for `absentReads`. */
     requestMark: () => mock.requests.length,
     /** The reads since `mark` that came back absent (HTTP 400 and up), journal reads left out,
