@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::error::ApiError;
-use crate::ids::RequestId;
+use crate::ids::{RequestId, Scope};
 #[cfg(feature = "test-hooks")]
 use crate::test_hook_table;
 
@@ -112,7 +112,68 @@ pub trait Endpoint: Serialize + DeserializeOwned + 'static {
 /// `endpoint_table!` checks when it compiles.
 pub trait Write: Endpoint {
     fn request(&self) -> RequestId;
+    /// The open project this write applies to; `None` for a write that is not
+    /// project-scoped. The server checks it before the reply cache, so a write against a
+    /// closed or replaced open is refused and never answered from the cache of another.
+    fn at(&self) -> Option<&Scope>;
 }
+
+/// Whether a write row is project-scoped. Every `command` and `job` row needs one of
+/// [`scoped!`] or [`unscoped!`], so a unit that adds a write must say which it is.
+trait ScopeOf {
+    fn scope_of(&self) -> Option<&Scope>;
+}
+
+/// Writes whose `at` names the open project they apply to.
+macro_rules! scoped {
+    ($($req:path),* $(,)?) => {
+        $(
+            impl ScopeOf for $req {
+                fn scope_of(&self) -> Option<&Scope> {
+                    Some(&self.at)
+                }
+            }
+        )*
+    };
+}
+
+/// Writes that apply to no project.
+macro_rules! unscoped {
+    ($($req:path),* $(,)?) => {
+        $(
+            impl ScopeOf for $req {
+                fn scope_of(&self) -> Option<&Scope> {
+                    None
+                }
+            }
+        )*
+    };
+}
+
+scoped!(
+    crate::prefs::SetDraftUnit,
+    crate::prefs::SetAlignSuggestions,
+    crate::prefs::RecordPlace,
+);
+unscoped!(
+    crate::app::Quit,
+    crate::app::ClientError,
+    crate::prefs::SetLocale,
+    crate::net::Set,
+    crate::jobs::Cancel,
+    crate::account::SignIn,
+    crate::account::CancelSignIn,
+    crate::account::Resume,
+    crate::account::SignOut,
+);
+#[cfg(feature = "test-hooks")]
+unscoped!(
+    crate::test::Crash,
+    crate::test::Hold,
+    crate::test::Release,
+    crate::test::FieldStore,
+    crate::test::Reset,
+);
 
 /// What an endpoint answers inside an HTTP 200 (AD9). On the wire it follows the crate's
 /// rule for enums: `{"type": "ok", "value": <reply>}` or `{"type": "err", "value":
@@ -187,6 +248,10 @@ macro_rules! write_impl {
         impl Write for $req {
             fn request(&self) -> RequestId {
                 self.request
+            }
+
+            fn at(&self) -> Option<&Scope> {
+                ScopeOf::scope_of(self)
             }
         }
     };

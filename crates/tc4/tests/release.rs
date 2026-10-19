@@ -13,11 +13,10 @@ use tempfile::TempDir;
 
 /// The words no release binary may hold: every endpoint name of the test service, the
 /// application's and the stand-in's alike, every flag only a test build has, and the batch
-/// tag of the fixture backend's seed (feature `fixture-backend`). The tag guards the binary
-/// only once `tc4` calls the seed (B1b): until then the linker drops the seed from a build
-/// with the feature as well, and `release_build_resolves_no_fixture_backend_and_no_test_hook`
-/// is what keeps the feature out.
-const HOOK_TEXT: [&str; 10] = [
+/// tag of the fixture backend's seed (feature `fixture-backend`). Since B1b `tc4 serve
+/// --scenario` calls the seed in a build with the feature, so the tag and the flag guard the
+/// release binary as well as `release_build_resolves_no_fixture_backend_and_no_test_hook`.
+const HOOK_TEXT: [&str; 11] = [
     "test/crash",
     "test/fieldStore",
     "test/fieldLog",
@@ -27,6 +26,7 @@ const HOOK_TEXT: [&str; 10] = [
     "test/release",
     "test/reset",
     "--test-seed-pace",
+    "--scenario",
     "tc4-seed-batch",
 ];
 
@@ -149,6 +149,24 @@ fn release_has_no_test_hooks() {
     assert_eq!(refused.status.code(), Some(2));
     assert!(
         String::from_utf8_lossy(&refused.stderr).contains("unknown flag --test-seed-pace"),
+        "{}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+    assert!(refused.stdout.is_empty());
+
+    // A scenario is the fixture backend's: a release build opens only real projects.
+    let refused = Command::new(&binary)
+        .args(["serve", "--app-data"])
+        .arg(app_data.path())
+        .arg("--ui")
+        .arg(&ui)
+        .args(["--scenario", "state"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("unknown flag --scenario"),
         "{}",
         String::from_utf8_lossy(&refused.stderr)
     );

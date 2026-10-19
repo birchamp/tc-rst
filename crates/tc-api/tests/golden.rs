@@ -627,6 +627,62 @@ fn all_endpoint_goldens() -> Vec<(String, Value)> {
     all
 }
 
+/// The scope a write's example names, and its path: `Some` exactly when the example's JSON
+/// has a top-level `at` that reads as a [`Scope`]. Other writes have an `at` of another kind
+/// (`app/clientError`'s time, `test/crash`'s point) or none.
+fn write_scope<E: tc_api::Write + Example>() -> (&'static str, Option<Scope>, Option<Scope>) {
+    let example = E::example();
+    let json = serde_json::to_value(&example).unwrap();
+    let in_json = json
+        .get("at")
+        .and_then(|at| serde_json::from_value::<Scope>(at.clone()).ok());
+    (E::PATH, example.at().cloned(), in_json)
+}
+
+macro_rules! write_scopes {
+    ($( $kind:ident $([$net:ident])? $path:literal : $req:path => $ok:ty; )*) => {{
+        let mut out = Vec::new();
+        $( write_scopes!(@row out $kind $req); )*
+        out
+    }};
+    (@row $out:ident query $req:path) => {};
+    (@row $out:ident command $req:path) => {
+        $out.push(write_scope::<$req>());
+    };
+    (@row $out:ident job $req:path) => {
+        $out.push(write_scope::<$req>());
+    };
+}
+
+/// tc-app checks a write's scope before its reply cache (APP-DESIGN §4.3, §4.4), so every
+/// write must name the project it applies to exactly when its request carries one.
+#[test]
+fn a_write_names_its_scope_exactly_when_its_json_has_at() {
+    let mut rows = tc_api::endpoint_table!(write_scopes);
+    rows.extend(tc_api::test_hook_table!(write_scopes));
+    let writes = ALL
+        .iter()
+        .filter(|e| matches!(e.kind, Kind::Command | Kind::StartJob))
+        .count();
+    assert_eq!(rows.len(), writes, "every write row is checked");
+    for (path, at, in_json) in &rows {
+        assert_eq!(at, in_json, "{path}");
+    }
+    let scoped: BTreeSet<&str> = rows
+        .iter()
+        .filter(|(_, at, _)| at.is_some())
+        .map(|(path, _, _)| *path)
+        .collect();
+    assert_eq!(
+        scoped,
+        BTreeSet::from([
+            "prefs/recordPlace",
+            "prefs/setAlignSuggestions",
+            "prefs/setDraftUnit"
+        ])
+    );
+}
+
 #[test]
 fn every_endpoint_has_golden_json() {
     let goldens = all_endpoint_goldens();

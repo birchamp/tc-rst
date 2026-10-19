@@ -1,5 +1,12 @@
 //! The seed's private steps, on the samples of `fixtures/tc4`.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Tests read whole folds to check results; the lint on whole-fold walks guards the product's
+// paths (crates/tc-app/clippy.toml).
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::disallowed_methods
+)]
 
 use super::check::{alignment_differences, decision_differences};
 use super::records::{carried_record, meta_field, meta_fields, migrate_pins_v1, pins_records};
