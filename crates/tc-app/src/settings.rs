@@ -119,10 +119,7 @@ impl Handle<ViewFromHome> for App {
             language_name,
             direction,
             font,
-            gateway: GatewayCard {
-                current,
-                options,
-            },
+            gateway: GatewayCard { current, options },
         })
     }
 }
