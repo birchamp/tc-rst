@@ -264,6 +264,10 @@ mod tests {
         fn request(&self) -> RequestId {
             self.request
         }
+
+        fn at(&self) -> Option<&tc_api::Scope> {
+            None
+        }
     }
 
     impl Handle<Boom> for App {

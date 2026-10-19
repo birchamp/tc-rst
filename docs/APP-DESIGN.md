@@ -350,7 +350,10 @@ pub trait Endpoint: Serialize + DeserializeOwned + 'static {
     const NET: Option<NetKind>;            // the UI asks the internet question first (AD25)
     type Ok: Serialize + DeserializeOwned;
 }
-pub trait Write: Endpoint { fn request(&self) -> RequestId; }  // every Command and StartJob
+pub trait Write: Endpoint {                 // every Command and StartJob
+    fn request(&self) -> RequestId;
+    fn at(&self) -> Option<&Scope>;          // the open project; None for a write of no project (B1b)
+}
 pub enum Reply<T> { Ok(T), Err(ApiError) }  // {"type":"ok","value":…} | {"type":"err","value":…}; into_result() *(A1)*
 pub type ReplyOf<E> = Reply<<E as Endpoint>::Ok>;
 
@@ -358,13 +361,20 @@ pub type ReplyOf<E> = Reply<<E as Endpoint>::Ok>;
 //     query "app/hello": app::Hello => app::HelloView;
 //     command [SignIn] "account/signIn": account::SignIn => account::AccountView;
 // tc-api implements `Endpoint` from it (and `Write`, from the request's `request` field, for every
-// `command` and `job` row, so a write without a RequestId does not compile) and builds
+// `command` and `job` row, so a write without a RequestId does not compile; `at()` comes from a
+// `scoped!` or `unscoped!` line each write row needs, B1b) and builds
 // `ALL: &[EndpointInfo { path, kind, net }]`. test_hook_table! holds the `test` rows and exists
 // only with `test-hooks`; ALL includes them then. tc-server builds its routes from the same
 // tables, and tc-app must implement `Handle<E>` for each row, so a request without a handler
 // does not compile.
 pub const API_VERSION: u32 = 1;           // header `X-Tc-Api`
 ```
+
+*(B1b: `Write::at()` lets tc-app check a write's scope before it picks a reply cache (§4.3,
+§4.4): the session's cache keeps project-scoped writes, so dispatch must know the scope first, and
+a stale-scope refusal is never kept under its request id, since the UI resends the same id in the
+new session. `a_write_names_its_scope_exactly_when_its_json_has_at` in tc-api's golden test checks
+every write row. No wire shape changed.)*
 
 tc-server routes `POST /api/v1/{path}` for exactly the rows of these tables (the `test` rows only
 with `--test-hooks`) and hands the body to the backend, whose typed dispatch parses it (A3); a path
