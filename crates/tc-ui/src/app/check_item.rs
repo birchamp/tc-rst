@@ -13,7 +13,10 @@
 //!   rebuild the request from the buffer entry alone.
 //! - **Item navigation** (#726) steps through the list's own order, as tC4's `activeIndex` does.
 
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::collections::{BTreeSet, HashMap};
+use std::rc::Rc;
+use std::task::{Poll, Waker};
 
 use tc_api::check::{CheckItemView, CheckListRef, CheckPlace, CheckUnit, DecideEdit, Tool};
 use tc_api::model::selection::{drag_range, toggle};
@@ -309,6 +312,69 @@ impl MarkFailure {
 
 // ---- The decision's writes ----------------------------------------------------------------
 
+#[derive(Default)]
+struct Writes {
+    busy: bool,
+    waiting: Vec<Waker>,
+    /// The newest token the page knows of each check's decision, from a read or a write's Ack.
+    tokens: HashMap<(CheckPlace, String), ShownToken>,
+}
+
+/// The writes of decisions, marks and comments alike: a mark and a comment of one check are
+/// both written over the decision's token, so the second over the token the first left behind
+/// would be a conflict with the person's own mark. They go one at a time, each over the newest
+/// token the page knows of its check, whichever check is on screen.
+#[derive(Clone, Default)]
+pub struct DecisionWrites(Rc<RefCell<Writes>>);
+
+/// The one write on its way; the next goes when this is dropped.
+pub struct Turn(DecisionWrites);
+
+impl DecisionWrites {
+    pub async fn turn(&self) -> Turn {
+        std::future::poll_fn(|cx| {
+            let mut writes = self.0.borrow_mut();
+            if writes.busy {
+                writes.waiting.push(cx.waker().clone());
+                Poll::Pending
+            } else {
+                writes.busy = true;
+                Poll::Ready(Turn(self.clone()))
+            }
+        })
+        .await
+    }
+
+    /// The page learned the token of a check's decision: a read showed it, or a write brought it.
+    pub fn learn(&self, place: &CheckPlace, check_id: &str, token: &ShownToken) {
+        self.0
+            .borrow_mut()
+            .tokens
+            .insert((place.clone(), check_id.to_owned()), token.clone());
+    }
+
+    /// The token the next write of the check goes over: the newest learned, else `sent`, the one
+    /// its field was based on (a comment restored after a reload, before any read).
+    pub fn token(&self, place: &CheckPlace, check_id: &str, sent: &ShownToken) -> ShownToken {
+        let writes = self.0.borrow();
+        let key = (place.clone(), check_id.to_owned());
+        writes.tokens.get(&key).unwrap_or(sent).clone()
+    }
+}
+
+impl Drop for Turn {
+    fn drop(&mut self) {
+        let waiting = {
+            let mut writes = self.0.0.borrow_mut();
+            writes.busy = false;
+            std::mem::take(&mut writes.waiting)
+        };
+        for waker in waiting {
+            waker.wake();
+        }
+    }
+}
+
 /// A write of check `(place, check_id)` was acknowledged. The shown check takes its new token and
 /// comment only if it is that check: a reply that comes after the person moved on is not for the
 /// check now on screen. True when it took them.
@@ -367,13 +433,13 @@ pub fn done_text(draft: &str, stored: Option<&str>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::future::Future;
     use tc_api::check::{
         Category, CheckArticle, DecisionView, GatewayView, NoteCategory, OriginalView, TargetWords,
         Testament,
     };
     use tc_api::helps::ArticleLink;
     use tc_api::shown::Shown;
-    use tc_api::token::ShownToken;
 
     fn set(items: &[u32]) -> BTreeSet<u32> {
         items.iter().copied().collect()
@@ -670,6 +736,29 @@ mod tests {
         serde_json::from_value(serde_json::json!(text)).unwrap()
     }
 
+    fn poll_once<T>(future: &mut std::pin::Pin<Box<impl Future<Output = T>>>) -> Poll<T> {
+        future
+            .as_mut()
+            .poll(&mut std::task::Context::from_waker(Waker::noop()))
+    }
+
+    /// A comment typed before a mark is written over the token the mark left, not the one the
+    /// field was based on: the mark and the comment are no conflict with each other.
+    #[test]
+    fn a_comment_after_a_mark_goes_over_the_marks_token() {
+        let writes = DecisionWrites::default();
+        let shown = view(3, &["Pablo"], &[]);
+        let (place, id) = (&shown.place, shown.check_id.as_str());
+        writes.learn(place, id, &token(1));
+        // The mark's Ack brings the next token.
+        writes.learn(place, id, &token(2));
+        assert_eq!(writes.token(place, id, &token(1)), token(2));
+        // A check the page has not read goes over the token its field was based on.
+        let other: CheckPlace = "TIT 2:1".parse().unwrap();
+        assert_eq!(writes.token(&other, id, &token(7)), token(7));
+        assert_eq!(writes.token(place, "zz", &token(7)), token(7));
+    }
+
     /// A reply that comes after the person moved to another check is not for the check shown.
     #[test]
     fn an_ack_changes_only_the_check_it_is_for() {
@@ -684,6 +773,28 @@ mod tests {
         assert_eq!(shown.decision.value.comment.as_deref(), Some("Ask"));
         assert!(take_ack(&mut shown, &place, "abcd", &token(8), ""));
         assert_eq!(shown.decision.value.comment, None);
+    }
+
+    /// A mark and a comment are never on their way together: the second waits for the first's
+    /// Ack, and then goes over the token that brought.
+    #[test]
+    fn decision_writes_go_one_at_a_time_in_the_order_they_came() {
+        let writes = DecisionWrites::default();
+        let mut first = Box::pin(writes.turn());
+        let Poll::Ready(turn) = poll_once(&mut first) else {
+            panic!("the first write goes at once");
+        };
+        let mut second = Box::pin(writes.turn());
+        let mut third = Box::pin(writes.turn());
+        assert!(poll_once(&mut second).is_pending());
+        assert!(poll_once(&mut third).is_pending());
+        drop(turn);
+        let Poll::Ready(turn) = poll_once(&mut second) else {
+            panic!("the second goes when the first is done");
+        };
+        assert!(poll_once(&mut third).is_pending());
+        drop(turn);
+        assert!(poll_once(&mut third).is_ready());
     }
 
     /// tC4's `done`: a comment is saved trimmed, only when it differs from the stored one, and

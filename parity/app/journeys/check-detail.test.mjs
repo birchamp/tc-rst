@@ -298,6 +298,45 @@ const slowDecides = (page, ms) => page.route('**/api/v1/check/decide', async (ro
   await route.fulfill({ response });
 });
 
+// A comment and a mark are two writes of one decision: whichever order they come in and however
+// slowly the disk answers, both are on the shown version and neither is a conflict with the
+// person's own earlier write.
+for (const [name, delay, order, leave] of [
+  ['comment_typed_then_mark_then_done_keeps_both', 0, 'mark first', 'comment-done'],
+  ['comment_typed_then_mark_then_next_keeps_both', 0, 'mark first', 'check-next'],
+  ['comment_typed_then_mark_while_the_disk_is_slow_then_done_keeps_both', 200, 'mark first', 'comment-done'],
+  ['comment_typed_then_mark_while_the_disk_is_slow_then_next_keeps_both', 200, 'mark first', 'check-next'],
+  ['comment_done_then_mark_while_the_disk_is_slow_keeps_both', 200, 'comment first', 'comment-done'],
+]) {
+  browserTest(name, async () => {
+    await withApp(async ({ page, env }) => {
+      await openTool(page, 'translationNotes');
+      const index = Number(await shownIndex(page));
+      if (delay) await slowDecides(page, delay);
+      await page.getByTestId('comment-toggle').click();
+      await page.getByTestId('comment-text').fill('Ask the team.');
+      if (order === 'mark first') {
+        await page.getByTestId('mark-invalid').click();
+        await page.getByTestId(leave).click();
+      } else {
+        await page.getByTestId(leave).click();
+        await page.getByTestId('mark-invalid').click();
+      }
+      const both = await until('the mark and the comment are stored', async () => {
+        const view = await item(env, 'translationNotes', index);
+        return view.decision.value.status === 'invalid' && view.decision.value.comment ? view : null;
+      });
+      assert.equal(both.decision.value.comment, 'Ask the team.');
+      // Let a late write land, then look again: the person's own two writes are no conflict.
+      await sleep(delay * 3 + 300);
+      const last = await item(env, 'translationNotes', index);
+      assert.equal(last.decision.value.status, 'invalid');
+      assert.equal(last.decision.value.comment, 'Ask the team.');
+      assert.equal(last.decision.marker, null, 'no conflict with the person themselves');
+    }, { scenario: 'en-pins' });
+  });
+}
+
 // A reply that comes after the checker moved on is for the check it was sent for: the next check
 // shows its own decision, and a mark on it is written over its own token.
 browserTest('a_slow_comment_save_does_not_touch_the_check_moved_to', async () => {

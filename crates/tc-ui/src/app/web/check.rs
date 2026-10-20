@@ -16,8 +16,8 @@ use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::buffer::{BufferKey, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave};
 use tc_api::check::{
-    CheckArticleRead, CheckItemView, CheckListRef, CheckPlace, CheckSessionView, CheckUnit, Decide,
-    DecideEdit, FixState, FixView, Item, Open, RailRow, RailRows, RailSince, Rows, RowsView, Tool,
+    CheckArticleRead, CheckItemView, CheckListRef, CheckSessionView, CheckUnit, Decide, DecideEdit,
+    FixState, FixView, Item, Open, RailRow, RailRows, RailSince, Rows, RowsView, Tool,
 };
 use tc_api::helps::ArticleView;
 use tc_api::model::rail::{self, Filter, SortMode};
@@ -32,7 +32,7 @@ use super::js;
 use super::saves::{FieldWriter, LocalBoxFuture};
 use super::{Api, ListenerId};
 use crate::app::check::CheckView;
-use crate::app::check_item::{self, MarkFailure};
+use crate::app::check_item::{self, DecisionWrites, MarkFailure};
 use crate::app::client::{CallError, Transport};
 use crate::app::save::{FieldScope, Pair, Source, View};
 
@@ -82,8 +82,6 @@ pub enum Academy {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Marking {
     Idle,
-    /// One mark is on its way; the next waits for its reply and its tokens.
-    Saving,
     Failed(MarkFailure),
 }
 
@@ -144,11 +142,9 @@ thread_local! {
     static ITEMS: Cell<u64> = const { Cell::new(0) };
     /// Counts the Academy article reads asked for.
     static ARTICLES: Cell<u64> = const { Cell::new(0) };
-    /// The mark that came while another was on its way: it goes after that one's reply, with the
-    /// tokens that reply brings.
-    static QUEUED: RefCell<Option<DecideEdit>> = const { RefCell::new(None) };
-    /// The detail the comment's writer tells when a comment is saved, so the next mark carries
-    /// the decision's new token.
+    /// Every write of a decision, a mark or a comment, goes through here.
+    static WRITES: DecisionWrites = DecisionWrites::default();
+    /// The detail a write's Ack tells, when the Ack is for the check it shows.
     static DETAIL: RefCell<Option<ArcRwSignal<Option<Detail>>>> = const { RefCell::new(None) };
     /// Counts the opens asked for: only the newest may land (tC4's `checkSessionSeq`).
     static OPENS: Cell<u64> = const { Cell::new(0) };
@@ -178,27 +174,35 @@ fn current(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
     counter.with(Cell::get)
 }
 
-/// The decision a save of the check comment or a mark of check `(place, check_id)` brought: its
-/// new token and the comment as stored, taken into the detail at once, before any read, so the
-/// next act carries them. Only if the detail shows that check: a reply that comes after the
-/// person moved on is not for the check now shown.
-fn decision_acked(ack: &Ack, place: &CheckPlace, check_id: &str) {
-    let Some(detail) = DETAIL.with(|d| d.borrow().clone()) else {
-        return;
-    };
-    let ([update], [saved]) = (ack.tokens.as_slice(), ack.saved.as_slice()) else {
-        return;
-    };
-    detail.maybe_update(|d| match d {
-        Some(Detail::Ready(view)) => {
-            check_item::take_ack(view, place, check_id, &update.token, &saved.text)
+/// Writes a decision: a mark or a comment of one check, after the write before it, over the
+/// newest token the page knows of the check. Its Ack's token and comment as stored are taken at
+/// once, before any read, by the next write and by the detail when it shows that check.
+async fn write_decision(api: &Api, mut request: Decide) -> Result<Ack, CallError> {
+    let writes = WRITES.with(DecisionWrites::clone);
+    let _turn = writes.turn().await;
+    request.decision = writes.token(&request.place, &request.check_id, &request.decision);
+    let ack = api.call(&request).await?;
+    if let ([update], [saved]) = (ack.tokens.as_slice(), ack.saved.as_slice()) {
+        writes.learn(&request.place, &request.check_id, &update.token);
+        if let Some(detail) = DETAIL.with(|d| d.borrow().clone()) {
+            detail.maybe_update(|d| match d {
+                Some(Detail::Ready(view)) => check_item::take_ack(
+                    view,
+                    &request.place,
+                    &request.check_id,
+                    &update.token,
+                    &saved.text,
+                ),
+                _ => false,
+            });
         }
-        _ => false,
-    });
+    }
+    Ok(ack)
 }
 
-/// How a check comment is saved: a `check/decide` with the comment, over the decision token the
-/// field holds. Nothing here reads the item: the place the buffer entry names is the check.
+/// How a check comment is saved: a `check/decide` with the comment, over the newest decision
+/// token the page knows, else the one the field holds. Nothing here reads the item: the place
+/// the buffer entry names is the check.
 /// C4 adds the comment's draft on the server.
 struct CommentWriter;
 
@@ -232,9 +236,7 @@ impl FieldWriter for CommentWriter {
                     "a check comment with no place, open or token".to_owned(),
                 )));
             };
-            let ack = api.call(&request).await?;
-            decision_acked(&ack, &request.place, &request.check_id);
-            Ok(ack)
+            write_decision(&api, request).await
         })
     }
 
@@ -557,7 +559,6 @@ impl Actions {
         let c = &self.s().c;
         bump(&ITEMS);
         bump(&ARTICLES);
-        QUEUED.with(|q| q.borrow_mut().take());
         c.comment_open.try_set(false);
         c.detail.try_set(None);
         c.selection.try_set(BTreeSet::new());
@@ -572,7 +573,6 @@ impl Actions {
         c.comment_open.try_set(false);
         c.academy.try_set(None);
         c.marking.try_set(Marking::Idle);
-        QUEUED.with(|q| q.borrow_mut().take());
     }
 
     /// Reads check `index` for the detail (tC4 shows it from the list it holds; the server
@@ -628,6 +628,7 @@ impl Actions {
     /// comment's field takes the decision the read shows (AD37).
     fn apply_item(&self, view: CheckItemView) {
         let c = &self.s().c;
+        WRITES.with(|w| w.learn(&view.place, &view.check_id, &view.decision.token));
         let local = c.selection.get_untracked();
         let selection = c.detail.with_untracked(|shown| {
             let shown = match shown {
@@ -667,43 +668,38 @@ impl Actions {
         self.runtime().saves().refresh(&key, pair, None);
     }
 
-    /// One act on the shown check, saved at once (AD20). Marks go one at a time, each with the
-    /// tokens the reply before it brought; one that comes meanwhile waits for it.
+    /// One act on the shown check, saved at once (AD20). The writes of decisions go one at a time
+    /// (`write_decision`); a reply that comes after the person moved to another check is not for
+    /// the check now shown, so it changes the rail's rows and nothing on screen.
     pub fn mark(&self, edit: DecideEdit) {
         let c = self.s().c.clone();
-        if matches!(c.marking.get_untracked(), Marking::Saving) {
-            QUEUED.with(|q| *q.borrow_mut() = Some(edit));
-            return;
-        }
         let (Some((at, list)), Some(Detail::Ready(view))) =
             (self.detail_target(), c.detail.get_untracked())
         else {
             return;
         };
+        let (place, check_id) = (view.place.clone(), view.check_id.clone());
         let request = Decide {
             at,
             request: js::random_request_id(),
             list,
-            place: view.place.clone(),
-            check_id: view.check_id.clone(),
+            place: place.clone(),
+            check_id: check_id.clone(),
             decision: view.decision.token.clone(),
             verse: view.target.verse.clone(),
             edit,
         };
-        c.marking.try_set(Marking::Saving);
+        c.marking.try_set(Marking::Idle);
         let this = self.clone();
         spawn_local(async move {
             // A write's reply is never dropped: its Ack carries the next token (AD2).
-            let result = this.runtime().api().call(&request).await;
-            let c = &this.s().c;
+            let result = write_decision(this.runtime().api(), request).await;
             if let Ok(ack) = &result {
-                decision_acked(ack, &request.place, &request.check_id);
                 this.patch_rail(ack);
             }
-            // The person may have moved on while the mark was on its way: what follows is for
-            // the check shown.
+            let c = &this.s().c;
             let shown = c.detail.with_untracked(|d| {
-                matches!(d, Some(Detail::Ready(v)) if v.place == request.place && v.check_id == request.check_id)
+                matches!(d, Some(Detail::Ready(v)) if v.place == place && v.check_id == check_id)
             });
             if !shown {
                 return;
@@ -712,14 +708,10 @@ impl Actions {
                 Ok(_) => {
                     c.marking.try_set(Marking::Idle);
                     this.refresh_item();
-                    if let Some(next) = QUEUED.with(|q| q.borrow_mut().take()) {
-                        this.mark(next);
-                    }
                 }
                 Err(error) => {
                     let failure = MarkFailure::of(&error);
                     let look_again = failure == MarkFailure::LookAgain;
-                    QUEUED.with(|q| q.borrow_mut().take());
                     c.marking.try_set(Marking::Failed(failure));
                     if look_again {
                         this.refresh_item();
