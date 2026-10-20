@@ -14,6 +14,9 @@ use tc_api::align::{
     AlignEdit, AlignPlace, AlignerView, BankClick, BankSelection, IndexItem, RailState, RailStatus,
     Word,
 };
+use tc_api::event::{ChangeCause, Event, SessionEvent};
+use tc_api::query::QueryKey;
+use tc_core::BookId;
 
 /// tC4's `mode`: the gateway lens or the original-language words (`align-mode-gw`, `-orig`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -242,6 +245,48 @@ pub fn armed(view: &AlignerView) -> bool {
     matches!(&view.selection, BankSelection::Armed(armed) if !armed.is_empty())
 }
 
+/// What the Align tool reads again after a frame of the event stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Refresh {
+    /// The rail's list of verses.
+    pub rail: bool,
+    /// The open aligner's view, which carries the save state and the suggestion engine's.
+    pub aligner: bool,
+}
+
+/// The reads a frame makes stale while the tool is open on `book`. A gap reads both: the
+/// aligner's save state and the engine's state come only from events and from the view, so the
+/// view is what a `Resync` restores (APP-DESIGN 5.4). A change of the engine reads the view. A
+/// teammate's change to the book reads the rail; the tool's own saves and the app's own
+/// changes do not, or every save would read the whole book's rail.
+pub fn refresh_for(event: &Event, book: BookId) -> Refresh {
+    match event {
+        Event::Resync => Refresh {
+            rail: true,
+            aligner: true,
+        },
+        Event::Session {
+            event: SessionEvent::Suggest { .. },
+            ..
+        } => Refresh {
+            rail: false,
+            aligner: true,
+        },
+        Event::Session {
+            event: SessionEvent::Changed { scope, cause, .. },
+            ..
+        } if !matches!(cause, ChangeCause::LocalSave { .. } | ChangeCause::System)
+            && QueryKey::Book(book).depends_on(scope) =>
+        {
+            Refresh {
+                rail: true,
+                aligner: false,
+            }
+        }
+        _ => Refresh::default(),
+    }
+}
+
 /// The person's edits in the order they were made, one on its way at a time. A second click
 /// made before the reply to the first is kept and sent when it comes, so it is never refused
 /// and never lost (A-14, `fast_clicks_are_queued_not_refused`).
@@ -349,6 +394,72 @@ mod tests {
         assert_eq!((last.prev, last.next), (Some(place(1, 3)), None));
         let lost = nav(&items, place(1, 2));
         assert_eq!((lost.at, lost.prev, lost.next), (None, None, None));
+    }
+
+    #[test]
+    fn a_resync_reads_the_aligner_again_and_a_save_of_the_tool_reads_nothing() {
+        use tc_api::align::{SuggestStatus, Testament};
+        use tc_api::event::{ChangeParts, ChangeScope, ChapterRef};
+        use tc_api::ids::{Epoch, ProjectRef, Scope, ViewSeq};
+        let at = Scope {
+            project: ProjectRef::parse("kr_ulb").unwrap(),
+            epoch: Epoch::new(1),
+        };
+        let session = |event| Event::Session {
+            at: at.clone(),
+            event,
+        };
+        let changed = |cause| {
+            session(SessionEvent::Changed {
+                view: ViewSeq::new(3),
+                scope: ChangeScope::Parts(ChangeParts {
+                    chapters: vec![ChapterRef {
+                        book: BookId::Titus,
+                        chapter: 1,
+                    }],
+                    ..ChangeParts::default()
+                }),
+                cause,
+            })
+        };
+        let both = Refresh {
+            rail: true,
+            aligner: true,
+        };
+        assert_eq!(refresh_for(&Event::Resync, BookId::Titus), both);
+        let suggest = session(SessionEvent::Suggest {
+            testament: Testament::Nt,
+            status: SuggestStatus::Reading,
+        });
+        assert_eq!(
+            refresh_for(&suggest, BookId::Titus),
+            Refresh {
+                rail: false,
+                aligner: true
+            }
+        );
+        // The tool's own save is a change of the book with the cause System: the rail has it.
+        assert_eq!(
+            refresh_for(&changed(ChangeCause::System), BookId::Titus),
+            Refresh::default()
+        );
+        let teammate = changed(ChangeCause::Intake { from: vec![] });
+        assert_eq!(
+            refresh_for(&teammate, BookId::Titus),
+            Refresh {
+                rail: true,
+                aligner: false
+            }
+        );
+        assert_eq!(
+            refresh_for(&teammate, BookId::Jonah),
+            Refresh::default(),
+            "another book's change is not this rail's"
+        );
+        assert_eq!(
+            refresh_for(&Event::Internet { on: true }, BookId::Titus),
+            Refresh::default()
+        );
     }
 
     #[test]

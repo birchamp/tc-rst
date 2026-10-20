@@ -22,7 +22,8 @@ use tc_api::align::{
     AlignEdit, AlignPlace, AlignSave, AlignerView, BankClick, BankSelection, Blocked,
     Card as AlignCard, Close as AlignClose, DroppedLinkView, Edit as AlignEditRequest, Flush,
     Freshness, GatewayLens, Index, IndexItem, IndexView, KeepReflow, Open as AlignOpen, OpenVerse,
-    Opened, RailState, RailStatus, SuggestStatus, SuggestView, Testament, Word,
+    Opened, RailState, RailStatus, Suggest as AlignSuggest, SuggestStatus, SuggestView, Testament,
+    Word,
 };
 use tc_api::app::{
     AppPrefsView, BuildInfo, ClientError, Hello, HelloView, OpenSession, Quit, SessionRole,
@@ -1608,6 +1609,16 @@ impl Example for KeepReflow {
     }
 }
 
+impl Example for AlignSuggest {
+    fn example() -> Self {
+        AlignSuggest {
+            at: scope(),
+            request: request(6),
+            aligner: AlignerId::new(5),
+        }
+    }
+}
+
 impl Example for Flush {
     fn example() -> Self {
         Flush {
@@ -2000,6 +2011,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
         BTreeSet::from([
             "align/close",
             "align/edit",
+            "align/suggest",
             "align/flush",
             "align/keepReflow",
             "align/open",

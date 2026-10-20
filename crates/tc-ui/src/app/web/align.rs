@@ -16,9 +16,7 @@ use tc_api::align::{
     AlignEdit, AlignPlace, AlignSave, AlignerView, Blocked, Close, Edit, Flush, Index, IndexItem,
     KeepReflow, Open, OpenVerse, Opened,
 };
-use tc_api::event::{ChangeCause, Event, SessionEvent};
 use tc_api::prefs::SetAlignSuggestions;
-use tc_api::query::QueryKey;
 use tc_core::BookId;
 use wasm_bindgen_futures::spawn_local;
 
@@ -26,7 +24,7 @@ use super::ListenerId;
 use super::app_ctx::Actions;
 use super::js;
 use super::saves::GateHookId;
-use crate::app::align::{EditQueue, Lens, RailFilter, patch_status, same_verse};
+use crate::app::align::{EditQueue, Lens, RailFilter, patch_status, refresh_for, same_verse};
 use crate::app::check::CheckView;
 use crate::app::client::CallError;
 
@@ -61,6 +59,8 @@ pub struct AlignState {
     pub filter: ArcRwSignal<RailFilter>,
     /// "How alignment works" is open.
     pub how: ArcRwSignal<bool>,
+    /// A Suggest is on its way: the button waits for its answer.
+    pub asking: ArcRwSignal<bool>,
     /// The verse each book was last at, kept in memory only (tC4 `toolPos`, §4.2).
     pub remembered: ArcRwSignal<Vec<(BookId, AlignPlace)>>,
 }
@@ -74,6 +74,7 @@ impl AlignState {
             lens: ArcRwSignal::new(Lens::Gateway),
             filter: ArcRwSignal::new(RailFilter::All),
             how: ArcRwSignal::new(false),
+            asking: ArcRwSignal::new(false),
             remembered: ArcRwSignal::new(Vec::new()),
         }
     }
@@ -419,6 +420,42 @@ impl Actions {
         });
     }
 
+    /// "Suggest" (tC4 `suggestAlign`): the engine proposes links for the words in the bank; they
+    /// stand on their cards until the person accepts or rejects them.
+    pub fn suggest_align(&self) {
+        let Some((at, _)) = self.align_scope() else {
+            return;
+        };
+        let Some(aligner) = self.s().a.screen.with_untracked(|s| match s {
+            Screen::Ready(view) => Some(view.aligner),
+            _ => None,
+        }) else {
+            return;
+        };
+        let a = self.s().a.clone();
+        if a.asking.get_untracked() {
+            return;
+        }
+        a.asking.try_set(true);
+        let attempt = current_open();
+        let this = self.clone();
+        spawn_local(async move {
+            let request = tc_api::align::Suggest {
+                at,
+                request: js::random_request_id(),
+                aligner,
+            };
+            let result = this.runtime().api().call(&request).await;
+            a.asking.try_set(false);
+            if current_open() != attempt {
+                return;
+            }
+            if let Ok(view) = result {
+                this.align_view(view);
+            }
+        });
+    }
+
     /// "Retry" on a verse that could not open.
     pub fn retry_align(&self) {
         let place = self.s().a.verse.get_untracked();
@@ -517,24 +554,12 @@ impl Actions {
             let Some((_, book)) = this.align_scope() else {
                 return;
             };
-            match &frame.event {
-                Event::Resync => {
-                    this.read_align_rail();
-                    this.refresh_align();
-                }
-                Event::Session {
-                    event: SessionEvent::Suggest { .. },
-                    ..
-                } => this.refresh_align(),
-                Event::Session {
-                    event: SessionEvent::Changed { scope, cause, .. },
-                    ..
-                } if !matches!(cause, ChangeCause::LocalSave { .. } | ChangeCause::System)
-                    && QueryKey::Book(book).depends_on(scope) =>
-                {
-                    this.read_align_rail();
-                }
-                _ => {}
+            let refresh = refresh_for(&frame.event, book);
+            if refresh.rail {
+                this.read_align_rail();
+            }
+            if refresh.aligner {
+                this.refresh_align();
             }
         });
         LISTENER.with(|l| l.set(Some(id)));

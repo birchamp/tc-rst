@@ -129,6 +129,7 @@ impl Handle<SetAlignSuggestions> for App {
         self.inner
             .prefs
             .set_align_suggestions(session.project, req.on);
+        self.suggestions_switched(&req.at, req.on).await?;
         Ok(())
     }
 }

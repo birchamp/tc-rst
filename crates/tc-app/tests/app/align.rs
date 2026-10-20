@@ -652,3 +652,184 @@ async fn mark_valid_lights_the_button_and_an_edit_takes_it_back() {
     let edited = place(&t.app, &at, &marked, 62, "fe", "πίστιν").await;
     assert!(!edited.done);
 }
+
+fn suggest_events(app: &App) -> Vec<tc_api::align::SuggestStatus> {
+    let mut reader = app.events().subscribe(0);
+    let mut out = Vec::new();
+    while let Some(next) = reader.try_next() {
+        if let Next::Frame(frame) = next
+            && let Event::Session {
+                event: SessionEvent::Suggest { status, .. },
+                ..
+            } = frame.event
+        {
+            out.push(status);
+        }
+    }
+    out
+}
+
+/// J5: the aligner's save state is what the close guard counts: it is Unsaved from the first
+/// link until the server has stored it, in the view and on the event stream, and it is the
+/// view that carries it again after a gap in the stream.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unsaved_links_hold_the_close_guard() {
+    let (_dir, t, backend) = start("sample").await;
+    let at = opened(&t.app).await.session.at;
+    let view = ready(&t.app, &at, 1, 1).await;
+    assert_eq!(
+        view.save,
+        AlignSave::Saved,
+        "nothing to save: the guard lets go"
+    );
+    let placed = place(&t.app, &at, &view, 61, "fe", "πίστιν").await;
+    assert_eq!(
+        placed.save,
+        AlignSave::Unsaved,
+        "a link the server has not stored holds it"
+    );
+    assert_eq!(saves(&t.app), [AlignSave::Unsaved]);
+    backend.script(&folder(SAMPLE), Scripted::Written).unwrap();
+    assert_eq!(flush(&t.app, &at, 71).await, AlignSave::Saved);
+    assert_eq!(ready(&t.app, &at, 1, 1).await.save, AlignSave::Saved);
+}
+
+/// A `Resync` is a gap in the event stream: the UI reads the aligner again, and its view says
+/// where the save stands, whatever `AlignSave` frames were lost.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn resync_restores_the_align_save_state() {
+    let (_dir, t, backend) = start("sample").await;
+    let at = opened(&t.app).await.session.at;
+    let view = ready(&t.app, &at, 1, 1).await;
+    place(&t.app, &at, &view, 61, "fe", "πίστιν").await;
+    backend
+        .script(
+            &folder(SAMPLE),
+            Scripted::NotWritten("The disk is full.".into()),
+        )
+        .unwrap();
+    let failed = flush(&t.app, &at, 70).await;
+    assert!(matches!(failed, AlignSave::Failed(_)));
+    // A reader that arrives after the ring wrapped sees no AlignSave frame at all, only a
+    // Resync; what it reads next is the view.
+    for _ in 0..tc_app::events::RING_FRAMES + 10 {
+        t.app.events().publish(Event::ProjectsChanged);
+    }
+    let mut late = t.app.events().subscribe(1);
+    let first = match late.try_next() {
+        Some(Next::Frame(frame)) => frame.event,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(first, Event::Resync);
+    assert_eq!(ready(&t.app, &at, 1, 1).await.save, failed);
+    backend.script(&folder(SAMPLE), Scripted::Written).unwrap();
+    assert_eq!(flush(&t.app, &at, 71).await, AlignSave::Saved);
+    assert_eq!(ready(&t.app, &at, 1, 1).await.save, AlignSave::Saved);
+}
+
+/// The suggestion engine learns from the project's own alignments in a `Train` job, the state
+/// goes Reading then Ready on the event stream and in every view, a Suggest gives proposals
+/// that are not links, and Accept all places them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn suggestions_are_learned_in_the_background_and_stay_proposals_until_accepted() {
+    use tc_api::align::SuggestStatus;
+    use tc_api::prefs::SetAlignSuggestions;
+    let (_dir, t, backend) = start("sample").await;
+    let at = opened(&t.app).await.session.at;
+    let first = ready(&t.app, &at, 1, 2).await;
+    assert_eq!(
+        first.suggest.status,
+        SuggestStatus::Off,
+        "off until the person turns it on"
+    );
+    ok(
+        &t.app,
+        &SetAlignSuggestions {
+            at: at.clone(),
+            request: request(80),
+            on: true,
+        },
+    )
+    .await;
+    // The training runs in the background; each view says where it is.
+    let learned = tc_app_test_wait(&t.app, &at).await;
+    assert_eq!(
+        learned.suggest.status,
+        SuggestStatus::Ready {
+            verses: 1,
+            boosted: false
+        },
+        "one verse of Titus has links: memory only"
+    );
+    assert_eq!(
+        suggest_events(&t.app),
+        [
+            SuggestStatus::Reading,
+            SuggestStatus::Ready {
+                verses: 1,
+                boosted: false
+            }
+        ]
+    );
+    // Asking writes nothing: proposals stand on their cards, the bank keeps its words.
+    let asked = match t
+        .app
+        .request(&tc_api::align::Suggest {
+            at: at.clone(),
+            request: request(81),
+            aligner: learned.aligner,
+        })
+        .await
+        .unwrap()
+    {
+        Reply::Ok(view) => view,
+        Reply::Err(error) => panic!("{error:?}"),
+    };
+    assert!(asked.suggest.asked && !asked.suggest.suggesting);
+    assert_eq!(asked.save, AlignSave::Saved, "a proposal is not a link");
+    assert!(backend.submitted(&folder(SAMPLE)).is_empty());
+    if asked.suggest.standing > 0 {
+        let refused = edit(&t.app, &at, &asked, 82, AlignEdit::MarkValid)
+            .await
+            .unwrap();
+        assert!(
+            refused.mark_refused,
+            "Mark valid waits for the proposals to be answered"
+        );
+        let accepted = edit(&t.app, &at, &refused, 83, AlignEdit::AcceptAll)
+            .await
+            .unwrap();
+        assert_eq!(accepted.suggest.standing, 0);
+        assert!(accepted.placed > asked.placed);
+        assert_eq!(accepted.save, AlignSave::Unsaved);
+    }
+    // Turning it off lets go of what was learned.
+    ok(
+        &t.app,
+        &SetAlignSuggestions {
+            at: at.clone(),
+            request: request(84),
+            on: false,
+        },
+    )
+    .await;
+    assert_eq!(
+        ready(&t.app, &at, 1, 2).await.suggest.status,
+        SuggestStatus::Off
+    );
+}
+
+/// The open aligner's view, read again until the engine has learned or the wait runs out.
+async fn tc_app_test_wait(app: &App, at: &Scope) -> AlignerView {
+    for _ in 0..200 {
+        let view = ready(app, at, 1, 2).await;
+        if matches!(
+            view.suggest.status,
+            tc_api::align::SuggestStatus::Ready { .. } | tc_api::align::SuggestStatus::None
+        ) {
+            return view;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("the engine did not finish learning");
+}

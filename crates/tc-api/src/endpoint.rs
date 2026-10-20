@@ -164,6 +164,7 @@ scoped!(
     crate::align::Open,
     crate::align::Edit,
     crate::align::KeepReflow,
+    crate::align::Suggest,
     crate::align::Flush,
     crate::align::Close,
 );

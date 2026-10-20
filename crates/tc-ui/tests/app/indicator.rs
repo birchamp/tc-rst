@@ -56,3 +56,32 @@ fn the_indicator_says_what_tc4_says() {
     assert!(!align.commit_error);
     assert_eq!(align.retry, Retry::Save);
 }
+
+/// J5: links the server has not stored hold the close guard, whatever the fields say; it lets
+/// go only when every field and every aligner is saved (tC4's `allSaved` counts
+/// `alignSaveState`).
+#[test]
+fn unsaved_links_hold_the_close_guard() {
+    use tc_ui::app::save::indicator::all_clean;
+    assert!(all_clean(Worst::Saved, &[]));
+    assert!(all_clean(Worst::Saved, &[AlignSave::Saved]));
+    for held in [
+        AlignSave::Unsaved,
+        AlignSave::Saving,
+        AlignSave::Failed(NotSaved::LookAgain),
+    ] {
+        assert!(
+            !all_clean(Worst::Saved, std::slice::from_ref(&held)),
+            "{held:?}"
+        );
+    }
+    // One aligner saved does not excuse another that is not.
+    assert!(!all_clean(
+        Worst::Saved,
+        &[AlignSave::Saved, AlignSave::Unsaved]
+    ));
+    // And a failed checkpoint alone does not hold it, as in tC4.
+    assert!(all_clean(Worst::Saved, &[AlignSave::Saved]));
+    let unsaved = indicator(Worst::Saved, &[AlignSave::Unsaved], false, &[]);
+    assert_eq!(unsaved.label_key().as_str(), "app.unsaved");
+}

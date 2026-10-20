@@ -464,3 +464,14 @@ pub struct Close {
     pub request: RequestId,
     pub aligner: AlignerId,
 }
+
+/// `align/suggest`: ask the engine for links for the words still in the bank. The proposals
+/// stand on their cards, dashed, until the person accepts or rejects them; nothing is written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Suggest {
+    pub at: Scope,
+    pub request: RequestId,
+    pub aligner: AlignerId,
+}

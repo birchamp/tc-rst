@@ -689,13 +689,17 @@ fn suggestions_row(
     let on = suggest.on;
     let a = actions.clone();
     let buttons = on.then(|| {
-        let (accept, reject, reset) = (actions.clone(), actions.clone(), actions.clone());
-        let asked = suggest.asked;
+        let (accept, reject, reset, ask) = (
+            actions.clone(),
+            actions.clone(),
+            actions.clone(),
+            actions.clone(),
+        );
+        let (asked, suggesting, asking) = (suggest.asked, suggest.suggesting, s.a.asking.clone());
         view! {
             <span style="display: inline-flex; gap: 6px;">
-                // Asking the engine for a verse's links is C5's; until it lands the row is only
-                // ever "Ready" when a model exists.
-                <Button size=Size::Sm variant=ButtonVariant::Secondary attrs=Attrs::from([("data-testid", "align-suggest")]) disabled=!ready || suggest.suggesting>
+                <Button size=Size::Sm variant=ButtonVariant::Secondary attrs=Attrs::from([("data-testid", "align-suggest")]) disabled=Signal::derive(move || !ready || suggesting || asking.get())
+                    on_click=Callback::new(move |_| ask.suggest_align())>
                     {t(keys::align::suggest::SUGGEST, &[])}
                 </Button>
                 <Button size=Size::Sm attrs=Attrs::from([("data-testid", "align-suggest-accept-all")]) disabled=!standing
@@ -713,7 +717,6 @@ fn suggestions_row(
             </span>
         }
     });
-    let _ = s;
     view! {
         <div data-testid="align-suggestions" data-status=status_id style=row.to_style()>
             <Overline tone=OverlineTone::Accent>{t(keys::align::suggest::TITLE, &[])}</Overline>

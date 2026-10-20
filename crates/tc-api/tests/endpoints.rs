@@ -63,6 +63,7 @@ const PHASE_0: &[&str] = &[
     "align/open",
     "align/edit",
     "align/keepReflow",
+    "align/suggest",
     "align/flush",
     "align/close",
     // B9a: Project settings from Home, and Get source texts with its downloads.

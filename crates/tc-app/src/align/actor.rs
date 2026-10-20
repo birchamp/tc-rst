@@ -7,10 +7,11 @@ use std::future::pending;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use tc_align::suggest::{RawLink, SessionInput};
 use tc_align::{Aligner, Click};
 use tc_api::ApiError;
 use tc_api::align::{
-    AlignEdit, AlignPlace, AlignSave, AlignerView, BankClick, SuggestStatus, Word,
+    AlignEdit, AlignPlace, AlignSave, AlignerView, BankClick, SuggestStatus, Testament, Word,
 };
 use tc_api::event::{Event, SessionEvent, SessionMode};
 use tc_api::ids::{AlignerId, Scope};
@@ -23,16 +24,17 @@ use tokio::time::{Instant, Sleep, sleep_until};
 
 use super::open::{Ready, Tokens};
 use super::save::{Effect, Event as SaveEvent, Machine, SAVE_AFTER, State, next};
+use super::suggest::SuggestHub;
 use super::view::{Facts, Moment, build};
 use crate::backend::{BoxFuture, CommandError, ProjectHandle, StoreCommand, StoreReply};
 use crate::events::EventBus;
 
-/// What the session around the aligner says now: the project's suggestions switch and what the
-/// engine knows. It comes with each request, so the view never shows an old switch.
-#[derive(Debug, Clone)]
+/// What the session around the aligner says now: the project's suggestions switch and the
+/// engine. It comes with each request, so the view never shows an old switch.
+#[derive(Clone)]
 pub(super) struct Ctx {
     pub suggest_on: bool,
-    pub suggest: SuggestStatus,
+    pub hub: Arc<SuggestHub>,
 }
 
 pub(super) enum Cmd {
@@ -50,6 +52,16 @@ pub(super) enum Cmd {
         ctx: Ctx,
         seq: u64,
         reply: oneshot::Sender<Result<AlignerView, ApiError>>,
+    },
+    /// The engine is asked about this verse: its words and links, and the verse's testament.
+    Input {
+        reply: oneshot::Sender<(SessionInput, Testament)>,
+    },
+    /// The engine's answer (none when it gave none): shown as proposals on their cards.
+    Show {
+        ctx: Ctx,
+        raw: Option<Vec<RawLink>>,
+        reply: oneshot::Sender<AlignerView>,
     },
     /// Save now and answer how it went.
     Flush { reply: oneshot::Sender<AlignSave> },
@@ -97,6 +109,9 @@ struct Actor {
     version: u64,
     machine: Machine,
     mark_refused: bool,
+    /// A Suggest was answered for this verse, and a Suggest is on its way.
+    asked: bool,
+    suggesting: bool,
     timer: Option<Pin<Box<Sleep>>>,
     /// The generation the running timer was armed with.
     armed: u64,
@@ -138,6 +153,8 @@ pub(super) fn spawn(env: Env, ready: Ready) -> Handle {
         version: 0,
         machine,
         mark_refused: false,
+        asked: false,
+        suggesting: false,
         timer: None,
         armed: 0,
         saving: None,
@@ -251,6 +268,20 @@ impl Actor {
                 });
                 let _ = reply.send(answer);
             }
+            Cmd::Input { reply } => {
+                self.suggesting = true;
+                let _ = reply.send((self.aligner.session_input(), self.facts.testament));
+            }
+            Cmd::Show { ctx, raw, reply } => {
+                self.suggesting = false;
+                if let Some(raw) = raw {
+                    self.aligner.show_suggestions(&raw);
+                    self.asked = true;
+                }
+                self.seq += 1;
+                self.mark_refused = false;
+                let _ = reply.send(self.view(&ctx));
+            }
             Cmd::Flush { reply } => {
                 self.flushing.push(reply);
                 self.apply(SaveEvent::Flush);
@@ -271,9 +302,15 @@ impl Actor {
                 save: self.machine.visible(),
                 mark_refused: self.mark_refused,
                 suggest_on: ctx.suggest_on,
-                suggest: ctx.suggest.clone(),
-                asked: false,
-                suggesting: false,
+                suggest: if ctx.suggest_on {
+                    ctx.hub
+                        .status(self.facts.testament)
+                        .unwrap_or(SuggestStatus::Reading)
+                } else {
+                    SuggestStatus::Off
+                },
+                asked: self.asked,
+                suggesting: self.suggesting,
             },
         )
     }
@@ -407,6 +444,7 @@ impl Actor {
             AlignEdit::AcceptAll => links(self.aligner.accept_all() > 0),
             AlignEdit::RejectAll => {
                 self.aligner.reject_all();
+                self.asked = false;
                 Applied::View
             }
         }

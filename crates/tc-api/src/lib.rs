@@ -143,6 +143,7 @@ macro_rules! endpoint_table {
             command "align/open": $crate::align::Open => $crate::align::Opened;
             command "align/edit": $crate::align::Edit => $crate::align::AlignerView;
             command "align/keepReflow": $crate::align::KeepReflow => $crate::align::AlignerView;
+            command "align/suggest": $crate::align::Suggest => $crate::align::AlignerView;
             command "align/flush": $crate::align::Flush => $crate::align::AlignSave;
             command "align/close": $crate::align::Close => $crate::align::AlignSave;
 

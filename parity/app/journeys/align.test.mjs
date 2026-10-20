@@ -207,3 +207,31 @@ browserTest('fast_clicks_in_the_page_are_queued_not_refused', async () => {
     assert.equal(requests.api(mark).filter((p) => p === '/api/v1/align/edit').length, 5, 'five clicks, five requests');
   });
 });
+
+/** Suggestions (tC4 #1, D72): the switch trains the engine in the background, Suggest proposes
+ * links as dashed chips that are not links, and Accept all places them. */
+browserTest('align_suggestions_through_the_page', async () => {
+  await withApp(async ({ page }) => {
+    await openAlign(page);
+    await page.locator('[data-testid="align-verse-list"] [data-ref="1:2"]').click();
+    await until('verse 1:2', async () => (await page.getByTestId('align-item-counter').textContent()) === 'Item 2 of 5');
+    const row = page.getByTestId('align-suggestions');
+    assert.equal(await row.getAttribute('data-status'), 'off');
+    await page.getByTestId('align-suggest-switch').check();
+    await until('the engine has learned', async () => (await row.getAttribute('data-status')) === 'ready');
+    assert.match(await page.getByTestId('align-suggest-status').textContent(), /Drawn from 1 verse/);
+    const before = await placed(page);
+    await page.getByTestId('align-suggest').click();
+    await until('proposals stand', async () => (await page.locator('[data-testid^="align-suggested-"]').count()) > 0);
+    assert.equal(await placed(page), before, 'a proposal is not a link');
+    assert.equal(await saveState(page), 'saved', 'and writes nothing');
+    await page.getByTestId('align-mark-valid').click();
+    await page.getByTestId('align-mark-valid-refused').waitFor();
+    await page.getByTestId('align-suggest-accept-all').click();
+    await until('the proposals are links', async () => (await page.locator('[data-testid^="align-suggested-"]').count()) === 0);
+    assert.notEqual(await placed(page), before);
+    assert.equal(await saveState(page), 'dirty');
+    await page.getByTestId('align-suggest-switch').uncheck();
+    await until('off again', async () => (await row.getAttribute('data-status')) === 'off');
+  });
+});

@@ -19,6 +19,7 @@ mod actor;
 pub(crate) mod index;
 mod open;
 mod save;
+mod suggest;
 mod view;
 
 use std::sync::Arc;
@@ -28,7 +29,7 @@ use tc_align::SourceBook;
 use tc_api::ApiError;
 use tc_api::align::{
     AlignSave, AlignerView, Close, Edit, Flush, Index, IndexView, KeepReflow, Open, OpenVerse,
-    Opened, SuggestStatus,
+    Opened, Suggest,
 };
 use tc_api::ids::AlignerId;
 use tokio::sync::Mutex;
@@ -52,6 +53,8 @@ type CutBook = ((tc_core::BookId, String), Arc<SourceBook>);
 #[derive(Default)]
 pub(crate) struct AlignCache {
     slot: Mutex<Option<Handle>>,
+    /// What the suggestion engine has learned of each testament.
+    hub: Arc<suggest::SuggestHub>,
     /// The original-language book of the verses opened, cut into verses once: the book and
     /// the sha of the pin it was read under.
     sources: Mutex<Option<CutBook>>,
@@ -88,6 +91,17 @@ impl AlignCache {
     }
 }
 
+impl AlignCache {
+    pub(crate) fn hub(&self) -> &Arc<suggest::SuggestHub> {
+        &self.hub
+    }
+
+    /// The book of the open aligner, if there is one.
+    pub(crate) async fn open_book(&self) -> Option<tc_core::BookId> {
+        self.slot.lock().await.as_ref().map(|open| open.book)
+    }
+}
+
 impl ProjectSession {
     pub(crate) fn align(&self) -> &AlignCache {
         &self.align
@@ -95,20 +109,15 @@ impl ProjectSession {
 }
 
 impl App {
-    /// The switch and the engine's state the views show.
+    /// The switch and the engine the views show.
     fn align_ctx(&self, session: &ProjectSession) -> Ctx {
-        let on = self
-            .inner
-            .prefs
-            .align_suggestions(&session.scope().project)
-            .unwrap_or(false);
         Ctx {
-            suggest_on: on,
-            suggest: if on {
-                SuggestStatus::None
-            } else {
-                SuggestStatus::Off
-            },
+            suggest_on: self
+                .inner
+                .prefs
+                .align_suggestions(&session.scope().project)
+                .unwrap_or(false),
+            hub: session.align().hub().clone(),
         }
     }
 
@@ -190,6 +199,11 @@ impl HandleRequest<Open> for App {
                 at: Some(OpenVerse { chapter, verse }),
             }),
             Prepared::Ready(ready) => {
+                // The engine learns from the project's verses, once a testament is opened with
+                // the switch on.
+                if ctx.suggest_on {
+                    self.train_suggestions(&session, suggest::testament_of(ready.book), false);
+                }
                 let handle = actor::spawn(self.align_env(&session), *ready);
                 let view = handle.ask(|reply| Cmd::View { ctx, reply }).await?;
                 *slot = Some(handle);
@@ -246,6 +260,26 @@ impl HandleRequest<Edit> for App {
             reply,
         })
         .await?
+    }
+}
+
+impl HandleRequest<Suggest> for App {
+    async fn handle(&self, req: Suggest) -> Result<AlignerView, ApiError> {
+        let session = self.read(&req.at)?;
+        let ctx = self.align_ctx(&session);
+        let (input, testament) = self
+            .aligner_cmd(&session, req.aligner, |reply| Cmd::Input { reply })
+            .await?;
+        // The model answers off the thread that serves the page (PERF:84: 50 ms).
+        let model = ctx.suggest_on.then(|| ctx.hub.model(testament)).flatten();
+        let raw = match model {
+            Some(model) => tokio::task::spawn_blocking(move || model.predict(&input))
+                .await
+                .ok(),
+            None => None,
+        };
+        self.aligner_cmd(&session, req.aligner, |reply| Cmd::Show { ctx, raw, reply })
+            .await
     }
 }
 
