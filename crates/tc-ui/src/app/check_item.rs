@@ -17,6 +17,7 @@ use std::collections::BTreeSet;
 
 use tc_api::check::{CheckItemView, CheckListRef, CheckPlace, CheckUnit, DecideEdit, Tool};
 use tc_api::model::selection::{drag_range, toggle};
+use tc_api::token::ShownToken;
 use tc_api::write::ReadOnlyReason;
 use tc_api::{ApiError, NotSaved};
 
@@ -304,6 +305,26 @@ impl MarkFailure {
             other => Self::Other(other.to_string()),
         }
     }
+}
+
+// ---- The decision's writes ----------------------------------------------------------------
+
+/// A write of check `(place, check_id)` was acknowledged. The shown check takes its new token and
+/// comment only if it is that check: a reply that comes after the person moved on is not for the
+/// check now on screen. True when it took them.
+pub fn take_ack(
+    shown: &mut CheckItemView,
+    place: &CheckPlace,
+    check_id: &str,
+    token: &ShownToken,
+    comment: &str,
+) -> bool {
+    let same = shown.place == *place && shown.check_id == check_id;
+    if same {
+        shown.decision.token = token.clone();
+        shown.decision.value.comment = Some(comment.to_owned()).filter(|t| !t.is_empty());
+    }
+    same
 }
 
 // ---- The check comment's field ------------------------------------------------------------
@@ -641,6 +662,28 @@ mod tests {
         assert_eq!(parse_comment_place("tn|TIT 1:1|"), None);
         assert_eq!(parse_comment_place("zz|TIT 1:1|abcd"), None);
         assert_eq!(parse_comment_place("tn|nowhere|abcd"), None);
+    }
+
+    /// A token for each digit `n`.
+    fn token(n: u8) -> ShownToken {
+        let text = "st1.00000000000000000000000".to_owned() + &n.to_string();
+        serde_json::from_value(serde_json::json!(text)).unwrap()
+    }
+
+    /// A reply that comes after the person moved to another check is not for the check shown.
+    #[test]
+    fn an_ack_changes_only_the_check_it_is_for() {
+        let mut shown = view(4, &["Pablo"], &[]);
+        let place = shown.place.clone();
+        let other: CheckPlace = "TIT 2:1".parse().unwrap();
+        assert!(!take_ack(&mut shown, &other, "abcd", &token(9), "Ask"));
+        assert!(!take_ack(&mut shown, &place, "other-row", &token(9), "x"));
+        assert_eq!(shown, view(4, &["Pablo"], &[]));
+        assert!(take_ack(&mut shown, &place, "abcd", &token(9), "Ask"));
+        assert_eq!(shown.decision.token, token(9));
+        assert_eq!(shown.decision.value.comment.as_deref(), Some("Ask"));
+        assert!(take_ack(&mut shown, &place, "abcd", &token(8), ""));
+        assert_eq!(shown.decision.value.comment, None);
     }
 
     /// tC4's `done`: a comment is saved trimmed, only when it differs from the stored one, and

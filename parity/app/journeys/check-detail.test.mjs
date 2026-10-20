@@ -7,7 +7,7 @@
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/check-detail.test.mjs
 import assert from 'node:assert/strict';
-import { browserTest, catalog, until, withApp } from './kit.mjs';
+import { browserTest, catalog, sleep, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
 
@@ -288,6 +288,41 @@ browserTest('check_comment_saved_on_leaving_the_item', async () => {
     await page.getByTestId('comment-delete').click();
     await page.getByTestId('comment-editor').waitFor({ state: 'detached' });
     await until('the comment is removed', async () => (await item(env, 'translationNotes', first)).decision.value.comment === null);
+  }, { scenario: 'en-pins' });
+});
+
+/** Holds every `check/decide` reply back for `ms`, as a slow fsync does: the write is stored, the page hears late. */
+const slowDecides = (page, ms) => page.route('**/api/v1/check/decide', async (route) => {
+  const response = await route.fetch();
+  await sleep(ms);
+  await route.fulfill({ response });
+});
+
+// A reply that comes after the checker moved on is for the check it was sent for: the next check
+// shows its own decision, and a mark on it is written over its own token.
+browserTest('a_slow_comment_save_does_not_touch_the_check_moved_to', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTool(page, 'translationNotes');
+    const first = Number(await shownIndex(page));
+    await slowDecides(page, 200);
+    await page.getByTestId('comment-toggle').click();
+    await page.getByTestId('comment-text').fill('Ask the team.');
+    await page.getByTestId('check-next').click();
+    await until('the next check shows', async () => Number(await shownIndex(page)) !== first);
+    await page.getByTestId('check-quote').waitFor();
+    await until('the comment is stored on the first check', async () => (await item(env, 'translationNotes', first)).decision.value.comment);
+    // The reply reaches the page; the check shown has not taken anything from it.
+    await sleep(300);
+    assert.equal(await page.getByTestId('comment-toggle').getAttribute('data-written'), '0', 'the next check has no comment');
+    await page.getByTestId('mark-invalid').click();
+    const second = await until('the mark is stored on the second check', async () => {
+      const view = await item(env, 'translationNotes', first + 1);
+      return view.decision.value.status === 'invalid' ? view : null;
+    });
+    assert.equal(second.decision.value.comment, null);
+    const left = await item(env, 'translationNotes', first);
+    assert.equal(left.decision.value.status, null, 'the first check holds only its comment');
+    assert.equal(left.decision.value.comment, 'Ask the team.');
   }, { scenario: 'en-pins' });
 });
 

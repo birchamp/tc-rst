@@ -16,8 +16,8 @@ use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::buffer::{BufferKey, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave};
 use tc_api::check::{
-    CheckArticleRead, CheckItemView, CheckListRef, CheckSessionView, CheckUnit, Decide, DecideEdit,
-    FixState, FixView, Item, Open, RailRow, RailRows, RailSince, Rows, RowsView, Tool,
+    CheckArticleRead, CheckItemView, CheckListRef, CheckPlace, CheckSessionView, CheckUnit, Decide,
+    DecideEdit, FixState, FixView, Item, Open, RailRow, RailRows, RailSince, Rows, RowsView, Tool,
 };
 use tc_api::helps::ArticleView;
 use tc_api::model::rail::{self, Filter, SortMode};
@@ -178,20 +178,22 @@ fn current(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
     counter.with(Cell::get)
 }
 
-/// The decision a save of the check comment or a mark brought: its new token and the comment as
-/// stored, taken into the detail at once, before any read, so the next act carries them.
-pub(crate) fn decision_acked(ack: &Ack) {
+/// The decision a save of the check comment or a mark of check `(place, check_id)` brought: its
+/// new token and the comment as stored, taken into the detail at once, before any read, so the
+/// next act carries them. Only if the detail shows that check: a reply that comes after the
+/// person moved on is not for the check now shown.
+fn decision_acked(ack: &Ack, place: &CheckPlace, check_id: &str) {
     let Some(detail) = DETAIL.with(|d| d.borrow().clone()) else {
         return;
     };
     let ([update], [saved]) = (ack.tokens.as_slice(), ack.saved.as_slice()) else {
         return;
     };
-    detail.try_update(|d| {
-        if let Some(Detail::Ready(view)) = d {
-            view.decision.token = update.token.clone();
-            view.decision.value.comment = Some(saved.text.clone()).filter(|t| !t.is_empty());
+    detail.maybe_update(|d| match d {
+        Some(Detail::Ready(view)) => {
+            check_item::take_ack(view, place, check_id, &update.token, &saved.text)
         }
+        _ => false,
     });
 }
 
@@ -231,7 +233,7 @@ impl FieldWriter for CommentWriter {
                 )));
             };
             let ack = api.call(&request).await?;
-            decision_acked(&ack);
+            decision_acked(&ack, &request.place, &request.check_id);
             Ok(ack)
         })
     }
@@ -694,10 +696,20 @@ impl Actions {
             // A write's reply is never dropped: its Ack carries the next token (AD2).
             let result = this.runtime().api().call(&request).await;
             let c = &this.s().c;
+            if let Ok(ack) = &result {
+                decision_acked(ack, &request.place, &request.check_id);
+                this.patch_rail(ack);
+            }
+            // The person may have moved on while the mark was on its way: what follows is for
+            // the check shown.
+            let shown = c.detail.with_untracked(|d| {
+                matches!(d, Some(Detail::Ready(v)) if v.place == request.place && v.check_id == request.check_id)
+            });
+            if !shown {
+                return;
+            }
             match result {
-                Ok(ack) => {
-                    decision_acked(&ack);
-                    this.patch_rail(&ack);
+                Ok(_) => {
                     c.marking.try_set(Marking::Idle);
                     this.refresh_item();
                     if let Some(next) = QUEUED.with(|q| q.borrow_mut().take()) {
