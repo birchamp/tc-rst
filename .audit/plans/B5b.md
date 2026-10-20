@@ -41,3 +41,14 @@ come from `tc_usfm::target_words` (tc-check `selection::target_words`).
   sent on Done and on leaving the item while its editor is open, with its buffer entry and draft
   (A-10, declared difference Q-25: tC4 drops a comment being typed when the checker moves on).
 - A decision shown is never rewritten: the request names the tokens of what was displayed.
+
+## After the C8 merge (2026-10-20)
+
+The merge of main (B4a, C6, C8) gave B5b the guided fix's wiring and M9b (APP-DESIGN §10, §7.4).
+
+7. **Merge.** `FixState`/`FixView` live in `tc_api::resources`; the check detail reads the
+   original-language text B4a loads with the book.
+8. **The guided fix's three ways.** `tc_ui::app::fix` (one way at a time, answers bound to their
+   screen) with host tests; `web/fix.rs` sends `fixFetch` (internet task, progress), the upload and
+   `fixSideload`, and `fixRepin` into C8's `UpgradeSet`; `fixRepin` takes a scripted plan under
+   test hooks; M9b's `upgrade-repin` captured; journeys `guided-fix.test.mjs`. D9 in the row.
