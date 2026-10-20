@@ -72,6 +72,16 @@ before restarting; a builder told `cont` continues its branch.
   verified once (reachable scenarios only), merged straight into main. Restart with the command at the
   end of `.audit/STATUS.md`; add `cont: { <unit>: '<branch>' }` for each unit whose branch has unmerged
   work (branches `lane-<unit>`), and give a continuing builder a note when its state needs one.
+- **Where the lane stood on 2026-10-20 (usage limit expected):** on main: B4a, B5a, C6, C8 (merged
+  by hand after its merge agent died on a usage limit), B6. In flight when the session ended: B5b in
+  its merge (in `lane-merge`, uncommitted), B4b in its first fix round (verified with three lenses),
+  B7 in verification, C5 building on `lane-c5`. Restart: if `lane-merge` holds a half-done merge,
+  finish it by hand (gates, then push, as C8 was) or `git merge --abort` it; then run the lane with
+  `done` from `.audit/STATUS.md` plus every unit now on main, and `cont` for each `lane-<unit>` branch
+  ahead of main (b4b, b5b if not merged, b7, c5), with a note saying how far each got (read the
+  journal of run `wf_c6c6c4ba-a62` if this session's files survive). Restarted runs use the new fix
+  rule above. B5b's earlier minors are in `/tmp/tcgate/b5b-minors.tsv` until they reach
+  `.audit/minors.tsv`.
 - **S2's redesign** (`.audit/workflows/s2-placement-redesign.js`) on the worktree
   `.claude/worktrees/s2-verify` (branch `s2-verify`, from `19e7fd2`): a placement ledger and a typed
   state machine with a model-based property test. When it is green: merge `s2-verify` into main;
