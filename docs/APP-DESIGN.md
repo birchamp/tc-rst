@@ -2473,9 +2473,16 @@ and its copy, another computer's lock and an unsafe projects folder, over the re
 mirror functions and models of `drafts.json` and the record, with an observation (a crash, a
 relaunch and the open's offer) possible between any two steps. It holds that the last text of
 every run's typing of a field that reached a place a crash does not take is stored, offered or
-answered; that every offered text is such an unanswered text; that a copy is never read-only for
+answered; that every offered text is such an unanswered text (a power cut that takes the mirror's
+removal line of a discarded text brings it back to be answered again, and one that takes a
+stretch's last line loses it even when an older line of the run holds the same text); that a copy is never read-only for
 the folder it was made in; that "That computer is closed" ends that lock; and that an offer never
-settles the text of a field the page holds. Each finding put back breaks it within the cases the
+settles the text of a field the page holds. A known limit, which the property excuses: text
+typed over an unanswered offer of its field and then followed by that offer's *Keep* looks, to
+rule 1, saved by the *Keep* (a version written here after the draft), so a power cut that also
+takes its mirror line loses it. The question is a dialog with a scrim (§6.7) and the editors
+take input once the offer is settled, so no translator reaches it; if B3's glue lets an editor
+take a keystroke before then, rule 1 must change. Each finding put back breaks it within the cases the
 test tries. The page asks for the offer at every open, before its editors take input, so a run's
 stored drafts are judged before that run's page saves the field. Without the shell's mirror, after
 a power cut took its last lines, or after the storage refused a write, nothing tells a run's older
