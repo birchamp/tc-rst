@@ -10,6 +10,7 @@ use leptos::prelude::*;
 use tc_api::helps::{ArticleLink, ArticleView, PassageView, ReadySlot, Slot};
 use tc_api::model::{ArticleBlock, BlockKind};
 use tc_api::shown::Direction as TextDir;
+use tc_api::story::FrameComment;
 
 use super::panel_icons::helps_icon;
 use crate::app::load::Load;
@@ -52,14 +53,27 @@ pub fn HelpsToggleButton() -> impl IntoView {
     .into_any()
 }
 
+/// What makes the panel a story's (tC4 `story`, #331): the whole story is listed in frame
+/// order with the frame in focus marked and scrolled into view, there is no simplified tab, and
+/// Translate adds the Comments tab.
+#[derive(Clone)]
+pub struct StoryPanel {
+    /// The frame in focus (0 is the title).
+    pub focus_frame: Memo<Option<u16>>,
+    /// The story's comments, when the panel has its Comments tab.
+    pub comments: Option<Memo<Arc<Vec<FrameComment>>>>,
+}
+
 /// tC4's `HelpsPanel` for a chapter: `focus_verses` are the focused unit's verses (none: the
-/// whole chapter), `pane` the source pane whose words title the cards.
+/// whole chapter), `pane` the source pane whose words title the cards. A story's panel is
+/// `story`.
 #[component]
 pub fn HelpsPanel(
     chapter: u16,
     focus_verses: Memo<Option<Vec<String>>>,
     helps: Signal<Load<Arc<PassageView>>>,
     pane: String,
+    #[prop(optional)] story: Option<StoryPanel>,
 ) -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
@@ -89,19 +103,31 @@ pub fn HelpsPanel(
     let label = Memo::new(move |_| {
         helps.with(|h| simplified_label(h.value().and_then(|v| v.simplified_pin.as_deref())))
     });
+    let has_comments = story.as_ref().is_some_and(|s| s.comments.is_some());
+    let is_story = story.is_some();
     let switcher = {
         let actions = actions.clone();
         let tab = tab.clone();
         move || {
-            let options = vec![
+            let mut options = vec![
                 SwitcherOption::new("notes", t(keys::helps::NOTES, &[])),
                 SwitcherOption::new("words", t(keys::helps::WORDS, &[])),
                 SwitcherOption::new("questions", t(keys::helps::QUESTIONS, &[])),
-                SwitcherOption::new("simplified", label.get()),
             ];
+            if !is_story {
+                options.push(SwitcherOption::new("simplified", label.get()));
+            }
+            if has_comments {
+                options.push(SwitcherOption::new(
+                    "comments",
+                    t(keys::helps::COMMENTS, &[]),
+                ));
+            }
             let value = {
                 let tab = tab.clone();
-                Signal::derive(move || Some(tab.get().as_str().to_owned()))
+                Signal::derive(move || {
+                    Some(tab.get().shown(has_comments, is_story).as_str().to_owned())
+                })
             };
             let actions = actions.clone();
             let on_change = Callback::new(move |v: String| {
@@ -122,9 +148,9 @@ pub fn HelpsPanel(
         "gap": 10,
     };
     let content = {
-        let (s, actions) = (s.clone(), actions.clone());
+        let (s, actions, story) = (s.clone(), actions.clone(), story.clone());
         move || {
-            let tab = tab.get();
+            let tab = tab.get().shown(has_comments, is_story);
             helps.with(|loaded| match loaded {
                 Load::Loading => {
                     let style = crate::css! {
@@ -145,7 +171,8 @@ pub fn HelpsPanel(
                     .into_any()
                 }
                 Load::Ready(view) | Load::Refreshing(view) => {
-                    helps_tab(&s, &actions, tab, view, chapter, focus_verses, &pane).into_any()
+                    helps_tab(&s, &actions, tab, view, chapter, focus_verses, &pane, story.as_ref())
+                        .into_any()
                 }
             })
         }
@@ -262,6 +289,7 @@ fn helps_divider(actions: &Actions, panel: NodeRef<html::Aside>) -> impl IntoVie
 }
 
 /// tC4's `HelpsTab`.
+#[allow(clippy::too_many_arguments)]
 fn helps_tab(
     s: &crate::app::web::AppState,
     actions: &Actions,
@@ -270,6 +298,7 @@ fn helps_tab(
     chapter: u16,
     focus_verses: Memo<Option<Vec<String>>>,
     pane: &str,
+    story: Option<&StoryPanel>,
 ) -> AnyView {
     // tC4's `chapterAllCrossBook`: a chapter the sources have in another book has its helps
     // there.
@@ -287,12 +316,67 @@ fn helps_tab(
     }
     let focus = focus_verses.get();
     let focus = focus.as_deref();
+    let frame = story.map(|s| s.focus_frame);
     match tab {
-        HelpsTab::Notes => notes_tab(s, actions, &view.notes, chapter, focus, pane),
-        HelpsTab::Words => words_tab(s, actions, &view.words, focus, pane),
-        HelpsTab::Questions => questions_tab(s, &view.questions, focus),
+        HelpsTab::Notes => notes_tab(s, actions, &view.notes, chapter, focus, pane, frame),
+        HelpsTab::Words => words_tab(s, actions, &view.words, focus, pane, frame),
+        HelpsTab::Questions => questions_tab(s, &view.questions, focus, frame),
         HelpsTab::Simplified => simplified_tab(&view.simplified, focus),
+        HelpsTab::Comments => match story.and_then(|s| s.comments) {
+            Some(comments) => comments_tab(s, comments),
+            None => ().into_any(),
+        },
     }
+}
+
+/// Whether a card at `verse` is lit: it is the focused help (a click), or, in a story, a card of
+/// the frame in focus (tC4 `isActive`).
+fn card_lit(
+    active: ArcRwSignal<Option<HelpFocus>>,
+    id: String,
+    verse: String,
+    frame: Option<Memo<Option<u16>>>,
+) -> Signal<bool> {
+    Signal::derive(move || {
+        active.with(|a| a.as_ref().is_some_and(|a| a.id == id))
+            || frame.is_some_and(|f| crate::app::story::card_in_focus(&verse, f.get()))
+    })
+}
+
+/// tC4's `CommentsTab` of a story: the newest comment of each frame, in frame order.
+fn comments_tab(s: &crate::app::web::AppState, comments: Memo<Arc<Vec<FrameComment>>>) -> AnyView {
+    let dir = match s.project.with_untracked(|p| p.as_ref().map(|p| p.dir)) {
+        Some(TextDir::Rtl) => "rtl",
+        _ => "ltr",
+    };
+    let list = comments.get();
+    let mut frames: Vec<u16> = list.iter().map(|c| c.frame).collect();
+    frames.sort_unstable();
+    frames.dedup();
+    if frames.is_empty() {
+        return empty_tab(None);
+    }
+    let boxed = crate::css! {
+        "border": "var(--stroke) solid var(--border)",
+        "border-radius": "var(--radius-lg)",
+        "padding": 14,
+        "background": "#fff",
+    };
+    let text = crate::css! { "white-space": "pre-wrap", "text-align": "start" };
+    frames
+        .into_iter()
+        .filter_map(|frame| {
+            let comment = crate::app::story::frame_comment(&list, frame)?;
+            let label = crate::app::story::comment_label(frame);
+            Some(view! {
+                <div data-testid="helps-comment" data-frame=frame.to_string() style=boxed.to_style()>
+                    <Overline>{label}</Overline>
+                    <p dir=dir style=text.to_style()>{comment.text.clone()}</p>
+                </div>
+            })
+        })
+        .collect_view()
+        .into_any()
 }
 
 /// tC4's `SlotState`: a tab with nothing to show says why.
@@ -386,6 +470,7 @@ fn notes_tab(
     chapter: u16,
     focus: Option<&[String]>,
     pane: &str,
+    frame: Option<Memo<Option<u16>>>,
 ) -> AnyView {
     let Slot::Ready(ready) = slot else {
         return slot_status(actions, slot);
@@ -407,11 +492,7 @@ fn notes_tab(
                 let verse = n.verse.as_str().to_owned();
                 let focus = focus_of(&n.id, &verse, &n.panes);
                 let (click, enter, leave) = card_events(actions, focus);
-                let id = n.id.clone();
-                let is_active = {
-                    let active = active.clone();
-                    Signal::derive(move || active.with(|a| a.as_ref().is_some_and(|a| a.id == id)))
-                };
+                let is_active = card_lit(active.clone(), n.id.clone(), verse.clone(), frame);
                 let title = HelpFocus::title(&n.panes, pane)
                     .or_else(|| (!n.quote.is_empty()).then(|| n.quote.clone()))
                     .or_else(|| n.academy.clone())
@@ -476,6 +557,7 @@ fn words_tab(
     slot: &Slot<tc_api::helps::WordCard>,
     focus: Option<&[String]>,
     pane: &str,
+    frame: Option<Memo<Option<u16>>>,
 ) -> AnyView {
     let Slot::Ready(ready) = slot else {
         return slot_status(actions, slot);
@@ -495,11 +577,7 @@ fn words_tab(
             .map(|w| {
                 let verse = w.verse.as_str().to_owned();
                 let (click, enter, leave) = card_events(actions, focus_of(&w.id, &verse, &w.panes));
-                let id = w.id.clone();
-                let is_active = {
-                    let active = active.clone();
-                    Signal::derive(move || active.with(|a| a.as_ref().is_some_and(|a| a.id == id)))
-                };
+                let is_active = card_lit(active.clone(), w.id.clone(), verse.clone(), frame);
                 let title = HelpFocus::title(&w.panes, pane)
                     .or_else(|| (!w.quote.is_empty()).then(|| w.quote.clone()))
                     .unwrap_or_else(|| w.slug.clone());
@@ -541,6 +619,7 @@ fn questions_tab(
     s: &crate::app::web::AppState,
     slot: &Slot<tc_api::helps::QuestionCard>,
     focus: Option<&[String]>,
+    frame: Option<Memo<Option<u16>>>,
 ) -> AnyView {
     let Slot::Ready(ready) = slot else {
         return match slot_state(slot) {
@@ -582,9 +661,8 @@ fn questions_tab(
     let cards = questions
         .into_iter()
         .map(|q| {
-            let id = q.id.clone();
-            let active = active.clone();
-            let is_active = Memo::new(move |_| active.with(|a| a.as_ref().is_some_and(|a| a.id == id)));
+            let lit = card_lit(active.clone(), q.id.clone(), q.verse.as_str().to_owned(), frame);
+            let is_active = Memo::new(move |_| lit.get());
             let style = move || {
                 crate::css! {
                     "border": format!("var(--stroke) solid {}", if is_active.get() { "var(--accent)" } else { "var(--border)" }),
@@ -828,7 +906,7 @@ fn note_blocks(blocks: &[ArticleBlock]) -> AnyView {
 }
 
 /// A note, cut to a preview with "Show more" when long (tC4's `ExpandableNote`).
-fn expandable_note(blocks: Vec<ArticleBlock>) -> impl IntoView {
+pub(crate) fn expandable_note(blocks: Vec<ArticleBlock>) -> impl IntoView {
     if blocks_len(&blocks) <= PREVIEW_CHARS {
         return note_blocks(&blocks);
     }

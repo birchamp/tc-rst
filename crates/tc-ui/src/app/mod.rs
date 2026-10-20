@@ -37,6 +37,7 @@ pub mod save;
 pub mod share;
 pub mod shell;
 pub mod sources;
+pub mod story;
 pub mod sync;
 pub mod understand;
 

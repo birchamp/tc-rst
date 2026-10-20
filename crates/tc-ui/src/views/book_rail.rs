@@ -71,6 +71,7 @@ pub fn book_rail(s: &AppState, actions: &Actions, book: &BookView) -> AnyView {
                         let actions = actions.clone();
                         rail_number_button(
                             Signal::derive(move || chapter.get() == c),
+                            Signal::from(false),
                             off,
                             Callback::new(move |()| actions.set_chapter(c)),
                             Attrs::default(),
@@ -78,10 +79,10 @@ pub fn book_rail(s: &AppState, actions: &Actions, book: &BookView) -> AnyView {
                         )
                     })
                     .collect_view();
-                rail_numbers(buttons.into_any())
+                rail_numbers(Attrs::default(), buttons.into_any())
             });
             rail_group(Signal::from(active), view! { {tile} {numbers} }.into_any())
         })
         .collect_view();
-    rail_shell(title, rows.into_any()).into_any()
+    rail_shell(title, Attrs::default(), rows.into_any()).into_any()
 }

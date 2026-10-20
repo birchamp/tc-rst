@@ -16,6 +16,9 @@ pub mod open_progress;
 pub mod panel_icons;
 pub mod rail_chrome;
 pub mod source_verse;
+pub mod story_draft;
+pub mod story_rail;
+pub mod story_understand;
 pub mod sync_result;
 pub mod understand;
 

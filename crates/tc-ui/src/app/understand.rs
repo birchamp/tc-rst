@@ -585,6 +585,8 @@ pub enum HelpsTab {
     Words,
     Questions,
     Simplified,
+    /// A story's user comments, on Translate (tC4 shows it with `comments`).
+    Comments,
 }
 
 impl HelpsTab {
@@ -594,13 +596,30 @@ impl HelpsTab {
             Self::Words => "words",
             Self::Questions => "questions",
             Self::Simplified => "simplified",
+            Self::Comments => "comments",
         }
     }
 
     pub fn parse(text: &str) -> Option<Self> {
-        [Self::Notes, Self::Words, Self::Questions, Self::Simplified]
-            .into_iter()
-            .find(|tab| tab.as_str() == text)
+        [
+            Self::Notes,
+            Self::Words,
+            Self::Questions,
+            Self::Simplified,
+            Self::Comments,
+        ]
+        .into_iter()
+        .find(|tab| tab.as_str() == text)
+    }
+
+    /// The tab a panel shows when the one chosen is not among its own (tC4's `shownTab`): a
+    /// story has no simplified text, and the Comments tab is Translate's.
+    pub fn shown(self, comments: bool, story: bool) -> Self {
+        match self {
+            Self::Comments if !comments => Self::Notes,
+            Self::Simplified if story => Self::Notes,
+            tab => tab,
+        }
     }
 }
 

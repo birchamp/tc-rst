@@ -3,11 +3,10 @@
 
 use leptos::prelude::*;
 use tc_api::check::{
-    AlignProgress, CardCount, CheckProgress, Picker, PickerView, PinCitation, Rung, Tool, ToolCard,
-    ToolState,
+    AlignProgress, CardCount, CheckProgress, CheckUnit, Picker, PickerView, PinCitation, Rung,
+    Tool, ToolCard, ToolState,
 };
 use tc_api::ids::Scope;
-use tc_core::BookId;
 use wasm_bindgen::JsCast;
 
 use crate::app::check::{
@@ -331,8 +330,16 @@ fn fallback_warning(actions: &Actions, tool: Tool, missing: &PinCitation) -> imp
     }
 }
 
+/// What a unit is called in the picker's words: the book's name, or "Story 3".
+pub(super) fn unit_label(unit: CheckUnit) -> String {
+    match unit {
+        CheckUnit::Book(book) => book.english_name().to_owned(),
+        CheckUnit::Story(story) => crate::app::story::story_label(story),
+    }
+}
+
 /// tC4's `ToolCard`.
-fn tool_card(actions: &Actions, card: &ToolCard, book: BookId) -> impl IntoView + use<> {
+fn tool_card(actions: &Actions, card: &ToolCard, label: &str) -> impl IntoView + use<> {
     let state = state_id(card.state);
     let ready = state == "ready";
     let (bg, border, fg) = tone(state);
@@ -352,7 +359,7 @@ fn tool_card(actions: &Actions, card: &ToolCard, book: BookId) -> impl IntoView 
         "text-transform": "uppercase",
         "color": fg,
     };
-    let book_name = book.english_name().to_owned();
+    let book_name = label.to_owned();
     let desc = if ready {
         t_dyn(&format!("check.desc.{}", tool_id(tool)), &[], None)
     } else {
@@ -497,7 +504,7 @@ fn align_card(progress: &CardCount<AlignProgress>) -> impl IntoView + use<> {
 }
 
 /// The Community Checking card: its only entry (D63).
-fn community_card(actions: &Actions, book: BookId) -> impl IntoView + use<> {
+fn community_card(actions: &Actions, unit: CheckUnit) -> impl IntoView + use<> {
     let style = picker_card().merge(&crate::css! { "cursor": "pointer" });
     let open_style = cta_style().merge(&crate::css! { "align-self": "flex-start" });
     let count_style = card_caption().merge(&crate::css! {
@@ -505,8 +512,21 @@ fn community_card(actions: &Actions, book: BookId) -> impl IntoView + use<> {
         "color": "var(--text-secondary)",
     });
     let next_style = card_caption().merge(&crate::css! { "color": "var(--text-tertiary)" });
-    // tC4 names the open chapter; the picker shows the book's first.
-    let read = format!("{} 1", book.english_name());
+    // tC4 names the open chapter; the picker shows the book's first. A story's preview holds
+    // every drafted story, not the open one (#454).
+    let (whole, next) = match unit {
+        CheckUnit::Book(book) => (
+            t(keys::cc::WHOLE_CHAPTER, &[]),
+            t(
+                keys::cc::NEXT_READ,
+                &[("ref", &format!("{} 1", book.english_name()))],
+            ),
+        ),
+        CheckUnit::Story(_) => (
+            t(keys::cc::ALL_DRAFTED_STORIES, &[]),
+            t(keys::cc::NEXT_READ_STORIES, &[]),
+        ),
+    };
     let open = {
         let actions = actions.clone();
         move || actions.go(View::Publish)
@@ -527,8 +547,8 @@ fn community_card(actions: &Actions, book: BookId) -> impl IntoView + use<> {
             <p style=picker_desc().to_style()>{t(keys::cc::CARD_DESC, &[])}</p>
             <div style="margin-bottom: 16px;">
                 <ProgressBar tone=Tone::Valid value=0.0 height=6.0 style=crate::css! { "margin-bottom": 9 } />
-                <p style=count_style.to_style()>{t(keys::cc::WHOLE_CHAPTER, &[])}</p>
-                <p style=next_style.to_style()>{t(keys::cc::NEXT_READ, &[("ref", &read)])}</p>
+                <p style=count_style.to_style()>{whole}</p>
+                <p style=next_style.to_style()>{next}</p>
             </div>
             <span data-testid="open-community-checking" style=open_style.to_style()>
                 {t(keys::cc::OPEN, &[])}
@@ -565,24 +585,30 @@ fn return_focus(s: &AppState) {
     }
 }
 
-fn grid(s: &AppState, actions: &Actions, view: &PickerView, book: BookId) -> impl IntoView + use<> {
+fn grid(
+    s: &AppState,
+    actions: &Actions,
+    view: &PickerView,
+    unit: CheckUnit,
+) -> impl IntoView + use<> {
     let style = crate::css! {
         "display": "grid",
         "grid-template-columns": "repeat(auto-fit,minmax(270px,1fr))",
         "gap": 16,
     };
+    let label = unit_label(unit);
     let cards: Vec<AnyView> = view
         .tools
         .iter()
-        .map(|card| tool_card(actions, card, book).into_any())
+        .map(|card| tool_card(actions, card, &label).into_any())
         .collect();
     let s = s.clone();
     request_animation_frame(move || return_focus(&s));
     view! {
         <div style=style.to_style()>
             {cards}
-            {align_card(&view.align)}
-            {community_card(actions, book)}
+            {view.align.as_ref().map(align_card)}
+            {community_card(actions, unit)}
         </div>
     }
 }
@@ -592,12 +618,12 @@ pub(super) fn picker(
     s: &AppState,
     actions: &Actions,
     at: Scope,
-    book: BookId,
+    unit: CheckUnit,
 ) -> impl IntoView + use<> {
     let Some(runtime) = use_runtime() else {
         return ().into_any();
     };
-    let read = runtime.cache().read(Picker { at, book });
+    let read = runtime.cache().read(Picker { at, unit });
     let main = crate::css! {
         "flex": 1,
         "overflow": "auto",
@@ -649,7 +675,7 @@ pub(super) fn picker(
                                     size=Size::Sm
                                     variant=ButtonVariant::Outline
                                     attrs=Attrs::from([("data-testid", "preflight-retry")])
-                                    on_click=Callback::new(move |_| retry.reload_picker(book))
+                                    on_click=Callback::new(move |_| retry.reload_picker(unit))
                                 >
                                     {t(keys::app::RETRY, &[])}
                                 </Button>
@@ -677,7 +703,7 @@ pub(super) fn picker(
                 Some(
                     view! {
                         {old_twl}
-                        {grid(&s, &actions, view, book)}
+                        {grid(&s, &actions, view, unit)}
                         {blocked.then(|| view! { <p style=note.to_style()>{t(keys::check::NEVER_BLOCKS, &[])}</p> })}
                     }
                     .into_any(),

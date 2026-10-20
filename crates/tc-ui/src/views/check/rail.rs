@@ -5,9 +5,8 @@
 use std::sync::Arc;
 
 use leptos::prelude::*;
-use tc_api::check::{CheckEmpty, RailRow, Tool};
+use tc_api::check::{CheckEmpty, CheckListRef, CheckUnit, RailRow, Tool};
 use tc_api::model::rail::{self, Filter, GroupLabel, SortMode};
-use tc_core::BookId;
 use wasm_bindgen::JsCast;
 
 use super::picker::{dropped_note, rung_key, tool_name};
@@ -139,7 +138,11 @@ fn filter_key(filter: Filter) -> String {
     format!("check.filter.{}", filter.id())
 }
 
-fn sort_key(mode: SortMode) -> String {
+/// A sort's label; a story's By verse is By frame (tC4 `check.sort.byFrame`).
+fn sort_key(mode: SortMode, story: bool) -> String {
+    if story && mode == SortMode::ByVerse {
+        return "check.sort.byFrame".to_owned();
+    }
     format!("check.sort.{}", mode.id())
 }
 
@@ -302,9 +305,16 @@ fn focus_is_unmoved() -> bool {
 }
 
 /// tC4's `CheckRail`.
-fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: BookId) -> AnyView {
+fn check_rail(
+    s: &AppState,
+    actions: &Actions,
+    rail: &Rail,
+    tool: Tool,
+    kind: CheckUnit,
+) -> AnyView {
     let c = s.c.clone();
-    let unit = book.english_name().to_owned();
+    let story = matches!(kind, CheckUnit::Story(_));
+    let unit = super::picker::unit_label(kind);
     let terms = Arc::new(rail.view.terms.clone());
     let rows = Arc::new(rail.rows.clone());
     let progress = rail.view.progress;
@@ -416,7 +426,7 @@ fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: Bo
                             style=rail_chip(shown == mode).to_style()
                             on:click=move |_| actions.set_check_sort(mode)
                         >
-                            {t_dyn(&sort_key(mode), &[], None)}
+                            {t_dyn(&sort_key(mode, story), &[], None)}
                         </button>
                     }
                 })
@@ -690,7 +700,8 @@ fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: Bo
 pub fn check_session(
     s: &AppState,
     actions: &Actions,
-    book: BookId,
+    at: tc_api::ids::Scope,
+    unit: CheckUnit,
     tool: Tool,
 ) -> impl IntoView + use<> {
     let session = s.c.session.clone();
@@ -725,11 +736,26 @@ pub fn check_session(
                         "min-width": 0,
                         "background": "var(--surface-app)",
                     };
+                    // A story's detail is the story card; a book's is B5b's.
+                    let detail = match unit {
+                        CheckUnit::Story(_) => {
+                            let list = CheckListRef { tool, unit };
+                            let order = Arc::new(rail_order(rail, tool));
+                            super::story::story_detail(
+                                &s,
+                                &actions,
+                                at.clone(),
+                                list,
+                                rail.rows.clone(),
+                                order,
+                            )
+                        }
+                        CheckUnit::Book(_) => ().into_any(),
+                    };
                     view! {
                         <div data-testid="check-session" style=root.to_style()>
-                            {check_rail(&s, &actions, rail, tool, book)}
-                            // The item detail is B5b's.
-                            <main style=main.to_style()></main>
+                            {check_rail(&s, &actions, rail, tool, unit)}
+                            <main style=main.to_style()>{detail}</main>
                         </div>
                     }
                     .into_any()
@@ -737,4 +763,23 @@ pub fn check_session(
             },
         })
     }
+}
+
+/// The order the rail's rows are walked in under the filter and sort chosen when the session
+/// opened: the order of Previous and Next. The detail holds it as the session opened, and the
+/// arrow keys of the rail follow the live filter.
+fn rail_order(rail: &Rail, tool: Tool) -> Vec<u32> {
+    rail::groups(
+        rail.rows.iter(),
+        rail.view.terms.len(),
+        Filter::All,
+        SortMode::default_for(tool),
+    )
+    .iter()
+    .flat_map(|g| {
+        g.rows
+            .iter()
+            .filter_map(|&at| rail.rows.get(at).map(|r| r.index))
+    })
+    .collect()
 }
