@@ -6,10 +6,11 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use proptest::prelude::*;
 use tc_api::editor::{Chapters, ChaptersView, VerseRow};
 use tc_api::ids::Scope;
 use tc_api::model::js_trim;
-use tc_api::model::section::{ParaFormat, SectionVerse, expand_keys, initial_text};
+use tc_api::model::section::{ParaFormat, SectionBuffer, SectionVerse, expand_keys, initial_text};
 use tc_api::test::{SaveSection, SaveVerse};
 use tc_api::write::{Ack, Stored};
 use tc_api::{ApiError, NotSaved, ShownToken};
@@ -202,6 +203,132 @@ fn a_typed_paragraph_or_poetry_line_sets_the_layout_of_the_verse_before() {
     let shown = vec![(9, text("a", "\n\\p\n", 9)), (10, text("b", "\n", 10))];
     let values = section_values("9 a\n10 b", &shown).unwrap();
     assert_eq!(layout_of(&values[0]), Some("\n"));
+}
+
+/// The verses as the card opens them after `after` is stored: a span's key, the format from the
+/// layout of the verse before, the stub as no text (tc-app's `editor/chapters` and tc-ui's
+/// `card_verses`).
+fn reopened(after: &[(u16, VerseValue)]) -> (Vec<String>, String) {
+    let mut verses = Vec::new();
+    let mut format = None;
+    for (verse, value) in after {
+        let VerseValue::Text {
+            words,
+            layout,
+            last,
+            ..
+        } = value
+        else {
+            continue;
+        };
+        let body = js_trim(words);
+        let drafted = !body.is_empty() && body != "___";
+        verses.push(SectionVerse {
+            key: if last.get() > *verse {
+                format!("{verse}-{last}")
+            } else {
+                verse.to_string()
+            },
+            drafted,
+            body: if drafted {
+                body.to_owned()
+            } else {
+                String::new()
+            },
+            format,
+        });
+        format = gap_marker(layout);
+    }
+    let keys: Vec<String> = verses.iter().map(|v| v.key.clone()).collect();
+    let text = initial_text(&verses, &expand_keys(&keys));
+    (keys, text)
+}
+
+fn shown_strategy() -> impl Strategy<Value = Vec<(u16, VerseValue)>> {
+    let words = prop_oneof![
+        Just("___".to_owned()),
+        Just(String::new()),
+        "[a-z]{1,3}( [a-z]{1,3}){0,3}",
+        "[a-z]{1,3}\n\\\\q2 [a-z]{1,3}",
+    ];
+    let layout = prop_oneof![
+        Just("\n".to_owned()),
+        Just("\n\\p\n".to_owned()),
+        Just("\n\\q1\n".to_owned()),
+        Just("\n\\q2\n".to_owned()),
+        Just("\n\\ts\\*\n\\p\n".to_owned()),
+    ];
+    let spans = prop_oneof![
+        Just(vec![1u16, 1, 1]),
+        Just(vec![2, 1, 1]),
+        Just(vec![1]),
+        Just(vec![1, 2, 1, 1]),
+    ];
+    spans
+        .prop_flat_map(move |spans| {
+            let parts = proptest::collection::vec((words.clone(), layout.clone()), spans.len());
+            (Just(spans), parts)
+        })
+        .prop_map(|(spans, parts)| {
+            let mut shown = Vec::new();
+            let mut head = 1u16;
+            for (len, (words, layout)) in spans.into_iter().zip(parts) {
+                shown.push((head, text(&words, &layout, head + len - 1)));
+                for n in head + 1..head + len {
+                    shown.push((n, covered(head)));
+                }
+                head += len;
+            }
+            shown
+        })
+}
+
+fn typed_strategy() -> impl Strategy<Value = String> {
+    let line = prop_oneof![
+        "(\t|\t\t)?[1-5]( [a-z]{1,3}){0,4}",
+        "(\t|\t\t)?[1-4]-[2-5]( [a-z]{1,3}){0,3}",
+        "[a-z]{1,3}( [a-z]{1,3}){0,4}",
+        Just(String::new()),
+    ];
+    proptest::collection::vec(line, 0..7).prop_map(|lines| lines.join("\n"))
+}
+
+/// The line typed before each verse that has text, named by the verse before it. A line before
+/// a verse with no words has no word to rest on, and tC4's reading gives it to the next word.
+fn formats_before_text(buffer: &SectionBuffer) -> Vec<(String, Option<ParaFormat>)> {
+    let with_text: Vec<String> = buffer.verses().into_iter().map(|(key, _)| key).collect();
+    buffer
+        .formats()
+        .into_iter()
+        .zip(buffer.new_keys().into_iter().skip(1))
+        .filter(|(_, next)| with_text.contains(next))
+        .map(|(format, _)| format)
+        .collect()
+}
+
+proptest! {
+    /// The differential test of AD24: the values tc-app writes for a card's text, opened again
+    /// in a card, read as the same verses with the same bodies and the same line before each
+    /// verse with text as the card held when Save was pressed: what a translator saw is stored.
+    #[test]
+    fn a_saved_section_opens_again_as_the_card_showed_it(
+        shown in shown_strategy(),
+        typed in typed_strategy(),
+    ) {
+        let (keys, _) = reopened(&shown);
+        let card = SectionBuffer::parse(&typed, &keys);
+        let values = section_values(&typed, &shown).unwrap();
+        let after: Vec<(u16, VerseValue)> = shown
+            .iter()
+            .zip(values)
+            .map(|((verse, old), new)| (*verse, new.unwrap_or_else(|| old.clone())))
+            .collect();
+        let (new_keys, text) = reopened(&after);
+        prop_assert_eq!(&new_keys, &card.new_keys(), "{:?}", after);
+        let again = SectionBuffer::parse(&text, &new_keys);
+        prop_assert_eq!(again.verses(), card.verses(), "{:?}", text);
+        prop_assert_eq!(formats_before_text(&again), formats_before_text(&card), "{:?}", text);
+    }
 }
 
 #[test]

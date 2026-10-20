@@ -9,7 +9,7 @@
 //     node --test parity/app/journeys/section.test.mjs
 import assert from 'node:assert/strict';
 import { newRequestId } from '../env-rust.mjs';
-import { browserTest, recordRequests, sleep, storageDump, until, withApp } from './kit.mjs';
+import { browserTest, catalog, recordRequests, sleep, storageDump, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
 const NINE = 'Exhorta a los siervos a que se sujeten a sus amos y a que agraden en todo';
@@ -400,4 +400,26 @@ browserTest('a_build_without_a_section_save_says_not_saved_and_keeps_the_card', 
     assert.equal(await typing(page, '9–10').inputValue(), `9 ${NINE}`);
     assert.equal(await card(page).count(), 1, 'the card stays open');
   });
+});
+
+// #614, tC4 `ds-labels` d: a verse number's name in Place comes from the catalog, so it follows
+// the app language.
+browserTest('ds_labels_d_a_verse_numbers_name_follows_the_app_language', async () => {
+  const [en, es] = [catalog('en'), catalog('es-419')];
+  const spanish = (key, vars = {}) => {
+    assert.ok(es[key] && es[key] !== en[key], `${key}: translated`);
+    return Object.entries(vars).reduce((s, [k, v]) => s.replace(`{${k}}`, String(v)), es[key]);
+  };
+  await withApp(async ({ page }) => {
+    await titus(page).click();
+    await page.getByTestId('mode-switch').getByRole('tab', { name: spanish('nav.draft'), exact: true }).click();
+    await page.getByRole('button', { name: '2', exact: true }).click();
+    await page.getByRole('button', { name: spanish('draft.draftSection', { span: '9–10' }) }).click();
+    await page.getByRole('textbox', { name: spanish('draft.sectionLabel', { span: '9–10' }) }).fill(`${NINE} ${TEN}`);
+    await page.getByRole('tab', { name: spanish('draft.modePlace') }).click();
+    const pin = bank(page).getByTestId('pin-10');
+    assert.equal(await pin.getAttribute('aria-label'), spanish('draft.moveVerse', { n: 10 }));
+    await card(page).getByRole('button', { name: spanish('draft.cancelVerse'), exact: true }).click();
+    await card(page).waitFor({ state: 'detached' });
+  }, { locale: 'es-419' });
 });
