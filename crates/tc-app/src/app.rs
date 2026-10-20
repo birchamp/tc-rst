@@ -203,6 +203,9 @@ pub(crate) struct Inner {
     pub(crate) downloaded: Mutex<std::collections::BTreeSet<(String, tc_core::BookId)>>,
     /// The plans a person is reading: upgrades, gateway changes and re-pins (C8).
     pub(crate) plans: crate::upgrades::KeptPlans,
+    /// The offers and plans a test or a parity capture scripted (C8).
+    #[cfg(feature = "test-hooks")]
+    pub(crate) scripted_resources: crate::upgrades::ScriptedResources,
     /// The server's uploads, which the guided fix's file install reads (C8). Given once, by the
     /// binary that runs the server.
     pub(crate) uploads: std::sync::OnceLock<crate::fixes::Uploads>,
@@ -447,6 +450,8 @@ impl App {
             downloaded: Mutex::new(std::collections::BTreeSet::new()),
             plans: crate::upgrades::KeptPlans::default(),
             uploads: std::sync::OnceLock::new(),
+            #[cfg(feature = "test-hooks")]
+            scripted_resources: crate::upgrades::ScriptedResources::default(),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]

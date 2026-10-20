@@ -388,6 +388,49 @@
       ],
       "why": "Urdu in Devanagari script (ur-deva) reads left to right and is named उर्दू (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), where tC4 4.0's registry names it اردو in Arabic script, right to left: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style and Understand behind the dialog included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it (a mask's rectangle must lie in the window).",
       "until": null
+    },
+    "upgrade-set": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-harmless": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-blocked": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-error": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-text": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "gateway-change-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's case draws the error of a confirm made while another project is open (`gateway.otherProject`: \"Another project is open now. Open this project and choose the language again.\"), which a Rust confirmation cannot meet: a plan belongs to the open it was made for and a confirm for another open is refused as stale before anything is written (APP-DESIGN 4.8). The reachable failure is a save the disk refuses, and the dialog states its reason in the same callout after \"The change was not applied.\": the capture answers the confirm with a disk with no room, \"There is no room left on the disk.\", so the one text line differs and every other line, style and pixel outside that line is tC4's.",
+      "until": null
     }
   }
 }

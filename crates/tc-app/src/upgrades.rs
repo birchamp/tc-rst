@@ -116,6 +116,31 @@ impl KeptPlans {
     }
 }
 
+/// What a test or a parity capture scripted for the resources service (C8): the offers and the
+/// plans tC4's gallery draws, whose releases no server holds. Test hooks only.
+#[cfg(feature = "test-hooks")]
+#[derive(Default)]
+pub(crate) struct ScriptedResources {
+    updates: std::sync::Mutex<Option<UpdatesView>>,
+    plans: std::sync::Mutex<VecDeque<PlanView>>,
+}
+
+#[cfg(feature = "test-hooks")]
+impl ScriptedResources {
+    pub(crate) fn script(&self, next: tc_api::test::Scripted) {
+        match next {
+            tc_api::test::Scripted::Updates(view) => *lock(&self.updates) = Some(view),
+            tc_api::test::Scripted::Plan(view) => lock(&self.plans).push_back(*view),
+            tc_api::test::Scripted::OpenDoor43Fails(_) | tc_api::test::Scripted::Sync { .. } => {}
+        }
+    }
+
+    pub(crate) fn clear(&self) {
+        *lock(&self.updates) = None;
+        lock(&self.plans).clear();
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // The installed resources a plan reads
 // ---------------------------------------------------------------------------------------
@@ -449,6 +474,12 @@ fn blocked_books(blocked: &[tc_api::resources::BlockedUnit]) -> String {
 }
 
 impl App {
+    /// The next scripted plan, when a test or a capture scripted one.
+    #[cfg(feature = "test-hooks")]
+    fn scripted_plan(&self) -> Option<PlanView> {
+        lock(&self.inner.scripted_resources.plans).pop_front()
+    }
+
     pub(crate) fn project_stories(&self, session: &ProjectSession) -> bool {
         session.handle().facts().kind == tc_journal::fold::ProjectKind::Stories
     }
@@ -594,6 +625,10 @@ impl Handle<CheckUpdates> for App {
     async fn handle(&self, req: CheckUpdates) -> Result<UpdatesView, ApiError> {
         let session = self.read(&req.at)?;
         let read = session.read();
+        #[cfg(feature = "test-hooks")]
+        if let Some(view) = lock(&self.inner.scripted_resources.updates).take() {
+            return Ok(view);
+        }
         let client = self.resources_client()?;
         let Some(pins) = crate::resources::project_pins(&read)? else {
             return Ok(UpdatesView {
@@ -725,6 +760,14 @@ fn pins_to_install(recipe: &Recipe) -> Vec<ResourcePin> {
 impl Handle<PlanUpgrade> for App {
     async fn handle(&self, req: PlanUpgrade) -> Result<JobId, ApiError> {
         let session = self.read(&req.at)?;
+        #[cfg(feature = "test-hooks")]
+        if let Some(view) = self.scripted_plan() {
+            let spec = JobSpec::new(JobKind::UpgradePlan, Phase::Plan { book: None })
+                .project(session.scope().project.clone());
+            return Ok(self.inner.jobs.start_async(spec, move |_ctx| async move {
+                Ok(JobOutcome::PlanReady(Box::new(view)))
+            }));
+        }
         let client = self.resources_client()?;
         let spec = JobSpec::new(
             JobKind::UpgradePlan,
@@ -787,6 +830,12 @@ impl Handle<PlanGateway> for App {
         let session = self.read(&req.at)?;
         let spec = JobSpec::new(JobKind::GatewayPlan, Phase::Plan { book: None })
             .project(session.scope().project.clone());
+        #[cfg(feature = "test-hooks")]
+        if let Some(view) = self.scripted_plan() {
+            return Ok(self.inner.jobs.start_async(spec, move |_ctx| async move {
+                Ok(JobOutcome::PlanReady(Box::new(view)))
+            }));
+        }
         let app = self.clone();
         Ok(self.inner.jobs.start_async(spec, move |ctx| async move {
             let view = app

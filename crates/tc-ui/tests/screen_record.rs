@@ -199,8 +199,9 @@ fn section_7_4_names_every_gallery_group_with_its_units() {
     let paths = Paths::committed();
     let design = doc(&paths);
     let record = Record::load(paths).unwrap();
-    // B2 D10 moved three Home cases into home-held, home-open and home-checkpoint.
-    assert_eq!(design.gallery.len(), 21);
+    // B2 D10 moved three Home cases into home-held, home-open and home-checkpoint; C8 split the
+    // re-pin confirmation off M9, which B5a draws with the Check picker.
+    assert_eq!(design.gallery.len(), 22);
     let units = |name: &str| {
         let group = design
             .group(name)
@@ -211,6 +212,8 @@ fn section_7_4_names_every_gallery_group_with_its_units() {
     assert_eq!(units("sign-in"), ("A8", "B9b"));
     assert_eq!(units("net-failed"), ("A8", "B2"));
     assert_eq!(units("M18"), ("B4b", "B4b"));
+    assert_eq!(units("M9"), ("C8", "C8"));
+    assert_eq!(units("M9b"), ("B5a", "B5a"));
     assert_eq!(units("S4"), ("B11", "B11"));
     assert_eq!(units("check-empty"), ("B5a", "B5a"));
     assert_eq!(units("home"), ("B2", "B2"));

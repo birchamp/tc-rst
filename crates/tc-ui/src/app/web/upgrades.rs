@@ -133,7 +133,11 @@ impl Actions {
         spawn_local(async move {
             // Saved first: the plan is read over work that is safe (A-26).
             if !this.runtime().saves().gate().await {
-                let reason = t(keys::gateway::UNSAVED, &[]);
+                // tC4's own sentence for a text upgrade that finds work unsaved.
+                let reason = t(
+                    keys::upgrade::FAILED,
+                    &[("reason", &t(keys::upgrade::ALIGN_UNSAVED, &[]))],
+                );
                 this.s().up.try_update(|up| up.install_failed(Some(reason)));
                 return;
             }
