@@ -640,13 +640,6 @@ fn book_of(list: &CheckListRef) -> Result<BookId, ApiError> {
     }
 }
 
-fn not_ready(pre: &Preflight) -> ApiError {
-    ApiError::BadRequest {
-        field: "list".to_owned(),
-        reason: format!("the tool cannot open: {:?}", pre.state),
-    }
-}
-
 // ---------------------------------------------------------------------------------------
 // check/picker
 // ---------------------------------------------------------------------------------------
@@ -785,7 +778,7 @@ impl Handle<Open> for App {
             session_view(&app, list, entry, read, req.since)
         })
         .await?
-        .map_err(|pre| not_ready(&pre))
+        .map_err(|_| ApiError::ToolNotReady)
     }
 }
 

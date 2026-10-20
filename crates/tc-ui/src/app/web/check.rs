@@ -9,6 +9,7 @@
 use std::cell::Cell;
 
 use leptos::prelude::*;
+use tc_api::ApiError;
 use tc_api::check::{
     CheckListRef, CheckSessionView, CheckUnit, FixState, FixView, Open, RailRow, RailRows,
     RailSince, Rows, RowsView, Tool,
@@ -177,6 +178,9 @@ impl Actions {
                     this.start_rail_listener(list);
                 }
                 Err(CallError::Dropped) => {}
+                // A pin went missing since the tool was last open (a resume, or a teammate's
+                // sync): the picker's card says why and offers the fix (tC4 `resumeCheckTool`).
+                Err(CallError::Api(ApiError::ToolNotReady)) => this.reset_check(),
                 Err(error) => {
                     c.session
                         .try_set(Some(Session::Failed(tool, error.to_string())));

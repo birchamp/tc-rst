@@ -47,3 +47,25 @@ browserTest('picker_get_source_texts_and_download_open_the_source_texts_dialog',
     await page.getByTestId('preflight-translationNotes').waitFor();
   });
 });
+
+browserTest('resume_into_a_tool_that_is_not_ready_shows_the_picker_and_its_fix', async () => {
+  await withApp(async ({ page }) => {
+    await openProject(page);
+    await page.getByRole('tab', { name: 'Check' }).click();
+    await page.getByTestId('open-translationNotes').click();
+    await page.getByTestId('check-progress').waitFor();
+    await page.getByTestId('project-switch').click();
+    await page.getByTestId(`project-${BIBLE}`).waitFor();
+    // The place kept says Translation Notes; its pins went missing meanwhile (the sample
+    // lacks Translation Words' es-419 resource, so the open asks for that tool).
+    await page.route('**/api/v1/check/open', (route) => {
+      const body = route.request().postDataJSON();
+      body.list.tool = 'translationWords';
+      return route.continue({ postData: JSON.stringify(body) });
+    });
+    await page.getByTestId(`project-${BIBLE}`).getByRole('button', { name: /Titus/ }).click();
+    await page.getByTestId('fix-translationWords').waitFor();
+    assert.equal(await page.getByTestId('check-error').count(), 0, 'no dead-end error');
+    await page.getByTestId('preflight-translationNotes').waitFor();
+  });
+});

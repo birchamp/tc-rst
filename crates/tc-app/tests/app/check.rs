@@ -9,6 +9,7 @@ use tc_api::check::{
     PickerView, RailRows, RailSince, Rows, RowsView, Rung, Tool, ToolState,
 };
 use tc_api::ids::Scope;
+use tc_api::{ApiError, Reply};
 use tc_app::App;
 use tc_app::backend::memory::MemoryBackend;
 use tc_app::backend::scenario::install_resources_into;
@@ -96,6 +97,27 @@ async fn the_sample_picker_is_tc4s() {
         other => panic!("{other:?}"),
     }
     assert_eq!(view.old_twl, None);
+}
+
+/// A tool whose pin this computer lacks does not open: the answer is the typed one the screen
+/// turns into the picker and its Fix card, not a bad request.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn opening_a_tool_that_is_not_ready_answers_tool_not_ready() {
+    let (_dir, t) = start("sample").await;
+    let at = opened(&t.app).await.session.at;
+    let reply = t
+        .app
+        .request(&Open {
+            at,
+            list: list(Tool::TranslationWords),
+            since: None,
+        })
+        .await
+        .unwrap();
+    assert!(
+        matches!(reply, Reply::Err(ApiError::ToolNotReady)),
+        "{reply:?}"
+    );
 }
 
 /// `en-check-picker`: every tool ready, Translation Words at 2 of 182 with "Paul" next,

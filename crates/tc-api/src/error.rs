@@ -32,6 +32,10 @@ pub enum ApiError {
     /// A check or align session was replaced.
     #[error("the session was replaced")]
     StaleSession,
+    /// A check tool was asked to open and one of its pins is not ready (not on this computer,
+    /// or pinned to nothing): the UI shows the picker, whose card says why and offers the fix.
+    #[error("the tool cannot open")]
+    ToolNotReady,
     /// A `RequestId` came back with another body: a bug, reported. The field stays dirty
     /// and saves again with a new id (A-2).
     #[error("a request id was used for another request")]

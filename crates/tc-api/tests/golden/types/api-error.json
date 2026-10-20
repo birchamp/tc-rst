@@ -22,6 +22,9 @@
     "type": "staleSession"
   },
   {
+    "type": "toolNotReady"
+  },
+  {
     "type": "requestReused"
   },
   {

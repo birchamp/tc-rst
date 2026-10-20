@@ -1875,6 +1875,7 @@ fn api_errors() -> Vec<ApiError> {
             current: Some(Epoch::new(4)),
         },
         ApiError::StaleSession,
+        ApiError::ToolNotReady,
         ApiError::RequestReused,
         ApiError::NotSaved(NotSaved::StaleScope),
         ApiError::Refused(tc_api::Refusal::Prefs(

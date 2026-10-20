@@ -466,6 +466,7 @@ pub enum ApiError {
     StaleScope { current: Option<Epoch> },      // a query's project closed or reopened: drop the reply.
                                                 // A write never gets this: it gets NotSaved::StaleScope *(A-19)*
     StaleSession,                               // a check or align session was replaced
+    ToolNotReady,                               // a check tool's pin is not ready: the UI shows the picker (B5a)
     RequestReused,                              // a RequestId came back with another body: a bug,
                                                 // reported; the field stays dirty and saves anew *(A-2)*
     NotSaved(NotSaved),                         // writes only
