@@ -16,6 +16,9 @@ authoritative list of what is done and what is next. Read, in order:
 
 - Short, plain sentences. Ask only questions a translator would notice, with each answer's effect
   and a recommendation; decide technical choices and say so. Keep working unless truly blocked.
+- **What fixers take (2026-10-20):** every blocker, and a major only when it harms a translator's
+  data or what they see; other majors are logged with the minors. `build-lane.js` tags each finding
+  with its harm (data, user, internal).
 - **Hours, not days (2026-10-19):** one verification pass; fix only blockers and majors (minors go
   to `.audit/minors.tsv`); simplest change; reuse tested work; deterministic tests over reading.
 - **Robustness (2026-10-19):** no piles of special cases. Logic that decides about a translator's
