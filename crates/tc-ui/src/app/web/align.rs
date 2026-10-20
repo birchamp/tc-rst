@@ -9,12 +9,14 @@
 //! tool or the project: the navigation gate calls `align/flush` (6.5).
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::align::{
     AlignEdit, AlignPlace, AlignSave, AlignerView, Blocked, Close, Edit, Flush, Index, IndexItem,
-    KeepReflow, Open, OpenVerse, Opened,
+    KeepReflow, Open, OpenVerse, Opened, RailState, RailStatus,
 };
 use tc_api::prefs::SetAlignSuggestions;
 use tc_core::BookId;
@@ -24,7 +26,7 @@ use super::ListenerId;
 use super::app_ctx::Actions;
 use super::js;
 use super::saves::GateHookId;
-use crate::app::align::{EditQueue, Lens, RailFilter, patch_status, refresh_for, same_verse};
+use crate::app::align::{EditQueue, Lens, RailFilter, refresh_for, same_verse};
 use crate::app::check::CheckView;
 use crate::app::client::CallError;
 
@@ -40,11 +42,67 @@ pub enum Screen {
     Failed(String),
 }
 
-/// The rail's verses (tC4 `s.alignIndex`).
-#[derive(Debug, Clone, PartialEq)]
+/// The rail's verses (tC4 `s.alignIndex`): their texts and places once, and the state of each
+/// verse as a signal of its own, so an edit changes the one row it belongs to and not the
+/// list, and only when the verse's state changes: placing a word on a verse that is still to
+/// do changes nothing on the rail (a Psalms rail has 2,461 rows).
+#[derive(Clone)]
+pub struct RailRows {
+    pub items: Arc<Vec<IndexItem>>,
+    /// Each verse's state, for its own row.
+    pub state: Arc<Vec<ArcRwSignal<RailState>>>,
+    /// Every verse's state together, for the bar, the chips' counts and the filter.
+    pub states: ArcRwSignal<Vec<RailState>>,
+    at: Arc<HashMap<(u16, u16), usize>>,
+}
+
+impl PartialEq for RailRows {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.items, &other.items)
+    }
+}
+
+impl RailRows {
+    pub fn new(items: Vec<IndexItem>) -> Self {
+        let states: Vec<RailState> = items.iter().map(|item| item.status.state).collect();
+        let state = states.iter().map(|s| ArcRwSignal::new(*s)).collect();
+        let at = items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| ((item.place.chapter, item.place.verse), i))
+            .collect();
+        Self {
+            items: Arc::new(items),
+            state: Arc::new(state),
+            states: ArcRwSignal::new(states),
+            at: Arc::new(at),
+        }
+    }
+
+    /// The open verse's row follows each edit without asking for the rail again; only a change
+    /// of its state is announced.
+    pub fn patch(&self, place: AlignPlace, status: RailStatus) {
+        let Some(&i) = self.at.get(&(place.chapter, place.verse)) else {
+            return;
+        };
+        let Some(row) = self.state.get(i) else {
+            return;
+        };
+        if row.get_untracked() == status.state {
+            return;
+        }
+        row.set(status.state);
+        self.states.update(|states| {
+            if let Some(slot) = states.get_mut(i) {
+                *slot = status.state;
+            }
+        });
+    }
+}
+
 pub enum Rail {
     Loading,
-    Ready(Vec<IndexItem>),
+    Ready(RailRows),
     Failed(String),
 }
 
@@ -61,6 +119,9 @@ pub struct AlignState {
     pub how: ArcRwSignal<bool>,
     /// A Suggest is on its way: the button waits for its answer.
     pub asking: ArcRwSignal<bool>,
+    /// The aligner the server holds for this page and the open it belongs to: what the tool
+    /// asks the server to close when it is left for another book.
+    pub open: ArcRwSignal<Option<(tc_api::ids::Scope, tc_api::ids::AlignerId)>>,
     /// The verse each book was last at, kept in memory only (tC4 `toolPos`, §4.2).
     pub remembered: ArcRwSignal<Vec<(BookId, AlignPlace)>>,
 }
@@ -75,6 +136,7 @@ impl AlignState {
             filter: ArcRwSignal::new(RailFilter::All),
             how: ArcRwSignal::new(false),
             asking: ArcRwSignal::new(false),
+            open: ArcRwSignal::new(None),
             remembered: ArcRwSignal::new(Vec::new()),
         }
     }
@@ -185,6 +247,7 @@ impl Actions {
                     Err(_) => this.runtime().align_forget(aligner),
                 }
             }
+            this.s().a.open.try_set(None);
             this.reset_align();
             let c = &this.s().c;
             c.view.try_set(CheckView::Picker);
@@ -192,8 +255,24 @@ impl Actions {
         });
     }
 
-    /// The Align state of a project or book that is no longer shown: nothing of it stays.
+    /// The Align state of a project or book that is no longer shown: nothing of it stays. The
+    /// aligner the server holds is closed, so its links are saved and it does not wait for the
+    /// project to be left (at Home the server's own leave saves it).
     pub(super) fn reset_align(&self) {
+        if let Some((at, aligner)) = self.s().a.open.try_update(Option::take).flatten() {
+            let this = self.clone();
+            spawn_local(async move {
+                let close = Close {
+                    at,
+                    request: js::random_request_id(),
+                    aligner,
+                };
+                match this.runtime().api().call(&close).await {
+                    Ok(AlignSave::Saved) | Err(_) => this.runtime().align_forget(aligner),
+                    Ok(unsaved) => this.runtime().align_save(aligner, unsaved),
+                }
+            });
+        }
         next_open();
         next_read();
         QUEUE.with(|q| q.borrow_mut().drop_waiting());
@@ -308,11 +387,17 @@ impl Actions {
     /// and its row is the rail's.
     fn align_view(&self, view: AlignerView) {
         let a = &self.s().a;
+        if let Some((at, _)) = self.align_scope() {
+            a.open.try_set(Some((at, view.aligner)));
+        }
         self.runtime().align_save(view.aligner, view.save.clone());
-        a.verse.try_set(Some(view.place));
-        a.rail.try_update(|rail| {
-            if let Rail::Ready(items) = rail {
-                patch_status(items, view.place, view.status);
+        // Only a change is announced: every row of the rail reads the open verse.
+        if a.verse.get_untracked() != Some(view.place) {
+            a.verse.try_set(Some(view.place));
+        }
+        a.rail.with_untracked(|rail| {
+            if let Rail::Ready(rows) = rail {
+                rows.patch(view.place, view.status);
             }
         });
         a.screen.try_set(Screen::Ready(Box::new(view)));
@@ -477,14 +562,14 @@ impl Actions {
             let a = &this.s().a;
             match result {
                 Ok(view) => {
-                    let mut items = view.items;
+                    let rows = RailRows::new(view.items);
                     // The open verse's row is the aligner's own (a read may be older).
                     a.screen.with_untracked(|s| {
                         if let Screen::Ready(open) = s {
-                            patch_status(&mut items, open.place, open.status);
+                            rows.patch(open.place, open.status);
                         }
                     });
-                    a.rail.try_set(Rail::Ready(items));
+                    a.rail.try_set(Rail::Ready(rows));
                 }
                 Err(CallError::Api(ApiError::StaleScope { .. }) | CallError::Dropped) => {}
                 Err(error) => {

@@ -54,12 +54,26 @@ pub(crate) fn items(read: &CountingSnapshot, book: BookId) -> Vec<IndexItem> {
                 });
                 continue;
             }
-            let target = TargetVerse::new(&format!("{words}{layout}"));
+            let content = format!("{words}{layout}");
             let at = anchor(c, verse, from);
             let stored = match read.projected(&RecordKey::Alignment(book, at.chapter, at.verse)) {
-                Some(Record::Alignment { value, .. }) => Some(value),
-                _ => None,
+                Some(Record::Alignment { value, .. }) => value,
+                // Nothing linked: to do, with no word counted. Most verses of a book are so, and
+                // the row needs only the text.
+                _ => {
+                    out.push(IndexItem {
+                        place,
+                        text: preview(&tc_usfm::shown_text_v1(&content)),
+                        status: RailStatus {
+                            state: rail_state(VerseState::Todo),
+                            placed: 0,
+                            total: 0,
+                        },
+                    });
+                    continue;
+                }
             };
+            let target = TargetVerse::new(&content);
             let run = AlignedRun {
                 anchor: at.verse.get(),
                 run_start: verse.get(),
@@ -67,7 +81,7 @@ pub(crate) fn items(read: &CountingSnapshot, book: BookId) -> Vec<IndexItem> {
                 text_md5: target.md5(),
                 source_sha,
             };
-            let status = verse_status(stored.as_ref(), Some((&run, &target)), None);
+            let status = verse_status(Some(&stored), Some((&run, &target)), None);
             out.push(IndexItem {
                 place,
                 text: preview(target.text()),
@@ -82,9 +96,9 @@ pub(crate) fn items(read: &CountingSnapshot, book: BookId) -> Vec<IndexItem> {
     out
 }
 
-/// The start of the verse for its row, which shows two lines.
+/// The start of the verse for its row, which shows one line of the rail's width.
 fn preview(text: &str) -> String {
-    const SHOWN: usize = 240;
+    const SHOWN: usize = 80;
     text.chars().take(SHOWN).collect()
 }
 

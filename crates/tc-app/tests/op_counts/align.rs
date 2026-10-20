@@ -105,3 +105,30 @@ async fn align_edit_touches_one_verse() {
     assert_eq!(small.app.book_resource_loads, 0, "{small:?}");
     assert_eq!(large.app.records_read, 0, "{large:?}");
 }
+
+/// The rail reads each verse of the book and its alignment once, and nothing of the rest of the
+/// project: its cost is the book's, whatever the history behind it (PERF rule 1).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn align_index_costs_the_book() {
+    let ((small, large), _) = costs_what_it_touches(
+        "the aligner's rail",
+        OnStore::AppCounts,
+        opened,
+        async |s: &Scale| {
+            let rail = ok(
+                &s.app,
+                &tc_api::align::Index {
+                    at: s.scope(),
+                    book: PSALMS,
+                },
+            )
+            .await;
+            assert!(rail.items.len() > 2_000, "{}", rail.items.len());
+        },
+    )
+    .await;
+    assert_eq!(small.app.book_resource_loads, 0, "{small:?}");
+    // Two records for each of the book's verses (its text, its alignment), and no more.
+    assert!(small.app.records_read <= 2 * 2_461 + 8, "{small:?}");
+    assert_eq!(small.app.records_read, large.app.records_read);
+}

@@ -235,3 +235,58 @@ browserTest('align_suggestions_through_the_page', async () => {
     await until('off again', async () => (await row.getAttribute('data-status')) === 'off');
   });
 });
+
+/** A placement on the open verse of a book as long as the Psalms: the rail has 2,461 rows, and a
+ * click must cost the verse, not the book. The rail's reply is made longer in the route. */
+browserTest('align_placement_paints_within_30_ms_on_a_psalms_sized_rail', async () => {
+  await withApp(async ({ page }) => {
+    await page.route('**/api/v1/align/index', async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      const real = body.value.items;
+      const items = [...real];
+      for (let chapter = 2; items.length < 2461; chapter += 1) {
+        for (let verse = 1; verse <= 17 && items.length < 2461; verse += 1) {
+          items.push({ place: { chapter, verse, last: verse }, text: `Verse ${chapter}:${verse} of a long book, drafted and waiting to be aligned.`, status: { state: 'todo', placed: 0, total: 20 } });
+        }
+      }
+      await route.fulfill({ response, json: { ...body, value: { ...body.value, items } } });
+    });
+    await openAlign(page);
+    await until('the long rail is drawn', async () => (await page.locator('[data-testid="align-verse-list"] > button').count()) >= 2461);
+    const times = await page.evaluate(async () => {
+      const painted = () => new Promise((resolve) => requestAnimationFrame(() => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => resolve();
+        channel.port2.postMessage(0);
+      }));
+      const progress = () => document.querySelector('[data-testid="align-progress"]').textContent;
+      const step = async (act) => {
+        const before = progress();
+        const start = performance.now();
+        act();
+        await new Promise((resolve) => {
+          const watch = new MutationObserver(() => {
+            if (progress() !== before) { watch.disconnect(); resolve(); }
+          });
+          watch.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
+        });
+        await painted();
+        return performance.now() - start;
+      };
+      const out = [];
+      for (let n = 0; n < 25; n += 1) {
+        document.querySelector('[data-testid="align-bank"] > button[data-word="fe"]').click();
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        const card = [...document.querySelectorAll('[data-testid^="align-card-"]')].find((c) => c.textContent.includes('πίστιν'));
+        out.push(await step(() => card.click()));
+        const placedWord = [...document.querySelectorAll('[data-testid^="align-card-"]')].find((c) => c.textContent.includes('πίστιν')).querySelector('button[data-word="fe"]');
+        out.push(await step(() => placedWord.click()));
+      }
+      return out;
+    });
+    const p = (xs, q) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length * q)];
+    console.log(`placement on a 2,461-row rail, painted: p50 ${p(times, 0.5).toFixed(1)} ms, p95 ${p(times, 0.95).toFixed(1)} ms (${times.length} edits)`);
+    if (process.env.TC4_PERF === '1') assert.ok(p(times, 0.95) <= 30, `p95 ${p(times, 0.95).toFixed(1)} ms over the 30 ms budget`);
+  });
+});

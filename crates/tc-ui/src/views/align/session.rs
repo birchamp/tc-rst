@@ -875,10 +875,10 @@ fn bank(actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
 /// tC4's `MarkValidBar` (#271, D73, #726): Previous and Next sit either side of Mark valid.
 fn mark_valid_bar(s: &AppState, actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
     let items = s.a.rail.with_untracked(|rail| match rail {
-        Rail::Ready(items) => items.clone(),
-        Rail::Loading | Rail::Failed(_) => Vec::new(),
+        Rail::Ready(rows) => Some(rows.items.clone()),
+        Rail::Loading | Rail::Failed(_) => None,
     });
-    let neighbours = nav(&items, view.place);
+    let neighbours = nav(items.as_deref().map_or(&[], Vec::as_slice), view.place);
     let done = view.done;
     let row = crate::css! {
         "display": "flex",
@@ -940,10 +940,10 @@ fn mark_valid_bar(s: &AppState, actions: &Actions, view: &AlignerView) -> impl I
 /// The header: the reference, and "Item n of total" (tC4's `AlignHeader`).
 fn header(s: &AppState, view: &AlignerView, book: BookId) -> impl IntoView + use<> {
     let items = s.a.rail.with_untracked(|rail| match rail {
-        Rail::Ready(items) => items.clone(),
-        Rail::Loading | Rail::Failed(_) => Vec::new(),
+        Rail::Ready(rows) => Some(rows.items.clone()),
+        Rail::Loading | Rail::Failed(_) => None,
     });
-    let neighbours = nav(&items, view.place);
+    let neighbours = nav(items.as_deref().map_or(&[], Vec::as_slice), view.place);
     let name = book.english_name().to_owned();
     let label = t(
         keys::align::REF,

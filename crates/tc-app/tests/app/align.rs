@@ -833,3 +833,29 @@ async fn tc_app_test_wait(app: &App, at: &Scope) -> AlignerView {
     }
     panic!("the engine did not finish learning");
 }
+
+/// tC4 #794: a verse that still holds the alignment markup of the file it was added from has
+/// its alignment in its text; the aligner does not open it, so nothing writes over it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_verse_that_holds_alignment_markup_does_not_open() {
+    let (_dir, t, backend) = start("sample").await;
+    let at = opened(&t.app).await.session.at;
+    let key = RecordKey::Verse(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    );
+    let marked = "\\zaln-s |x-strong=\"G39720\" x-lemma=\"Παῦλος\" x-morph=\"Gr,N,,,,,NMS,\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"Παῦλος\"\\*\\w Pablo|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*";
+    let changes = backend
+        .teammates_edit_verse(&folder(SAMPLE), &key, &[marked])
+        .unwrap();
+    backend.teammate_edits(&folder(SAMPLE), changes).unwrap();
+    match open_verse(&t.app, &at, 1, 1).await {
+        Opened::Blocked { why, .. } => assert_eq!(why, Blocked::AlignedInText),
+        other => panic!("{other:?}"),
+    }
+    assert!(
+        backend.submitted(&folder(SAMPLE)).is_empty(),
+        "opening wrote nothing"
+    );
+}

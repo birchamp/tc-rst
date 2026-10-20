@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "2bcdb864cd2da070",
+    "ui": "6169c453fdc46722",
     "commit": "dev",
     "api": 1
   },
@@ -120,7 +120,7 @@
       "png": "screens/align-workspace.png",
       "sha256": "8f01c125790516aa98b1f9353809943bb3f415c6580e9ccfebdfb67a1be755d7",
       "dom": "dom/align-workspace.json",
-      "domSha256": "f73572879c06cb01da20fe0355d244bc43409d393418d38384440db50c0f9331"
+      "domSha256": "e247f75d8b1b9a2dbe73e464363c917ea17eda64526bd751a06f6654281fa37d"
     },
     {
       "name": "align-original",
@@ -143,7 +143,7 @@
       "png": "screens/align-original.png",
       "sha256": "bcf419a1de1cb357faad85eb9fcff3aa1d0a8aa9f96e70e137bc0c2a54b58faa",
       "dom": "dom/align-original.json",
-      "domSha256": "9ca9398cfe9384e5b19bc7075d44ddb4746c05a3d403dfd4bb7d027eac9a9aa1"
+      "domSha256": "8940ec6f297a26f578c492b2a2a6df48b7045bafaaac2a7ec8bd4bba9b704dd6"
     },
     {
       "name": "align-workspace-row",
@@ -166,7 +166,7 @@
       "png": "screens/align-workspace-row.png",
       "sha256": "a35887ec546ae6317d1e49a0b49d3c61d1a40dd34088d3c9260408be15abd9bd",
       "dom": "dom/align-workspace-row.json",
-      "domSha256": "b290f9b75af51aa5a2ab372ccc28735556072ffcd5cebb72dc96360486544c02"
+      "domSha256": "6076e7e3fe9229e526d4f5430ffa84a651e490a17617ff51af44bef901782cfd"
     },
     {
       "name": "ar-align-workspace-row",
@@ -189,7 +189,7 @@
       "png": "screens/ar-align-workspace-row.png",
       "sha256": "2ee6ebe7fa173d70677fdca270aa087c141701fa053accd6e562adfabea9942a",
       "dom": "dom/ar-align-workspace-row.json",
-      "domSha256": "469ee3ce0ec0af65e38e6362bda4fa691877d722ba60b46ecae5aecfbd32ea61"
+      "domSha256": "23ebe43c1ced32a049da371e3730fa3eb6b84f1663c3c6b593c05298bf6975b5"
     },
     {
       "name": "align-workspace-620",
@@ -212,7 +212,7 @@
       "png": "screens/align-workspace-620.png",
       "sha256": "3cff17ef41f02301cc24afa9787b3710144418a6d9703fd570ba0f69356c565a",
       "dom": "dom/align-workspace-620.json",
-      "domSha256": "3eb96a12946de0b798f64e50be5cf23ecab6ecb103631c81d3906b037cbbecf9"
+      "domSha256": "5e39a8b958942bc6bde49bfae951df7655df6fb2ca2872e4d400daba8e3287fe"
     },
     {
       "name": "ar-align-workspace-620",
@@ -235,7 +235,7 @@
       "png": "screens/ar-align-workspace-620.png",
       "sha256": "0f628469ef0539643546ae72570b5e47ffc1d162942ba2b510e43e77028d83dc",
       "dom": "dom/ar-align-workspace-620.json",
-      "domSha256": "5245068054a2ae0097b7d5b3a4527014e97e8afa66351559b762fe1076893254"
+      "domSha256": "d8403bb8f8dcdb777ee15006e48a7b6c1d25808e8ef6eb21be9f5196ec58898c"
     },
     {
       "name": "project-settings",
@@ -1450,7 +1450,7 @@
       "png": "screens/align-unavailable-undrafted.png",
       "sha256": "7b32a9733ce94fadc8f2c20353ec550a549ca65dc808f2d03a4954ff28e071bf",
       "dom": "dom/align-unavailable-undrafted.json",
-      "domSha256": "372a1326a2f5b4c469b2bfd723760d9fed52648b509aff4b230fd82bfc3c7423"
+      "domSha256": "c5e3a0f5ccc3905e7c4c4a201f4d2376fc7f8749014d4a98d2bc472d8f7bdad2"
     },
     {
       "name": "align-unavailable-unpinned",
@@ -1472,7 +1472,7 @@
       "png": "screens/align-unavailable-unpinned.png",
       "sha256": "57e36d77db065168b33876562baa3244d26a47ee6a14f6e15a40d29219050077",
       "dom": "dom/align-unavailable-unpinned.json",
-      "domSha256": "f8bf2a390c777fe8b31a3f7e38aa4d6fc4814a6bc239b48030f22ffb8152239f"
+      "domSha256": "7ab30a8c585fab80bd671161dfe84686dddcda1fbd5132769bf2030c98df4032"
     },
     {
       "name": "align-unavailable-missing",
@@ -1494,7 +1494,7 @@
       "png": "screens/align-unavailable-missing.png",
       "sha256": "94d6f33197e4ac5eb315f15589a1366ac5a9dd1b049105a79808feb424dbf2d0",
       "dom": "dom/align-unavailable-missing.json",
-      "domSha256": "45cf0e82f3853935f0885b67013fc3f0509cc6b47e5892d9b7098e595d4e302a"
+      "domSha256": "80b1807d3f762f85af14639cc7e6976887dd8b96659ba40051fcf3bdb7909a1f"
     },
     {
       "name": "align-unavailable-versification-unavailable",
@@ -1516,7 +1516,7 @@
       "png": "screens/align-unavailable-versification-unavailable.png",
       "sha256": "ddd3162b714410c34a00954ca686307d35036adb6ec3bf750e3a8bba2c7fc284",
       "dom": "dom/align-unavailable-versification-unavailable.json",
-      "domSha256": "2205ee57b3f8c91086165b258da6f5f0c3fa3cdebf12f453d4ebe21c3bc09435"
+      "domSha256": "9000b98474c55555430af8a3a44619fcf5d5e490ff734112a9805b520d3202b8"
     },
     {
       "name": "align-unavailable-no-counterpart",
@@ -1538,7 +1538,7 @@
       "png": "screens/align-unavailable-no-counterpart.png",
       "sha256": "346db33ffc8dd535451bb3af362dacd3c09832c41843c6cd176c5a454ed55605",
       "dom": "dom/align-unavailable-no-counterpart.json",
-      "domSha256": "b9d42175fb24fc64f70b19f9ac53084d6127547475212a5606db2e73ea6e6249"
+      "domSha256": "34b941fc75f61505fca224877505b955ed84441921440e7e46a9bbb1a9685815"
     },
     {
       "name": "align-unavailable-versification-unknown",
@@ -1560,7 +1560,7 @@
       "png": "screens/align-unavailable-versification-unknown.png",
       "sha256": "b85b2dffcb96f675dbd79c23997d2d83ae417b6537dce58ca7d18018012a3c5f",
       "dom": "dom/align-unavailable-versification-unknown.json",
-      "domSha256": "e5420ea8961652a8555e8413bebe9d22fab9ad4b7c1a9b75ac60b82786a7f502"
+      "domSha256": "32dabd32aa3de0c83b627fe85a07cda07094073dc73be524d714115d00799fc9"
     },
     {
       "name": "align-unavailable-unreadable",
@@ -1582,7 +1582,7 @@
       "png": "screens/align-unavailable-unreadable.png",
       "sha256": "e0f59409d7a644ab0f88fc341c8ef874847f26812abf28d66a83aa271097fd05",
       "dom": "dom/align-unavailable-unreadable.json",
-      "domSha256": "415885589ee047961c80794ab662665e5f730a21d273bc918080700dc0379f79"
+      "domSha256": "c8aa5f73bdd0057bc9a3cf7f27587593ba0a881ab0b50b6451de5c1ae3bb6d9b"
     },
     {
       "name": "align-loading",
@@ -1604,7 +1604,7 @@
       "png": "screens/align-loading.png",
       "sha256": "244997f250d1f4d23b6333229091e8811915f4f90e7a94c9fb57a911c2798aaf",
       "dom": "dom/align-loading.json",
-      "domSha256": "9ef32f42d041a308fc60eebe67beeabe6de1d41b61c6b6f5e77915eb241681d9"
+      "domSha256": "4c32be3945f57d8fe67c7aa2469e8bdb4de68715bb2a050823a46d56bf80b3de"
     },
     {
       "name": "align-error",
@@ -1626,7 +1626,7 @@
       "png": "screens/align-error.png",
       "sha256": "83cced400641a08cb6a31d240893babe9f249006b46048f5bbfcc128f25316eb",
       "dom": "dom/align-error.json",
-      "domSha256": "1f68f863ad71f4009b15ccb74f90f893ba4c5396c1d768bfbda21e802ff5978d"
+      "domSha256": "4edd106faeff067978d5c600c805cdd30adc2560e23628b8195a39a7750683ba"
     },
     {
       "name": "home-loading",

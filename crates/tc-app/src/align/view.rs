@@ -225,3 +225,74 @@ pub(super) fn build(aligner: &Aligner, facts: &Facts, now: &Moment) -> AlignerVi
         save: now.save.clone(),
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use unicode_normalization::UnicodeNormalization;
+
+    use super::*;
+    use tc_align::SourceBook;
+
+    fn fixture(name: &str) -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/tc4/test-fixtures")
+            .join(name);
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    /// tC4 #768: a record imported from tC4 4.0 holds NFC words, the resources do not, and the
+    /// card's gateway label must be found either way. Genesis 1:1, the ULT's own alignment.
+    #[test]
+    fn gateway_label_survives_an_nfc_record() {
+        let ult = fixture("en_ult/GEN-1-1.usfm");
+        let pane = crate::sources::pane_book(&ult);
+        let model = pane.chapters.get(&1).unwrap().verses.first().unwrap();
+        let gateway = Gateway {
+            verse: model.aligned.clone(),
+        };
+        assert!(gateway.has_alignment());
+        let hebrew = SourceBook::parse(&fixture("hbo_uhb/GEN-1-1.usfm"));
+        let source = hebrew.verse(1, tc_core::VerseSpan::single(1)).unwrap();
+        let labels = |nfc: bool| -> Vec<Option<String>> {
+            source
+                .words()
+                .iter()
+                .map(|w| {
+                    let mut word = w.clone();
+                    if nfc {
+                        word.word = word.word.nfc().collect();
+                    }
+                    gateway.label(std::slice::from_ref(&word))
+                })
+                .collect()
+        };
+        assert!(
+            source
+                .words()
+                .iter()
+                .any(|w| w.word != w.word.nfc().collect::<String>()),
+            "the resource's own Hebrew is not in NFC, or the test shows nothing"
+        );
+        let own = labels(false);
+        assert_eq!(labels(true), own, "the NFC form finds the same words");
+        let say = |i: usize| own.get(i).cloned().flatten().unwrap_or_default();
+        assert_eq!(say(0), "In the beginning");
+        assert_eq!(say(1), "created");
+        assert_eq!(say(2), "God");
+        assert_eq!(say(4), "the heavens");
+        assert_eq!(say(5), "and");
+        assert_eq!(say(6), "the earth");
+        // A word the pane does not align has no label, not an empty one.
+        let stranger = tc_journal::record::SourceWord {
+            word: "זזזז".into(),
+            strong: None,
+            lemma: None,
+            morph: None,
+            occurrence: 1,
+            occurrences: 1,
+            extra: Default::default(),
+        };
+        assert_eq!(gateway.label(&[stranger]), None);
+    }
+}

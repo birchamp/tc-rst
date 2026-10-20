@@ -8,7 +8,7 @@
 mod session;
 
 use leptos::prelude::*;
-use tc_api::align::{IndexItem, RailState};
+use tc_api::align::{AlignPlace, IndexItem, RailState};
 use tc_core::BookId;
 
 use crate::app::align::{RailFilter, counts, percent, progress, same_verse};
@@ -58,35 +58,52 @@ fn state_name(state: RailState) -> &'static str {
     }
 }
 
+/// One verse's button on the rail. Its colour and state follow its own signal, and which verse is
+/// open follows the open verse's, so an edit draws one row and not the list.
 fn row_button(
     actions: &Actions,
     item: &IndexItem,
-    active: bool,
+    state: ArcRwSignal<RailState>,
+    open: ArcRwSignal<Option<AlignPlace>>,
     dir: &'static str,
 ) -> impl IntoView + use<> {
     let undrafted = item.status.state == RailState::Undrafted;
     let place = item.place;
     let label = place.label();
-    let style = crate::css! {
-        "border": if active { "var(--stroke) solid var(--accent)" } else { "var(--stroke) solid var(--border)" },
-        "text-align": "start",
-        "cursor": if undrafted { "default" } else { "pointer" },
-        "font-family": "inherit",
-        "border-radius": "var(--radius-md)",
-        "padding": "10px 12px",
-        "width": "100%",
-        "display": "flex",
-        "align-items": "center",
-        "gap": 10,
-        "background": if active { "var(--surface-accent-soft)" } else { "var(--surface-card)" },
-        "opacity": if undrafted { 0.55 } else { 1.0 },
+    let active = move || open.get().is_some_and(|open| same_verse(open, place));
+    let style = {
+        let active = active.clone();
+        move || {
+            let on = active();
+            crate::css! {
+                "border": if on { "var(--stroke) solid var(--accent)" } else { "var(--stroke) solid var(--border)" },
+                "text-align": "start",
+                "cursor": if undrafted { "default" } else { "pointer" },
+                "font-family": "inherit",
+                "border-radius": "var(--radius-md)",
+                "padding": "10px 12px",
+                "width": "100%",
+                "display": "flex",
+                "align-items": "center",
+                "gap": 10,
+                "background": if on { "var(--surface-accent-soft)" } else { "var(--surface-card)" },
+                "opacity": if undrafted { 0.55 } else { 1.0 },
+            }
+            .to_style()
+        }
     };
-    let dot_style = crate::css! {
-        "width": 9,
-        "height": 9,
-        "border-radius": "var(--radius-pill)",
-        "flex": "none",
-        "background": dot(item.status.state),
+    let dot_style = {
+        let status = state.clone();
+        move || {
+            crate::css! {
+                "width": 9,
+                "height": 9,
+                "border-radius": "var(--radius-pill)",
+                "flex": "none",
+                "background": dot(status.get()),
+            }
+            .to_style()
+        }
     };
     let ref_style = crate::css! {
         "font-size": "var(--fs-badge)",
@@ -111,23 +128,27 @@ fn row_button(
         item.text.clone()
     };
     let actions = actions.clone();
+    let state_name = {
+        let state = state.clone();
+        move || state_name(state.get())
+    };
     view! {
         <button
             type="button"
             disabled=undrafted
             data-i=(!undrafted).then_some("choice")
             data-tone="accent"
-            data-selected=active.then_some("true")
+            data-selected=move || active().then_some("true")
             data-ref=label.clone()
-            data-status=state_name(item.status.state)
-            style=style.to_style()
+            data-status=state_name
+            style=style
             on:click=move |_| {
                 if !undrafted {
                     actions.set_align_verse(place);
                 }
             }
         >
-            <span style=dot_style.to_style()></span>
+            <span style=dot_style></span>
             <span style=ref_style.to_style()>{place.label()}</span>
             <span dir=(!undrafted).then_some(dir) style=text_style.to_style()>{text}</span>
         </button>
@@ -195,17 +216,29 @@ fn align_rail(s: &AppState, actions: &Actions, book: BookId) -> impl IntoView + 
         "font-style": "italic",
         "margin": "6px 2px",
     };
-    let items = {
+    // The list of verses, once a read has come; a read that comes again is a new list.
+    let rows = {
         let rail = a.rail.clone();
         Memo::new(move |_| {
             rail.with(|rail| match rail {
-                Rail::Ready(items) => items.clone(),
-                Rail::Loading | Rail::Failed(_) => Vec::new(),
+                Rail::Ready(rows) => Some(rows.clone()),
+                Rail::Loading | Rail::Failed(_) => None,
             })
         })
     };
+    // Every verse's state, read together for the bar and the chips' counts: one signal, so an
+    // edit that changes no verse's state costs none of this.
+    let states = move || -> Vec<RailState> {
+        rows.with(|rows| {
+            rows.as_ref()
+                .map(|rows| rows.states.get())
+                .unwrap_or_default()
+        })
+    };
+    let counted = Memo::new(move |_| counts(states()));
+    let done_of = Memo::new(move |_| progress(states()));
     let bar = move || {
-        let (done, total) = items.with(|items| progress(items));
+        let (done, total) = done_of.get();
         view! {
             <ProgressBar
                 tone=Tone::Valid
@@ -221,7 +254,7 @@ fn align_rail(s: &AppState, actions: &Actions, book: BookId) -> impl IntoView + 
         let a = a.clone();
         move || {
             let on = a.filter.get();
-            let n = items.with(|items| counts(items));
+            let n = counted.get();
             RailFilter::ORDER
                 .iter()
                 .zip(n)
@@ -261,35 +294,41 @@ fn align_rail(s: &AppState, actions: &Actions, book: BookId) -> impl IntoView + 
     } else {
         "ltr"
     };
-    let rows = {
-        let (a, actions) = (a.clone(), actions.clone());
-        move || {
+    // The places of the rows the filter shows. A verse that changes state under a filter
+    // comes and goes; the others stay as they are.
+    let shown = {
+        let a = a.clone();
+        Memo::new(move |_| {
             let filter = a.filter.get();
-            let active = a.verse.get();
-            items.with(|items| {
-                items
-                    .iter()
-                    .filter(|item| filter.matches(item))
-                    .map(|item| {
-                        let on = active.is_some_and(|a| same_verse(a, item.place));
-                        row_button(&actions, item, on, dir)
+            states()
+                .into_iter()
+                .enumerate()
+                .filter(|(_, state)| filter.matches_state(*state))
+                .map(|(i, _)| i)
+                .collect::<Vec<usize>>()
+        })
+    };
+    let list = {
+        let (a, actions) = (a.clone(), actions.clone());
+        view! {
+            <For
+                each=move || shown.get()
+                key=|i: &usize| *i
+                children=move |i: usize| {
+                    rows.with_untracked(|rows| {
+                        let rows = rows.as_ref()?;
+                        let (item, state) = rows.items.get(i).zip(rows.state.get(i))?;
+                        Some(row_button(&actions, item, state.clone(), a.verse.clone(), dir).into_any())
                     })
-                    .collect::<Vec<_>>()
-            })
+                }
+            />
         }
     };
-    let nothing = {
-        let a = a.clone();
-        move || {
-            let filter = a.filter.get();
-            let none = a.rail.with(|rail| match rail {
-                Rail::Ready(items) => !items.iter().any(|i| filter.matches(i)),
-                Rail::Loading | Rail::Failed(_) => false,
-            });
-            none.then(|| {
-                view! { <p data-testid="align-rail-empty" style=empty_style.to_style()>{t(keys::check::RAIL_EMPTY, &[])}</p> }
-            })
-        }
+    let nothing = move || {
+        let none = rows.with(|rows| rows.is_some()) && shown.with(Vec::is_empty);
+        none.then(|| {
+            view! { <p data-testid="align-rail-empty" style=empty_style.to_style()>{t(keys::check::RAIL_EMPTY, &[])}</p> }
+        })
     };
     let back = {
         let actions = actions.clone();
@@ -315,7 +354,7 @@ fn align_rail(s: &AppState, actions: &Actions, book: BookId) -> impl IntoView + 
                 {failure}
             </div>
             <div data-testid="align-verse-list" style=list_style.to_style()>
-                {rows}
+                {list}
                 {nothing}
             </div>
             <div style="padding: 12px 16px; border-top: var(--stroke-hair) solid var(--border-hair);">

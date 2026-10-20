@@ -11,8 +11,7 @@ use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
 use tc_api::align::{
-    AlignEdit, AlignPlace, AlignerView, BankClick, BankSelection, IndexItem, RailState, RailStatus,
-    Word,
+    AlignEdit, AlignPlace, AlignerView, BankClick, BankSelection, IndexItem, RailState, Word,
 };
 use tc_api::event::{ChangeCause, Event, SessionEvent};
 use tc_api::query::QueryKey;
@@ -55,30 +54,38 @@ impl RailFilter {
     }
 
     pub fn matches(self, item: &IndexItem) -> bool {
+        self.matches_state(item.status.state)
+    }
+
+    pub fn matches_state(self, state: RailState) -> bool {
         match self {
             Self::All => true,
             // A verse not drafted yet is still to do.
-            Self::Todo => matches!(item.status.state, RailState::Todo | RailState::Undrafted),
-            Self::Invalid => item.status.state == RailState::Invalid,
+            Self::Todo => matches!(state, RailState::Todo | RailState::Undrafted),
+            Self::Invalid => state == RailState::Invalid,
         }
     }
 }
 
-/// The chips' counts, in [`RailFilter::ORDER`].
-pub fn counts(items: &[IndexItem]) -> [usize; 3] {
-    RailFilter::ORDER.map(|filter| items.iter().filter(|i| filter.matches(i)).count())
+/// The chips' counts, in [`RailFilter::ORDER`], from the state of each verse.
+pub fn counts(states: impl IntoIterator<Item = RailState>) -> [usize; 3] {
+    let mut out = [0; 3];
+    for state in states {
+        for (n, filter) in out.iter_mut().zip(RailFilter::ORDER) {
+            *n += usize::from(filter.matches_state(state));
+        }
+    }
+    out
 }
 
 /// Verses done out of verses drafted (the rail's bar and `align.progressVerses`).
-pub fn progress(items: &[IndexItem]) -> (usize, usize) {
-    let drafted = items
-        .iter()
-        .filter(|i| i.status.state != RailState::Undrafted);
-    let total = drafted.clone().count();
-    let done = drafted
-        .filter(|i| i.status.state == RailState::Valid)
-        .count();
-    (done, total)
+pub fn progress(states: impl IntoIterator<Item = RailState>) -> (usize, usize) {
+    states
+        .into_iter()
+        .filter(|state| *state != RailState::Undrafted)
+        .fold((0, 0), |(done, total), state| {
+            (done + usize::from(state == RailState::Valid), total + 1)
+        })
 }
 
 /// The width of the rail's bar, as tC4's `ProgressBar` is given it.
@@ -134,13 +141,6 @@ pub fn parse_place(label: &str) -> Option<AlignPlace> {
 /// does not know how far its span reaches.
 pub fn same_verse(a: AlignPlace, b: AlignPlace) -> bool {
     (a.chapter, a.verse) == (b.chapter, b.verse)
-}
-
-/// The open verse's row follows each edit without asking for the rail again.
-pub fn patch_status(items: &mut [IndexItem], place: AlignPlace, status: RailStatus) {
-    if let Some(item) = items.iter_mut().find(|i| same_verse(i.place, place)) {
-        item.status = status;
-    }
 }
 
 /// A word that occurs more than once in its verse shows its number (tC4 #735).
@@ -371,8 +371,9 @@ mod tests {
             item(3, RailState::Invalid),
             item(4, RailState::Undrafted),
         ];
-        assert_eq!(counts(&items), [4, 2, 1]);
-        assert_eq!(progress(&items), (1, 3));
+        let states = || items.iter().map(|i| i.status.state);
+        assert_eq!(counts(states()), [4, 2, 1]);
+        assert_eq!(progress(states()), (1, 3));
         assert!(RailFilter::Todo.matches(&items[3]), "undrafted is to do");
         assert!(!RailFilter::Todo.matches(&items[0]));
         assert_eq!(percent(1, 4), 25.0);
