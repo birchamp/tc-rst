@@ -8,24 +8,23 @@
 use std::sync::Arc;
 
 use leptos::prelude::*;
-use tc_api::resources::{GatewayPackage, PackageRole, PackageRow, SourceGateway};
+use tc_api::resources::{
+    GatewayPackage, PackageRole, PackageRow, RepoMove, SetOffer, SetRung, SourceGateway, TextKind,
+    TextOffer,
+};
 use tc_api::shown::Direction;
 use tc_core::BookId;
 
+use crate::app::forms::chapters;
+use crate::app::shell::CurrentProject;
 use crate::app::sources::{Dl, SourcesForm};
+use crate::app::upgrades::{Installing, UpgradeState};
 use crate::app::web::{Actions, AppCtx, use_app};
 use crate::ds::{
     Attrs, Badge, BadgeTone, Button, ButtonVariant, Callout, CalloutTone, OptionCard, Overline,
     Select, SelectOption, Size,
 };
 use crate::i18n::{Key, keys, t};
-
-/// The chapters of each book in canonical order (tC4 `BOOK_CHAPTERS`).
-const CHAPTERS: [u16; 66] = [
-    50, 40, 27, 36, 34, 24, 21, 4, 31, 24, 22, 25, 29, 36, 10, 13, 10, 42, 150, 31, 12, 8, 66, 52,
-    5, 48, 12, 14, 3, 9, 1, 4, 7, 3, 3, 3, 2, 14, 4, 28, 16, 24, 21, 28, 16, 16, 13, 6, 6, 4, 4, 5,
-    3, 6, 4, 3, 1, 13, 5, 5, 3, 5, 1, 1, 1, 22,
-];
 
 fn dir_attr(dir: Direction) -> &'static str {
     match dir {
@@ -54,6 +53,7 @@ pub fn SourceTexts() -> impl IntoView {
         return ().into_any();
     };
     let src = s.src.clone();
+    let (up, project) = (s.up.clone(), s.project.clone());
     let gateway = {
         let src = src.clone();
         Memo::new(move |_| src.with(|src| src.gateway.clone()))
@@ -61,12 +61,14 @@ pub fn SourceTexts() -> impl IntoView {
     // tC4 gives step 1 no footer at all (`footer={g ? … : null}`), so a change of step draws
     // the dialog again.
     let step2 = Memo::new(move |_| gateway.with(Option::is_some));
-    (move || sources_modal(&actions, &src, gateway, step2.get())).into_any()
+    (move || sources_modal(&actions, &src, &up, &project, gateway, step2.get())).into_any()
 }
 
 fn sources_modal(
     actions: &Actions,
     src: &ArcRwSignal<SourcesForm>,
+    up: &ArcRwSignal<UpgradeState>,
+    project: &ArcRwSignal<Option<CurrentProject>>,
     gateway: Memo<Option<GatewayPackage>>,
     step2: bool,
 ) -> AnyView {
@@ -81,8 +83,10 @@ fn sources_modal(
     });
     let children: ChildrenFn = {
         let (actions, src) = (actions.clone(), src.clone());
+        let (up, project) = (up.clone(), project.clone());
         Arc::new(move || {
             let (actions, src) = (actions.clone(), src.clone());
+            let (up, project) = (up.clone(), project.clone());
             let offline = {
                 let (actions, src) = (actions.clone(), src.clone());
                 move || {
@@ -114,7 +118,7 @@ fn sources_modal(
                     let pinned = packages.as_ref().is_some_and(|p| p.pinned);
                     let gateways = packages.map(|p| p.gateways).unwrap_or_default();
                     view! {
-                        {resource_updates(&actions, pinned)}
+                        {resource_updates(&actions, &up, &project, pinned)}
                         {language_step(&actions, gateways)}
                     }
                     .into_any()
@@ -140,10 +144,68 @@ fn sources_modal(
 }
 
 /// J12's "Pinned resources" with Check for updates (tC4 `ResourceUpdates`), for a project with
-/// language sets. The offers are C8's.
-fn resource_updates(actions: &Actions, pinned: bool) -> impl IntoView + use<> {
-    let actions = actions.clone();
+/// language sets: on demand and online only, the offers per language set and per scripture
+/// text. Accepting installs the release and opens the confirmation, where the pins move.
+fn resource_updates(
+    actions: &Actions,
+    up: &ArcRwSignal<UpgradeState>,
+    project: &ArcRwSignal<Option<CurrentProject>>,
+    pinned: bool,
+) -> impl IntoView + use<> {
+    let (actions, up, project) = (actions.clone(), up.clone(), project.clone());
     pinned.then(|| {
+        let check = actions.clone();
+        let checking = {
+            let up = up.clone();
+            Signal::derive(move || up.with(|up| up.checking))
+        };
+        let progress = {
+            let up = up.clone();
+            move || {
+                up.with(|up| up.progress.clone()).map(|repo| {
+                    view! {
+                        <p data-testid="upgrade-progress" style="font-size: var(--fs-caption-lg); color: var(--text-secondary); font-weight: var(--fw-bold); margin: 0px;">
+                            {t(keys::sources::PROGRESS, &[("repo", &repo)])}
+                        </p>
+                    }
+                })
+            }
+        };
+        let error = {
+            let up = up.clone();
+            move || {
+                up.with(|up| up.error.clone()).map(|error| {
+                    view! {
+                        <Callout
+                            tone=CalloutTone::Warn
+                            attrs=Attrs::from([("role", "alert"), ("data-testid", "upgrade-error")])
+                            style=crate::css! { "overflow-wrap": "anywhere" }
+                        >
+                            {error}
+                        </Callout>
+                    }
+                })
+            }
+        };
+        // Offers show only for the project they were asked for.
+        let offers = {
+            let (actions, up, project) = (actions.clone(), up.clone(), project.clone());
+            move || {
+                let here = project.with(|p| p.as_ref().map(|p| p.at.project.clone()));
+                let (offers, installing) = up.with(|up| (up.offers.clone(), up.installing.clone()));
+                let offers = offers.filter(|o| Some(&o.project) == here.as_ref())?;
+                let sets = offers
+                    .view
+                    .sets
+                    .iter()
+                    .map(|offer| offer_card(&actions, offer, &installing))
+                    .collect_view();
+                Some(view! {
+                    {sets}
+                    {text_offers(&actions, &offers.view.texts, &installing)}
+                })
+            }
+        };
         view! {
             <div data-testid="resource-updates" style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 6px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -152,15 +214,143 @@ fn resource_updates(actions: &Actions, pinned: bool) -> impl IntoView + use<> {
                     <Button
                         size=Size::Sm
                         variant=ButtonVariant::Secondary
+                        disabled=checking
                         attrs=Attrs::from([("data-testid", "check-updates")])
-                        on_click=Callback::new(move |_| actions.check_for_updates())
+                        on_click=Callback::new(move |_| check.check_for_updates())
                     >
-                        {t(keys::upgrade::CHECK, &[])}
+                        {move || if checking.get() { t(keys::upgrade::CHECKING, &[]) } else { t(keys::upgrade::CHECK, &[]) }}
                     </Button>
                 </div>
+                {progress}
+                {error}
+                {offers}
             </div>
         }
     })
+}
+
+const OFFER_BOX: &str = "border: var(--stroke) solid var(--border); border-radius: var(--radius-lg); padding: 10px 14px; display: flex; flex-direction: column; gap: 6px;";
+const OFFER_TITLE: &str =
+    "font-weight: var(--fw-heavy); color: var(--uw-ocean); font-size: var(--fs-ui-sm);";
+const OFFER_ROW: &str =
+    "font-size: var(--fs-caption-lg); color: var(--text-secondary); font-family: var(--font-mono);";
+const CURRENT: &str =
+    "font-size: var(--fs-caption); color: var(--tc-valid-strong); font-weight: var(--fw-bold);";
+
+fn date_label(published: &Option<String>) -> String {
+    published
+        .as_deref()
+        .map(|p| p.chars().take(10).collect())
+        .unwrap_or_default()
+}
+
+fn row_text(change: &RepoMove) -> String {
+    t(
+        keys::upgrade::ROW,
+        &[
+            ("repo", &change.repo),
+            ("from", &change.from),
+            ("to", &change.to),
+            ("date", &date_label(&change.published)),
+        ],
+    )
+}
+
+/// One language set's offer (tC4 `OfferCard`).
+fn offer_card(actions: &Actions, offer: &SetOffer, installing: &Option<Installing>) -> AnyView {
+    let rung = match offer.rung {
+        SetRung::Primary => "primary",
+        SetRung::Fallback => "fallback",
+    };
+    let key = match offer.rung {
+        SetRung::Primary => keys::upgrade::set::PRIMARY,
+        SetRung::Fallback => keys::upgrade::set::FALLBACK,
+    };
+    let title = t(key, &[("lang", &offer.language)]);
+    let busy = *installing == Some(Installing::Set(offer.rung));
+    let any = installing.is_some();
+    let n = offer.moves.len();
+    let action = if n > 0 {
+        let (actions, which) = (actions.clone(), offer.rung);
+        view! {
+            <Button
+                size=Size::Sm
+                disabled=any
+                attrs=Attrs::new().with("data-testid", format!("upgrade-set-{rung}"))
+                on_click=Callback::new(move |_| actions.upgrade_set(which))
+            >
+                {if busy { t(keys::upgrade::INSTALLING, &[]) } else { t(keys::upgrade::UPGRADE_SET, &[("n", &n)]) }}
+            </Button>
+        }
+        .into_any()
+    } else {
+        view! {
+            <span data-testid=format!("upgrade-current-{rung}") style=CURRENT>{t(keys::upgrade::UP_TO_DATE, &[])}</span>
+        }
+        .into_any()
+    };
+    let rows = offer
+        .moves
+        .iter()
+        .map(|m| view! { <div data-testid="upgrade-row" style=OFFER_ROW>{row_text(m)}</div> })
+        .collect_view();
+    view! {
+        <div data-testid=format!("upgrade-offer-{rung}") data-upgrades=n.to_string() style=OFFER_BOX>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style=OFFER_TITLE>{title}</span>
+                <div style="flex: 1 1 0%;"></div>
+                {action}
+            </div>
+            {rows}
+        </div>
+    }
+    .into_any()
+}
+
+/// One row for each scripture text with a newer release (tC4 `TextOffers`, #258).
+fn text_offers(
+    actions: &Actions,
+    offers: &[TextOffer],
+    installing: &Option<Installing>,
+) -> impl IntoView + use<> {
+    let any = installing.is_some();
+    let current = offers.is_empty().then(|| {
+        view! { <span data-testid="upgrade-texts-current" style=CURRENT>{t(keys::upgrade::TEXTS_CURRENT, &[])}</span> }
+    });
+    let rows = offers
+        .iter()
+        .map(|offer| {
+            let repo = offer.change.repo.clone();
+            let kind = match offer.kind {
+                TextKind::Original => ("original", keys::upgrade::text::ORIGINAL),
+                TextKind::Gateway => ("gateway", keys::upgrade::text::GATEWAY),
+            };
+            let busy = *installing == Some(Installing::Text(repo.clone()));
+            let (actions, which) = (actions.clone(), repo.clone());
+            view! {
+                <div data-testid=format!("upgrade-text-{repo}") data-kind=kind.0 style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: var(--fs-caption-lg); color: var(--text-secondary);">{t(kind.1, &[])}</span>
+                    <span style=OFFER_ROW>{row_text(&offer.change)}</span>
+                    <div style="flex: 1 1 0%;"></div>
+                    <Button
+                        size=Size::Sm
+                        disabled=any
+                        attrs=Attrs::new().with("data-testid", format!("upgrade-text-apply-{repo}"))
+                        on_click=Callback::new(move |_| actions.upgrade_text(which.clone()))
+                    >
+                        {if busy { t(keys::upgrade::INSTALLING, &[]) } else { t(keys::upgrade::UPGRADE_TEXT, &[]) }}
+                    </Button>
+                </div>
+            }
+        })
+        .collect_view();
+    view! {
+        <div data-testid="upgrade-texts" style=OFFER_BOX>
+            <span style=OFFER_TITLE>{t(keys::upgrade::TEXTS, &[])}</span>
+            {current}
+            {rows}
+        </div>
+    }
 }
 
 /// Step 1 (tC4 `LanguageStep`).
@@ -218,26 +408,33 @@ fn package_card(actions: &Actions, g: SourceGateway) -> AnyView {
     }
 }
 
-fn book_options() -> Vec<SelectOption> {
+/// The books in canonical order with their chapters and testament (tC4's `ALL_CODES` options).
+/// A book in `held` is greyed out and badged, as Add a book shows the books the project has.
+pub(super) fn book_options(held: &[BookId]) -> Vec<SelectOption> {
     BookId::ALL
         .iter()
-        .zip(CHAPTERS)
         .enumerate()
-        .map(|(i, (book, chapters))| SelectOption {
-            value: book.code().to_owned(),
-            label: book.english_name().to_owned(),
-            code: Some(book.code().to_owned()),
-            meta: Some(t(keys::add_book::CHAPTERS_SHORT, &[("n", &chapters)])),
-            group: Some(t(
-                if i >= 39 {
-                    keys::add_book::NT
-                } else {
-                    keys::add_book::OT
-                },
-                &[],
-            )),
-            badge: None,
-            disabled: false,
+        .map(|(i, book)| {
+            let already = held.contains(book);
+            SelectOption {
+                value: book.code().to_owned(),
+                label: book.english_name().to_owned(),
+                code: Some(book.code().to_owned()),
+                meta: Some(t(
+                    keys::add_book::CHAPTERS_SHORT,
+                    &[("n", &chapters(*book))],
+                )),
+                group: Some(t(
+                    if i >= 39 {
+                        keys::add_book::NT
+                    } else {
+                        keys::add_book::OT
+                    },
+                    &[],
+                )),
+                badge: already.then(|| t(keys::add_book::IN_THIS_BIBLE, &[])),
+                disabled: already,
+            }
         })
         .collect()
 }
@@ -252,7 +449,7 @@ fn gateway_step(
         src.with_untracked(|src| (src.is_current(&g), src.is_checkable(&g)));
     let change = actions.clone();
     let check_in = (is_checkable && !is_current).then(|| {
-        let (actions, gateway, autonym) = (actions.clone(), g.gateway.clone(), g.autonym.clone());
+        let (actions, package, autonym) = (actions.clone(), g.clone(), g.autonym.clone());
         view! {
             <Callout
                 tone=CalloutTone::Info
@@ -267,7 +464,7 @@ fn gateway_step(
                     size=Size::Sm
                     attrs=Attrs::from([("data-testid", "use-for-checking")])
                     style=crate::css! { "flex": "none" }
-                    on_click=Callback::new(move |_| actions.ask_gateway_change(gateway.clone()))
+                    on_click=Callback::new(move |_| actions.ask_gateway_change(package.clone()))
                 >
                     {t(keys::sources::CHECK_IN, &[])}
                 </Button>
@@ -319,7 +516,7 @@ fn gateway_step(
             search_placeholder=Signal::derive(|| t(keys::add_book::FIND_BOOK, &[]))
             no_matches_label=Signal::derive(|| t(keys::add_book::NO_MATCHES, &[]))
             clear_label=Signal::derive(|| t(keys::common::CLEAR, &[]))
-            options=book_options()
+            options=book_options(&[])
         />
         <div style="padding-bottom: 14px;">
             <Overline tag="span" style=crate::css! { "display": "block", "margin-bottom": 8 }>

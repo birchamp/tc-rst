@@ -181,7 +181,9 @@ fn named(language: &tc_resources::GatewayLanguage) -> GatewayRef {
 }
 
 /// The project's pins from its fold, `None` when it records none.
-fn project_pins(read: &crate::counters::CountingSnapshot) -> Result<Option<ProjectPins>, ApiError> {
+pub(crate) fn project_pins(
+    read: &crate::counters::CountingSnapshot,
+) -> Result<Option<ProjectPins>, ApiError> {
     crate::understand::project_pins(read).map_err(|reason| ApiError::BadRequest {
         field: "pins".to_owned(),
         reason,
@@ -198,7 +200,7 @@ impl App {
             .map_err(|e| e.to_string())
     }
 
-    fn resources_client(&self) -> Result<Door43Client, ApiError> {
+    pub(crate) fn resources_client(&self) -> Result<Door43Client, ApiError> {
         self.inner.resources_door43.clone().map_err(|reason| {
             ApiError::Refused(Refusal::Resources(ResourceRefusal::CatalogUnreadable {
                 reason,
@@ -290,10 +292,10 @@ fn catalog_error(error: Door43Error) -> ApiError {
 }
 
 /// What a download tells its job, and what it asks it.
-struct JobWatch {
-    progress: ProgressSink,
-    cancel: CancelToken,
-    phase: Phase,
+pub(crate) struct JobWatch {
+    pub(crate) progress: ProgressSink,
+    pub(crate) cancel: CancelToken,
+    pub(crate) phase: Phase,
 }
 
 impl DownloadWatch for JobWatch {
@@ -426,6 +428,14 @@ impl Handle<Download> for App {
             }
             if let Some(end) = stopped {
                 return Err(end);
+            }
+            // What the download brought joins the project's sets (tC4 `adoptDownloadedPins`).
+            if (fetched_any || failed.len() < paths.len())
+                && let Err(error) = runtime.block_on(app.adopt_downloaded_pins(&session, gateway))
+            {
+                return Err(JobEnd::Failed(ApiError::Refused(Refusal::Resources(
+                    ResourceRefusal::AdoptFailed { error },
+                ))));
             }
             if failed.is_empty() {
                 Ok(JobOutcome::Finished)

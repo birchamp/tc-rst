@@ -46,6 +46,12 @@ pub enum Pending {
     Catalog,
     /// Get source texts' Download (B9a, tC4 `downloadPackage`).
     Download,
+    /// "Check for updates" (C8, tC4 `checkForUpdates`).
+    Updates,
+    /// A language set's Upgrade (C8, tC4 `upgradeSet`).
+    UpgradeSet(tc_api::resources::SetRung),
+    /// A scripture text's Upgrade (C8, tC4 `upgradeText`), by its repository's name.
+    UpgradeText(String),
 }
 
 impl Pending {
@@ -61,7 +67,11 @@ impl Pending {
             Self::CheckSignIn => NetKind::CheckSignIn,
             Self::Profile => NetKind::Profile,
             Self::OpenDoor43 => NetKind::Open,
-            Self::Catalog | Self::Download => NetKind::Sources,
+            Self::Catalog
+            | Self::Download
+            | Self::Updates
+            | Self::UpgradeSet(_)
+            | Self::UpgradeText(_) => NetKind::Sources,
         }
     }
 }

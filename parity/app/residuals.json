@@ -85,6 +85,38 @@
       "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
       "until": null
     },
+    "add-book-pick": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home behind the dialog lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the dialog's DOM with every computed style is line for line tC4's, from its scrim to its last button, and the Home behind it is B2's (see its rows). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture C6's rows with B2's and remove this residual.",
+      "until": null
+    },
+    "add-book-pick-multi": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home behind the dialog lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the dialog's DOM with every computed style is line for line tC4's, from its scrim to its last button, and the Home behind it is B2's (see its rows). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture C6's rows with B2's and remove this residual.",
+      "until": null
+    },
+    "add-book-usfm": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home behind the dialog lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the dialog's DOM with every computed style is line for line tC4's, from its scrim to its last button, and the Home behind it is B2's (see its rows). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture C6's rows with B2's and remove this residual.",
+      "until": null
+    },
+    "add-book-usfm-files": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home behind the dialog lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the dialog's DOM with every computed style is line for line tC4's, from its scrim to its last button, and the Home behind it is B2's (see its rows). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture C6's rows with B2's and remove this residual.",
+      "until": null
+    },
     "add-project": {
       "layers": [
         "pixels",
@@ -435,6 +467,49 @@
         "dom"
       ],
       "why": "Urdu in Devanagari script (ur-deva) reads left to right and is named उर्दू (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), where tC4 4.0's registry names it اردو in Arabic script, right to left: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style and Understand behind the dialog included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it (a mask's rectangle must lie in the window).",
+      "until": null
+    },
+    "upgrade-set": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-harmless": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-blocked": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-error": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-text": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "gateway-change-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's case draws the error of a confirm made while another project is open (`gateway.otherProject`: \"Another project is open now. Open this project and choose the language again.\"), which a Rust confirmation cannot meet: a plan belongs to the open it was made for and a confirm for another open is refused as stale before anything is written (APP-DESIGN 4.8). The reachable failure is a save the disk refuses, and the dialog states its reason in the same callout after \"The change was not applied.\": the capture answers the confirm with a disk with no room, \"There is no room left on the disk.\", so the one text line differs and every other line, style and pixel outside that line is tC4's.",
       "until": null
     }
   }

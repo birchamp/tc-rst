@@ -71,6 +71,15 @@ pub enum Command {
         scope: Scope,
         seed: SeedSource,
     },
+    /// A book added with its own text, in one batch (tC4 `addUsfmBooks`, #767): the presence,
+    /// the book's records and the alignments of its aligned verses, all or none. The cause is
+    /// an import of `file_name`.
+    AddBookText {
+        book: BookId,
+        scope: Scope,
+        usfm: String,
+        file_name: String,
+    },
     RemoveBook {
         book: BookId,
         presence_shown: ShownToken,

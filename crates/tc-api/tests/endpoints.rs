@@ -65,6 +65,21 @@ const PHASE_0: &[&str] = &[
     "resources/sources",
     "resources/catalog",
     "resources/download",
+    // C6: create, add books, and save settings.
+    "settings/save",
+    "create/bible",
+    "create/obs",
+    "create/addBlankBooks",
+    "create/reviewUsfm",
+    "create/addUsfmBooks",
+    // C8: release upgrades, the gateway change and the guided fix.
+    "resources/checkUpdates",
+    "resources/planUpgrade",
+    "resources/planGateway",
+    "resources/applyPlan",
+    "resources/fixFetch",
+    "resources/fixSideload",
+    "resources/fixRepin",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -147,6 +162,9 @@ fn the_list_and_the_impls_agree() {
                 | "door43/sync"
                 | "resources/catalog"
                 | "resources/download"
+                | "resources/checkUpdates"
+                | "resources/planUpgrade"
+                | "resources/fixFetch"
         );
         assert_eq!(
             asks, expected,

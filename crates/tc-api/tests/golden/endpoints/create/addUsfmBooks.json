@@ -1,0 +1,57 @@
+{
+  "path": "create/addUsfmBooks",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+    "project": "kanuri_bible",
+    "files": [
+      {
+        "upload": "00112233445566778899aabbccddeeff",
+        "name": "57-TIT.usfm"
+      },
+      {
+        "upload": "00112233445566778899aabbccddeeff",
+        "name": "old-TIT.usfm"
+      }
+    ]
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "rows": [
+        {
+          "name": "57-TIT.usfm",
+          "outcome": {
+            "type": "added",
+            "value": {
+              "book": "TIT"
+            }
+          }
+        },
+        {
+          "name": "old-TIT.usfm",
+          "outcome": {
+            "type": "refused",
+            "value": {
+              "type": "twoFiles",
+              "value": {
+                "book": "TIT",
+                "first": "57-TIT.usfm"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

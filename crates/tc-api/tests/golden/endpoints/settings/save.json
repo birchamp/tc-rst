@@ -1,0 +1,28 @@
+{
+  "path": "settings/save",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "28282828282828282828282828282828",
+    "project": "es-419_tit_equipo",
+    "shown": {
+      "direction": "ltr",
+      "font": null
+    },
+    "direction": "rtl",
+    "font": "Scheherazade New — Arabic script"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

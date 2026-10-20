@@ -24,6 +24,7 @@ mod op_counts {
     pub mod harness;
     mod home;
     mod lint;
+    mod plans;
     mod probes;
     mod section;
     mod session;

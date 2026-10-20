@@ -305,12 +305,6 @@ pub(crate) fn obs_written_up() -> Vec<(String, Option<String>, Option<String>, C
             Some("relationships".to_owned()),
             CheckRule::FoldAnomaly,
         ),
-        (
-            "ingredients/checking/settings.json".to_owned(),
-            None,
-            None,
-            CheckRule::FileNotDerived,
-        ),
     ];
     for story in 1..=50 {
         out.push((

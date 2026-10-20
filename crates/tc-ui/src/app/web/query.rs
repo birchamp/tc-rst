@@ -337,7 +337,7 @@ impl CachedQuery for tc_api::check::Rows {
     }
 }
 
-impl CachedQuery for tc_api::check::FixState {
+impl CachedQuery for tc_api::resources::FixState {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         project_read(&self.at, resource_keys())
     }

@@ -399,6 +399,14 @@ pub enum Scripted {
         project: ProjectRef,
         outcome: ScriptedSync,
     },
+    /// The next `resources/checkUpdates` answers this view without asking Door43: the offers
+    /// tC4's gallery draws, whose releases no server holds (C8's parity captures).
+    Updates(crate::resources::UpdatesView),
+    /// The next plan (`resources/planUpgrade`, `planGateway` or `fixRepin`) is this view, as made,
+    /// with no download and no reading of the project: a dialog tC4's gallery draws with the
+    /// carry-over counts of another change. The server keeps no plan under it, so confirming it
+    /// answers `PlanStale`, which is what tC4's gallery shows for a failed upgrade.
+    Plan(Box<crate::resources::PlanView>),
 }
 
 /// How a scripted sync ends: what Door43 held, as a person's sync would find it.

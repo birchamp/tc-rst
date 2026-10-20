@@ -87,8 +87,8 @@ pub use lexicon::{
     PartEntry, PartLookup, lexicon_entries_compared, open_lexicon, repackage_lexicon,
 };
 pub use load::{
-    BookResources, Missing, ObsResources, PartStatus, SourceText, TextRole, TextStatus, load_book,
-    load_obs,
+    BookResources, Missing, ObsResources, PaneBook, PartStatus, SourceText, TextRole, TextStatus,
+    literal_pane_book, load_book, load_obs,
 };
 pub use pin::{
     AQUIFER_OWNER, AquiferLanguage, AquiferPin, AquiferRepo, AssetName, BookCoverage, DCS_HOST,

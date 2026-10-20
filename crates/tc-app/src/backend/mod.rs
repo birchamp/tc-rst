@@ -22,7 +22,7 @@ use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::ProjectRef;
 use tc_api::token::TokenTextError;
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::{Choice, Command, Draft, DraftField, SectionValue};
+use tc_journal::command::{Choice, Command, Draft, DraftField, SectionValue, UpgradePlan};
 use tc_journal::fold::{ConflictId, Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
 use tc_journal::{BookId, ChangeId, DeviceId, RecordKey, ShownToken};
@@ -328,6 +328,46 @@ impl StoreCommand {
         )
     }
 
+    /// `AddBook` (STORAGE §5.7): a blank book seeded from the chapters and verses of
+    /// `source`. It writes no record that existed, so it carries no token.
+    pub fn add_book(book: BookId, source: String) -> Self {
+        Self::new(
+            Command::AddBook {
+                book,
+                scope: tc_journal::record::Scope::Whole,
+                seed: tc_journal::command::SeedSource { usfm: source },
+            },
+            Vec::new(),
+        )
+    }
+
+    /// `AddBookText` (STORAGE §5.7, tC4 `addUsfmBooks`): a book with its own text, in one
+    /// batch whose cause is an import of `file_name`.
+    pub fn add_book_text(book: BookId, usfm: String, file_name: String) -> Self {
+        Self::new(
+            Command::AddBookText {
+                book,
+                scope: tc_journal::record::Scope::Whole,
+                usfm,
+                file_name,
+            },
+            Vec::new(),
+        )
+    }
+
+    /// `SetSetting` (STORAGE §5.4): one top-level key of `settings.json`, over the value the
+    /// token shows.
+    pub fn set_setting(shown: EditToken, value: Option<tc_journal::Json>) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::SetSetting {
+                shown: shown.0,
+                value,
+            },
+            listed,
+        )
+    }
+
     /// `SaveSection` (STORAGE §5.2): one edit token per verse and chapter front the section
     /// editor displayed, with its new value, or `None` for one displayed and left as it was;
     /// and the book's layout token when the book has one. The store checks only what was
@@ -399,6 +439,18 @@ impl StoreCommand {
             },
             listed,
         )
+    }
+
+    /// `ApplyUpgrade` (STORAGE §5.8, unit C8): a plan made off the actor from one snapshot, each
+    /// change naming the heads its record had there. The store writes the whole plan as one
+    /// batch, or refuses with `PlanStale` when some record's heads moved.
+    pub fn apply_upgrade(plan: UpgradePlan) -> Self {
+        let listed = plan
+            .changes
+            .iter()
+            .map(|change| (change.record.key(), change.parents.clone()))
+            .collect();
+        Self::new(Command::ApplyUpgrade { plan }, listed)
     }
 
     /// The UI request this command answers: its batch's event is announced as that
@@ -837,6 +889,31 @@ pub enum CopyFailure {
     Failed(String),
 }
 
+/// A project to create: the folder its name makes and the first records of its history (the
+/// details, the versification, the settings and the pins), written as one batch.
+#[derive(Debug, Clone)]
+pub struct NewProjectSpec {
+    pub folder: ProjectRef,
+    pub kind: ProjectKind,
+    pub records: Vec<tc_journal::Record>,
+}
+
+/// Why a project was not created (tc-store `CreateError`). Nothing of it is left.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CreateFailure {
+    /// Something is at the folder's name already; it keeps every byte.
+    #[error("a folder with that name exists")]
+    NameExists,
+    /// A detail the Scripture Burrito cannot hold, in words (#582).
+    #[error("{0}")]
+    NotHeld(String),
+    #[error("{0}")]
+    Failed(String),
+    /// The backend creates nothing (the memory backend).
+    #[error("this backend creates no projects")]
+    Unavailable,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StoreError {
     /// The folder is no project of the projects folder (any more): it went away, or lost its
@@ -898,6 +975,14 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// Copies `folder`, every save and its `drafts.json` included, to a new folder `name` in
     /// the projects folder: the copy offer of a read-only project (STORAGE §5.0, R7). Blocking.
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure>;
+
+    /// Creates a project in the projects folder: built in a staging folder and renamed into
+    /// place without replacing anything (R2), so a crash leaves the whole project or none.
+    /// Blocking. Only the store on disk creates projects.
+    fn create(&self, new: NewProjectSpec) -> Result<(), CreateFailure> {
+        let _ = new;
+        Err(CreateFailure::Unavailable)
+    }
 
     /// The person said that the computer `folder`'s lock names is closed (STORAGE §5.0): the
     /// next open of `folder` takes the lock and opens writable, where it would otherwise open

@@ -30,4 +30,5 @@ mod app {
     mod sync;
     mod translate;
     mod understand;
+    mod upgrades;
 }
