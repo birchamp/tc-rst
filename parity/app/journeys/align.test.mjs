@@ -253,7 +253,9 @@ browserTest('align_placement_paints_within_30_ms_on_a_psalms_sized_rail', async 
       await route.fulfill({ response, json: { ...body, value: { ...body.value, items } } });
     });
     await openAlign(page);
+    const drawing = Date.now();
     await until('the long rail is drawn', async () => (await page.locator('[data-testid="align-verse-list"] > button').count()) >= 2461);
+    console.log(`the 2,461-row rail was drawn ${Date.now() - drawing} ms after the first verse (the polling step is 25 ms)`);
     const times = await page.evaluate(async () => {
       const painted = () => new Promise((resolve) => requestAnimationFrame(() => {
         const channel = new MessageChannel();
