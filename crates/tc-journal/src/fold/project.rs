@@ -2016,9 +2016,6 @@ fn slot_json(j: &Json) -> Value {
     Value::Object(m)
 }
 
-/// Splices a story's title, frames and reference into its template (see
-/// `FoldState::story_markdown`). Lines keep their terminators; a part with no record keeps
-/// the template's text.
 /// tC4's `TITLE_RE` (`journal/story.mjs:15`): `# `, ASCII digits, `.`, then nothing or a space
 /// and the title. Gives the digits and the title, which is empty for `# 2.`. A line of another
 /// form is none.
@@ -2091,6 +2088,9 @@ pub(crate) fn template_frame(base: &str, n: u16) -> Option<String> {
     None
 }
 
+/// Splices a story's title, frames and reference into its template (see
+/// `FoldState::story_markdown`). Lines keep their terminators; a part with no record keeps
+/// the template's text.
 pub(crate) fn splice_story(
     base: &str,
     frame: impl Fn(u16) -> Option<String>,
