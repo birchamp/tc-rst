@@ -1671,3 +1671,54 @@ fn an_obs_frame_is_saved_by_tc4s_text_rules_and_whole_or_not_at_all() {
     );
     assert!(points >= 4);
 }
+
+/// A small USFM book of generated chapters, paragraphs, verses, spans and words.
+fn generated_book() -> impl proptest::strategy::Strategy<Value = String> {
+    use proptest::prelude::*;
+    let word = "[a-zA-Z\u{e9}\u{4e2d}\u{5d0}]{1,7}";
+    let verse = (
+        prop::option::of(prop::sample::select(vec!["\\p", "\\q1", "\\m"])),
+        prop::collection::vec(word, 1..6),
+    );
+    let chapter = prop::collection::vec(verse, 1..6);
+    prop::collection::vec(chapter, 1..4).prop_map(|chapters| {
+        let mut out = String::from("\\id 2JN source\n\\h 2 John\n\\mt 2 John\n");
+        for (c, verses) in chapters.iter().enumerate() {
+            out.push_str(&format!("\\c {}\n", c + 1));
+            for (v, (marker, words)) in verses.iter().enumerate() {
+                if let Some(marker) = marker {
+                    out.push_str(&format!("{marker}\n"));
+                }
+                out.push_str(&format!("\\v {} {}\n", v + 1, words.join(" ")));
+            }
+        }
+        out
+    })
+}
+
+/// A book added from a file reads back as that file, byte for byte, and writes no alignment for
+/// text that carries none: nothing of the translator's file is dropped or rewritten.
+#[test]
+fn adding_a_book_from_a_file_loses_no_byte_of_it() {
+    use proptest::prelude::*;
+    let (base, folder) = rich();
+    let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
+        cases: 48,
+        failure_persistence: None,
+        ..ProptestConfig::default()
+    });
+    runner
+        .run(&generated_book(), |usfm| {
+            let (_rig, handle) = open(&base.copy(), &folder);
+            submit(&handle, add_text(BookId::SecondJohn, usfm.clone())).unwrap();
+            let fold = handle.snapshot().fold().clone();
+            prop_assert_eq!(fold.book_usfm(BookId::SecondJohn), Some(usfm));
+            prop_assert!(
+                book_keys(&handle, BookId::SecondJohn)
+                    .iter()
+                    .all(|k| !matches!(k, RecordKey::Alignment(..)))
+            );
+            Ok(())
+        })
+        .unwrap();
+}

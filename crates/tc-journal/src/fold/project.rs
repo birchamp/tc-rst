@@ -523,11 +523,9 @@ impl FoldState {
         if !self.pin_keys.is_empty() {
             out.insert(DerivedFile::Resources);
         }
-        // A story project writes the file once it holds a setting, as tC4 does (J20): it has
-        // none before, so a project received without settings gets no file made up for it.
-        if self.kind == super::ProjectKind::Bible || !self.setting_keys.is_empty() {
-            out.insert(DerivedFile::Settings);
-        }
+        // Every project has the file, a story project too: tC4 derives it for both (J20,
+        // `journalingStore.ts` "resources.json and settings.json are ALWAYS derivable").
+        out.insert(DerivedFile::Settings);
         if let Some(k) = self.key_idx(&RecordKey::Versification)
             && !matches!(self.entry(k).projected, Projected::Nothing)
         {

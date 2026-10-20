@@ -308,16 +308,20 @@ impl App {
         self.inner.config.app_data.join(UPLOADS).join(id.as_str())
     }
 
-    /// The text of an uploaded file, or why it is not text.
-    async fn upload_bytes(&self, file: &UsfmFile) -> Result<Vec<u8>, ApiError> {
+    /// What an uploaded file is, and its text when it is a book. The file is read and parsed on
+    /// the blocking pool: a book of several megabytes is not a job for the async threads.
+    async fn upload_verdict(
+        &self,
+        file: &UsfmFile,
+    ) -> Result<(UsfmVerdict, Option<String>), ApiError> {
         let path = self.upload_path(&file.upload);
-        tokio::task::spawn_blocking(move || std::fs::read(path))
+        let read = tokio::task::spawn_blocking(move || std::fs::read(path).map(classify_usfm))
             .await
-            .map_err(|e| create_failed(e.to_string()))?
-            .map_err(|_| ApiError::BadRequest {
-                field: "upload".to_owned(),
-                reason: "no such upload".to_owned(),
-            })
+            .map_err(|e| create_failed(e.to_string()))?;
+        read.map_err(|_| ApiError::BadRequest {
+            field: "upload".to_owned(),
+            reason: "no such upload".to_owned(),
+        })
     }
 
     fn drop_upload(&self, file: &UsfmFile) {
@@ -425,8 +429,7 @@ impl Handle<AddBlankBooks> for App {
 
 impl Handle<ReviewUsfm> for App {
     async fn handle(&self, req: ReviewUsfm) -> Result<UsfmVerdict, ApiError> {
-        let bytes = self.upload_bytes(&req.file).await?;
-        Ok(classify_usfm(bytes).0)
+        Ok(self.upload_verdict(&req.file).await?.0)
     }
 }
 
@@ -439,8 +442,8 @@ impl Handle<AddUsfmBooks> for App {
         let mut claims = Claims::default();
         let mut rows = Vec::new();
         for file in &req.files {
-            let (verdict, text) = match self.upload_bytes(file).await {
-                Ok(bytes) => classify_usfm(bytes),
+            let (verdict, text) = match self.upload_verdict(file).await {
+                Ok(read) => read,
                 Err(error) => {
                     self.books_added(lease, &req.project).await;
                     return Err(error);

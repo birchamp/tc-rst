@@ -298,9 +298,11 @@ impl App {
                     })?;
                 // Where a copy of a project goes when the projects folder is what made it
                 // read-only (Q-30); a folder of an earlier copy is listed from the start.
+                // A folder someone named (`--projects`, the tests and the captures) has no local
+                // folder beside it: the person's own would be listed among theirs.
                 let backend = match crate::config::local_projects_root(&host)
                     .ok()
-                    .filter(|local| *local != projects.path)
+                    .filter(|local| *local != projects.path && projects.chosen != RootChoice::Given)
                 {
                     Some(local) => backend.with_local_projects(local.clone()).map_err(|e| {
                         StartError::ProjectsFolder {
