@@ -11,6 +11,8 @@
 //! - **`test/saveVerse`** saves a verse through the real seam and store (unit C0), so the
 //!   contract cases that run through tc-app go through dispatch, the session's reply cache and
 //!   the store before C2's `editor/saveVerse` exists. C2 moves them there and deletes it.
+//! - **`test/saveSection`** saves a section card the same way (unit B4b), until C2's
+//!   `editor/saveSection` takes its request.
 //! - **Test fields** (`test/fieldStore`, `test/fieldLog`) are a write that goes through the
 //!   real reply cache and records every text it stores, so the UI's save machine can be
 //!   proved before any real save exists. They are durable (`test-hooks/fields.json`, written
@@ -43,10 +45,12 @@ use tc_api::shown::{PersonLabel, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, FieldDraft, FieldLog, FieldLogView, FieldStore, Hold,
     HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, MAX_ECHO, Quiet,
-    QuietView, Release, Reset, SaveVerse, StoredDraft, StoredText, TokenBase,
+    QuietView, Release, Reset, SaveSection, SaveVerse, StoredDraft, StoredText, TokenBase,
 };
+use tc_api::write::SaveRefusal;
 use tc_api::write::{Ack, ConflictBrief, SavedValue, Stored, TokenUpdate};
 use tc_api::{ALL, ApiError, NotSaved, Shown, ShownToken};
+use tc_journal::command::SectionValue;
 use tokio::sync::Notify;
 use unicode_normalization::UnicodeNormalization;
 
@@ -803,6 +807,59 @@ impl Handle<SaveVerse> for App {
                 Ok(api) => api,
                 Err(unworded) => self.internal(
                     "the store refused a save no screen has words for yet",
+                    crate::reports::facts(json!({"reason": unworded.0})),
+                ),
+            }),
+        }
+    }
+}
+
+impl Handle<SaveSection> for App {
+    /// The card's text over the verses it displayed (STORAGE §5.2): the values are made from
+    /// the text and the values the tokens stood for, and the store checks the section whole.
+    async fn handle(&self, req: SaveSection) -> Result<Ack, ApiError> {
+        self.hooks()?;
+        let session = self
+            .inner
+            .sessions
+            .reader(&req.at)
+            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let handle = session.handle().clone();
+        let tokens = req
+            .displayed
+            .iter()
+            .map(|token| wire::token::edit_token(handle.as_ref(), token))
+            .collect::<Result<Vec<_>, _>>()?;
+        let read = session.read();
+        let displayed = tokens
+            .iter()
+            .map(|token| crate::section::displayed(&read, token, req.book))
+            .collect::<Result<Vec<_>, _>>()?;
+        let refused = |_| ApiError::NotSaved(NotSaved::Refused(SaveRefusal::IncoherentView));
+        let values = crate::section::section_values(&req.text, &displayed).map_err(refused)?;
+        let me = handle.facts().device;
+        let command = StoreCommand::save_section(
+            req.book,
+            tokens
+                .iter()
+                .cloned()
+                .zip(values.into_iter().map(|v| v.map(SectionValue::Verse)))
+                .collect(),
+            None,
+        )
+        .requested_by(req.request);
+        match handle.submit(command).await {
+            Ok(reply) => wire::write::section_ack(&reply, &session.read(), &tokens, &req.text, me)
+                .map_err(|e| {
+                    self.internal(
+                        "a section save's reply could not be written",
+                        crate::reports::facts(json!({"reason": e.to_string()})),
+                    )
+                }),
+            Err(error) => Err(match wire::error::command_error(error) {
+                Ok(api) => api,
+                Err(unworded) => self.internal(
+                    "the store refused a section save no screen has words for yet",
                     crate::reports::facts(json!({"reason": unworded.0})),
                 ),
             }),

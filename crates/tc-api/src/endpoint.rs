@@ -177,7 +177,7 @@ unscoped!(
     crate::door43::SyncProject,
 );
 #[cfg(feature = "test-hooks")]
-scoped!(crate::test::SaveVerse);
+scoped!(crate::test::SaveVerse, crate::test::SaveSection);
 #[cfg(feature = "test-hooks")]
 unscoped!(
     crate::test::Crash,

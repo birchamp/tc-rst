@@ -75,6 +75,53 @@ pub fn ack(
     })
 }
 
+/// The `Ack` of a section save the store answered. `shown` is the token of every verse the
+/// section displayed, in order, and `sent` the text of the card. The field's one value is the
+/// card's text, keyed under the first verse, whose token comes back whether the batch wrote
+/// it or not; every other displayed verse and every record the batch wrote comes back with
+/// the token the next save uses (the batch's own when it wrote the record).
+pub fn section_ack(
+    reply: &StoreReply,
+    read: &CountingSnapshot,
+    shown: &[EditToken],
+    sent: &str,
+    me: DeviceId,
+) -> Result<Ack, WireError> {
+    let first = shown
+        .first()
+        .ok_or_else(|| WireError::Record("a section save displayed no verse".to_owned()))?;
+    let record =
+        record_ref(first.key()).ok_or_else(|| WireError::Record(format!("{:?}", first.key())))?;
+    let (stored_as, disk_warning) = stored(&reply.stored);
+    let mut tokens = Vec::new();
+    for token in shown {
+        let next = reply
+            .tokens
+            .iter()
+            .find(|(key, _)| key == token.key())
+            .map_or(token, |(_, next)| next);
+        tokens.push(token_update(token.key(), next)?);
+    }
+    for (key, token) in &reply.tokens {
+        if !shown.iter().any(|t| t.key() == key) {
+            tokens.push(token_update(key, token)?);
+        }
+    }
+    let new_conflicts = new_conflicts(reply, read, &record, me)?;
+    Ok(Ack {
+        view: view(reply.seq),
+        stored: stored_as,
+        tokens,
+        new_conflicts,
+        saved: vec![SavedValue {
+            record,
+            text: sent.nfc().collect(),
+        }],
+        rows: Vec::new(),
+        disk_warning,
+    })
+}
+
 /// The conflicts a batch made, each with who the person's text now stands beside. `record`
 /// names a conflict the snapshot no longer holds.
 pub fn new_conflicts(

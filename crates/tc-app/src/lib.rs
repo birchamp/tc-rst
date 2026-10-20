@@ -35,6 +35,7 @@ pub mod prefs;
 pub mod replies;
 pub mod reports;
 pub mod resources;
+pub mod section;
 mod seed;
 pub mod session;
 pub mod settings;

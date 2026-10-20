@@ -31,12 +31,20 @@ use crate::store_world::{
     words_of,
 };
 
-const SAMPLE: &str = "sample_burrito";
+pub(super) const SAMPLE: &str = "sample_burrito";
 
 /// The scenario `name` written into an empty projects folder on `fs`.
 fn scenario_on(fs: &FaultFs, name: &str) -> (ScenarioStore, ScenarioReport) {
+    scenario_state_on(fs, scenario(name))
+}
+
+/// A scenario's state, as given, written into an empty projects folder on `fs`.
+pub(super) fn scenario_state_on(
+    fs: &FaultFs,
+    state: &tc_app::backend::scenario::ScenarioState,
+) -> (ScenarioStore, ScenarioReport) {
     let backend = backend_over(fs, APP, FakePlatform::default(), Arc::default());
-    ScenarioStore::write(backend, scenario(name)).unwrap()
+    ScenarioStore::write(backend, state).unwrap()
 }
 
 fn sample_path() -> PathBuf {
@@ -209,7 +217,7 @@ fn a_scenario_written_while_the_start_cleanup_runs_keeps_its_staging_folder_and_
 }
 
 /// An app over the sample scenario on `fs`.
-async fn app_over(dir: &Path, store: Arc<ScenarioStore>) -> TestApp {
+pub(super) async fn app_over(dir: &Path, store: Arc<ScenarioStore>) -> TestApp {
     let projects = dir.join("projects");
     std::fs::create_dir_all(&projects).unwrap();
     TestApp::start_with(dir, &Parts::new(), |config, deps| {

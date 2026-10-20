@@ -25,6 +25,7 @@ mod op_counts {
     mod home;
     mod lint;
     mod probes;
+    mod section;
     mod session;
     mod understand;
 }

@@ -168,6 +168,7 @@ macro_rules! test_hook_table {
             command "test/release": $crate::test::Release => ();
             command "test/fieldStore": $crate::test::FieldStore => $crate::write::Ack;
             command "test/saveVerse": $crate::test::SaveVerse => $crate::write::Ack;
+            command "test/saveSection": $crate::test::SaveSection => $crate::write::Ack;
             query "test/fieldLog": $crate::test::FieldLog => $crate::test::FieldLogView;
             command "test/fieldDraft": $crate::test::FieldDraft => ();
             command "test/keychain": $crate::test::Keychain => $crate::test::KeychainView;

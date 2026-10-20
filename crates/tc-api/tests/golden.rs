@@ -61,6 +61,7 @@ use tc_api::ids::{
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
 };
+use tc_api::model::section::ParaFormat;
 use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_api::net::{NetView, Set, State as NetState};
 use tc_api::prefs::{
@@ -82,8 +83,8 @@ use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
-    QuietView, Release, Reset, SaveVerse, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
-    TeammatesEdit, TokenBase,
+    QuietView, Release, Reset, SaveSection, SaveVerse, Script, Scripted, ScriptedSync, StoredDraft,
+    StoredText, TeammatesEdit, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -736,6 +737,21 @@ impl Example for SaveVerse {
     }
 }
 
+impl Example for SaveSection {
+    fn example() -> Self {
+        SaveSection {
+            at: scope(),
+            request: request(19),
+            book: BookId::Titus,
+            displayed: vec![
+                token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+                token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            ],
+            text: "1-2 Paul, a servant of God\n\t3 an apostle".into(),
+        }
+    }
+}
+
 impl Example for Ack {
     fn example() -> Self {
         ack()
@@ -1341,6 +1357,8 @@ impl Example for ChaptersView {
                         lead: None,
                         before: Some(0),
                         words: words("Recuérdales que se sujeten", None),
+                        format: None,
+                        covered: Vec::new(),
                     },
                     VerseRow {
                         key: RefPart::parse("2-3").unwrap(),
@@ -1356,6 +1374,8 @@ impl Example for ChaptersView {
                                 versions: 2,
                             }),
                         ),
+                        format: Some(ParaFormat::Q1),
+                        covered: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
                     },
                     VerseRow {
                         key: RefPart::parse("4").unwrap(),
@@ -1365,6 +1385,8 @@ impl Example for ChaptersView {
                         lead: None,
                         before: None,
                         words: words("___", None),
+                        format: None,
+                        covered: Vec::new(),
                     },
                 ],
             }],
@@ -1809,6 +1831,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "session/drafts",
             "session/keepDraft",
             "session/otherComputerClosed",
+            "test/saveSection",
             "test/saveVerse",
         ])
     );
