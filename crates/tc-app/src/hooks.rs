@@ -248,8 +248,7 @@ struct Holds {
     armed: Mutex<HashMap<HoldPoint, u64>>,
 }
 
-/// tc-store's point for each of the app's (C1a); none for the open, which the app holds
-/// before it asks the store (B3).
+/// The store points, plus the open and suggestion training held by the app itself.
 fn store_point(at: HoldPoint) -> Option<tc_store::Point> {
     use tc_store::Point;
     match at {
@@ -258,7 +257,7 @@ fn store_point(at: HoldPoint) -> Option<tc_store::Point> {
         HoldPoint::Checkpoint => Some(Point::BeforeCheckpoint),
         HoldPoint::Materialize => Some(Point::BeforeMaterialize),
         HoldPoint::DraftWrite => Some(Point::BeforeDraftWrite),
-        HoldPoint::Open => None,
+        HoldPoint::Open | HoldPoint::Train => None,
     }
 }
 

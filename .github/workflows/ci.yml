@@ -44,6 +44,14 @@ jobs:
       # tc-api's types are the UI's too, so they must build for wasm32 as well.
       - run: cargo clippy -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings
 
+  alignment-budget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p tc-align --release --test suggestion_budget -- --ignored --nocapture
+
   # The tC4 visual-parity baseline: its screenshots (by sha256), DOM snapshots, manifest, README
   # and the owner's rulings in docs/PLAN.md must agree, the mock server must answer the sync
   # transport as the platform does, the parity state built from this repository's copies of

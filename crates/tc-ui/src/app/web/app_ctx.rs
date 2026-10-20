@@ -680,7 +680,10 @@ impl Actions {
     pub fn retry(&self, which: Retry) {
         match which {
             Retry::Checkpoint => {}
-            Retry::Story | Retry::Note | Retry::Save => self.0.runtime.saves().retry(),
+            Retry::Story | Retry::Note | Retry::Save => {
+                self.0.runtime.saves().retry();
+                self.retry_align_save();
+            }
         }
     }
 

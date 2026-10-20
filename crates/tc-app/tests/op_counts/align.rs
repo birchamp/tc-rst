@@ -1,13 +1,23 @@
 //! The count rows of B6 (§8.2), on Psalms and on the corpus ten times larger: opening one
 //! verse in the aligner and editing it touch that verse, whatever the size of the project.
 
+use std::time::Duration;
+
+use tc_align::Alignment;
 use tc_api::Reply;
 use tc_api::align::{AlignEdit, AlignerView, BankClick, Edit, Open, OpenVerse, Opened};
-use tc_api::ids::RequestId;
+use tc_api::event::Event;
+use tc_api::ids::{JobId, RequestId};
+use tc_api::jobs::{JobKind, JobState};
+use tc_api::prefs::SetAlignSuggestions;
+use tc_api::test::{Hold, HoldPoint, Release};
 use tc_app::App;
+use tc_app::events::Next;
+use tc_app::jobs::JobRegistry;
+use tc_journal::{ChapterNo, Record, RecordKey, VerseNo};
 
-use super::corpus::{PSALMS, corpora};
-use super::harness::{OnStore, Scale, costs_what_it_touches, opened};
+use super::corpus::{PSALMS, corpora, store_corpora};
+use super::harness::{Backing, OnStore, Scale, cost, costs_what_it_touches, growth, opened, scale};
 
 async fn ok<E: tc_api::Endpoint>(app: &App, req: &E) -> E::Ok {
     match app.request(req).await.unwrap() {
@@ -131,4 +141,257 @@ async fn align_index_costs_the_book() {
     // Two records for each of the book's verses (its text, its alignment), and no more.
     assert!(small.app.records_read <= 2 * 2_461 + 8, "{small:?}");
     assert_eq!(small.app.records_read, large.app.records_read);
+}
+
+/// Opening the cached aligner, changing a placement and flushing cost one verse's records.
+/// The edit stays inside the measured action so its timer cannot save during setup.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn align_save_costs_one_verse() {
+    let (_, (stored, _)) = costs_what_it_touches(
+        "opening, editing and saving one verse's cached aligner",
+        OnStore::Everything,
+        async |s: &Scale| {
+            opened(s).await;
+            open_verse(s, first_verse(), 1).await;
+            if let Some(memory) = s.memory() {
+                memory
+                    .script(&s.folder, tc_app::backend::memory::Scripted::Written)
+                    .unwrap();
+            }
+        },
+        async |s: &Scale| {
+            let view = open_verse(s, first_verse(), 2).await;
+            let (card, word) = view
+                .cards
+                .iter()
+                .find_map(|card| card.placed.first().map(|word| (card.index, word.clone())))
+                .expect("the real Psalms verse has placed words");
+            let edited: AlignerView = ok(
+                &s.app,
+                &Edit {
+                    at: s.scope(),
+                    request: request(3),
+                    aligner: view.aligner,
+                    seq: view.seq,
+                    edit: AlignEdit::Unplace { card, word },
+                },
+            )
+            .await;
+            assert_eq!(edited.placed + 1, view.placed);
+            assert_eq!(edited.save, tc_api::align::AlignSave::Unsaved);
+            let saved: tc_api::align::AlignSave = ok(
+                &s.app,
+                &tc_api::align::Flush {
+                    at: s.scope(),
+                    request: request(4),
+                },
+            )
+            .await;
+            assert_eq!(saved, tc_api::align::AlignSave::Saved);
+        },
+    )
+    .await;
+    assert!(stored.fold.keys_updated > 0, "{stored:?}");
+    assert!(stored.store.commands > 0, "{stored:?}");
+}
+
+/// Cancelling also frees Train's wait, so a failed assertion cannot strand a blocking job.
+struct CancelTrainingOnDrop {
+    jobs: JobRegistry,
+    id: JobId,
+}
+
+impl Drop for CancelTrainingOnDrop {
+    fn drop(&mut self) {
+        self.jobs.cancel(self.id);
+    }
+}
+
+async fn training_held(s: &Scale) -> CancelTrainingOnDrop {
+    let mut events = s.app.events().subscribe(s.app.events().head());
+    ok(
+        &s.app,
+        &Hold {
+            request: request(40),
+            at: HoldPoint::Train,
+        },
+    )
+    .await;
+    ok(
+        &s.app,
+        &SetAlignSuggestions {
+            at: s.scope(),
+            request: request(41),
+            on: true,
+        },
+    )
+    .await;
+    let running = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match events.next().await {
+                Next::Frame(frame) => {
+                    if let Event::Job(job) = frame.event
+                        && job.kind == JobKind::Train
+                        && matches!(job.state, JobState::Running(_))
+                    {
+                        break job.id;
+                    }
+                }
+                other => panic!("training's event stream ended: {other:?}"),
+            }
+        }
+    })
+    .await;
+    // Clean up even if the progress reporter failed to announce the held job.
+    if running.is_err() {
+        ok(
+            &s.app,
+            &SetAlignSuggestions {
+                at: s.scope(),
+                request: request(42),
+                on: false,
+            },
+        )
+        .await;
+        ok(
+            &s.app,
+            &Release {
+                request: request(43),
+                at: HoldPoint::Train,
+            },
+        )
+        .await;
+    }
+    let guard = CancelTrainingOnDrop {
+        jobs: s.app.jobs().clone(),
+        id: running.expect("the held Train job reports Running"),
+    };
+    assert_eq!(
+        s.app.holding(),
+        1,
+        "training reached the gate before any corpus reads"
+    );
+    guard
+}
+
+/// The model's captured snapshot stays held throughout the edited save. No background
+/// corpus read enters the counters, and a save that waited for training could not finish.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn align_save_costs_one_verse_while_model_training_is_held() {
+    let (memory, disk) = (corpora(), store_corpora());
+    for backing in [Backing::Memory, Backing::Store] {
+        let mut costs = Vec::new();
+        for (project, on_disk) in [
+            (&memory.psalms, &disk.psalms),
+            (&memory.larger, &disk.larger),
+        ] {
+            let s = scale(backing, project, on_disk).await;
+            opened(&s).await;
+            let before = open_verse(&s, first_verse(), 1).await;
+            let train = training_held(&s).await;
+            if let Some(memory) = s.memory() {
+                memory
+                    .script(&s.folder, tc_app::backend::memory::Scripted::Written)
+                    .unwrap();
+            }
+            let measured = tokio::time::timeout(
+                Duration::from_secs(5),
+                cost(&s, async |s| {
+                    let view = open_verse(s, first_verse(), 2).await;
+                    assert_eq!(view.suggest.status, tc_api::align::SuggestStatus::Reading);
+                    let (card, word) = view
+                        .cards
+                        .iter()
+                        .find_map(|card| card.placed.first().map(|word| (card.index, word.clone())))
+                        .expect("the real Psalms verse has placed words");
+                    let edited: AlignerView = ok(
+                        &s.app,
+                        &Edit {
+                            at: s.scope(),
+                            request: request(3),
+                            aligner: view.aligner,
+                            seq: view.seq,
+                            edit: AlignEdit::Unplace { card, word },
+                        },
+                    )
+                    .await;
+                    assert_eq!(edited.placed + 1, view.placed);
+                    assert_eq!(edited.save, tc_api::align::AlignSave::Unsaved);
+                    let saved = ok(
+                        &s.app,
+                        &tc_api::align::Flush {
+                            at: s.scope(),
+                            request: request(4),
+                        },
+                    )
+                    .await;
+                    assert_eq!(saved, tc_api::align::AlignSave::Saved);
+                }),
+            )
+            .await
+            .expect("the edited save finishes before training is released");
+            assert_eq!(s.app.holding(), 1, "the save did not release training");
+            assert!(matches!(
+                s.app.jobs().view(train.id).unwrap().state,
+                JobState::Running(_)
+            ));
+            if backing == Backing::Store {
+                // MemoryBackend's scripted Written reply does not change its fold. Check
+                // durable projection only where the store actually applied this save.
+                let key = RecordKey::Alignment(
+                    PSALMS,
+                    ChapterNo::new(first_verse().chapter).unwrap(),
+                    VerseNo::new(1).unwrap(),
+                );
+                let Some(Record::Alignment { value, .. }) =
+                    s.app.read(&s.scope()).unwrap().read().projected(&key)
+                else {
+                    panic!("the saved verse lost its alignment");
+                };
+                assert_eq!(value.placed() + 1, usize::try_from(before.placed).unwrap());
+                assert!(measured.fold.keys_updated > 0, "{measured:?}");
+                assert!(measured.store.commands > 0, "{measured:?}");
+            }
+            costs.push(measured);
+
+            // Releasing corpus reads before cost() took its final snapshot would mix the
+            // whole background model's work into the one-verse count.
+            let mut ended = s.app.jobs().watch(train.id).unwrap();
+            ok(
+                &s.app,
+                &SetAlignSuggestions {
+                    at: s.scope(),
+                    request: request(44),
+                    on: false,
+                },
+            )
+            .await;
+            ok(
+                &s.app,
+                &Release {
+                    request: request(45),
+                    at: HoldPoint::Train,
+                },
+            )
+            .await;
+            let terminal = tokio::time::timeout(
+                Duration::from_secs(5),
+                ended.wait_for(JobRegistry::is_ended),
+            )
+            .await
+            .expect("the held training cancels")
+            .unwrap()
+            .clone();
+            assert_eq!(terminal, JobState::Cancelled);
+            assert_eq!(s.app.holding(), 0);
+            drop(train);
+            s.app.quit().await;
+        }
+        let grew = growth(&costs[0], &costs[1]);
+        assert!(
+            grew.is_empty(),
+            "saving with training held grows on {backing:?}:\n{}",
+            grew.join("\n")
+        );
+    }
 }

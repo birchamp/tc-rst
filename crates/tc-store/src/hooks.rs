@@ -9,6 +9,8 @@ pub enum Point {
     BeforeBookRead,
     BeforeDraftWrite,
     BeforeDurablePending,
+    /// The command committed and notified the draft writer; its Ack has not been sent.
+    BeforeCommandReply,
     /// The actor is about to seal and materialize for a checkpoint (§5.13).
     BeforeCheckpoint,
     /// The actor is about to write derived files (§5.10).

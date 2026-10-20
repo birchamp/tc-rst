@@ -148,6 +148,8 @@ pub enum HoldPoint {
     Save,
     /// A project's open for the screens, before the store opens it (B3).
     Open,
+    /// Suggestion training, after capturing its snapshot and before reading it.
+    Train,
     BookRead,
     Checkpoint,
     Materialize,

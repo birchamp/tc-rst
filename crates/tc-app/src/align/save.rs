@@ -68,6 +68,12 @@ pub(super) enum Effect {
     Start {
         version: u64,
     },
+    /// Keep the unsaved links with both displayed tokens, beside the store actor. After a
+    /// save that leaves newer edits, refresh their draft with the Ack's alignment token.
+    /// R26 preserves the newer draft before this Ack, including through a crash.
+    Draft {
+        version: u64,
+    },
     /// The store holds the newest version: the aligner no longer counts as changed.
     MarkSaved,
 }
@@ -122,7 +128,7 @@ pub(super) fn next(machine: Machine, event: Event) -> (Machine, Vec<Effect>) {
                 },
                 timer,
             },
-            vec![],
+            vec![Effect::Draft { version }],
         ),
         (
             State::Clean | State::Carried { .. } | State::Dirty { .. } | State::Failed { .. },
@@ -137,7 +143,7 @@ pub(super) fn next(machine: Machine, event: Event) -> (Machine, Vec<Effect>) {
                     },
                     timer,
                 },
-                vec![Effect::Arm { timer }],
+                vec![Effect::Draft { version }, Effect::Arm { timer }],
             )
         }
 
@@ -200,7 +206,7 @@ pub(super) fn next(machine: Machine, event: Event) -> (Machine, Vec<Effect>) {
                     state: State::Dirty { latest, timer },
                     timer,
                 },
-                vec![Effect::Arm { timer }],
+                vec![Effect::Draft { version: latest }, Effect::Arm { timer }],
             )
         }
         (State::Saving { latest, .. }, Event::Done(Err(reason))) => (
@@ -208,7 +214,7 @@ pub(super) fn next(machine: Machine, event: Event) -> (Machine, Vec<Effect>) {
                 state: State::Failed { latest, reason },
                 timer,
             },
-            vec![],
+            vec![Effect::Draft { version: latest }],
         ),
         // An outcome with no save on its way: the actor starts one save at a time.
         (state, Event::Done(_)) => (Machine { state, timer }, vec![]),
@@ -239,10 +245,12 @@ mod tests {
             stale: bool,
         },
         Flush,
-        /// The save in flight ends: the store has it, or the disk refuses.
-        Finish {
+        /// The store finishes its save; its reply has not reached the aligner yet.
+        StoreFinished {
             ok: bool,
         },
+        /// A completed save's reply reaches the aligner, which may refresh its draft.
+        Ack,
         /// The app is killed: the machine is gone, the store keeps what it has.
         Crash,
     }
@@ -252,10 +260,32 @@ mod tests {
             4 => Just(Act::Edit),
             2 => any::<bool>().prop_map(|stale| Act::Tick { stale }),
             2 => Just(Act::Flush),
-            4 => any::<bool>().prop_map(|ok| Act::Finish { ok }),
+            3 => any::<bool>().prop_map(|ok| Act::StoreFinished { ok }),
+            3 => Just(Act::Ack),
             1 => Just(Act::Crash),
         ];
         proptest::collection::vec(act, 0..60)
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Inflight {
+        Saving { version: u64, submitted: u64 },
+        Reply { ok: bool },
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct Draft {
+        version: u64,
+        put: u64,
+    }
+
+    type ClearDraft = fn(Option<Draft>, u64, u64) -> Option<Draft>;
+
+    /// R26: a save clears a current draft only when it predates submission or holds the
+    /// value saved. Version equality models the edit text; the logical clock models the
+    /// store's monotonic submission and put instants. Offered drafts are not current drafts.
+    fn clear_saved_draft(draft: Option<Draft>, submitted: u64, saved: u64) -> Option<Draft> {
+        draft.filter(|draft| draft.put > submitted && draft.version != saved)
     }
 
     /// The world the machine acts in.
@@ -265,14 +295,24 @@ mod tests {
         latest: u64,
         /// The version the store holds.
         stored: u64,
-        /// The save in flight, by version.
-        inflight: Option<u64>,
+        /// Store completion and delivery of the actor's Ack are separate steps, with a
+        /// crash allowed between them.
+        inflight: Option<Inflight>,
+        /// The current draft, assuming its best-effort write completed before the crash.
+        /// The real-store regressions exercise that durability boundary.
+        draft: Option<Draft>,
+        clock: u64,
+        clear_draft: ClearDraft,
         /// The version at which the aligner opened with a carry-over to save, if any.
         carried: bool,
     }
 
     impl World {
         fn new(carried: bool) -> Self {
+            Self::with_clear(carried, clear_saved_draft)
+        }
+
+        fn with_clear(carried: bool, clear_draft: ClearDraft) -> Self {
             Self {
                 machine: if carried {
                     Machine::carried(0)
@@ -282,6 +322,9 @@ mod tests {
                 latest: 0,
                 stored: 0,
                 inflight: None,
+                draft: None,
+                clock: 0,
+                clear_draft,
                 carried,
             }
         }
@@ -301,7 +344,21 @@ mod tests {
                                 self.latest
                             ));
                         }
-                        self.inflight = Some(version);
+                        self.clock += 1;
+                        self.inflight = Some(Inflight::Saving {
+                            version,
+                            submitted: self.clock,
+                        });
+                    }
+                    Effect::Draft { version } => {
+                        if version != self.latest {
+                            return Err("a draft did not keep the latest links".into());
+                        }
+                        self.clock += 1;
+                        self.draft = Some(Draft {
+                            version,
+                            put: self.clock,
+                        });
                     }
                     Effect::Arm { .. } | Effect::Disarm | Effect::MarkSaved => {}
                 }
@@ -310,6 +367,11 @@ mod tests {
         }
 
         fn check(&self) -> Result<(), String> {
+            if self.latest > self.stored
+                && self.draft.map(|draft| draft.version) != Some(self.latest)
+            {
+                return Err("the newest unsaved links have no draft".into());
+            }
             let saved = self.machine.visible() == AlignSave::Saved;
             let held = self.stored == self.latest;
             let untouched = self.carried && self.latest == 0;
@@ -355,21 +417,45 @@ mod tests {
                     Ok(())
                 }
                 Act::Flush => self.feed(next, Event::Flush),
-                Act::Finish { ok } => {
-                    let Some(version) = self.inflight.take() else {
+                Act::StoreFinished { ok } => {
+                    let Some(Inflight::Saving { version, submitted }) = self.inflight else {
                         return Ok(());
                     };
                     if *ok {
                         self.stored = self.stored.max(version);
-                        self.feed(next, Event::Done(Ok(())))
-                    } else {
-                        self.feed(next, Event::Done(Err(NotSaved::Disk("full".into()))))
+                        self.draft = (self.clear_draft)(self.draft, submitted, version);
                     }
+                    self.inflight = Some(Inflight::Reply { ok: *ok });
+                    // No Event::Done here: the actor has not received its Ack, and cannot
+                    // redraft links. R26 must already keep a newer differing draft safe.
+                    self.check()
+                }
+                Act::Ack => {
+                    let Some(Inflight::Reply { ok }) = self.inflight else {
+                        return Ok(());
+                    };
+                    self.inflight = None;
+                    self.feed(
+                        next,
+                        Event::Done(if ok {
+                            Ok(())
+                        } else {
+                            Err(NotSaved::Disk("full".into()))
+                        }),
+                    )
                 }
                 Act::Crash => {
-                    // What the machine knew is gone; the links that were unsaved are lost, as
-                    // a crash loses them (C5's draft is what narrows this window). The new
-                    // aligner opens from the store.
+                    // A completed draft write survives the crash; Keep on the next open
+                    // stores it. The record and the offered draft therefore conserve the
+                    // latest links even though the old aligner and its save future are gone.
+                    let recovered = self
+                        .draft
+                        .take()
+                        .map_or(self.stored, |draft| self.stored.max(draft.version));
+                    if recovered != self.latest {
+                        return Err("a crash lost the newest links before the actor's Ack".into());
+                    }
+                    self.stored = recovered;
                     self.machine = Machine::clean();
                     self.inflight = None;
                     self.latest = self.stored;
@@ -402,7 +488,13 @@ mod tests {
                             return Err(format!("a flush did nothing in {:?}", before.state));
                         }
                     }
-                    Some(_) | None => self.act(next, &Act::Finish { ok: true })?,
+                    Some(_) | None => match self.inflight {
+                        Some(Inflight::Saving { .. }) => {
+                            self.act(next, &Act::StoreFinished { ok: true })?;
+                        }
+                        Some(Inflight::Reply { .. }) => self.act(next, &Act::Ack)?,
+                        None => return Err("a pending save has neither a store nor an Ack".into()),
+                    },
                 }
             }
             Err("a flush never ended".into())
@@ -503,6 +595,43 @@ mod tests {
             );
         }
         next(machine, event)
+    }
+
+    /// The old field-wide removal loses version 2 after version 1 becomes durable, before
+    /// the actor can refresh version 2's draft on its Ack. No browser mirror holds links.
+    #[test]
+    fn a_durable_save_keeps_newer_links_through_a_crash_before_its_ack() {
+        let prefix = [Act::Edit, Act::Flush, Act::Edit];
+        let mut good = World::new(false);
+        for act in &prefix {
+            good.act(next, act).unwrap();
+        }
+        good.act(next, &Act::StoreFinished { ok: true }).unwrap();
+        assert_eq!((good.stored, good.latest), (1, 2));
+        assert_eq!(good.draft.unwrap().version, 2);
+        assert!(matches!(good.inflight, Some(Inflight::Reply { ok: true })));
+        assert!(matches!(
+            good.machine.state,
+            State::Saving { sent: 1, latest: 2 }
+        ));
+        good.act(next, &Act::Crash).unwrap();
+        assert_eq!(
+            good.stored, 2,
+            "the offered draft's Keep restores the links"
+        );
+
+        let mut buggy = World::with_clear(false, |_, _, _| None);
+        for act in &prefix {
+            buggy.act(next, act).unwrap();
+        }
+        assert!(
+            buggy.act(next, &Act::StoreFinished { ok: true }).is_err(),
+            "the model must reject the old field-wide draft removal before any Ack"
+        );
+        assert!(
+            buggy.act(next, &Act::Crash).is_err(),
+            "the seeded bug loses links if the app stops in this window"
+        );
     }
 
     #[test]

@@ -665,6 +665,27 @@ impl ProjectHandle for MemoryHandle {
 
     fn submit(&self, command: StoreCommand) -> BoxFuture<Result<StoreReply, CommandError>> {
         let state = self.state.clone();
+        // A draft has no journal outcome to script. It must not consume the outcome a
+        // test queued for the next save, just as tc-store writes it beside the actor.
+        if matches!(command.journal(), Command::Draft { .. }) {
+            let mut live = lock(&state.live);
+            let result = if live.open != Some(self.open) {
+                Err(CommandError::Closed)
+            } else if let SessionMode::ReadOnly(reason) = live.mode {
+                Err(CommandError::ReadOnly(reason))
+            } else {
+                live.submitted.push(command.journal().clone());
+                Ok(StoreReply {
+                    tokens: Vec::new(),
+                    new_conflicts: Vec::new(),
+                    stored: Stored::Unchanged,
+                    seq: live.published.seq(),
+                    changes: Vec::new(),
+                    skipped: Vec::new(),
+                })
+            };
+            return Box::pin(async move { result });
+        }
         let next = {
             let mut live = lock(&state.live);
             if live.open != Some(self.open) {

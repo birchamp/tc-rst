@@ -517,10 +517,17 @@ impl Saves {
     }
 
     fn align_saves(&self) -> Vec<AlignSave> {
-        self.0
+        let mut states: Vec<AlignSave> = self
+            .0
             .state
             .align_saves
-            .with_untracked(|saves| saves.values().cloned().collect())
+            .with_untracked(|saves| saves.values().cloned().collect());
+        if let Some(reason) = super::align::edit_failure() {
+            states.push(AlignSave::Failed(tc_api::write::NotSaved::Disk(reason)));
+        } else if super::align::edits_pending() {
+            states.push(AlignSave::Unsaved);
+        }
+        states
     }
 
     fn checkpoint_failed(&self) -> bool {

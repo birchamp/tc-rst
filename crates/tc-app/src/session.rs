@@ -1007,9 +1007,20 @@ async fn pump(
             StoreEvent::Committed { seq, delta, cause } => {
                 let newest = session.read();
                 let me = session.handle.facts().device;
-                let labels = newest.person_labels(me);
+                let labels = std::cell::OnceCell::new();
                 let label = |device: &tc_journal::DeviceId| {
-                    labels.get(device).map(wire::scope::person_label)
+                    if *device == me {
+                        Some(wire::scope::person_label(
+                            &tc_journal::fold::PersonLabel::Mine,
+                        ))
+                    } else {
+                        // Local saves need no other device's profile. Numbering an unknown
+                        // teammate is project-wide work, deferred until a change names one.
+                        labels
+                            .get_or_init(|| newest.person_labels(me))
+                            .get(device)
+                            .map(wire::scope::person_label)
+                    }
                 };
                 let conflicts_changed = previous.conflict_counts() != newest.conflict_counts();
                 let scope = wire::scope::change_scope(

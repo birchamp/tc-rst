@@ -17,7 +17,9 @@ use crate::app::web::align::{Rail, Screen};
 use crate::app::web::{Actions, AppState};
 use crate::attrs::Attrs;
 use crate::css::Css;
-use crate::ds::{Button, ButtonVariant, ChipState, Overline, OverlineTone, Size, WordChip};
+use crate::ds::{
+    Button, ButtonVariant, Callout, CalloutTone, ChipState, Overline, OverlineTone, Size, WordChip,
+};
 use crate::i18n::{keys, t, t_dyn};
 use crate::views::item_nav::{Which, item_nav_button};
 
@@ -25,7 +27,15 @@ use crate::views::item_nav::{Which, item_nav_button};
 /// nothing to align, or the verse (tC4's `Align` and `AlignBlocked`).
 pub fn align_session(s: &AppState, actions: &Actions, book: BookId) -> impl IntoView + use<> {
     let (s, actions) = (s.clone(), actions.clone());
-    move || {
+    let error = s.a.edit_error.clone();
+    let notice = move || {
+        error.get().map(|message| view! {
+        <Callout tone=CalloutTone::Warn attrs=Attrs::from([("role", "alert"), ("data-testid", "align-edit-error")])>
+            {message}
+        </Callout>
+    })
+    };
+    let screen = move || {
         let screen = s.a.screen.get();
         match screen {
             Screen::Loading => {
@@ -39,7 +49,8 @@ pub fn align_session(s: &AppState, actions: &Actions, book: BookId) -> impl Into
             Screen::Blocked(why) => blocked(why, book),
             Screen::Ready(view) => ready(&s, &actions, book, *view),
         }
-    }
+    };
+    (notice, screen).into_any()
 }
 
 fn notice_box() -> Css {

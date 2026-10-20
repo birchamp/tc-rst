@@ -4,11 +4,13 @@
 //! carried by a copy of a read-only project (R7).
 
 use crate::common::*;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tc_journal::command::{AlignmentEdit, Command, Draft, DraftField, SectionValue};
 use tc_journal::record::{AlignmentGroup, CommentTarget, SourceWord, TargetWord, VerseValue};
 use tc_journal::{ChapterNo, Record, RecordKey, VerseNo};
 use tc_store::fault::FaultFs;
-use tc_store::{OpenOptions, ProjectHandle};
+use tc_store::{Hooks, OpenOptions, Point, ProjectHandle};
 
 fn draft(handle: &ProjectHandle, field: DraftField, keys: &[RecordKey], text: &str) {
     let shown = keys.iter().map(|k| handle.mint(k, None).unwrap()).collect();
@@ -537,4 +539,162 @@ fn an_offered_draft_outlives_the_next_sessions_save_of_its_field() {
     let (_rig, handle) = reopen(fs, &folder);
     assert_eq!(texts_offered(&handle), ["never answered"]);
     handle.close().unwrap();
+}
+
+/// A completed write is the barrier, so the crash does not depend on the writer's throttle.
+fn wait_for_draft_write(handle: &ProjectHandle, previous: u64) {
+    let until = Instant::now() + Duration::from_secs(10);
+    while handle.counters().drafts_written <= previous {
+        assert!(Instant::now() < until, "the draft writer did not finish");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+fn link_group(source: &str, target: &str) -> AlignmentGroup {
+    AlignmentGroup {
+        top_words: vec![SourceWord {
+            word: source.into(),
+            strong: None,
+            lemma: None,
+            morph: None,
+            occurrence: 1,
+            occurrences: 1,
+            extra: Default::default(),
+        }],
+        bottom_words: vec![TargetWord {
+            word: target.into(),
+            occurrence: 1,
+            occurrences: 1,
+            extra: Default::default(),
+        }],
+        extra: Default::default(),
+    }
+}
+
+/// R26: the record and writer complete before Ack; no align actor can refresh the draft.
+#[test]
+fn a_newer_alignment_draft_survives_a_crash_before_the_saves_ack() {
+    let hooks = Arc::new(Hooks::default());
+    let rig = rig_with_hooks(FaultFs::new(), hooks.clone());
+    let folder = create_titus(&rig, "Titus");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    handle.wait_idle();
+    let key = alignment_key();
+    let shown = handle.mint(&key, None).unwrap();
+    let verse_shown = handle.mint(&verse(1, 1), None).unwrap();
+    let first = AlignmentEdit {
+        alignments: vec![link_group("Παῦλος", "Paul")],
+        word_bank: Vec::new(),
+        done: false,
+    };
+    let mut newer = first.clone();
+    newer.alignments.push(link_group("δοῦλος", "servant"));
+    hooks.hold(Point::BeforeDurablePending);
+    hooks.hold(Point::BeforeCommandReply);
+    let saving = handle.submit(Command::SaveAlignment {
+        shown: shown.clone(),
+        verse_shown: verse_shown.clone(),
+        value: first.clone(),
+    });
+    hooks.wait_reached(Point::BeforeDurablePending, 1);
+    let writes = handle.counters().drafts_written;
+    handle
+        .submit(Command::Draft {
+            draft: Draft {
+                field: DraftField::Alignment,
+                shown: vec![shown.clone(), verse_shown.clone()],
+                text: newer.to_json(),
+            },
+            // Equal wall clocks must not make a newer draft look older than the save.
+            at: tc_journal::WallTime(0),
+        })
+        .wait()
+        .unwrap();
+    wait_for_draft_write(&handle, writes);
+    hooks.release(Point::BeforeDurablePending);
+    hooks.wait_reached(Point::BeforeCommandReply, 1);
+
+    // This other field forces the writer past the save notification and into a durable
+    // write while Ack is held. It cannot recreate the alignment draft if the save erased it.
+    let writes = handle.counters().drafts_written;
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 2)],
+        "another unsaved verse",
+    );
+    wait_for_draft_write(&handle, writes);
+    let after = rig.fs.crash(true);
+    hooks.release(Point::BeforeCommandReply);
+    saving.wait().unwrap();
+    handle.close().unwrap();
+
+    let (rig, handle) = reopen(after, &folder);
+    let saved = handle.snapshot().fold().projected(&key).unwrap();
+    assert!(
+        matches!(saved, Record::Alignment { value, .. } if value.alignments == first.alignments)
+    );
+    let offers = handle.offered_drafts();
+    let offered = offers
+        .iter()
+        .find(|offer| offer.draft.field == DraftField::Alignment)
+        .expect("the newer durable links must be offered before any actor Ack");
+    assert_eq!(offered.draft.shown, vec![shown, verse_shown]);
+    assert_eq!(
+        AlignmentEdit::from_json(&offered.draft.text),
+        Some(newer.clone())
+    );
+    let kept = handle
+        .submit(Command::KeepDraft {
+            draft: offered.draft.clone(),
+            section: Vec::new(),
+        })
+        .wait()
+        .unwrap();
+    assert!(
+        !kept.new_conflicts.is_empty(),
+        "the intervening save stays a conflict"
+    );
+    let snapshot = handle.snapshot();
+    let heads = snapshot.fold().heads(&key);
+    assert!(heads.iter().any(|head| {
+        matches!(snapshot.fold().body(head).map(|body| body.record),
+            Some(Record::Alignment { value, .. }) if value.alignments == newer.alignments)
+    }));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// Both permitted removals are observable on disk, rather than hidden by the open's filter.
+#[test]
+fn a_save_clears_an_older_different_draft_and_a_newer_equal_draft() {
+    let hooks = Arc::new(Hooks::default());
+    let rig = rig_with_hooks(FaultFs::new(), hooks.clone());
+    let folder = create_titus(&rig, "Titus");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 3)], "older draft");
+    save_verse(&handle, 1, 3, "later saved text").unwrap();
+    handle.wait_idle();
+
+    hooks.hold(Point::BeforeDurablePending);
+    let saving = handle.submit(Command::SaveVerse {
+        shown: handle.mint(&verse(1, 4), None).unwrap(),
+        words: "saved café".into(),
+    });
+    hooks.wait_reached(Point::BeforeDurablePending, 1);
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 4)],
+        "saved cafe\u{301}",
+    );
+    hooks.release(Point::BeforeDurablePending);
+    saving.wait().unwrap();
+    handle.wait_idle();
+    let bytes = rig.fs.peek(&folder.join(".tc/drafts.json")).unwrap();
+    let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+    assert!(entries.is_empty(), "{entries:#?}");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
 }

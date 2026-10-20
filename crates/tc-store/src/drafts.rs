@@ -4,7 +4,8 @@
 //! after a crash the file holds the old or the new list (crash row D1).
 //!
 //! The file holds two kinds of entry (APP-DESIGN §6.6, C1b). A *current* entry is the newest
-//! draft of a field this session typed; a save of the field removes it, *Keep* does not. An
+//! draft of a field this session typed; a save removes it only if it predates submission or
+//! holds the saved text (R26); *Keep* does not. An
 //! *offered* entry is a text an open offered, from the last session's drafts or taken in from
 //! the page's buffer (`offer`): it has a number, and only *Keep* of its text or *Discard* of
 //! its number removes it, *Discard* written before it answers, so a save of the field, the
@@ -53,6 +54,9 @@ struct Entry {
     /// entry of that run, when newer, holds the same editor's newer text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     run: Option<String>,
+    /// Local ordering against command submission; WallTime belongs to the page and can repeat.
+    #[serde(skip)]
+    put: Option<Instant>,
 }
 
 /// A draft offered at open.
@@ -132,9 +136,9 @@ fn key_of(draft: &Draft) -> String {
 }
 
 enum Msg {
-    Put(Box<Draft>, WallTime, Option<String>),
-    /// The current entries of these fields go: a save of the field succeeded.
-    Remove(Vec<String>),
+    Put(Box<Draft>, WallTime, Option<String>, Instant),
+    /// A successful save may remove an older or equal current entry, never newer work.
+    Remove(Vec<SavedField>, Instant),
     /// An offered entry, written before the answer, which says whether it was.
     Offer(u64, Box<Entry>, mpsc::Sender<bool>),
     /// An offered entry goes, written before the answer.
@@ -393,7 +397,7 @@ impl DraftWriter {
                         (false, _) => Duration::from_secs(3600),
                     };
                     match rx.recv_timeout(wait) {
-                        Ok(Msg::Put(draft, at, run)) => {
+                        Ok(Msg::Put(draft, at, run, put)) => {
                             let key = key_of(&draft);
                             state.current.insert(
                                 key,
@@ -404,13 +408,23 @@ impl DraftWriter {
                                     at: at.0,
                                     offered: false,
                                     run,
+                                    put: Some(put),
                                 },
                             );
                             state.dirty = true;
                         }
-                        Ok(Msg::Remove(keys)) => {
-                            for key in keys {
-                                state.dirty |= state.current.remove(&key).is_some();
+                        Ok(Msg::Remove(fields, submitted)) => {
+                            for field in fields {
+                                let remove = state.current.get(&field.key).is_some_and(|entry| {
+                                    entry.put.is_none_or(|put| put < submitted)
+                                        || field
+                                            .text
+                                            .as_ref()
+                                            .is_some_and(|text| same_text(&entry.text, text))
+                                });
+                                if remove {
+                                    state.dirty |= state.current.remove(&field.key).is_some();
+                                }
                             }
                         }
                         Ok(Msg::Offer(id, entry, done)) => {
@@ -452,13 +466,18 @@ impl DraftWriter {
     /// The field's current draft, with the page's time of its text: the open compares it with
     /// the page's buffer entries, which carry that clock (APP-DESIGN §6.6).
     pub(crate) fn put(&self, draft: Draft, at: WallTime) {
-        self.send(Msg::Put(Box::new(draft), at, self.run.clone()));
+        self.send(Msg::Put(
+            Box::new(draft),
+            at,
+            self.run.clone(),
+            Instant::now(),
+        ));
     }
 
-    /// A save of these drafts' fields succeeded: their current entries go. Offered entries
-    /// stay until the person answers them.
-    pub(crate) fn saved(&self, keys: Vec<String>) {
-        self.send(Msg::Remove(keys));
+    /// The save cannot erase a newer differing draft sent while it waited (R26). Offered
+    /// entries stay until the person answers them.
+    pub(crate) fn saved(&self, fields: Vec<SavedField>, submitted: Instant) {
+        self.send(Msg::Remove(fields, submitted));
     }
 
     /// *Keep* of `draft` succeeded: the offered entries of its field with its text go, and
@@ -513,6 +532,7 @@ impl DraftWriter {
             at: at.0,
             offered: true,
             run: None,
+            put: None,
         };
         let (tx, rx) = mpsc::channel();
         if !self.send(Msg::Offer(id, Box::new(entry), tx)) {
@@ -561,18 +581,34 @@ impl DraftWriter {
     }
 }
 
-/// The draft entries a successful command clears (§5.14: "A successful save of that field
-/// removes its entry").
-pub(crate) fn cleared_by(command: &tc_journal::command::Command, fold: &FoldState) -> Vec<String> {
+/// The current field a successful save may clear, with the text the committed fold holds.
+pub(crate) struct SavedField {
+    key: String,
+    text: Option<String>,
+}
+
+/// Computed after commit: a newer differing current draft stays even before the save's Ack.
+pub(crate) fn cleared_by(
+    command: &tc_journal::command::Command,
+    fold: &FoldState,
+) -> Vec<SavedField> {
     use tc_journal::command::Command;
-    let one =
-        |field: DraftField, token: &ShownToken| vec![draft_key(&field, &[token.key().clone()])];
+    let one = |field: DraftField, token: &ShownToken| {
+        vec![SavedField {
+            key: draft_key(&field, &[token.key().clone()]),
+            text: field_text(&field, fold.projected(token.key()).as_ref()),
+        }]
+    };
     match command {
         Command::SaveVerse { shown, .. } => one(DraftField::Words, shown),
         Command::SaveLayout { shown, .. } => one(DraftField::Layout, shown),
         Command::SaveSection { book, shown, .. } => {
             let keys: Vec<RecordKey> = shown.iter().map(|(t, _)| t.key().clone()).collect();
-            vec![draft_key(&DraftField::Section { book: *book }, &keys)]
+            vec![SavedField {
+                key: draft_key(&DraftField::Section { book: *book }, &keys),
+                // The command has parsed values, not the section editor's raw buffer.
+                text: None,
+            }]
         }
         Command::SaveFrame { shown, .. } => {
             let field = match shown.key() {
@@ -584,20 +620,23 @@ pub(crate) fn cleared_by(command: &tc_journal::command::Command, fold: &FoldStat
         Command::SaveDecision { shown, .. } => one(DraftField::CheckComment, shown),
         Command::SaveAlignment { shown, .. } => one(DraftField::Alignment, shown),
         Command::ReviseComment { shown, .. } => match fold.projected(shown.key()) {
-            Some(Record::Comment { value, .. }) => vec![draft_key(
-                &DraftField::UserComment {
+            Some(Record::Comment { value, .. }) => one(
+                DraftField::UserComment {
                     target: value.target,
                 },
-                &[shown.key().clone()],
-            )],
+                shown,
+            ),
             _ => Vec::new(),
         },
-        Command::AddComment { target, .. } => vec![draft_key(
-            &DraftField::UserComment {
-                target: target.clone(),
-            },
-            &[],
-        )],
+        Command::AddComment { target, text } => vec![SavedField {
+            key: draft_key(
+                &DraftField::UserComment {
+                    target: target.clone(),
+                },
+                &[],
+            ),
+            text: Some(text.clone()),
+        }],
         // *Keep* answers an offered entry (`DraftWriter::kept`); the field's current draft is
         // the page's typing since, which it still holds.
         Command::KeepDraft { .. } => Vec::new(),

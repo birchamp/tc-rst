@@ -27,6 +27,9 @@ use super::common::{Parts, TestApp, folder};
 use super::scenario::scenario;
 use super::understand::{ok, opened};
 
+#[path = "align_store.rs"]
+mod store;
+
 const SAMPLE: &str = "sample_burrito";
 
 /// An app over a parity scenario, keeping a handle on its memory backend so a test can script
@@ -831,7 +834,19 @@ async fn tc_app_test_wait(app: &App, at: &Scope) -> AlignerView {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    panic!("the engine did not finish learning");
+    let view = ready(app, at, 1, 2).await;
+    let mut events = app.events().subscribe(1);
+    let mut jobs = Vec::new();
+    while let Some(Next::Frame(frame)) = events.try_next() {
+        if let Event::Job(job) = frame.event {
+            jobs.push(job);
+        }
+    }
+    panic!(
+        "the engine did not finish learning: status={:?}, suggestions={:?}, jobs={jobs:?}",
+        view.suggest.status,
+        suggest_events(app),
+    );
 }
 
 /// tC4 #794: a verse that still holds the alignment markup of the file it was added from has
@@ -995,4 +1010,9 @@ async fn a_right_to_left_project_aligns_with_its_bank_right_to_left() {
             .any(|g| g.bottom_words.iter().any(|w| w.word == "بولس")),
         "{value:?}"
     );
+}
+
+mod confirmed_suggestions {
+    use super::*;
+    include!("align_suggestions.rs");
 }

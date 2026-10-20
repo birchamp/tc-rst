@@ -12,21 +12,26 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use js_sys::{Function, Promise};
 use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::align::{
     AlignEdit, AlignPlace, AlignSave, AlignerView, Blocked, Close, Edit, Flush, Index, IndexItem,
     KeepReflow, Open, OpenVerse, Opened, RailState, RailStatus,
 };
+use tc_api::app::Hello;
 use tc_api::prefs::SetAlignSuggestions;
 use tc_core::BookId;
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen::JsValue;
+use wasm_bindgen_futures::{JsFuture, spawn_local};
 
 use super::ListenerId;
 use super::app_ctx::Actions;
 use super::js;
 use super::saves::GateHookId;
-use crate::app::align::{EditQueue, Lens, RailFilter, refresh_for, same_verse};
+use crate::app::align::{
+    EditFailure, EditQueue, Lens, RailFilter, SentEdit, refresh_for, same_verse,
+};
 use crate::app::check::CheckView;
 use crate::app::client::CallError;
 
@@ -119,6 +124,8 @@ pub struct AlignState {
     pub how: ArcRwSignal<bool>,
     /// A Suggest is on its way: the button waits for its answer.
     pub asking: ArcRwSignal<bool>,
+    /// A queued edit failed; the workspace stays mounted with its pending actions retained.
+    pub edit_error: ArcRwSignal<Option<String>>,
     /// The aligner the server holds for this page, the open it belongs to and its verse: what
     /// the tool asks the server to close when it is left for another book, and the verse shown
     /// again when the server refuses to leave it.
@@ -137,6 +144,7 @@ impl AlignState {
             filter: ArcRwSignal::new(RailFilter::All),
             how: ArcRwSignal::new(false),
             asking: ArcRwSignal::new(false),
+            edit_error: ArcRwSignal::new(None),
             open: ArcRwSignal::new(None),
             remembered: ArcRwSignal::new(Vec::new()),
         }
@@ -156,6 +164,12 @@ thread_local! {
     static READS: Cell<u64> = const { Cell::new(0) };
     /// The edits the person made, one on their way at a time (A-14).
     static QUEUE: RefCell<EditQueue> = RefCell::new(EditQueue::default());
+    /// Refreshes and navigation wait for replies instead of abandoning clicks.
+    static EDIT_WAITERS: RefCell<Vec<Function>> = const { RefCell::new(Vec::new()) };
+    /// Only the newest status refresh may replace the current view.
+    static REFRESHES: Cell<u64> = const { Cell::new(0) };
+    /// A newer navigation wins while earlier requests wait for page edits to drain.
+    static NAVIGATIONS: Cell<u64> = const { Cell::new(0) };
     /// The gate hook that asks the server to save the links, while the tool is open.
     static HOOK: Cell<Option<GateHookId>> = const { Cell::new(None) };
     /// The listener that keeps the rail and the view true to the server's events.
@@ -173,11 +187,27 @@ fn current_open() -> u64 {
     OPENS.with(Cell::get)
 }
 
+fn next_navigation() -> u64 {
+    NAVIGATIONS.with(|n| {
+        n.set(n.get() + 1);
+        n.get()
+    })
+}
+
 fn next_read() -> u64 {
     READS.with(|c| {
         c.set(c.get() + 1);
         c.get()
     })
+}
+
+/// Pending page commands count as unsaved even before the server has seen their links.
+pub(super) fn edits_pending() -> bool {
+    QUEUE.with(|q| !q.borrow().is_idle())
+}
+
+pub(super) fn edit_failure() -> Option<String> {
+    QUEUE.with(|q| q.borrow().failure().map(|f| f.message().to_owned()))
 }
 
 fn open_verse(place: AlignPlace) -> OpenVerse {
@@ -222,17 +252,26 @@ impl Actions {
     /// "← All checking tools" (tC4 `closeAlign`): the links are saved first; a save that fails
     /// keeps the person in the tool, with the indicator saying so.
     pub fn close_align(&self) {
-        let Some((at, _)) = self.align_scope() else {
-            self.reset_align();
-            return;
-        };
-        let aligner = self.s().a.screen.with_untracked(|s| match s {
-            Screen::Ready(view) => Some(view.aligner),
-            _ => None,
-        });
+        let navigation = next_navigation();
         let this = self.clone();
         spawn_local(async move {
-            if let Some(aligner) = aligner {
+            if !this.drain_align_edits().await || NAVIGATIONS.with(Cell::get) != navigation {
+                return;
+            }
+            let Some((at, _)) = this.align_scope() else {
+                this.reset_align();
+                return;
+            };
+            let view = this.s().a.screen.with_untracked(|s| match s {
+                Screen::Ready(view) => Some(view.clone()),
+                _ => None,
+            });
+            if let Some(mut view) = view {
+                // Once every click has arrived, stop offering controls while Close saves the
+                // verse. An edit sent after Close could otherwise name an aligner that is gone.
+                next_open();
+                this.s().a.screen.try_set(Screen::Loading);
+                let aligner = view.aligner;
                 let close = Close {
                     at,
                     request: js::random_request_id(),
@@ -241,11 +280,16 @@ impl Actions {
                 match this.runtime().api().call(&close).await {
                     Ok(AlignSave::Saved) => this.runtime().align_forget(aligner),
                     Ok(unsaved) => {
-                        this.runtime().align_save(aligner, unsaved);
+                        view.save = unsaved;
+                        this.align_view(*view);
                         return;
                     }
-                    // The aligner was replaced or the project closed: nothing waits to be saved.
-                    Err(_) => this.runtime().align_forget(aligner),
+                    Err(_) => {
+                        // An unanswered close is not proof that the links were saved.
+                        this.s().a.screen.try_set(Screen::Ready(view));
+                        this.refresh_align();
+                        return;
+                    }
                 }
             }
             this.s().a.open.try_set(None);
@@ -276,7 +320,9 @@ impl Actions {
         }
         next_open();
         next_read();
+        next_navigation();
         QUEUE.with(|q| q.borrow_mut().drop_waiting());
+        self.align_edits_changed();
         if let Some(id) = HOOK.with(Cell::take) {
             self.runtime().saves().remove_gate_hook(id);
         }
@@ -312,12 +358,21 @@ impl Actions {
     /// Opens the aligner for `place` (the book's resume point when none), or reads the open
     /// one again. Only the newest open may land.
     pub fn open_align(&self, place: Option<AlignPlace>) {
+        let navigation = next_navigation();
+        let this = self.clone();
+        spawn_local(async move {
+            if this.drain_align_edits().await && NAVIGATIONS.with(Cell::get) == navigation {
+                this.open_align_after_edits(place);
+            }
+        });
+    }
+
+    fn open_align_after_edits(&self, place: Option<AlignPlace>) {
         let Some((at, book)) = self.align_scope() else {
             return;
         };
         let attempt = next_open();
-        // What waited was made on a verse that is being left; the server saves that one.
-        QUEUE.with(|q| q.borrow_mut().drop_waiting());
+        // Every page edit has reached this verse before the server is asked to leave it.
         let a = self.s().a.clone();
         a.screen.try_set(Screen::Loading);
         let this = self.clone();
@@ -360,13 +415,63 @@ impl Actions {
     /// The verse the server holds open, read again: after a gap, a refused leave or a changed
     /// switch. Its view carries the save state and the suggestions' state.
     pub fn refresh_align(&self) {
-        let Some(place) = self.s().a.screen.with_untracked(|s| match s {
-            Screen::Ready(view) => Some(view.place),
+        let Some((at, book)) = self.align_scope() else {
+            return;
+        };
+        let Some(aligner) = self.s().a.screen.with_untracked(|s| match s {
+            Screen::Ready(view) => Some(view.aligner),
             _ => None,
         }) else {
             return;
         };
-        self.open_align(Some(place));
+        let attempt = current_open();
+        let refresh = REFRESHES.with(|n| {
+            n.set(n.get() + 1);
+            n.get()
+        });
+        let this = self.clone();
+        spawn_local(async move {
+            if !this.drain_align_edits().await
+                || current_open() != attempt
+                || REFRESHES.with(Cell::get) != refresh
+            {
+                return;
+            }
+            let place = this.s().a.screen.with_untracked(|s| match s {
+                Screen::Ready(view) if view.aligner == aligner => Some(view.place),
+                _ => None,
+            });
+            let Some(place) = place else { return };
+            let result = this
+                .runtime()
+                .api()
+                .call(&Open {
+                    at,
+                    request: js::random_request_id(),
+                    book,
+                    verse: Some(open_verse(place)),
+                })
+                .await;
+            if current_open() != attempt || REFRESHES.with(Cell::get) != refresh {
+                return;
+            }
+            if let Ok(Opened::Ready(view)) = result {
+                let current = this.s().a.screen.with_untracked(|s| match s {
+                    Screen::Ready(now) if now.aligner == aligner => Some(now.seq),
+                    _ => None,
+                });
+                match current {
+                    Some(seq)
+                        if !edits_pending() && (view.aligner != aligner || view.seq >= seq) =>
+                    {
+                        this.align_view(*view);
+                    }
+                    // A click made during the read wins. Read its answer's status afterwards.
+                    Some(_) => this.refresh_align(),
+                    None => {}
+                }
+            }
+        });
     }
 
     /// The verse the server holds, opened again. Read from `open`, not the screen: an open on
@@ -409,9 +514,45 @@ impl Actions {
     /// A click, a drop or a button (tC4 `applyAlignEdit`): queued, and sent when the reply to
     /// the one before has come.
     pub fn align_edit(&self, edit: AlignEdit) {
-        if let Some(edit) = QUEUE.with(|q| q.borrow_mut().push(edit)) {
+        if !self
+            .s()
+            .a
+            .screen
+            .with_untracked(|s| matches!(s, Screen::Ready(_)))
+        {
+            return;
+        }
+        let next = QUEUE.with(|q| q.borrow_mut().push(edit));
+        self.align_edits_changed();
+        if let Some(edit) = next {
             self.send_align_edit(edit);
         }
+    }
+
+    fn align_edits_changed(&self) {
+        self.s().a.edit_error.try_set(edit_failure());
+        self.runtime().saves().server_states_changed();
+        let waiting = EDIT_WAITERS.with(|w| std::mem::take(&mut *w.borrow_mut()));
+        for resolve in waiting {
+            let _ = resolve.call0(&JsValue::NULL);
+        }
+    }
+
+    async fn drain_align_edits(&self) -> bool {
+        let attempt = current_open();
+        while edits_pending() {
+            if edit_failure().is_some() {
+                return false;
+            }
+            let changed = Promise::new(&mut |resolve, _| {
+                EDIT_WAITERS.with(|w| w.borrow_mut().push(resolve));
+            });
+            let _ = JsFuture::from(changed).await;
+            if current_open() != attempt {
+                return false;
+            }
+        }
+        true
     }
 
     fn send_align_edit(&self, edit: AlignEdit) {
@@ -422,45 +563,76 @@ impl Actions {
             Screen::Ready(view) => Some((view.aligner, view.seq)),
             _ => None,
         }) else {
-            QUEUE.with(|q| q.borrow_mut().drop_waiting());
             return;
         };
-        let attempt = current_open();
-        let this = self.clone();
-        spawn_local(async move {
-            let request = Edit {
+        let sent = SentEdit {
+            request: Edit {
                 at,
                 request: js::random_request_id(),
                 aligner,
                 seq,
                 edit,
-            };
-            let result = this.runtime().api().call(&request).await;
+            },
+            run: self.runtime().state().instance.get_untracked(),
+        };
+        QUEUE.with(|q| q.borrow_mut().sent(sent.clone()));
+        self.send_align_request(sent, false);
+    }
+
+    fn fail_align_request(&self, reason: EditFailure) {
+        QUEUE.with(|q| q.borrow_mut().failed(reason));
+        self.align_edits_changed();
+    }
+
+    fn send_align_request(&self, sent: SentEdit, retry: bool) {
+        let attempt = current_open();
+        let this = self.clone();
+        spawn_local(async move {
+            if retry {
+                let hello = this.runtime().api().call(&Hello {}).await;
+                if current_open() != attempt {
+                    return;
+                }
+                let run = match hello {
+                    Ok(hello) => hello.instance,
+                    Err(error) => {
+                        this.fail_align_request(EditFailure::Retryable(error.to_string()));
+                        return;
+                    }
+                };
+                if current_open() != attempt {
+                    return;
+                }
+                if run != sent.run || this.runtime().state().instance.get_untracked() != sent.run {
+                    this.fail_align_request(EditFailure::Refused(
+                        ApiError::StaleSession.to_string(),
+                    ));
+                    return;
+                }
+            }
+            let result = this.runtime().api().call(&sent.request).await;
             if current_open() != attempt {
                 return;
             }
             match result {
                 Ok(view) => {
                     this.align_view(view);
-                    if let Some(next) = QUEUE.with(|q| q.borrow_mut().replied()) {
+                    let next = QUEUE.with(|q| q.borrow_mut().replied());
+                    this.align_edits_changed();
+                    if let Some(next) = next {
                         this.send_align_edit(next);
                     }
                 }
-                // The edits that waited were made on a view that is gone; the server's own is
-                // read again.
-                Err(CallError::Api(ApiError::StaleSession)) => {
-                    QUEUE.with(|q| q.borrow_mut().drop_waiting());
-                    this.reopen_open_verse(None);
+                Err(CallError::Transport(error)) => {
+                    this.fail_align_request(EditFailure::Retryable(error.to_string()));
                 }
-                Err(CallError::Api(ApiError::NotSaved(_))) => {
-                    QUEUE.with(|q| q.borrow_mut().drop_waiting());
-                }
-                Err(CallError::Api(ApiError::StaleScope { .. }) | CallError::Dropped) => {}
-                Err(_) => {
-                    QUEUE.with(|q| q.borrow_mut().drop_waiting());
-                    this.reopen_open_verse(None);
+                Err(error) => {
+                    // A refusal is not an acknowledgement, and a new actor has no right to
+                    // reinterpret these queued card positions. Leave them in the window.
+                    this.fail_align_request(EditFailure::Refused(error.to_string()));
                 }
             }
+            this.align_edits_changed();
         });
     }
 
@@ -598,35 +770,69 @@ impl Actions {
         HOOK.with(|h| h.set(Some(id)));
     }
 
-    /// `align/flush`: true when the links are saved. A failure keeps the person where they are.
-    async fn flush_aligner(&self) -> bool {
-        let Some((at, _)) = self.align_scope() else {
-            return true;
-        };
-        let aligner = self.s().a.screen.with_untracked(|s| match s {
-            Screen::Ready(view) => Some(view.aligner),
-            _ => None,
+    /// Retry includes server-owned alignment saves, which are not fields of SaveMachine.
+    pub(super) fn retry_align_save(&self) {
+        if self.s().a.open.with_untracked(Option::is_none) {
+            return;
+        }
+        if let Some(sent) = QUEUE.with(|q| q.borrow_mut().retry()) {
+            self.align_edits_changed();
+            self.send_align_request(sent, true);
+        }
+        let this = self.clone();
+        spawn_local(async move {
+            this.flush_aligner().await;
         });
-        let request = Flush {
-            at,
-            request: js::random_request_id(),
-        };
-        match self.runtime().api().call(&request).await {
-            Ok(AlignSave::Saved) => {
-                if let Some(aligner) = aligner {
-                    self.runtime().align_save(aligner, AlignSave::Saved);
-                }
-                true
+    }
+
+    /// Every queued click reaches the server before `align/flush`. Clicks made while the save
+    /// runs join the next drain, so navigation cannot leave them behind.
+    async fn flush_aligner(&self) -> bool {
+        let attempt = current_open();
+        loop {
+            if !self.drain_align_edits().await || current_open() != attempt {
+                return false;
             }
-            Ok(unsaved) => {
-                if let Some(aligner) = aligner {
-                    self.runtime().align_save(aligner, unsaved);
-                }
-                false
+            let Some((at, _)) = self.align_scope() else {
+                return true;
+            };
+            let aligner = self
+                .s()
+                .a
+                .open
+                .with_untracked(|open| open.as_ref().map(|(_, aligner, _)| *aligner));
+            let request = Flush {
+                at,
+                request: js::random_request_id(),
+            };
+            let generation = QUEUE.with(|q| q.borrow().generation());
+            let result = self.runtime().api().call(&request).await;
+            if current_open() != attempt {
+                return false;
             }
-            // The project is closed or replaced: there is nothing of this page's to save.
-            Err(CallError::Api(ApiError::StaleScope { .. }) | CallError::Dropped) => true,
-            Err(_) => false,
+            match result {
+                Ok(AlignSave::Saved) => {
+                    if QUEUE.with(|q| q.borrow().generation()) != generation {
+                        continue;
+                    }
+                    if let Some(aligner) = aligner {
+                        self.runtime().align_save(aligner, AlignSave::Saved);
+                    }
+                    if !edits_pending() {
+                        return true;
+                    }
+                }
+                Ok(unsaved) => {
+                    if let Some(aligner) = aligner {
+                        self.runtime().align_save(aligner, unsaved);
+                    }
+                    return false;
+                }
+                Err(CallError::Api(ApiError::StaleScope { .. }) | CallError::Dropped) => {
+                    return !edits_pending();
+                }
+                Err(_) => return false,
+            }
         }
     }
 

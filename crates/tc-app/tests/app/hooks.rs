@@ -452,6 +452,7 @@ async fn reset_keeps_a_write_in_flight_so_its_retry_still_waits_for_it() {
 async fn holds_at_the_other_points_are_accepted_and_nothing_reaches_them() {
     let (_dir, t) = started().await;
     let points = [
+        HoldPoint::Train,
         HoldPoint::BookRead,
         HoldPoint::Checkpoint,
         HoldPoint::Materialize,

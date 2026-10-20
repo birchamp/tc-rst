@@ -2012,7 +2012,12 @@ token of every record the editor displayed, and its text. A draft never goes thr
 actor's queue: a writer thread of its own keeps the newest draft of each field and writes
 `.tc/drafts.json` with `atomic_write` at most once a second, so a draft write never delays a
 save (APP-DESIGN R22). A draft is best effort; after a crash the file holds the old list or the
-new one (crash row D1). A successful save of that field removes its entry. The fields:
+new one (crash row D1). A successful save removes a current entry only when it was put before
+the command was submitted, or its text equals a value now stored for the field (APP-DESIGN
+R26, C5). A newer differing draft survives before the save's reply, independently of the
+editor. Ordering uses local monotonic instants kept only in memory, never the page's clock;
+the file format is unchanged. A newer section buffer is kept conservatively because the
+section command carries parsed values rather than that raw buffer. The fields:
 
 | Field | Text | Tokens |
 |---|---|---|
@@ -2043,7 +2048,7 @@ the copy's first open offers them.
 
 *(APP-DESIGN C1b, built in tc-store by the app's unit C1b, 2026-10-19: the file holds two kinds
 of entry. A* current *entry is the newest draft of a field this session typed, and a successful
-save of the field removes it; `KeepDraft` does not. An* offered *entry is a text an open offered
+save removes it under the ordering/equality rule above; `KeepDraft` does not. An* offered *entry is a text an open offered
 (`offered: true` in the file), from the last session's entries or taken in from the page's
 buffer (`ProjectHandle::offer_draft`, written before it returns its number): only `KeepDraft` of
 its text or `discard_draft` of its number removes it, and `discard_draft` is written before it
