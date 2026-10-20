@@ -523,9 +523,9 @@ impl FoldState {
         if !self.pin_keys.is_empty() {
             out.insert(DerivedFile::Resources);
         }
-        if self.kind == super::ProjectKind::Bible {
-            out.insert(DerivedFile::Settings);
-        }
+        // Every project has the file, a story project too: tC4 derives it for both (J20,
+        // `journalingStore.ts` "resources.json and settings.json are ALWAYS derivable").
+        out.insert(DerivedFile::Settings);
         if let Some(k) = self.key_idx(&RecordKey::Versification)
             && !matches!(self.entry(k).projected, Projected::Nothing)
         {
@@ -1998,17 +1998,36 @@ fn slot_json(j: &Json) -> Value {
 /// Splices a story's title, frames and reference into its template (see
 /// `FoldState::story_markdown`). Lines keep their terminators; a part with no record keeps
 /// the template's text.
+/// tC4's `TITLE_RE` (`journal/story.mjs:15`): `# `, ASCII digits, `.`, then nothing or a space
+/// and the title. Gives the digits and the title, which is empty for `# 2.`. A line of another
+/// form is none.
+fn title_parts(line: &str) -> Option<(&str, &str)> {
+    let rest = line.strip_prefix("# ")?;
+    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+    if digits == 0 {
+        return None;
+    }
+    let after = rest[digits..].strip_prefix('.')?;
+    let title = if after.is_empty() {
+        ""
+    } else {
+        after.strip_prefix(' ')?
+    };
+    Some((&rest[..digits], title))
+}
+
 /// The template's text of frame `n` of a story, as [`splice_story`] cuts the template: frame
-/// 0 is its first `# ` line without the `# `, frame n the paragraph after its n-th image
-/// line, without the paragraph's last line ending.
+/// 0 is the title of its first `# ` line (what follows `# N. `, as tC4 reads it; the number
+/// is the line's own), frame n the paragraph after its n-th image line, without the
+/// paragraph's last line ending.
 pub(crate) fn template_frame(base: &str, n: u16) -> Option<String> {
     let lines: Vec<&str> = base.split_inclusive('\n').collect();
     let body = |line: &str| line.trim_end_matches(['\n', '\r']).to_owned();
     if n == 0 {
-        return lines
-            .iter()
-            .map(|l| body(l))
-            .find_map(|b| b.strip_prefix("# ").map(str::to_owned));
+        return lines.iter().map(|l| body(l)).find_map(|b| {
+            let rest = b.strip_prefix("# ")?;
+            Some(title_parts(&b).map_or(rest, |(_, title)| title).to_owned())
+        });
     }
     let reference_at = lines.iter().rposition(|l| {
         let b = body(l);
@@ -2082,7 +2101,16 @@ pub(crate) fn splice_story(
             title_done = true;
             match frame(0) {
                 Some(title) => {
+                    // tC4's `writeTitle`: `# N. title`, or `# N.` for an empty one; the
+                    // number stays the line's own.
                     out.push_str("# ");
+                    if let Some((number, _)) = title_parts(&text) {
+                        out.push_str(number);
+                        out.push('.');
+                        if !title.is_empty() {
+                            out.push(' ');
+                        }
+                    }
                     out.push_str(&title);
                     out.push_str(terminator(line));
                 }

@@ -653,21 +653,39 @@ fn a_seeded_change_the_fold_does_not_show_is_a_mismatch() {
 }
 
 #[test]
-fn a_derived_file_the_fold_does_not_list_is_a_mismatch() {
-    // The file-set rule alone sees what a materialize would drop: an OBS project's
-    // settings.json renders, but the fold does not list it among its files.
+fn an_obs_projects_settings_json_is_a_derived_file_the_fold_lists() {
+    // The storage team's fix of docs/evidence/state-seed-check-2026-10-18.md §4.2 (done with C6):
+    // a story project derives settings.json as a Bible project does, so a materialize writes
+    // it and the file-set rule finds nothing to drop.
     let folder = sample("sample-burrito-obs");
     let built = build(&folder, fixture_project_id("sample_burrito_obs")).unwrap();
-    let path = "ingredients/checking/settings.json";
-    assert!(built.fold.render(&DerivedFile::Settings).is_some());
-    assert!(!built.fold.derived_files().contains(&DerivedFile::Settings));
+    assert!(built.fold.derived_files().contains(&DerivedFile::Settings));
     let found = check::check(&folder, &built).mismatches;
-    let at_settings: Vec<CheckRule> = found
-        .iter()
-        .filter(|m| m.path == path)
-        .map(|m| m.rule)
-        .collect();
-    assert_eq!(at_settings, [CheckRule::FileNotDerived]);
+    assert!(
+        found
+            .iter()
+            .all(|m| m.path != "ingredients/checking/settings.json"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn a_derived_file_the_fold_does_not_list_is_a_mismatch() {
+    // The file-set rule alone sees what a materialize would drop: a resources.json that names
+    // no pin renders, but the fold, holding no pin, does not list it.
+    let mut folder = sample("sample-burrito");
+    let path = "ingredients/checking/resources.json";
+    folder
+        .files
+        .insert(path.to_owned(), b"{\"schemaVersion\":2}\n".to_vec());
+    let built = build(&folder, fixture_project_id("sample_burrito")).unwrap();
+    let found = check::check(&folder, &built).mismatches;
+    assert!(
+        found
+            .iter()
+            .any(|m| m.path == path && m.rule == CheckRule::FileNotDerived),
+        "{found:?}"
+    );
 }
 
 /// The OBS sample's built seed with one edit of story 1 by a person on this computer, and
@@ -699,16 +717,18 @@ fn obs_story_one_after(frame: u16, text: &str) -> (String, String) {
 }
 
 /// Storage findings outside the seed check (docs/evidence/state-seed-check-2026-10-18.md,
-/// part 5), asserted as they stand today so this test fails the day storage changes them.
+/// part 5): the title edit (5.1) is fixed in tc-journal (B7); the splice of an empty frame
+/// (5.2) is asserted as it stands, so this test fails the day storage changes it.
 #[test]
 fn obs_frame_edits_project_other_bytes_than_tc4_writes_today() {
-    // tC4's title box sends the title without the number; the fold writes `# ` and the text,
-    // so the number is lost and tC4's TITLE_RE no longer reads the line as a title.
+    // tC4's title box sends the title without the number, and the fold writes `# N. title`
+    // as tC4's `writeTitle` does, so the number is kept and the file reads back.
     let (base, projected) = obs_story_one_after(0, "La Creación");
     let tc4 = tc_obs::story::write_title(&base, "La Creación").unwrap();
     assert_eq!(tc4.lines().next(), Some("# 1. La Creación"));
-    assert_eq!(projected.lines().next(), Some("# La Creación"));
-    assert!(tc_obs::StoryFile::parse(projected.clone()).is_err());
+    assert_eq!(projected.lines().next(), Some("# 1. La Creación"));
+    assert_eq!(projected, tc4);
+    assert!(tc_obs::StoryFile::parse(projected).is_ok());
     // An edit of an empty frame: the fold keeps the template's blank lines and adds the
     // text after them; tC4's writer puts one blank line on each side.
     let (base, projected) = obs_story_one_after(3, "Texto nuevo.");

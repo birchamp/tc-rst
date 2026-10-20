@@ -297,3 +297,126 @@ fn a_story_splices_its_frames_and_reference_into_the_template() {
         "frame 2 has no record and keeps the template's text"
     );
 }
+
+fn story_one_with(template: &str, frame_zero: Option<&str>) -> String {
+    let mut ana = Dev::new(1);
+    let story = tc_journal::StoryNo::new(1).expect("story");
+    let mut changes = vec![ana.one(
+        Record::StoryBase {
+            story,
+            value: template.into(),
+        },
+        vec![],
+    )];
+    if let Some(title) = frame_zero {
+        changes.push(ana.one(
+            Record::Frame {
+                story,
+                frame: tc_journal::FrameNo(0),
+                value: title.into(),
+            },
+            vec![],
+        ));
+    }
+    let state = FoldState::fold(
+        ProjectKind::Stories,
+        changes.into_iter().map(FoldInput::from),
+    );
+    String::from_utf8(state.render(&DerivedFile::Story(story)).expect("story")).expect("utf-8")
+}
+
+/// tC4's `TITLE_RE` and `writeTitle`: frame 0 is what follows `# N. `, and the number is the
+/// line's own, so a title a person types never loses it (docs/evidence/state-seed-check-2026-10-18.md
+/// §4.1, §5.1).
+#[test]
+fn a_story_title_is_the_text_after_its_number() {
+    let template = "# 1. The Creation\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)\n\nText.\n";
+    assert_eq!(
+        story_one_with(template, None),
+        template,
+        "no record: untouched"
+    );
+    assert_eq!(
+        story_one_with(template, Some("La Creación")),
+        template.replace("The Creation", "La Creación")
+    );
+    assert_eq!(
+        story_one_with(template, Some("")),
+        template.replace("# 1. The Creation", "# 1."),
+        "an empty title is `# N.`"
+    );
+    let seed = template.replace("# 1. The Creation", "# 1.");
+    assert_eq!(
+        story_one_with(&seed, Some("La Creación")),
+        template.replace("The Creation", "La Creación")
+    );
+}
+
+#[test]
+fn a_story_titles_check_text_has_no_number() {
+    let mut ana = Dev::new(1);
+    let story = tc_journal::StoryNo::new(2).expect("story");
+    let template = "# 2. How God made it\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-02-01.jpg)\n\nText.\n";
+    let seed = FoldState::fold(
+        ProjectKind::Stories,
+        [FoldInput::from(ana.one(
+            Record::StoryBase {
+                story,
+                value: template.into(),
+            },
+            vec![],
+        ))],
+    );
+    let texts = seed.check_texts(tc_journal::pins::Collection::Stories);
+    let target = tc_journal::CheckTarget::Frame {
+        story,
+        frame: tc_journal::FrameNo(0),
+    };
+    let title = texts.text(&target).expect("the title has a text");
+    assert_eq!(title.content(), "How God made it");
+}
+
+/// tC4's `relationshipsFromPins`: a pin whose flavor is not scripture, parascriptural or
+/// peripheral (the OBS source text is `gloss/textStories`) has no relationship, since the
+/// schema would refuse it and the whole group's relationships would be dropped
+/// (docs/evidence/state-seed-check-2026-10-18.md §4.3).
+#[test]
+fn a_pin_that_is_no_scripture_has_no_relationship_and_makes_no_anomaly() {
+    let mut ana = Dev::new(1);
+    let slot = |repo: &str, flavor: &str| {
+        obj(&[
+            ("repoPath", Json::from(repo)),
+            ("version", Json::from("v1")),
+            ("flavor", Json::from(flavor)),
+        ])
+    };
+    let changes = vec![ana.one(
+        support::pins(
+            PinGroup::Primary,
+            &[
+                ("obs", slot("git.door43.org/uW/en_obs", "gloss/textStories")),
+                (
+                    "obsNotes",
+                    slot("git.door43.org/uW/en_obs-tn", "parascriptural/x-obsNotes"),
+                ),
+                ("bare", slot("git.door43.org/uW/en_bare", "textTranslation")),
+            ],
+        ),
+        vec![],
+    )];
+    let state = fold(&changes);
+    assert_eq!(
+        state
+            .anomalies()
+            .filter(|a| matches!(a, tc_journal::fold::Anomaly::InvalidForBurrito { .. }))
+            .count(),
+        0
+    );
+    let source = state.metadata_source((1, 0));
+    let ids: Vec<&str> = source
+        .relationships
+        .iter()
+        .map(|r| r["id"].as_str().expect("id"))
+        .collect();
+    assert_eq!(ids, ["dcs::uW/en_obs-tn"]);
+}

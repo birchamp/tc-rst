@@ -9,12 +9,11 @@ use std::sync::OnceLock;
 use tc_app::backend::ProjectStore;
 use tc_app::backend::memory::MemoryBackend;
 use tc_app::backend::scenario::{Door43Remote, ScenarioError, ScenarioState, install_resources};
-use tc_app::backend::seed::SeedRefusal;
 use tc_app::config::ProjectsFolder;
 use tc_resources::ResourceStore;
 
 use super::common::{Parts, TestApp, folder, open_progress, repo_root, tit};
-use super::state_seed::{bible_declared, obs_written_up, tuple};
+use super::state_seed::bible_declared;
 
 const SCENARIOS: [&str; 3] = ["sample", "en-pins", "shared"];
 
@@ -87,28 +86,17 @@ fn a_scenario_read_from_disk_equals_the_one_assembled_in_memory() {
     }
 }
 
-/// The OBS sample fails B1a's check with the 53 mismatches the storage team owns
-/// (`docs/evidence/state-seed-check-2026-10-18.md`). This test changes the day they fix them:
-/// then the OBS project loads, and Home shows both cards (B2). That day, recapture B2's rows
-/// (`node parity/app/capture-rust.mjs --unit B2 --only home,add-project,new-bible,new-obs,import,add-book,account-menu,app-language,help,about,feedback`
-/// and `--case license,net-failed,home-empty,home-list-error,home-resume --layers pixels,dom`,
-/// then `UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record`) and remove their residuals,
-/// which explain the missing card (B2 D11).
+/// Every scenario loads both its projects: the OBS sample passes B1a's check since the three
+/// findings of `docs/evidence/state-seed-check-2026-10-18.md` §4 are fixed (B7), and Home shows
+/// both cards.
 #[test]
-fn every_scenario_loads_its_bible_project_and_refuses_its_obs_project() {
+fn every_scenario_loads_both_its_projects() {
     for name in SCENARIOS {
         let (backend, report) = MemoryBackend::from_scenario(scenario(name)).unwrap();
         let loaded: Vec<String> = report.loaded.iter().map(|(f, _)| f.to_string()).collect();
-        assert_eq!(loaded, ["sample_burrito"], "{name}");
+        assert_eq!(loaded, ["sample_burrito", "sample_burrito_obs"], "{name}");
         assert_eq!(report.loaded[0].1.declared, bible_declared(), "{name}");
-        assert_eq!(report.refused.len(), 1, "{name}");
-        let (refused, why) = &report.refused[0];
-        assert_eq!(refused.as_str(), "sample_burrito_obs", "{name}");
-        let SeedRefusal::Mismatches(mismatches) = why else {
-            panic!("{name}: {why}")
-        };
-        let tuples: Vec<_> = mismatches.iter().map(tuple).collect();
-        assert_eq!(tuples, obs_written_up(), "{name}");
+        assert!(report.refused.is_empty(), "{name}: {:?}", report.refused);
         let listed: Vec<String> = backend
             .list()
             .unwrap()
@@ -116,11 +104,7 @@ fn every_scenario_loads_its_bible_project_and_refuses_its_obs_project() {
             .into_iter()
             .map(|e| e.folder.to_string())
             .collect();
-        assert_eq!(
-            listed,
-            ["sample_burrito"],
-            "{name}: nothing of a refused project shows"
-        );
+        assert_eq!(listed, ["sample_burrito", "sample_burrito_obs"], "{name}");
     }
 }
 

@@ -13,7 +13,7 @@ use tc_app::StoreChoice;
 use tc_app::backend::memory::MemoryBackend;
 use tc_app::backend::scenario::{ScenarioError, ScenarioReport};
 use tc_app::backend::scenario_store::ScenarioStore;
-use tc_app::backend::seed::{SeedRefusal, fixture_project_id};
+use tc_app::backend::seed::fixture_project_id;
 use tc_app::backend::store::StoreBackend;
 use tc_app::backend::{ProjectHandle, ProjectStore};
 use tc_app::config::ProjectsFolder;
@@ -25,13 +25,14 @@ use super::common::{
     Parts, TestApp, folder, is_busy, open_progress, post, rid, tit, until_held_count, until_quiet,
 };
 use super::scenario::scenario;
-use super::state_seed::{bible_declared, obs_written_up, tuple};
+use super::state_seed::bible_declared;
 use crate::store_world::{
     APP, PROJECTS, START_MS, assert_valid_burrito, backend_over, files, pending_files, progress,
     words_of,
 };
 
 const SAMPLE: &str = "sample_burrito";
+const OBS: &str = "sample_burrito_obs";
 
 /// The scenario `name` written into an empty projects folder on `fs`.
 fn scenario_on(fs: &FaultFs, name: &str) -> (ScenarioStore, ScenarioReport) {
@@ -51,37 +52,29 @@ fn open_sample(store: &ScenarioStore) -> Arc<dyn ProjectHandle> {
 }
 
 #[test]
-fn every_scenario_writes_its_bible_project_and_refuses_its_obs_project() {
+fn every_scenario_writes_both_its_projects() {
     for name in ["sample", "en-pins", "shared"] {
         let fs = FaultFs::new();
         let (store, report) = scenario_on(&fs, name);
         let loaded: Vec<String> = report.loaded.iter().map(|(f, _)| f.to_string()).collect();
-        assert_eq!(loaded, [SAMPLE], "{name}");
+        assert_eq!(loaded, [SAMPLE, OBS], "{name}");
         assert_eq!(report.loaded[0].1.declared, bible_declared(), "{name}");
-        let [(refused, SeedRefusal::Mismatches(mismatches))] = &report.refused[..] else {
-            panic!("{name}: {:?}", report.refused)
-        };
-        assert_eq!(refused.as_str(), "sample_burrito_obs", "{name}");
-        let tuples: Vec<_> = mismatches.iter().map(tuple).collect();
-        assert_eq!(tuples, obs_written_up(), "{name}");
+        assert!(report.refused.is_empty(), "{name}: {:?}", report.refused);
         let listing = store.list().unwrap();
         let listed: Vec<String> = listing
             .projects
             .iter()
             .map(|e| e.folder.to_string())
             .collect();
-        assert_eq!(
-            listed,
-            [SAMPLE],
-            "{name}: nothing of a refused project shows"
-        );
+        assert_eq!(listed, [SAMPLE, OBS], "{name}");
         assert!(
             listing.unusable.is_empty(),
             "{name}: {:?}",
             listing.unusable
         );
         assert_eq!(listing.projects[0].id, fixture_project_id(SAMPLE), "{name}");
-        // Nothing but the project: no staging folder, no refused project's files.
+        assert_eq!(listing.projects[1].id, fixture_project_id(OBS), "{name}");
+        // Nothing but the projects: no staging folder.
         let entries: Vec<String> = fs
             .files_under(Path::new(PROJECTS))
             .keys()
@@ -90,8 +83,28 @@ fn every_scenario_writes_its_bible_project_and_refuses_its_obs_project() {
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
             .collect();
-        assert_eq!(entries, [SAMPLE], "{name}");
+        assert_eq!(entries, [SAMPLE, OBS], "{name}");
     }
+}
+
+/// The OBS project opens through the store and is a valid Scripture Burrito, with its fifty
+/// stories as the files the seed was made from.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_obs_project_opens_on_the_store_and_is_a_valid_burrito() {
+    let fs = FaultFs::new();
+    let (store, _) = scenario_on(&fs, "sample");
+    let handle = store.open(&folder(OBS), progress()).unwrap();
+    handle.wait_idle();
+    assert_eq!(handle.facts().kind, tc_journal::fold::ProjectKind::Stories);
+    handle.close().await.unwrap();
+    let path = Path::new(PROJECTS).join(OBS);
+    let story = fs.peek(&path.join("ingredients/content/01.md")).unwrap();
+    assert!(
+        String::from_utf8(story)
+            .unwrap()
+            .starts_with("# 1. La Creación\n")
+    );
+    assert_valid_burrito(&fs, &path);
 }
 
 /// The same seed: every record the memory backend folds from the scenario has the same heads
@@ -267,7 +280,7 @@ async fn a_reset_puts_back_a_changed_project_and_removes_others() {
         .iter()
         .map(|e| e.folder.to_string())
         .collect();
-    assert_eq!(listed, [SAMPLE]);
+    assert_eq!(listed, [SAMPLE, OBS]);
     let open = t
         .app
         .sessions()
@@ -390,7 +403,12 @@ fn a_crash_while_a_scenario_project_is_written_leaves_no_half_project() {
     let (written, _) = ScenarioStore::write(backend, scenario("sample")).unwrap();
     let points = dry.ops() - start;
     assert!(points > 10, "{points} write points");
-    let records = open_sample(&written).snapshot().fold().record_keys().len();
+    let records_of = |name: &str| {
+        let handle = written.open(&folder(name), progress()).unwrap();
+        handle.wait_idle();
+        handle.snapshot().fold().record_keys().len()
+    };
+    let wanted = [(SAMPLE, records_of(SAMPLE)), (OBS, records_of(OBS))];
     // Every write point, a stopped write torn at every other one: the seed runs again for
     // each, so both forms at every point would double a long test for little.
     for n in 0..points {
@@ -410,24 +428,28 @@ fn a_crash_while_a_scenario_project_is_written_leaves_no_half_project() {
             .map(|name| name.to_string_lossy().into_owned())
             .collect();
         assert!(
-            names.iter().all(|name| name == SAMPLE),
-            "point {n}: only the project may be left: {names:?}"
+            names.iter().all(|name| name == SAMPLE || name == OBS),
+            "point {n}: only the projects may be left: {names:?}"
         );
-        if names.contains(SAMPLE) {
+        for (name, records) in wanted {
+            if !names.contains(name) {
+                continue;
+            }
             // Placed: the whole project is there, and opens.
+            let path = Path::new(PROJECTS).join(name);
             let handle = after
                 .store()
-                .open(&sample_path(), &tc_store::OpenOptions::default())
+                .open(&path, &tc_store::OpenOptions::default())
                 .unwrap();
-            assert_eq!(handle.facts().id, fixture_project_id(SAMPLE), "point {n}");
+            assert_eq!(handle.facts().id, fixture_project_id(name), "point {n}");
             assert_eq!(
                 handle.snapshot().fold().record_keys().len(),
                 records,
-                "point {n}"
+                "point {n}: {name}"
             );
             handle.wait_idle();
             handle.close().unwrap();
-            assert_valid_burrito(&next, &sample_path());
+            assert_valid_burrito(&next, &path);
         }
     }
 }
