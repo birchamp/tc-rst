@@ -1042,7 +1042,7 @@ computer) makes every older token fail its MAC; that is how a draft becomes `Unv
   the Bible card in every scenario, and B2's Home captures, whose `home()` waits for both cards
   (§7.1), wait for it.)* *(B2 D11: B2 did not wait. `home()` waits for the cards `home/list`
   names (§7.1), and every B2 row with tC4's OBS card is explained in `residuals.json`; the day
-  this test fails, B2's rows are captured again and those residuals go.)* *(B7: the day came. The three findings are fixed in tc-journal (B7 D1), the seed check passes on the OBS project of every scenario, `every_scenario_loads_both_its_projects` asserts it, and B2's Home rows were captured again with both cards.)*
+  this test fails, B2's rows are captured again and those residuals go.)* *(B7: the day came. The three findings are fixed in tc-journal (B7 D1), the seed check passes on the OBS project of every scenario, `every_scenario_loads_both_its_projects` asserts it, and B2's Home rows and C6's four Add a book cases were captured again with both cards.)*
   *(B1a: pending files are for Local devices only,
   and `encode_pending` refuses the seed's `Importer` device, so the seed seals packs as STORAGE
   §13.1 T8 does. tc-obs's `decode_story` records cannot give a story file back through the fold,
