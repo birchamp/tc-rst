@@ -387,7 +387,6 @@ fn project_in(name: &str, tag: &str) -> NewProject {
     let languages =
         format!(r#"[{{"name":{{"en":"Lengua"}},"scriptDirection":"rtl","tag":"{tag}"}}]"#);
     let mut project = titus_project(name);
-    project.books.clear();
     for record in &mut project.records {
         if let tc_journal::Record::ProjectMeta {
             field: tc_journal::MetaField::Languages,
@@ -434,7 +433,6 @@ fn create_keeps_regional_language_tags() {
     {
         let name = format!("Lengua{n}");
         let folder = rig.store.create(&project_in(&name, tag)).unwrap();
-        eprintln!("{:?}", files(&rig.fs, &folder).keys().collect::<Vec<_>>());
         let metadata: serde_json::Value =
             serde_json::from_slice(&rig.fs.peek(&folder.join("metadata.json")).unwrap()).unwrap();
         let language = &metadata["languages"][0];

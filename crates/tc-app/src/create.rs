@@ -32,6 +32,7 @@ use crate::backend::{CommandError, CreateFailure, NewProjectSpec, StoreCommand};
 use crate::dispatch::Handle;
 use crate::feedback::iso_utc_millis;
 use crate::jobs::ProgressSink;
+use crate::language_search::{LanguageIndex, language_name};
 use crate::session::ProjectSession;
 use crate::wire;
 
@@ -60,6 +61,7 @@ pub fn project_records(
     kind: ProjectKind,
     versification: Option<StandardScheme>,
     now: WallMs,
+    listed_name: Option<&str>,
 ) -> Result<Vec<Record>, String> {
     let meta = |field, value| -> Result<Record, String> {
         Ok(Record::ProjectMeta {
@@ -74,8 +76,10 @@ pub fn project_records(
     };
     let name = details.name.trim();
     let code = details.code.trim();
+    // The name the person typed; else the shipped Door43 list's name for the code (tC4's
+    // platform named a regional code from its own table); else the code.
     let language = match details.language_name.trim() {
-        "" => code,
+        "" => listed_name.unwrap_or(code),
         named => named,
     };
     let mut records = vec![
@@ -203,12 +207,20 @@ impl App {
         if taken {
             return Err(name_in_use());
         }
+        let code = details.code.trim();
+        let listed_name = LanguageIndex::shared().ok().and_then(|index| {
+            index
+                .rows()
+                .find(|row| row.lc.eq_ignore_ascii_case(code))
+                .map(|row| language_name(row).to_owned())
+        });
         let records = project_records(
             &details,
             &folder,
             kind,
             versification,
             self.inner.clock.now(),
+            listed_name.as_deref(),
         )
         .map_err(create_failed)?;
         let spec = NewProjectSpec {

@@ -523,7 +523,9 @@ impl FoldState {
         if !self.pin_keys.is_empty() {
             out.insert(DerivedFile::Resources);
         }
-        if self.kind == super::ProjectKind::Bible {
+        // A story project writes the file once it holds a setting, as tC4 does (J20): it has
+        // none before, so a project received without settings gets no file made up for it.
+        if self.kind == super::ProjectKind::Bible || !self.setting_keys.is_empty() {
             out.insert(DerivedFile::Settings);
         }
         if let Some(k) = self.key_idx(&RecordKey::Versification)

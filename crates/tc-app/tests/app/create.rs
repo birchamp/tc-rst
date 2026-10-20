@@ -324,6 +324,43 @@ async fn create_keeps_regional_language_tags() {
     }
 }
 
+/// The language's name is the one the person typed; with none typed, the shipped Door43 list's
+/// name for the code, else the code (tC4's platform named a code from its own table, #386).
+#[tokio::test]
+async fn a_language_with_no_name_typed_is_named_by_the_shipped_list_else_its_code() {
+    let (_dir, t, world, _store) = app().await;
+    for (n, (code, name)) in [("es-419", None), ("x-abc", Some("x-abc"))]
+        .into_iter()
+        .enumerate()
+    {
+        let details = Details {
+            name: format!("Unnamed {n}"),
+            language_name: String::new(),
+            code: code.to_owned(),
+            ..kanuri()
+        };
+        let created = post(&t.app, &bible(40 + n as u8, details)).await.unwrap();
+        post(
+            &t.app,
+            &AddBlankBooks {
+                request: rid(50 + n as u8),
+                project: created.project.clone(),
+                books: vec![BookId::Philemon],
+            },
+        )
+        .await
+        .unwrap();
+        let language = &metadata(&world, &created.project)["languages"][0];
+        match name {
+            Some(name) => assert_eq!(language["name"]["en"], name),
+            None => {
+                let listed = language["name"]["en"].as_str().unwrap();
+                assert!(!listed.is_empty() && listed != code, "{listed}");
+            }
+        }
+    }
+}
+
 /// J20: New Open Bible Stories makes a project of fifty stories that is a valid Burrito.
 #[tokio::test]
 async fn new_obs_makes_fifty_stories() {
@@ -908,4 +945,97 @@ fn the_suite_version_add_a_book_names_is_the_pinned_literal_bible() {
         literal.to_string().contains(tc_api::create::SUITE_VERSION),
         "{literal}"
     );
+}
+
+fn settings_file(world: &StoreWorld, project: &ProjectRef) -> serde_json::Value {
+    let files = project_files(world, project);
+    let bytes = files
+        .get("ingredients/checking/settings.json")
+        .unwrap_or_else(|| panic!("{project}: {:?}", files.keys().collect::<Vec<_>>()));
+    serde_json::from_slice(bytes).unwrap()
+}
+
+/// tC4 #529, the settings contract: a new project writes the presentation settings and nothing
+/// else, Bible or stories; the checking language lives in the pins, never in the settings.
+#[tokio::test]
+async fn a_new_project_writes_the_presentation_settings_and_no_checking_language() {
+    let (_dir, t, world, _store) = app().await;
+    let details = Details {
+        name: "Contrato Tito".into(),
+        language_name: "Español".into(),
+        code: "es".into(),
+        direction: Direction::Ltr,
+        ..kanuri()
+    };
+    let bible_project = post(&t.app, &bible(1, details.clone()))
+        .await
+        .unwrap()
+        .project;
+    post(
+        &t.app,
+        &AddBlankBooks {
+            request: rid(2),
+            project: bible_project.clone(),
+            books: vec![BookId::Titus],
+        },
+    )
+    .await
+    .unwrap();
+    let obs = post(
+        &t.app,
+        &Obs {
+            request: rid(3),
+            details: Details {
+                name: "Contrato Historias".into(),
+                ..details
+            },
+        },
+    )
+    .await
+    .unwrap()
+    .project;
+    for project in [&bible_project, &obs] {
+        let settings = settings_file(&world, project);
+        let keys: Vec<&str> = settings
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let mut sorted = keys.clone();
+        sorted.sort_unstable();
+        assert_eq!(
+            sorted,
+            ["languageName", "schemaVersion", "textDirection", "textFont"],
+            "{project}"
+        );
+        assert_eq!(settings["schemaVersion"], 1);
+        assert_eq!(settings["textDirection"], "ltr");
+        assert_eq!(settings["languageName"], "Español");
+        assert_eq!(settings["textFont"], FONT);
+    }
+}
+
+/// A project from before #529 that still carries `checkingLanguage` keeps it through a Save,
+/// which writes the direction and the font only.
+#[tokio::test]
+async fn a_save_keeps_a_checking_language_an_early_project_carries() {
+    let (_dir, t, world, _store) = app().await;
+    let project = world.bible.clone();
+    {
+        let handle = world.open(&project);
+        handle
+            .submit(setting(handle.as_ref(), "checkingLanguage", "en"))
+            .await
+            .unwrap();
+        handle.clone().close().await.unwrap();
+    }
+    let view = settings_view(&t, &project).await;
+    post(&t.app, &save(1, &project, &view, Direction::Rtl, FONT))
+        .await
+        .unwrap();
+    let settings = settings_file(&world, &project);
+    assert_eq!(settings["checkingLanguage"], "en");
+    assert_eq!(settings["textDirection"], "rtl");
+    assert_eq!(settings["textFont"], FONT);
 }
