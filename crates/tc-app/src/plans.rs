@@ -289,7 +289,8 @@ pub fn plan_decisions(
         };
         on_unit(affected.collection);
         let list = sources.list(affected.tool, affected.collection, &list_source, &spec)?;
-        let carried = carry::plan(&list.items, &pin.resource, &candidate.decisions);
+        let mut carried = carry::plan(&list.items, &pin.resource, &candidate.decisions);
+        keep_in_place(&mut carried);
         let texts = read.check_texts(affected.collection);
         let targets: BTreeMap<CheckTarget, Arc<TargetText>> = carried
             .entries
@@ -352,6 +353,22 @@ fn book_scope(read: &CountingSnapshot, collection: Collection) -> Vec<tc_burrito
             ..
         }) => ranges.as_slice().to_vec(),
         _ => Vec::new(),
+    }
+}
+
+/// Leaves where they are, as decisions no list places, the moves that meet another decision,
+/// so the dialog counts them as checks to check again and nothing is written for them.
+fn keep_in_place(plan: &mut carry::Plan) {
+    for entry in &mut plan.entries {
+        if matches!(
+            entry.outcome,
+            Outcome::Moves {
+                contested: true,
+                ..
+            }
+        ) {
+            entry.outcome = Outcome::Unplaced;
+        }
     }
 }
 

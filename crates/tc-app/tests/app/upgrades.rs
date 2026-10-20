@@ -310,6 +310,18 @@ struct Opts {
     /// The project pins the translation words too, at a release a newer one of which no longer
     /// has the article of some of its decided words checks; the notes are at their newest.
     words: bool,
+    trouble: Trouble,
+}
+
+/// What is wrong with the project's records beyond the sample's: what a teammate's sync, a
+/// Door43 release or an earlier version of the app can leave there.
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+enum Trouble {
+    #[default]
+    Nothing,
+    /// The first decision is two decisions with check ids v91 does not have, each recording
+    /// the quote of the one v91 note that both come to.
+    TwoOnOneCheck,
 }
 
 /// A project that pins an original-language text and a gateway Bible pane as well, and holds
@@ -344,6 +356,18 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
     for n in 0..orphans {
         let made = orphan(&decided[0], &format!("zz{n}z"));
         decided.push(made);
+    }
+    if opts.trouble == Trouble::TwoOnOneCheck {
+        let quote = v91_quote_of(&decided[0].0);
+        let twin = |id: &str| {
+            let mut twin = orphan(&decided[0], id);
+            twin.1
+                .context
+                .insert("quoteString".into(), tc_journal::Json::from(quote.as_str()));
+            twin
+        };
+        let twins = [twin("aa1a"), twin("bb2b")];
+        decided.splice(0..1, twins);
     }
     let mut records = sample_records(&BTreeMap::from([(BookId::Titus, titus)]), vrs);
     let mut pins = ProjectPins {
@@ -470,6 +494,31 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
         tn,
         decided,
     }
+}
+
+/// The quote v91 gives the note of the check `key`, which v86 (the decisions') words differently.
+fn v91_quote_of(key: &CheckKey) -> String {
+    let table =
+        String::from_utf8(fixture("tc4/test-fixtures/resources/en_tn@v91/TIT.tsv")).unwrap();
+    let notes = parse_notes(&table, TsvScope::Book(BookId::Titus))
+        .unwrap()
+        .notes;
+    let eng = tc_versification::StandardScheme::Eng.scheme();
+    notes_for_book(
+        &notes,
+        &BookSpec {
+            book: BookId::Titus,
+            resource_frame: eng,
+            project_frame: Some(eng),
+            scope: &[],
+        },
+    )
+    .items
+    .into_iter()
+    .find(|item| item.key == *key)
+    .unwrap()
+    .quote
+    .to_string()
 }
 
 async fn ok<E: Endpoint>(app: &tc_app::App, req: &E) -> E::Ok {
@@ -1857,4 +1906,68 @@ async fn a_download_adds_what_it_brought_to_the_sets_of_its_package_and_moves_no
     // Downloading it again changes nothing.
     download(&w, english, &["en_ust"], 82).await;
     assert_eq!(commands(&w) - commands_before, 1);
+}
+
+// ---- records in conflict, and decisions that cannot move ---------------------------------------
+
+/// What the dialog said about the notes of Titus, and what the project holds of them afterwards:
+/// how many decisions record `new` and how many still record `old`.
+struct Outcome {
+    carried: u32,
+    check_again: u32,
+    on_new: usize,
+    on_old: usize,
+}
+
+async fn upgrade_titus(w: &World, id: u8) -> Outcome {
+    let view = plan_set(w, SetRung::Primary, id).await;
+    let carry = view.rows[0].carry.unwrap();
+    assert_eq!(
+        ok(&w.t.app, &confirm(w, view.plan, id + 1)).await,
+        PlanApplied::Applied
+    );
+    handle(w).wait_idle();
+    let new = pins_of(w)
+        .primary
+        .unwrap()
+        .pin(SetSlot::TranslationNotes)
+        .unwrap()
+        .resource();
+    let held = |expected: &tc_check::ResourceRef| {
+        w.decided
+            .iter()
+            .filter(|(key, _)| resource_of(w, key) == *expected)
+            .count()
+    };
+    Outcome {
+        carried: carry.carried,
+        check_again: carry.check_again,
+        on_new: held(&new),
+        on_old: held(&w.tn.resource()),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn two_decisions_that_come_to_one_check_are_counted_as_checks_to_do_again() {
+    let w = build(
+        6,
+        0,
+        None,
+        Opts {
+            trouble: Trouble::TwoOnOneCheck,
+            ..Opts::default()
+        },
+    )
+    .await;
+    assert_eq!(w.decided.len(), 7);
+
+    let done = upgrade_titus(&w, 50).await;
+
+    // The dialog's figures are what the project holds afterwards: five decisions on v91, and
+    // the two that could not move still on v86, kept as they were.
+    assert_eq!((done.carried, done.check_again), (5, 2));
+    assert_eq!((done.on_new, done.on_old), (5, 2));
+    for (key, was) in &w.decided[..2] {
+        assert_eq!(resource_of(&w, key), was.resource);
+    }
 }
