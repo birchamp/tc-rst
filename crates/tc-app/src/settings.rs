@@ -78,6 +78,10 @@ fn unreadable(reason: String) -> ApiError {
 impl Handle<ViewFromHome> for App {
     async fn handle(&self, req: ViewFromHome) -> Result<SettingsView, ApiError> {
         let folder = req.project;
+        // A project left for Home a moment ago writes its files in the leave's checkpoint, so
+        // the files read before it ends still hold what came before the last change (a new
+        // checking language among them).
+        self.inner.sessions.settled(&folder).await;
         let listed = self.inner.home.listed(&folder);
         let looked_for = folder.clone();
         let read = self
