@@ -289,14 +289,28 @@ impl App {
         // named was checked above.
         let (store, on_disk): (Arc<dyn ProjectStore>, _) = match store {
             StoreChoice::OnDisk => {
-                let backend = Arc::new(
+                let backend =
                     StoreBackend::on_disk(&config.app_data, &projects.path).map_err(|e| {
                         StartError::AppData {
                             path: config.app_data.clone(),
                             reason: e.to_string(),
                         }
+                    })?;
+                // Where a copy of a project goes when the projects folder is what made it
+                // read-only (Q-30); a folder of an earlier copy is listed from the start.
+                let backend = match crate::config::local_projects_root(&host)
+                    .ok()
+                    .filter(|local| *local != projects.path)
+                {
+                    Some(local) => backend.with_local_projects(local.clone()).map_err(|e| {
+                        StartError::ProjectsFolder {
+                            path: local,
+                            reason: e.to_string(),
+                        }
                     })?,
-                );
+                    None => backend,
+                };
+                let backend = Arc::new(backend);
                 (backend.clone(), Some(backend))
             }
             StoreChoice::Given(store) => (store, None),

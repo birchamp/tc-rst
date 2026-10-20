@@ -118,6 +118,8 @@ fn spawn(name: &str, f: impl FnOnce() + Send + 'static) -> Option<std::thread::J
 /// The projects folder through tc-store (see the module documentation).
 pub struct StoreBackend {
     store: tc_store::Store,
+    /// What the store started with, for the store of the local projects folder.
+    config: tc_store::StoreConfig,
     projects: PathBuf,
     vfs: Arc<dyn tc_store::Vfs>,
     hooks: Arc<tc_store::Hooks>,
@@ -129,6 +131,15 @@ pub struct StoreBackend {
     trusted: Mutex<std::collections::BTreeSet<ProjectRef>>,
     /// This server run, which each open's drafts record (C1b).
     run: Mutex<Option<String>>,
+    /// Where this computer's local projects folder is, when it is not the projects folder
+    /// itself (Q-30).
+    local: Option<PathBuf>,
+    /// The store over the local projects folder: started with this one when the folder exists,
+    /// else by the first copy that needs it. Home lists its projects beside this folder's.
+    beside: Mutex<Option<Arc<StoreBackend>>>,
+    /// The names the local projects folder listed last, so a read of one project goes to the
+    /// right folder without listing either.
+    beside_names: Mutex<std::collections::BTreeSet<ProjectRef>>,
 }
 
 impl std::fmt::Debug for StoreBackend {
@@ -148,17 +159,94 @@ impl StoreBackend {
         let projects = config.projects.clone();
         let vfs = config.vfs.clone();
         let platform = config.platform.clone();
-        let store =
-            tc_store::Store::start_with_hooks(config, hooks.clone()).map_err(store_error)?;
+        let store = tc_store::Store::start_with_hooks(config.clone(), hooks.clone())
+            .map_err(store_error)?;
         Ok(Self {
             store,
+            config,
             projects,
             vfs,
             hooks,
             platform,
             trusted: Mutex::default(),
             run: Mutex::default(),
+            local: None,
+            beside: Mutex::default(),
+            beside_names: Mutex::default(),
         })
+    }
+
+    /// Names the local projects folder (Q-30): the folder a copy of a project goes to when the
+    /// projects folder itself cannot keep a copy safe. A local folder that exists already holds
+    /// earlier copies, so it is started now and Home lists them.
+    pub fn with_local_projects(mut self, local: PathBuf) -> Result<Self, StoreError> {
+        let exists = self
+            .vfs
+            .metadata(&local)
+            .is_ok_and(|meta| meta.kind == tc_store::vfs::EntryKind::Dir);
+        self.local = Some(local);
+        if exists {
+            let beside = self.start_beside()?;
+            *lock(&self.beside) = Some(beside);
+        }
+        Ok(self)
+    }
+
+    /// The store over the local projects folder, which has no local folder of its own.
+    fn start_beside(&self) -> Result<Arc<StoreBackend>, StoreError> {
+        let Some(local) = &self.local else {
+            return Err(store_error("this computer has no local projects folder"));
+        };
+        let config = tc_store::StoreConfig {
+            projects: local.clone(),
+            ..self.config.clone()
+        };
+        Self::start(config, self.hooks.clone()).map(Arc::new)
+    }
+
+    /// The store of the local projects folder, when it holds `folder`.
+    fn beside_of(&self, folder: &ProjectRef) -> Option<Arc<StoreBackend>> {
+        if lock(&self.beside_names).contains(folder) {
+            lock(&self.beside).clone()
+        } else {
+            None
+        }
+    }
+
+    /// The store a copy is written by: this one where its folder can keep a copy safe, else the
+    /// local projects folder's, made now if no copy has needed it yet (Q-30). `Err` says why no
+    /// folder of this computer can: the reason the projects folder cannot.
+    fn copy_target(&self) -> Result<Option<Arc<StoreBackend>>, CopyFailure> {
+        let Some(place) = self.platform.folder(&self.projects).unsafe_folder else {
+            return Ok(None);
+        };
+        let unsafe_here = || {
+            CopyFailure::Unsafe(read_only_reason(&tc_store::ReadOnlyReason::UnsafeFolder(
+                place.clone(),
+            )))
+        };
+        let Some(local) = &self.local else {
+            return Err(unsafe_here());
+        };
+        let mut beside = lock(&self.beside);
+        if let Some(beside) = &*beside {
+            // The folder was checked when it was made, and a cloud client may have come since.
+            return if self.platform.folder(local).unsafe_folder.is_none() {
+                Ok(Some(beside.clone()))
+            } else {
+                Err(unsafe_here())
+            };
+        }
+        tc_store::atomic_create_dirs(&*self.vfs, local)
+            .map_err(|e| CopyFailure::Failed(format!("{}: {e}", local.display())))?;
+        if self.platform.folder(local).unsafe_folder.is_some() {
+            return Err(unsafe_here());
+        }
+        let started = self
+            .start_beside()
+            .map_err(|e| CopyFailure::Failed(e.to_string()))?;
+        *beside = Some(started.clone());
+        Ok(Some(started))
     }
 
     /// Production: this computer's files, clock and processors.
@@ -357,6 +445,29 @@ impl StoreBackend {
             Err(reason) => unusable(UnusableReason::ProjectFileDamaged(reason)),
         }
     }
+
+    /// Reads the projects folder itself: tc-store's `Store::list` keeps only the folders with a
+    /// `project.json`, and would hide one that holds someone's work without it.
+    fn list_here(&self) -> Result<Listing, StoreError> {
+        let entries = self
+            .vfs
+            .read_dir(&self.projects)
+            .map_err(|e| store_error(format!("{}: {e}", self.projects.display())))?;
+        let mut listing = Listing::default();
+        for entry in &entries {
+            match self.entry(entry) {
+                Some(Ok(entry)) => listing.projects.push(entry),
+                Some(Err(unusable)) => listing.unusable.push(unusable),
+                None => listing
+                    .others
+                    .push(entry.name.to_string_lossy().into_owned()),
+            }
+        }
+        listing.projects.sort_by(|a, b| a.folder.cmp(&b.folder));
+        listing.unusable.sort_by(|a, b| a.name.cmp(&b.name));
+        listing.others.sort();
+        Ok(listing)
+    }
 }
 
 /// `NN.md`, a story of Open Bible Stories (1 to 50), as tC4's `listStories` reads the content
@@ -420,6 +531,9 @@ fn sync_remote(bytes: &[u8]) -> Option<super::Door43Remote> {
 
 impl ProjectStore for StoreBackend {
     fn peek(&self, folder: &ProjectRef) -> Result<super::ProjectPeek, StoreError> {
+        if let Some(beside) = self.beside_of(folder) {
+            return beside.peek(folder);
+        }
         let path = self.listed(folder).map_err(|failure| match failure {
             OpenFailure::NotAProject => StoreError::NotAProject,
             OpenFailure::Unreadable { reason } => StoreError::Other(reason),
@@ -448,6 +562,9 @@ impl ProjectStore for StoreBackend {
         books: &[tc_journal::BookId],
         watch: &SummaryWatch,
     ) -> Result<SummaryFiles, StoreError> {
+        if let Some(beside) = self.beside_of(folder) {
+            return beside.summary_files(folder, books, watch);
+        }
         let cancelled = || store_error("cancelled");
         let path = self
             .listed(folder)
@@ -502,6 +619,9 @@ impl ProjectStore for StoreBackend {
         folder: &ProjectRef,
         file: &tc_journal::fold::DerivedFile,
     ) -> Result<Option<Vec<u8>>, StoreError> {
+        if let Some(beside) = self.beside_of(folder) {
+            return beside.derived_file(folder, file);
+        }
         let path = self.listed(folder).map_err(|_| StoreError::NotAProject)?;
         let rel = file.path();
         match self.vfs.read(&under(&path, &rel)) {
@@ -511,26 +631,45 @@ impl ProjectStore for StoreBackend {
         }
     }
 
-    /// Reads the projects folder itself: tc-store's `Store::list` keeps only the folders with a
-    /// `project.json`, and would hide one that holds someone's work without it.
+    /// Both projects folders: the chosen one, and the local one beside it when copies were made
+    /// there (Q-30).
     fn list(&self) -> Result<Listing, StoreError> {
-        let entries = self
-            .vfs
-            .read_dir(&self.projects)
-            .map_err(|e| store_error(format!("{}: {e}", self.projects.display())))?;
-        let mut listing = Listing::default();
-        for entry in &entries {
-            match self.entry(entry) {
-                Some(Ok(entry)) => listing.projects.push(entry),
-                Some(Err(unusable)) => listing.unusable.push(unusable),
-                None => listing
-                    .others
-                    .push(entry.name.to_string_lossy().into_owned()),
+        let mut listing = self.list_here()?;
+        let beside = lock(&self.beside).clone();
+        if let Some(beside) = beside {
+            let there = beside.list_here()?;
+            // A name this folder holds is this folder's: one name never opens two folders.
+            let taken = |name: &str| {
+                listing.projects.iter().any(|p| p.folder.as_str() == name)
+                    || listing.unusable.iter().any(|u| u.name == name)
+                    || listing.others.iter().any(|o| o == name)
+            };
+            let mut names = std::collections::BTreeSet::new();
+            let mut merged = Listing::default();
+            for project in there.projects {
+                if !taken(project.folder.as_str()) {
+                    names.insert(project.folder.clone());
+                    merged.projects.push(project);
+                }
             }
+            for unusable in there.unusable {
+                if !taken(&unusable.name) {
+                    merged.unusable.push(unusable);
+                }
+            }
+            for other in there.others {
+                if !taken(&other) {
+                    merged.others.push(other);
+                }
+            }
+            *lock(&self.beside_names) = names;
+            listing.projects.extend(merged.projects);
+            listing.unusable.extend(merged.unusable);
+            listing.others.extend(merged.others);
+            listing.projects.sort_by(|a, b| a.folder.cmp(&b.folder));
+            listing.unusable.sort_by(|a, b| a.name.cmp(&b.name));
+            listing.others.sort();
         }
-        listing.projects.sort_by(|a, b| a.folder.cmp(&b.folder));
-        listing.unusable.sort_by(|a, b| a.name.cmp(&b.name));
-        listing.others.sort();
         Ok(listing)
     }
 
@@ -539,6 +678,9 @@ impl ProjectStore for StoreBackend {
         folder: &ProjectRef,
         progress: ProgressSink,
     ) -> Result<Arc<dyn ProjectHandle>, OpenFailure> {
+        if let Some(beside) = self.beside_of(folder) {
+            return beside.open(folder, progress);
+        }
         let path = self.listed(folder)?;
         let options = tc_store::OpenOptions {
             progress: forward_open(progress),
@@ -555,19 +697,35 @@ impl ProjectStore for StoreBackend {
         Ok(handle)
     }
 
-    /// The copy goes into the projects folder, so it is refused where the projects folder
-    /// itself is what made the project read-only: a copy there would be read-only too.
+    /// The copy goes into the projects folder, or into the local projects folder where the
+    /// projects folder itself is what made the project read-only (Q-30): a copy beside it would
+    /// be read-only too. It is refused only where this computer has no folder that is safe.
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
-        let from = self
-            .listed(folder)
-            .map_err(|_| CopyFailure::Failed(format!("{folder} is not in the projects folder")))?;
-        if let Some(place) = self.platform.folder(&self.projects).unsafe_folder {
-            return Err(CopyFailure::Unsafe(read_only_reason(
-                &tc_store::ReadOnlyReason::UnsafeFolder(place),
-            )));
+        let from = match self.beside_of(folder) {
+            Some(beside) => beside.listed(folder),
+            None => self.listed(folder),
         }
-        match self.store.copy_project(&from, name.as_str()) {
-            Ok(_) => Ok(()),
+        .map_err(|_| CopyFailure::Failed(format!("{folder} is not in the projects folder")))?;
+        let beside = self.copy_target()?;
+        let target = beside.as_deref().unwrap_or(self);
+        // One name never opens two folders: the other folder's names are taken too.
+        let listing = self
+            .list()
+            .map_err(|e| CopyFailure::Failed(e.to_string()))?;
+        let taken = |n: &str| n == name.as_str();
+        if listing.projects.iter().any(|p| taken(p.folder.as_str()))
+            || listing.unusable.iter().any(|u| taken(&u.name))
+            || listing.others.iter().any(|o| taken(o))
+        {
+            return Err(CopyFailure::NameExists);
+        }
+        match target.store.copy_project(&from, name.as_str()) {
+            Ok(_) => {
+                if beside.is_some() {
+                    lock(&self.beside_names).insert(name.clone());
+                }
+                Ok(())
+            }
             Err(tc_store::CreateError::NameExists(_)) => Err(CopyFailure::NameExists),
             Err(error) => Err(CopyFailure::Failed(error.to_string())),
         }
@@ -592,6 +750,9 @@ impl ProjectStore for StoreBackend {
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {
+        if let Some(beside) = self.beside_of(folder) {
+            return beside.trust_lock(folder);
+        }
         lock(&self.trusted).insert(folder.clone());
     }
 

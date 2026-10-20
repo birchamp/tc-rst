@@ -7,13 +7,12 @@
 //! open of the folder (AD38), so a card clicked meanwhile shares the session; a blank book is
 //! one `AddBook`, a book from a file is one `AddBookText`, whole or absent (tC4 #767).
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use tc_api::create::{
-    AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
-    UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
+    AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Claims, Created, Details, Obs, ReviewUsfm,
+    UsfmAdded, UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
 };
 use tc_api::ids::{ProjectRef, UploadId, WallMs};
 use tc_api::jobs::{OpenPhase, Phase};
@@ -425,7 +424,7 @@ impl Handle<AddUsfmBooks> for App {
     async fn handle(&self, req: AddUsfmBooks) -> Result<UsfmAdded, ApiError> {
         let lease = self.books_session(&req.project).await?;
         let session = lease.session().clone();
-        let mut claimed: BTreeMap<BookId, String> = BTreeMap::new();
+        let mut claims = Claims::default();
         let mut rows = Vec::new();
         for file in &req.files {
             let (verdict, text) = match self.upload_bytes(file).await {
@@ -438,20 +437,13 @@ impl Handle<AddUsfmBooks> for App {
             let outcome = match verdict {
                 UsfmVerdict::Refused(problem) => UsfmOutcome::Refused(problem),
                 UsfmVerdict::Book { book } => {
-                    if let Some(first) = claimed.get(&book) {
-                        UsfmOutcome::Refused(UsfmProblem::TwoFiles {
-                            book,
-                            first: first.clone(),
-                        })
-                    } else {
-                        claimed.insert(book, file.name.clone());
-                        if !session
-                            .read()
-                            .heads(&RecordKey::BookPresence(book))
-                            .is_empty()
-                        {
-                            UsfmOutcome::Refused(UsfmProblem::Exists { book })
-                        } else {
+                    let held = !session
+                        .read()
+                        .heads(&RecordKey::BookPresence(book))
+                        .is_empty();
+                    match claims.claim(&file.name, book, held) {
+                        Err(problem) => UsfmOutcome::Refused(problem),
+                        Ok(book) => {
                             let text = text.unwrap_or_default();
                             let command =
                                 StoreCommand::add_book_text(book, text, file.name.clone())

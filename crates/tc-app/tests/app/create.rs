@@ -686,3 +686,215 @@ async fn a_blank_book_is_seeded_from_the_pinned_literal_pane() {
         "the literal Bible's paragraphs, not one for each chapter: {titus}"
     );
 }
+
+/// A computer whose folders under `unsafe_under` are copied by OneDrive and whose other folders
+/// are safe.
+#[derive(Debug)]
+struct SyncedUnder {
+    unsafe_under: Vec<std::path::PathBuf>,
+    host: tc_store::FakePlatform,
+}
+
+impl tc_store::Platform for SyncedUnder {
+    fn machine_id(&self) -> String {
+        self.host.machine_id()
+    }
+    fn host(&self) -> String {
+        self.host.host()
+    }
+    fn pid(&self) -> u32 {
+        self.host.pid()
+    }
+    fn folder(&self, path: &Path) -> tc_store::FolderFacts {
+        let synced = self.unsafe_under.iter().any(|root| path.starts_with(root));
+        tc_store::FolderFacts {
+            unsafe_folder: synced.then(|| tc_store::UnsafeFolder::CloudSynced {
+                client: "OneDrive".to_owned(),
+            }),
+            network: false,
+        }
+    }
+}
+
+/// A backend over the world's files on a computer where `/projects` is copied by a cloud client
+/// and the local folder `/local` is, or is not.
+fn synced_backend(world: &StoreWorld, local_synced: bool) -> tc_app::backend::store::StoreBackend {
+    let mut unsafe_under = vec![std::path::PathBuf::from("/projects")];
+    if local_synced {
+        unsafe_under.push(std::path::PathBuf::from("/local"));
+    }
+    let backend = tc_app::backend::store::StoreBackend::start(
+        tc_store::StoreConfig {
+            app_data: std::path::PathBuf::from("/app"),
+            projects: std::path::PathBuf::from("/projects"),
+            vfs: Arc::new(world.fs.clone()),
+            platform: Arc::new(SyncedUnder {
+                unsafe_under,
+                host: tc_store::FakePlatform::default(),
+            }),
+            clock: Arc::new(tc_store::ManualClock::at(crate::store_world::START_MS)),
+            threads: 2,
+        },
+        Arc::default(),
+    )
+    .unwrap();
+    backend.store().wait_cleanup();
+    backend
+        .with_local_projects(std::path::PathBuf::from("/local"))
+        .unwrap()
+}
+
+async fn app_over(
+    backend: Arc<tc_app::backend::store::StoreBackend>,
+) -> (tempfile::TempDir, TestApp) {
+    let dir = tempfile::tempdir().unwrap();
+    let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
+        deps.store = StoreChoice::Given(backend);
+    })
+    .await;
+    (dir, t)
+}
+
+/// Q-30: a project read-only because its projects folder is copied by a cloud client is copied
+/// into the local projects folder, with every unsaved text and no folder to pick; Home lists the
+/// copy beside the others, and it opens writable. The synced folder is not touched.
+#[tokio::test]
+async fn copy_to_this_computer_goes_into_the_local_projects_folder() {
+    let world = store_world();
+    let backend = Arc::new(synced_backend(&world, false));
+    let (_dir, t) = app_over(backend.clone()).await;
+    let project = world.bible.clone();
+    let before = files(&world.fs, &world.folder(&project));
+
+    let open = t
+        .app
+        .sessions()
+        .open_screen(&project, super::common::open_progress())
+        .await
+        .unwrap();
+    assert_eq!(
+        open.mode,
+        tc_api::event::SessionMode::ReadOnly(tc_api::write::ReadOnlyReason::CloudSynced)
+    );
+    let copy = post(
+        &t.app,
+        &tc_api::session::CopyProject {
+            at: open.at.clone(),
+            request: rid(60),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(copy.project.as_str(), "sample_burrito - Copy");
+    // The copy is in the local folder and the synced folder is as it was.
+    assert!(
+        world
+            .fs
+            .peek(Path::new(
+                "/local/sample_burrito - Copy/ingredients/tc/project.json"
+            ))
+            .is_some()
+    );
+    assert!(
+        world
+            .fs
+            .peek(Path::new(
+                "/projects/sample_burrito - Copy/ingredients/tc/project.json"
+            ))
+            .is_none()
+    );
+    t.app.sessions().leave_screen(&open.at).unwrap();
+    t.app.sessions().settled(&project).await;
+    assert_eq!(files(&world.fs, &world.folder(&project)), before);
+
+    // Home lists it, read from the local folder.
+    let home = post(&t.app, &List {}).await.unwrap();
+    let card = home
+        .cards
+        .iter()
+        .find(|card| card.project == copy.project)
+        .expect("Home lists the copy");
+    assert_eq!(card.kind, ProjectKind::Bible);
+    // It opens writable and keeps a save.
+    let copied = t
+        .app
+        .sessions()
+        .open_screen(&copy.project, super::common::open_progress())
+        .await
+        .unwrap();
+    assert_eq!(copied.mode, tc_api::event::SessionMode::Writable);
+    let session = t.app.sessions().reader(&copied.at).unwrap();
+    crate::store_world::save(
+        session.handle().as_ref(),
+        &crate::store_world::tit(1, 2),
+        "a copy that saves",
+    )
+    .await
+    .unwrap();
+    t.app.sessions().leave_screen(&copied.at).unwrap();
+    t.app.sessions().settled(&copy.project).await;
+
+    // A second copy takes the next name; the first is not overwritten.
+    let open = t
+        .app
+        .sessions()
+        .open_screen(&project, super::common::open_progress())
+        .await
+        .unwrap();
+    let second = post(
+        &t.app,
+        &tc_api::session::CopyProject {
+            at: open.at.clone(),
+            request: rid(61),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(second.project.as_str(), "sample_burrito - Copy (2)");
+    t.app.sessions().leave_screen(&open.at).unwrap();
+    t.app.sessions().settled(&project).await;
+
+    // After a restart the local folder is there, so Home lists both copies from the start.
+    drop(t);
+    let backend = Arc::new(synced_backend(&world, false));
+    let listing = tc_app::backend::ProjectStore::list(backend.as_ref()).unwrap();
+    let names: Vec<&str> = listing.projects.iter().map(|p| p.folder.as_str()).collect();
+    assert!(names.contains(&"sample_burrito - Copy"), "{names:?}");
+    assert!(names.contains(&"sample_burrito - Copy (2)"), "{names:?}");
+}
+
+/// Where the local folder is copied by a cloud client too, there is no safe place: the copy is
+/// refused with the reason, and nothing is made.
+#[tokio::test]
+async fn copy_to_this_computer_is_refused_where_the_local_folder_is_synced_too() {
+    let world = store_world();
+    let backend = Arc::new(synced_backend(&world, true));
+    let (_dir, t) = app_over(backend).await;
+    let project = world.bible.clone();
+    let open = t
+        .app
+        .sessions()
+        .open_screen(&project, super::common::open_progress())
+        .await
+        .unwrap();
+    let refused = post(
+        &t.app,
+        &tc_api::session::CopyProject {
+            at: open.at.clone(),
+            request: rid(62),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(
+            refusal(refused),
+            Refusal::Create(CreateRefusal::CopyUnsafe {
+                reason: tc_api::write::ReadOnlyReason::CloudSynced
+            })
+        ),
+        "the reason is the projects folder's"
+    );
+    assert!(files(&world.fs, Path::new("/local")).is_empty());
+    t.app.sessions().leave_screen(&open.at).unwrap();
+}

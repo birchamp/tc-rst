@@ -217,6 +217,31 @@ impl UsfmProblem {
     }
 }
 
+/// The books that the files of one request claim, in order (tC4 `classifyUsfmFiles`): the first
+/// file of a book keeps it and a later file of the same book is refused as the second; a book
+/// the project holds is refused too. The dialog runs this on the verdicts of its files so a
+/// row's words follow every add and remove, and the server runs it again on the request.
+#[derive(Debug, Clone, Default)]
+pub struct Claims(std::collections::BTreeMap<BookId, String>);
+
+impl Claims {
+    /// File `name` is the book `book`; `held` says whether the project holds the book.
+    pub fn claim(&mut self, name: &str, book: BookId, held: bool) -> Result<BookId, UsfmProblem> {
+        if let Some(first) = self.0.get(&book) {
+            return Err(UsfmProblem::TwoFiles {
+                book,
+                first: first.clone(),
+            });
+        }
+        self.0.insert(book, name.to_owned());
+        if held {
+            Err(UsfmProblem::Exists { book })
+        } else {
+            Ok(book)
+        }
+    }
+}
+
 /// `create/addUsfmBooks`: Add books from USFM files. Each file that can be added is one batch,
 /// whole or absent (tC4 #767); the others are refused in their own rows and the rest still
 /// add. An uploaded file is deleted once its row is answered.
@@ -279,6 +304,32 @@ mod tests {
             direction: Direction::Ltr,
             font: String::new(),
         }
+    }
+
+    #[test]
+    fn the_first_file_of_a_book_keeps_it_and_a_held_book_is_refused() {
+        let mut claims = Claims::default();
+        let titus = BookId::Titus;
+        assert_eq!(claims.claim("a.usfm", titus, false), Ok(titus));
+        assert_eq!(
+            claims.claim("b.usfm", titus, false),
+            Err(UsfmProblem::TwoFiles {
+                book: titus,
+                first: "a.usfm".into()
+            })
+        );
+        assert_eq!(
+            claims.claim("c.usfm", BookId::Jude, true),
+            Err(UsfmProblem::Exists { book: BookId::Jude })
+        );
+        // A file refused as held still claims its book, as tC4's `fileOf` does.
+        assert_eq!(
+            claims.claim("d.usfm", BookId::Jude, true),
+            Err(UsfmProblem::TwoFiles {
+                book: BookId::Jude,
+                first: "c.usfm".into()
+            })
+        );
     }
 
     #[test]
