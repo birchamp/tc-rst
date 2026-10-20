@@ -47,6 +47,8 @@ const PHASE_0: &[&str] = &[
     "editor/sources",
     "helps/passage",
     "helps/article",
+    // B4a: Translate's text.
+    "editor/chapters",
     // B9b: the share dialog's first step, the repository link, and Open from Door43.
     "account/repoLink",
     "account/orgs",

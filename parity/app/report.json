@@ -28,10 +28,10 @@
   },
   "totals": {
     "rows": 130,
-    "same": 9,
+    "same": 10,
     "declared": 0,
-    "differs": 44,
-    "unported": 77,
+    "differs": 46,
+    "unported": 74,
     "failed": 0
   },
   "rows": [
@@ -114,11 +114,32 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B4a",
-        "dom": "B4a",
-        "meaning": "B4a"
+      "status": "differs",
+      "by": "B4a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
+        "rustSha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "3e27eb9e669b3cf153ed6418ca4a7e7ddb19bc88bbec2d03b415730c91075a7e",
+        "rustSha256": "c3bb32908edbb4610d1856f313bf2801de6f9e47c3d533f552d89a540882c41a",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 1351: tC4               \"“It is necessary to stop them … they should”\" | rust               \"“It is necessary to stop them”\"",
+          "line 1378: tC4               \"“It is necessary … teaching what they should not”\" | rust               \"“teaching what they should not”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1172,11 +1193,31 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B4a",
-        "dom": "B4a",
-        "meaning": "B4a"
+      "status": "differs",
+      "by": "B4a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
+        "rustSha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "8252bdeb4bb17728b64be6834f74ddc0db7492dc1bb26e3466a73db46b105f9e",
+        "rustSha256": "54c358010d2e89dd1a1070ca545e927f79740ff85fc325aeea63f137e7330320",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 1346: tC4               \"“It is necessary to stop them … they should”\" | rust               \"“It is necessary to stop them”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1196,11 +1237,29 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B4a",
-        "dom": "B4a",
-        "meaning": "B4a"
+      "status": "same",
+      "by": "B4a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
+        "rustSha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "4eadd4501bc0afaf5835272e9a343f38c7273091f49c825608fdc22187d5db82",
+        "rustSha256": "f4c2c428bb904325cf65ed0396f1c759ebabfa4eadea3952ed998dc7d7454d15",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {

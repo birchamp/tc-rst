@@ -407,6 +407,20 @@
       ],
       "why": "The item detail beside the rail is unit B5b's, which captures this case again with its session screens: until then the detail column is empty. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid. The rail header's bar carries tC4 #764's declared difference (see check-picker)."
     },
+    "translate-tit1": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The titles of two Titus 1 note cards in the helps panel are tC4 9ad4d5c's, “It is necessary to stop them” and “teaching what they should not”, where the d310bf3 capture shows “It is necessary to stop them … they should” and “It is necessary … teaching what they should not”: FIX-helps adopted tC4's later rendering of a note's quote early (C39, docs/TC4-DELTA-2026-10-19.md §3.11; tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code by `every_gateway_title_of_genesis_psalms_and_titus_is_tc4s`). Both cards are below the fold, so the screenshot is tC4's pixel for pixel, and every other line of the DOM, every computed style included, is tC4's. The difference goes when the reference moves to v4.0.0 and the screens are captured again (DELTA §3.11 item 1).",
+      "until": null
+    },
+    "en-translate-tit1": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The title of a Titus 1 note card in the helps panel is tC4 9ad4d5c's, “It is necessary to stop them”, where the d310bf3 capture shows “It is necessary to stop them … they should”: FIX-helps adopted tC4's later rendering of a note's quote early (C39, docs/TC4-DELTA-2026-10-19.md §3.11; tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code by `every_gateway_title_of_genesis_psalms_and_titus_is_tc4s`). The card is below the fold, so the screenshot is tC4's pixel for pixel, and every other line of the DOM, every computed style included, is tC4's. The difference goes when the reference moves to v4.0.0 and the screens are captured again (DELTA §3.11 item 1).",
+      "until": null
+    },
     "project-settings": {
       "layers": [
         "pixels",

@@ -52,6 +52,7 @@ mod app {
     mod store;
     mod store_scenario;
     mod sync;
+    mod translate;
     pub mod understand;
     mod wire;
 }

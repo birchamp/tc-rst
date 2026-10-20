@@ -34,8 +34,9 @@ use tc_api::check::{
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
-    Book, BookView, CommentView, FrameRow, PaneChapter, PaneText, PaneVerse, RailBook, RowSource,
-    SourceFrame, SourcePane, Sources, SourcesView,
+    Book, BookView, ChapterText, Chapters, ChaptersView, CommentView, FrameRow, PaneChapter,
+    PaneText, PaneVerse, RailBook, RowSource, SourceFrame, SourcePane, Sources, SourcesView,
+    VerseRow,
 };
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
@@ -1240,6 +1241,7 @@ impl Example for SourcesView {
             panes: vec![
                 SourcePane {
                     id: "ult".into(),
+                    version: Some("v91".into()),
                     dir: Direction::Ltr,
                     text: PaneText::Ready(PaneChapter {
                         sections: vec![1, 4],
@@ -1264,17 +1266,25 @@ impl Example for SourcesView {
                 },
                 SourcePane {
                     id: "ust".into(),
+                    version: Some("v88".into()),
                     dir: Direction::Ltr,
                     text: PaneText::NotInstalled,
                 },
                 SourcePane {
                     id: "glt".into(),
+                    version: None,
                     dir: Direction::Rtl,
                     text: PaneText::Error {
                         reason: "the book could not be read".into(),
                     },
                 },
             ],
+            original: Some(SourcePane {
+                id: "orig".into(),
+                version: Some("v0.34".into()),
+                dir: Direction::Ltr,
+                text: PaneText::Missing,
+            }),
             // A project in another numbering: `rsc` Jonah 2 holds `eng` 1:17 and 2:1-10.
             frame: SourceFrame::Mapped {
                 rows: vec![
@@ -1297,6 +1307,68 @@ impl Example for SourcesView {
                     },
                 ],
             },
+        }
+    }
+}
+
+impl Example for Chapters {
+    fn example() -> Self {
+        Chapters {
+            at: scope(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for ChaptersView {
+    fn example() -> Self {
+        let words = |value: &str, marker: Option<ConflictMarker>| Shown {
+            value: value.into(),
+            token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            marker,
+        };
+        ChaptersView {
+            view: ViewSeq::new(42),
+            chapters: vec![ChapterText {
+                chapter: 3,
+                sections: vec![1, 4],
+                verses: vec![
+                    VerseRow {
+                        key: RefPart::parse("1").unwrap(),
+                        record: record(r#"{"book":"TIT","chapter":3,"kind":"verse","verse":1}"#),
+                        drafted: true,
+                        text: "Recuérdales que se sujeten".into(),
+                        lead: None,
+                        before: Some(0),
+                        words: words("Recuérdales que se sujeten", None),
+                    },
+                    VerseRow {
+                        key: RefPart::parse("2-3").unwrap(),
+                        record: record(r#"{"book":"TIT","chapter":3,"kind":"verse","verse":2}"#),
+                        drafted: true,
+                        text: "que no hablen mal de nadie, que sean amables".into(),
+                        lead: Some(1),
+                        before: None,
+                        words: words(
+                            "\\q1 que no hablen mal de nadie,\n\\q2 que sean amables",
+                            Some(ConflictMarker {
+                                conflict: ConflictRef::parse(&"e".repeat(64)).unwrap(),
+                                versions: 2,
+                            }),
+                        ),
+                    },
+                    VerseRow {
+                        key: RefPart::parse("4").unwrap(),
+                        record: record(r#"{"book":"TIT","chapter":3,"kind":"verse","verse":4}"#),
+                        drafted: false,
+                        text: String::new(),
+                        lead: None,
+                        before: None,
+                        words: words("___", None),
+                    },
+                ],
+            }],
+            conflicts: 1,
         }
     }
 }

@@ -417,6 +417,10 @@ struct Item {
     refused: bool,
     /// A power cut took the mirror's line of its text: an older line of the run may stand.
     cut: bool,
+    /// A *Keep* saved a version here after the last keystroke, which rule 1 counts as the run's
+    /// own save of the field: the text typed over a standing offer is not proven by it. Only an
+    /// editor that takes input beneath an unanswered question reaches this.
+    kept_over: bool,
     /// Every text of the stretch: when the last one reached no such place (a browser with no
     /// shell, whose item holds another run's entry or whose storage is full), an earlier one
     /// is the best left, and offering it is no fault (A4b keeps an older text over none).
@@ -684,6 +688,7 @@ impl World {
                 in_file: false,
                 refused: false,
                 cut: false,
+                kept_over: false,
                 history: Vec::new(),
             });
         if fresh {
@@ -705,6 +710,7 @@ impl World {
             item.in_storage = false;
             item.in_mirror = false;
             item.in_file = false;
+            item.kept_over = false;
         }
         let actions = self.step(
             field,
@@ -822,22 +828,27 @@ impl World {
         let keep = self.synced.max(self.mirror.len().saturating_sub(lines));
         self.mirror.truncate(keep);
         let none = |_: &BufferKey, _: ServerInstance| false;
-        let left: Vec<(BufferKey, ServerInstance, String)> =
+        let left: Vec<(BufferKey, ServerInstance, String, i64)> =
             offer::buffered_lines(&MemStore::new(), &self.mirror, &self.folder, &id(), &none)
                 .iter()
                 .filter_map(|line| match serde_json::from_str(line) {
                     Ok(BufferLine::Changed { key, entry }) => {
-                        Some((key, entry.instance, entry.text))
+                        Some((key, entry.instance, entry.text, entry.at.0))
                     }
                     _ => None,
                 })
                 .collect();
         let keys: Vec<BufferKey> = (0..FIELDS).map(|f| self.key(f)).collect();
         for ((field, run, _), item) in &mut self.items {
-            let kept = left.iter().any(|(key, of, text)| {
-                *key == keys[*field] && *of == instance(*run) && same_text(text, &item.text)
+            // The line of this stretch's last keystroke, not an older stretch's of the same text.
+            let kept = left.iter().any(|(key, of, text, at)| {
+                *key == keys[*field]
+                    && *of == instance(*run)
+                    && same_text(text, &item.text)
+                    && *at >= item.typed_at
             });
-            item.cut |= item.in_mirror && !kept;
+            // A discarded text's removal line is as lost as a Changed line: its text stands.
+            item.cut |= (item.in_mirror && !kept) || (item.answered == Answered::Discarded && kept);
             item.in_mirror &= kept;
             item.in_storage = false;
         }
@@ -1007,8 +1018,15 @@ impl World {
                     self.drafts
                         .offered
                         .retain(|_, e| e.field != field || !(all || same_text(&e.text, &text)));
-                    // An offer stands for earlier runs' texts: the page's own are never offered.
                     let run = self.run;
+                    for item in self
+                        .items
+                        .iter_mut()
+                        .filter(|((f, r, _), _)| *f == field && *r == run)
+                    {
+                        item.1.kept_over = true;
+                    }
+                    // An offer stands for earlier runs' texts: the page's own are never offered.
                     for item in self
                         .items
                         .iter_mut()
@@ -1199,7 +1217,7 @@ impl World {
                 let held = item.held_then
                     || after.store.held_since(field, item.base, &item.text)
                     || after.store.made_since(field, item.since, &item.text);
-                if *f != field || !item.open() || held || !item.durable() {
+                if *f != field || !item.open() || held || !item.durable() || item.kept_over {
                     continue;
                 }
                 let held = offered.iter().any(|t| same_text(t, &item.text))
@@ -1329,4 +1347,55 @@ fn the_property_catches_every_finding_put_back() {
         }
     }
     assert!(missed.is_empty(), "not caught: {missed:#?}");
+}
+
+/// Inputs the property found, each a power cut or a keep the model once counted wrong.
+#[test]
+fn the_cases_the_property_found_hold() {
+    use Op::*;
+    let cases: [(&str, Vec<Op>); 3] = [
+        // A power cut takes the removal line of a discarded text: it stands in the mirror and
+        // is offered again, which loses nothing.
+        (
+            "discarded text offered again",
+            vec![Type(0, 1), Crash, Offer, Settle, Discard(0, 0), PowerCut(1)],
+        ),
+        // The power cut takes the last stretch's lines; an older stretch's line of the same
+        // text does not keep it.
+        (
+            "older stretch's line of the same text",
+            vec![
+                Type(0, 0),
+                StorageFull,
+                Type(0, 1),
+                Send(0),
+                Land(0),
+                Ack(0),
+                Teammate(0, 2),
+                Type(0, 1),
+                PowerCut(2),
+            ],
+        ),
+        // Text typed over an unanswered offer, then the offer kept: the keep stands in for the
+        // save rule 1 looks for.
+        (
+            "typed over an offer, then kept",
+            vec![
+                Type(1, 2),
+                DraftTick(1),
+                Flush,
+                PowerCut(3),
+                Type(1, 0),
+                DraftTick(1),
+                Flush,
+                Keep(1, 0),
+                PowerCut(1),
+            ],
+        ),
+    ];
+    for (name, ops) in cases {
+        if let Err(why) = play(None, true, &ops) {
+            panic!("{name}: {why}");
+        }
+    }
 }

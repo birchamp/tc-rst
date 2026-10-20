@@ -42,6 +42,7 @@ pub mod share;
 pub mod sources;
 mod startup;
 pub mod sync;
+mod translate;
 mod understand;
 pub mod wire;
 

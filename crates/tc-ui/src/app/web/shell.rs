@@ -489,9 +489,9 @@ fn main_view(s: &AppState) -> AnyView {
         Screen::Home => view! { <Home /> }.into_any(),
         Screen::Understand => view! { <Understand /> }.into_any(),
         Screen::Check => view! { <Check /> }.into_any(),
-        // B4a Translate, B8 Community Checking, B7 the story views.
-        Screen::Draft
-        | Screen::CommunityChecking
+        Screen::Draft => view! { <crate::views::translate::Translate /> }.into_any(),
+        // B8 Community Checking, B7 the story views.
+        Screen::CommunityChecking
         | Screen::StoryUnderstand
         | Screen::StoryDraft
         | Screen::Nothing => ().into_any(),

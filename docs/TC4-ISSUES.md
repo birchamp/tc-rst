@@ -158,16 +158,16 @@ the rebuild fixed it or does as tC4 does:
 
 | Issue | Title | Status | Unit or crate | Regression test | Action |
 |---|---|---|---|---|---|
-| #786 | Editing a multi-line poetry verse changes only its first line | unit todo | B4a, C2; APP-DESIGN Q-20 | `verse_editor_shows_every_poem_line`; `verse_starting_on_its_own_poem_line_opens_with_its_text`; B4b no-change section save on Psalm 3 and GEN 3:14-17 | The owner already ruled (Q-20): the box edits all of `words`, so no old line is left. B4a never takes the box's text or emptiness from tC4's `drafted` flag; a save replaces `words` only. Rewrite Q-20's wrong premise and tell the owner. |
-| #784 | A `\v` after a marker is missing from Translate and Align | covered | tc-usfm; B4a, B6 | `every_aligned_ult_verse_opens_in_verse_order_with_nothing_to_save` (2,461 Psalms verses) | B4a: GEN 3:15 is listed, and an edit keeps the `\q1 ` before `\v 15`. B6: 1,533 Genesis and 2,461 Psalms verses. Optional codec test for `\p\v 6` (ZEC 2:6). |
+| #786 | Editing a multi-line poetry verse changes only its first line | unit todo | C2, B4b (B4a done); APP-DESIGN Q-20 | `verse_editor_shows_every_poem_line` (tc-app and tc-ui); `verse_starting_on_its_own_poem_line_opens_with_its_text` (inside the tc-app test); B4b no-change section save on Psalm 3 and GEN 3:14-17 | B4a: `editor/chapters` carries each verse's whole `words`, every poem line with its markers, and the verse card edits them; the box's text and emptiness come from `words` alone (only the stub `___` shows empty). Q-20's wrong premise is rewritten (APP-DESIGN §12). C2: a save replaces `words` only. |
+| #784 | A `\v` after a marker is missing from Translate and Align | covered | tc-usfm; B6 (B4a done) | `every_aligned_ult_verse_opens_in_verse_order_with_nothing_to_save` (2,461 Psalms verses); `a_verse_right_after_a_marker_is_listed_in_its_paragraph` (tc-app, B4a) | B4a: a verse right after a marker (`\p\v 6`) is a row of its own that opens its paragraph; a save replaces `words` only, so the marker before `\v` (the previous verse's layout) stays. B6: 1,533 Genesis and 2,461 Psalms verses. |
 | #802 | Refuse a book save over newer text on disk | covered | tc-store; C2 | `a_stale_token_makes_a_conflict_never_a_revert`; `loss_rename_retry_never_overwrites_outside_save` | Optional C2 two-tab Playwright case. |
 | #179 | An edit whose base is unknown displaces the verse's text | unit todo | tc-journal | `loss_unknown_parent_verse_edit_keeps_standing_text` | The behavior is right (two heads, the standing text shows, a conflict marked incomplete history), but no test pins it. Commit the test. |
 | #364 | Renumber verses in the editor | not applicable | later B4b, C2 | — | tC4 4.1.0. STORAGE §5.2 already has the write. Port when tC4 ships it. |
 | #365 | Import a book into an existing project | not applicable | later F1, C7a | — | tC4 4.1.0. Build on the §11.1 outside-edit path when wanted. |
 | #353 | ULT and UST side by side in Translate | not applicable | B4a if adopted | — | Post-4.0, no layout decided. |
-| #131 | Translate's source pane in projects with other verse numbers | unit todo | B4a | `cross_frame_translate_shows_the_mapped_source_verse` (2:2 maps to 1:1, fan-out, unmapped, cross-book) | Map through `map_reference`, as Understand does. Show tC4's statements when a verse cannot be placed. Declared difference; tell the owner. |
+| #131 | Translate's source pane in projects with other verse numbers | covered | B4a | `cross_frame_translate_shows_the_mapped_source_verse` (tc-ui: a shift, a fan-out, another book, no place, an unknown numbering; and a journey) | Done by B4a: Translate reads `editor/sources`' mapped panes, one row per project verse labelled and numbered with the source verse it shows, with tC4's statements for a verse in another book or in no place. A declared difference (APP-DESIGN B4a D9); the owner is told. |
 | #121 | Understand: source text for verses mapped into another book | covered | B3 | `cross_book_verse_shows_the_statement_and_keys_comments_to_the_project_verse` (tc-ui); `a_verse_in_another_book_names_that_book` (tc-app) | Done by B3: a project verse the sources have in another book is `understand.verseCrossBook` with its place (`DAG 13:1`), never this book's text; the comment box keeps the project verse; a chapter wholly in another book says `understand.helpsCrossBook`. |
-| #118 | Understand: Section view in projects with other verse numbers | unit todo | B4a (B3 done) | `cross_frame_project_shows_the_verse_only_statement_instead_of_the_switch` (B3 journey); `a_project_in_another_numbering_reads_each_verse_where_the_sources_have_it` (tc-app) | B3: one unit per project verse, each the source verse the project's numbering names (`editor/sources` `frame`), `understand.crossFrameVerseOnly` in place of the switch, `understand.frameUnavailable` when the scheme is unknown. B4a: the same on Translate. |
+| #118 | Understand: Section view in projects with other verse numbers | covered | B3, B4a | `cross_frame_project_shows_the_verse_only_statement_instead_of_the_switch` (B3 journey); `a_project_in_another_numbering_reads_each_verse_where_the_sources_have_it` (tc-app); `cross_frame_translate_shows_the_mapped_source_verse` (B4a journey) | Done by B3 and B4a: one unit per project verse, each the source verse the project's numbering names (`editor/sources` `frame`), `understand.crossFrameVerseOnly` in place of the switch on both screens, `understand.frameUnavailable` when the scheme is unknown. |
 | #55 | Draft book introductions | not applicable | — | — | tC4 4.1.0. The introduction is kept byte for byte. |
 | #27 | Merge concurrent edits automatically | covered | tc-journal | `merge_bookmark_and_status`; `loss_check_two_ways_visible` | None. |
 | #767 | Import creates an empty book after the size warning | unit todo | C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent`; J9 en_ult EXO and LEV add whole | See §1 row 17. Make the fallback safe, or get the one-batch command (a change to Q-17). Vendor `addBook.usfmTooLarge` if a refusal stays. |
@@ -194,12 +194,12 @@ the rebuild fixed it or does as tC4 does:
 | #619 | Quotes and bold in helps, not raw `>` and `__` | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | B3: `tc_helps::blocks`, tC4's renderer, held to tC4's own output on every Titus note (608 blocks). B5b: the Check article panel draws the same blocks. |
 | #621 | Superscript verse numbers in the simplified-text tab | covered | B3 | journey `simplified_tab_verse_numbers_are_superscript` | Done by B3, the source verse's `c:v` in another numbering. |
 | #628 | Full Markdown in helps | covered | B3 | `ta_article_with_a_table_renders_a_table` (tc-helps); journey `an_article_draws_its_table_numbers_and_nesting` | Done by B3 for tables, numbered items and nested lists, a declared difference the owner was told (DELTA-10-19 §5). Links stay their label until tC4 decides. Installed images are not drawn: tA names them by Door43 address, which no install keeps on this computer yet. |
-| #602 | Resize the helps panel by dragging | unit todo | B4a (B3 done) | `helps_panel_width_follows_the_divider_drag` | B3: the divider resizes the panel within 280 to 720 px; one show/hide button. B4a reuses both. |
+| #602 | Resize the helps panel by dragging | covered | B3, B4a | `helps_panel_width_follows_the_divider_drag` | Done by B3 and B4a: the divider resizes the panel within 280 to 720 px; one show/hide button; Translate mounts the same panel. |
 | #601 | Keep the article title and close button visible | covered | B3 | `article_close_button_visible_after_scroll` | Done by B3: the article's header stays in view. |
 | #234 | Widen the helps pane | covered | B3 | `helps_panel_width_follows_the_divider_drag` | Done by B3 with #602's divider. |
-| #728 | Make "Draft section" look like a button | unit todo | B4a | DOM parity of `en-translate-tit1` | `Button(Secondary, Sm)`, end-aligned, accent text while enabled. |
+| #728 | Make "Draft section" look like a button | covered | B4a | pixel and DOM parity of `en-translate-tit1` and `translate-tit1` (the two differ only by C39's note titles) | Done by B4a: `Button(Secondary, Sm)`, end-aligned, accent text while enabled. |
 | #650 | An Arabic gateway package end to end | covered | B3 | journey `arabic_helps_panes_are_rtl_in_an_english_interface` | Done by B3: each helps slot carries its gateway's direction (`rung_dir`), and the cards, questions, simplified text and article read in it. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B4a, B5b, B6, G2 | J10 `rtl_project_drafts_checks_and_aligns` | Each journey adds the Arabic case; G2 captures the `ar` screens. |
+| #29 | Right-to-left and complex scripts end to end | unit todo | B5b, B6, G2 (B4a's case done) | J10 `rtl_project_drafts_checks_and_aligns`; B4a `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime` | Each journey adds the Arabic case; G2 captures the `ar` screens. B4a: Arabic typed through an IME composition into the verse card while a teammate's change arrives keeps every keystroke and saves as a second version. |
 | #614 | Four English literals in design-system props | unit todo | B4b, B5b, C6, A5 | port of tC4 `ds-labels` a–d | Pass the catalog strings; consider making them required props. |
 | #702 | Text zoom sliders | not applicable | — | — | tC4 4.1.0. |
 | #719 | Add source Bibles to a project | not applicable | later B9a | — | tC4 4.1.0. |
@@ -255,7 +255,7 @@ the rebuild fixed it or does as tC4 does:
 | #621 | Superscript verse numbers in the simplified tab | covered | B3 | `simplified_tab_verse_numbers_are_superscript` | Done by B3 (§3). |
 | #619 | Quotes and bold in helps | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | As in §3, with #628's differences. |
 | #601 | Sticky article header | covered | B3 | `article_close_button_visible_after_scroll` | Done by B3 (§3). |
-| #602 | Resize the helps panel | unit todo | B4a (B3 done) | `helps_panel_width_follows_the_divider_drag` | As in §3. |
+| #602 | Resize the helps panel | covered | B3, B4a | `helps_panel_width_follows_the_divider_drag` | As in §3. |
 | #606 | Third-party licenses in About, offline | unit todo | A5, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). B9a: nothing in the app installs an Aquifer resource yet (APP-DESIGN §4.6), so the attribution goes with the unit that first installs one. |
 | #532 | Show a verse's new draft on return to the check | unit todo | B5b, C4 | `check_shows_new_draft_after_switching_back` | Read the verse again on return or when the book text arrives. |
 | #42 | Keyboard pass on the Check pages | unit todo | B5b (B5a done) | journeys `check_keyboard_picker_guided_fix_and_rail`, `check_keyboard_on_a_psalms_sized_rail`; `rail_keys_are_tc4s_roving_pattern` (tc-ui, the `railKeyDown` cases) | B5a: the picker's stops with the ring, the guided fix holding and returning the focus, the rail taking the focus once and being one Tab stop with tC4's keys, Tab out of the list, Back to the card, also on a virtual rail of Psalms' size. B5b: the detail column's stops, the drawer, the target words. #769's heading stops wait for the reference move. |
@@ -346,10 +346,10 @@ the rebuild fixed it or does as tC4 does:
 | #740 | First launch in under a minute | unit todo | G1, G2 | keep `repeat_launch_reads_no_resource_content_file`; add the Windows measurement | The code half is covered. The Windows 60 s goal is not shown yet; merge with #751. |
 | #730 | Correct 76 Arabic strings | covered | tc-ui | `every_vendored_file_has_the_bytes_tc4_has` | B5a uses `byFigure` after the next vendoring. |
 | #729 | The help panel blinks white | unit todo | A5 | tC4 help cases g, h and i | Port `swapPages`; swap only HTML pages under `help/`. |
-| #728 | "Draft section" looks like a button | unit todo | B4a | DOM parity of `translate-tit1` | As in §3, with an RTL case. |
+| #728 | "Draft section" looks like a button | covered | B4a | pixel and DOM parity of `translate-tit1` | As in §3. The RTL case waits for a right-to-left project, which C6's create makes. |
 | #763 | The rc.2 help pages | reference change | A5, A6a | help case b | Q31 for the banner and install sentences. Also triage #476 (§7). |
 | #686 | Bundle Noto Sans Arabic | covered | tc-ui; A5 | port tC4 app-language case j, with a check that the font file answers 200 | None in tc-ui. |
-| #657 | Mirror the interface for a right-to-left language | unit todo | A5, B3, B4a | tC4 app-language cases h and i | Window-control room stays on the physical side. |
+| #657 | Mirror the interface for a right-to-left language | unit todo | A5, B3, C6 (B4a's half done) | tC4 app-language cases h and i; B4a `app_language_i_scripture_follows_the_project_under_an_arabic_interface` | Window-control room stays on the physical side. B4a: under Arabic the page reads right to left and a left-to-right project's source, translation and verse card read left to right; a right-to-left project under English needs C6's create. |
 | #642 | Remove the Linux native title bar | unit todo | G1 | `linux_window_keeps_native_frame` | Match 4.0. |
 | #613 | Bundle a Devanagari interface font | unit todo | A5 | `hindi_label_renders_in_the_bundled_face_offline` | Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
 | #606 | Third-party licenses in About | unit todo | G1 (A5 if tC4 ships it) | release check: every crate in `Cargo.lock` has a notice | Generate notices from `Cargo.lock`, fonts, vendored tC4 assets, Electronite and resources. Include the crates' own `NOTICE` files: `crates/tc-align/NOTICE`, and `crates/tc-door43/NOTICE` (proxy-watch's MIT notice, Windows builds). |
@@ -359,7 +359,7 @@ the rebuild fixed it or does as tC4 does:
 | #278 | Show the build in the app | unit todo | A5, G1 | `about_commit_matches_the_release_record` | G1 sets `TC4_BUILD_COMMIT` for server and wasm. |
 | #167 | Which interface languages | covered | tc-ui | `the_registry_names_the_ten_decided_locales_each_with_a_catalog` | None. |
 | #37 | Unused catalog keys | not applicable | tc-ui | — | Optional: check that each rebuild key is used. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B4a, B5b, B6, G1 | Arabic IME Playwright case; Graphite probe | Use logical properties where tC4's physical ones break right to left, and record it. |
+| #29 | Right-to-left and complex scripts end to end | unit todo | B5b, B6, G1 (B4a's IME case done) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe | Use logical properties where tC4's physical ones break right to left, and record it. |
 | #701 | Urdu (Devanagari) direction | rebuild bug | tc-resources | `ur_deva_helps_read_left_to_right_and_are_named_in_devanagari` | See §1 row 12. |
 | #548 | Dropdown follow-ups | covered | tc-ui | `a_book_matches_by_name_or_code_prefix`; gallery `select-search` | None. |
 | #552 | Move the dropdown onto a library | rebuild bug | tc-ui | ds-gallery `Select/disabled-while-open` | See §1 row 13. |
@@ -470,9 +470,12 @@ Follow-ups the fix units left (2026-10-19):
   (#650, #657); resume shows no clickable picker (#518, with B5a); the sync toast's Download
   opens the project (B9a its Source texts) and closes the toast once open, and a failed open
   keeps it (#724).
-- **B4a:** the verse box shows all of `words` (#786); the source pane follows the verse
-  mapping (#131); verse-only statement (#118); "Draft section" pill (#728); reuse the divider
-  (#602); right-to-left and IME cases (#29, #657).
+- **B4a:** built: the verse box shows all of `words` (#786); a `\v` after a marker is a row
+  (#784); the source pane follows the verse mapping (#131, #118); the "Draft section" pill
+  (#728); the one divider (#602); the Arabic IME case (#29) and the interface half of #657.
+  Left: a right-to-left project's Translate screen waits for C6's create (#657); what an emptied
+  box stores is C2's (#786); the two Titus 1 screens' note titles are residuals until the
+  reference moves (C39).
 - **B4b:** emptied section save (#600); pin click-then-click (#598); state hints (#604);
   blank lines in a joined span (#575); VerseMarker label (#614); section-save tests (#786).
 - **B5a:** visible progress bars (#764); resume (#518, #513); keyboard pass (#42); opening
