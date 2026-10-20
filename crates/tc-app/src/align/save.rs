@@ -1,9 +1,10 @@
 //! The server's save of an open aligner's links as a state machine (APP-DESIGN AD18, A-4).
 //!
 //! The links are the translator's work, so the rules are in one place and proved by a
-//! model-based test (`tests/app/align_save.rs`): a change is never forgotten, a save that
-//! fails leaves the links unsaved and is tried again, a change made while a save runs is saved
-//! after it, and only a save that stored the newest version makes the links "Saved".
+//! model-based test (`no_change_is_forgotten_and_saved_means_stored`, below): a change is never
+//! forgotten, a save that fails leaves the links unsaved and is tried again, a change made while
+//! a save runs is saved after it, and only a save that stored the newest version makes the links
+//! "Saved".
 //!
 //! [`next`] is pure. The actor (`actor.rs`) carries the effects out: it keeps the timer, sends
 //! the command to the store and feeds the outcome back as an event.
