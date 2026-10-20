@@ -21,7 +21,7 @@ use tc_api::ids::{Scope, ViewSeq};
 use tc_api::model::section::{SectionBuffer, expand_keys, indent_line, initial_text};
 use wasm_bindgen::JsCast;
 
-use super::draft_chrome::editing_card;
+use super::draft_chrome::{FooterPress, editing_card};
 use crate::app::save::{FieldSave, FieldScope, Pair, Source, View};
 use crate::app::section::{can_save, hints, word_title};
 use crate::app::translate::{card_tokens, card_verses, range_span};
@@ -46,11 +46,12 @@ fn sup() -> String {
     .to_style()
 }
 
-/// The translation's type at the design's reading step.
+/// tC4's `editType`: the translation's type one step down from the reading step, at the
+/// reading leading.
 fn edit_type() -> crate::css::Css {
     crate::css! {
         "font-family": "var(--font-scripture)",
-        "font-size": "var(--fs-verse-lg)",
+        "font-size": "var(--fs-verse-md)",
         "line-height": "var(--lh-verse-lg)",
     }
 }
@@ -346,6 +347,7 @@ pub fn SectionEditor(
         header,
         view! { {field} }.into_any(),
         footer,
+        FooterPress::TakesFocus,
         Attrs::from([("data-testid", "section-editor")]),
     );
     view! { {card} {question} }.into_any()

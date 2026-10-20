@@ -511,6 +511,14 @@
       ],
       "why": "tC4's case draws the error of a confirm made while another project is open (`gateway.otherProject`: \"Another project is open now. Open this project and choose the language again.\"), which a Rust confirmation cannot meet: a plan belongs to the open it was made for and a confirm for another open is refused as stale before anything is written (APP-DESIGN 4.8). The reachable failure is a save the disk refuses, and the dialog states its reason in the same callout after \"The change was not applied.\": the capture answers the confirm with a disk with no room, \"There is no room left on the disk.\", so the one text line differs and every other line, style and pixel outside that line is tC4's.",
       "until": null
+    },
+    "section-empty-confirm": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The save indicator reads “Unsaved changes” (`data-state=\"dirty\"`, tone `warn`) where tC4 reads “Saved”: tC4's indicator mirrors only its verse scheduler, and a section card's text is not in it until Save, so tC4 says “Saved” while every word of the section has just been deleted and nothing is stored. The rebuild's section card is a field of the save machine (APP-DESIGN §6.5, `SaveRule::OnSaveOnly`), so the indicator says what is true: there are unsaved changes (a declared difference, docs/PLAN.md, unit B4b). Those are the only pixels that differ. In the DOM, besides the indicator's three lines, the textarea keeps the text it opened with as its child text node, where React writes each new value there too (`defaultValue`); the field's value, which is what the person sees and what is saved, is empty on both sides. Every other line of the DOM, every computed style included, is tC4's, and the question, its words, buttons and focus are tC4's.",
+      "until": null
     }
   }
 }

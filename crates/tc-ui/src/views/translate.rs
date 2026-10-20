@@ -29,7 +29,7 @@ use wasm_bindgen::JsCast;
 
 use super::book_rail::book_rail;
 use super::conflict_markers::{conflict_verse, conflicts_button};
-use super::draft_chrome::{HAIR, cell, chip_style, draft_pill, editing_card};
+use super::draft_chrome::{FooterPress, HAIR, cell, chip_style, draft_pill, editing_card};
 use super::helps_panel::{HelpsPanel, HelpsToggleButton};
 use super::panel_icons::rail_icon;
 use super::section_editor::SectionEditor;
@@ -1275,5 +1275,11 @@ fn VerseEditor(
         <Button variant=ButtonVariant::Ghost style=cancel_style on_click=Callback::new(cancel)>{t(keys::draft::CANCEL_VERSE, &[])}</Button>
     }
     .into_any();
-    editing_card(header, textarea, footer, Attrs::default())
+    editing_card(
+        header,
+        textarea,
+        footer,
+        FooterPress::KeepsFocus,
+        Attrs::default(),
+    )
 }

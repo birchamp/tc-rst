@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "55e6e3bff1e21c93",
+    "ui": "c7d668cfb5c37d62",
     "commit": "dev",
     "api": 1
   },
@@ -121,6 +121,31 @@
       "sha256": "d3cf8e15f05c4a594a26cc568da140760e00b158a3c01aedca0d6667f533a180",
       "dom": "dom/check-picker.json",
       "domSha256": "4b7fb91ae3922bf885660c5e44567c5a1e69f83ab274a65d0f8848e1b574993a"
+    },
+    {
+      "name": "project-settings",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B9a",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/project-settings.png",
+      "sha256": "3f03b454183a951c63275a5506dc4cd7977fafee5cb3830c84c6c1d9e6aa7f0c",
+      "dom": "dom/project-settings.json",
+      "domSha256": "9b3b7da08c44715b2dac42f6acc1c31bb5d64525979f0293b50e689cd79939e8"
     },
     {
       "name": "add-project",
@@ -490,6 +515,29 @@
       "domSha256": "6ee5adbeba55299cedcd9dafc68e8b4d12370d6e3bcf6d9aa1c7f4aa0e69f9e5"
     },
     {
+      "name": "source-texts",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B9a",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/source-texts.png",
+      "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+      "dom": "dom/source-texts.json",
+      "domSha256": "b18f63877e6a443863539bbf94a6550cf822e72df163332659734f5c9a19a349"
+    },
+    {
       "name": "guided-fix",
       "kind": "screen",
       "scenario": "sample",
@@ -613,6 +661,167 @@
       "sha256": "4322217dbf8e5d36927169787fcafc68438aa696d8f6774e7329f7402d874f28",
       "dom": "dom/open-door43-refused.json",
       "domSha256": "f0946e51655a18ddfe7bd804e875e1411da26055c24cff28bbdfa47e550e2b6e"
+    },
+    {
+      "name": "en-understand-tit1",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B3",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-understand-tit1.png",
+      "sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
+      "dom": "dom/en-understand-tit1.json",
+      "domSha256": "63bdf176158aa4098705b9d2ac946f8e76999a2a5184015578cd6ac1d22eaa84"
+    },
+    {
+      "name": "en-understand-tw-article",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B3",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-understand-tw-article.png",
+      "sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
+      "dom": "dom/en-understand-tw-article.json",
+      "domSha256": "ffdef63557d37fc36b68529084c39cf2aebb7de647cb38cf241f0a631281b50c"
+    },
+    {
+      "name": "en-understand-questions",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B3",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-understand-questions.png",
+      "sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
+      "dom": "dom/en-understand-questions.json",
+      "domSha256": "ca0f05c4a5da535d854da4848d6ac93bcf3a1387585ca744bf2401766a26d04d"
+    },
+    {
+      "name": "en-translate-tit1",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B4a",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-translate-tit1.png",
+      "sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
+      "dom": "dom/en-translate-tit1.json",
+      "domSha256": "54c358010d2e89dd1a1070ca545e927f79740ff85fc325aeea63f137e7330320"
+    },
+    {
+      "name": "en-translate-section-editor",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B4b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-translate-section-editor.png",
+      "sha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
+      "dom": "dom/en-translate-section-editor.json",
+      "domSha256": "5af7ad3b085169b44aa67ff0e45b7f7f101ac1511b431022c30681c7f2837fc4"
+    },
+    {
+      "name": "en-translate-verse-editor",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B4a",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-translate-verse-editor.png",
+      "sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
+      "dom": "dom/en-translate-verse-editor.json",
+      "domSha256": "f4c2c428bb904325cf65ed0396f1c759ebabfa4eadea3952ed998dc7d7454d15"
+    },
+    {
+      "name": "en-check-picker",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B5a",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-check-picker.png",
+      "sha256": "ef6b1feeb9fcba1923604c5ee4f28a81600dd978e75fd462316c1e839298786c",
+      "dom": "dom/en-check-picker.json",
+      "domSha256": "1b674eedc97e10406548c64de94f360238dd2bcde1babedbcb5893166a0aacf1"
     },
     {
       "name": "shared-home",
@@ -827,144 +1036,6 @@
       "sha256": "f8c3159f6bcd6f40fb1ef3ccf8888fbced72625a9e19f81c0e8cdaf0d659b33b",
       "dom": "dom/sync-ok-restored.json",
       "domSha256": "a45642622da7e3cab0122397062b9890e8e08c07fd61fb1ae1047acd591164f8"
-    },
-    {
-      "name": "en-understand-tit1",
-      "kind": "screen",
-      "scenario": "en-pins",
-      "locale": "en",
-      "by": "B3",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {},
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/en-understand-tit1.png",
-      "sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
-      "dom": "dom/en-understand-tit1.json",
-      "domSha256": "63bdf176158aa4098705b9d2ac946f8e76999a2a5184015578cd6ac1d22eaa84"
-    },
-    {
-      "name": "en-understand-tw-article",
-      "kind": "screen",
-      "scenario": "en-pins",
-      "locale": "en",
-      "by": "B3",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {},
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/en-understand-tw-article.png",
-      "sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
-      "dom": "dom/en-understand-tw-article.json",
-      "domSha256": "ffdef63557d37fc36b68529084c39cf2aebb7de647cb38cf241f0a631281b50c"
-    },
-    {
-      "name": "en-understand-questions",
-      "kind": "screen",
-      "scenario": "en-pins",
-      "locale": "en",
-      "by": "B3",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {},
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/en-understand-questions.png",
-      "sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
-      "dom": "dom/en-understand-questions.json",
-      "domSha256": "ca0f05c4a5da535d854da4848d6ac93bcf3a1387585ca744bf2401766a26d04d"
-    },
-    {
-      "name": "en-translate-tit1",
-      "kind": "screen",
-      "scenario": "en-pins",
-      "locale": "en",
-      "by": "B4a",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {},
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/en-translate-tit1.png",
-      "sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
-      "dom": "dom/en-translate-tit1.json",
-      "domSha256": "54c358010d2e89dd1a1070ca545e927f79740ff85fc325aeea63f137e7330320"
-    },
-    {
-      "name": "en-translate-verse-editor",
-      "kind": "screen",
-      "scenario": "en-pins",
-      "locale": "en",
-      "by": "B4a",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {},
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/en-translate-verse-editor.png",
-      "sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
-      "dom": "dom/en-translate-verse-editor.json",
-      "domSha256": "f4c2c428bb904325cf65ed0396f1c759ebabfa4eadea3952ed998dc7d7454d15"
-    },
-    {
-      "name": "en-check-picker",
-      "kind": "screen",
-      "scenario": "en-pins",
-      "locale": "en",
-      "by": "B5a",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {},
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/en-check-picker.png",
-      "sha256": "ef6b1feeb9fcba1923604c5ee4f28a81600dd978e75fd462316c1e839298786c",
-      "dom": "dom/en-check-picker.json",
-      "domSha256": "1b674eedc97e10406548c64de94f360238dd2bcde1babedbcb5893166a0aacf1"
     },
     {
       "name": "open-progress-journal",
@@ -1257,6 +1328,28 @@
       "sha256": "007ac25fcc03a358d7ac30b4261514267c972c418ba2b94f85fdd33f8e10f619",
       "dom": "dom/gateway-change-failed.json",
       "domSha256": "07f06f137c27edc7f6aff3028dcb9b209b29f067d458cfd9ef49e34826da9f60"
+    },
+    {
+      "name": "section-empty-confirm",
+      "kind": "case",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B4b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/section-empty-confirm.png",
+      "sha256": "7d898acb713d79d9e135a5a4654abba7aab6df2e2398c09487bf8c5360147fb7",
+      "dom": "dom/section-empty-confirm.json",
+      "domSha256": "c74eb6f42db086e07f5c84262bda6f409ac576851f3cd9b00f42c49b906fa4ef"
     },
     {
       "name": "license",
@@ -1710,54 +1803,6 @@
       "sha256": "d4e110ff6418bb3907d0042ee39795b146aa9311862d235aba45516b8b2caaae",
       "dom": "dom/home-open-error.json",
       "domSha256": "024baa2fdb33cbc7f54e1711d942314a5c40db2bb3482f908f4893c4a6780ecb"
-    },
-    {
-      "name": "project-settings",
-      "kind": "screen",
-      "scenario": "sample",
-      "locale": "en",
-      "by": "B9a",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito": "share"
-      },
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/project-settings.png",
-      "sha256": "3f03b454183a951c63275a5506dc4cd7977fafee5cb3830c84c6c1d9e6aa7f0c",
-      "dom": "dom/project-settings.json",
-      "domSha256": "9b3b7da08c44715b2dac42f6acc1c31bb5d64525979f0293b50e689cd79939e8"
-    },
-    {
-      "name": "source-texts",
-      "kind": "screen",
-      "scenario": "sample",
-      "locale": "en",
-      "by": "B9a",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {},
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/source-texts.png",
-      "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
-      "dom": "dom/source-texts.json",
-      "domSha256": "b18f63877e6a443863539bbf94a6550cf822e72df163332659734f5c9a19a349"
     },
     {
       "name": "home-resume",

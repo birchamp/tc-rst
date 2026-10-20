@@ -21,17 +21,17 @@
       }
     },
     "build": {
-      "ui": "55e6e3bff1e21c93",
+      "ui": "c7d668cfb5c37d62",
       "commit": "dev",
       "api": 1
     }
   },
   "totals": {
     "rows": 130,
-    "same": 14,
+    "same": 15,
     "declared": 0,
-    "differs": 56,
-    "unported": 60,
+    "differs": 57,
+    "unported": 58,
     "failed": 0
   },
   "rows": [
@@ -1225,11 +1225,29 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B4b",
-        "dom": "B4b",
-        "meaning": "B4b"
+      "status": "same",
+      "by": "B4b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
+        "rustSha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "b4da7276d8343c2e3f25179752d5720d9e486c342f9656216701443371fc1e2b",
+        "rustSha256": "5af7ad3b085169b44aa67ff0e45b7f7f101ac1511b431022c30681c7f2837fc4",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -2151,10 +2169,30 @@
       "kind": "case",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B4b",
-        "dom": "B4b"
+      "status": "differs",
+      "by": "B4b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "029c5c03d7e11bd1dbb6d2a0b6859f9efc8056e38e601932e2d510b82063f2a3",
+        "rustSha256": "7d898acb713d79d9e135a5a4654abba7aab6df2e2398c09487bf8c5360147fb7",
+        "mismatched": 738,
+        "outsideMasks": 738,
+        "masks": [],
+        "diff": "diffs/section-empty-confirm.png"
+      },
+      "dom": {
+        "tc4Sha256": "c0335ad3407c7c23a41602f13db4f97fd06c1e84d3fda079523e832ea99f46aa",
+        "rustSha256": "c74eb6f42db086e07f5c84262bda6f409ac576851f3cd9b00f42c49b906fa4ef",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 34: tC4           <div data-state=\"saved\" data-testid=\"save-indicator\" style=\"align-items: center; color: rgba(255, 255, 255, 0.66); column-gap: 6px; display: flex; font-size: var(--fs-caption); font-weight: var(--fw-heavy); letter-spacing: var(--track-12); row-gap: 6px\"> | rust           <div data-state=\"dirty\" data-testid=\"save-indicator\" style=\"align-items: center; color: rgba(255, 255, 255, 0.66); column-gap: 6px; display: flex; font-size: var(--fs-caption); font-weight: var(--fw-heavy); letter-spacing: var(--track-12); row-gap: 6px\">",
+          "line 35: tC4             <span data-tone=\"valid\" style=\"display: inline-flex\"> | rust             <span data-tone=\"warn\" style=\"display: inline-flex\">",
+          "line 37: tC4             \"Saved\" | rust             \"Unsaved changes\"",
+          "line 138: tC4                 <div data-layer-placement=\"center\" data-testid=\"section-empty-confirm\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust                   \"1 Pablo, siervo de Dios y apóstol de Jesucristo, según la fe de los escogidos de Dios y el conocimiento de la verdad que va con la piedad,\n2 con la esperanza de la vida eterna, la cual Dios, que no miente, prometió desde antes del principio de los siglos,\n3 y a su debido tiempo ma…",
+          "line 139: tC4                   <div  style=\"display: flex; max-height: 100%; max-width: 100%; pointer-events: auto\"> | rust                 <div  style=\"align-items: center; column-gap: 10px; display: flex; margin-top: 8px; row-gap: 10px\">"
+        ]
       }
     },
     {
