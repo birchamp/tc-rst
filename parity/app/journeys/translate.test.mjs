@@ -200,6 +200,23 @@ browserTest('refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_i
   }, { hooks: true });
 }, { hooks: true });
 
+// The toolbar's count of conflicts is the project's: a conflict a sync or a USB file brings in
+// another book shows on the screen the person is on, with no need to leave it.
+browserTest('a_conflict_in_another_book_shows_in_the_open_books_toolbar', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTranslate(page);
+    assert.equal(await page.getByTestId('conflicts-review').count(), 0);
+    const at = await scope(env);
+    const jonah = await env.call('editor/chapters', { at, book: 'JON' });
+    const { token } = jonah.chapters[0].verses.find((v) => v.key === '1').words;
+    for (const words of ['Jonás, uno', 'Jonás, dos']) {
+      await env.call('test/saveVerse', { at, request: newRequestId(), shown: token, words });
+    }
+    await page.getByTestId('conflicts-review').waitFor();
+    assert.equal(await page.getByTestId('conflicts-review').getAttribute('data-count'), '1');
+  }, { hooks: true });
+}, { hooks: true });
+
 // tC4 #131, #118: in a project of another numbering, Translate's source column shows for each
 // project verse the source verse its numbering names, under that verse's place, one verse per
 // row with the verse-only statement in place of the switch; a verse in another book or in no
