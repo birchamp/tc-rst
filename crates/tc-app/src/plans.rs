@@ -47,8 +47,8 @@ use tc_versification::Scheme;
 use crate::counters::CountingSnapshot;
 use crate::numbering::Numbering;
 
-/// The two tools a change of pins moves.
-pub const TOOLS: [ToolId; 2] = [ToolId::TranslationNotes, ToolId::TranslationWords];
+/// The two tools a change of pins moves, in the order tC4 lists a book's rows (`TOOL_SLOT`).
+pub const TOOLS: [ToolId; 2] = [ToolId::TranslationWords, ToolId::TranslationNotes];
 
 /// A resource the new pins resolve a unit's list to, and the translation words that filter a
 /// Words list of a book.
@@ -225,7 +225,18 @@ pub fn plan_decisions(
             continue;
         };
         let unit = api_unit(affected.collection);
-        let blocked = |reason| BlockedUnit { tool, unit, reason };
+        // A unit the change cannot be applied to is listed with the decisions it holds and no
+        // carry-over (tC4 `gateway.affectedRow`).
+        let block = |out: &mut DecisionPlan, reason| {
+            out.rows.push(PlanRow {
+                tool,
+                unit,
+                decisions: count(affected.decisions),
+                against: repo_name(&affected.checked_against),
+                carry: None,
+            });
+            out.blocked.push(BlockedUnit { tool, unit, reason });
+        };
         let eng = tc_versification::StandardScheme::Eng.scheme();
         let frame = match (project.numbering, affected.collection) {
             // The stories carry no verse numbering.
@@ -234,11 +245,11 @@ pub fn plan_decisions(
             (Numbering::Unknown, _) => None,
         };
         let Some(frame) = frame else {
-            out.blocked.push(blocked(BlockReason::VersificationUnknown));
+            block(&mut out, BlockReason::VersificationUnknown);
             continue;
         };
         if affected.blocked {
-            out.blocked.push(blocked(BlockReason::NoResource));
+            block(&mut out, BlockReason::NoResource);
             continue;
         }
         let Some(candidate) = candidates
@@ -252,11 +263,11 @@ pub fn plan_decisions(
             affected.collection,
             Unrecorded::Installed(&local),
         ) else {
-            out.blocked.push(blocked(BlockReason::NoResource));
+            block(&mut out, BlockReason::NoResource);
             continue;
         };
         let Answer::Pin { rung, pin } = answer else {
-            out.blocked.push(blocked(BlockReason::NoResource));
+            block(&mut out, BlockReason::NoResource);
             continue;
         };
         let list_source = ListSource {

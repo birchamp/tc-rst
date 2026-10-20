@@ -21,6 +21,7 @@ mod sources;
 mod state;
 mod stream;
 pub mod understand;
+mod upgrades;
 mod view_error;
 
 use std::any::Any;

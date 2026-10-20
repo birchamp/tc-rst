@@ -25,6 +25,7 @@ use crate::views::home::Home;
 use crate::views::modals::add_book::AddBook;
 use crate::views::modals::add_project::AddProject;
 use crate::views::modals::feedback::Feedback;
+use crate::views::modals::gateway_change::GatewayChange;
 use crate::views::modals::import::Import;
 use crate::views::modals::new_bible::{NewBible, NewObs};
 use crate::views::modals::open_door43::OpenFromDoor43;
@@ -32,6 +33,7 @@ use crate::views::modals::project_settings::ProjectSettings;
 use crate::views::modals::share::ShareDialog;
 use crate::views::modals::sign_in::ShareSignIn;
 use crate::views::modals::source_texts::SourceTexts;
+use crate::views::modals::upgrade_set::UpgradeSet;
 use crate::views::open_progress::OpenProgress;
 use crate::views::understand::Understand;
 
@@ -88,7 +90,10 @@ pub fn App() -> impl IntoView {
             {home_dialogs(&ctx.s)}
             {move || settings_open.get().then(|| view! { <ProjectSettings /> })}
             {move || sources_open.get().then(|| view! { <SourceTexts /> })}
-            // GatewayChange, UpgradeSet (C8) and GuidedFix (B5a) mount here, before ShareSignIn.
+            // The confirmations that Get source texts and Project settings open; each shows while
+            // its state holds a plan. GuidedFix (B5a) mounts here too, before ShareSignIn.
+            <GatewayChange />
+            <UpgradeSet />
             {move || sign_in_open.get().map(|_| view! { <ShareSignIn /> })}
             {move || share_open.get().then(|| view! { <ShareDialog /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}

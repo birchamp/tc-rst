@@ -463,9 +463,6 @@ pub struct BlockedUnit {
 pub enum BlockReason {
     /// The new pins leave the unit's decisions with no usable resource.
     NoResource,
-    /// The numbering data to carry the decisions over could not be loaded; trying again may
-    /// work.
-    VersificationUnavailable,
     /// The project's versification could not be identified, so its decisions cannot be carried
     /// over safely.
     VersificationUnknown,

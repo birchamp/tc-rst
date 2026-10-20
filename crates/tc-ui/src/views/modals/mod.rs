@@ -3,6 +3,7 @@
 pub mod add_book;
 pub mod add_project;
 pub mod feedback;
+pub mod gateway_change;
 pub mod import;
 pub mod language_name_field;
 pub mod new_bible;
@@ -11,3 +12,4 @@ pub mod project_settings;
 pub mod share;
 pub mod sign_in;
 pub mod source_texts;
+pub mod upgrade_set;

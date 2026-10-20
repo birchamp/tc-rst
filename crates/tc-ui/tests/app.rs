@@ -28,4 +28,5 @@ mod app {
     mod sse;
     mod sync;
     mod understand;
+    mod upgrades;
 }

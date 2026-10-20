@@ -287,8 +287,8 @@ fn option(
         "→".into()
     };
     let on_click = (!is_current).then(|| {
-        let (actions, gateway) = (actions.clone(), g.gateway.clone());
-        Callback::new(move |_: web_sys::Event| actions.choose_settings_gateway(gateway.clone()))
+        let (actions, package) = (actions.clone(), g.clone());
+        Callback::new(move |_: web_sys::Event| actions.choose_settings_gateway(package.clone()))
     });
     let style = if is_current {
         crate::css! { "cursor": "default" }

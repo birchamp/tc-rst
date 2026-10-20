@@ -1015,7 +1015,11 @@ async fn a_project_whose_numbering_is_unknown_cannot_carry_its_decisions_over() 
     let w = world_with(6, 0, Some(&vrs)).await;
     install_spanish_suite(&w).await;
     let view = plan_gateway(&w, 71).await;
-    assert!(view.rows.is_empty());
+    // The unit is listed with the decisions it holds and no carry-over.
+    let [row] = &view.rows[..] else {
+        panic!("{:?}", view.rows)
+    };
+    assert_eq!((row.decisions, row.carry), (6, None));
     let [blocked] = &view.blocked[..] else {
         panic!("{:?}", view.blocked)
     };

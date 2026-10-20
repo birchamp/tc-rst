@@ -23,7 +23,7 @@ use crate::app::sources::{Dl, SettingsForm, SourcesForm};
 use crate::i18n::t_dyn;
 
 /// What a refusal says, in tC4's words; any other error as the server gave it.
-fn said(error: &ApiError) -> String {
+pub(super) fn said(error: &ApiError) -> String {
     match error {
         ApiError::Refused(refusal) => match refusal.detail() {
             Some(detail) => detail.to_owned(),
@@ -40,7 +40,7 @@ fn said(error: &ApiError) -> String {
     }
 }
 
-fn api_error(error: CallError) -> ApiError {
+pub(super) fn api_error(error: CallError) -> ApiError {
     match error {
         CallError::Api(error) => error,
         other => ApiError::BadRequest {
@@ -87,9 +87,19 @@ impl Actions {
     /// Save changes: C6 saves the settings through the single open (AD14).
     pub fn save_settings(&self) {}
 
-    /// A package of the Checking language card: C8 opens the project and asks the gateway
-    /// change (tC4 `chooseSettingsGateway`).
-    pub fn choose_settings_gateway(&self, _gateway: tc_api::resources::GatewayRef) {}
+    /// A package of the Checking language card (tC4 `chooseSettingsGateway`): Settings closes,
+    /// the project opens, and the change of checking language is asked over it.
+    pub fn choose_settings_gateway(&self, package: GatewayPackage) {
+        let Some(project) = self
+            .s()
+            .st
+            .with_untracked(|st| st.as_ref().map(|st| st.project.clone()))
+        else {
+            return;
+        };
+        self.close_modal();
+        self.open_then_gateway(project, package);
+    }
 
     /// "Manage source texts" (tC4 `manageSettingsSources`): Settings opens only from Home, and
     /// Get source texts needs the open project, so the project opens first and the dialog
@@ -167,12 +177,6 @@ impl Actions {
             self.internet_task(Pending::Catalog);
         }
     }
-
-    /// "Check for updates": C8 reads the newer releases (J12).
-    pub fn check_for_updates(&self) {}
-
-    /// "Use for checking": C8 asks the gateway change (J13).
-    pub fn ask_gateway_change(&self, _gateway: tc_api::resources::GatewayRef) {}
 
     /// The internet question was Not now: the catalog was not read.
     pub(super) fn catalog_dropped(&self) {
