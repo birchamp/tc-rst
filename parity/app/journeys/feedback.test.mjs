@@ -62,7 +62,9 @@ browserTest('c. opening the report and typing in it go to no other origin and as
     await page.getByLabel('Name (optional)', { exact: true }).fill('Journey Tester');
     await page.getByLabel('Email (optional)', { exact: true }).fill('journey@example.invalid');
     await sleep(300);
-    assert.deepEqual(requests.api(mark), ['/api/v1/feedback/compose']);
+    // Home behind the dialog reads a card again when its summary is ready, which can land at any
+    // moment (the OBS project's fifty stories): that read is Home's, not the report's.
+    assert.deepEqual(requests.api(mark).filter((p) => p !== '/api/v1/home/card'), ['/api/v1/feedback/compose']);
     assert.deepEqual(env.refused(), []);
     const text = await attachment(page).textContent();
     assert.match(text.split('\n')[0], /^translationCore \S+ \(\S+\) · \S+ \S+$/, 'the version line names the program and the platform');
