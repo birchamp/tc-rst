@@ -12,10 +12,11 @@ use tc_api::check::{
     DecisionStatus, GatewayText, GatewayView, Item, Open, OriginalView, RailRow, RailRows,
     Testament, Tool,
 };
-use tc_api::editor::SaveVerse;
+use tc_api::editor::{Draft, DraftField, SaveVerse};
 use tc_api::helps::ArticleView;
-use tc_api::ids::Scope;
+use tc_api::ids::{Scope, WallMs};
 use tc_api::model::selection::drag_range;
+use tc_api::session::{DraftKind, Drafts, KeepDraft, OfferedDrafts};
 use tc_api::write::Stored;
 use tc_api::{ApiError, NotSaved, Reply};
 use tc_app::App;
@@ -494,6 +495,174 @@ async fn a_mark_for_another_check_is_look_again() {
     let reply = t.app.request(&mark).await.unwrap();
     assert!(
         matches!(reply, Reply::Err(ApiError::NotSaved(NotSaved::LookAgain))),
+        "{reply:?}"
+    );
+}
+
+// ---- the check comment's server draft (C4, A-10) --------------------------------------------
+
+/// The next launch over the files an ended app left: a new app on `fs`'s crash image, with the
+/// same app data (the installed resources).
+async fn relaunch(dir: &tempfile::TempDir, fs: &FaultFs) -> TestApp {
+    let backend = backend_over(
+        &fs.crash(false),
+        APP,
+        FakePlatform::default(),
+        Arc::default(),
+    );
+    let projects = dir.path().join("projects");
+    TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+        config.projects = ProjectsFolder::Given(projects.clone());
+        deps.store = StoreChoice::Given(Arc::new(backend));
+    })
+    .await
+}
+
+/// A check comment's draft, as the comment editor sends it between saves (`editor/draft`).
+fn comment_draft(t: &TestApp, at: &Scope, over: &tc_api::ShownToken, text: &str) -> Draft {
+    Draft {
+        at: at.clone(),
+        request: rid(40),
+        instance: t.app.instance(),
+        field: DraftField::CheckComment,
+        shown: vec![over.clone()],
+        text: text.to_owned(),
+        changed: WallMs(1_792_000_000_000),
+    }
+}
+
+async fn offers(t: &TestApp, at: &Scope, request: u8) -> OfferedDrafts {
+    post(
+        &t.app,
+        &Drafts {
+            at: at.clone(),
+            request: rid(request),
+            buffered: Vec::new(),
+            mirror: false,
+        },
+    )
+    .await
+    .unwrap()
+}
+
+/// RT-10, Q-25: the checker marks a check valid, types a comment and the app ends before the
+/// comment is saved (a crash, a power cut, a kill). The next open offers the comment, and
+/// *Keep* stores it on the decision the person made, beside the mark, with no conflict
+/// against the person's own mark.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_check_comment_typed_before_the_app_ended_is_offered_and_kept_beside_the_mark() {
+    let (dir, t, fs) = on_the_store().await;
+    let at = open_on_store(&t).await;
+    let open = session(&t.app, &at, Tool::TranslationNotes).await;
+    let first = the_first(rows(&open), "for the faith of the chosen people of God");
+    let view = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    let ack = post(
+        &t.app,
+        &decide(&at, 1, &view, DecideEdit::Valid { words: vec![0] }),
+    )
+    .await
+    .unwrap();
+    let marked = ack.tokens[0].token.clone();
+    post(
+        &t.app,
+        &comment_draft(&t, &at, &marked, "ask Pablo about faith"),
+    )
+    .await
+    .unwrap();
+    drop(t);
+
+    let t = relaunch(&dir, &fs).await;
+    let at = open_on_store(&t).await;
+    let offered = offers(&t, &at, 41).await;
+    let offer = offered
+        .offers
+        .iter()
+        .find(|o| o.kind == DraftKind::CheckComment)
+        .unwrap_or_else(|| panic!("the comment is offered: {offered:?}"));
+    assert_eq!(offer.text, "ask Pablo about faith");
+    assert_eq!(offer.place.as_str(), "TIT 1:1");
+    let kept = post(
+        &t.app,
+        &KeepDraft {
+            at: at.clone(),
+            request: rid(42),
+            kind: offer.kind,
+            shown: offer.shown.clone(),
+            text: offer.text.clone(),
+            discard: offer.settles.stored.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(kept.new_conflicts.is_empty(), "{kept:?}");
+    let now = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    assert_eq!(
+        now.decision.value.comment.as_deref(),
+        Some("ask Pablo about faith")
+    );
+    assert_eq!(now.decision.value.status, Some(DecisionStatus::Valid));
+    assert_eq!(now.target.selected, [0]);
+    let again = offers(&t, &at, 43).await;
+    assert!(
+        again.offers.is_empty(),
+        "answered once: {again:?} after {offered:?}"
+    );
+}
+
+/// A comment whose save landed leaves no draft behind: the next open after the app ended
+/// offers nothing, so a saved comment is never asked about again.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_saved_check_comment_leaves_no_draft_to_offer() {
+    let (dir, t, fs) = on_the_store().await;
+    let at = open_on_store(&t).await;
+    let open = session(&t.app, &at, Tool::TranslationNotes).await;
+    let first = the_first(rows(&open), "for the faith of the chosen people of God");
+    let view = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    post(
+        &t.app,
+        &comment_draft(&t, &at, &view.decision.token, "ask Pablo"),
+    )
+    .await
+    .unwrap();
+    post(
+        &t.app,
+        &decide(
+            &at,
+            2,
+            &view,
+            DecideEdit::Comment {
+                text: "ask Pablo".into(),
+            },
+        ),
+    )
+    .await
+    .unwrap();
+    drop(t);
+
+    let t = relaunch(&dir, &fs).await;
+    let at = open_on_store(&t).await;
+    assert!(offers(&t, &at, 41).await.offers.is_empty());
+    let now = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    assert_eq!(now.decision.value.comment.as_deref(), Some("ask Pablo"));
+}
+
+/// A check comment's draft names its decision's record; any other token is refused, as for
+/// every editor draft.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_check_comment_draft_over_another_record_is_refused() {
+    let (_dir, t, _fs) = on_the_store().await;
+    let at = open_on_store(&t).await;
+    let open = session(&t.app, &at, Tool::TranslationNotes).await;
+    let first = the_first(rows(&open), "for the faith of the chosen people of God");
+    let view = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    let verse = view.target.verse.clone().expect("the verse is drafted");
+    let reply = t
+        .app
+        .request(&comment_draft(&t, &at, &verse, "on the verse"))
+        .await
+        .unwrap();
+    assert!(
+        matches!(reply, Reply::Err(ApiError::NotSaved(NotSaved::BadToken))),
         "{reply:?}"
     );
 }

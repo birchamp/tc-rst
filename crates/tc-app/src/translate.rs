@@ -441,6 +441,13 @@ fn draft_target(
                 }) { return Err(ApiError::NotSaved(NotSaved::BadToken)); }
             tc_journal::command::DraftField::Section { book }
         }
+        // The decision's token: the comment is a field of the decision record (STORAGE §5.4).
+        DraftField::CheckComment => {
+            if shown.len() != 1 || !matches!(first.key(), RecordKey::Check(_)) {
+                return Err(ApiError::NotSaved(NotSaved::BadToken));
+            }
+            tc_journal::command::DraftField::CheckComment
+        }
     };
     Ok((field, shown))
 }

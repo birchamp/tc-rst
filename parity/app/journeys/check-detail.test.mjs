@@ -7,6 +7,8 @@
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/check-detail.test.mjs
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { browserTest, catalog, sleep, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
@@ -288,6 +290,35 @@ browserTest('check_comment_saved_on_leaving_the_item', async () => {
     await page.getByTestId('comment-delete').click();
     await page.getByTestId('comment-editor').waitFor({ state: 'detached' });
     await until('the comment is removed', async () => (await item(env, 'translationNotes', first)).decision.value.comment === null);
+  }, { scenario: 'en-pins' });
+});
+
+// C4, A-10: while a check comment is typed, its text is on the server too (`editor/draft` into
+// the project's `.tc/drafts.json`), so a crash or a power cut before Done cannot lose it; the
+// next open offers it (tc-app `a_check_comment_typed_before_the_app_ended_is_offered_and_kept_
+// beside_the_mark`). The save on Done clears the draft, so a saved comment is never offered.
+browserTest('a_check_comment_being_typed_is_drafted_on_the_server_until_it_is_saved', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTool(page, 'translationNotes');
+    const index = Number(await shownIndex(page));
+    await page.getByTestId('mark-invalid').click();
+    await until('the mark is stored', async () => (await item(env, 'translationNotes', index)).decision.value.status === 'invalid');
+    const typed = 'Ask the team about the faith of the chosen people.';
+    await page.getByTestId('comment-toggle').click();
+    await page.getByTestId('comment-text').fill(typed);
+    const draftFile = path.join(env.projectsDir, 'sample_burrito', '.tc', 'drafts.json');
+    const drafted = () => fs.existsSync(draftFile) && JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === typed);
+    await until('the comment being typed is drafted on the server', drafted, 5_000);
+    assert.equal((await item(env, 'translationNotes', index)).decision.value.comment, null, 'a draft is not a save');
+    await page.getByTestId('comment-done').click();
+    const saved = await until('Done saves it', async () => {
+      const view = await item(env, 'translationNotes', index);
+      return view.decision.value.comment ? view : null;
+    });
+    assert.equal(saved.decision.value.comment, typed);
+    assert.equal(saved.decision.value.status, 'invalid', 'the mark stays');
+    assert.equal(saved.decision.marker, null, 'no conflict with the person themselves');
+    await until('the saved comment leaves no draft', async () => !drafted());
   }, { scenario: 'en-pins' });
 });
 

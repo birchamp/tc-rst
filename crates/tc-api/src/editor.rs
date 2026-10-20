@@ -357,7 +357,8 @@ pub struct DiscardDraft {
     pub changed: WallMs,
 }
 
-/// The Translate fields C2 can draft. A section carries every displayed verse token.
+/// The fields with a server draft. A section carries every displayed verse token; a check
+/// comment carries its decision's token (C4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(
@@ -374,4 +375,5 @@ pub enum DraftField {
         #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
         book: BookId,
     },
+    CheckComment,
 }
