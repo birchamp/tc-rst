@@ -169,12 +169,20 @@ And these (unit C6):
 - A project whose projects folder cannot keep a copy safe is copied to this computer's local
   projects folder, and Home lists it there (Q-30). tC4 has no such copy.
 
-And this (unit B4b):
+And these (unit B4b):
 
 - While a section card holds text it has not saved, the save indicator reads "Unsaved
   changes". tC4 4.0's indicator follows only its verse saves and reads "Saved" then, even
   when every word of the section has just been deleted and nothing is stored. The M18 case
   `section-empty-confirm` shows it, with a residual.
+- A paragraph or poetry line before a verse with no words stays before that verse when the
+  section is saved: the format typed on that verse's line, or the line it had when the text
+  gives it none. tC4 4.0 gives that line to the next verse with words, so a section save that
+  left a seeded book's verses undrafted moved or removed the lines the book took from its
+  source.
+- When a section's first verse has no words, the text a Place session writes keeps the format
+  of its first line, so a save from Place keeps it. tC4 4.0's `serializeDraft` drops it (its
+  own Save reads the session, not the text).
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
