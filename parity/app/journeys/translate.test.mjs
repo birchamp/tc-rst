@@ -269,16 +269,25 @@ browserTest('cross_frame_translate_shows_the_mapped_source_verse', async () => {
   }, { scenario: 'en-pins' });
 });
 
-// tC4 app-language e (Translate's half; the comment's is C3's): a verse typed before a language
-// switch is saved by the card's blur and survives the switch; the book and chapter stay, and the
-// card opens again in the new language on the same text.
+// tC4 app-language e: a comprehension note and a verse typed before a language switch are
+// saved by their blurs and survive the switch; the book and chapter stay, the card opens again
+// in the new language on the same text, and the note shows in Understand (C3 adds the note).
 browserTest('app_language_e_a_verse_typed_before_the_switch_survives_it', async () => {
   await withApp(async ({ page, env }) => {
+    const en = catalog('en');
     const es = catalog('es-419');
     const TEXT = 'Pablo, siervo de Dios y apóstol de Jesucristo.';
-    await openTranslate(page);
+    const NOTE = 'Pablo se presenta como siervo y apóstol.';
+    await titus(page).click();
+    await page.getByTestId('understand-unit-s1').waitFor();
     await page.getByRole('button', { name: '2', exact: true }).click();
     await page.getByRole('heading', { name: 'Titus 2' }).waitFor();
+    await page.getByRole('tab', { name: en['understand.byVerse'], exact: true }).click();
+    const note = page.getByPlaceholder(en['understand.commentsPlaceholderVerse']).first();
+    await note.fill(NOTE);
+    await note.blur();
+    await until('the note is saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    await page.getByTestId('mode-switch').getByRole('tab', { name: en['nav.draft'] }).click();
     await page.getByRole('tab', { name: 'Verse', exact: true }).click();
     await page.getByRole('button', { name: 'start this verse' }).first().click();
     await box(page, 1).fill(TEXT);
@@ -297,6 +306,10 @@ browserTest('app_language_e_a_verse_typed_before_the_switch_survives_it', async 
     assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), TEXT);
     await page.getByRole('button', { name: es['draft.cancelVerse'], exact: true }).click();
     await page.getByLabel(label, { exact: true }).waitFor({ state: 'detached' });
+    await page.getByTestId('mode-switch').getByRole('tab', { name: es['nav.understand'] }).click();
+    const shown = page.getByPlaceholder(es['understand.commentsPlaceholderVerse']).first();
+    await until('the note shows in Spanish', async () => (await shown.count()) > 0 && (await shown.inputValue()) === NOTE);
+    assert.ok((await env.call('editor/book', { at: await scope(env), book: 'TIT' })).comments.some((c) => c.text === NOTE));
   });
 });
 

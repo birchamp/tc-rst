@@ -23,7 +23,7 @@ async function openStory1(page, env) {
 /** The API paths of the requests since `mark`, a path once however often it was asked. */
 const paths = (requests, mark) => [...new Set(requests.api(mark))].sort();
 
-browserTest('j25_a_story_opens_with_its_rail_its_units_and_a_comment_box_that_takes_no_typing', async () => {
+browserTest('j25_a_story_opens_with_its_rail_its_units_and_writable_comment_boxes', async () => {
   await withApp(async ({ page, env }) => {
     await openStory1(page, env);
     assert.equal(await page.getByTestId(/^story-\d+$/).count(), 50, 'the rail lists the fifty stories');
@@ -31,11 +31,7 @@ browserTest('j25_a_story_opens_with_its_rail_its_units_and_a_comment_box_that_ta
     assert.equal(await page.locator('[data-testid^="story-understand-unit-"]').count(), 17, 'the title and sixteen frames');
     const boxes = page.locator('[data-testid="story-understand-comment"] textarea');
     assert.equal(await boxes.count(), 17);
-    assert.equal(await page.locator('[data-testid="story-understand-comment"] textarea[readonly]').count(), 17, 'no box takes typing until C3 saves it');
-    const before = await boxes.nth(1).inputValue();
-    await boxes.nth(1).click();
-    await page.keyboard.type('typed words');
-    assert.equal(await boxes.nth(1).inputValue(), before, 'what is typed into a read-only box is not kept');
+    assert.equal(await page.locator('[data-testid="story-understand-comment"] textarea[readonly]').count(), 0, 'production comment writers are available');
   }, SCENARIO);
 });
 
