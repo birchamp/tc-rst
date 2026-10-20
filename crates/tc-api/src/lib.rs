@@ -34,6 +34,7 @@ pub mod editor;
 pub mod endpoint;
 pub mod error;
 pub mod event;
+pub mod export;
 pub mod feedback;
 pub mod helps;
 pub mod home;
@@ -193,6 +194,9 @@ macro_rules! endpoint_table {
             command "resources/fixSideload": $crate::resources::FixSideload => ();
             command "resources/fixRepin": $crate::resources::FixRepin
                 => $crate::resources::PlanView;
+
+            query "export/book": $crate::export::Book => $crate::export::BookPrint;
+            query "export/stories": $crate::export::Stories => $crate::export::StoriesPrint;
         }
     };
 }

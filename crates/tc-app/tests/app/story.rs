@@ -26,7 +26,7 @@ fn story_no(n: u8) -> StoryNo {
     StoryNo::new(n).unwrap()
 }
 
-async fn open_obs(app: &App) -> OpenedProject {
+pub(super) async fn open_obs(app: &App) -> OpenedProject {
     let job = ok(
         app,
         &Open {
@@ -266,7 +266,7 @@ fn pictures_zip() -> Vec<u8> {
     writer.finish().unwrap().into_inner()
 }
 
-async fn start_with_pictures(name: &str) -> (tempfile::TempDir, TestApp) {
+pub(super) async fn start_with_pictures(name: &str) -> (tempfile::TempDir, TestApp) {
     let state = scenario(name);
     let (backend, _) = MemoryBackend::from_scenario(state).unwrap();
     let dir = tempfile::tempdir().unwrap();

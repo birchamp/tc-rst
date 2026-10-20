@@ -1,0 +1,64 @@
+{
+  "path": "export/book",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "items": [
+        {
+          "type": "chapter",
+          "value": {
+            "chapter": 1,
+            "verses": [
+              {
+                "label": "1",
+                "text": "Pablo, siervo de Dios"
+              },
+              {
+                "label": "2-3",
+                "text": null
+              }
+            ]
+          }
+        },
+        {
+          "type": "gap",
+          "value": {
+            "from": 2,
+            "to": 2
+          }
+        },
+        {
+          "type": "chapter",
+          "value": {
+            "chapter": 3,
+            "verses": [
+              {
+                "label": "1",
+                "text": "Recuérdales"
+              }
+            ]
+          }
+        }
+      ],
+      "undrafted": true
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

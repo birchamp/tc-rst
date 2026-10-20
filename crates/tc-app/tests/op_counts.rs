@@ -22,6 +22,7 @@ mod op_counts {
     mod align;
     mod check;
     pub mod corpus;
+    mod export;
     pub mod harness;
     mod home;
     mod lint;
