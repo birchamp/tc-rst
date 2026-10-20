@@ -1,5 +1,5 @@
-// The section editor (B4b), J2's section steps on real saves through the store (the test
-// build's `test/saveSection`, until C2's `editor/saveSection`): the card saves only on Save,
+// The section editor (B4b/C2), J2's section steps through the production
+// `editor/saveSection`: the card saves only on Save,
 // Cancel leaves no buffer entry, a Save that leaves no words asks first (#600), a span is made
 // and broken with two clicks (#598), the Place hints read by state (#604), a joined span has no
 // blank line (#575), the exits stay off under an open card and keep its draft, and a reload
@@ -8,6 +8,8 @@
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_UI_HOOKS=target/tc-ui-app-hooks \
 //     node --test parity/app/journeys/section.test.mjs
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { newRequestId } from '../env-rust.mjs';
 import { browserTest, catalog, recordRequests, sleep, storageDump, until, withApp } from './kit.mjs';
 
@@ -85,8 +87,8 @@ browserTest('section_editor_saves_only_on_save', async () => {
     const ten = (await verseOf(env, '10')).words.value;
     assert.equal(`${nine} ${ten}`, `${NINE} ${TEN}`, 'the words are all there, split where 10 was placed');
     assert.ok(ten.startsWith('no '), ten);
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // Cancel leaves no buffer entry and no draft, and writes nothing.
 browserTest('cancel_leaves_no_buffer_entry_and_no_draft', async () => {
@@ -98,6 +100,8 @@ browserTest('cancel_leaves_no_buffer_entry_and_no_draft', async () => {
     await typing(page, '9–10').fill(`9 ${NINE}\n10 ${TEN}`);
     await card(page).getByText('Drafting 9–10').click();
     assert.ok((await storageDump(page)).includes(NINE), 'the card is kept in the browser buffer while it is open');
+    const draftFile = path.join(env.projectsDir, BIBLE, '.tc', 'drafts.json');
+    await until('the section draft is durable before Cancel', () => fs.existsSync(draftFile) && JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text.includes(NINE)));
     await card(page).getByRole('button', { name: 'Cancel' }).click();
     await card(page).waitFor({ state: 'detached' });
     await sleep(300);
@@ -106,13 +110,117 @@ browserTest('cancel_leaves_no_buffer_entry_and_no_draft', async () => {
     assert.equal(savesSent(requests, mark), 0);
     assert.equal((await verseOf(env, '9')).words.value, '___');
     assert.equal(await indicator(page).getAttribute('data-state'), 'saved');
+    assert.ok(!JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text.includes(NINE)), 'Cancel durably removes the current server draft');
     // The lock ends with the card.
     assert.equal(await page.getByTestId('mode-switch').getByRole('tab', { name: 'Check' }).isDisabled(), false);
     // And the section opens again from what is stored.
     await pill(page, '9–10').click();
     assert.equal(await typing(page, '9–10').inputValue(), '');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
+
+browserTest('a_failed_cancel_keeps_the_card_buffer_and_draft_until_retry', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTitus2(page);
+    await pill(page, '9–10').click();
+    const wanted = `9 ${NINE}\n10 ${TEN}`;
+    await typing(page, '9–10').fill(wanted);
+    let refused = false;
+    await page.route('**/api/v1/editor/discardDraft', async (route) => {
+      if (refused) return route.continue();
+      refused = true;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        type: 'err', value: { type: 'notSaved', value: { type: 'disk', value: 'fixture Cancel refused' } },
+      }) });
+    });
+    await card(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByTestId('section-cancel-error').waitFor();
+    assert.equal(await typing(page, '9–10').inputValue(), wanted);
+    assert.ok((await storageDump(page)).includes(NINE));
+    const draftFile = path.join(env.projectsDir, BIBLE, '.tc', 'drafts.json');
+    assert.ok(JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted));
+    assert.equal((await verseOf(env, '9')).words.value, '___');
+    await card(page).getByRole('button', { name: 'Retry', exact: true }).click();
+    await card(page).waitFor({ state: 'detached' });
+    assert.ok(!(await storageDump(page)).includes(NINE));
+    assert.ok(!JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted));
+  });
+});
+
+for (const lostReply of [false, true]) {
+  browserTest(`cancel_retries_the_same_request_after_${lostReply ? 'a_lost_reply' : 'a_request_that_never_arrived'}`, async () => {
+    await withApp(async ({ page, env, errors, allow }) => {
+      await openTitus2(page);
+      await pill(page, '9–10').click();
+      const wanted = `9 ${NINE}\n10 ${TEN}`;
+      await typing(page, '9–10').fill(wanted);
+      const attempts = [];
+      await page.route('**/api/v1/editor/discardDraft', async (route) => {
+        attempts.push(route.request().postDataJSON());
+        if (attempts.length === 1) {
+          if (lostReply) await route.fetch();
+          return route.abort('failed');
+        }
+        return route.continue();
+      });
+      await card(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByTestId('section-cancel-error').waitFor();
+      assert.equal(await typing(page, '9–10').inputValue(), wanted);
+      assert.ok((await storageDump(page)).includes(NINE));
+      await card(page).getByRole('button', { name: 'Retry', exact: true }).click();
+      await card(page).waitFor({ state: 'detached' });
+      assert.equal(attempts.length, 2);
+      assert.deepEqual(attempts[1], attempts[0], 'Cancel retries its original scope, id, run, tokens, text and keystroke time');
+      const draftFile = path.join(env.projectsDir, BIBLE, '.tc', 'drafts.json');
+      assert.ok(!JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted));
+      assert.ok(!(await storageDump(page)).includes(NINE));
+      const aborted = 'console: Failed to load resource: net::ERR_FAILED';
+      assert.equal(errors.filter((error) => error === aborted).length, 1);
+      allow(/^console: Failed to load resource: net::ERR_FAILED$/);
+    });
+  });
+}
+
+browserTest('a_delayed_pre_save_draft_cannot_restore_obsolete_section_text', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTitus2(page);
+    await pill(page, '9–10').click();
+    const obsolete = '9 an intermediate section draft';
+    const wanted = `9 ${NINE}\n10 ${TEN}`;
+    let release;
+    let reached;
+    const held = new Promise((resolve) => { release = resolve; });
+    const entered = new Promise((resolve) => { reached = resolve; });
+    await page.route('**/api/v1/editor/draft', async (route) => {
+      if (route.request().postDataJSON().text === obsolete) {
+        reached();
+        await held;
+      }
+      return route.continue();
+    });
+    try {
+      await typing(page, '9–10').fill(obsolete);
+      await entered;
+      await typing(page, '9–10').fill(wanted);
+      await saveButton(page).click();
+      await card(page).waitFor({ state: 'detached' });
+      assert.equal((await verseOf(env, '9')).words.value, NINE, 'a save never waits behind a draft request');
+      release();
+      await until('old draft lane and durable cleanup finish', async () => {
+        const draftFile = path.join(env.projectsDir, BIBLE, '.tc', 'drafts.json');
+        return await page.evaluate(() => window.__tcIdle) && fs.existsSync(draftFile)
+          && !JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === obsolete || d.text === wanted);
+      });
+      await page.reload();
+      await page.getByTestId('account-menu').waitFor();
+      const offers = await env.call('session/drafts', { at: await scope(env), request: newRequestId(), buffered: [], mirror: false });
+      assert.ok(!JSON.stringify(offers).includes(obsolete), 'reopening never offers the obsolete section');
+      assert.equal((await verseOf(env, '9')).words.value, NINE);
+    } finally {
+      release();
+    }
+  });
+});
 
 // #600: a Save that leaves the section with no words asks first; Escape and Keep editing write
 // nothing; the answer writes the stub for each verse, a paragraph between them stays; a section
@@ -153,8 +261,8 @@ browserTest('emptied_section_save_asks_then_writes_stubs', async () => {
     }
     // Nothing drafted, nothing typed: nothing to save.
     await env.call('test/reset', { request: newRequestId() });
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 browserTest('an_undrafted_section_has_nothing_to_save', async () => {
   await withApp(async ({ page }) => {
@@ -166,8 +274,8 @@ browserTest('an_undrafted_section_has_nothing_to_save', async () => {
     assert.equal(await saveButton(page).isEnabled(), true);
     await typing(page, '9–10').fill('');
     assert.equal(await saveButton(page).isDisabled(), true);
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // #604: the bank's instruction reads by state.
 browserTest('section_card_reads_the_idle_place_hint', async () => {
@@ -196,8 +304,8 @@ browserTest('section_card_reads_the_idle_place_hint', async () => {
     assert.equal(await drop.isVisible(), false);
     assert.equal(await bank(page).getByRole('button', { name: /Move where verse/ }).count(), 0);
     assert.equal(await words(page).getByRole('button', { name: 'Move where verse 10 begins' }).isVisible(), true);
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // #598, #63: a placed number moves with two clicks, and a span is broken where it is clicked.
 browserTest('break_a_span_with_two_clicks', async () => {
@@ -234,8 +342,8 @@ browserTest('break_a_span_with_two_clicks', async () => {
     assert.equal((await verseOf(env, '10')).words.value, TEN);
     assert.equal(await verseOf(env, '9-10'), undefined, 'the span is two verses again');
     await pill(page, '9–10').waitFor();
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // #575: the blank line a paragraph left between two verses is one space once they are a span.
 browserTest('joined_span_collapses_blank_lines_to_one_space', async () => {
@@ -250,8 +358,8 @@ browserTest('joined_span_collapses_blank_lines_to_one_space', async () => {
     await card(page).waitFor({ state: 'detached' });
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     assert.equal((await verseOf(env, '9-10')).words.value, `${NINE} ${TEN}`);
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // #54: Tab and Shift+Tab indent the line for poetry, a blank line opens a paragraph, and the
 // formats land in the layout of the verse before; typing them again takes them away.
@@ -291,8 +399,8 @@ browserTest('paragraph_and_poetry_lines_from_the_card_land_in_the_verse_before',
     await card(page).waitFor({ state: 'detached' });
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     assert.equal((await verseOf(env, '10')).format, null);
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // A number-only line still asks for its format after a Place round trip: Tab adds poetry,
 // an omitted line keeps it, and an explicitly unindented number removes it.
@@ -321,8 +429,8 @@ browserTest('a_place_round_trip_keeps_the_format_typed_before_an_undrafted_verse
       assert.equal(ten.words.value, '___');
       assert.equal(ten.format, want, 'the format typed on an undrafted verse survives Place');
     }
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // #598 in one Place session: a number moved twice is a move of the number only. The card read its
 // own text again after each drop, so the second move kept a line break inside verse 10 and the
@@ -346,8 +454,8 @@ browserTest('a_number_moved_twice_in_place_keeps_the_text_and_adds_no_paragraph'
     assert.equal((await verseOf(env, '9')).words.value, NINE);
     assert.equal((await verseOf(env, '10')).words.value, TEN);
     assert.equal((await verseOf(env, '10')).format, null, 'no paragraph was typed');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // D7: the card is read-only while its save runs. Tab on a line and a drop of a number picked up
 // before Save change nothing, so the save that comes back closes the card; a change there left
@@ -388,8 +496,8 @@ browserTest('a_held_section_save_takes_no_tab_and_no_drop', async () => {
     await release();
     assert.equal((await verseOf(env, '9')).words.value, `${NINE}\nno defraudando`, 'the line break typed after verse 9 stays');
     assert.equal((await verseOf(env, '10')).words.value, 'sino mostrando toda buena fe');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // A page that reloads while a section save runs sends that save again with no card. The card
 // opened afterwards is based on every verse it shows: a base cut to the first verse made its
@@ -416,8 +524,8 @@ browserTest('a_section_card_opened_after_a_reload_during_its_save_saves_each_ver
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     assert.equal((await verseOf(env, '9')).words.value, `${NINE} amén`);
     assert.equal((await verseOf(env, '10')).words.value, TEN);
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // #241: a held number takes the press and selects no text; Escape on a word puts it back.
 browserTest('a_held_number_selects_no_text_and_escape_puts_it_back', async () => {
@@ -435,8 +543,8 @@ browserTest('a_held_number_selects_no_text_and_escape_puts_it_back', async () =>
     await words(page).getByText('a', { exact: true }).press('Escape');
     assert.equal(await words(page).evaluate((el) => el.style.userSelect), '');
     assert.equal(await words(page).getByRole('button', { name: 'Move where verse 10 begins' }).count(), 1, 'still where it was');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // tC4's sectionDraftExits: while the card is open the chapter, the book, the mode tabs, the
 // project button and the other sections' pills are off, a press on one keeps the draft in the
@@ -470,8 +578,8 @@ browserTest('section_card_keeps_its_draft_on_every_exit', async () => {
     await page.getByRole('tab', { name: 'Place verse numbers' }).click();
     await page.getByRole('tab', { name: 'Type', exact: true }).click();
     assert.equal(await typing(page, '9–10').inputValue(), typed.replace(/ +$/, ''));
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // A reload saves nothing: the card's buffer comes back as a draft and only the card's Save
 // writes it (APP-DESIGN 6.5).
@@ -490,8 +598,8 @@ browserTest('a_reload_never_saves_a_section_buffer', async () => {
     assert.equal(savesSent(requests, mark), 0, requests.api(mark).join(', '));
     assert.equal((await verseOf(env, '9')).words.value, '___');
     assert.ok((await storageDump(page)).includes(NINE), 'the buffer is still there for the offer');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // STORAGE 5.2: a change that arrived under the open card becomes a second version beside the
 // card's save, never a revert and never a refusal.
@@ -501,7 +609,7 @@ browserTest('a_teammates_change_under_a_section_card_becomes_a_conflict', async 
     await pill(page, '9–10').click();
     await typing(page, '9–10').fill(`9 ${NINE}\n10 ${TEN}`);
     const row = await verseOf(env, '9');
-    await env.call('test/saveVerse', { at: await scope(env), request: newRequestId(), shown: row.words.token, words: 'Los siervos, sujetos' });
+    await env.call('editor/saveVerse', { at: await scope(env), request: newRequestId(), shown: row.words.token, words: 'Los siervos, sujetos' });
     await sleep(300);
     await saveButton(page).click();
     await card(page).waitFor({ state: 'detached' });
@@ -509,21 +617,32 @@ browserTest('a_teammates_change_under_a_section_card_becomes_a_conflict', async 
     assert.equal((await verseOf(env, '9')).words.marker?.versions, 2, 'both versions are kept');
     assert.equal((await verseOf(env, '10')).words.value, TEN);
     await page.getByTestId('conflict-marker-2:9').waitFor();
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
-// Without a section save (C2 brings editor/saveSection) a Save is refused and says so: the card
-// and its text stay and the indicator offers Retry.
-browserTest('a_build_without_a_section_save_says_not_saved_and_keeps_the_card', async () => {
-  await withApp(async ({ page }) => {
+// A failed production section save keeps the whole card; Retry writes only on demand.
+browserTest('a_failed_section_save_keeps_the_card_and_retry_stores_it', async () => {
+  await withApp(async ({ page, env }) => {
     await openTitus2(page);
     await pill(page, '9–10').click();
-    await typing(page, '9–10').fill(`9 ${NINE}`);
+    const wanted = `9 ${NINE}`;
+    let refuse = true;
+    await page.route('**/api/v1/editor/saveSection', async (route) => {
+      if (refuse) {
+        refuse = false;
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'err', value: { type: 'notSaved', value: { type: 'disk', value: 'fixture write refused' } } }) });
+      }
+      return route.continue();
+    });
+    await typing(page, '9–10').fill(wanted);
     await saveButton(page).click();
     await until('error', async () => (await indicator(page).getAttribute('data-state')) === 'error', 5_000);
-    assert.equal(await page.getByTestId('save-indicator').getByRole('button', { name: 'Retry' }).count(), 1);
-    assert.equal(await typing(page, '9–10').inputValue(), `9 ${NINE}`);
+    assert.equal(await typing(page, '9–10').inputValue(), wanted);
     assert.equal(await card(page).count(), 1, 'the card stays open');
+    assert.equal((await verseOf(env, '9')).words.value, '___');
+    await indicator(page).getByRole('button', { name: 'Retry' }).click();
+    await until('retry saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    assert.equal((await verseOf(env, '9')).words.value, NINE);
   });
 });
 
@@ -548,3 +667,26 @@ browserTest('ds_labels_d_a_verse_numbers_name_follows_the_app_language', async (
     await card(page).waitFor({ state: 'detached' });
   }, { locale: 'es-419' });
 });
+
+// C2: the real section buffer survives a WebAssembly panic without becoming a save.
+browserTest('a_real_section_draft_survives_a_panic_without_saving', async () => {
+  await withApp(async ({ page, env, allow }) => {
+    await openTitus2(page);
+    await pill(page, '9–10').click();
+    const wanted = `9 ${NINE}\n10 ${TEN}`;
+    await typing(page, '9–10').fill(wanted);
+    assert.ok((await storageDump(page)).includes(NINE));
+    const requests = recordRequests(page);
+    const mark = requests.mark();
+    allow(/panic|RuntimeError|unreachable|tc4 test/);
+    await page.evaluate(() => sessionStorage.setItem('tc4.test.panicAtBoot', '1'));
+    await page.reload();
+    await page.getByTestId('view-error').waitFor({ timeout: 20_000 });
+    assert.ok((await storageDump(page)).includes(NINE), 'the typed section survives panic and reload');
+    assert.equal((await verseOf(env, '9')).words.value, '___', 'panic recovery never saves a section');
+    assert.equal(savesSent(requests, mark), 0);
+    await page.getByTestId('view-error-home').click();
+    await page.getByTestId('add-project').waitFor();
+    assert.ok((await storageDump(page)).includes(NINE), 'Back to Home retains the section for recovery');
+  }, { hooks: true });
+}, { hooks: true });

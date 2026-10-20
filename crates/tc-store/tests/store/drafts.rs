@@ -698,3 +698,105 @@ fn a_save_clears_an_older_different_draft_and_a_newer_equal_draft() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+#[test]
+fn cancelling_a_current_section_draft_is_durable_and_preserves_its_offer() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let cancelled = Draft {
+        field: DraftField::Section { book: TIT },
+        shown: vec![handle.mint(&verse(1, 3), None).unwrap()],
+        text: "3 a cancelled section".into(),
+    };
+    let at = tc_journal::WallTime(123);
+    let offered = handle.offer_draft(cancelled.clone(), true, at).unwrap();
+    handle
+        .submit(Command::Draft {
+            draft: cancelled.clone(),
+            at,
+        })
+        .wait()
+        .unwrap();
+    assert!(handle.discard_current_draft(cancelled, at));
+    assert_eq!(handle.offered_drafts()[0].id, offered);
+    let fs = rig.fs.crash(true);
+    drop(handle);
+    let (rig, handle) = reopen(fs, &folder);
+    let drafts = handle.offered_drafts();
+    assert_eq!(drafts.len(), 1, "only the independent offer remains");
+    assert_eq!(drafts[0].draft.text, "3 a cancelled section");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+#[test]
+fn a_failed_current_draft_cancel_reports_failure_and_can_be_retried() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let cancelled = Draft {
+        field: DraftField::Section { book: TIT },
+        shown: vec![handle.mint(&verse(1, 3), None).unwrap()],
+        text: "3 cancel after the disk recovers".into(),
+    };
+    let at = tc_journal::WallTime(321);
+    handle
+        .submit(Command::Draft {
+            draft: cancelled.clone(),
+            at,
+        })
+        .wait()
+        .unwrap();
+    handle.wait_idle();
+    rig.fs
+        .fail_writes(Some(std::io::ErrorKind::PermissionDenied));
+    assert!(!handle.discard_current_draft(cancelled.clone(), at));
+    let bytes = rig.fs.peek(&folder.join(".tc/drafts.json")).unwrap();
+    let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(entries[0]["text"], cancelled.text);
+    rig.fs.fail_writes(None);
+    assert!(handle.discard_current_draft(cancelled, at));
+    let fs = rig.fs.crash(true);
+    drop(handle);
+    let (rig, handle) = reopen(fs, &folder);
+    assert!(handle.offered_drafts().is_empty());
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::test_runner::Config::with_cases(32))]
+    #[test]
+    fn stale_cancel_never_discards_newer_or_different_current_text(
+        ops in proptest::collection::vec((proptest::bool::ANY, 0u8..4), 1..24),
+    ) {
+        let (rig, folder) = titus();
+        let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+        let shown = vec![handle.mint(&verse(1, 3), None).unwrap()];
+        let mut current: Option<(String, i64)> = None;
+        for (put, version) in ops {
+            let text = format!("3 typed version {version}");
+            let at = i64::from(version);
+            let draft = Draft {
+                field: DraftField::Section { book: TIT },
+                shown: shown.clone(),
+                text: text.clone(),
+            };
+            if put {
+                handle.submit(Command::Draft { draft, at: tc_journal::WallTime(at) }).wait().unwrap();
+                current = Some((text, at));
+            } else {
+                proptest::prop_assert!(handle.discard_current_draft(draft, tc_journal::WallTime(at)));
+                if current.as_ref() == Some(&(text, at)) {
+                    current = None;
+                }
+            }
+        }
+        let fs = crashed_after_drafts(&rig, handle);
+        let (rig, handle) = reopen(fs, &folder);
+        let offered: Vec<_> = handle.offered_drafts().into_iter()
+            .map(|d| (d.draft.text, d.at.0)).collect();
+        proptest::prop_assert_eq!(offered, current.into_iter().collect::<Vec<_>>());
+        handle.close().unwrap();
+        assert_valid_burrito(&rig.fs, &folder);
+    }
+}

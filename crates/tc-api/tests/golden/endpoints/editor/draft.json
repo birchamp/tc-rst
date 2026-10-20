@@ -1,0 +1,38 @@
+{
+  "path": "editor/draft",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "15151515151515151515151515151515",
+    "instance": "07070707070707070707070707070707",
+    "field": {
+      "type": "section",
+      "value": {
+        "book": "TIT"
+      }
+    },
+    "shown": [
+      "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+      "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+    ],
+    "text": "1-2 Paul, a servant of God\n\t3 an apostle",
+    "changed": 1792000000000
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

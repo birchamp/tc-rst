@@ -1,16 +1,16 @@
 //! The contract cases of APP-DESIGN §4.2 that run through tc-app (unit C0): the request bytes
 //! go through `App::call`, which takes and gives exactly what tc-server forwards, then
-//! dispatch, the session's reply cache, the seam and the store. `test/saveVerse` is the write;
-//! C2 moves these cases onto `editor/saveVerse` and runs the conflict case through HTTP too.
+//! dispatch, the session's reply cache, the seam and the store. `editor/saveVerse` is the write;
+//! These production saves also prove C2's retry, durability and stale-token contract.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use tc_api::app::OpenSession;
+use tc_api::editor::SaveVerse;
 use tc_api::event::{ChangeCause, ChangeScope, ChapterRef, Event, SessionEvent};
 use tc_api::ids::RequestId;
 use tc_api::shown::Who;
-use tc_api::test::SaveVerse;
 use tc_api::write::{Ack, Stored, TokenUpdate};
 use tc_api::{ApiError, Endpoint, NotSaved, Reply};
 use tc_app::Answer;
@@ -451,4 +451,99 @@ async fn a_conflict_with_another_computers_head_names_its_writer() {
         "the conflict is with the other computer's head"
     );
     assert_eq!(heads(&session, &key).len(), 2, "both heads stand");
+}
+
+/// A production save cannot acknowledge words before its journal durability point.
+#[tokio::test]
+async fn production_save_waits_for_durability_before_acknowledging() {
+    let rig = Rig::new().await;
+    let open = rig.open(&rig.world.bible).await;
+    let session = rig.session(&open);
+    let key = tit(1, 11);
+    let before = words_of(&session.handle().snapshot(), &key);
+    let req = rig.request(&open, 91, &key, "the words awaiting durability");
+    rig.world.hooks.hold(Point::BeforeDurablePending);
+    let app = rig.t.app.clone();
+    let body = serde_json::to_vec(&req).unwrap();
+    let mut saving = tokio::spawn(async move { app.call(SaveVerse::PATH, &body).await });
+    until("production save reaches durability", || {
+        rig.world.hooks.reached(Point::BeforeDurablePending) == 1
+    })
+    .await;
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), &mut saving)
+            .await
+            .is_err()
+    );
+    assert_eq!(words_of(&session.handle().snapshot(), &key), before);
+    rig.world.hooks.release(Point::BeforeDurablePending);
+    let ack = result_of(
+        &tokio::time::timeout(Duration::from_secs(5), saving)
+            .await
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert_eq!(ack.saved[0].text, req.words);
+}
+
+#[tokio::test]
+async fn a_production_save_refused_by_the_disk_keeps_its_value_and_can_be_retried() {
+    let rig = Rig::new().await;
+    let open = rig.open(&rig.world.bible).await;
+    let session = rig.session(&open);
+    let key = tit(1, 9);
+    let before = (
+        words_of(&session.handle().snapshot(), &key),
+        heads(&session, &key),
+    );
+    let req = rig.request(&open, 92, &key, "holding firm");
+    rig.world.fs.fail_op(0, std::io::ErrorKind::StorageFull);
+    assert!(matches!(
+        result_of(&rig.send(&req).await),
+        Err(ApiError::NotSaved(NotSaved::Disk(_)))
+    ));
+    assert_eq!(
+        (
+            words_of(&session.handle().snapshot(), &key),
+            heads(&session, &key)
+        ),
+        before
+    );
+    // Refusals are cached, so Retry keeps the text/base and uses a new request id.
+    let retry = SaveVerse {
+        request: rid(93),
+        ..req
+    };
+    let ack = result_of(&rig.send(&retry).await).unwrap();
+    assert_eq!(ack.saved[0].text, "holding firm");
+    assert!(ack.new_conflicts.is_empty());
+    assert_eq!(heads(&session, &key).len(), 1);
+}
+
+#[tokio::test]
+async fn a_production_save_with_a_post_rename_disk_error_acknowledges_the_saved_text() {
+    let rig = Rig::new().await;
+    let key = tit(1, 10);
+    let flush = crate::store_world::pending_dir_flush(&rig.world, &rig.world.bible, &key).await;
+    let open = rig.open(&rig.world.bible).await;
+    let session = rig.session(&open);
+    let req = rig.request(&open, 94, &key, "probe");
+    rig.world.fs.fail_op(flush, std::io::ErrorKind::Other);
+    let saved = rig.send(&req).await;
+    let ack = result_of(&saved).unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert!(ack.disk_warning.is_some(), "{ack:?}");
+    assert_eq!(ack.saved[0].text, "probe");
+    assert_eq!(
+        words_of(&session.handle().snapshot(), &key).as_deref(),
+        Some("probe")
+    );
+    let changes = session.handle().snapshot().fold().history(&key).len();
+    assert_eq!(body_of(&rig.send(&req).await), body_of(&saved));
+    assert_eq!(
+        session.handle().snapshot().fold().history(&key).len(),
+        changes
+    );
 }

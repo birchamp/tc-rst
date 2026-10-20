@@ -6,7 +6,7 @@
 //! - M2 a Psalms verse saved until its reply;
 //! - M3 from a save's submit to its `Committed` at a subscriber (the seam's events thread and
 //!   the join with the command's origin);
-//! - M4 `test/saveVerse` through `App::call` until its `Ack` (dispatch, the reply cache, the
+//! - M4 `editor/saveVerse` through `App::call` until its `Ack` (dispatch, the reply cache, the
 //!   session, `wire::write::ack`, the store);
 //! - M5 an open of the whole Bible (warm cache), and when the first progress report reaches
 //!   the open's sink;
@@ -17,12 +17,16 @@
 //! ```text
 //! cargo run --release -p tc-store --example storebench -j 6 -- setup target/store-adapter-bench
 //! cargo run --release -p tc-app --features test-hooks --example store_adapter_bench -j 6 -- target/store-adapter-bench
+//! # Only the production verse-save clock probe (200 samples; skips M1–M3 and M5–M7):
+//! cargo run --release -p tc-app --features test-hooks --example store_adapter_bench -j 6 -- target/store-adapter-bench --m4-only
 //! ```
 //!
 //! The direct runs use `DIR/projects/bible`, the seam's a copy of it, `DIR/projects/bible-seam`,
 //! so both can be open at once; with `STORE_ADAPTER_BENCH_SWAP=1` the two swap folders, so a
 //! difference that follows the folder is the disk's, not the adapter's. Prints one JSON line
-//! per measurement.
+//! per measurement. M4 measures 200 changed Psalms verses through the production route with
+//! runtime hooks disabled, including the store's fsync before Ack. These local measurements
+//! are compared with the 25 ms budget; the Windows reference laptop requires its own run.
 
 // A benchmark stops at its first failure, with the reason: nothing to keep going for.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
@@ -34,8 +38,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::json;
+use tc_api::editor::SaveVerse;
 use tc_api::jobs::{OpenPhase, Phase};
-use tc_api::test::SaveVerse;
 use tc_api::{Endpoint, Reply};
 use tc_app::backend::store::StoreBackend;
 use tc_app::backend::{ProjectStore, StoreCommand, StoreEvent};
@@ -46,6 +50,12 @@ use tc_journal::command::Command;
 use tc_journal::{BookId, RecordKey};
 
 const SEAM: &str = "bible-seam";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    All,
+    M4,
+}
 
 fn millis(d: Duration) -> f64 {
     d.as_secs_f64() * 1000.0
@@ -127,13 +137,20 @@ fn psalms(fold: &tc_journal::fold::FoldState, n: usize) -> Vec<RecordKey> {
 
 fn main() {
     let dir = PathBuf::from(std::env::args().nth(1).expect("DIR"));
+    let mode = if std::env::args().skip(2).any(|arg| arg == "--m4-only") {
+        Mode::M4
+    } else {
+        Mode::All
+    };
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
         .unwrap();
-    rt.block_on(in_memory());
-    rt.block_on(bench(&dir));
+    if mode == Mode::All {
+        rt.block_on(in_memory());
+    }
+    rt.block_on(bench(&dir, mode));
 }
 
 /// The sample's Titus as records, as tc-app's store tests make it.
@@ -265,7 +282,7 @@ async fn in_memory() {
     seam.close().await.unwrap();
 }
 
-async fn bench(dir: &Path) {
+async fn bench(dir: &Path, mode: Mode) {
     copy_project(
         &dir.join("projects/bible"),
         &dir.join("projects").join(SEAM),
@@ -286,170 +303,175 @@ async fn bench(dir: &Path) {
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis());
 
-    // ---- M5: opens, warm (a first untimed open of each writes its fold cache).
-    for _ in 0..1 {
-        direct_store
-            .open(&direct_path, &tc_store::OpenOptions::default())
-            .unwrap()
-            .close()
-            .unwrap();
-        let h = seam_store.open(&seam_folder, progress()).unwrap();
-        h.close().await.unwrap();
-    }
-    let (mut open_direct, mut open_seam, mut first_report) = (Vec::new(), Vec::new(), Vec::new());
-    for _ in 0..5 {
-        let started = Instant::now();
-        let h = direct_store
-            .open(&direct_path, &tc_store::OpenOptions::default())
-            .unwrap();
-        open_direct.push(millis(started.elapsed()));
-        h.wait_idle();
-        h.close().unwrap();
-
-        let sink = progress();
-        let initial = sink.snapshot();
-        let seen: Arc<Mutex<Option<Duration>>> = Arc::default();
-        let started = Instant::now();
-        let watcher = {
-            let (sink, seen) = (sink.clone(), seen.clone());
-            std::thread::spawn(move || {
-                while started.elapsed() < Duration::from_secs(30) {
-                    if sink.snapshot() != initial {
-                        *seen.lock().unwrap() = Some(started.elapsed());
-                        return;
-                    }
-                    std::thread::sleep(Duration::from_millis(1));
-                }
-            })
-        };
-        let h = {
-            let (store, folder) = (seam_store.clone(), seam_folder.clone());
-            tokio::task::spawn_blocking(move || store.open(&folder, sink).unwrap())
-                .await
+    if mode == Mode::All {
+        // ---- M5: opens, warm (a first untimed open of each writes its fold cache).
+        for _ in 0..1 {
+            direct_store
+                .open(&direct_path, &tc_store::OpenOptions::default())
                 .unwrap()
-        };
-        open_seam.push(millis(started.elapsed()));
-        watcher.join().unwrap();
-        if let Some(at) = *seen.lock().unwrap() {
-            first_report.push(millis(at));
+                .close()
+                .unwrap();
+            let h = seam_store.open(&seam_folder, progress()).unwrap();
+            h.close().await.unwrap();
         }
-        h.wait_idle();
-        h.close().await.unwrap();
+        let (mut open_direct, mut open_seam, mut first_report) =
+            (Vec::new(), Vec::new(), Vec::new());
+        for _ in 0..5 {
+            let started = Instant::now();
+            let h = direct_store
+                .open(&direct_path, &tc_store::OpenOptions::default())
+                .unwrap();
+            open_direct.push(millis(started.elapsed()));
+            h.wait_idle();
+            h.close().unwrap();
+
+            let sink = progress();
+            let initial = sink.snapshot();
+            let seen: Arc<Mutex<Option<Duration>>> = Arc::default();
+            let started = Instant::now();
+            let watcher = {
+                let (sink, seen) = (sink.clone(), seen.clone());
+                std::thread::spawn(move || {
+                    while started.elapsed() < Duration::from_secs(30) {
+                        if sink.snapshot() != initial {
+                            *seen.lock().unwrap() = Some(started.elapsed());
+                            return;
+                        }
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                })
+            };
+            let h = {
+                let (store, folder) = (seam_store.clone(), seam_folder.clone());
+                tokio::task::spawn_blocking(move || store.open(&folder, sink).unwrap())
+                    .await
+                    .unwrap()
+            };
+            open_seam.push(millis(started.elapsed()));
+            watcher.join().unwrap();
+            if let Some(at) = *seen.lock().unwrap() {
+                first_report.push(millis(at));
+            }
+            h.wait_idle();
+            h.close().await.unwrap();
+        }
+        report("M5 open, whole Bible, warm: tc-store", "ms", &open_direct);
+        report("M5 open, whole Bible, warm: seam", "ms", &open_seam);
+        report("M5 the seam's first forwarded report", "ms", &first_report);
     }
-    report("M5 open, whole Bible, warm: tc-store", "ms", &open_direct);
-    report("M5 open, whole Bible, warm: seam", "ms", &open_seam);
-    report("M5 the seam's first forwarded report", "ms", &first_report);
 
     // ---- Both open from here.
     let direct = direct_store
         .open(&direct_path, &tc_store::OpenOptions::default())
         .unwrap();
     direct.wait_idle();
-    let seam = seam_store.open(&seam_folder, progress()).unwrap();
-    seam.wait_idle();
-
-    // ---- M1: snapshots.
-    let (mut snap_direct, mut snap_seam) = (Vec::new(), Vec::new());
-    for _ in 0..20 {
-        let started = Instant::now();
-        for _ in 0..100_000 {
-            std::hint::black_box(direct.snapshot());
-        }
-        snap_direct.push(started.elapsed().as_nanos() as f64 / 100_000.0);
-        let started = Instant::now();
-        for _ in 0..100_000 {
-            std::hint::black_box(seam.snapshot());
-        }
-        snap_seam.push(started.elapsed().as_nanos() as f64 / 100_000.0);
-    }
-    report("M1 snapshot(): tc-store", "ns", &snap_direct);
-    report("M1 snapshot(): seam", "ns", &snap_seam);
-
-    // ---- M2 and M3: saves until the reply, and until the subscriber's event.
     let verses = psalms(direct.snapshot().fold(), 400);
-    let direct_events = direct.subscribe();
-    let mut seam_events = seam.subscribe();
-    let (mut save_direct, mut save_seam) = (Vec::new(), Vec::new());
-    let (mut event_direct, mut event_seam) = (Vec::new(), Vec::new());
-    let mut one_save = None;
-    for (i, key) in verses.iter().take(200).enumerate() {
-        let shown = direct.mint(key, None).unwrap();
-        let started = Instant::now();
-        let reply = direct
-            .submit(Command::SaveVerse {
-                shown,
-                words: format!("A direct save {i} of run {run}"),
-            })
-            .wait()
-            .unwrap();
-        save_direct.push(millis(started.elapsed()));
-        assert!(!reply.changes.is_empty());
-        loop {
-            if let tc_store::StoreEvent::Committed { seq, .. } = direct_events.recv().unwrap()
-                && seq == reply.seq
-            {
-                event_direct.push(millis(started.elapsed()));
-                break;
-            }
-        }
+    if mode == Mode::All {
+        let seam = seam_store.open(&seam_folder, progress()).unwrap();
+        seam.wait_idle();
 
-        let token = seam.snapshot().mint(key, None).unwrap();
-        let before = seam.counters();
-        let started = Instant::now();
-        let reply = seam
-            .submit(StoreCommand::save_verse(
-                token,
-                format!("A seam save {i} of run {run}"),
-            ))
-            .await
-            .unwrap();
-        save_seam.push(millis(started.elapsed()));
-        if one_save.is_none() {
-            one_save = Some(seam.counters().since(&before));
+        // ---- M1: snapshots.
+        let (mut snap_direct, mut snap_seam) = (Vec::new(), Vec::new());
+        for _ in 0..20 {
+            let started = Instant::now();
+            for _ in 0..100_000 {
+                std::hint::black_box(direct.snapshot());
+            }
+            snap_direct.push(started.elapsed().as_nanos() as f64 / 100_000.0);
+            let started = Instant::now();
+            for _ in 0..100_000 {
+                std::hint::black_box(seam.snapshot());
+            }
+            snap_seam.push(started.elapsed().as_nanos() as f64 / 100_000.0);
         }
-        assert!(!reply.changes.is_empty());
-        loop {
-            if let Some(StoreEvent::Committed { seq, .. }) = seam_events.recv().await
-                && seq == reply.seq
-            {
-                event_seam.push(millis(started.elapsed()));
-                break;
+        report("M1 snapshot(): tc-store", "ns", &snap_direct);
+        report("M1 snapshot(): seam", "ns", &snap_seam);
+
+        // ---- M2 and M3: saves until the reply, and until the subscriber's event.
+        let direct_events = direct.subscribe();
+        let mut seam_events = seam.subscribe();
+        let (mut save_direct, mut save_seam) = (Vec::new(), Vec::new());
+        let (mut event_direct, mut event_seam) = (Vec::new(), Vec::new());
+        let mut one_save = None;
+        for (i, key) in verses.iter().take(200).enumerate() {
+            let shown = direct.mint(key, None).unwrap();
+            let started = Instant::now();
+            let reply = direct
+                .submit(Command::SaveVerse {
+                    shown,
+                    words: format!("A direct save {i} of run {run}"),
+                })
+                .wait()
+                .unwrap();
+            save_direct.push(millis(started.elapsed()));
+            assert!(!reply.changes.is_empty());
+            loop {
+                if let tc_store::StoreEvent::Committed { seq, .. } = direct_events.recv().unwrap()
+                    && seq == reply.seq
+                {
+                    event_direct.push(millis(started.elapsed()));
+                    break;
+                }
+            }
+
+            let token = seam.snapshot().mint(key, None).unwrap();
+            let before = seam.counters();
+            let started = Instant::now();
+            let reply = seam
+                .submit(StoreCommand::save_verse(
+                    token,
+                    format!("A seam save {i} of run {run}"),
+                ))
+                .await
+                .unwrap();
+            save_seam.push(millis(started.elapsed()));
+            if one_save.is_none() {
+                one_save = Some(seam.counters().since(&before));
+            }
+            assert!(!reply.changes.is_empty());
+            loop {
+                if let Some(StoreEvent::Committed { seq, .. }) = seam_events.recv().await
+                    && seq == reply.seq
+                {
+                    event_seam.push(millis(started.elapsed()));
+                    break;
+                }
             }
         }
-    }
-    report(
-        "M2 save a Psalms verse until its reply: tc-store",
-        "ms",
-        &save_direct,
-    );
-    report(
-        "M2 save a Psalms verse until its reply: seam",
-        "ms",
-        &save_seam,
-    );
-    report(
-        "M3 save until the subscriber's Committed: tc-store",
-        "ms",
-        &event_direct,
-    );
-    report(
-        "M3 save until the subscriber's Committed: seam",
-        "ms",
-        &event_seam,
-    );
-    let one = one_save.unwrap();
-    println!(
-        "{}",
-        json!({"name": "one seam save's store counters", "files_opened": one.files_opened,
+        report(
+            "M2 save a Psalms verse until its reply: tc-store",
+            "ms",
+            &save_direct,
+        );
+        report(
+            "M2 save a Psalms verse until its reply: seam",
+            "ms",
+            &save_seam,
+        );
+        report(
+            "M3 save until the subscriber's Committed: tc-store",
+            "ms",
+            &event_direct,
+        );
+        report(
+            "M3 save until the subscriber's Committed: seam",
+            "ms",
+            &event_seam,
+        );
+        let one = one_save.unwrap();
+        println!(
+            "{}",
+            json!({"name": "one seam save's store counters", "files_opened": one.files_opened,
                "files_created": one.files_created, "fsyncs": one.fsyncs, "renames": one.renames})
-    );
-    drop(seam_events);
-    drop(direct_events);
-    direct.wait_idle();
-    seam.wait_idle();
-    seam.close().await.unwrap();
+        );
+        drop(seam_events);
+        drop(direct_events);
+        direct.wait_idle();
+        seam.wait_idle();
+        seam.close().await.unwrap();
+    }
 
-    // ---- M4: test/saveVerse through App::call, beside direct saves.
+    // ---- M4: editor/saveVerse through App::call, beside direct saves.
     let app_dir = dir.join("bench-app");
     let _ = std::fs::remove_dir_all(&app_dir);
     let app = App::start(
@@ -462,7 +484,7 @@ async fn bench(dir: &Path) {
                 commit: "bench".to_owned(),
             },
             bundle: None,
-            test_hooks: true,
+            test_hooks: false,
             seed_pace: None,
         },
         AppDeps {
@@ -507,11 +529,21 @@ async fn bench(dir: &Path) {
             panic!("{answer:?}")
         };
         let reply: Reply<tc_api::write::Ack> = serde_json::from_slice(&body).unwrap();
-        assert!(reply.into_result().is_ok());
+        let ack = reply.into_result().unwrap();
+        assert_eq!(ack.stored, tc_api::write::Stored::Written);
+        assert!(
+            ack.disk_warning.is_none(),
+            "a non-durable save is not a timing success"
+        );
     }
+    assert_eq!(
+        call_app.len(),
+        200,
+        "the fixture must supply 200 changed Psalms saves"
+    );
     report("M4 save until its reply: tc-store", "ms", &call_direct);
     report(
-        "M4 test/saveVerse through App::call until its Ack",
+        "M4 editor/saveVerse through App::call until its Ack",
         "ms",
         &call_app,
     );
@@ -519,6 +551,13 @@ async fn bench(dir: &Path) {
     let _ = std::fs::remove_dir_all(&app_dir);
     direct.wait_idle();
     direct.close().unwrap();
+    if mode == Mode::M4 {
+        for root in [&direct_path, &dir.join("projects").join(seam_name)] {
+            let problems = tc_burrito::validate_dir(root);
+            assert!(problems.is_empty(), "{}: {problems:?}", root.display());
+        }
+        return;
+    }
 
     // ---- M6: a close after 10 saves.
     let (mut close_direct, mut close_seam) = (Vec::new(), Vec::new());

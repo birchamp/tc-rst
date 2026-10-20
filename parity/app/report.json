@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "04b2e028da76a4db",
+      "ui": "0f9ff1fa441d73a8",
       "commit": "dev",
       "api": 1
     }
@@ -107,7 +107,7 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B4a",
+      "by": "C2",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
@@ -119,7 +119,7 @@
       },
       "dom": {
         "tc4Sha256": "3e27eb9e669b3cf153ed6418ca4a7e7ddb19bc88bbec2d03b415730c91075a7e",
-        "rustSha256": "c3bb32908edbb4610d1856f313bf2801de6f9e47c3d533f552d89a540882c41a",
+        "rustSha256": "20a18c41ccd54d9894d4dd2629caf56eee90d06a24c1b11ac6dfd8f78b219ae1",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1289,7 +1289,7 @@
       "scenario": "en-pins",
       "locale": "en",
       "status": "differs",
-      "by": "B4a",
+      "by": "C2",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
@@ -1301,7 +1301,7 @@
       },
       "dom": {
         "tc4Sha256": "8252bdeb4bb17728b64be6834f74ddc0db7492dc1bb26e3466a73db46b105f9e",
-        "rustSha256": "54c358010d2e89dd1a1070ca545e927f79740ff85fc325aeea63f137e7330320",
+        "rustSha256": "24a6c502778a2d18194b0709b75c9acfd92d79aae1c6bf49588380fb8ecbce91",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1321,7 +1321,7 @@
       "scenario": "en-pins",
       "locale": "en",
       "status": "same",
-      "by": "B4b",
+      "by": "C2",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
@@ -1333,7 +1333,7 @@
       },
       "dom": {
         "tc4Sha256": "b4da7276d8343c2e3f25179752d5720d9e486c342f9656216701443371fc1e2b",
-        "rustSha256": "5af7ad3b085169b44aa67ff0e45b7f7f101ac1511b431022c30681c7f2837fc4",
+        "rustSha256": "c7928a9cf0d9873e75bc4db903dc47075a61e0c9124219567490351b9873de61",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1351,7 +1351,7 @@
       "scenario": "en-pins",
       "locale": "en",
       "status": "same",
-      "by": "B4a",
+      "by": "C2",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
@@ -1363,7 +1363,7 @@
       },
       "dom": {
         "tc4Sha256": "4eadd4501bc0afaf5835272e9a343f38c7273091f49c825608fdc22187d5db82",
-        "rustSha256": "f4c2c428bb904325cf65ed0396f1c759ebabfa4eadea3952ed998dc7d7454d15",
+        "rustSha256": "282152c41b6ff8d383f767c2a92ffb965d185900fdf17d73bb5b5eb553478b40",
         "scope": null,
         "same": true,
         "declared": [],

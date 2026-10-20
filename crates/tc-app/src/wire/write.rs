@@ -34,6 +34,33 @@ pub fn ack(
     sent: &str,
     me: DeviceId,
 ) -> Result<Ack, WireError> {
+    text_ack(reply, read, shown, sent, me, TextPart::Words)
+}
+
+/// An Ack's field text must match the layout field, never the unchanged verse words.
+pub fn layout_ack(
+    reply: &StoreReply,
+    read: &CountingSnapshot,
+    shown: &EditToken,
+    sent: &str,
+    me: DeviceId,
+) -> Result<Ack, WireError> {
+    text_ack(reply, read, shown, sent, me, TextPart::Layout)
+}
+
+enum TextPart {
+    Words,
+    Layout,
+}
+
+fn text_ack(
+    reply: &StoreReply,
+    read: &CountingSnapshot,
+    shown: &EditToken,
+    sent: &str,
+    me: DeviceId,
+    part: TextPart,
+) -> Result<Ack, WireError> {
     let key = shown.key();
     let record = record_ref(key).ok_or_else(|| WireError::Record(format!("{key:?}")))?;
     let (stored_as, disk_warning) = stored(&reply.stored);
@@ -53,9 +80,12 @@ pub fn ack(
                 .filter(|body| body.record.key() == *key)
                 .find_map(|body| match body.record {
                     Record::Verse {
-                        value: VerseValue::Text { words, .. },
+                        value: VerseValue::Text { words, layout, .. },
                         ..
-                    } => Some(words),
+                    } => Some(match part {
+                        TextPart::Words => words,
+                        TextPart::Layout => layout,
+                    }),
                     _ => None,
                 });
             // A verse save stores the NFC form of the words sent; the body is the record of
@@ -180,6 +210,9 @@ pub fn new_conflicts(
     record: &tc_api::ids::RecordRef,
     me: DeviceId,
 ) -> Result<Vec<ConflictBrief>, WireError> {
+    if reply.new_conflicts.is_empty() {
+        return Ok(Vec::new());
+    }
     let labels = read.person_labels(me);
     reply
         .new_conflicts

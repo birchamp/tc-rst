@@ -376,7 +376,7 @@ browserTest('check_shows_new_draft_after_switching_back', async () => {
     // To Understand, where the draft is not shown, and the verse changes as Translate's save does.
     await page.getByRole('tab', { name: catalog('en')['nav.understand'], exact: true }).click();
     await page.getByTestId('understand-unit-s1').waitFor();
-    await env.call('test/saveVerse', {
+    await env.call('editor/saveVerse', {
       at: await scopeOf(env),
       request: (await import('../env-rust.mjs')).newRequestId(),
       shown: before.target.verse,

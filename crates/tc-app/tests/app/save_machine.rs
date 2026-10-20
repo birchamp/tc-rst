@@ -11,7 +11,7 @@
 //! These tests use real time and a multi-thread runtime: the store writes its file on the
 //! blocking pool. The page's own clock is virtual.
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -19,20 +19,28 @@ use proptest::prelude::*;
 use tc_api::buffer::{
     BufferEntry, BufferKey, BufferLine, FieldKey, FieldKind, FieldPlace, SentSave,
 };
-use tc_api::ids::{ProjectId, ProjectRef, RequestId, WallMs};
+use tc_api::editor::{Draft, DraftField, SaveVerse};
+use tc_api::ids::{ProjectId, ProjectRef, RequestId, Scope, WallMs};
+use tc_api::shown::Shown;
 use tc_api::test::{
-    Crash, CrashPoint, FieldDraft, FieldLogView, FieldStore, Hold, HoldPoint, Release, TokenBase,
+    Crash, CrashPoint, FieldDraft, FieldLogView, FieldStore, Hold, HoldPoint, Release, StoredText,
+    TokenBase,
 };
 use tc_api::write::Ack;
 use tc_api::{ApiError, Reply, ShownToken};
-use tc_app::{Answer, App, Then};
+use tc_app::config::ProjectsFolder;
+use tc_app::wire::token::shown;
+use tc_app::{Answer, App, StoreChoice, Then};
+use tc_journal::record::VerseValue;
+use tc_journal::{ChangeId, Record};
 use tc_ui::app::buffer::{self, MemStore};
 use tc_ui::app::client::{CallError, Transport};
 use tc_ui::app::save::classify::{Answered, classify};
 use tc_ui::app::save::{Command, FieldSave, FieldScope, Pair, ResendCheck, SaveMachine, Source};
 use tokio::task::JoinHandle;
 
-use super::common::{TestApp, field_log};
+use super::common::{Parts, TestApp, field_log};
+use crate::store_world::{StoreWorld, progress, store_world, tit, words_of};
 
 const FIELD: &str = "probe-a";
 const TEXTS: [&str; 7] = [
@@ -112,6 +120,17 @@ struct World {
     last_typed: String,
     /// Each clean `Ack`'s text and the field's value at that moment.
     clean_checks: Vec<(String, String)>,
+    verse: Option<VerseStore>,
+}
+
+/// The production mode reads its audit from the actual journal, independently of Acks.
+struct VerseStore {
+    _world: StoreWorld,
+    at: Scope,
+    key: BufferKey,
+    baseline: HashSet<ChangeId>,
+    initial_heads: Vec<ChangeId>,
+    requests: HashMap<RequestId, (String, Vec<ChangeId>)>,
 }
 
 fn store_body(sent: &SentSave, base: &[ShownToken]) -> Vec<u8> {
@@ -137,6 +156,77 @@ impl World {
             now: 0.0,
             last_typed: String::new(),
             clean_checks: Vec::new(),
+            verse: None,
+        }
+    }
+
+    async fn verse() -> Self {
+        let world = store_world();
+        let dir = tempfile::tempdir().unwrap();
+        let projects = dir.path().join("projects");
+        std::fs::create_dir(&projects).unwrap();
+        let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+            config.projects = ProjectsFolder::Given(projects);
+            deps.store = StoreChoice::Given(world.store());
+        })
+        .await;
+        let open = t
+            .app
+            .sessions()
+            .open_screen(&world.bible, progress())
+            .await
+            .unwrap();
+        let session = t.app.read(&open.at).unwrap();
+        session.handle().wait_idle();
+        let record = tit(1, 12);
+        let snapshot = session.handle().snapshot();
+        let key = BufferKey {
+            project: open.at.project.clone(),
+            id: session.id().clone(),
+            field: FieldKey {
+                kind: FieldKind::Verse,
+                place: FieldPlace::parse("TIT 1:12").unwrap(),
+            },
+        };
+        let initial = words_of(&snapshot, &record).unwrap();
+        let verse = VerseStore {
+            _world: world,
+            at: open.at,
+            key,
+            baseline: snapshot.fold().history(&record).into_iter().collect(),
+            initial_heads: snapshot.fold().shown_heads(&record, None),
+            requests: HashMap::new(),
+        };
+        let page = Page::new(&t.app, MemStore::new());
+        Self {
+            dir,
+            t,
+            page,
+            mirror: Vec::new(),
+            now: 0.0,
+            last_typed: initial,
+            clean_checks: Vec::new(),
+            verse: Some(verse),
+        }
+    }
+
+    fn key(&self) -> BufferKey {
+        self.verse
+            .as_ref()
+            .map_or_else(key, |verse| verse.key.clone())
+    }
+
+    fn scope(&self) -> FieldScope {
+        self.verse.as_ref().map_or(FieldScope::App, |verse| {
+            FieldScope::Project(Some(verse.at.clone()))
+        })
+    }
+
+    fn path(&self) -> &'static str {
+        if self.verse.is_some() {
+            "editor/saveVerse"
+        } else {
+            "test/fieldStore"
         }
     }
 
@@ -213,17 +303,35 @@ impl World {
                 }
                 Command::Draft { text, base, .. } => {
                     // Best effort, never awaited: a held store must not hold the page.
-                    let body = serde_json::to_vec(&FieldDraft {
-                        request: fresh_id(),
-                        field: FIELD.to_owned(),
-                        shown: base[0].clone(),
-                        text,
-                    })
-                    .unwrap();
+                    let (path, body) = if let Some(verse) = &self.verse {
+                        let entry = buffer::read(&self.page.store, &verse.key).unwrap();
+                        (
+                            "editor/draft",
+                            serde_json::to_vec(&Draft {
+                                at: verse.at.clone(),
+                                request: fresh_id(),
+                                instance: entry.instance,
+                                field: DraftField::Words,
+                                shown: base,
+                                text,
+                                changed: entry.at,
+                            })
+                            .unwrap(),
+                        )
+                    } else {
+                        (
+                            "test/fieldDraft",
+                            serde_json::to_vec(&FieldDraft {
+                                request: fresh_id(),
+                                field: FIELD.to_owned(),
+                                shown: base[0].clone(),
+                                text,
+                            })
+                            .unwrap(),
+                        )
+                    };
                     let app = self.t.app.clone();
-                    drop(tokio::spawn(async move {
-                        app.call("test/fieldDraft", &body).await
-                    }));
+                    drop(tokio::spawn(async move { app.call(path, &body).await }));
                 }
                 Command::DiscardDraft { .. } | Command::Show { .. } | Command::ReadSessions => {}
             }
@@ -232,8 +340,29 @@ impl World {
 
     fn send(&mut self, sent: SentSave, base: &[ShownToken]) {
         let app = self.t.app.clone();
-        let body = store_body(&sent, base);
-        let handle = tokio::spawn(async move { app.call("test/fieldStore", &body).await });
+        let path = self.path();
+        let body = if let Some(verse) = &mut self.verse {
+            let at = sent
+                .scope
+                .clone()
+                .expect("a production save keeps its original scope");
+            let session = app.read(&at).unwrap();
+            let token = session.handle().parse_edit(&base[0]).unwrap();
+            let request = (buffer::nfc(&sent.text), token.heads().to_vec());
+            if let Some(previous) = verse.requests.insert(sent.request, request.clone()) {
+                assert_eq!(previous, request, "a retry retains the exact text and base");
+            }
+            serde_json::to_vec(&SaveVerse {
+                at,
+                request: sent.request,
+                shown: base[0].clone(),
+                words: sent.text.clone(),
+            })
+            .unwrap()
+        } else {
+            store_body(&sent, base)
+        };
+        let handle = tokio::spawn(async move { app.call(path, &body).await });
         self.page.inflight.push_back(Flight { sent, handle });
     }
 
@@ -253,10 +382,64 @@ impl World {
     }
 
     async fn log(&mut self) -> FieldLogView {
-        self.ask(&tc_api::test::FieldLog {
-            field: FIELD.to_owned(),
-        })
-        .await
+        if let Some(verse) = &self.verse {
+            let session = self.t.app.read(&verse.at).unwrap();
+            let snapshot = session.handle().snapshot();
+            let record = tit(1, 12);
+            let mut changes: Vec<_> = snapshot
+                .fold()
+                .history(&record)
+                .into_iter()
+                .filter(|id| !verse.baseline.contains(id))
+                .map(|id| (id, snapshot.fold().body(&id).unwrap()))
+                .collect();
+            changes.sort_by_key(|(_, body)| body.seq);
+            let mut previous = verse.initial_heads.clone();
+            let stores = changes
+                .into_iter()
+                .map(|(id, body)| {
+                    let Record::Verse {
+                        value: VerseValue::Text { words, .. },
+                        ..
+                    } = body.record
+                    else {
+                        panic!("a word save must keep a text verse")
+                    };
+                    let request = verse
+                        .requests
+                        .iter()
+                        .find(|(_, (text, parents))| *text == words && *parents == body.parents)
+                        .map(|(request, _)| *request)
+                        .expect("each journal change came from a submitted production save");
+                    let base = if body.parents == previous {
+                        TokenBase::Current
+                    } else {
+                        TokenBase::Stale
+                    };
+                    previous = vec![id];
+                    StoredText {
+                        request,
+                        text: words,
+                        base,
+                    }
+                })
+                .collect();
+            FieldLogView {
+                current: Shown {
+                    value: words_of(&snapshot, &record).unwrap(),
+                    token: shown(&snapshot.mint(&record, None).unwrap()).unwrap(),
+                    marker: None,
+                },
+                stores,
+                draft: None,
+                drafts: 0,
+            }
+        } else {
+            self.ask(&tc_api::test::FieldLog {
+                field: FIELD.to_owned(),
+            })
+            .await
+        }
     }
 
     async fn open_editor(&mut self) {
@@ -269,24 +452,26 @@ impl World {
             token: log.current.token,
             view: None,
         };
-        let (_, commands) = self.page.m.open(key(), FieldScope::App, pair, self.now);
+        let (key, scope) = (self.key(), self.scope());
+        let (_, commands) = self.page.m.open(key, scope, pair, self.now);
         self.page.editor = true;
         self.run(commands).await;
     }
 
     async fn type_text(&mut self, text: &str) {
+        let key = self.key();
         self.open_editor().await;
         if !self.page.focused {
             self.page.focused = true;
-            let commands = self.page.m.focus(&key(), self.now);
+            let commands = self.page.m.focus(&key, self.now);
             self.run(commands).await;
         }
         // boot.js's capture listener, before the WebAssembly sees the keystroke, which then
         // leaves the write to it only if it says its item took the text.
-        let template = self.page.m.template(&key()).unwrap();
+        let template = self.page.m.template(&key).unwrap();
         let input = buffer::input_to_entry(
             &mut self.page.store,
-            &key(),
+            &key,
             text,
             WallMs(self.now as i64),
             &template,
@@ -299,20 +484,22 @@ impl World {
         } else {
             Source::Program
         };
-        let commands = self.page.m.typed(&key(), text, source, self.now);
+        let commands = self.page.m.typed(&key, text, source, self.now);
         self.last_typed = text.to_owned();
         self.run(commands).await;
     }
 
     async fn blur(&mut self) {
+        let key = self.key();
         if self.page.focused {
             self.page.focused = false;
-            let commands = self.page.m.blur(&key(), self.now);
+            let commands = self.page.m.blur(&key, self.now);
             self.run(commands).await;
         }
     }
 
     async fn advance(&mut self, ms: f64) {
+        let key = self.key();
         let until = self.now + ms;
         let mut rounds = 0;
         while let Some(deadline) = self.page.m.next_deadline().filter(|d| *d <= until) {
@@ -321,7 +508,7 @@ impl World {
                 rounds < 1000,
                 "a deadline that never passes: {deadline} at {} in {:?}",
                 self.now,
-                self.page.m.state(&key())
+                self.page.m.state(&key)
             );
             self.now = deadline.max(self.now);
             let commands = self.page.m.tick(self.now);
@@ -335,6 +522,7 @@ impl World {
     /// The oldest call's answer, given to the machine. `keep_last` says whether an answer
     /// after which the process ended reached the page before it did.
     async fn deliver(&mut self, keep_last: bool) -> Delivered {
+        let key = self.key();
         let Some(flight) = self.page.inflight.pop_front() else {
             return Delivered::Answered;
         };
@@ -364,23 +552,14 @@ impl World {
         if let Some(reply) = reply
             && (!ended || keep_last)
         {
-            let commands = self
-                .page
-                .m
-                .reply(&key(), request, classify(reply), self.now);
+            let commands = self.page.m.reply(&key, request, classify(reply), self.now);
             self.run(commands).await;
-            if matches!(self.page.m.state(&key()), Some(FieldSave::Clean)) {
-                let text = buffer::nfc(self.page.m.text(&key()).unwrap());
+            if matches!(self.page.m.state(&key), Some(FieldSave::Clean)) {
+                let text = buffer::nfc(self.page.m.text(&key).unwrap());
                 // The value at this moment; an app that ended meanwhile says nothing about it.
-                if let Ok(Reply::Ok(log)) = self
-                    .t
-                    .app
-                    .request(&tc_api::test::FieldLog {
-                        field: FIELD.to_owned(),
-                    })
-                    .await
-                {
-                    self.clean_checks.push((text, log.current.value));
+                if !ended {
+                    let value = self.log().await.current.value;
+                    self.clean_checks.push((text, value));
                 }
             }
         }
@@ -393,12 +572,13 @@ impl World {
 
     /// The oldest call's reply is lost; its work on the server goes on.
     async fn cut(&mut self) {
+        let key = self.key();
         if let Some(flight) = self.page.inflight.pop_front() {
             drop(flight.handle);
             let commands = self
                 .page
                 .m
-                .reply(&key(), flight.sent.request, Answered::Lost, self.now);
+                .reply(&key, flight.sent.request, Answered::Lost, self.now);
             self.run(commands).await;
         }
     }
@@ -411,7 +591,8 @@ impl World {
         drop(old.inflight);
         for (k, entry) in buffer::entries(&self.page.store) {
             if entry.instance == self.page.m.instance() {
-                let commands = self.page.m.restore(k, entry, FieldScope::App, self.now);
+                let scope = self.scope();
+                let commands = self.page.m.restore(k, entry, scope, self.now);
                 self.run(commands).await;
             }
         }
@@ -486,10 +667,11 @@ impl World {
     /// landed before the crash, and the newer text continues from it), and over the entry's own
     /// token otherwise, so a change made since becomes a conflict.
     async fn offer(&mut self) {
+        let key = self.key();
         let newest: Option<BufferEntry> =
             buffer::merge(Vec::new(), &buffer::current_lines(&self.mirror))
                 .into_iter()
-                .filter(|(k, _)| *k == key())
+                .filter(|(k, _)| *k == key)
                 .map(|(_, entry)| entry)
                 .max_by_key(|entry| entry.at);
         let Some(entry) = newest else {
@@ -499,7 +681,7 @@ impl World {
         let stored = log.current.value;
         if buffer::same_text(&entry.text, &stored) {
             self.mirror
-                .push(buffer::removed_line(&key(), entry.instance).unwrap());
+                .push(buffer::removed_line(&key, entry.instance).unwrap());
             return;
         }
         let landed = entry
@@ -519,11 +701,12 @@ impl World {
         };
         self.ask(&keep).await;
         self.mirror
-            .push(buffer::removed_line(&key(), entry.instance).unwrap());
+            .push(buffer::removed_line(&key, entry.instance).unwrap());
     }
 
     /// Everything answered and saved, with nothing held.
     async fn settle(&mut self) {
+        let key = self.key();
         for _ in 0..40 {
             self.keep_alive().await;
             while self.t.app.holding() > 0 {
@@ -546,7 +729,7 @@ impl World {
             let commands = self.page.m.retry(self.now);
             self.run(commands).await;
             self.advance(3000.0).await;
-            let saved = matches!(self.page.m.state(&key()), Some(FieldSave::Clean) | None);
+            let saved = matches!(self.page.m.state(&key), Some(FieldSave::Clean) | None);
             if saved && self.page.inflight.is_empty() {
                 break;
             }
@@ -557,7 +740,8 @@ impl World {
     /// The row's assertions: the last text stored, once; no request id twice; no store over an
     /// older version; no earlier text marked clean in its place; every mirror line readable.
     async fn check(&mut self) {
-        let state = self.page.m.state(&key()).cloned();
+        let key = self.key();
+        let state = self.page.m.state(&key).cloned();
         assert!(
             matches!(state, Some(FieldSave::Clean) | None),
             "the field ends saved: {state:?}"
@@ -815,7 +999,10 @@ fn crash_steps() -> impl Strategy<Value = Vec<Step>> {
 }
 
 async fn play(steps: Vec<Step>) {
-    let mut w = World::new().await;
+    play_world(World::new().await, steps).await;
+}
+
+async fn play_world(mut w: World, steps: Vec<Step>) {
     for step in steps {
         w.keep_alive().await;
         match step {
@@ -881,4 +1068,24 @@ fn a_status_503_is_a_lost_reply() {
         classify(Err(CallError::Api(ApiError::RequestReused))),
         Answered::Reissue
     ));
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(48))]
+
+    /// The same reload/lost-reply property on editor/saveVerse, its real project tokens,
+    /// the production Draft path and tc-store's journal, rather than test/fieldStore.
+    #[test]
+    fn production_reload_anywhere_stores_the_last_text_once(steps in reload_steps()) {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                tokio::time::timeout(Duration::from_secs(30), async {
+                    play_world(World::verse().await, steps).await;
+                }).await.expect("the production save/reload scenario finishes");
+            });
+    }
 }

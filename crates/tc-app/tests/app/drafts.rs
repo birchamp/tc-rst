@@ -8,13 +8,14 @@ use std::sync::Arc;
 use tc_api::buffer::{
     BufferEntry, BufferKey, BufferLine, FieldKey, FieldKind, FieldPlace, SentSave,
 };
+use tc_api::editor::{Draft, DraftField as EditorDraftField, SaveVerse};
 use tc_api::event::SessionMode;
 use tc_api::ids::{ProjectRef, RequestId, ServerInstance, WallMs};
 use tc_api::session::{
     CopyProject, DiscardDraft, DraftKind, DraftOffer, Drafts, Keep, KeepDraft, KeptDraft,
     OfferedDrafts, OtherComputerClosed,
 };
-use tc_api::test::{Crash, CrashPoint, SaveVerse};
+use tc_api::test::{Crash, CrashPoint};
 use tc_api::write::{ReadOnlyReason, Stored};
 use tc_api::{ApiError, Endpoint, NotSaved, ShownToken};
 use tc_app::backend::{CheckpointReason, ProjectStore, StoreCommand};
@@ -155,8 +156,8 @@ impl Rig {
         self.stored_draft_at(session, key, text, START_MS).await;
     }
 
-    /// A draft of `key` as an editor sends it, through the store (C2 sends it with
-    /// `editor/draft`), with the page's time of its last keystroke, written to `drafts.json`
+    /// A draft through the production endpoint, with the page's original keystroke time,
+    /// written to `drafts.json`
     /// before this returns.
     async fn stored_draft_at(
         &self,
@@ -165,17 +166,20 @@ impl Rig {
         text: &str,
         at: i64,
     ) {
-        let token = session.read().mint(key, None).unwrap();
-        session
-            .handle()
-            .submit(StoreCommand::draft(
-                DraftField::Words,
-                vec![token],
-                text.to_owned(),
-                WallTime(at),
-            ))
-            .await
-            .unwrap();
+        post(
+            &self.t.app,
+            &Draft {
+                at: session.scope().clone(),
+                request: fresh(),
+                instance: self.t.app.instance(),
+                field: EditorDraftField::Words,
+                shown: vec![self.token(session, key)],
+                text: text.to_owned(),
+                changed: WallMs(at),
+            },
+        )
+        .await
+        .unwrap();
         session.handle().wait_idle();
     }
 
@@ -1031,4 +1035,195 @@ async fn an_older_draft_is_not_offered_over_the_sessions_own_save() {
     rig.relaunch().await;
     let session = rig.open(&rig.bible.clone()).await;
     assert!(rig.offer_with(&session, &[], true).await.offers.is_empty());
+}
+
+/// The newer production Draft is durable before the older save's Ack; a stopped app
+/// cannot rely on the browser receiving that Ack and refreshing its draft afterward.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_draft_sent_during_a_save_survives_a_crash() {
+    tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        let mut rig = Rig::new().await;
+        let session = rig.open(&rig.bible.clone()).await;
+        let key = tit(1, 12);
+        let shown = rig.token(&session, &key);
+        let original = words(&session, &key);
+        let draft_writes = session.handle().counters().drafts_written;
+        rig.hooks.hold(tc_store::Point::BeforeDurablePending);
+        struct Release(Arc<tc_store::Hooks>);
+        impl Drop for Release {
+            fn drop(&mut self) {
+                self.0.release(tc_store::Point::BeforeDurablePending);
+            }
+        }
+        let held = Release(rig.hooks.clone());
+        rig.arm(CrashPoint::BeforeReply).await;
+        let req = SaveVerse {
+            at: session.scope().clone(),
+            request: fresh(),
+            shown: shown.clone(),
+            words: "first words sent".to_owned(),
+        };
+        let app = rig.t.app.clone();
+        let body = serde_json::to_vec(&req).unwrap();
+        let saving = tokio::spawn(async move { app.call(SaveVerse::PATH, &body).await });
+        super::common::until("the production save reaches durability", || {
+            rig.hooks.reached(tc_store::Point::BeforeDurablePending) == 1
+        })
+        .await;
+        post(
+            &rig.t.app,
+            &Draft {
+                at: session.scope().clone(),
+                request: fresh(),
+                instance: rig.t.app.instance(),
+                field: EditorDraftField::Words,
+                shown: vec![shown],
+                text: "first words sent, with newer typing".to_owned(),
+                changed: WallMs(START_MS + 1),
+            },
+        )
+        .await
+        .unwrap();
+        super::common::until("the newer draft reaches its own file", || {
+            session.handle().counters().drafts_written > draft_writes
+        })
+        .await;
+        assert_eq!(
+            words(&session, &key),
+            original,
+            "the journal save still waits"
+        );
+        drop(held);
+        assert_eq!(
+            saving.await.unwrap(),
+            Answer::Ended,
+            "no save Ack reached the page"
+        );
+        drop(session);
+        rig.relaunch().await;
+        let session = rig.open(&rig.bible.clone()).await;
+        assert_eq!(words(&session, &key).as_deref(), Some("first words sent"));
+        assert!(matches!(
+            rig.save(&session, 120, &key, "a teammate's version").await,
+            Answer::Reply { .. }
+        ));
+        let offers = rig.offer(&session, &[]).await;
+        let offer = offer_at(&offers, "TIT 1:12");
+        assert_eq!(offer.text, "first words sent, with newer typing");
+        let kept = rig.keep(&session, 121, offer).await.unwrap();
+        assert_eq!(
+            kept.new_conflicts.len(),
+            1,
+            "the newer draft never replaces unseen work"
+        );
+        let fold = session.handle().snapshot();
+        let versions: Vec<_> = fold
+            .fold()
+            .heads(&key)
+            .into_iter()
+            .map(|id| match fold.fold().body(&id).unwrap().record {
+                Record::Verse {
+                    value: tc_journal::record::VerseValue::Text { words, .. },
+                    ..
+                } => words,
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert!(versions.contains(&"a teammate's version".to_owned()));
+        assert!(versions.contains(&"first words sent, with newer typing".to_owned()));
+    })
+    .await
+    .expect("the held-save draft recovery scenario must finish");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn resume_follows_confirmed_saves_and_the_drafts_original_keystroke_time() {
+    use tc_api::home::{HomeView, List, ResumePlace};
+    use tc_api::prefs::PlaceMode;
+    use tc_app::prefs::AppDataPath;
+    async fn resume_with(app: &tc_app::App, snippet: &str) -> tc_api::home::LastEditView {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let home: HomeView = post(app, &List {}).await.unwrap();
+                if let Some(resume) = home.resume
+                    && resume.snippet == snippet
+                {
+                    return resume;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .expect("Resume must observe the queued preference update")
+    }
+    let rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let (saved, drafted) = (tit(1, 13), tit(1, 14));
+    rig.t.clock.set(START_MS + 20);
+    let answer = rig
+        .save(&session, 122, &saved, "  a confirmed   translation  ")
+        .await;
+    let Answer::Reply { body, .. } = answer else {
+        panic!("{answer:?}")
+    };
+    let ack: tc_api::Reply<tc_api::write::Ack> = serde_json::from_slice(&body).unwrap();
+    assert!(matches!(ack, tc_api::Reply::Ok(_)));
+    let first = resume_with(&rig.t.app, "a confirmed translation").await;
+    assert_eq!(first.project, rig.bible);
+    assert_eq!(first.snippet, "a confirmed translation");
+    assert_eq!(first.mode, PlaceMode::Draft);
+    assert_eq!(
+        first.place,
+        ResumePlace::Book {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: tc_api::ids::RefPart::parse("13").unwrap(),
+        }
+    );
+    session.handle().wait_idle();
+    rig.fs.fail_op(0, std::io::ErrorKind::StorageFull);
+    let answer = rig
+        .save(&session, 123, &drafted, "a refused translation")
+        .await;
+    let Answer::Reply { body, .. } = answer else {
+        panic!("{answer:?}")
+    };
+    let refused: tc_api::Reply<tc_api::write::Ack> = serde_json::from_slice(&body).unwrap();
+    assert!(matches!(
+        refused,
+        tc_api::Reply::Err(ApiError::NotSaved(NotSaved::Disk(_)))
+    ));
+    let after_refusal: HomeView = post(&rig.t.app, &List {}).await.unwrap();
+    assert_eq!(after_refusal.resume, Some(first));
+    rig.t.clock.set(START_MS + 10_000);
+    let changed = WallMs(START_MS + 100);
+    post(
+        &rig.t.app,
+        &Draft {
+            at: session.scope().clone(),
+            request: fresh(),
+            instance: rig.t.app.instance(),
+            field: EditorDraftField::Words,
+            shown: vec![rig.token(&session, &drafted)],
+            text: "newer words still in the editor".to_owned(),
+            changed,
+        },
+    )
+    .await
+    .unwrap();
+    let resume = resume_with(&rig.t.app, "newer words still in the editor").await;
+    assert_eq!(resume.snippet, "newer words still in the editor");
+    assert_eq!(
+        resume.place,
+        ResumePlace::Book {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: tc_api::ids::RefPart::parse("14").unwrap(),
+        }
+    );
+    drop(session);
+    rig.t.app.quit().await;
+    let bytes = rig.t.files.get(&AppDataPath::app_prefs()).unwrap();
+    let prefs: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(prefs["lastEdit"]["at"], serde_json::json!(changed.0));
 }

@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tc_api::test::{Hold, HoldPoint, Release, Reset, SaveVerse};
+use tc_api::editor::SaveVerse;
+use tc_api::test::{Hold, HoldPoint, Release, Reset};
 use tc_api::write::Stored;
 use tc_app::StoreChoice;
 use tc_app::backend::memory::MemoryBackend;

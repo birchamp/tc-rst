@@ -739,6 +739,16 @@ impl ProjectHandle for MemoryHandle {
         false
     }
 
+    fn discard_current_draft(
+        &self,
+        _field: DraftField,
+        _shown: Vec<EditToken>,
+        _text: String,
+        _at: tc_journal::WallTime,
+    ) -> bool {
+        true
+    }
+
     fn offer_draft(
         &self,
         _field: DraftField,

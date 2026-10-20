@@ -46,9 +46,10 @@ use tc_api::create::{
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
-    Book, BookView, ChapterText, Chapters, ChaptersView, CommentView, FrameRow, PaneChapter,
-    PaneText, PaneVerse, RailBook, RowSource, SourceFrame, SourcePane, Sources, SourcesView,
-    VerseRow,
+    Book, BookView, ChapterText, Chapters, ChaptersView, CommentView,
+    DiscardDraft as EditorDiscardDraft, Draft as EditorDraft, DraftField as EditorDraftField,
+    FrameRow, PaneChapter, PaneText, PaneVerse, RailBook, RowSource, SaveLayout, SaveSection,
+    SaveVerse, SourceFrame, SourcePane, Sources, SourcesView, VerseRow,
 };
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
@@ -102,8 +103,8 @@ use tc_api::story;
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
-    QuietView, Release, Reset, SaveSection, SaveVerse, Script, Scripted, ScriptedSync, StoredDraft,
-    StoredText, TeammatesEdit, TokenBase,
+    QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
+    TeammatesEdit, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -1122,6 +1123,48 @@ impl Example for SaveSection {
                 token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
             ],
             text: "1-2 Paul, a servant of God\n\t3 an apostle".into(),
+        }
+    }
+}
+
+impl Example for SaveLayout {
+    fn example() -> Self {
+        SaveLayout {
+            at: scope(),
+            request: request(20),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            layout: "\n\\q1\n".into(),
+        }
+    }
+}
+
+impl Example for EditorDraft {
+    fn example() -> Self {
+        EditorDraft {
+            at: scope(),
+            request: request(21),
+            instance: ServerInstance::from_bytes([7; 16]),
+            field: EditorDraftField::Section {
+                book: BookId::Titus,
+            },
+            shown: SaveSection::example().displayed,
+            text: "1-2 Paul, a servant of God\n\t3 an apostle".into(),
+            changed: WallMs(1_792_000_000_000),
+        }
+    }
+}
+
+impl Example for EditorDiscardDraft {
+    fn example() -> Self {
+        let draft = EditorDraft::example();
+        Self {
+            at: draft.at,
+            request: request(22),
+            instance: draft.instance,
+            field: draft.field,
+            shown: draft.shown,
+            text: draft.text,
+            changed: draft.changed,
         }
     }
 }
@@ -2713,8 +2756,11 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "session/drafts",
             "session/keepDraft",
             "session/otherComputerClosed",
-            "test/saveSection",
-            "test/saveVerse",
+            "editor/saveSection",
+            "editor/saveVerse",
+            "editor/saveLayout",
+            "editor/draft",
+            "editor/discardDraft",
         ])
     );
 }

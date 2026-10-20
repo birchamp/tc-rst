@@ -330,6 +330,18 @@ impl StoreCommand {
         )
     }
 
+    /// `SaveLayout` (STORAGE §5.1): only the displayed verse's layout changes.
+    pub fn save_layout(shown: EditToken, layout: String) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::SaveLayout {
+                shown: shown.0,
+                layout,
+            },
+            listed,
+        )
+    }
+
     /// `AddBook` (STORAGE §5.7): a blank book seeded from the chapters and verses of
     /// `source`. It writes no record that existed, so it carries no token.
     pub fn add_book(book: BookId, source: String) -> Self {
@@ -1095,6 +1107,16 @@ pub trait ProjectHandle: Send + Sync {
     /// *Discard* of an offered draft: its entry leaves `drafts.json` (STORAGE §5.14), written
     /// before this returns. Whether the file holds the change.
     fn discard_draft(&self, id: u64) -> bool;
+
+    /// Cancel only the current draft matching this editor's exact text, base and time.
+    /// A newer entry and offered drafts stay; true means the resulting list is durable.
+    fn discard_current_draft(
+        &self,
+        field: DraftField,
+        shown: Vec<EditToken>,
+        text: String,
+        at: tc_journal::WallTime,
+    ) -> bool;
 
     /// Takes an unsaved text in as an offered draft of `drafts.json` (APP-DESIGN §6.6),
     /// written before this returns its number; the same text of the field already offered

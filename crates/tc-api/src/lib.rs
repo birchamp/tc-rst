@@ -134,6 +134,11 @@ macro_rules! endpoint_table {
             query "editor/book": $crate::editor::Book => $crate::editor::BookView;
             query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;
             query "editor/chapters": $crate::editor::Chapters => $crate::editor::ChaptersView;
+            command "editor/saveVerse": $crate::editor::SaveVerse => $crate::write::Ack;
+            command "editor/saveLayout": $crate::editor::SaveLayout => $crate::write::Ack;
+            command "editor/saveSection": $crate::editor::SaveSection => $crate::write::Ack;
+            command "editor/draft": $crate::editor::Draft => ();
+            command "editor/discardDraft": $crate::editor::DiscardDraft => ();
 
             query "helps/passage": $crate::helps::Passage => $crate::helps::PassageView;
             query "helps/article": $crate::helps::Article => $crate::helps::ArticleView;
@@ -206,8 +211,6 @@ macro_rules! test_hook_table {
             command "test/hold": $crate::test::Hold => ();
             command "test/release": $crate::test::Release => ();
             command "test/fieldStore": $crate::test::FieldStore => $crate::write::Ack;
-            command "test/saveVerse": $crate::test::SaveVerse => $crate::write::Ack;
-            command "test/saveSection": $crate::test::SaveSection => $crate::write::Ack;
             query "test/fieldLog": $crate::test::FieldLog => $crate::test::FieldLogView;
             command "test/fieldDraft": $crate::test::FieldDraft => ();
             command "test/keychain": $crate::test::Keychain => $crate::test::KeychainView;

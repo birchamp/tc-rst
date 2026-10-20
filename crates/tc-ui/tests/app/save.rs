@@ -904,6 +904,48 @@ fn drafts_go_at_most_once_a_second_never_while_saving_and_never_twice_the_same_t
     );
 }
 
+/// C2: Ack changes the draft's base even when a throttled draft of that text already ran.
+/// Its refreshed draft goes in the Ack's command batch, before the next timer can save it.
+#[test]
+fn an_ack_drafts_newer_text_immediately_on_its_new_tokens() {
+    let mut page = Page::new();
+    let k = key("a");
+    page.open(&k, "old", 1);
+    page.focus(&k);
+    page.type_text(&k, "newer");
+    page.advance(1000.0);
+    assert_eq!(page.drafts(), ["newer"]);
+    page.type_text(&k, "sent");
+    page.blur(&k);
+    page.focus(&k);
+    page.type_text(&k, "newer");
+    let commands = page.m.reply(
+        &k,
+        page.inflight.front().unwrap().sent.request,
+        Answered::Acked(ack("sent", 9, 2)),
+        page.now,
+    );
+    let write = commands
+        .iter()
+        .position(|command| {
+            matches!(command,
+                Command::Write { entry, .. } if entry.text == "newer" && entry.base == [tok(9)]
+            )
+        })
+        .expect("buffer with the Ack's token precedes the draft");
+    let draft = commands
+        .iter()
+        .position(|command| {
+            matches!(command,
+                Command::Draft { text, base, .. } if text == "newer" && *base == [tok(9)]
+            )
+        })
+        .expect("the same Ack batch drafts the remaining text");
+    assert!(write < draft);
+    assert_eq!(page.m.text(&k), Some("newer"));
+    assert!(matches!(page.m.state(&k), Some(FieldSave::Dirty { .. })));
+}
+
 /// RT-20: typing causes no save and at most one draft a second.
 #[test]
 fn ten_seconds_of_typing_send_no_save_and_at_most_ten_drafts() {

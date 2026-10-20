@@ -1431,6 +1431,23 @@ impl ProjectHandle for StoreHandle {
             .is_some_and(|handle| handle.discard_draft(id))
     }
 
+    fn discard_current_draft(
+        &self,
+        field: DraftField,
+        shown: Vec<EditToken>,
+        text: String,
+        at: tc_journal::WallTime,
+    ) -> bool {
+        let draft = Draft {
+            field,
+            shown: shown.into_iter().map(|token| token.0).collect(),
+            text,
+        };
+        self.inner()
+            .as_ref()
+            .is_some_and(|handle| handle.discard_current_draft(draft, at))
+    }
+
     fn offer_draft(
         &self,
         field: DraftField,

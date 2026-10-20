@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use tc_api::editor::SaveVerse;
 use tc_api::event::SessionMode;
-use tc_api::test::SaveVerse;
 use tc_api::write::Stored;
 use tc_app::StoreChoice;
 use tc_app::config::ProjectsFolder;

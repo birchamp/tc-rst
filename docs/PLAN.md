@@ -193,6 +193,13 @@ And these (unit B4b):
   stays in the bank. tC4's serializer drops pin 1. The rebuild writes the covering span and
   then its empty interior override, preserving verse boundaries as well as words and formats.
 
+And this (unit C2):
+
+- Section Cancel waits until the server durably removes that card's current draft. A failed
+  Cancel keeps the card and text and offers Retry, so a cancelled draft cannot return as a
+  recovery offer after a crash. tC4 4.0 closes the local card immediately and has no equivalent
+  durable draft removal.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

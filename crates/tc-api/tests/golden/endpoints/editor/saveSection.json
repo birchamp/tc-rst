@@ -1,5 +1,5 @@
 {
-  "path": "test/saveVerse",
+  "path": "editor/saveSection",
   "kind": "command",
   "net": null,
   "request": {
@@ -7,9 +7,13 @@
       "project": "kr_ulb",
       "epoch": 3
     },
-    "request": "12121212121212121212121212121212",
-    "shown": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
-    "words": "Paul, a servant of God"
+    "request": "13131313131313131313131313131313",
+    "book": "TIT",
+    "displayed": [
+      "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+      "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+    ],
+    "text": "1-2 Paul, a servant of God\n\t3 an apostle"
   },
   "reply": {
     "type": "ok",

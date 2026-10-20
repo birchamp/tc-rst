@@ -2030,6 +2030,14 @@ section command carries parsed values rather than that raw buffer. The fields:
 
 An entry of `drafts.json` is `{field, shown: [token text], text, at}`.
 
+Cancelling an open section card drains its pending draft calls, then calls
+`discard_current_draft` with that exact field, displayed tokens, text and original keystroke
+time (APP-DESIGN C2). The draft writer removes only a matching current entry and atomically
+writes the remaining list before answering. A newer current entry and independent offered
+entries survive. A failed write is reported to the card; its browser buffer and mirror are
+kept until Retry confirms the durable removal. This uses the same file format and atomic
+helper as the draft writer.
+
 At open (§6.1 O12), a draft is offered when its text differs both from the value its token
 stands for and from what the record holds now: "Unsaved text from your last session was found
 for Titus 1:4. Keep it / Discard." A draft whose text equals either was saved or is

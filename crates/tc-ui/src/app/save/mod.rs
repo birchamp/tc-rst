@@ -813,12 +813,17 @@ impl SaveMachine {
                 } else {
                     field.state = FieldSave::Dirty { since: now };
                     field.note_waiting();
+                    // The remaining text now has the Ack's tokens. Refresh its server draft
+                    // immediately even when the prior draft had the same text (R26).
+                    field.draft_due = Some(now);
+                    field.draft_text = None;
                     out.push(Command::Write {
                         key: key.clone(),
                         entry: entry_of(field),
                         mirror: true,
                     });
                     field.mirrored = true;
+                    pump_draft(key, field, now, &mut out);
                 }
             }
             Answered::Lost => {

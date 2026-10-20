@@ -49,6 +49,12 @@ const PHASE_0: &[&str] = &[
     "helps/article",
     // B4a: Translate's text.
     "editor/chapters",
+    // C2: production Translate saves and drafts.
+    "editor/saveVerse",
+    "editor/saveLayout",
+    "editor/saveSection",
+    "editor/draft",
+    "editor/discardDraft",
     // B9b: the share dialog's first step, the repository link, and Open from Door43.
     "account/repoLink",
     "account/orgs",
@@ -104,8 +110,6 @@ const PHASE_0: &[&str] = &[
     "test/hold",
     "test/release",
     "test/fieldStore",
-    "test/saveVerse",
-    "test/saveSection",
     "test/fieldLog",
     "test/fieldDraft",
     "test/keychain",

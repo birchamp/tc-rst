@@ -24,7 +24,7 @@ use wasm_bindgen::JsCast;
 
 use super::draft_chrome::{FooterPress, editing_card};
 use crate::app::save::{FieldSave, FieldScope, Pair, Source, View};
-use crate::app::section::{can_save, hints, word_title};
+use crate::app::section::{CancelState, can_save, hints, word_title};
 use crate::app::translate::{card_tokens, card_verses, range_span};
 use crate::app::web::{Actions, use_runtime};
 use crate::attrs::Attrs;
@@ -141,6 +141,7 @@ pub fn SectionEditor(
     let mode = RwSignal::new(Mode::Type);
     let asking = RwSignal::new(false);
     let requested = RwSignal::new(false);
+    let cancel_state = RwSignal::new(CancelState::Idle);
     let changes = saves.changes();
     let saving = {
         let (saves, key) = (
@@ -151,6 +152,7 @@ pub fn SectionEditor(
         Memo::new(move |_| {
             changes.get();
             matches!(saves.state(&key), Some(FieldSave::Saving { .. }))
+                || cancel_state.with(|state| matches!(state, CancelState::Pending))
         })
     };
     // The card closes when its save has stored the text; a failure or a hold keeps it open
@@ -264,8 +266,18 @@ pub fn SectionEditor(
         );
         let actions = actions.clone();
         Callback::new(move |_| {
-            saves.discard(&key);
-            actions.close_section();
+            if cancel_state.with_untracked(|state| matches!(state, CancelState::Pending)) {
+                return;
+            }
+            cancel_state.set(CancelState::Pending);
+            let (saves, key, actions) = (saves.clone(), key.clone(), actions.clone());
+            wasm_bindgen_futures::spawn_local(async move {
+                match saves.discard_confirmed(&key).await {
+                    Ok(true) => actions.close_section(),
+                    Ok(false) => cancel_state.set(CancelState::Idle),
+                    Err(error) => cancel_state.set(CancelState::Error(error)),
+                }
+            });
         })
     };
 
@@ -347,7 +359,15 @@ pub fn SectionEditor(
         };
         view! {
             <Button size=Size::Sm disabled=off on_click=on_save>{t(keys::draft::SAVE_SECTION, &[])}</Button>
-            <Button variant=ButtonVariant::Ghost style=cancel_style disabled=saving on_click=cancel>{t(keys::draft::CANCEL_VERSE, &[])}</Button>
+            <Button variant=ButtonVariant::Ghost style=cancel_style disabled=saving on_click=cancel>{move || {
+                if cancel_state.with(|state| matches!(state, CancelState::Error(_))) {
+                    t(keys::app::RETRY, &[])
+                } else { t(keys::draft::CANCEL_VERSE, &[]) }
+            }}</Button>
+            {move || cancel_state.with(|state| match state {
+                CancelState::Error(error) => Some(view! { <span role="alert" data-testid="section-cancel-error">{error.clone()}</span> }),
+                CancelState::Idle | CancelState::Pending => None,
+            })}
         }
         .into_any()
     };

@@ -9,10 +9,11 @@ States: **done** (committed in the reported ref), **running**, **next** (its dep
 **waits** (for the units named).
 
 2026-10-20 continuation: main has 29/48 app units. The isolated `resume-build-lane` branch has
-33/48 after fully gated B5b, B4b, B7 and C5 work; no push or main fast-forward has occurred.
+34/48 after fully gated B5b, B4b, B7, C5 and C2 work; no push or main fast-forward has occurred.
 The app table below describes this integration branch. The final gate passes all required
-formatting/workspace/release/wasm checks and 3,230 Rust tests (7 ignored); all 13 alignment
-browser journeys pass across the focused runs. Section pin-loss and journal test-oracle
+formatting/workspace/release/wasm checks and 3,243 Rust tests (7 ignored); C2 passes 50 distinct browser journeys and three strict
+Psalms/10× count rows. C5’s 13 alignment journeys remain verified. C2 production durable
+API save p95 is 17.904/18.331 ms locally; the Windows reference measurement remains open. Section pin-loss and journal test-oracle
 counterexamples found by the gate are fixed in separate commits. See
 `.audit/plans/RESUME-2026-10-20.md`; preserve completed checks rather than restarting them.
 
@@ -40,7 +41,7 @@ The Windows VM runs the full gates on each new main (`.audit/tools/winvm/`).
 |---|---|---|---|
 | 0 | all: A1 to A11 and G0 | | |
 | 1 | B1a, B1b, B2, B3, B4a, B4b, B5a, B5b, B6, B7, B9a, B9b, B10 | | B8, B11 next |
-| 2 | C0, C1a, C1b, C5, C6, C8 | | C2, C3, C4 next; C7 after B11 and its questions |
+| 2 | C0, C1a, C1b, C2, C5, C6, C8 | | C3, C4 next; C7 after B11 and its questions |
 | 3 | | | D1 (S2, C2, C5), D2 (S2, B8) |
 | 4 | | | E1a, E1b, E2 (X and their units) |
 | 5 | | | F1 (I, C1a) |

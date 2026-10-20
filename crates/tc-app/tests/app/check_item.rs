@@ -12,10 +12,10 @@ use tc_api::check::{
     DecisionStatus, GatewayText, GatewayView, Item, Open, OriginalView, RailRow, RailRows,
     Testament, Tool,
 };
+use tc_api::editor::SaveVerse;
 use tc_api::helps::ArticleView;
 use tc_api::ids::Scope;
 use tc_api::model::selection::drag_range;
-use tc_api::test::SaveVerse;
 use tc_api::write::Stored;
 use tc_api::{ApiError, NotSaved, Reply};
 use tc_app::App;

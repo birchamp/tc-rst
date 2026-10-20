@@ -143,6 +143,7 @@ enum Msg {
     Offer(u64, Box<Entry>, mpsc::Sender<bool>),
     /// An offered entry goes, written before the answer.
     Unstore(u64, mpsc::Sender<bool>),
+    Cancel(Box<Draft>, WallTime, mpsc::Sender<bool>),
     Flush(mpsc::Sender<()>),
     Stop,
 }
@@ -436,6 +437,18 @@ impl DraftWriter {
                             state.dirty |= state.offered.remove(&id).is_some();
                             let _ = done.send(state.write());
                         }
+                        Ok(Msg::Cancel(draft, at, done)) => {
+                            let key = key_of(&draft);
+                            let shown: Vec<String> =
+                                draft.shown.iter().map(ShownToken::to_text).collect();
+                            let matches = state.current.get(&key).is_some_and(|entry| {
+                                entry.at == at.0 && entry.text == draft.text && entry.shown == shown
+                            });
+                            if matches {
+                                state.dirty |= state.current.remove(&key).is_some();
+                            }
+                            let _ = done.send(state.write());
+                        }
                         Ok(Msg::Flush(done)) => {
                             state.write();
                             let _ = done.send(());
@@ -472,6 +485,13 @@ impl DraftWriter {
             self.run.clone(),
             Instant::now(),
         ));
+    }
+
+    /// Cancel removes only the exact current entry the page discarded, never newer typing
+    /// or an offer. The page finishes its earlier draft requests before issuing this.
+    pub(crate) fn cancel(&self, draft: Draft, at: WallTime) -> bool {
+        let (done, finished) = mpsc::channel();
+        self.send(Msg::Cancel(Box::new(draft), at, done)) && finished.recv().unwrap_or(false)
     }
 
     /// The save cannot erase a newer differing draft sent while it waited (R26). Offered

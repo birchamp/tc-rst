@@ -151,6 +151,11 @@ macro_rules! unscoped {
 }
 
 scoped!(
+    crate::editor::SaveVerse,
+    crate::editor::SaveLayout,
+    crate::editor::SaveSection,
+    crate::editor::Draft,
+    crate::editor::DiscardDraft,
     crate::prefs::SetDraftUnit,
     crate::prefs::SetAlignSuggestions,
     crate::prefs::RecordPlace,
@@ -194,8 +199,6 @@ unscoped!(
     crate::create::AddBlankBooks,
     crate::create::AddUsfmBooks,
 );
-#[cfg(feature = "test-hooks")]
-scoped!(crate::test::SaveVerse, crate::test::SaveSection);
 #[cfg(feature = "test-hooks")]
 unscoped!(
     crate::test::Crash,

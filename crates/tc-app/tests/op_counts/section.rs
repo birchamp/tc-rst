@@ -4,10 +4,10 @@
 
 use std::sync::Mutex;
 
+use tc_api::editor::SaveSection;
 use tc_api::editor::{Chapters, ChaptersView};
 use tc_api::model::js_trim;
 use tc_api::model::section::{SectionVerse, expand_keys, initial_text};
-use tc_api::test::SaveSection;
 use tc_api::write::Stored;
 
 use super::corpus::{PSALMS, corpora};

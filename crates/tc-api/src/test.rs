@@ -3,10 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use tc_core::BookId;
-
 use crate::home::ResumePlace;
-use crate::ids::{ProjectRef, RequestId, Scope, WallMs};
+use crate::ids::{ProjectRef, RequestId, WallMs};
 use crate::prefs::PlaceMode;
 use crate::shown::Shown;
 use crate::token::ShownToken;
@@ -167,40 +165,6 @@ pub struct FieldStore {
     /// A name the test chooses for the field.
     pub field: String,
     pub shown: ShownToken,
-    pub text: String,
-}
-
-/// `test/saveVerse`: a verse save through the real storage seam and store (unit C0), so the
-/// contract cases that run through tc-app go through dispatch, the session's reply cache and
-/// the store before C2's `editor/saveVerse` exists. C2 moves those cases onto its endpoint
-/// and deletes this one.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SaveVerse {
-    pub at: Scope,
-    pub request: RequestId,
-    /// The verse the field displayed.
-    pub shown: ShownToken,
-    pub words: String,
-}
-
-/// `test/saveSection`: a section save through the real storage seam and store (unit B4b), until
-/// C2's `editor/saveSection` takes the same request. It carries the card's text and the tokens
-/// of every verse the card displayed, in order, a span's covered verses included; the server
-/// reads the section's verse keys from them (a Text with a later `last` is a span) and builds
-/// the values (APP-DESIGN 3.8).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SaveSection {
-    pub at: Scope,
-    pub request: RequestId,
-    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
-    pub book: BookId,
-    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
-    pub displayed: Vec<ShownToken>,
-    /// The Type-mode text of the card (`model::section`).
     pub text: String,
 }
 

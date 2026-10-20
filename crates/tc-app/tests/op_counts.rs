@@ -30,5 +30,6 @@ mod op_counts {
     mod section;
     mod session;
     mod story;
+    mod translate;
     mod understand;
 }

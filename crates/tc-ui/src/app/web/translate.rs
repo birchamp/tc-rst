@@ -4,10 +4,9 @@
 //! after the last keystroke. A section card's is of kind `Section`: it saves only by its Save
 //! button (A-1), and Cancel discards it.
 //!
-//! `editor/saveVerse` and `editor/saveSection` are C2's. Until they exist, a build with the test
-//! hooks saves through `test/saveVerse` and `test/saveSection`, the real saves through the store
-//! (C0, B4b), so the journeys prove the cards on real outcomes; any other build has no writer,
-//! and a save is `Unavailable`: "Not saved" with Retry, the text kept in the buffer.
+//! The production writers use the same save machine as the editor and restored buffers:
+//! request ids and sent text stay unchanged across retries, and server drafts carry the
+//! buffer entry's own timestamp and displayed tokens.
 
 use leptos::prelude::*;
 
@@ -62,12 +61,12 @@ impl Actions {
     }
 }
 
-#[cfg(feature = "test-hooks")]
 mod writer {
     use std::rc::Rc;
 
-    use tc_api::buffer::{BufferKey, DraftCall, FieldKind, SentSave};
-    use tc_api::test::{SaveSection, SaveVerse};
+    use tc_api::buffer::{BufferEntry, BufferKey, DraftCall, FieldKind, SentSave};
+    use tc_api::editor::{Draft, DraftField, SaveLayout, SaveSection, SaveVerse};
+    use tc_api::ids::Scope;
     use tc_api::token::ShownToken;
     use tc_api::write::Ack;
 
@@ -75,9 +74,9 @@ mod writer {
     use crate::app::translate::parse_verse_place;
     use crate::app::web::{Api, FieldWriter, LocalBoxFuture, Saves};
 
-    /// A verse saved through `test/saveVerse`, the real save through the store, until C2's
-    /// `editor/saveVerse`.
+    /// Verse words and layout share timing and buffer semantics, with distinct typed saves.
     struct VerseWriter;
+    struct LayoutWriter;
 
     impl FieldWriter for VerseWriter {
         fn save(
@@ -108,24 +107,36 @@ mod writer {
             })
         }
 
-        /// `editor/draft` comes with C2.
-        fn draft(
+        fn draft_request(
             &self,
-            _api: &Api,
-            _key: &BufferKey,
-            _text: &str,
-            _base: &[ShownToken],
-        ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
-            None
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<Draft> {
+            draft_request(key, scope, entry)
         }
 
-        fn draft_call(&self, _key: &BufferKey, _base: &[ShownToken]) -> Option<DraftCall> {
-            None
+        fn draft_entry(
+            &self,
+            api: &Api,
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
+            draft(api, key, scope, entry)
+        }
+
+        fn draft_call_entry(
+            &self,
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<DraftCall> {
+            draft_call(key, scope, entry)
         }
     }
 
-    /// A section saved through `test/saveSection`, the real save through the store, until C2's
-    /// `editor/saveSection`: the card's text over the tokens of every verse it displayed.
+    /// A section's one string and every displayed record, including after a reload.
     struct SectionWriter;
 
     impl FieldWriter for SectionWriter {
@@ -155,27 +166,140 @@ mod writer {
             })
         }
 
-        /// `editor/draft` comes with C2.
-        fn draft(
+        fn draft_request(
             &self,
-            _api: &Api,
-            _key: &BufferKey,
-            _text: &str,
-            _base: &[ShownToken],
-        ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
-            None
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<Draft> {
+            draft_request(key, scope, entry)
         }
 
-        fn draft_call(&self, _key: &BufferKey, _base: &[ShownToken]) -> Option<DraftCall> {
-            None
+        fn draft_entry(
+            &self,
+            api: &Api,
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
+            draft(api, key, scope, entry)
         }
+
+        fn draft_call_entry(
+            &self,
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<DraftCall> {
+            draft_call(key, scope, entry)
+        }
+    }
+
+    impl FieldWriter for LayoutWriter {
+        fn save(
+            &self,
+            api: &Api,
+            _key: &BufferKey,
+            sent: &SentSave,
+            base: &[ShownToken],
+        ) -> LocalBoxFuture<Result<Ack, CallError>> {
+            let api = api.clone();
+            let request = sent
+                .scope
+                .clone()
+                .zip(base.first().cloned())
+                .map(|(at, shown)| SaveLayout {
+                    at,
+                    request: sent.request,
+                    shown,
+                    layout: sent.text.clone(),
+                });
+            Box::pin(async move {
+                match request {
+                    Some(request) => api.call(&request).await,
+                    None => Err(CallError::Transport(Transport::Unreadable(
+                        "a layout save with no open or no token".to_owned(),
+                    ))),
+                }
+            })
+        }
+
+        fn draft_request(
+            &self,
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<Draft> {
+            draft_request(key, scope, entry)
+        }
+
+        fn draft_entry(
+            &self,
+            api: &Api,
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
+            draft(api, key, scope, entry)
+        }
+
+        fn draft_call_entry(
+            &self,
+            key: &BufferKey,
+            scope: Option<Scope>,
+            entry: &BufferEntry,
+        ) -> Option<DraftCall> {
+            draft_call(key, scope, entry)
+        }
+    }
+
+    fn draft_request(key: &BufferKey, scope: Option<Scope>, entry: &BufferEntry) -> Option<Draft> {
+        let field = match key.field.kind {
+            FieldKind::Verse => DraftField::Words,
+            FieldKind::Layout => DraftField::Layout,
+            FieldKind::Section => DraftField::Section {
+                book: parse_verse_place(key.field.place.as_str())?.0,
+            },
+            _ => return None,
+        };
+        Some(Draft {
+            at: scope?,
+            request: super::super::js::random_request_id(),
+            instance: entry.instance,
+            field,
+            shown: entry.base.clone(),
+            text: entry.text.clone(),
+            changed: entry.at,
+        })
+    }
+
+    fn draft(
+        api: &Api,
+        key: &BufferKey,
+        scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
+        let api = api.clone();
+        let request = draft_request(key, scope, entry)?;
+        Some(Box::pin(async move { api.call(&request).await }))
+    }
+
+    fn draft_call(key: &BufferKey, scope: Option<Scope>, entry: &BufferEntry) -> Option<DraftCall> {
+        let mut body = serde_json::to_value(draft_request(key, scope, entry)?).ok()?;
+        let body = body.as_object_mut()?;
+        body.remove("request");
+        body.remove("text");
+        Some(DraftCall {
+            path: "editor/draft".to_owned(),
+            body: serde_json::to_string(body).ok()?,
+        })
     }
 
     pub(in crate::app::web) fn register(saves: &Saves) {
         saves.register(FieldKind::Verse, Rc::new(VerseWriter));
+        saves.register(FieldKind::Layout, Rc::new(LayoutWriter));
         saves.register(FieldKind::Section, Rc::new(SectionWriter));
     }
 }
 
-#[cfg(feature = "test-hooks")]
 pub(super) use writer::register;

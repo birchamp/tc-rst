@@ -51,3 +51,12 @@ pub fn hints(held: Option<&str>, bank: usize, words: usize) -> Hints {
         bank_empty: bank == 0 && words > 0,
     }
 }
+
+/// A section remains open until its server draft was durably discarded.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum CancelState {
+    #[default]
+    Idle,
+    Pending,
+    Error(String),
+}

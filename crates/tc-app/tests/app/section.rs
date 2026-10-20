@@ -1,7 +1,7 @@
 //! The section save (unit B4b, STORAGE §5.2) through the app: a card's text over the verses it
 //! displayed becomes the values the store writes. The values are built by a pure function
 //! (`tc_app::section::section_values`) tested on its own, and the whole save runs on the store
-//! through `test/saveSection`, until C2's `editor/saveSection` takes the same request.
+//! through the production `editor/saveSection` endpoint.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -9,10 +9,10 @@ use std::sync::Arc;
 
 use proptest::prelude::*;
 use tc_api::editor::{Chapters, ChaptersView, VerseRow};
+use tc_api::editor::{SaveSection, SaveVerse};
 use tc_api::ids::Scope;
 use tc_api::model::js_trim;
 use tc_api::model::section::{ParaFormat, SectionBuffer, SectionVerse, expand_keys, initial_text};
-use tc_api::test::{SaveSection, SaveVerse};
 use tc_api::write::{Ack, Stored};
 use tc_api::{ApiError, NotSaved, ShownToken};
 use tc_app::backend::scenario::ScenarioState;

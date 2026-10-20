@@ -541,7 +541,6 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     if probe {
         probe::register(&saves);
     }
-    #[cfg(feature = "test-hooks")]
     translate::register(&saves);
     saves.restore(&hello);
     saves.guard_close();

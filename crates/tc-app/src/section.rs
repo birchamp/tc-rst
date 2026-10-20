@@ -19,8 +19,15 @@ use tc_api::{ApiError, NotSaved};
 use tc_journal::record::{ChapterVerse, MarkerWs, VerseValue};
 use tc_journal::{Record, RecordKey, VerseNo};
 
-use crate::backend::EditToken;
+use crate::app::App;
+use crate::backend::{EditToken, StoreCommand};
 use crate::counters::CountingSnapshot;
+use crate::dispatch::Handle;
+use crate::wire;
+use serde_json::json;
+use tc_api::editor::SaveSection;
+use tc_api::write::Ack;
+use tc_journal::command::SectionValue;
 
 /// Why a section's text could not be made into values: the displayed verses do not fit
 /// together, an editor bug (STORAGE §5.2).
@@ -273,4 +280,62 @@ pub fn section_values(
         .iter()
         .map(|(verse, old)| new.get(verse).filter(|value| *value != old).cloned())
         .collect())
+}
+
+impl Handle<SaveSection> for App {
+    /// The card's text over the verses it displayed (STORAGE §5.2): the values are made from
+    /// the text and the values the tokens stood for, and the store checks the section whole.
+    async fn handle(&self, req: SaveSection) -> Result<Ack, ApiError> {
+        let session = self
+            .inner
+            .sessions
+            .reader(&req.at)
+            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let handle = session.handle().clone();
+        let tokens = req
+            .displayed
+            .iter()
+            .map(|token| wire::token::edit_token(handle.as_ref(), token))
+            .collect::<Result<Vec<_>, _>>()?;
+        let read = session.read();
+        let displayed = tokens
+            .iter()
+            .map(|token| crate::section::displayed(&read, token, req.book))
+            .collect::<Result<Vec<_>, _>>()?;
+        let refused = |_| ApiError::NotSaved(NotSaved::Refused(SaveRefusal::IncoherentView));
+        let values = crate::section::section_values(&req.text, &displayed).map_err(refused)?;
+        let me = handle.facts().device;
+        let command = StoreCommand::save_section(
+            req.book,
+            tokens
+                .iter()
+                .cloned()
+                .zip(values.into_iter().map(|v| v.map(SectionValue::Verse)))
+                .collect(),
+            None,
+        )
+        .requested_by(req.request);
+        match handle.submit(command).await {
+            Ok(reply) => {
+                if let Some(first) = tokens.first() {
+                    self.record_translate_edit(&session, first, &req.text, self.inner.clock.now());
+                }
+                wire::write::section_ack(&reply, &session.read(), &tokens, &req.text, me).map_err(
+                    |e| {
+                        self.internal(
+                            "a section save's reply could not be written",
+                            crate::reports::facts(json!({"reason": e.to_string()})),
+                        )
+                    },
+                )
+            }
+            Err(error) => Err(match wire::error::command_error(error) {
+                Ok(api) => api,
+                Err(unworded) => self.internal(
+                    "the store refused a section save no screen has words for yet",
+                    crate::reports::facts(json!({"reason": unworded.0})),
+                ),
+            }),
+        }
+    }
 }
