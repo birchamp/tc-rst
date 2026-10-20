@@ -859,3 +859,140 @@ async fn a_verse_that_holds_alignment_markup_does_not_open() {
         "opening wrote nothing"
     );
 }
+
+/// tC4 #29, the right-to-left project's half: a project created right to left (C6) with a book
+/// added from a file aligns as any other. The bank reads right to left, a repeated Arabic word
+/// carries its occurrence in verse order, and a placement is saved to the store.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_right_to_left_project_aligns_with_its_bank_right_to_left() {
+    use tc_api::create::{AddUsfmBooks, Bible, Details, UsfmFile, UsfmOutcome};
+    use tc_api::ids::UploadId;
+    use tc_api::session::{Open as OpenProject, OpenUnit};
+    use tc_api::shown::Direction;
+
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("app-data/uploads")).unwrap();
+    install_resources_into(
+        &dir.path().join("app-data"),
+        &scenario("sample").resources().unwrap(),
+    )
+    .unwrap();
+    let world = crate::store_world::store_world();
+    let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
+        deps.store = StoreChoice::Given(world.store());
+    })
+    .await;
+    let project = super::common::post(
+        &t.app,
+        &Bible {
+            request: request(1),
+            details: Details {
+                name: "Arabic Bible".to_owned(),
+                language_name: "العربية".to_owned(),
+                code: "ar".to_owned(),
+                door43_code: None,
+                direction: Direction::Rtl,
+                font: String::new(),
+            },
+            versification: "eng".to_owned(),
+        },
+    )
+    .await
+    .unwrap()
+    .project;
+    let upload = UploadId::parse(&format!("{:032x}", 1)).unwrap();
+    std::fs::write(
+        dir.path().join("app-data/uploads").join(upload.as_str()),
+        "\\id TIT\n\\c 1\n\\p\n\\v 1 بولس عبد الله ورسول يسوع المسيح لأجل إيمان مختاري الله\n\\v 2 على رجاء الحياة الأبدية\n",
+    )
+    .unwrap();
+    let added = super::common::post(
+        &t.app,
+        &AddUsfmBooks {
+            request: request(2),
+            project: project.clone(),
+            files: vec![UsfmFile {
+                upload,
+                name: "57-TIT.usfm".to_owned(),
+            }],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        added.rows[0].outcome,
+        UsfmOutcome::Added {
+            book: BookId::Titus
+        }
+    );
+    let job = ok(
+        &t.app,
+        &OpenProject {
+            request: request(3),
+            project: project.clone(),
+            unit: Some(OpenUnit::Book(BookId::Titus)),
+        },
+    )
+    .await;
+    let mut watch = t.app.jobs().watch(job).unwrap();
+    let state = tokio::time::timeout(Duration::from_secs(5), async {
+        watch
+            .wait_for(tc_app::jobs::JobRegistry::is_ended)
+            .await
+            .unwrap()
+            .clone()
+    })
+    .await
+    .unwrap();
+    let opened = match state {
+        tc_api::jobs::JobState::Done(tc_api::jobs::JobOutcome::Opened(opened)) => *opened,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(opened.dir, Direction::Rtl);
+    let at = opened.session.at;
+
+    let view = ready(&t.app, &at, 1, 1).await;
+    assert_eq!(
+        view.target_dir,
+        Direction::Rtl,
+        "the bank reads right to left"
+    );
+    assert_eq!(view.orig_dir, Direction::Ltr, "the Greek cards do not");
+    let bank: Vec<_> = view
+        .bank
+        .iter()
+        .map(|w| (w.word.as_str(), w.occurrence))
+        .collect();
+    assert_eq!(bank[0], ("بولس", 1), "{bank:?}");
+    let god: Vec<_> = bank.iter().filter(|(w, _)| *w == "الله").collect();
+    assert_eq!(
+        god,
+        [&("الله", 1), &("الله", 2)],
+        "in verse order: {bank:?}"
+    );
+
+    let placed = place(&t.app, &at, &view, 4, "بولس", "Παῦλος").await;
+    assert!(
+        placed.cards[card(&placed, "Παῦλος") as usize]
+            .placed
+            .iter()
+            .any(|w| w.word == "بولس")
+    );
+    assert_eq!(flush(&t.app, &at, 6).await, AlignSave::Saved);
+    let session = t.app.sessions().reader(&at).unwrap();
+    let stored = session.read().projected(&RecordKey::Alignment(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    ));
+    let Some(tc_journal::Record::Alignment { value, .. }) = stored else {
+        panic!("no alignment stored: {stored:?}");
+    };
+    assert!(
+        value
+            .alignments
+            .iter()
+            .any(|g| g.bottom_words.iter().any(|w| w.word == "بولس")),
+        "{value:?}"
+    );
+}

@@ -11,6 +11,7 @@ use common::*;
 use tc_align::suggest::{self, Model, RawLink};
 use tc_align::{Aligner, AlignmentValue, MarkValidRefused, TargetVerse, TargetWord};
 use tc_core::Testament;
+use tc_journal::json::Json;
 
 /// TIT 1:1 of en_ult as a draft, against UGNT TIT 1:1.
 fn open(stored: Option<&AlignmentValue>, text: &str) -> Aligner {
@@ -508,4 +509,69 @@ fn a_source_book_gives_every_verse_the_words_from_book_gives() {
     );
     assert!(!cut.display_text(1, span).is_empty());
     assert!(!cut.has(9, span));
+}
+
+/// tC4 #409: a span aligned verse by verse numbers each source word within its own verse and
+/// names that verse in `x-ref`. Such a value, from a file added as a book, opens with every link
+/// where it was: the pin fit (#790) numbers words across the span, and would read 1:3's "Θεοῦ"
+/// (the first of its verse, the third of the span) as 1:1's.
+#[test]
+fn an_imported_span_with_x_ref_opens_with_every_link() {
+    let source = source_verse(UGNT, "1:1-3");
+    let text = "Paul, a servant of God, revealed his word at the right time by the command of God";
+    let open_span = |stored: Option<&AlignmentValue>| {
+        Aligner::open(stored, None, TargetVerse::new(text), &source, basis(3)).unwrap()
+    };
+    let card_of = |aligner: &Aligner, word: &str, occurrence: u32| {
+        aligner
+            .value()
+            .alignments
+            .iter()
+            .position(|g| {
+                g.top_words
+                    .iter()
+                    .any(|w| w.word == word && w.occurrence == occurrence)
+            })
+            .unwrap()
+    };
+    let mut aligner = open_span(None);
+    for (on, at, said, n) in [
+        ("Παῦλος", 1, "Paul", 1),
+        ("Θεοῦ", 1, "God", 1),
+        ("Θεοῦ", 3, "God", 2),
+    ] {
+        let card = card_of(&aligner, on, at);
+        let word = aligner
+            .value()
+            .word_bank
+            .iter()
+            .find(|w| w.word == said && w.occurrence == n)
+            .cloned()
+            .unwrap();
+        aligner.place(card, &word).unwrap();
+    }
+    let mut stored = aligner.into_value();
+    // 1:3's words as a verse-by-verse aligner writes them.
+    let before_1_3 =
+        source_verse(UGNT, "1:1").words().len() + source_verse(UGNT, "1:2").words().len();
+    let own = source_verse(UGNT, "1:3");
+    for group in &mut stored.alignments {
+        for word in &mut group.top_words {
+            let at = source
+                .words()
+                .iter()
+                .position(|s| s.word == word.word && s.occurrence == word.occurrence)
+                .unwrap();
+            if let Some(mine) = at.checked_sub(before_1_3).map(|i| &own.words()[i]) {
+                word.occurrence = mine.occurrence;
+                word.occurrences = mine.occurrences;
+                word.extra.insert("x-ref".to_owned(), Json::from("1:3"));
+            }
+        }
+    }
+    let reopened = open_span(Some(&stored));
+    assert!(reopened.dropped().is_empty(), "{:?}", reopened.dropped());
+    assert_eq!(reopened.value().alignments, stored.alignments);
+    assert_eq!(reopened.value().placed(), 3);
+    assert!(!reopened.is_changed(), "nothing to save");
 }
