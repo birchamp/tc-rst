@@ -607,6 +607,9 @@ pub struct StoryItemView {
     /// The note's text as blocks (Translation Notes); empty for a words link.
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub note: Vec<crate::model::ArticleBlock>,
+    /// The direction of the gateway language the note is in (#650); none when the app knows no
+    /// gateway by the resolving set's language, and the note then takes the page's.
+    pub note_dir: Option<crate::shown::Direction>,
     /// The article the check links to: the note's Translation Academy article, or the word's.
     pub article: Option<crate::helps::ArticleLink>,
     /// The gateway story's frame (the title for frame 0): tC4's `StoryPane`.

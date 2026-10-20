@@ -1632,6 +1632,7 @@ impl Example for StoryItemView {
                     "This title",
                 ),
             )],
+            note_dir: Some(Direction::Ltr),
             article: Some(ArticleLink::Academy {
                 slug: "translate-titles".into(),
             }),

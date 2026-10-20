@@ -105,6 +105,22 @@ pub fn HelpsPanel(
     });
     let has_comments = story.as_ref().is_some_and(|s| s.comments.is_some());
     let is_story = story.is_some();
+    // The frame in focus leads (owner ruling 2026-09-18, #331): its first card scrolls into view.
+    let list_ref = NodeRef::<html::Div>::new();
+    if let Some(story) = story.clone() {
+        let tab = tab.clone();
+        Effect::new(move |_| {
+            let frame = story.focus_frame.get();
+            let _ = tab.get();
+            let loaded = helps.with(|h| h.value().is_some());
+            let (Some(frame), true, Some(list)) = (frame, loaded, list_ref.get()) else {
+                return;
+            };
+            if let Ok(Some(card)) = list.query_selector(&format!("[data-frame=\"{frame}\"]")) {
+                card.scroll_into_view_with_bool(true);
+            }
+        });
+    }
     let switcher = {
         let actions = actions.clone();
         let tab = tab.clone();
@@ -188,7 +204,7 @@ pub fn HelpsPanel(
                 <aside node_ref=panel data-testid="helps-panel" style=style.clone()>
                     {helps_divider(&actions, panel)}
                     {switcher.clone()}
-                    <div style=list.to_style()>{content.clone()}</div>
+                    <div node_ref=list_ref style=list.to_style()>{content.clone()}</div>
                     {article.clone()}
                 </aside>
             }
@@ -330,17 +346,16 @@ fn helps_tab(
 }
 
 /// Whether a card at `verse` is lit: it is the focused help (a click), or, in a story, a card of
-/// the frame in focus (tC4 `isActive`).
+/// the frame in focus (tC4 `isActive`). Read inside the tab's render, so the tab is drawn again
+/// when the focus moves.
 fn card_lit(
-    active: ArcRwSignal<Option<HelpFocus>>,
-    id: String,
-    verse: String,
+    active: &ArcRwSignal<Option<HelpFocus>>,
+    id: &str,
+    verse: &str,
     frame: Option<Memo<Option<u16>>>,
-) -> Signal<bool> {
-    Signal::derive(move || {
-        active.with(|a| a.as_ref().is_some_and(|a| a.id == id))
-            || frame.is_some_and(|f| crate::app::story::card_in_focus(&verse, f.get()))
-    })
+) -> bool {
+    active.with(|a| a.as_ref().is_some_and(|a| a.id == id))
+        || frame.is_some_and(|f| crate::app::story::card_in_focus(verse, f.get()))
 }
 
 /// tC4's `CommentsTab` of a story: the newest comment of each frame, in frame order.
@@ -492,7 +507,8 @@ fn notes_tab(
                 let verse = n.verse.as_str().to_owned();
                 let focus = focus_of(&n.id, &verse, &n.panes);
                 let (click, enter, leave) = card_events(actions, focus);
-                let is_active = card_lit(active.clone(), n.id.clone(), verse.clone(), frame);
+                let lit = card_lit(&active, &n.id, &verse, frame);
+                let is_active = Signal::from(lit);
                 let title = HelpFocus::title(&n.panes, pane)
                     .or_else(|| (!n.quote.is_empty()).then(|| n.quote.clone()))
                     .or_else(|| n.academy.clone())
@@ -502,6 +518,9 @@ fn notes_tab(
                     attrs.set("dir", dir);
                 }
                 attrs.set("data-frame", verse.as_str());
+                if lit {
+                    attrs.set("data-focused", "true");
+                }
                 let note = n.note.clone();
                 let body: crate::ds::Slot =
                     Box::new(move || expandable_note(note.clone()).into_any());
@@ -577,7 +596,8 @@ fn words_tab(
             .map(|w| {
                 let verse = w.verse.as_str().to_owned();
                 let (click, enter, leave) = card_events(actions, focus_of(&w.id, &verse, &w.panes));
-                let is_active = card_lit(active.clone(), w.id.clone(), verse.clone(), frame);
+                let lit = card_lit(&active, &w.id, &verse, frame);
+                let is_active = Signal::from(lit);
                 let title = HelpFocus::title(&w.panes, pane)
                     .or_else(|| (!w.quote.is_empty()).then(|| w.quote.clone()))
                     .unwrap_or_else(|| w.slug.clone());
@@ -586,6 +606,9 @@ fn words_tab(
                     attrs.set("dir", dir);
                 }
                 attrs.set("data-frame", verse.as_str());
+                if lit {
+                    attrs.set("data-focused", "true");
+                }
                 let slug = w.slug.clone();
                 let link = ArticleLink::Words {
                     category: w.category.clone(),
@@ -661,8 +684,8 @@ fn questions_tab(
     let cards = questions
         .into_iter()
         .map(|q| {
-            let lit = card_lit(active.clone(), q.id.clone(), q.verse.as_str().to_owned(), frame);
-            let is_active = Memo::new(move |_| lit.get());
+            let lit = card_lit(&active, &q.id, q.verse.as_str(), frame);
+            let is_active = Memo::new(move |_| lit);
             let style = move || {
                 crate::css! {
                     "border": format!("var(--stroke) solid {}", if is_active.get() { "var(--accent)" } else { "var(--border)" }),

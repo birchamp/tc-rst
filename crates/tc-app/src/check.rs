@@ -980,7 +980,7 @@ impl Handle<StoryItem> for App {
         let session = self.read(&req.at)?;
         let installed = installed(self)?;
         let index = usize::try_from(req.index).unwrap_or(usize::MAX);
-        let (item, title, place) = self
+        let (item, title, place, set) = self
             .with_list(
                 &session,
                 req.list.tool,
@@ -991,6 +991,7 @@ impl Handle<StoryItem> for App {
                         entry.derived.items.get(index)?.clone(),
                         entry.derived.titles.get(index)?.clone(),
                         entry.derived.places.get(index)?.clone(),
+                        entry.derived.citation.rung,
                     ))
                 },
             )
@@ -1047,6 +1048,13 @@ impl Handle<StoryItem> for App {
                 .as_deref()
                 .map(|note| crate::understand::blocks(&note.replace("\\n", "\n")))
                 .unwrap_or_default(),
+            note_dir: crate::understand::rung_dir(
+                loaded.pins.as_ref(),
+                Some(match set {
+                    Rung::Primary => tc_resources::Rung::Primary,
+                    Rung::Fallback => tc_resources::Rung::Fallback,
+                }),
+            ),
             article: story_article(&item),
             gateway,
             target,

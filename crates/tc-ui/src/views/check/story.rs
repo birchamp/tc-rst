@@ -275,6 +275,10 @@ fn detail(
         "color": "var(--text-heading)",
         "margin": "0 0 14px",
     };
+    let note_dir = view.note_dir.map(|d| match d {
+        tc_api::shown::Direction::Ltr => "ltr",
+        tc_api::shown::Direction::Rtl => "rtl",
+    });
     let note = (!view.note.is_empty()).then(|| {
         let boxed = crate::css! {
             "max-width": "62ch",
@@ -296,7 +300,7 @@ fn detail(
         view! {
             <div data-testid="check-note" style=boxed.to_style()>
                 <Overline style=crate::css! { "color": "var(--tc-warn-text-2)" }>{t(keys::check::WHAT_TO_CHECK, &[])}</Overline>
-                <div data-testid="check-note-text" style=text.to_style()>
+                <div data-testid="check-note-text" dir=note_dir style=text.to_style()>
                     {crate::views::helps_panel::expandable_note(blocks)}
                 </div>
             </div>
@@ -324,7 +328,7 @@ fn detail(
     let reference = t(keys::check::REF, &[("c", &story), ("v", &frame)]);
     let target_dir = "auto";
     view! {
-        <div data-testid="check-detail" style=wrap.to_style()>
+        <div style=wrap.to_style()>
             <div style=head.to_style()>
                 <span style=place.to_style()>{unit}" "{reference}</span>
                 <div style="flex: 1;"></div>

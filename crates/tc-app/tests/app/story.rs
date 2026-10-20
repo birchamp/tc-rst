@@ -654,6 +654,11 @@ async fn a_story_check_shows_the_gateway_frame_with_its_quote_lit_and_the_projec
     assert_eq!(title.title, "The Creation");
     assert_eq!(title.target, "La Creación");
     assert!(!title.note.is_empty(), "the note's blocks");
+    assert_eq!(
+        title.note_dir,
+        Some(tc_api::shown::Direction::Ltr),
+        "the English set's notes read left to right"
+    );
     let StoryPane::Text { tokens, lit } = &title.gateway else {
         panic!("{:?}", title.gateway)
     };
