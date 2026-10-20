@@ -420,3 +420,88 @@ fn a_pin_that_is_no_scripture_has_no_relationship_and_makes_no_anomaly() {
         .collect();
     assert_eq!(ids, ["dcs::uW/en_obs-tn"]);
 }
+
+/// A story's check session reads that story's decisions and comments only (R1): the other
+/// forty-nine are never touched, however many they hold.
+#[test]
+fn a_story_reads_its_own_decisions_and_comments() {
+    use tc_journal::record::{CommentTarget, UserStatus};
+    use tc_journal::{CheckId, CheckKey, CheckTarget, FrameNo, ToolId};
+    let mut ana = Dev::new(1);
+    let template = |n: u8| {
+        format!(
+            "# {n}. T\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-{n:02}-01.jpg)\n\nText.\n"
+        )
+    };
+    let story = |n: u8| tc_journal::StoryNo::new(n).expect("story");
+    let mut changes = Vec::new();
+    for n in [1, 2] {
+        changes.push(ana.one(
+            Record::StoryBase {
+                story: story(n),
+                value: template(n),
+            },
+            vec![],
+        ));
+    }
+    let key = |n: u8, id: &str| CheckKey {
+        tool: ToolId::TranslationNotes,
+        check_id: CheckId::parse(id).expect("id"),
+        target: CheckTarget::Frame {
+            story: story(n),
+            frame: FrameNo(1),
+        },
+        occurrence: 1,
+    };
+    for (n, id) in [(1, "aaaa"), (1, "bbbb"), (2, "cccc")] {
+        changes.push(ana.one(
+            check(&key(n, id), decision(Some(UserStatus::Valid), false, None)),
+            vec![],
+        ));
+    }
+    let on_frame = |n: u8| CommentTarget::Frame {
+        story: story(n),
+        frame: FrameNo(1),
+    };
+    changes.push(ana.one(comment(1, on_frame(1), "uno"), vec![]));
+    changes.push(ana.one(comment(2, on_frame(2), "dos"), vec![]));
+    changes.push(ana.one(
+        comment(3, CommentTarget::Check(key(1, "aaaa")), "sobre el chequeo"),
+        vec![],
+    ));
+    let state = FoldState::fold(
+        ProjectKind::Stories,
+        changes.into_iter().map(FoldInput::from),
+    );
+
+    let decisions = |n: u8| -> Vec<String> {
+        state
+            .story_decisions(ToolId::TranslationNotes, story(n))
+            .iter()
+            .map(|d| d.key.check_id.as_str().to_owned())
+            .collect()
+    };
+    assert_eq!(decisions(1), ["aaaa", "bbbb"]);
+    assert_eq!(decisions(2), ["cccc"]);
+    assert_eq!(decisions(3), Vec::<String>::new(), "a story with none");
+    assert!(
+        state
+            .story_decisions(ToolId::TranslationWords, story(1))
+            .is_empty(),
+        "another tool's decisions are not these"
+    );
+    // The story's own comments: on its frames and on its checks, never another story's.
+    assert_eq!(state.story_comments_of(story(1)).len(), 2);
+    assert_eq!(state.story_comments_of(story(2)).len(), 1);
+    assert!(state.story_comments_of(story(3)).is_empty());
+    // The whole collection's read still holds all of them.
+    assert_eq!(
+        state
+            .decisions(
+                ToolId::TranslationNotes,
+                tc_journal::pins::Collection::Stories
+            )
+            .len(),
+        3
+    );
+}

@@ -1015,6 +1015,27 @@ impl FoldState {
             }
             Collection::Stories => (self.story_attached().collect(), None),
         };
+        self.decisions_in(tool, collection, keys, text)
+    }
+
+    /// [`Self::decisions`] of one story's frames: what a story's Check session opens with. It
+    /// reads that story's decisions only, never the other forty-nine's.
+    pub fn story_decisions(&self, tool: ToolId, story: StoryNo) -> Vec<ProjectedDecision> {
+        let keys = self
+            .story_attached
+            .get(&story)
+            .map(|keys| keys.iter().copied().collect())
+            .unwrap_or_default();
+        self.decisions_in(tool, Collection::Stories, keys, None)
+    }
+
+    fn decisions_in(
+        &self,
+        tool: ToolId,
+        collection: Collection,
+        keys: Vec<KeyIdx>,
+        text: Option<BookText>,
+    ) -> Vec<ProjectedDecision> {
         let resolved = self
             .pins
             .answer(tool, collection)
