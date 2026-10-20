@@ -70,7 +70,13 @@ fn export(repo: &str, sha: &str, files: &[(String, Vec<u8>)]) -> Vec<u8> {
 /// The Spanish package `es-419_gl` installed on this computer, its notes and links holding the
 /// Psalms table under each of `covers`' names: the books it covers.
 fn install_package(app_data: &Path, covers: &[BookId]) {
-    let store = ResourceStore::open(app_data.join(tc_app::RESOURCES_FOLDER)).unwrap();
+    let folder = app_data.join(tc_app::RESOURCES_FOLDER);
+    // The harness shares one read-only store between its scales. This test installs, and a
+    // package installed for one scale would otherwise stay installed for the next.
+    if folder.is_symlink() {
+        std::fs::remove_file(&folder).unwrap();
+    }
+    let store = ResourceStore::open(folder).unwrap();
     let scale_dir = root().join("fixtures/scale/psa");
     let tn = std::fs::read(scale_dir.join("en_tn/tn_PSA.tsv")).unwrap();
     let twl = std::fs::read(scale_dir.join("en_twl/twl_PSA.tsv")).unwrap();
