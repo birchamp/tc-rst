@@ -251,7 +251,12 @@ fn usfm_step(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl I
         }
     };
     view! {
-        <div data-testid="ab-usfm" style="display: flex; flex-direction: column; gap: 14px; padding-bottom: 18px;">
+        <div
+            data-testid="ab-usfm"
+            style="display: flex; flex-direction: column; gap: 14px; padding-bottom: 18px;"
+            on:dragover=move |event: web_sys::DragEvent| event.prevent_default()
+            on:drop=on_drop
+        >
             <input
                 node_ref=input
                 type="file"
@@ -261,17 +266,12 @@ fn usfm_step(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl I
                 hidden
                 on:change=on_change
             />
-            <div
-                on:dragover=move |event: web_sys::DragEvent| event.prevent_default()
-                on:drop=on_drop
-            >
-                <DropZone
-                    title=t(keys::importer::kind::usfm::DROP, &[])
-                    hint=t(keys::importer::kind::usfm::HINT, &[])
-                    attrs=Attrs::from([("data-testid", "ab-usfm-drop")])
-                    on_click=click
-                />
-            </div>
+            <DropZone
+                title=t(keys::importer::kind::usfm::DROP, &[])
+                hint=t(keys::importer::kind::usfm::HINT, &[])
+                attrs=Attrs::from([("data-testid", "ab-usfm-drop")])
+                on_click=click
+            />
             {rows}
             {error_callout(ab)}
         </div>
