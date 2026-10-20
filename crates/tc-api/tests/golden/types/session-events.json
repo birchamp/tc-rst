@@ -105,5 +105,18 @@
         }
       }
     }
+  },
+  {
+    "type": "suggest",
+    "value": {
+      "testament": "nt",
+      "status": {
+        "type": "ready",
+        "value": {
+          "verses": 12,
+          "boosted": true
+        }
+      }
+    }
   }
 ]

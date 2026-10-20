@@ -18,6 +18,7 @@ mod store_world;
 
 mod app {
     mod account;
+    mod align;
     mod app_data;
     mod app_start;
     mod check;

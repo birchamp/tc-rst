@@ -139,6 +139,13 @@ macro_rules! endpoint_table {
             query "check/open": $crate::check::Open => $crate::check::CheckSessionView;
             query "check/rows": $crate::check::Rows => $crate::check::RowsView;
 
+            query "align/index": $crate::align::Index => $crate::align::IndexView;
+            command "align/open": $crate::align::Open => $crate::align::Opened;
+            command "align/edit": $crate::align::Edit => $crate::align::AlignerView;
+            command "align/keepReflow": $crate::align::KeepReflow => $crate::align::AlignerView;
+            command "align/flush": $crate::align::Flush => $crate::align::AlignSave;
+            command "align/close": $crate::align::Close => $crate::align::AlignSave;
+
             query "resources/fixState": $crate::check::FixState
                 => Option<$crate::check::FixView>;
             query "settings/viewFromHome": $crate::settings::ViewFromHome

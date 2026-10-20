@@ -277,6 +277,8 @@ impl Runtime {
                 });
                 self.0.saves.server_states_changed();
             }
+            // The Align screen reads its view again (B6 step 4).
+            Effect::Suggest { .. } => {}
         }
     }
 

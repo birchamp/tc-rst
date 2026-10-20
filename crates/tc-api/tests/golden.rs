@@ -18,7 +18,12 @@ use tc_api::account::{
     OrgChoice, Orgs, ProfileLink, RepoLink, Resume, ResumeOutcome, ResumeView, ShareTargets,
     SignIn, SignOut, State as AccountState, WebUrl,
 };
-use tc_api::align::AlignSave;
+use tc_api::align::{
+    AlignEdit, AlignPlace, AlignSave, AlignerView, BankClick, BankSelection, Blocked,
+    Card as AlignCard, Close as AlignClose, DroppedLinkView, Edit as AlignEditRequest, Flush,
+    Freshness, GatewayLens, Index, IndexItem, IndexView, KeepReflow, Open as AlignOpen, OpenVerse,
+    Opened, RailState, RailStatus, SuggestStatus, SuggestView, Testament, Word,
+};
 use tc_api::app::{
     AppPrefsView, BuildInfo, ClientError, Hello, HelloView, OpenSession, Quit, SessionRole,
 };
@@ -1440,6 +1445,255 @@ fn pin_citation(repo: &str, version: Option<&str>, sha: char) -> PinCitation {
     }
 }
 
+fn align_word(word: &str, occurrence: u32, occurrences: u32) -> Word {
+    Word {
+        word: word.to_owned(),
+        occurrence,
+        occurrences,
+    }
+}
+
+impl Example for Index {
+    fn example() -> Self {
+        Index {
+            at: scope(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for IndexView {
+    fn example() -> Self {
+        IndexView {
+            items: vec![
+                IndexItem {
+                    place: AlignPlace {
+                        chapter: 1,
+                        verse: 1,
+                        last: 1,
+                    },
+                    text: "Pablo, siervo de Dios".into(),
+                    status: RailStatus {
+                        state: RailState::Todo,
+                        placed: 6,
+                        total: 27,
+                    },
+                },
+                IndexItem {
+                    place: AlignPlace {
+                        chapter: 1,
+                        verse: 9,
+                        last: 10,
+                    },
+                    text: String::new(),
+                    status: RailStatus {
+                        state: RailState::Undrafted,
+                        placed: 0,
+                        total: 0,
+                    },
+                },
+            ],
+        }
+    }
+}
+
+impl Example for AlignOpen {
+    fn example() -> Self {
+        AlignOpen {
+            at: scope(),
+            request: request(1),
+            book: BookId::Titus,
+            verse: Some(OpenVerse {
+                chapter: 1,
+                verse: 1,
+            }),
+        }
+    }
+}
+
+impl Example for Opened {
+    fn example() -> Self {
+        Opened::Ready(Box::new(AlignerView::example()))
+    }
+}
+
+impl Example for AlignerView {
+    fn example() -> Self {
+        AlignerView {
+            aligner: AlignerId::new(5),
+            seq: 3,
+            place: AlignPlace {
+                chapter: 1,
+                verse: 1,
+                last: 1,
+            },
+            testament: Testament::Nt,
+            target_dir: Direction::Ltr,
+            orig_dir: Direction::Ltr,
+            original: "Παῦλος δοῦλος Θεοῦ".into(),
+            gateway: Some(GatewayLens {
+                text: "Paul, a servant of God".into(),
+            }),
+            bank: vec![align_word("de", 1, 2), align_word("Dios", 1, 1)],
+            selection: BankSelection::Armed(vec![0]),
+            cards: vec![
+                AlignCard {
+                    index: 0,
+                    top: vec![align_word("Παῦλος", 1, 1)],
+                    placed: vec![align_word("Pablo", 1, 1)],
+                    suggested: vec![],
+                    gateway: Some("Paul".into()),
+                },
+                AlignCard {
+                    index: 1,
+                    top: vec![align_word("δοῦλος", 1, 1), align_word("Θεοῦ", 1, 1)],
+                    placed: vec![],
+                    suggested: vec![align_word("siervo", 1, 1)],
+                    gateway: None,
+                },
+            ],
+            placed: 1,
+            total: 4,
+            done: false,
+            mark_refused: false,
+            suggest: SuggestView {
+                on: true,
+                status: SuggestStatus::Ready {
+                    verses: 5,
+                    boosted: false,
+                },
+                asked: true,
+                standing: 1,
+                suggesting: false,
+            },
+            freshness: Freshness::Stale,
+            dropped: vec![DroppedLinkView {
+                card: 1,
+                top: vec![align_word("δοῦλος", 1, 1)],
+                word: align_word("esclavo", 1, 1),
+            }],
+            status: RailStatus {
+                state: RailState::Invalid,
+                placed: 1,
+                total: 4,
+            },
+            save: AlignSave::Unsaved,
+        }
+    }
+}
+
+impl Example for AlignEditRequest {
+    fn example() -> Self {
+        AlignEditRequest {
+            at: scope(),
+            request: request(2),
+            aligner: AlignerId::new(5),
+            seq: 3,
+            edit: AlignEdit::ClickBank {
+                index: 0,
+                click: BankClick::Toggle,
+            },
+        }
+    }
+}
+
+impl Example for KeepReflow {
+    fn example() -> Self {
+        KeepReflow {
+            at: scope(),
+            request: request(3),
+            aligner: AlignerId::new(5),
+            seq: 3,
+        }
+    }
+}
+
+impl Example for Flush {
+    fn example() -> Self {
+        Flush {
+            at: scope(),
+            request: request(4),
+        }
+    }
+}
+
+impl Example for AlignClose {
+    fn example() -> Self {
+        AlignClose {
+            at: scope(),
+            request: request(5),
+            aligner: AlignerId::new(5),
+        }
+    }
+}
+
+impl Example for AlignSave {
+    fn example() -> Self {
+        AlignSave::Failed(NotSaved::Disk("The disk is full.".into()))
+    }
+}
+
+/// Every edit, so the wire form of each is in a file.
+fn align_edits() -> Vec<AlignEdit> {
+    vec![
+        AlignEdit::ClickBank {
+            index: 2,
+            click: BankClick::Range,
+        },
+        AlignEdit::PlaceSelection { card: 1 },
+        AlignEdit::PlaceWords {
+            card: 1,
+            words: vec![align_word("de", 2, 2)],
+        },
+        AlignEdit::Unplace {
+            card: 0,
+            word: align_word("Pablo", 1, 1),
+        },
+        AlignEdit::Move {
+            from: 0,
+            to: 1,
+            word: align_word("Pablo", 1, 1),
+        },
+        AlignEdit::Merge { from: 0, to: 1 },
+        AlignEdit::Split { card: 1 },
+        AlignEdit::MarkValid,
+        AlignEdit::Accept {
+            card: 1,
+            word: align_word("siervo", 1, 1),
+        },
+        AlignEdit::AcceptAll,
+        AlignEdit::RejectAll,
+    ]
+}
+
+fn align_blocked() -> Vec<Blocked> {
+    vec![
+        Blocked::Undrafted,
+        Blocked::Unpinned,
+        Blocked::Missing,
+        Blocked::Unreadable,
+        Blocked::VersificationUnavailable,
+        Blocked::VersificationUnknown,
+        Blocked::NoCounterpart,
+        Blocked::AlignedInText,
+    ]
+}
+
+fn suggest_statuses() -> Vec<SuggestStatus> {
+    vec![
+        SuggestStatus::Off,
+        SuggestStatus::Reading,
+        SuggestStatus::None,
+        SuggestStatus::Ready {
+            verses: 1,
+            boosted: false,
+        },
+        SuggestStatus::Error {
+            reason: "the engine stopped".into(),
+        },
+    ]
+}
+
 impl Example for Picker {
     fn example() -> Self {
         Picker {
@@ -1727,6 +1981,11 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
     assert_eq!(
         scoped,
         BTreeSet::from([
+            "align/close",
+            "align/edit",
+            "align/flush",
+            "align/keepReflow",
+            "align/open",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
@@ -2006,6 +2265,13 @@ fn session_events() -> Vec<SessionEvent> {
             aligner: AlignerId::new(5),
             state: AlignSave::Failed(NotSaved::Disk("The disk is full.".into())),
         },
+        SessionEvent::Suggest {
+            testament: Testament::Nt,
+            status: SuggestStatus::Ready {
+                verses: 12,
+                boosted: true,
+            },
+        },
     ]
 }
 
@@ -2117,6 +2383,12 @@ fn shared_types_have_golden_json() {
         ("types/refusals.json", Value::Array(refusals)),
         ("types/uploads.json", uploads()),
         ("types/buffer.json", buffer()),
+        ("types/align-edits.json", wire_samples(&align_edits())),
+        ("types/align-blocked.json", wire_samples(&align_blocked())),
+        (
+            "types/suggest-statuses.json",
+            wire_samples(&suggest_statuses()),
+        ),
         ("types/check-places.json", plain_samples(&check_places())),
         ("types/check-units.json", wire_samples(&check_units())),
         (
@@ -2165,6 +2437,9 @@ fn no_golden_file_is_left_without_its_endpoint_or_type() {
         "event-frame",
         "refusals",
         "uploads",
+        "align-edits",
+        "align-blocked",
+        "suggest-statuses",
         "check-places",
         "check-units",
         "check-lists",

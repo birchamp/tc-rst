@@ -353,6 +353,28 @@ impl StoreCommand {
         )
     }
 
+    /// `SaveAlignment` (STORAGE §5.3): the aligner's links of a verse, over the alignment the
+    /// first token shows, made against the verse the second shows. The store stamps it from
+    /// that verse, so a verse that changed meanwhile leaves the alignment stale at once.
+    pub fn save_alignment(
+        shown: EditToken,
+        verse_shown: EditToken,
+        value: tc_journal::command::AlignmentEdit,
+    ) -> Self {
+        let listed = vec![
+            (shown.key().clone(), shown.heads().to_vec()),
+            (verse_shown.key().clone(), verse_shown.heads().to_vec()),
+        ];
+        Self::new(
+            Command::SaveAlignment {
+                shown: shown.0,
+                verse_shown: verse_shown.0,
+                value,
+            },
+            listed,
+        )
+    }
+
     /// `Draft` (STORAGE §5.14): unsaved editor text with the tokens of what the editor
     /// displayed, and `at`, the page's clock at the text's last keystroke (its buffer entry's
     /// `at`, APP-DESIGN §6.6). The store keeps it beside the actor (R22), so it writes no

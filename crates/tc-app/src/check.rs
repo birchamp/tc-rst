@@ -37,7 +37,7 @@ use tc_check::fix::{self, Machine, Preflight, PreflightState};
 use tc_check::{CheckItem, CheckState, CheckTarget, Collection, Ladder, Pin, ToolId};
 use tc_core::BookId;
 use tc_helps::{HelpsPart, Occurrence};
-use tc_journal::record::{BookPresence, ResourceRef, Scope as BookScope, VerseValue};
+use tc_journal::record::{BookPresence, ResourceRef, Scope as BookScope};
 use tc_journal::{Record, RecordKey};
 use tc_resources::{Missing, PartStatus, ProjectPins};
 
@@ -705,62 +705,9 @@ impl Handle<Picker> for App {
     }
 }
 
-/// The Align card's count (tC4 `alignPickerEntry` over `alignIndexItems`): every drafted
-/// verse counts; one is done when its alignment is marked done and still vouches for the verse
-/// (`tc_align::verse_status`); the next is the first drafted verse not done.
+/// The Align card's count, from the rail's own rule (`crate::align::index`).
 fn align_card(read: &CountingSnapshot, book: BookId) -> CardCount<AlignProgress> {
-    let mut done = 0;
-    let mut total = 0;
-    let mut next = None;
-    for chapter in read.chapters_of(book) {
-        let keys = read.chapter_keys(book, chapter);
-        for key in &keys.verses {
-            let Some(Record::Verse {
-                verse,
-                value: VerseValue::Text { words, last, .. },
-                ..
-            }) = read.projected(key)
-            else {
-                continue;
-            };
-            // tC4's verse text of a stub (`___`) is empty: not drafted (#572's rule).
-            if !crate::drafted::words_drafted(&words) {
-                continue;
-            }
-            total += 1;
-            let target = tc_align::words::TargetVerse::new(&words);
-            let run = tc_journal::alignment::AlignedRun {
-                anchor: verse.get(),
-                run_start: verse.get(),
-                run_end: last.get().max(verse.get()),
-                text_md5: target.md5(),
-                source_sha: None,
-            };
-            let alignment = keys
-                .alignments
-                .iter()
-                .find_map(|k| match read.projected(k) {
-                    Some(Record::Alignment {
-                        verse: anchor,
-                        value,
-                        ..
-                    }) if anchor == verse => Some(value),
-                    _ => None,
-                });
-            let status = tc_align::verse_status(alignment.as_ref(), Some((&run, &target)), None);
-            if status.state == tc_align::VerseState::Valid {
-                done += 1;
-            } else if next.is_none() {
-                let label = if last.get() > verse.get() {
-                    format!("{chapter}:{}-{}", verse.get(), last.get())
-                } else {
-                    format!("{chapter}:{}", verse.get())
-                };
-                next = Some(label);
-            }
-        }
-    }
-    CardCount::Counted(AlignProgress { done, total, next })
+    CardCount::Counted(crate::align::index::progress(read, book))
 }
 
 // ---------------------------------------------------------------------------------------

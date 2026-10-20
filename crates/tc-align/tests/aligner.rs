@@ -117,6 +117,31 @@ fn suggestions_write_nothing_block_mark_valid_and_vanish_on_reject() {
 }
 
 #[test]
+fn clear_discards_standing_suggestions() {
+    let mut aligner = open(None, TEXT);
+    proposal_for(&mut aligner, 0, "Paul");
+    assert_eq!(aligner.proposals().len(), 1);
+    aligner.clear();
+    assert!(aligner.proposals().is_empty());
+    assert_eq!(aligner.shown_bank().len(), aligner.value().word_bank.len());
+}
+
+#[test]
+fn a_saved_value_is_not_saved_again_until_it_changes() {
+    let mut aligner = open(None, TEXT);
+    aligner.place(0, &banked(&aligner, "Paul")).unwrap();
+    assert!(aligner.is_changed());
+    aligner.mark_saved();
+    assert!(!aligner.is_changed());
+    aligner.unplace(0, &banked_on_card(&aligner, 0)).unwrap();
+    assert!(aligner.is_changed());
+}
+
+fn banked_on_card(aligner: &Aligner, card: usize) -> TargetWord {
+    aligner.value().alignments[card].bottom_words[0].clone()
+}
+
+#[test]
 fn an_accepted_suggestion_is_the_same_as_placing_the_word_by_hand() {
     let mut by_hand = open(None, TEXT);
     by_hand.place(0, &banked(&by_hand, "Paul")).unwrap();
@@ -452,4 +477,35 @@ fn a_shown_word_the_hash_leaves_out_is_carried_over_when_it_changes() {
     assert_eq!(reopened.dropped().len(), 1);
     assert_eq!(reopened.dropped()[0].word, selah);
     assert!(!reopened.is_changed(), "leaving keeps the stored value");
+}
+
+#[test]
+fn a_source_book_gives_every_verse_the_words_from_book_gives() {
+    let text = read(UGNT);
+    let book = tc_usfm::Book::parse(&text);
+    let cut = tc_align::SourceBook::parse(&text);
+    let mut seen = 0;
+    for segment in book.segments() {
+        let Some(unit) = segment.as_verse() else {
+            continue;
+        };
+        let (Some(chapter), Some(verses)) = (unit.chapter(), unit.verses()) else {
+            continue;
+        };
+        assert_eq!(
+            cut.verse(chapter, verses).unwrap(),
+            tc_align::SourceVerse::from_book(&book, chapter, verses).unwrap(),
+            "{chapter}:{verses:?}"
+        );
+        assert!(cut.has(chapter, verses));
+        seen += 1;
+    }
+    assert!(seen > 40, "{seen} verses of Titus");
+    let span = tc_core::VerseSpan::range(1, 2).unwrap();
+    assert_eq!(
+        cut.verse(1, span).unwrap().words().len(),
+        source_verse(UGNT, "1:1").words().len() + source_verse(UGNT, "1:2").words().len()
+    );
+    assert!(!cut.display_text(1, span).is_empty());
+    assert!(!cut.has(9, span));
 }

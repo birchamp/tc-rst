@@ -161,6 +161,11 @@ scoped!(
     crate::session::CopyProject,
     crate::session::OtherComputerClosed,
     crate::resources::Download,
+    crate::align::Open,
+    crate::align::Edit,
+    crate::align::KeepReflow,
+    crate::align::Flush,
+    crate::align::Close,
 );
 unscoped!(
     crate::app::Quit,

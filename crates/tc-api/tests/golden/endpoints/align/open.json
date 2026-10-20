@@ -1,0 +1,154 @@
+{
+  "path": "align/open",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "01010101010101010101010101010101",
+    "book": "TIT",
+    "verse": {
+      "chapter": 1,
+      "verse": 1
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "type": "ready",
+      "value": {
+        "aligner": 5,
+        "seq": 3,
+        "place": {
+          "chapter": 1,
+          "verse": 1,
+          "last": 1
+        },
+        "testament": "nt",
+        "targetDir": "ltr",
+        "origDir": "ltr",
+        "original": "Παῦλος δοῦλος Θεοῦ",
+        "gateway": {
+          "text": "Paul, a servant of God"
+        },
+        "bank": [
+          {
+            "word": "de",
+            "occurrence": 1,
+            "occurrences": 2
+          },
+          {
+            "word": "Dios",
+            "occurrence": 1,
+            "occurrences": 1
+          }
+        ],
+        "selection": {
+          "type": "armed",
+          "value": [
+            0
+          ]
+        },
+        "cards": [
+          {
+            "index": 0,
+            "top": [
+              {
+                "word": "Παῦλος",
+                "occurrence": 1,
+                "occurrences": 1
+              }
+            ],
+            "placed": [
+              {
+                "word": "Pablo",
+                "occurrence": 1,
+                "occurrences": 1
+              }
+            ],
+            "suggested": [],
+            "gateway": "Paul"
+          },
+          {
+            "index": 1,
+            "top": [
+              {
+                "word": "δοῦλος",
+                "occurrence": 1,
+                "occurrences": 1
+              },
+              {
+                "word": "Θεοῦ",
+                "occurrence": 1,
+                "occurrences": 1
+              }
+            ],
+            "placed": [],
+            "suggested": [
+              {
+                "word": "siervo",
+                "occurrence": 1,
+                "occurrences": 1
+              }
+            ],
+            "gateway": null
+          }
+        ],
+        "placed": 1,
+        "total": 4,
+        "done": false,
+        "markRefused": false,
+        "suggest": {
+          "on": true,
+          "status": {
+            "type": "ready",
+            "value": {
+              "verses": 5,
+              "boosted": false
+            }
+          },
+          "asked": true,
+          "standing": 1,
+          "suggesting": false
+        },
+        "freshness": "stale",
+        "dropped": [
+          {
+            "card": 1,
+            "top": [
+              {
+                "word": "δοῦλος",
+                "occurrence": 1,
+                "occurrences": 1
+              }
+            ],
+            "word": {
+              "word": "esclavo",
+              "occurrence": 1,
+              "occurrences": 1
+            }
+          }
+        ],
+        "status": {
+          "state": "invalid",
+          "placed": 1,
+          "total": 4
+        },
+        "save": {
+          "type": "unsaved"
+        }
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
