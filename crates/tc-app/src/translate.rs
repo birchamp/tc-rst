@@ -6,6 +6,7 @@
 use tc_api::ApiError;
 use tc_api::editor::{ChapterText, Chapters, ChaptersView, VerseRow};
 use tc_api::ids::{ConflictRef, RefPart};
+use tc_api::model::section::ParaFormat;
 use tc_api::shown::{ConflictMarker, Shown};
 use tc_journal::fold::Resolved;
 use tc_journal::record::VerseValue;
@@ -28,6 +29,8 @@ struct Text {
     last: u16,
     words: String,
     layout: String,
+    /// The records of the verses a span covers, in order.
+    covered: Vec<RecordKey>,
 }
 
 /// The paragraph marks of a verse's content: the levels of those before its first text and
@@ -45,11 +48,11 @@ fn marks(body: &str) -> (Vec<u8>, Vec<u8>) {
 }
 
 fn texts(read: &CountingSnapshot, book: tc_core::BookId, chapter: u16) -> Vec<Text> {
-    let mut texts: Vec<Text> = read
-        .chapter_keys(book, chapter)
-        .verses
-        .into_iter()
-        .filter_map(|key| match read.projected(&key) {
+    let mut texts: Vec<Text> = Vec::new();
+    // The verses a span covers, with the verse that covers them.
+    let mut covered: Vec<(u16, u16, RecordKey)> = Vec::new();
+    for key in read.chapter_keys(book, chapter).verses {
+        match read.projected(&key) {
             Some(Record::Verse {
                 verse,
                 value:
@@ -60,17 +63,29 @@ fn texts(read: &CountingSnapshot, book: tc_core::BookId, chapter: u16) -> Vec<Te
                         ..
                     },
                 ..
-            }) => Some(Text {
+            }) => texts.push(Text {
                 key,
                 verse: verse.get(),
                 last: last.get().max(verse.get()),
                 words,
                 layout,
+                covered: Vec::new(),
             }),
-            _ => None,
-        })
-        .collect();
+            Some(Record::Verse {
+                verse,
+                value: VerseValue::Covered { by },
+                ..
+            }) => covered.push((by.get(), verse.get(), key)),
+            _ => {}
+        }
+    }
     texts.sort_unstable_by_key(|t| t.verse);
+    covered.sort_unstable_by_key(|(_, verse, _)| *verse);
+    for (by, _, key) in covered {
+        if let Some(text) = texts.iter_mut().find(|t| t.verse == by) {
+            text.covered.push(key);
+        }
+    }
     texts
 }
 
@@ -98,6 +113,8 @@ impl App {
         // The marks after the previous verse's text, and whether a `\ts\*` came in it.
         let mut trailing: Vec<u8> = Vec::new();
         let mut section_mark = false;
+        // The `\p`, `\q1` or `\q2` line the previous verse's layout ends with.
+        let mut gap: Option<ParaFormat> = None;
         for text in texts(read, book, chapter) {
             let body = format!("{}{}", text.words, text.layout);
             let (lead, tail) = marks(&body);
@@ -136,6 +153,23 @@ impl App {
                 )
             })?;
             let drafted = crate::drafted::words_drafted(&text.words);
+            let covered = text
+                .covered
+                .iter()
+                .map(|key| {
+                    read.mint(key, None)
+                        .map_err(|e| e.to_string())
+                        .and_then(|t| wire::token::shown(&t).map_err(|e| e.to_string()))
+                        .map_err(|reason| {
+                            self.internal(
+                                "a covered verse's token could not be made",
+                                crate::reports::facts(
+                                    serde_json::json!({"verse": label, "reason": reason}),
+                                ),
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             verses.push(VerseRow {
                 key,
                 record,
@@ -152,7 +186,10 @@ impl App {
                     value: text.words,
                     token: minted,
                 },
+                format: gap,
+                covered,
             });
+            gap = crate::section::gap_marker(&text.layout);
             trailing = tail;
             section_mark = body.contains("\\ts\\*");
         }

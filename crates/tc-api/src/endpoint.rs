@@ -195,7 +195,7 @@ unscoped!(
     crate::create::AddUsfmBooks,
 );
 #[cfg(feature = "test-hooks")]
-scoped!(crate::test::SaveVerse);
+scoped!(crate::test::SaveVerse, crate::test::SaveSection);
 #[cfg(feature = "test-hooks")]
 unscoped!(
     crate::test::Crash,

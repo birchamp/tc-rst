@@ -23,6 +23,7 @@ mod app {
     pub mod save_kit;
     mod save_props;
     mod save_refresh;
+    mod section;
     mod share;
     mod shell;
     mod sources;

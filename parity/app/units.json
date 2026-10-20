@@ -1,5 +1,5 @@
 {
-  "about": "The units of docs/APP-DESIGN.md \u00a710 that have landed on the integration branch. Each unit adds its own id here in the branch that builds it. crates/tc-ui/tests/screen_record.rs reads it to know which layers must be captured by now, which units may have captured, and which scripted screens must have been captured again (APP-DESIGN \u00a77.5).",
+  "about": "The units of docs/APP-DESIGN.md §10 that have landed on the integration branch. Each unit adds its own id here in the branch that builds it. crates/tc-ui/tests/screen_record.rs reads it to know which layers must be captured by now, which units may have captured, and which scripted screens must have been captured again (APP-DESIGN §7.5).",
   "landed": [
     "A1",
     "A2",
@@ -28,6 +28,7 @@
     "C6",
     "C8",
     "B6",
-    "B5b"
+    "B5b",
+    "B4b"
   ]
 }

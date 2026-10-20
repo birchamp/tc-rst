@@ -186,7 +186,20 @@ impl Saves {
     /// An editor mounts on a field: the signal is the text it shows, which the machine changes
     /// only while the editor is not focused (AD37).
     pub fn open(&self, key: &BufferKey, scope: FieldScope, pair: Pair) -> ArcRwSignal<String> {
-        let (text, commands) = self.machine(|m| m.open(key.clone(), scope, pair, js::now_ms()));
+        self.open_over(key, scope, pair, Vec::new())
+    }
+
+    /// As [`open`](Self::open) for a field that displays several records, a section card: the
+    /// tokens of the others follow `pair.token` in its base.
+    pub fn open_over(
+        &self,
+        key: &BufferKey,
+        scope: FieldScope,
+        pair: Pair,
+        rest: Vec<ShownToken>,
+    ) -> ArcRwSignal<String> {
+        let (text, commands) =
+            self.machine(|m| m.open_over(key.clone(), scope, pair, rest, js::now_ms()));
         let shown = ArcRwSignal::new(text);
         self.0.shown.borrow_mut().insert(key.clone(), shown.clone());
         self.run(commands);

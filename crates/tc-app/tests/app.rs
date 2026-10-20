@@ -47,13 +47,14 @@ mod app {
     mod reports;
     mod save_machine;
     pub mod scenario;
+    mod section;
     mod seed;
     mod sessions;
     mod share;
     mod sources;
     pub mod state_seed;
     mod store;
-    mod store_scenario;
+    pub mod store_scenario;
     mod sync;
     mod translate;
     pub mod understand;

@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
 use crate::ids::{RecordRef, RefPart, Scope, ViewSeq, WallMs};
+use crate::model::section::ParaFormat;
 use crate::shown::{Direction, Known, Shown};
+use crate::token::ShownToken;
 
 /// `editor/book`: the book Understand and Translate show.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -272,4 +274,12 @@ pub struct VerseRow {
     /// What the verse box edits: the verse's whole `words`, every poem line with its markers
     /// (#786, Q-20), with the token of the version shown and its conflict marker.
     pub words: Shown<String>,
+    /// The paragraph or poetry marker line (`\p`, `\q1`, `\q2`) the previous verse's layout
+    /// ends with, which opens this verse's line in the section card (tC4's `gapMarkerOf`, #54);
+    /// none for a chapter's first verse and where the layout holds none of the three.
+    pub format: Option<ParaFormat>,
+    /// The tokens of the verses a span covers (`4-5` covers 5), in order: the section card
+    /// displays every verse of its section, so its save names them (STORAGE §5.2).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub covered: Vec<ShownToken>,
 }

@@ -99,6 +99,7 @@ const PHASE_0: &[&str] = &[
     "test/release",
     "test/fieldStore",
     "test/saveVerse",
+    "test/saveSection",
     "test/fieldLog",
     "test/fieldDraft",
     "test/keychain",

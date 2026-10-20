@@ -137,6 +137,10 @@ pub fn VerseMarker(
     #[prop(default = 32.0)] size: f64,
     #[prop(optional)] state: MarkerState,
     #[prop(optional)] on_pick_up: Option<Callback<web_sys::Event>>,
+    /// The release of a press on the marker (tC4 passes `onPointerUp` on to the span): the ghost
+    /// a held pin leaves where it may land takes the drop with it.
+    #[prop(optional)]
+    on_pointer_up: Option<Callback<PointerEvent>>,
     #[prop(optional, into)] label: Option<String>,
     #[prop(optional)] style: Css,
     #[prop(optional)] attrs: Attrs,
@@ -171,6 +175,11 @@ pub fn VerseMarker(
                 e.prevent_default();
                 if let Some(cb) = on_pick_up {
                     cb.run(e.into());
+                }
+            }
+            on:pointerup=move |e: PointerEvent| {
+                if let Some(cb) = on_pointer_up {
+                    cb.run(e);
                 }
             }
             on:keydown=move |e: KeyboardEvent| {

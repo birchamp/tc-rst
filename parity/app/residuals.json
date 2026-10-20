@@ -664,6 +664,14 @@
       ],
       "why": "The re-pin confirmation is tC4's pixel for pixel, with the counts tC4's case borrows from the recorded gateway change, scripted for the Rust server (`test/script`); the sample holds no other copy of es-419 TWL, so the route adds one installed version to the server's `resources/fixState` reply, as the case writes the release name. Behind it, the picker's Translation Notes bar carries tC4 #764's declared difference (its count for screen readers, `aria-label` \"1 of 112 resolved\", see check-picker); the scrim hides the bar's fill, so only the DOM shows it. Every other line of the DOM, every computed style included, is tC4's.",
       "until": null
+    },
+    "section-empty-confirm": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The save indicator reads “Unsaved changes” (`data-state=\"dirty\"`, tone `warn`) where tC4 reads “Saved”: tC4's indicator mirrors only its verse scheduler, and a section card's text is not in it until Save, so tC4 says “Saved” while every word of the section has just been deleted and nothing is stored. The rebuild's section card is a field of the save machine (APP-DESIGN §6.5, `SaveRule::OnSaveOnly`), so the indicator says what is true: there are unsaved changes (a declared difference, docs/PLAN.md, unit B4b). Those are the only pixels that differ. In the DOM, besides the indicator's three lines, the textarea keeps the text it opened with as its child text node, where React writes each new value there too (`defaultValue`); the field's value, which is what the person sees and what is saved, is empty on both sides. Every other line of the DOM, every computed style included, is tC4's, and the question, its words, buttons and focus are tC4's.",
+      "until": null
     }
   }
 }

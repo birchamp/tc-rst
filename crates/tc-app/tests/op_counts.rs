@@ -27,6 +27,7 @@ mod op_counts {
     mod lint;
     mod plans;
     mod probes;
+    mod section;
     mod session;
     mod understand;
 }

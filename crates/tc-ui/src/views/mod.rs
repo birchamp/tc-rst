@@ -19,6 +19,7 @@ pub mod modals;
 pub mod open_progress;
 pub mod panel_icons;
 pub mod rail_chrome;
+pub mod section_editor;
 pub mod source_verse;
 pub mod sync_result;
 pub mod translate;

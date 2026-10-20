@@ -57,11 +57,25 @@ pub fn draft_pill(label: String, aria: String, style: Css, on_click: Callback<()
     .into_any()
 }
 
+/// Where a press on an editing card's Save or Cancel leaves the focus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FooterPress {
+    /// In the field: the verse card's buttons carry `onMouseDown` `preventDefault` in tC4, so
+    /// the field's blur does not close the card before the click lands.
+    KeepsFocus,
+    /// On the button, as any press does: the section card's buttons carry no handler in tC4.
+    TakesFocus,
+}
+
 /// tC4's `EditingCard`: the accent border, a header row, the field, and the footer with Save
-/// and Cancel. A press in the footer keeps the focus in the field (tC4 puts `onMouseDown`
-/// `preventDefault` on each button), so the field's blur does not close the card before the
-/// click lands.
-pub fn editing_card(header: AnyView, field: AnyView, footer: AnyView, attrs: Attrs) -> AnyView {
+/// and Cancel.
+pub fn editing_card(
+    header: AnyView,
+    field: AnyView,
+    footer: AnyView,
+    press: FooterPress,
+    attrs: Attrs,
+) -> AnyView {
     let card = crate::css! {
         "border": "var(--stroke-selected) solid var(--accent)",
         "border-radius": "var(--radius-md)",
@@ -89,7 +103,14 @@ pub fn editing_card(header: AnyView, field: AnyView, footer: AnyView, attrs: Att
             view! { <div style=head.to_style()>{header}</div> },
             field,
             view! {
-                <div style=foot.to_style() on:mousedown=|e: web_sys::MouseEvent| e.prevent_default()>
+                <div
+                    style=foot.to_style()
+                    on:mousedown=move |e: web_sys::MouseEvent| {
+                        if press == FooterPress::KeepsFocus {
+                            e.prevent_default();
+                        }
+                    }
+                >
                     {footer}
                 </div>
             },

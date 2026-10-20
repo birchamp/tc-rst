@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use tc_core::BookId;
+
 use crate::home::ResumePlace;
 use crate::ids::{ProjectRef, RequestId, Scope, WallMs};
 use crate::prefs::PlaceMode;
@@ -179,6 +181,25 @@ pub struct SaveVerse {
     /// The verse the field displayed.
     pub shown: ShownToken,
     pub words: String,
+}
+
+/// `test/saveSection`: a section save through the real storage seam and store (unit B4b), until
+/// C2's `editor/saveSection` takes the same request. It carries the card's text and the tokens
+/// of every verse the card displayed, in order, a span's covered verses included; the server
+/// reads the section's verse keys from them (a Text with a later `last` is a span) and builds
+/// the values (APP-DESIGN 3.8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveSection {
+    pub at: Scope,
+    pub request: RequestId,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+    pub book: BookId,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub displayed: Vec<ShownToken>,
+    /// The Type-mode text of the card (`model::section`).
+    pub text: String,
 }
 
 /// `test/fieldLog`: a test field's current value with its token, and every text stored
