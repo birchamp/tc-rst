@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "527f290d49bacc6a",
+    "ui": "7af2dd85558bbfd7",
     "commit": "dev",
     "api": 1
   },
@@ -33,7 +33,7 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -44,14 +44,15 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home.png",
-      "sha256": "86eebce10e6faadb77d06970f2dc469261766fae4dad2e270dbaa76e97fc4540",
+      "sha256": "deda26b7ff171e96d22310f0930a97ee15873a7fbf41dd30cdd54dda82bfadcc",
       "dom": "dom/home.json",
-      "domSha256": "afcb234dcb6ea8ba3c3da206aae47f10c798bfa94da1ad7a294ec5808e91f2a1"
+      "domSha256": "c561a93718940e1a5b3840dd78a635294590aac3f35a16cf10b4fecc899ca93e"
     },
     {
       "name": "understand-tit1",
@@ -100,11 +101,11 @@
       "domSha256": "4b7fb91ae3922bf885660c5e44567c5a1e69f83ab274a65d0f8848e1b574993a"
     },
     {
-      "name": "add-project",
+      "name": "project-settings",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -115,21 +116,48 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/project-settings.png",
+      "sha256": "8596565decf123d6e886598e2b5c2cd482a3f2af120f99ec96e9a24823d634cf",
+      "dom": "dom/project-settings.json",
+      "domSha256": "b3aa84c0336e17ddcf50d2c1c48b82dcf0ccc0911a3c64c4f3d327b81e1ba878"
+    },
+    {
+      "name": "add-project",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-project.png",
-      "sha256": "2d95703d1d9dfe8e128a2af0bf6d4b78adf3f77f51ab3d6835ed6fc0be321e2e",
+      "sha256": "eb9609dea209f0d876a5a2cec6e92de03dbd71020a723f438b38d3662261f29f",
       "dom": "dom/add-project.json",
-      "domSha256": "bd82090ae251c62f5b94ad3b1028a037ac9106147d5697ec4e485c4d3ae09ae7"
+      "domSha256": "7081012407391c5cc18856db13a410c3f3184b42d69e6eaf5d243b9bc975745c"
     },
     {
       "name": "new-bible",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -140,21 +168,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/new-bible.png",
-      "sha256": "6f8a27c11a512eabcf1365c08e5710d912b069ecd65071a6b815d535c3b0cf04",
+      "sha256": "38d1f79bdaa914c790c13d38f8bcfa1005b943d2cc36b92449196101e1eddee3",
       "dom": "dom/new-bible.json",
-      "domSha256": "2e80087a1ac60f49d084d8d50511bacef0b9283bfbc1a9c6b37702e453bd555c"
+      "domSha256": "9c007ef8212f7613d3eff5ba1685333751fff68c70f1b119e23a981c7c85e4ce"
     },
     {
       "name": "import",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -165,21 +194,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import.png",
-      "sha256": "2e2bbe70d756ebce7502a11222f4f649c9f5e0bae04ce86c150c00a1b3d3f03e",
+      "sha256": "8e72d50d821f0ff9bab7761d2d5aba3f0386db6b4c5b0c0ae85699e7ffd4a355",
       "dom": "dom/import.json",
-      "domSha256": "1cd85142cba4d331b4c2ecafb1fd42cce02663cde8a564101ab49c07b3667eeb"
+      "domSha256": "0de423265751454c7d72a59670b386ca0fada91eea50c676c96144e46e8e4106"
     },
     {
       "name": "share-internet-consent",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B9b",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -190,21 +220,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-internet-consent.png",
-      "sha256": "fb9acc8440bc6b12bd2177e614ba6ac1df88822e87cb5671f72f64ce2a82ce48",
+      "sha256": "508ba093b5e2198d6f3445eccf71a9a5592cb873d1866202bf30c5666184fe3f",
       "dom": "dom/share-internet-consent.json",
-      "domSha256": "e18fda65cffb0141dc37d5ccbb96441ddea94b8b523a788a4f5f14523936bd25"
+      "domSha256": "94084e9f2090e49ed82dcb74dea6f4cf5a185147464b00ac9a41db0a72187b8b"
     },
     {
       "name": "share-signin",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B9b",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -215,6 +246,7 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
@@ -227,16 +259,16 @@
         }
       },
       "png": "screens/share-signin.png",
-      "sha256": "b6e22b7a20368f9e3c12d6f672e76bc78ed882d376aed2a44d4a47f22e124212",
+      "sha256": "66e36793df4bd089208e085b907a295b67089926c3b170cce282c746a5d720e8",
       "dom": "dom/share-signin.json",
-      "domSha256": "210142a3ed1e5387b5a788d7c02c2e8e799ca650f7cfd9e1fa1e8bce739a9afd"
+      "domSha256": "aa234f16a95ac4a639a500f962ff91c0014e747b7831d6279b1d2d31a5233ff9"
     },
     {
       "name": "share-dialog",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B9b",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -247,21 +279,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-dialog.png",
-      "sha256": "684e6d930184ad83e5c8f21fb93e7eaa5b71414eff25a60537abceb2c2eaeea7",
+      "sha256": "14f519d2439311d08e2abd0b78e9609081b72e8e3106cdbc6d27c0947d537764",
       "dom": "dom/share-dialog.json",
-      "domSha256": "13fddbfb367dc4f1b173303d5ff08d4b682c52c6dd212c5d42cc9ad17a7e13dc"
+      "domSha256": "da61e7e0447d3b6e571cb545b9210f44ba233a3fccfa698dafaf4d69e95663e0"
     },
     {
       "name": "share-dialog-check",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B9b",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -272,21 +305,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-dialog-check.png",
-      "sha256": "d89ed9effd63039dbb4dcde1a1884e32f9669527ac6adafb2551e122b6b4f38d",
+      "sha256": "46d5ed3a511040a4766dfb6ea04f134fa59e60203a191e23c5257e668daf4b0c",
       "dom": "dom/share-dialog-check.json",
-      "domSha256": "902f61eb8d2161b77ec849f83210f57678efebef336f2aff229c5a951017c0ff"
+      "domSha256": "ad5d7bacde97f4b84077998bb4b6e4dc63163e81bc19888a2ddff8a408441ecb"
     },
     {
       "name": "account-menu",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -297,21 +331,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/account-menu.png",
-      "sha256": "8737f483073955d7d56a81c13fa9076acf8e809e8be91d10d23ffb0fc8985070",
+      "sha256": "7f6e777bfa5f68831e6697e876a49b04f5f5526d34421b1b1b3efe942e186105",
       "dom": "dom/account-menu.json",
-      "domSha256": "5c3b2d35d108ca7020be77ca42d4ad7c2184159e4e752dde139a83b547cfe531"
+      "domSha256": "dc5c1322c3de39947044167b8ebb2381d4963475c1f82061dfb3bd9532629c84"
     },
     {
       "name": "app-language",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -322,21 +357,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/app-language.png",
-      "sha256": "b3cf2ac8d8494f33646b09d74c33cfd79177a1473d13258676c842a0c7dca5eb",
+      "sha256": "aa0c2d6393e914ed5a7668ca6d10c08e4ffa31ea9a91c1e3feedc6b54cce7d6d",
       "dom": "dom/app-language.json",
-      "domSha256": "340d3e7181efd0bb952eeaa5c1a1d174ab081c83250f7f7e0b73b3cd736b2b18"
+      "domSha256": "0108a6b35544e14e788f288d9cb42cda4922608813ad27f99184cc3175f522af"
     },
     {
       "name": "help",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -352,14 +388,14 @@
       "png": "screens/help.png",
       "sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
       "dom": "dom/help.json",
-      "domSha256": "887de163fa4fe3b7c590e70c0e0bb54564b21f6fc373929ee5bc2c3327e409e6"
+      "domSha256": "4b3d8f2149686d092b79d4941861699d96c2c7d14938540ec21e7037f3c4e448"
     },
     {
       "name": "about",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -370,6 +406,7 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
@@ -382,16 +419,16 @@
         }
       },
       "png": "screens/about.png",
-      "sha256": "0f2bde2f1a730289cda790ab1acf005cd8d414db2f017eeb55c183029cdb25b5",
+      "sha256": "b7a4270f938945e16f17fb03a1fa34b58a2c334f264432faf4c5a1e4bb9046fe",
       "dom": "dom/about.json",
-      "domSha256": "4fdf52eec12f03440dfbad3a1c10fe3bb342976c866deb84dd211f044a977548"
+      "domSha256": "c50784ce247081e2ae2c9b0e4184ee9579e6f2182e52e6e6d78537d442f2d0fe"
     },
     {
       "name": "feedback",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -412,16 +449,16 @@
         }
       },
       "png": "screens/feedback.png",
-      "sha256": "23a628784f5cde1e960736cbced1a97af2d848b310d4559be4f18ab809ce009c",
+      "sha256": "d9bfcf2078fddbbff53fe453e72f0f2d7abbf56243f0b8d5e6bd0a41541db76e",
       "dom": "dom/feedback.json",
-      "domSha256": "fa667baaf060640efb29adfe052ba3aac3bfe898a60b5f344e0d815a91010f2a"
+      "domSha256": "c060d97a062a1fa0639273c0e449211a53b89f24b6289fe1e8cfc7410b4cef03"
     },
     {
       "name": "new-obs",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -432,21 +469,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/new-obs.png",
-      "sha256": "3532b4295e471edf9ae585499f162b1b12f697d17250fa8c19edd4d771120f25",
+      "sha256": "4ef81c4f5a24ed9a5744fb9dc29fcb6ae0998d20ac8a16517241540be55d7ff0",
       "dom": "dom/new-obs.json",
-      "domSha256": "9aa7a31ee0127c6940a7d4e53a98ffb09bc533d897d3c7a1c6f42bceec27b04b"
+      "domSha256": "4446c65aa6ead79a9abd7572f18b1537607981f94667a80a1b09154e9e587cbc"
     },
     {
       "name": "add-book",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -457,14 +495,37 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
-        "sample_burrito": "share"
+        "sample_burrito_obs": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book.png",
-      "sha256": "9fb4487699f22ba1c333f73712b3b4ffcb4f2bd754506f82ea1e9b3cef6c138c",
+      "sha256": "171d4a33b301c208666db25998d1d0aad9526758b1e97dc1ebc745bd4c099ae6",
       "dom": "dom/add-book.json",
-      "domSha256": "6ee5adbeba55299cedcd9dafc68e8b4d12370d6e3bcf6d9aa1c7f4aa0e69f9e5"
+      "domSha256": "84ad6e199099b0ef17a106b37eac78bc6981621d1342aa0d2a4784cdfcb19c00"
+    },
+    {
+      "name": "source-texts",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B9a",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/source-texts.png",
+      "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+      "dom": "dom/source-texts.json",
+      "domSha256": "b18f63877e6a443863539bbf94a6550cf822e72df163332659734f5c9a19a349"
     },
     {
       "name": "guided-fix",
@@ -490,11 +551,80 @@
       "domSha256": "519747de0c3ff727ba31951acd35b29b0504040b82fb7368cace8a6c8b735aec"
     },
     {
+      "name": "obs-understand",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/obs-understand.png",
+      "sha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee",
+      "dom": "dom/obs-understand.json",
+      "domSha256": "147455485cc955ca7a9348942fb0fb95f5a3122a4eada938fc4d64bce25e659a"
+    },
+    {
+      "name": "obs-translate",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/obs-translate.png",
+      "sha256": "c3c00c0de4ee21e8054db619df6b15cee04a972b5e10594af4378230fe6c7d06",
+      "dom": "dom/obs-translate.json",
+      "domSha256": "20647533d715a04ce36ffdce66ef5ab1cf04048c7f84dedc7d43a3d759620214"
+    },
+    {
+      "name": "obs-check-picker",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/obs-check-picker.png",
+      "sha256": "165976fe5621165d4c2265af2165c1af46dd58747622b4761fec41f605d5d414",
+      "dom": "dom/obs-check-picker.json",
+      "domSha256": "3fbd32fb4cbb86f1da1c8c358a3c203778e3fa81a840adc13c74a2bd575d81ed"
+    },
+    {
       "name": "open-door43",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B9b",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -505,6 +635,7 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
@@ -517,16 +648,16 @@
         }
       },
       "png": "screens/open-door43.png",
-      "sha256": "f232bdc9ba131b6c8f3866a35b8b03e31083fc9354475b0e85e27162199d3c51",
+      "sha256": "56e39218aa2d7fcb33670771e9e16e128152ffe7e2089e99269d39e6fbaf05c5",
       "dom": "dom/open-door43.json",
-      "domSha256": "ec0ffd1ac94acff063ce4fd3e59f1d8f6bdea01404d1a335095774edebf93008"
+      "domSha256": "90a63bb73b370cc3be7fbeb3d8dbd87d839d2f6204384554d6ed1e23221209fa"
     },
     {
       "name": "open-door43-internet-consent",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B9b",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -537,6 +668,7 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
@@ -549,17 +681,17 @@
         }
       },
       "png": "screens/open-door43-internet-consent.png",
-      "sha256": "df8e0c7cc240b3c383f8fd01b2e7bf4f97302d439db698b9020fd2e5e7c59b77",
+      "sha256": "b6a3b2a66594d140254f19e6f27ec6a1d67071a459ffa0ad8e0829d64e4ce145",
       "dom": "dom/open-door43-internet-consent.json",
-      "domSha256": "ad7c62fef21970cc57ff439a0e65bf5f2ee7ac47a9d8becad95d04f48385c784"
+      "domSha256": "88804c497637f6ac7b2e834d4f725af8da9cdc2ae7eadeeaabacbe5acf4d712c"
     },
     {
       "name": "open-door43-refused",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B10",
-      "backend": "memory+scripted",
+      "by": "B7",
+      "backend": "store",
       "layers": [
         "pixels",
         "dom",
@@ -569,6 +701,7 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
@@ -587,223 +720,9 @@
         }
       },
       "png": "screens/open-door43-refused.png",
-      "sha256": "4322217dbf8e5d36927169787fcafc68438aa696d8f6774e7329f7402d874f28",
+      "sha256": "544070874a3901bcda9bed940e71b2a3d3ff7b211842c8de3fb0abd480e21f2b",
       "dom": "dom/open-door43-refused.json",
-      "domSha256": "f0946e51655a18ddfe7bd804e875e1411da26055c24cff28bbdfa47e550e2b6e"
-    },
-    {
-      "name": "shared-home",
-      "kind": "screen",
-      "scenario": "shared",
-      "locale": "en",
-      "by": "B10",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito": "sync"
-      },
-      "syncToast": null,
-      "maskRects": {
-        "q2-obs-card": null
-      },
-      "png": "screens/shared-home.png",
-      "sha256": "186e04fe56c2e793306b6621b73b6c77cc00f84562473a152eec15ca354144fb",
-      "dom": "dom/shared-home.json",
-      "domSha256": "9d4a3ae47cbfd9c8d5e4d0350bde996aaf2bb7b6e119ba9a03aaaae9dd9f9a0a"
-    },
-    {
-      "name": "sync-internet-consent",
-      "kind": "screen",
-      "scenario": "shared",
-      "locale": "en",
-      "by": "B10",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito": "sync"
-      },
-      "syncToast": null,
-      "maskRects": {
-        "q2-obs-card": null
-      },
-      "png": "screens/sync-internet-consent.png",
-      "sha256": "0502905e0021b815ad40c881270ae32fb4accea777b0af1176c6569cd4cb2e3a",
-      "dom": "dom/sync-internet-consent.json",
-      "domSha256": "63b164f342ed46e504430cebfdc2b0ff16996f27dc05f1501e418ad8f219b0d6"
-    },
-    {
-      "name": "sync-failed",
-      "kind": "screen",
-      "scenario": "shared",
-      "locale": "en",
-      "by": "B10",
-      "backend": "memory+scripted",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito": "sync"
-      },
-      "syncToast": {
-        "ok": false,
-        "code": "sync.clone-failed",
-        "text": "The sync did not complete. tC4 could not get the project from Door43. Nothing changed. Try again.",
-        "received": 0,
-        "newestWins": 0,
-        "verseConflicts": 0,
-        "from": null,
-        "restored": 0,
-        "missingPins": 0,
-        "links": []
-      },
-      "maskRects": {
-        "q2-obs-card": null
-      },
-      "png": "screens/sync-failed.png",
-      "sha256": "bb430471b9bfe80a530bf26e3dc82f872045bb452b801abddcf73fc4b9703e25",
-      "dom": "dom/sync-failed.json",
-      "domSha256": "14fa7f211cccbc36e96661392fbbc6735115d32cba90f3a4edb642d50f15d1de"
-    },
-    {
-      "name": "sync-ok",
-      "kind": "screen",
-      "scenario": "shared",
-      "locale": "en",
-      "by": "B10",
-      "backend": "memory+scripted",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito": "sync"
-      },
-      "syncToast": {
-        "ok": true,
-        "code": null,
-        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review This project now uses 5 resource versions that are not on this computer. Download",
-        "received": 0,
-        "newestWins": 0,
-        "verseConflicts": 0,
-        "from": null,
-        "restored": 0,
-        "missingPins": 5,
-        "links": [
-          "download"
-        ]
-      },
-      "maskRects": {
-        "q2-obs-card": null
-      },
-      "png": "screens/sync-ok.png",
-      "sha256": "55b3245ee896d8bfcab798f15fb9604cf1fc01f3d4f02f9b3c556f2d6a0a783e",
-      "dom": "dom/sync-ok.json",
-      "domSha256": "84737935b934ba9d260840ab41981d6284d15d039a4a21bb97e08b888d40e114"
-    },
-    {
-      "name": "sync-ok-teammates",
-      "kind": "screen",
-      "scenario": "shared",
-      "locale": "en",
-      "by": "B10",
-      "backend": "memory+scripted",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito": "sync"
-      },
-      "syncToast": {
-        "ok": true,
-        "code": null,
-        "text": "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: Teammate 1 · Teammate 2 This project now uses 5 resource versions that are not on this computer. Review Download",
-        "received": 2,
-        "newestWins": 0,
-        "verseConflicts": 1,
-        "from": "Changes from: Teammate 1 · Teammate 2",
-        "restored": 0,
-        "missingPins": 5,
-        "links": [
-          "review",
-          "download"
-        ]
-      },
-      "maskRects": {
-        "q2-obs-card": null
-      },
-      "png": "screens/sync-ok-teammates.png",
-      "sha256": "a838a7cdb486a4ab23966dd42ee7737049bc9b9a0dc9e4d440d708c5e2f95b10",
-      "dom": "dom/sync-ok-teammates.json",
-      "domSha256": "c3e8b13bce489f96613e9b006a1990b72dc1afe67f85734508ca33ae26b889f4"
-    },
-    {
-      "name": "sync-ok-restored",
-      "kind": "screen",
-      "scenario": "shared",
-      "locale": "en",
-      "by": "B10",
-      "backend": "memory+scripted",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito": "sync"
-      },
-      "syncToast": {
-        "ok": true,
-        "code": null,
-        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Door43 did not have 1 change from a teammate. tC4 sent it again. This project now uses 5 resource versions that are not on this computer. Review Download",
-        "received": 0,
-        "newestWins": 0,
-        "verseConflicts": 1,
-        "from": null,
-        "restored": 1,
-        "missingPins": 5,
-        "links": [
-          "review",
-          "download"
-        ]
-      },
-      "maskRects": {
-        "q2-obs-card": null
-      },
-      "png": "screens/sync-ok-restored.png",
-      "sha256": "f8c3159f6bcd6f40fb1ef3ccf8888fbced72625a9e19f81c0e8cdaf0d659b33b",
-      "dom": "dom/sync-ok-restored.json",
-      "domSha256": "a45642622da7e3cab0122397062b9890e8e08c07fd61fb1ae1047acd591164f8"
+      "domSha256": "e1175469d8431f98500f0c24d81fe8206fdf54ae71fbb12518d7ea68534bc270"
     },
     {
       "name": "en-understand-tit1",
@@ -898,11 +817,330 @@
       "domSha256": "1b674eedc97e10406548c64de94f360238dd2bcde1babedbcb5893166a0aacf1"
     },
     {
+      "name": "en-obs-understand",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-obs-understand.png",
+      "sha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346",
+      "dom": "dom/en-obs-understand.json",
+      "domSha256": "28dbaaa66115ece76a41d2f40aec85f1900a6917ce1dc67af1652024c039df03"
+    },
+    {
+      "name": "en-obs-translate",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-obs-translate.png",
+      "sha256": "a3d3512ef295e0fc1ac908efcf463e13b6b7e88377bfa80e918e6e7e23a99570",
+      "dom": "dom/en-obs-translate.json",
+      "domSha256": "2ba5cf02ee63082194c20e555546da2164736272ee68da712402262def529257"
+    },
+    {
+      "name": "en-obs-check-tn-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-obs-check-tn-session.png",
+      "sha256": "11f1d3403d0f0a360737bb49ea6147beafddac48c7419443fb87fa1519b02f56",
+      "dom": "dom/en-obs-check-tn-session.json",
+      "domSha256": "33f7df28947d79fa0f2a338a4ff116f571431067b6d4a4d4d568e686f05303b1"
+    },
+    {
+      "name": "shared-home",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "sync",
+        "sample_burrito": "sync"
+      },
+      "syncToast": null,
+      "maskRects": {
+        "q2-obs-card": {
+          "x": 856,
+          "y": 251,
+          "width": 148,
+          "height": 31
+        }
+      },
+      "png": "screens/shared-home.png",
+      "sha256": "45bbca1b2b1fc4c277f0f6a55f26f8d7b1bcf36ed8312671030e7dbd7390ff64",
+      "dom": "dom/shared-home.json",
+      "domSha256": "d24d436786cd8775939462d00f8b422968f668377975abfd5538636653296554"
+    },
+    {
+      "name": "sync-internet-consent",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "sync",
+        "sample_burrito": "sync"
+      },
+      "syncToast": null,
+      "maskRects": {
+        "q2-obs-card": {
+          "x": 856,
+          "y": 251,
+          "width": 148,
+          "height": 31
+        }
+      },
+      "png": "screens/sync-internet-consent.png",
+      "sha256": "99bdda008eb485689e07931019f249b7b4492858ea59a1f4f8bc5ad8a0d4708b",
+      "dom": "dom/sync-internet-consent.json",
+      "domSha256": "63f085bfeca897fb0480497f63e62a43267723d69b75c56aee8ce8dcbfb20b01"
+    },
+    {
+      "name": "sync-failed",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "sync",
+        "sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": false,
+        "code": "sync.clone-failed",
+        "text": "The sync did not complete. tC4 could not get the project from Door43. Nothing changed. Try again.",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 0,
+        "from": null,
+        "restored": 0,
+        "missingPins": 0,
+        "links": []
+      },
+      "maskRects": {
+        "q2-obs-card": {
+          "x": 856,
+          "y": 251,
+          "width": 148,
+          "height": 31
+        }
+      },
+      "png": "screens/sync-failed.png",
+      "sha256": "c4274730368f8db20227bb5a6efb221e97f998ef3a837f1e9c679fd60cb9430c",
+      "dom": "dom/sync-failed.json",
+      "domSha256": "4d29e6d4d78500655c0f638beb7587ef57eda0cfead760a18e603e1a952a5859"
+    },
+    {
+      "name": "sync-ok",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "sync",
+        "sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review This project now uses 5 resource versions that are not on this computer. Download",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 0,
+        "from": null,
+        "restored": 0,
+        "missingPins": 5,
+        "links": [
+          "download"
+        ]
+      },
+      "maskRects": {
+        "q2-obs-card": {
+          "x": 856,
+          "y": 251,
+          "width": 148,
+          "height": 31
+        }
+      },
+      "png": "screens/sync-ok.png",
+      "sha256": "3fb87c1ef96a0dd6e614abe20c6c93a6add0865635081486ef0f417390d56489",
+      "dom": "dom/sync-ok.json",
+      "domSha256": "e1c854732dc340f19269db1b577b4afc44802fff1377c3dd1ad1aacfe8525072"
+    },
+    {
+      "name": "sync-ok-teammates",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "sync",
+        "sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: Teammate 1 · Teammate 2 This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 2,
+        "newestWins": 0,
+        "verseConflicts": 1,
+        "from": "Changes from: Teammate 1 · Teammate 2",
+        "restored": 0,
+        "missingPins": 5,
+        "links": [
+          "review",
+          "download"
+        ]
+      },
+      "maskRects": {
+        "q2-obs-card": {
+          "x": 856,
+          "y": 251,
+          "width": 148,
+          "height": 31
+        }
+      },
+      "png": "screens/sync-ok-teammates.png",
+      "sha256": "d12bd6efc87fe3f9d0ea778c09b473be428ae59acf0a25ef59ae41fa15c2fb77",
+      "dom": "dom/sync-ok-teammates.json",
+      "domSha256": "ddb92a9c65601a6b1f66cb0eb491b0ea18586c3a99dd2bd819f1243d5a509365"
+    },
+    {
+      "name": "sync-ok-restored",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B7",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "sync",
+        "sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Door43 did not have 1 change from a teammate. tC4 sent it again. This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 1,
+        "from": null,
+        "restored": 1,
+        "missingPins": 5,
+        "links": [
+          "review",
+          "download"
+        ]
+      },
+      "maskRects": {
+        "q2-obs-card": {
+          "x": 856,
+          "y": 251,
+          "width": 148,
+          "height": 31
+        }
+      },
+      "png": "screens/sync-ok-restored.png",
+      "sha256": "4a6907173cab2edbdbff4b6e689618385ff11000557fe80bc3461467b4c84c5e",
+      "dom": "dom/sync-ok-restored.json",
+      "domSha256": "6c88d13e4b029e823636e9bfe1c22d23830974c1389d27f1d7d80a7344aa7d6d"
+    },
+    {
       "name": "open-progress-journal",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B3",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -912,21 +1150,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-journal.png",
-      "sha256": "b666d0a2a5e0a6f5547852d4f1d06f58f930578e0a96c01093537c2744f05275",
+      "sha256": "1e9cae2af3d2a12b4b5edc4733941a1b90060940b257507f3ac561aaff4c8099",
       "dom": "dom/open-progress-journal.json",
-      "domSha256": "76b0880db8adf44d65151a1d84528a293aad98709b01eefc1b9ab319ea565601"
+      "domSha256": "e6f90add065be7fc66cdc6f13e35725536d8917651ac883aa8d246f9549330b1"
     },
     {
       "name": "open-progress-state",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B3",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -936,21 +1175,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-state.png",
-      "sha256": "ec7157d830ba198477a5849550e4908c4a2b1f26552e42055cd069ad418fff5c",
+      "sha256": "01db6eebea570151f399e3aaecf6b85a01bc1fb8f16f1d6f982e7335e703ab82",
       "dom": "dom/open-progress-state.json",
-      "domSha256": "a08fedf276ee0dc6775694a49181cd9b4bb5e4c126ee2ee0fec84ee6d4226d77"
+      "domSha256": "25058979481e34d74eada3ed428ab49699c1237141b6bb999cfe8021343973b4"
     },
     {
       "name": "open-progress-prepare",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B3",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -960,21 +1200,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-prepare.png",
-      "sha256": "7ee34750e3f76c3430c02c1162e6e98dfc4c5ec279cbfbbe2b2cf5fd7367b2ac",
+      "sha256": "4bcea915d9bbbe396a6f21e73d27d9c96c3babca68851eebbe8fbe5ea28a193b",
       "dom": "dom/open-progress-prepare.json",
-      "domSha256": "d9fded610c8223e6eff8f393dd35d18d7a7f3cb19d86acc4a7c076170baa869c"
+      "domSha256": "c4e3e224c979452e22461a9c32596216127e6bfe1f134b164d481cee87f9e46e"
     },
     {
       "name": "license",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -987,16 +1228,16 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/license.png",
-      "sha256": "ac95625a8c200093edc32afca90d0fefc192db7d00714d99a3d769061a66b5a1",
+      "sha256": "317fc72d8fa092b4c0ee4fd90d460166aff4a6d10c53aaa85dadd8af48271d72",
       "dom": "dom/license.json",
-      "domSha256": "029848e385d31ba13fe59bf547ae0c5db0368b3f0956bcd9cbcef3155a8fd17d"
+      "domSha256": "de5c071178c33a2ca9bad74f4d18af84902019856e4891c0fd330528f995f9d8"
     },
     {
       "name": "net-failed",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -1006,21 +1247,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/net-failed.png",
-      "sha256": "a620223367aeb7f2dff1d75937388e3285a5c63f229453700aef047d25ed5a7c",
+      "sha256": "cbc98e3c28f3205ae97c4f637be8ac30a319dacd0457c28bff45fede1fb4e97f",
       "dom": "dom/net-failed.json",
-      "domSha256": "1008f61a547a2cb7101965c6edf934d1c2b2d5ef642d971de9d7069e1c52d511"
+      "domSha256": "2228538f5bdf85e67e4cf62669c158f8c0080662051aeb47637de099249bc60b"
     },
     {
       "name": "signin-error",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B9b",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -1030,6 +1272,7 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
@@ -1042,9 +1285,9 @@
         }
       },
       "png": "screens/signin-error.png",
-      "sha256": "cc5bc301865985bdc8f7952bf06da8da3cc0bf83c010d8e785f1c2ecae117ee4",
+      "sha256": "b6731b4c0881a4bb1f71c571997ebc6246f6856eb1e1b45d4791ca4b9602b794",
       "dom": "dom/signin-error.json",
-      "domSha256": "633ea4568eb66234c102f4fe481f0c71f1c4e402adb84f78a18404390cc93a12"
+      "domSha256": "f68f084ce93048a327b26062e6e52e9f53c31a97529b885dbd71147ec56ee8a5"
     },
     {
       "name": "check-empty-none",
@@ -1315,7 +1558,7 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B3",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -1325,69 +1568,22 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
+        "sample_burrito_obs": "share",
         "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home-open-error.png",
-      "sha256": "d4e110ff6418bb3907d0042ee39795b146aa9311862d235aba45516b8b2caaae",
+      "sha256": "6edf81fe6c2dc8a4add50933cb616eb47a446c74a123a33e98533b871618e7a4",
       "dom": "dom/home-open-error.json",
-      "domSha256": "024baa2fdb33cbc7f54e1711d942314a5c40db2bb3482f908f4893c4a6780ecb"
-    },
-    {
-      "name": "project-settings",
-      "kind": "screen",
-      "scenario": "sample",
-      "locale": "en",
-      "by": "B9a",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito": "share"
-      },
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/project-settings.png",
-      "sha256": "3f03b454183a951c63275a5506dc4cd7977fafee5cb3830c84c6c1d9e6aa7f0c",
-      "dom": "dom/project-settings.json",
-      "domSha256": "9b3b7da08c44715b2dac42f6acc1c31bb5d64525979f0293b50e689cd79939e8"
-    },
-    {
-      "name": "source-texts",
-      "kind": "screen",
-      "scenario": "sample",
-      "locale": "en",
-      "by": "B9a",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom",
-        "meaning"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {},
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/source-texts.png",
-      "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
-      "dom": "dom/source-texts.json",
-      "domSha256": "b18f63877e6a443863539bbf94a6550cf822e72df163332659734f5c9a19a349"
+      "domSha256": "a8ac9b36ffbeed6c5533426eb96053cea808ae826b074269f2a0586407f26963"
     },
     {
       "name": "home-resume",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B2",
+      "by": "B7",
       "backend": "store",
       "layers": [
         "pixels",
@@ -1397,14 +1593,15 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
-        "sample_burrito": "share"
+        "sample_burrito": "share",
+        "sample_burrito_obs": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home-resume.png",
-      "sha256": "5b6810495cd9f47b4e74b72f98590fd90b3ff61328749cc89d7d9847c9a37583",
+      "sha256": "d58143645c7db683c68a935c28fa89e9b63a9dc8490578aa889467a4328965cb",
       "dom": "dom/home-resume.json",
-      "domSha256": "96967c377bfe3d902188b5cba97918f95d4674391c5c1a3d796761336bb5681a"
+      "domSha256": "e14431eedcc30f7f2ac0083a80bc6ed4bf3cb384d555a691ad8632579f643608"
     }
   ]
 }
