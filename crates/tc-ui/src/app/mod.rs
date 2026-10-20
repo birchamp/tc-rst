@@ -20,6 +20,7 @@ pub mod boot;
 pub mod buffer;
 pub mod cache;
 pub mod check;
+pub mod check_item;
 pub mod client;
 pub mod confirm;
 pub mod effects;

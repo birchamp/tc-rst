@@ -323,3 +323,20 @@ impl CachedQuery for tc_api::check::FixState {
         project_read(&self.at, resource_keys())
     }
 }
+
+/// A check's detail and its article (B5b): read by the Check screen's actions when a check is
+/// selected or changed, never kept in the cache.
+impl CachedQuery for tc_api::check::Item {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            vec![tc_api::query::QueryKey::CheckList(self.list)],
+        )
+    }
+}
+
+impl CachedQuery for tc_api::check::CheckArticleRead {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}

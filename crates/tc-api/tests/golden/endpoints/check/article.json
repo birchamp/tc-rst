@@ -22,6 +22,7 @@
       "type": "found",
       "value": {
         "title": "God",
+        "path": "payload/kt/god.md",
         "blocks": [
           {
             "kind": "h",

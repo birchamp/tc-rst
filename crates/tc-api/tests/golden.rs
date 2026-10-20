@@ -1404,6 +1404,7 @@ impl Example for ArticleView {
     fn example() -> Self {
         ArticleView::Found {
             title: "God".into(),
+            path: "payload/kt/god.md".into(),
             blocks: vec![
                 ArticleBlock::new(BlockKind::H, 0, spans("", "Definition:")),
                 ArticleBlock {
@@ -1602,6 +1603,7 @@ impl Example for CheckItemView {
     fn example() -> Self {
         CheckItemView {
             index: 7,
+            view: ViewSeq::new(43),
             check_id: "abcd".into(),
             place: verse_place(BookId::Titus, "1", "1"),
             title: "knowledge".into(),

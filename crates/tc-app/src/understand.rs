@@ -979,12 +979,17 @@ fn word_body(title: &str, slug: &str, body: &str) -> String {
     }
 }
 
-/// The article `link` names: its title and markdown, and the part its language comes from.
-/// Translation Academy's is found by slug, a word's by folder and slug.
-fn find_article<'a>(
-    loaded: &'a LoadedBook,
-    link: &ArticleLink,
-) -> (Option<(&'a str, &'a str)>, HelpsPart) {
+/// An article found: its title, its markdown and where it is in its repository, as tC4 names it
+/// (`ArticleFile::ipath`).
+struct Found<'a> {
+    title: &'a str,
+    body: &'a str,
+    path: String,
+}
+
+/// The article `link` names, and the part its language comes from. Translation Academy's is
+/// found by slug, a word's by folder and slug.
+fn find_article<'a>(loaded: &'a LoadedBook, link: &ArticleLink) -> (Option<Found<'a>>, HelpsPart) {
     let helps = &loaded.resources.helps;
     match link {
         ArticleLink::Academy { slug } => (
@@ -994,9 +999,11 @@ fn find_article<'a>(
                         manual: *manual,
                         slug: slug.clone(),
                     };
-                    helps
-                        .academy_article(&id)
-                        .map(|f| (f.item.title.as_str(), f.item.body.as_str()))
+                    helps.academy_article(&id).map(|f| Found {
+                        title: f.item.title.as_str(),
+                        body: f.item.body.as_str(),
+                        path: format!("{}/{}/01.md", manual.folder(), slug.as_str()),
+                    })
                 })
             }),
             HelpsPart::Notes,
@@ -1007,9 +1014,15 @@ fn find_article<'a>(
                 .and_then(WordCategory::parse)
                 .zip(Slug::parse(slug).ok())
                 .and_then(|(category, slug)| {
-                    helps.word_article(&WordArticleId::Dcs { category, slug })
-                })
-                .map(|f| (f.item.title.as_str(), f.item.body.as_str())),
+                    let path = format!("payload/{}/{}.md", category.folder(), slug.as_str());
+                    helps
+                        .word_article(&WordArticleId::Dcs { category, slug })
+                        .map(|f| Found {
+                            title: f.item.title.as_str(),
+                            body: f.item.body.as_str(),
+                            path,
+                        })
+                }),
             HelpsPart::WordLinks,
         ),
     }
@@ -1023,13 +1036,14 @@ pub(crate) fn article_view(loaded: &LoadedBook, link: &ArticleLink) -> ArticleVi
         _ => None,
     };
     match found {
-        Some((title, body)) => {
+        Some(Found { title, body, path }) => {
             let body = match link {
                 ArticleLink::Academy { .. } => body.to_owned(),
                 ArticleLink::Words { slug, .. } => word_body(title, slug, body),
             };
             ArticleView::Found {
                 title: title.to_owned(),
+                path,
                 blocks: blocks(&body),
                 dir: rung_dir(loaded.pins.as_ref(), rung).unwrap_or(Direction::Ltr),
             }
@@ -1042,7 +1056,7 @@ pub(crate) fn article_view(loaded: &LoadedBook, link: &ArticleLink) -> ArticleVi
 pub(crate) fn article_title(loaded: &LoadedBook, link: &ArticleLink) -> Option<String> {
     find_article(loaded, link)
         .0
-        .map(|(title, _)| title.to_owned())
+        .map(|found| found.title.to_owned())
 }
 
 impl Handle<Article> for App {

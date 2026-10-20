@@ -20,6 +20,7 @@
     "type": "ok",
     "value": {
       "index": 7,
+      "view": 43,
       "checkId": "abcd",
       "place": "TIT 1:1",
       "title": "knowledge",
@@ -63,7 +64,6 @@
         "type": "pane",
         "value": {
           "pane": "ult",
-          "dir": "ltr",
           "text": {
             "type": "verse",
             "value": {

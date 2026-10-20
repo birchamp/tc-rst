@@ -5,6 +5,7 @@
 //! Align card's count. A ready card opens its tool; a card whose pinned resource is missing
 //! opens the guided fix (M11). Nothing here writes the project (tC4 #501).
 
+mod detail;
 mod picker;
 mod rail;
 

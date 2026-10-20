@@ -1,4 +1,6 @@
 [
+  "check.markLookAgain",
+  "check.markNotSaved",
   "drafts.offer.copyText",
   "drafts.offer.discard",
   "drafts.offer.found",

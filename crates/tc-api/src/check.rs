@@ -602,6 +602,9 @@ pub struct Item {
 #[serde(rename_all = "camelCase")]
 pub struct CheckItemView {
     pub index: u32,
+    /// The session view this read was made at: the comment's field takes the decision it shows
+    /// only from a read at least as new as its own (AD37).
+    pub view: ViewSeq,
     /// The help row the check comes from; a mark names it with the place.
     pub check_id: String,
     pub place: CheckPlace,

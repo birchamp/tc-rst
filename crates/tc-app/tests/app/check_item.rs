@@ -155,6 +155,58 @@ async fn a_decided_word_check_marks_its_selected_word_and_serves_its_article() {
     assert!(blocks.len() > 5);
 }
 
+/// tC4 #619: the Check drawer draws the blocks the helps panel draws: `check/article` answers
+/// what `helps/article` answers for the same link, and the check's own title names it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_checks_article_is_the_helps_blocks() {
+    let (_dir, t) = start("en-pins").await;
+    let at = opened(&t.app).await.session.at;
+    for (tool, title) in [
+        (Tool::TranslationNotes, "Abstract Nouns"),
+        (Tool::TranslationWords, "Paul, Saul"),
+    ] {
+        let open = session(&t.app, &at, tool).await;
+        let first = rows(&open)[0].index;
+        let view = item(&t.app, &at, tool, first).await;
+        let read = ok(
+            &t.app,
+            &CheckArticleRead {
+                at: at.clone(),
+                list: list(tool),
+                index: first,
+            },
+        )
+        .await;
+        let helps = ok(
+            &t.app,
+            &tc_api::helps::Article {
+                at: at.clone(),
+                book: BookId::Titus,
+                link: view.article.link.clone(),
+            },
+        )
+        .await;
+        assert_eq!(read, helps);
+        let ArticleView::Found {
+            title: found,
+            path,
+            blocks,
+            ..
+        } = read
+        else {
+            panic!("{read:?}");
+        };
+        assert_eq!(found, title);
+        assert_eq!(view.article.title.as_deref(), Some(title));
+        assert!(!path.is_empty() && !blocks.is_empty());
+        let text: String = blocks.iter().map(|b| b.text()).collect();
+        assert!(
+            !text.contains("__") && !text.contains("\n>"),
+            "no raw marks: {text:.80}"
+        );
+    }
+}
+
 /// tC4 #501: showing every check of a list writes nothing.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn showing_checks_writes_nothing() {
@@ -313,10 +365,11 @@ async fn the_triage_buttons_follow_tc4s_rules() {
     );
 }
 
-/// `check_comment_saved_on_leaving_the_item`, the server's half: a comment saved with the
-/// token of the item shown comes back with the item, a bookmark and the comment change nothing
-/// of the decision, and an empty comment removes it. The UI's half, that leaving the item
-/// sends it, is `tc_ui`'s `check_comment_saves_on_done_and_on_leaving`.
+/// The server's half of `check_comment_saved_on_leaving_the_item` (the journey in
+/// `parity/app/journeys/check-detail.test.mjs` types a comment, goes to the next check and finds
+/// it stored on the first): a comment saved with the token of the item shown comes back with the
+/// item, a bookmark and the comment change nothing of the decision, and an empty comment removes
+/// it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_comment_and_a_bookmark_leave_the_decision_as_it_was() {
     let (_dir, t, _fs) = on_the_store().await;

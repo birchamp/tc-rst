@@ -687,7 +687,7 @@ fn simplified_tab(
 }
 
 /// A block's spans, bold and italic as elements (tC4's `BlockText`, #619).
-fn block_text(block: &ArticleBlock) -> AnyView {
+pub(crate) fn block_text(block: &ArticleBlock) -> AnyView {
     block
         .spans
         .iter()
@@ -745,7 +745,10 @@ fn table_view(rows: &[&ArticleBlock]) -> AnyView {
 }
 
 /// `blocks` drawn one by one with `one`, a run of table rows as one table (#628).
-fn with_tables(blocks: &[ArticleBlock], one: impl Fn(&ArticleBlock) -> AnyView) -> AnyView {
+pub(crate) fn with_tables(
+    blocks: &[ArticleBlock],
+    one: impl Fn(&ArticleBlock) -> AnyView,
+) -> AnyView {
     let mut out: Vec<AnyView> = Vec::new();
     let mut rows: Vec<&ArticleBlock> = Vec::new();
     for b in blocks {
@@ -770,7 +773,7 @@ fn with_tables(blocks: &[ArticleBlock], one: impl Fn(&ArticleBlock) -> AnyView) 
 }
 
 /// How far a list item is set in: tC4's 14 px, and 14 more for each level it is nested (#628).
-fn list_indent(b: &ArticleBlock) -> u32 {
+pub(crate) fn list_indent(b: &ArticleBlock) -> u32 {
     match b.kind {
         BlockKind::Li | BlockKind::Ol => 14 + 14 * u32::from(b.depth),
         _ => 0,
@@ -778,12 +781,12 @@ fn list_indent(b: &ArticleBlock) -> u32 {
 }
 
 /// A numbered item's number, before its text (#628).
-fn number_mark(b: &ArticleBlock) -> Option<String> {
+pub(crate) fn number_mark(b: &ArticleBlock) -> Option<String> {
     (b.kind == BlockKind::Ol).then(|| format!("{}. ", b.number.as_deref().unwrap_or_default()))
 }
 
 /// A block inside `depth` quotes (tC4's `Quoted`): one bar per level.
-fn quoted(depth: u8, inner: AnyView) -> AnyView {
+pub(crate) fn quoted(depth: u8, inner: AnyView) -> AnyView {
     if depth == 0 {
         return inner;
     }
@@ -797,7 +800,7 @@ fn quoted(depth: u8, inner: AnyView) -> AnyView {
 }
 
 /// A note's blocks as spans, so the last sits beside "Show more" (tC4's `NoteBlocks`).
-fn note_blocks(blocks: &[ArticleBlock]) -> AnyView {
+pub(crate) fn note_blocks(blocks: &[ArticleBlock]) -> AnyView {
     with_tables(blocks, |b| {
         let heading = b.kind == BlockKind::H;
         let mut style = crate::css! { "display": "block" };
@@ -828,7 +831,7 @@ fn note_blocks(blocks: &[ArticleBlock]) -> AnyView {
 }
 
 /// A note, cut to a preview with "Show more" when long (tC4's `ExpandableNote`).
-fn expandable_note(blocks: Vec<ArticleBlock>) -> impl IntoView {
+pub(crate) fn expandable_note(blocks: Vec<ArticleBlock>) -> impl IntoView {
     if blocks_len(&blocks) <= PREVIEW_CHARS {
         return note_blocks(&blocks);
     }

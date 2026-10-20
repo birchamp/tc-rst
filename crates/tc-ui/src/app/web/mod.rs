@@ -508,6 +508,7 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     }
     // The writers first, then the buffer's entries of this run come back as fields (AD22).
     let saves = Saves::new(api.clone(), state.clone(), Rc::clone(busy));
+    check::register_writers(&saves);
     #[cfg(feature = "test-hooks")]
     let probe = probe::requested();
     #[cfg(not(feature = "test-hooks"))]

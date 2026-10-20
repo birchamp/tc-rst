@@ -19,6 +19,7 @@ use tc_api::check::{
     TargetWords, Testament, Tool,
 };
 use tc_api::helps::{ArticleLink, ArticleView};
+use tc_api::ids::ViewSeq;
 use tc_api::shown::Shown;
 use tc_api::write::Ack;
 use tc_api::{ApiError, NotSaved};
@@ -134,6 +135,7 @@ fn text_at(read: &CountingSnapshot, key: &RecordKey, target: &CheckTarget) -> Op
 
 /// What `check/item` takes from the list and the snapshot, before the book's resources.
 struct Facts {
+    view: ViewSeq,
     item: CheckItem,
     place: CheckPlace,
     title: String,
@@ -213,6 +215,7 @@ fn facts(entry: &ListEntry, read: &CountingSnapshot, index: u32) -> Result<Optio
         marker: None,
     };
     Ok(Some(Facts {
+        view: super::view_of(read),
         item: item.clone(),
         place: row.place.clone(),
         title: row.title.clone(),
@@ -299,7 +302,7 @@ fn gateway(loaded: &LoadedBook, place: &CheckPlace, item: &CheckItem) -> Gateway
                         .filter_map(|i| u32::try_from(i).ok())
                         .collect();
                 GatewayText::Verse {
-                    tokens: model.view.tokens.clone(),
+                    tokens: one_space_tokens(&model.view.tokens),
                     lit,
                 }
             }
@@ -312,6 +315,45 @@ fn gateway(loaded: &LoadedBook, place: &CheckPlace, item: &CheckItem) -> Gateway
         },
     };
     GatewayView::Pane { pane, text }
+}
+
+/// A verse's tokens as tC4's usfm-js hands them to the pane: the USFM breaks a line between the
+/// words of an aligned verse, which are single spaces there, and the line break that ends the
+/// verse stays.
+fn one_space_tokens(tokens: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = tokens.iter().map(|t| one_space(t)).collect();
+    if let (Some(last), Some(shown)) = (tokens.last(), out.last_mut())
+        && last.ends_with('\n')
+        && shown.ends_with(' ')
+    {
+        shown.pop();
+        shown.push('\n');
+    }
+    out
+}
+
+/// A token with each run of white space as one space.
+fn one_space(token: &str) -> String {
+    let mut out = String::with_capacity(token.len());
+    let mut space = false;
+    for c in token.chars() {
+        if c.is_whitespace() {
+            if !space {
+                out.push(' ');
+            }
+            space = true;
+        } else {
+            out.push(c);
+            space = false;
+        }
+    }
+    out
+}
+
+/// A note's cell as blocks. The cell keeps its line breaks escaped (`\n` written as a backslash
+/// and an n), and tC4's `ExpandableNote` reads them as breaks before it renders.
+fn note_blocks(cell: &str) -> Vec<tc_api::model::ArticleBlock> {
+    blocks(&cell.replace("\\n", "\n"))
 }
 
 /// The article a check links to: a note's Translation Academy article, a word's article.
@@ -362,12 +404,18 @@ impl Handle<Item> for App {
         };
         Ok(CheckItemView {
             index: req.index,
+            view: facts.view,
             check_id: facts.item.key.check_id.as_str().to_owned(),
             original: original(&loaded, book, &facts.place),
             gateway: gateway(&loaded, &facts.place, &facts.item),
             place: facts.place,
             title: facts.title,
-            note: facts.item.note.as_deref().map(blocks).unwrap_or_default(),
+            note: facts
+                .item
+                .note
+                .as_deref()
+                .map(note_blocks)
+                .unwrap_or_default(),
             helps_dir: rung_dir(loaded.pins(), rung),
             article: CheckArticle {
                 title: article_title(&loaded, &link),
@@ -533,5 +581,28 @@ impl Handle<Decide> for App {
                 ),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_verses_line_breaks_between_words_are_single_spaces() {
+        assert_eq!(one_space(",\n"), ", ");
+        assert_eq!(one_space("\n"), " ");
+        assert_eq!(one_space("a \n b"), "a b");
+        assert_eq!(one_space("Paul"), "Paul");
+        let verse = [",\n".to_owned(), "Christ".to_owned(), ",\n".to_owned()];
+        assert_eq!(one_space_tokens(&verse), [", ", "Christ", ",\n"]);
+    }
+
+    #[test]
+    fn a_notes_escaped_line_breaks_are_breaks() {
+        let blocks = note_blocks("## Abstract nouns\\nThe words **faith** and *hope*.");
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].text(), "Abstract nouns");
+        assert_eq!(blocks[1].text(), "The words faith and hope.");
     }
 }

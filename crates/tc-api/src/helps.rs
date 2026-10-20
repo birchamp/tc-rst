@@ -206,6 +206,11 @@ pub enum ArticleLink {
 pub enum ArticleView {
     Found {
         title: String,
+        /// Where the article is in its repository, as tC4 names it (`payload/kt/god.md`,
+        /// `translate/figs-abstractnouns/01.md`): the Check drawer ends with it. A reply
+        /// without one (an older server's) draws no line.
+        #[serde(default)]
+        path: String,
         #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
         blocks: Vec<ArticleBlock>,
         dir: Direction,
