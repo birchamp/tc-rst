@@ -31,6 +31,91 @@ pub fn complete_language_sets(pins: &ProjectPins) -> ProjectPins {
     next
 }
 
+/// The optional pins a download of `gateway`'s package adds to the project's sets (tC4
+/// `mergeOptionalPins`, `adoptDownloadedPins`): the questions, the simplified Bible, the Open
+/// Bible Stories members and the image pack that this computer holds for the gateway, in each
+/// of the project's sets that names that gateway and does not pin the slot. A pin already in
+/// a set never moves, and the three story members enter a set together or not at all (a
+/// partial download must not make a partial story set). They are found apart from the
+/// required suite, because a person may download only the questions for a project whose set
+/// is pinned. `None` when nothing changes.
+pub fn merge_optional_pins(
+    pins: &ProjectPins,
+    gateway: &Gateway,
+    installed: &[ResourcePin],
+) -> Option<ProjectPins> {
+    let pick = |slot: SetSlot| {
+        gateway
+            .repo_for(slot)
+            .and_then(|repo| gateways::preferred(installed, &repo))
+            .cloned()
+    };
+    let simplified = gateway
+        .simplified_candidates()
+        .iter()
+        .find_map(|repo| gateways::preferred(installed, repo))
+        .cloned();
+    let owner = gateways::account(gateway.owner);
+    let mut packs = installed.iter().filter(|p| {
+        p.repo.owner() == &owner
+            && p.flavor
+                .as_deref()
+                .is_some_and(|f| f.ends_with("/x-obsimages"))
+    });
+    let images = match (packs.next(), packs.next()) {
+        (Some(pack), None) => Some(pack.clone()),
+        _ => None,
+    };
+    let (questions, obs, obs_notes, obs_links, obs_questions) = (
+        pick(SetSlot::TranslationQuestions),
+        pick(SetSlot::Obs),
+        pick(SetSlot::ObsNotes),
+        pick(SetSlot::ObsWordsLinks),
+        pick(SetSlot::ObsQuestions),
+    );
+    if [&questions, &simplified, &obs, &obs_questions, &images]
+        .iter()
+        .all(|pin| pin.is_none())
+    {
+        return None;
+    }
+    let mut next = pins.clone();
+    let mut changed = false;
+    for rung in crate::sets::Rung::LADDER {
+        let Some(set) = next.set_mut(rung).as_mut() else {
+            continue;
+        };
+        let names_it = set.gateway.named().is_some_and(|named| {
+            named.language == gateway.language
+                && named.owner.as_str().eq_ignore_ascii_case(gateway.owner)
+        });
+        if !names_it {
+            continue;
+        }
+        let mut attach = |set: &mut LanguageSet, slot: SetSlot, pin: &Option<ResourcePin>| {
+            if let Some(pin) = pin
+                && !set.pins.contains_key(&slot)
+            {
+                set.pins.insert(slot, pin.clone());
+                changed = true;
+            }
+        };
+        attach(set, SetSlot::TranslationQuestions, &questions);
+        attach(set, SetSlot::SimplifiedText, &simplified);
+        let story = [SetSlot::Obs, SetSlot::ObsNotes, SetSlot::ObsWordsLinks];
+        if story.iter().all(|slot| !set.pins.contains_key(slot))
+            && let (Some(obs), Some(notes), Some(links)) = (&obs, &obs_notes, &obs_links)
+        {
+            for (slot, pin) in story.iter().zip([obs, notes, links]) {
+                attach(set, *slot, &Some(pin.clone()));
+            }
+        }
+        attach(set, SetSlot::ObsQuestions, &obs_questions);
+        attach(set, SetSlot::ObsImages, &images);
+    }
+    changed.then_some(next)
+}
+
 /// The pins after the change: `primary` moves, and the panes when given. The fallback
 /// never changes here (D30.2).
 pub fn apply_gateway_change(
@@ -486,5 +571,115 @@ mod tests {
             )),
             ["en::unfoldingWord", "es-419::es-419_gl"]
         );
+    }
+
+    // ---- merge_optional_pins (tC4 `adoptDownloadedPins`) ----------------------------------
+
+    fn flavored(repo: &str, version: &str) -> ResourcePin {
+        pin(repo, version).with_flavor("parascriptural/x-bcvquestions")
+    }
+
+    fn english_sets() -> ProjectPins {
+        let en = set("en", "unfoldingWord", "v91");
+        ProjectPins {
+            primary: Some(en.clone()),
+            fallback: Some(en),
+            ..ProjectPins::default()
+        }
+    }
+
+    fn english() -> &'static Gateway {
+        gateways::find("en", "unfoldingWord").unwrap()
+    }
+
+    #[test]
+    fn a_downloaded_questions_resource_joins_each_set_that_names_the_gateway() {
+        let installed = [flavored("unfoldingWord/en_tq", "v91")];
+        let merged = merge_optional_pins(&english_sets(), english(), &installed).unwrap();
+        for rung in [crate::sets::Rung::Primary, crate::sets::Rung::Fallback] {
+            let set = merged.set(rung).unwrap();
+            assert_eq!(
+                set.pin(SetSlot::TranslationQuestions)
+                    .unwrap()
+                    .repo
+                    .repo()
+                    .name
+                    .as_str(),
+                "en_tq"
+            );
+            // Every pin the set held is as it was.
+            let was = english_sets();
+            let was = was.set(rung).unwrap();
+            for (slot, pin) in &was.pins {
+                assert_eq!(set.pin(*slot), Some(pin), "{slot:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_pin_a_set_already_holds_never_moves() {
+        let mut pins = english_sets();
+        if let Some(primary) = pins.primary.as_mut() {
+            primary.pins.insert(
+                SetSlot::TranslationQuestions,
+                flavored("unfoldingWord/en_tq", "v90"),
+            );
+        }
+        let installed = [flavored("unfoldingWord/en_tq", "v91")];
+        let merged = merge_optional_pins(&pins, english(), &installed).unwrap();
+        let held = |p: &ProjectPins| {
+            p.primary
+                .as_ref()
+                .unwrap()
+                .pin(SetSlot::TranslationQuestions)
+                .unwrap()
+                .sha
+        };
+        assert_eq!(held(&merged), held(&pins), "the primary keeps its v90");
+        assert!(
+            merged
+                .fallback
+                .as_ref()
+                .unwrap()
+                .pin(SetSlot::TranslationQuestions)
+                .is_some(),
+            "the fallback, which lacked it, gets the installed one"
+        );
+    }
+
+    #[test]
+    fn nothing_is_adopted_by_a_set_of_another_gateway_or_when_nothing_changes() {
+        let installed = [flavored("unfoldingWord/en_tq", "v91")];
+        let spanish = ProjectPins {
+            primary: Some(es()),
+            ..ProjectPins::default()
+        };
+        assert_eq!(merge_optional_pins(&spanish, english(), &installed), None);
+        assert_eq!(merge_optional_pins(&english_sets(), english(), &[]), None);
+        let held = merge_optional_pins(&english_sets(), english(), &installed).unwrap();
+        assert_eq!(
+            merge_optional_pins(&held, english(), &installed),
+            None,
+            "a second download of the same changes nothing"
+        );
+    }
+
+    #[test]
+    fn the_story_members_enter_a_set_together_or_not_at_all() {
+        let story = |repo: &str| {
+            pin(&format!("unfoldingWord/{repo}"), "v1").with_flavor("peripheral/x-obs")
+        };
+        let partial = [story("en_obs"), story("en_obs-tn")];
+        assert_eq!(
+            merge_optional_pins(&english_sets(), english(), &partial),
+            None,
+            "a partial download makes no partial story set"
+        );
+        let whole = [story("en_obs"), story("en_obs-tn"), story("en_obs-twl")];
+        let merged = merge_optional_pins(&english_sets(), english(), &whole).unwrap();
+        let set = merged.primary.unwrap();
+        for slot in [SetSlot::Obs, SetSlot::ObsNotes, SetSlot::ObsWordsLinks] {
+            assert!(set.pin(slot).is_some(), "{slot:?}");
+        }
     }
 }

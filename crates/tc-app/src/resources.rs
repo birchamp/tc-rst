@@ -429,6 +429,14 @@ impl Handle<Download> for App {
             if let Some(end) = stopped {
                 return Err(end);
             }
+            // What the download brought joins the project's sets (tC4 `adoptDownloadedPins`).
+            if (fetched_any || failed.len() < paths.len())
+                && let Err(error) = runtime.block_on(app.adopt_downloaded_pins(&session, gateway))
+            {
+                return Err(JobEnd::Failed(ApiError::Refused(Refusal::Resources(
+                    ResourceRefusal::AdoptFailed { error },
+                ))));
+            }
             if failed.is_empty() {
                 Ok(JobOutcome::Finished)
             } else {

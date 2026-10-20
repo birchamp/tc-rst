@@ -32,7 +32,7 @@ impl GatewayRef {
 /// One package of tC4's registry of gateway languages (`data/gateways.ts`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GatewayPackage {
     pub gateway: GatewayRef,
     /// The English name.
@@ -46,7 +46,7 @@ pub struct GatewayPackage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Seen {
     pub tn: String,
     pub tw: String,
@@ -184,8 +184,11 @@ impl PackageRole {
 /// `resources/download` [sources] (job `Download`): installs the named repositories of one
 /// organization on this computer, one after the other, each at the open project's pin when the
 /// project pins it and this computer lacks that version, else as installed, else at its latest
-/// release. A cancelled job installed nothing it had not finished; it never changes the
-/// project.
+/// release. A cancelled job installed nothing it had not finished and changes no pin. A download
+/// that installed something adds to each of the project's sets that names the package the
+/// optional pins it now holds for them (the questions, the simplified Bible, the story
+/// members, the image pack: tC4 `adoptDownloadedPins`), and never moves a pin a set holds; if
+/// that write fails the job says so (`AdoptFailed`) though the repositories are installed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -217,7 +220,7 @@ pub enum SetRung {
 /// list (tC4 `upgrade.row`, `upgrade.move`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RepoMove {
     pub repo: String,
     /// The release the project pins, or the first 12 digits of its commit when it has no tag.
@@ -239,11 +242,13 @@ pub struct CheckUpdates {
 /// What `resources/checkUpdates` found.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdatesView {
     /// One offer for each language set the project pins; a set with no moves is up to date.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub sets: Vec<SetOffer>,
     /// The scripture texts with a newer release (#258).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub texts: Vec<TextOffer>,
     /// Why the texts could not be asked about, said beside the set offers, which stand.
     pub texts_error: Option<String>,
@@ -251,11 +256,12 @@ pub struct UpdatesView {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetOffer {
     pub rung: SetRung,
     /// The set's language id, as tC4 names the set (`Primary set · es-419`).
     pub language: String,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub moves: Vec<RepoMove>,
 }
 
@@ -272,7 +278,7 @@ pub enum TextKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TextOffer {
     pub kind: TextKind,
     pub change: RepoMove,
@@ -351,7 +357,7 @@ pub enum PlanApplied {
 /// `GatewayChange.jsx`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlanView {
     pub plan: PlanId,
     pub what: PlanWhat,
@@ -359,8 +365,10 @@ pub struct PlanView {
     /// affected.
     pub decisions_at_risk: u32,
     /// One row for each (tool, book) the change affects.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub rows: Vec<PlanRow>,
     /// Units the change cannot be applied to; the plan cannot be confirmed while there are any.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub blocked: Vec<BlockedUnit>,
     /// For an original-language text: the verses whose alignments will be marked for review.
     /// Every alignment is kept.
@@ -380,19 +388,22 @@ impl PlanView {
     tag = "type",
     content = "value",
     rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum PlanWhat {
     /// A release upgrade of a language set.
     Set {
         rung: SetRung,
         language: String,
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
         moves: Vec<RepoMove>,
     },
     /// The guided fix moves a set's pins to a version installed here.
     Repin {
         rung: SetRung,
         language: String,
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
         moves: Vec<RepoMove>,
     },
     /// A scripture text's release.
@@ -404,7 +415,7 @@ pub enum PlanWhat {
 /// A checking-language change, each side named by its autonym (#579).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GatewayChange {
     pub from: Option<GatewayPackage>,
     pub to: GatewayPackage,
@@ -416,7 +427,7 @@ pub struct GatewayChange {
 /// bundled default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImageChange {
     pub from: Option<String>,
     pub to: Option<String>,
@@ -425,7 +436,7 @@ pub struct ImageChange {
 /// What the change does to one (tool, book)'s decisions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlanRow {
     pub tool: Tool,
     pub unit: CheckUnit,
@@ -439,7 +450,7 @@ pub struct PlanRow {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Carry {
     /// Decisions that find their check in the new list and count as decided there.
     pub carried: u32,
@@ -449,7 +460,7 @@ pub struct Carry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BlockedUnit {
     pub tool: Tool,
     pub unit: CheckUnit,
@@ -491,6 +502,7 @@ pub struct FixView {
     pub pin: PinLabel,
     pub rung: SetRung,
     /// Other commits of the same repository installed here, to move the pin to.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub candidates: Vec<PinLabel>,
     /// Why the installed copies could not be read, said instead of "none installed".
     pub candidates_error: Option<String>,

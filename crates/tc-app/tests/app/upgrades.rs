@@ -1771,3 +1771,90 @@ async fn a_tw_only_change_that_drops_a_decided_article_is_counted() {
         "v2"
     );
 }
+
+// ---- J3: what a download brings joins the sets that name its package -----------------------------
+
+async fn add_repo(fake: &FakeDoor43, owner: &str, name: &str, fixture_dir: &str) {
+    fake.add_repo(RepoSeed {
+        owner: owner.into(),
+        name: name.into(),
+        subject: "Resource".into(),
+        language: "en".into(),
+        topics: vec!["tc-ready".into()],
+        private: false,
+        commits: vec![CommitSeed {
+            message: "Release v1".into(),
+            files: export(fixture_dir, &format!("{owner}/{name}")),
+            tag: Some("v1".into()),
+            release: Some(ReleaseKind::Published),
+        }],
+    })
+    .await
+    .unwrap();
+}
+
+async fn download(w: &World, gateway: tc_api::resources::GatewayRef, repos: &[&str], id: u8) {
+    let job = ok(
+        &w.t.app,
+        &tc_api::resources::Download {
+            request: rid(id),
+            at: w.at.clone(),
+            gateway,
+            book: BookId::Titus,
+            repos: repos.iter().map(|r| (*r).to_owned()).collect(),
+        },
+    )
+    .await;
+    assert_eq!(
+        ended(&w.t.app, job).await,
+        JobState::Done(JobOutcome::Finished)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_download_adds_what_it_brought_to_the_sets_of_its_package_and_moves_no_pin() {
+    // tC4 `adoptDownloadedPins`, J3's "pins with sha": the simplified Bible of the English
+    // package joins both English sets, pinned by its commit and release; the notes and links
+    // they held stay as they were, and a package of another language adds nothing.
+    let w = world(6, 0).await;
+    add_repo(&w.fake, "unfoldingWord", "en_ust", "en_ult@v89").await;
+    add_repo(&w.fake, "es-419_gl", "es-419_tq", "en_tn@v86").await;
+    let english = tc_api::resources::GatewayRef {
+        language: "en".into(),
+        owner: "unfoldingWord".into(),
+    };
+    let before = pins_of(&w);
+    let (changes_before, commands_before) = (changes(&w), commands(&w));
+
+    download(&w, spanish(), &["es-419_tq"], 80).await;
+    assert_eq!(
+        (changes(&w), commands(&w)),
+        (changes_before, commands_before),
+        "the Spanish questions belong to no set of this project"
+    );
+
+    download(&w, english.clone(), &["en_ust"], 81).await;
+    handle(&w).wait_idle();
+    assert_eq!(commands(&w) - commands_before, 1, "one batch");
+    let after = pins_of(&w);
+    let sha = w
+        .fake
+        .resolve("unfoldingWord", "en_ust", "v1")
+        .await
+        .unwrap();
+    for rung in [tc_resources::Rung::Primary, tc_resources::Rung::Fallback] {
+        let (was, now) = (before.set(rung).unwrap(), after.set(rung).unwrap());
+        let adopted = now.pin(SetSlot::SimplifiedText).unwrap();
+        assert_eq!(adopted.sha.to_hex(), sha);
+        assert_eq!(
+            adopted.version.as_ref().map(ToString::to_string).as_deref(),
+            Some("v1")
+        );
+        for (slot, pin) in &was.pins {
+            assert_eq!(now.pin(*slot), Some(pin), "{rung:?} {slot:?} is as it was");
+        }
+    }
+    // Downloading it again changes nothing.
+    download(&w, english, &["en_ust"], 82).await;
+    assert_eq!(commands(&w) - commands_before, 1);
+}

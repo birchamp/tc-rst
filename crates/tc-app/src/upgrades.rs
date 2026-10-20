@@ -34,7 +34,7 @@ use tc_journal::keys::PinGroup;
 use tc_journal::record::{PinGroupValue, Record};
 use tc_journal::{Cause, RecordKey};
 use tc_resources::gateway_change::{
-    apply_gateway_change, complete_language_sets, source_panes_for_gateway,
+    apply_gateway_change, complete_language_sets, merge_optional_pins, source_panes_for_gateway,
 };
 use tc_resources::gateways::{self, Gateway};
 use tc_resources::resolve::backfill_coverage;
@@ -474,6 +474,46 @@ fn blocked_books(blocked: &[tc_api::resources::BlockedUnit]) -> String {
 }
 
 impl App {
+    /// The optional pins a download brought, written into the project's sets that name its
+    /// package (tC4 `adoptDownloadedPins`): one batch, over the heads read, again from the
+    /// project as it is when a teammate's change landed meanwhile, as tC4's retries. A pin a
+    /// set holds never moves. `Err` says why the pins were not written.
+    pub(crate) async fn adopt_downloaded_pins(
+        &self,
+        session: &Arc<ProjectSession>,
+        gateway: &'static Gateway,
+    ) -> Result<(), String> {
+        for _ in 0..4 {
+            let read = session.read();
+            let Some(current) = crate::resources::project_pins(&read).map_err(|e| e.to_string())?
+            else {
+                return Ok(());
+            };
+            let installed = self.installed_pins().await?;
+            let Some(merged) = merge_optional_pins(&current, gateway, &installed) else {
+                return Ok(());
+            };
+            let store = self.inner.resources.clone();
+            let changes = tokio::task::spawn_blocking(move || {
+                let (filled, _) = backfill_coverage(&merged, &store);
+                pin_changes(&read, &current, &filled).map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+            let plan = UpgradePlan { changes };
+            match session
+                .handle()
+                .submit(StoreCommand::apply_upgrade(plan))
+                .await
+            {
+                Ok(_) => return Ok(()),
+                Err(CommandError::PlanStale) => {}
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        Err("the project kept changing".to_owned())
+    }
+
     /// The next scripted plan, when a test or a capture scripted one.
     #[cfg(feature = "test-hooks")]
     fn scripted_plan(&self) -> Option<PlanView> {
