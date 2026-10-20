@@ -523,10 +523,12 @@ fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> Any
             })
         }
     });
+    // The parts that do not move with a read (the place, the title, the note) are taken once;
+    // the rest follow the detail through their own memos below.
     let read = {
         let detail = detail.clone();
         move || {
-            detail.with(|d| match d {
+            detail.with_untracked(|d| match d {
                 Some(Detail::Ready(view)) => Some((**view).clone()),
                 _ => None,
             })

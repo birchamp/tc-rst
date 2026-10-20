@@ -194,6 +194,11 @@ browserTest('check_keyboard_detail_drawer_words_marks_and_comment', async () => 
       return view.decision.value.status === 'valid' ? view : null;
     });
     assert.deepEqual(saved.target.selected.map((i) => saved.target.words[i]), [w0, w1]);
+    // The reads the mark brought changed the detail in place: the button keeps the focus, and
+    // the words keep the selection.
+    await until('the reads have landed', () => page.getByTestId('mark-valid').evaluate((b) => getComputedStyle(b).backgroundColor !== 'rgb(255, 255, 255)'));
+    assert.ok(await activeIs(page, '[data-testid="mark-valid"]'), 'Mark valid keeps the focus after its reads');
+    assert.equal(await pressed(1), 'true');
 
     // A comment; Done returns the focus to the comment button.
     await tabTo(page, (id) => id === 'comment-toggle');
