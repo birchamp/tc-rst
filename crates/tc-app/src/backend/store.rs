@@ -176,9 +176,10 @@ impl StoreBackend {
         })
     }
 
-    /// Names the local projects folder (Q-30): the folder a copy of a project goes to when the
-    /// projects folder itself cannot keep a copy safe. A local folder that exists already holds
-    /// earlier copies, so it is started now and Home lists them.
+    /// Names the other projects folder (Q-30): the local one beside the projects folder, or the
+    /// default one where the local one is the projects folder. A copy of a project goes there
+    /// when the projects folder itself cannot keep a copy safe. A folder that exists already
+    /// holds projects, so it is started now and Home lists them.
     pub fn with_local_projects(mut self, local: PathBuf) -> Result<Self, StoreError> {
         let exists = self
             .vfs

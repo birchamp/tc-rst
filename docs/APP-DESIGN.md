@@ -1567,8 +1567,9 @@ the folder that exists, so nothing needs to be stored before S1. When both folde
 local one wins: nothing in the app creates it except that first launch, so it holds the
 projects the person already works in, and a default folder made later by hand or by a sync
 client must not replace it. A launch never lists fewer projects than the one before it. The
-default folder's own projects, if it has any, are not listed; the report names that folder
-(`localBesideDefault`), so "Ask for help" explains a person who looks in it. Beside the chosen folder the app lists the local folder too when it exists, which only a copy of a
+default folder's own projects are listed too, beside the local folder's; the report names that
+folder (`localBesideDefault`, `alsoListed`), so "Ask for help" explains where they are. Where the default
+folder is the chosen one, the app lists the local folder too when it exists, which only a copy of a
 read-only project made (Q-30, C6 D9): Home shows its projects with the others, and a name never opens
 two folders. A `--projects` folder is used as named; if it does not exist the
 start stops with its path, because an empty folder made in its place would look as if the

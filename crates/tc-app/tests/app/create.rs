@@ -907,14 +907,6 @@ async fn copy_to_this_computer_goes_into_the_local_projects_folder() {
     assert_eq!(second.project.as_str(), "sample_burrito - Copy (2)");
     t.app.sessions().leave_screen(&open.at).unwrap();
     t.app.sessions().settled(&project).await;
-
-    // After a restart the local folder is there, so Home lists both copies from the start.
-    drop(t);
-    let backend = Arc::new(synced_backend(&world, false));
-    let listing = tc_app::backend::ProjectStore::list(backend.as_ref()).unwrap();
-    let names: Vec<&str> = listing.projects.iter().map(|p| p.folder.as_str()).collect();
-    assert!(names.contains(&"sample_burrito - Copy"), "{names:?}");
-    assert!(names.contains(&"sample_burrito - Copy (2)"), "{names:?}");
 }
 
 /// Where the local folder is copied by a cloud client too, there is no safe place: the copy is

@@ -150,7 +150,7 @@ async fn a_default_folder_that_appears_later_does_not_replace_the_local_folder()
         "the default folder was not touched"
     );
 
-    // The report says where the projects are and which folder is not listed, so "Ask for
+    // The report says where the projects are and which folder is listed beside it, so "Ask for
     // help" explains a person who looks in the other one.
     let reports = reports_of(&second.app, ReportOp::ProjectsFolder);
     assert_eq!(reports.len(), 1);
@@ -161,7 +161,7 @@ async fn a_default_folder_that_appears_later_does_not_replace_the_local_folder()
         local.display().to_string().as_str()
     );
     assert_eq!(
-        reports[0].facts["notListed"],
+        reports[0].facts["alsoListed"],
         default.display().to_string().as_str()
     );
 }

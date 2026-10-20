@@ -298,15 +298,21 @@ impl App {
                     })?;
                 // Where a copy of a project goes when the projects folder is what made it
                 // read-only (Q-30); a folder of an earlier copy is listed from the start.
-                // A folder someone named (`--projects`, the tests and the captures) has no local
-                // folder beside it: the person's own would be listed among theirs.
-                let backend = match crate::config::local_projects_root(&host)
-                    .ok()
-                    .filter(|local| *local != projects.path && projects.chosen != RootChoice::Given)
-                {
-                    Some(local) => backend.with_local_projects(local.clone()).map_err(|e| {
+                // A folder someone named (`--projects`, the tests and the captures) has no
+                // second folder beside it: the person's own would be listed among theirs. Where
+                // the local folder is the root, the default one is beside it, so a launch after
+                // the first copy still lists the projects of the launch before.
+                let beside = match &projects.chosen {
+                    RootChoice::Given => None,
+                    RootChoice::LocalBesideDefault { default } => Some(default.clone()),
+                    _ => crate::config::local_projects_root(&host)
+                        .ok()
+                        .filter(|local| *local != projects.path),
+                };
+                let backend = match beside {
+                    Some(other) => backend.with_local_projects(other.clone()).map_err(|e| {
                         StartError::ProjectsFolder {
-                            path: local,
+                            path: other,
                             reason: e.to_string(),
                         }
                     })?,
@@ -671,7 +677,7 @@ fn projects_folder_record(projects: &ProjectsRoot) -> Option<Value> {
             "path": path, "choice": "firstLaunchSynced", "syncedBy": synced_by,
         })),
         RootChoice::LocalBesideDefault { default } => Some(json!({
-            "path": path, "choice": "localBesideDefault", "notListed": default.display().to_string(),
+            "path": path, "choice": "localBesideDefault", "alsoListed": default.display().to_string(),
         })),
         RootChoice::Given | RootChoice::Existing | RootChoice::ExistingLocal => None,
     }

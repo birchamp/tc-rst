@@ -207,6 +207,91 @@ async fn a_link_to_a_project_elsewhere_is_listed_as_unusable() {
     ));
 }
 
+/// A launch never lists fewer projects than the one before it. The default folder is copied by
+/// a client, so its project opens read-only and the copy goes into the local folder, which that
+/// copy makes; the next launch finds both folders and makes the local one the root. Home still
+/// lists the default folder's project, and both open as they did.
+#[tokio::test]
+async fn a_launch_after_the_first_copy_lists_the_default_folder_too() {
+    use tc_api::event::SessionMode;
+    use tc_api::write::ReadOnlyReason;
+    use tc_app::config::RootChoice;
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("home");
+    let default = home.join("translationCore4").join("projects");
+    make_project(&dir.path().join("app-data"), &default, "original_a");
+    // Then a Syncthing marker in the home folder: it copies what is below it.
+    std::fs::create_dir_all(home.join(".stfolder")).unwrap();
+    let start = || {
+        TestApp::start_in(dir.path(), |_, deps| {
+            deps.store = StoreChoice::OnDisk;
+        })
+    };
+    let names = |t: &TestApp| -> Vec<String> {
+        let listing = t.app.sessions().store().list().unwrap();
+        listing
+            .projects
+            .iter()
+            .map(|e| e.folder.as_str().to_owned())
+            .collect()
+    };
+
+    let t = start().await;
+    assert_eq!(t.app.projects_root().path, default);
+    assert_eq!(names(&t), ["original_a"]);
+    let open = t
+        .app
+        .sessions()
+        .open_screen(&folder("original_a"), open_progress())
+        .await
+        .unwrap();
+    assert_eq!(
+        open.mode,
+        SessionMode::ReadOnly(ReadOnlyReason::CloudSynced)
+    );
+    let copy = post(
+        &t.app,
+        &tc_api::session::CopyProject {
+            at: open.at.clone(),
+            request: rid(1),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(copy.project.as_str(), "original_a - Copy");
+    t.app.sessions().leave_screen(&open.at).unwrap();
+    t.app.sessions().settled(&folder("original_a")).await;
+    t.app.quit().await;
+    drop(t);
+
+    let t = start().await;
+    assert_eq!(
+        t.app.projects_root().chosen,
+        RootChoice::LocalBesideDefault {
+            default: default.clone()
+        }
+    );
+    assert_eq!(names(&t), ["original_a", "original_a - Copy"]);
+    for (name, mode) in [
+        (
+            "original_a",
+            SessionMode::ReadOnly(ReadOnlyReason::CloudSynced),
+        ),
+        ("original_a - Copy", SessionMode::Writable),
+    ] {
+        let open = t
+            .app
+            .sessions()
+            .open_screen(&folder(name), open_progress())
+            .await
+            .unwrap();
+        assert_eq!(open.mode, mode, "{name}");
+        t.app.sessions().leave_screen(&open.at).unwrap();
+        t.app.sessions().settled(&folder(name)).await;
+    }
+    t.app.quit().await;
+}
+
 /// tc-store's start removes the staging folders that an interrupted create, copy, join or
 /// import left (STORAGE §6.4 N1). The app records each in the report log, so "Ask for help"
 /// carries it and E1b and F1 can tell the person; a project beside them is untouched. An
