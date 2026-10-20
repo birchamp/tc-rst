@@ -632,7 +632,8 @@ mod tests {
         let pin = tc_resources::suite::obs_images();
         let id = pack_id(pin);
         assert!(!id.contains('/'), "{id}");
-        assert_eq!(pin_of_pack_id(&id).as_ref(), Some(pin));
+        let named = pin_of_pack_id(&id).unwrap();
+        assert_eq!((&named.repo, named.sha), (&pin.repo, pin.sha));
         assert_eq!(pin_of_pack_id("git.door43.org~uW~obs_images_360"), None);
         assert_eq!(pin_of_pack_id(&format!("{id}~x")), None);
         assert_eq!(
