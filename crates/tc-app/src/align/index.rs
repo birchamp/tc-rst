@@ -96,9 +96,11 @@ pub(crate) fn items(read: &CountingSnapshot, book: BookId) -> Vec<IndexItem> {
     out
 }
 
-/// The start of the verse for its row, which shows one line of the rail's width.
+/// The start of the verse for its row, which shows one line of the rail's width. tC4 puts the
+/// whole verse in the row and lets the line hide the rest; 240 characters hold nearly every
+/// verse whole, so the row's text is tC4's, and the rare longer verse still fills the line.
 fn preview(text: &str) -> String {
-    const SHOWN: usize = 80;
+    const SHOWN: usize = 240;
     text.chars().take(SHOWN).collect()
 }
 
