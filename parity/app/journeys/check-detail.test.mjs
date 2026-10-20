@@ -175,6 +175,12 @@ browserTest('check_keyboard_detail_drawer_words_marks_and_comment', async () => 
     assert.equal(await pressed(2), 'false');
     assert.equal(await pressed(1), 'true');
 
+    // The line is one roving stop: Tab leaves it and Shift+Tab comes back to the word the caret is on.
+    await page.keyboard.press('Tab');
+    assert.equal(await activeIs(page, '[data-testid^="tw-"]'), false, 'Tab leaves the words');
+    await page.keyboard.press('Shift+Tab');
+    assert.ok(await activeIs(page, '[data-testid="tw-2"]'), 'Shift+Tab returns to the caret word');
+
     // The marking row: Previous (skipped while disabled), the three marks, Next.
     if (await page.getByTestId('check-prev').isEnabled()) {
       await page.keyboard.press('Tab');

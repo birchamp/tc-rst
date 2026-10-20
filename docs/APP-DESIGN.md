@@ -2666,7 +2666,7 @@ so the rebuild must keep its keyboard contract by itself *(A-24)*:
 | `views/Understand.jsx`, `SourceVerse.jsx`, `HelpsPanel.jsx`, `BookRail.jsx`, `railChrome.jsx`, `PanelIcons.jsx` | same names in snake case | B3 |
 | `views/Draft.jsx`, `draftChrome.jsx`, `conflictMarkers.jsx` | same names | B4a |
 | `views/SectionEditor.jsx`, `sectionDraft.js` (in `tc_api::model`) | same names | B4b |
-| `views/Check.jsx`, `ItemNav.jsx` | `views/check/{picker,session,rail,detail,marks,drawer}.rs`, `item_nav.rs` | B5a, B5b |
+| `views/Check.jsx`, `ItemNav.jsx`, `CompareCard.jsx` | `views/check/{picker,rail,detail}.rs` (`rail.rs` holds the session; `detail.rs` the compare card, the target words, the marks, `ItemNavButton` and the Academy drawer), `app/check_item.rs` | B5a, B5b |
 | `views/Align.jsx` | `views/align.rs` | B6 |
 | `views/StoryUnderstand.jsx`, `StoryDraft.jsx`, `StoryRail.jsx` | `views/story_*.rs` | B7 |
 | `views/CommunityChecking.jsx`, `ExportMenu.jsx`, `print/*` | `views/community_checking.rs`, `export_menu.rs`, `print/*`; the print model in `tc-export` | A10, B8, D2 |

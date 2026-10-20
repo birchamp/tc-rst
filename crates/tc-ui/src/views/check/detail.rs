@@ -358,6 +358,13 @@ fn target_words(s: &AppState, words: Vec<String>, direction: TextDir) -> AnyView
     let nav = StoredValue::new_local(WordNav::default());
     let root: NodeRef<html::P> = NodeRef::new();
     let len = words.len();
+    // The word that is the line's Tab stop follows the caret (tC4's roving tab index).
+    let stop_at = RwSignal::new(0usize);
+    let sync_stop = move || {
+        if let Some(at) = nav.try_with_value(|nav| nav.tab_stop(len)) {
+            stop_at.try_set(at);
+        }
+    };
     let rtl = direction == TextDir::Rtl;
     let apply = {
         let selection = selection.clone();
@@ -394,6 +401,7 @@ fn target_words(s: &AppState, words: Vec<String>, direction: TextDir) -> AnyView
                 e.prevent_default();
             }
             apply(step);
+            sync_stop();
         }
     };
     let on_blur = move |e: web_sys::FocusEvent| {
@@ -451,6 +459,7 @@ fn target_words(s: &AppState, words: Vec<String>, direction: TextDir) -> AnyView
                     e.prevent_default();
                     focus_word(root, i);
                     nav.try_update_value(|nav| nav.press(i, &selection.get_untracked()));
+                    sync_stop();
                 }
             };
             let on_enter = {
@@ -470,9 +479,10 @@ fn target_words(s: &AppState, words: Vec<String>, direction: TextDir) -> AnyView
                     if let Some(next) = next {
                         selection.try_set(next);
                     }
+                    sync_stop();
                 }
             };
-            let stop = move || nav.with_value(|nav| nav.tab_stop(len)) == i;
+            let stop = move || stop_at.get() == i;
             view! {
                 <span
                     data-testid=format!("tw-{i}")
