@@ -11,6 +11,7 @@ mod app {
     mod draft_machine;
     mod effects;
     mod feedback;
+    mod fix;
     mod forms;
     mod home;
     mod indicator;

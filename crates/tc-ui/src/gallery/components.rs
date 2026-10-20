@@ -802,8 +802,9 @@ fn checkbox(p: Props) -> AnyView {
 
 fn drop_zone(p: Props) -> AnyView {
     DropZone(DropZoneProps {
-        title: p.str("title"),
+        title: p.str("title").into(),
         hint: p.str("hint"),
+        disabled: p.flag_signal("disabled"),
         on_click: handler(&p, "onClick"),
         style: p.css("style"),
         attrs: p.rest(),
