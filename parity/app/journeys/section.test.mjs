@@ -294,6 +294,48 @@ browserTest('paragraph_and_poetry_lines_from_the_card_land_in_the_verse_before',
   }, { hooks: true });
 }, { hooks: true });
 
+// D7: the card is read-only while its save runs. Tab on a line and a drop of a number picked up
+// before Save change nothing, so the save that comes back closes the card; a change there left
+// the card dirty, and its next save wrote verse 10 into verse 9.
+browserTest('a_held_section_save_takes_no_tab_and_no_drop', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTitus2(page);
+    const saving = () => until('saving', async () => (await indicator(page).getAttribute('data-state')) === 'saving', 5_000);
+    const release = async () => {
+      await env.call('test/release', { request: newRequestId(), at: 'save' });
+      await card(page).waitFor({ state: 'detached' });
+      await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    };
+    await pill(page, '9–10').click();
+    const field = typing(page, '9–10');
+    await field.fill(`9 ${NINE}\n10 ${TEN}`);
+    await env.call('test/hold', { request: newRequestId(), at: 'save' });
+    await saveButton(page).click();
+    await saving();
+    await field.evaluate((el) => el.setSelectionRange(el.value.indexOf('\n10') + 1, el.value.indexOf('\n10') + 1));
+    await field.press('Tab');
+    assert.equal(await field.inputValue(), `9 ${NINE}\n10 ${TEN}`, 'Tab changes nothing while the save runs');
+    await release();
+    assert.equal((await verseOf(env, '9')).words.value, NINE);
+    assert.equal((await verseOf(env, '10')).words.value, TEN);
+    assert.equal((await verseOf(env, '10')).format, null);
+    // Place: 10 moves to "sino", is picked up again, and a word is clicked while the save runs.
+    await pill(page, '9–10').click();
+    await page.getByRole('tab', { name: 'Place verse numbers' }).click();
+    const pin = words(page).getByRole('button', { name: 'Move where verse 10 begins' });
+    await pin.click();
+    await page.getByRole('button', { name: 'Begin verse 10 at sino' }).click();
+    await pin.click();
+    await env.call('test/hold', { request: newRequestId(), at: 'save' });
+    await saveButton(page).click();
+    await saving();
+    await page.getByRole('button', { name: 'Begin verse 10 at no' }).click();
+    await release();
+    assert.equal((await verseOf(env, '9')).words.value, `${NINE}\nno defraudando`, 'the line break typed after verse 9 stays');
+    assert.equal((await verseOf(env, '10')).words.value, 'sino mostrando toda buena fe');
+  }, { hooks: true });
+}, { hooks: true });
+
 // A page that reloads while a section save runs sends that save again with no card. The card
 // opened afterwards is based on every verse it shows: a base cut to the first verse made its
 // next save write the whole text into verse 9.

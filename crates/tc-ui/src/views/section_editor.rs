@@ -399,7 +399,8 @@ fn type_field(
             return;
         }
         event.prevent_default();
-        let Some(el) = area.get_untracked() else {
+        // The card is read-only while its save runs (D7), and `readonly` stops only input.
+        let Some(el) = area.get_untracked().filter(|_| !saving.get_untracked()) else {
             return;
         };
         let caret = el.selection_start().ok().flatten().unwrap_or(0) as usize;
@@ -475,7 +476,7 @@ fn place_view(
         hover.set(None);
     });
     let drop_at = Callback::new(move |index: usize| {
-        let Some(pin) = held.get_untracked() else {
+        let Some(pin) = held.get_untracked().filter(|_| !inert.get_untracked()) else {
             return;
         };
         let next = buffer.with_untracked(|b| b.drop_pin(&pin, index));
