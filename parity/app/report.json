@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "25eed1f6d65d4625",
+      "ui": "04b2e028da76a4db",
       "commit": "dev",
       "api": 1
     }
@@ -30,8 +30,8 @@
     "rows": 130,
     "same": 14,
     "declared": 0,
-    "differs": 68,
-    "unported": 48,
+    "differs": 69,
+    "unported": 47,
     "failed": 0
   },
   "rows": [
@@ -2301,10 +2301,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "338b91b071570d3b481519f5c13e892568ba93b249c66bf5694a9795e6252135",
+        "rustSha256": "338b91b071570d3b481519f5c13e892568ba93b249c66bf5694a9795e6252135",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "431a203119f84da37ac7d5581127db692d50ae3b20defe608a7a9acb01424ef3",
+        "rustSha256": "b4b563e4faa1c631ef065388b0fdef970e4d7cbbfd8d4f9dd7a3a1c33782812e",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 70: tC4               <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backg… | rust               <div aria-label=\"1 of 112 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-…",
+          "line 71: tC4                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r… | rust                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r…"
+        ]
       }
     },
     {

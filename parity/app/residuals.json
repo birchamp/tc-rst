@@ -601,6 +601,13 @@
         "dom"
       ],
       "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide: the source texts stack."
+    },
+    "upgrade-repin": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The re-pin confirmation is tC4's pixel for pixel, with the counts tC4's case borrows from the recorded gateway change, scripted for the Rust server (`test/script`); the sample holds no other copy of es-419 TWL, so the route adds one installed version to the server's `resources/fixState` reply, as the case writes the release name. Behind it, the picker's Translation Notes bar carries tC4 #764's declared difference (its count for screen readers, `aria-label` \"1 of 112 resolved\", see check-picker); the scrim hides the bar's fill, so only the DOM shows it. Every other line of the DOM, every computed style included, is tC4's.",
+      "until": null
     }
   }
 }

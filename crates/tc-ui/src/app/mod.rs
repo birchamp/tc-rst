@@ -26,6 +26,7 @@ pub mod confirm;
 pub mod effects;
 pub mod events;
 pub mod feedback;
+pub mod fix;
 pub mod forms;
 pub mod home;
 pub mod internet;

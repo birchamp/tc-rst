@@ -23,7 +23,7 @@ use tc_api::helps::ArticleView;
 use tc_api::model::rail::{self, Filter, SortMode};
 use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, RecordPlace};
 use tc_api::query::QueryKey;
-use tc_api::resources::{FixState, FixView};
+use tc_api::resources::FixState;
 use tc_api::token::ShownToken;
 use tc_api::write::Ack;
 use wasm_bindgen_futures::spawn_local;
@@ -35,6 +35,7 @@ use super::{Api, ListenerId};
 use crate::app::check::CheckView;
 use crate::app::check_item::{self, DecisionWrites, MarkFailure};
 use crate::app::client::{CallError, Transport};
+use crate::app::fix::{Fix, FixScreen};
 use crate::app::save::{FieldScope, Pair, Source, View};
 
 /// An open tool's rail.
@@ -52,14 +53,6 @@ pub enum Session {
     Loading(Tool),
     Open(Box<Rail>),
     /// The open failed: its reason (tC4's `check-error`).
-    Failed(Tool, String),
-}
-
-/// The guided fix (M11, tC4 `s.fix`).
-#[derive(Debug, Clone, PartialEq)]
-pub enum Fix {
-    Loading(Tool),
-    Ready(Tool, FixView),
     Failed(Tool, String),
 }
 
@@ -457,7 +450,8 @@ impl Actions {
             }
             match result {
                 Ok(Some(view)) => {
-                    fix.try_set(Some(Fix::Ready(tool, view)));
+                    let screen = FixScreen::new(super::fix::next_id(), tool, view);
+                    fix.try_set(Some(Fix::Ready(Box::new(screen))));
                 }
                 // Nothing is missing any more: there is nothing to fix.
                 Ok(None) | Err(CallError::Dropped) => {
