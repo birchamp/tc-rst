@@ -36,7 +36,7 @@ authoritative list of what is done and what is next. Read, in order:
 | What | Where |
 |---|---|
 | Repository | `/home/bot/tc-rst` (main checked out; worktrees under `.claude/worktrees/`) |
-| Build folders | each worktree's `target` is a link to `/var/tmp/tc-rst-target/<worktree>` (the root drive has the room); never share one |
+| Build folders | each worktree owns its `target`; older worktrees link to `/var/tmp/tc-rst-target/<worktree>`, while `resume-build-lane` has its own directory. Never share build folders |
 | Tools | Rust 1.99.1, Node 22, wasm-bindgen 0.2.129, Playwright 1.56.1 under the home folder; every shell that runs them starts with `. ~/.tc-env` (it also caps `RUST_TEST_THREADS=4` and sets the Playwright override) |
 | tC4 | `~/unfoldingword/translationcore4` at `d310bf3`, read-only, for builders; `~/unfoldingword/tc4-ref`, the same commit with `npm ci`, for parity and gallery runs (`TC4_ROOT`) |
 | Machine record | `docs/evidence/linux-machine-2026-10-18.md` (its CPU has SHA instructions; the reference laptop does not) |
@@ -72,16 +72,24 @@ before restarting; a builder told `cont` continues its branch.
   verified once (reachable scenarios only), merged straight into main. Restart with the command at the
   end of `.audit/STATUS.md`; add `cont: { <unit>: '<branch>' }` for each unit whose branch has unmerged
   work (branches `lane-<unit>`), and give a continuing builder a note when its state needs one.
-- **Where the lane stood on 2026-10-20 (usage limit expected):** on main: B4a, B5a, C6, C8 (merged
-  by hand after its merge agent died on a usage limit), B6. In flight when the session ended: B5b in
-  its merge (in `lane-merge`, uncommitted), B4b in its first fix round (verified with three lenses),
-  B7 in verification, C5 building on `lane-c5`. Restart: if `lane-merge` holds a half-done merge,
-  finish it by hand (gates, then push, as C8 was) or `git merge --abort` it; then run the lane with
-  `done` from `.audit/STATUS.md` plus every unit now on main, and `cont` for each `lane-<unit>` branch
-  ahead of main (b4b, b5b if not merged, b7, c5), with a note saying how far each got (read the
-  journal of run `wf_c6c6c4ba-a62` if this session's files survive). Restarted runs use the new fix
-  rule above. B5b's earlier minors are in `.audit/b5b-minors-pending.tsv` until they reach
-  `.audit/minors.tsv`.
+- **Recovered on 2026-10-20:** `resume-build-lane` recovers B5b (`37da0b7`), B4b (`3fe7ebf`)
+  and B7 (`b230dad`), each with required Rust/release/wasm gates and browser proof. The old B5b
+  merge was already committed as `a896279`; it was not an active half-merge to abort. The old
+  worktrees' uncommitted files remain intact. C5 had no unique old work; its real implementation,
+  no-loss review fixes and verification are in `.audit/plans/C5.md`. Read current git status/log
+  and `.audit/plans/RESUME-2026-10-20.md` before restarting; its preparation patches are already
+  applied and must not be applied again. The original JavaScript Workflow runner is absent from
+  the current toolset, so this continuation follows its stages with current-agent delegation.
+  B5b's five older findings remain in `.audit/b5b-minors-pending.tsv`; do not lose that backlog.
+  C5's prediction probe passes the prescribed 150 ms CI gate; the 50 ms reference target remains
+  explicit P/G2 work (`docs/evidence/align-save-suggestions-2026-10-20.md`). Its final full gate
+  launched after the owner explicitly approved local tests, then found a minimized section
+  placement property failure (`1-4 0\n2`); its narrow fix passes all 47 section tests and is
+  committed as `fe9443e`. A separate journal test-oracle fix recognizes cancelling bit flips.
+  The final full gate passes in `resume-c5-complete-full.log`: all required checks, 3,230 Rust
+  tests, 7 ignored. All 13 alignment browser journeys pass across focused runs. C5 is built
+  and verified as `d45be902885e83550fdcf11284a24754ee8ab705` on this integration branch;
+  main has not moved or been pushed. S2 stays separate.
 - **S2's redesign** (`.audit/workflows/s2-placement-redesign.js`) on the worktree
   `.claude/worktrees/s2-verify` (branch `s2-verify`, from `19e7fd2`): a placement ledger and a typed
   state machine with a model-based property test. When it is green: merge `s2-verify` into main;
