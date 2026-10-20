@@ -50,5 +50,6 @@ mod app {
     mod store_scenario;
     mod sync;
     mod understand;
+    mod upgrades;
     mod wire;
 }

@@ -17,8 +17,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tc_journal::fold::ConflictId;
 use tc_journal::fold::{
-    BookView, ChapterKeys, Conflict, ConflictCounts, Counters, DerivedFile, KeyState, PersonLabel,
+    BookView, ChapterKeys, CheckTexts, Conflict, ConflictCounts, Counters, DerivedFile, KeyState,
+    PersonLabel, ProjectedDecision,
 };
+use tc_journal::pins::Collection;
 use tc_journal::token::TokenError;
 use tc_journal::{BookId, ChangeBody, ChangeId, DeviceId, Record, RecordKey, ToolId};
 
@@ -234,6 +236,27 @@ impl CountingSnapshot {
         let keys = self.snapshot.fold().decisions_of(tool, book);
         self.count(AppCounter::KeysProbed, keys.len());
         keys
+    }
+
+    /// Every decision of `tool` on one book or on the stories, with the state its decision
+    /// file carries (R1). A book's decisions are read against the book's text, so a book
+    /// counts as one projection of its text.
+    pub fn decisions(&self, tool: ToolId, collection: Collection) -> Vec<ProjectedDecision> {
+        let decisions = self.snapshot.fold().decisions(tool, collection);
+        self.count(AppCounter::KeysProbed, decisions.len());
+        if matches!(collection, Collection::Book(_)) {
+            self.count(AppCounter::BookUsfm, 1);
+        }
+        decisions
+    }
+
+    /// The texts a collection's checks are read against, for a decision shown on a check under
+    /// another key than its own: one projection of the book's text.
+    pub fn check_texts(&self, collection: Collection) -> CheckTexts<'_> {
+        if matches!(collection, Collection::Book(_)) {
+            self.count(AppCounter::BookUsfm, 1);
+        }
+        self.snapshot.fold().check_texts(collection)
     }
 
     pub fn alignments_of(&self, book: BookId) -> Vec<RecordKey> {

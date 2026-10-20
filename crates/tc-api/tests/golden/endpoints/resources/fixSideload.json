@@ -1,0 +1,31 @@
+{
+  "path": "resources/fixSideload",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "tool": "translationWords",
+    "unit": {
+      "type": "book",
+      "value": "TIT"
+    },
+    "upload": "0123456789abcdef0123456789abcdef"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -111,6 +111,96 @@
     }
   },
   {
+    "type": "job",
+    "value": {
+      "id": 12,
+      "kind": "gatewayPlan",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "planReady",
+          "value": {
+            "plan": 4,
+            "what": {
+              "type": "gateway",
+              "value": {
+                "from": {
+                  "gateway": {
+                    "language": "es-419",
+                    "owner": "es-419_gl"
+                  },
+                  "name": "Latin American Spanish",
+                  "autonym": "Español (Latinoamérica)",
+                  "direction": "ltr",
+                  "seen": {
+                    "tn": "v66",
+                    "tw": "v66",
+                    "ta": "v66"
+                  }
+                },
+                "to": {
+                  "gateway": {
+                    "language": "en",
+                    "owner": "unfoldingWord"
+                  },
+                  "name": "English",
+                  "autonym": "English",
+                  "direction": "ltr",
+                  "seen": {
+                    "tn": "v89",
+                    "tw": "v89",
+                    "ta": "v89"
+                  }
+                },
+                "images": {
+                  "from": null,
+                  "to": "en_obs-images"
+                }
+              }
+            },
+            "decisionsAtRisk": 4,
+            "rows": [
+              {
+                "tool": "translationWords",
+                "unit": {
+                  "type": "book",
+                  "value": "TIT"
+                },
+                "decisions": 2,
+                "against": "es-419_twl",
+                "carry": {
+                  "carried": 2,
+                  "checkAgain": 0
+                }
+              },
+              {
+                "tool": "translationNotes",
+                "unit": {
+                  "type": "book",
+                  "value": "TIT"
+                },
+                "decisions": 2,
+                "against": "es-419_tn",
+                "carry": null
+              }
+            ],
+            "blocked": [
+              {
+                "tool": "translationNotes",
+                "unit": {
+                  "type": "stories"
+                },
+                "reason": "versificationUnknown"
+              }
+            ],
+            "alignments": 12
+          }
+        }
+      }
+    }
+  },
+  {
     "type": "projectsChanged"
   },
   {

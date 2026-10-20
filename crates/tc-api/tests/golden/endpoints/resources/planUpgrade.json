@@ -1,0 +1,29 @@
+{
+  "path": "resources/planUpgrade",
+  "kind": "startJob",
+  "net": "sources",
+  "request": {
+    "request": "16161616161616161616161616161616",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "offer": {
+      "type": "set",
+      "value": {
+        "rung": "primary"
+      }
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "sources"
+    }
+  }
+}

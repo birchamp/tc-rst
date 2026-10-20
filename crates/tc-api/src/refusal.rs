@@ -610,7 +610,11 @@ pub enum ResourceRefusal {
     UpgradeFailed {
         reason: String,
     },
-    GatewayFailed,
+    /// The change was not planned or not written; `reason` is the cause, which the dialog shows
+    /// after "The change was not applied." (tC4 `gateway.failed`).
+    GatewayFailed {
+        reason: String,
+    },
     /// `books` would lose their checking resource.
     GatewayBlocked {
         books: String,
@@ -632,7 +636,7 @@ impl Message for ResourceRefusal {
             Self::FixFailed { .. } => "fix.failed",
             Self::UpdateCheckFailed { .. } => "upgrade.checkFailed",
             Self::UpgradeFailed { .. } => "upgrade.failed",
-            Self::GatewayFailed => "gateway.failed",
+            Self::GatewayFailed { .. } => "gateway.failed",
             Self::GatewayBlocked { .. } => "gateway.blockedError",
             Self::AdoptFailed { .. } => "sources.adoptFailed",
         }
@@ -646,7 +650,13 @@ impl Message for ResourceRefusal {
             Self::SomeFailed { list } => vec![("list", list.clone())],
             Self::GatewayBlocked { books } => vec![("books", books.clone())],
             Self::AdoptFailed { error } => vec![("error", error.clone())],
-            Self::GatewayFailed => Vec::new(),
+            Self::GatewayFailed { .. } => Vec::new(),
+        }
+    }
+    fn detail(&self) -> Option<&str> {
+        match self {
+            Self::GatewayFailed { reason } => Some(reason),
+            _ => None,
         }
     }
 }

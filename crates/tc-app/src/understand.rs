@@ -130,7 +130,7 @@ fn resources_stamp(read: &CountingSnapshot) -> Vec<Vec<ChangeId>> {
 }
 
 /// The project's versification register, when it has one.
-fn versification(read: &CountingSnapshot) -> Option<VersificationValue> {
+pub(crate) fn versification(read: &CountingSnapshot) -> Option<VersificationValue> {
     match read.projected(&RecordKey::Versification) {
         Some(Record::Versification { value }) => Some(value),
         _ => None,

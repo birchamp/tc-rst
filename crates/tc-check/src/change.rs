@@ -191,6 +191,31 @@ pub fn consequences(
     out
 }
 
+/// Whether a change of pins can disturb the decisions of one (tool, collection) at all: the
+/// resource its list comes from differs on the two sides, or, for a Words list of a book, so
+/// does the translation words pin that filters it. A caller reads a unit's decisions only
+/// when this is true, so a change costs the units it moves and not the project; the units
+/// it leaves alone cannot be affected, revived or blocked.
+pub fn unit_moves(
+    current: &dyn Ladder,
+    next: &dyn Ladder,
+    tool: ToolId,
+    collection: Collection,
+    local: impl Fn(&ResourceRef) -> Option<Coverage>,
+) -> bool {
+    let unit = Unit {
+        tool,
+        collection,
+        decisions: &[],
+    };
+    let answer = |pins: &dyn Ladder| pins.answer(tool, collection, Unrecorded::Installed(&local));
+    let (before, after) = (answer(current), answer(next));
+    moved(
+        before.as_ref().and_then(Answer::resource),
+        after.as_ref().and_then(Answer::resource),
+    ) || !filter(current, &unit, before.as_ref()).same(&filter(next, &unit, after.as_ref()))
+}
+
 /// True when two sides' resources differ, one being absent included.
 fn moved(a: Option<&ResourceRef>, b: Option<&ResourceRef>) -> bool {
     match (a, b) {

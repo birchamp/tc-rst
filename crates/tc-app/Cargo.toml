@@ -20,6 +20,8 @@ fixture-backend = ["dep:zip"]
 tc-api = { path = "../tc-api", features = ["server"] }
 tc-core = { path = "../tc-core" }
 tc-burrito = { path = "../tc-burrito" }
+# The checks a change of pins carries over (C8).
+tc-check = { path = "../tc-check" }
 tc-door43 = { path = "../tc-door43" }
 # The helps the Understand screen shows: blocks and highlights (B3).
 tc-helps = { path = "../tc-helps" }

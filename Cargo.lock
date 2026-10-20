@@ -3226,6 +3226,7 @@ dependencies = [
  "tc-api",
  "tc-app",
  "tc-burrito",
+ "tc-check",
  "tc-core",
  "tc-corpus",
  "tc-door43",

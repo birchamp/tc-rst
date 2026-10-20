@@ -161,6 +161,12 @@ scoped!(
     crate::session::CopyProject,
     crate::session::OtherComputerClosed,
     crate::resources::Download,
+    crate::resources::PlanUpgrade,
+    crate::resources::PlanGateway,
+    crate::resources::ApplyPlan,
+    crate::resources::FixFetch,
+    crate::resources::FixSideload,
+    crate::resources::FixRepin,
 );
 unscoped!(
     crate::app::Quit,

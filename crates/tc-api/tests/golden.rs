@@ -64,8 +64,12 @@ use tc_api::prefs::{
 };
 use tc_api::refusal::Message;
 use tc_api::resources::{
-    Catalog, CatalogView, Download, FromInstalls, GatewayPackage, GatewayRef, PackageRole,
-    PackageRow, Seen, SourceGateway, Sources as SourceTexts, SourcesView as SourceTextsView,
+    ApplyPlan, BlockReason, BlockedUnit, Carry, Catalog, CatalogView, CheckUpdates, Download,
+    FixFetch, FixRepin, FixSideload, FixState, FixView, FromInstalls, GatewayChange,
+    GatewayPackage, GatewayRef, ImageChange, OfferRef, PackageRole, PackageRow, PinLabel,
+    PlanApplied, PlanGateway, PlanRow, PlanUpgrade, PlanView, PlanWhat, RepoMove, Seen, SetOffer,
+    SetRung, SourceGateway, Sources as SourceTexts, SourcesView as SourceTextsView, TextKind,
+    TextOffer, UpdatesView,
 };
 use tc_api::session::{
     BufferSlot, Close, CopyProject, DiscardDraft, DraftKind, DraftOffer, Drafts, Keep, KeepDraft,
@@ -609,6 +613,232 @@ impl Example for Download {
             gateway: spanish(),
             book: BookId::Titus,
             repos: vec!["es-419_glt".into(), "es-419_tn".into()],
+        }
+    }
+}
+
+fn tn_move() -> RepoMove {
+    RepoMove {
+        repo: "es-419_tn".into(),
+        from: "v66".into(),
+        to: "v67".into(),
+        published: Some("2026-10-02T14:03:11Z".into()),
+    }
+}
+
+impl Example for CheckUpdates {
+    fn example() -> Self {
+        CheckUpdates { at: scope() }
+    }
+}
+
+impl Example for UpdatesView {
+    fn example() -> Self {
+        UpdatesView {
+            sets: vec![
+                SetOffer {
+                    rung: SetRung::Primary,
+                    language: "es-419".into(),
+                    moves: vec![tn_move()],
+                },
+                SetOffer {
+                    rung: SetRung::Fallback,
+                    language: "en".into(),
+                    moves: Vec::new(),
+                },
+            ],
+            texts: vec![TextOffer {
+                kind: TextKind::Original,
+                change: RepoMove {
+                    repo: "el-x-koine_ugnt".into(),
+                    from: "v0.34".into(),
+                    to: "v0.35".into(),
+                    published: None,
+                },
+            }],
+            texts_error: Some("Door43 did not answer".into()),
+        }
+    }
+}
+
+impl Example for PlanUpgrade {
+    fn example() -> Self {
+        PlanUpgrade {
+            request: request(22),
+            at: scope(),
+            offer: OfferRef::Set {
+                rung: SetRung::Primary,
+            },
+        }
+    }
+}
+
+impl Example for PlanGateway {
+    fn example() -> Self {
+        PlanGateway {
+            request: request(23),
+            at: scope(),
+            gateway: GatewayRef {
+                language: "en".into(),
+                owner: "unfoldingWord".into(),
+            },
+        }
+    }
+}
+
+impl Example for ApplyPlan {
+    fn example() -> Self {
+        ApplyPlan {
+            request: request(24),
+            at: scope(),
+            plan: tc_api::ids::PlanId::new(3),
+        }
+    }
+}
+
+fn gateway_plan() -> PlanView {
+    PlanView {
+        plan: tc_api::ids::PlanId::new(4),
+        what: PlanWhat::Gateway(Box::new(GatewayChange {
+            from: Some(spanish_package()),
+            to: english_package(),
+            images: Some(ImageChange {
+                from: None,
+                to: Some("en_obs-images".into()),
+            }),
+        })),
+        decisions_at_risk: 4,
+        rows: vec![
+            PlanRow {
+                tool: Tool::TranslationWords,
+                unit: CheckUnit::Book(BookId::Titus),
+                decisions: 2,
+                against: "es-419_twl".into(),
+                carry: Some(Carry {
+                    carried: 2,
+                    check_again: 0,
+                }),
+            },
+            PlanRow {
+                tool: Tool::TranslationNotes,
+                unit: CheckUnit::Book(BookId::Titus),
+                decisions: 2,
+                against: "es-419_tn".into(),
+                carry: None,
+            },
+        ],
+        blocked: vec![BlockedUnit {
+            tool: Tool::TranslationNotes,
+            unit: CheckUnit::Stories,
+            reason: BlockReason::VersificationUnknown,
+        }],
+        alignments: Some(12),
+    }
+}
+
+fn spanish_package() -> GatewayPackage {
+    GatewayPackage {
+        gateway: spanish(),
+        name: "Latin American Spanish".into(),
+        autonym: "Español (Latinoamérica)".into(),
+        direction: Direction::Ltr,
+        seen: Seen {
+            tn: "v66".into(),
+            tw: "v66".into(),
+            ta: "v66".into(),
+        },
+    }
+}
+
+impl Example for PlanApplied {
+    fn example() -> Self {
+        PlanApplied::Replanned(Box::new(PlanView {
+            what: PlanWhat::Set {
+                rung: SetRung::Primary,
+                language: "es-419".into(),
+                moves: vec![tn_move()],
+            },
+            ..gateway_plan()
+        }))
+    }
+}
+
+impl Example for PlanView {
+    fn example() -> Self {
+        PlanView {
+            what: PlanWhat::Repin {
+                rung: SetRung::Fallback,
+                language: "en".into(),
+                moves: vec![tn_move()],
+            },
+            ..gateway_plan()
+        }
+    }
+}
+
+impl Example for FixState {
+    fn example() -> Self {
+        FixState {
+            at: scope(),
+            tool: Tool::TranslationWords,
+            unit: CheckUnit::Book(BookId::Titus),
+        }
+    }
+}
+
+fn pin_label(version: Option<&str>, sha: &str) -> PinLabel {
+    PinLabel {
+        repo_path: "git.door43.org/es-419_gl/es-419_twl".into(),
+        version: version.map(str::to_owned),
+        sha: sha.into(),
+    }
+}
+
+impl Example for FixView {
+    fn example() -> Self {
+        FixView {
+            pin: pin_label(Some("v18"), "1111111111111111111111111111111111111111"),
+            rung: SetRung::Primary,
+            candidates: vec![pin_label(
+                Some("v19"),
+                "2222222222222222222222222222222222222222",
+            )],
+            candidates_error: None,
+        }
+    }
+}
+
+impl Example for FixFetch {
+    fn example() -> Self {
+        FixFetch {
+            request: request(25),
+            at: scope(),
+            tool: Tool::TranslationWords,
+            unit: CheckUnit::Book(BookId::Titus),
+        }
+    }
+}
+
+impl Example for FixSideload {
+    fn example() -> Self {
+        FixSideload {
+            request: request(26),
+            at: scope(),
+            tool: Tool::TranslationWords,
+            unit: CheckUnit::Book(BookId::Titus),
+            upload: tc_api::ids::UploadId::parse("0123456789abcdef0123456789abcdef").unwrap(),
+        }
+    }
+}
+
+impl Example for FixRepin {
+    fn example() -> Self {
+        FixRepin {
+            request: request(27),
+            at: scope(),
+            tool: Tool::TranslationWords,
+            unit: CheckUnit::Book(BookId::Titus),
+            sha: "2222222222222222222222222222222222222222".into(),
         }
     }
 }
@@ -1569,7 +1799,13 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
+            "resources/applyPlan",
             "resources/download",
+            "resources/fixFetch",
+            "resources/fixRepin",
+            "resources/fixSideload",
+            "resources/planGateway",
+            "resources/planUpgrade",
             "session/close",
             "session/copy",
             "session/discardDraft",
@@ -1780,6 +2016,12 @@ fn events() -> Vec<Event> {
                 restored: 0,
                 missing_pins: 5,
             })),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(12),
+            kind: JobKind::GatewayPlan,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::PlanReady(Box::new(gateway_plan()))),
         }),
         Event::ProjectsChanged,
         Event::HomeCard {

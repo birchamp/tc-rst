@@ -160,6 +160,8 @@ pub enum JobOutcome {
     },
     /// A sync that completed (B10): what its toast shows.
     Synced(SyncResultView),
+    /// An upgrade, a gateway change or a re-pin planned (C8): the plan to read and confirm.
+    PlanReady(Box<crate::resources::PlanView>),
 }
 
 /// What a completed sync brought and left (tC4's `report.facts` of an ok sync, which its toast
