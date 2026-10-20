@@ -138,6 +138,9 @@ macro_rules! endpoint_table {
             query "check/picker": $crate::check::Picker => $crate::check::PickerView;
             query "check/open": $crate::check::Open => $crate::check::CheckSessionView;
             query "check/rows": $crate::check::Rows => $crate::check::RowsView;
+            query "check/item": $crate::check::Item => $crate::check::CheckItemView;
+            query "check/article": $crate::check::CheckArticleRead => $crate::helps::ArticleView;
+            command "check/decide": $crate::check::Decide => $crate::write::Ack;
 
             query "resources/fixState": $crate::check::FixState
                 => Option<$crate::check::FixView>;

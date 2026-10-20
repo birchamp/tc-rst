@@ -21,6 +21,7 @@ mod app {
     mod app_data;
     mod app_start;
     mod check;
+    mod check_item;
     pub mod common;
     mod dispatch;
     mod drafted;

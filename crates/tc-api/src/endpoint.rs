@@ -161,6 +161,7 @@ scoped!(
     crate::session::CopyProject,
     crate::session::OtherComputerClosed,
     crate::resources::Download,
+    crate::check::Decide,
 );
 unscoped!(
     crate::app::Quit,

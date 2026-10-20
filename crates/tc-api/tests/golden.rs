@@ -26,10 +26,12 @@ use tc_api::buffer::{
     BufferEntry, BufferKey, BufferLine, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave,
 };
 use tc_api::check::{
-    AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
-    CheckSessionView, CheckUnit, Dot, DroppedNote, FixState, FixView, NextCheck, NoteCategory,
-    Open as CheckOpen, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch,
-    RailRows, RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard,
+    AlignProgress, CardCount, Category, CheckArticle, CheckArticleRead, CheckEmpty, CheckItemView,
+    CheckListRef, CheckNotice, CheckPlace, CheckProgress, CheckSessionView, CheckUnit, Decide,
+    DecideEdit, DecisionStatus, DecisionView, Dot, DroppedNote, FixState, FixView, GatewayText,
+    GatewayView, Item, NextCheck, NoteCategory, Open as CheckOpen, OriginalView, Picker,
+    PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows, RailSince,
+    ResourceCitation, RowFlags, Rows, RowsView, Rung, TargetWords, Testament, Tool, ToolCard,
     ToolState,
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
@@ -1576,6 +1578,96 @@ impl Example for Option<FixView> {
     }
 }
 
+impl Example for Item {
+    fn example() -> Self {
+        Item {
+            at: scope(),
+            list: titus_tn(),
+            index: 7,
+        }
+    }
+}
+
+impl Example for CheckArticleRead {
+    fn example() -> Self {
+        CheckArticleRead {
+            at: scope(),
+            list: titus_tn(),
+            index: 7,
+        }
+    }
+}
+
+impl Example for CheckItemView {
+    fn example() -> Self {
+        CheckItemView {
+            index: 7,
+            check_id: "abcd".into(),
+            place: verse_place(BookId::Titus, "1", "1"),
+            title: "knowledge".into(),
+            note: vec![ArticleBlock::new(
+                BlockKind::P,
+                0,
+                vec![ArticleSpan {
+                    text: "The words faith and knowledge are abstract nouns.".into(),
+                    ..ArticleSpan::default()
+                }],
+            )],
+            helps_dir: Some(Direction::Ltr),
+            article: CheckArticle {
+                link: ArticleLink::Academy {
+                    slug: "figs-abstractnouns".into(),
+                },
+                title: Some("Abstract Nouns".into()),
+                category: Category::Note(NoteCategory::Grammar),
+            },
+            original: OriginalView::Ready {
+                testament: Testament::Nt,
+                verse: Some("Παῦλος, δοῦλος Θεοῦ".into()),
+            },
+            gateway: GatewayView::Pane {
+                pane: "ult".into(),
+                text: GatewayText::Verse {
+                    tokens: vec!["Paul".into(), ", ".into(), "a".into()],
+                    lit: vec![0],
+                },
+            },
+            target: TargetWords {
+                words: vec!["Pablo".into(), "siervo".into()],
+                selected: vec![0],
+                verse: Some(token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")),
+            },
+            decision: Shown {
+                value: DecisionView {
+                    status: Some(DecisionStatus::Valid),
+                    nothing_to_select: false,
+                    bookmarked: true,
+                    comment: Some("ask the team".into()),
+                    invalidated: false,
+                },
+                token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+                marker: None,
+            },
+            notices: vec![CheckNotice::Invalidated { count: 2 }],
+        }
+    }
+}
+
+impl Example for Decide {
+    fn example() -> Self {
+        Decide {
+            at: scope(),
+            request: request(23),
+            list: titus_tn(),
+            place: verse_place(BookId::Titus, "1", "1"),
+            check_id: "abcd".into(),
+            decision: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            verse: Some(token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")),
+            edit: DecideEdit::Valid { words: vec![0, 1] },
+        }
+    }
+}
+
 impl Example for Script {
     fn example() -> Self {
         Script {
@@ -1727,6 +1819,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
     assert_eq!(
         scoped,
         BTreeSet::from([
+            "check/decide",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",

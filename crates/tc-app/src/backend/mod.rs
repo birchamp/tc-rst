@@ -22,7 +22,7 @@ use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::ProjectRef;
 use tc_api::token::TokenTextError;
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::{Choice, Command, Draft, DraftField, SectionValue};
+use tc_journal::command::{Choice, Command, DecisionEdit, Draft, DraftField, SectionValue};
 use tc_journal::fold::{ConflictId, Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
 use tc_journal::{BookId, ChangeId, DeviceId, RecordKey, ShownToken};
@@ -348,6 +348,25 @@ impl StoreCommand {
                 book,
                 shown: shown.into_iter().map(|(t, value)| (t.0, value)).collect(),
                 layout: layout.map(|t| t.0),
+            },
+            listed,
+        )
+    }
+
+    /// `SaveDecision` (STORAGE §5.4): one act of the checker over the decision the detail showed,
+    /// and the verse whose text it was judged against (the same token again when the check
+    /// names no verse text). The store checks only what was displayed, so a change made
+    /// meanwhile elsewhere becomes a conflict, never a refusal.
+    pub fn save_decision(shown: EditToken, verse_shown: EditToken, value: DecisionEdit) -> Self {
+        let listed = [&shown, &verse_shown]
+            .into_iter()
+            .map(|t| (t.key().clone(), t.heads().to_vec()))
+            .collect();
+        Self::new(
+            Command::SaveDecision {
+                shown: shown.0,
+                verse_shown: verse_shown.0,
+                value,
             },
             listed,
         )

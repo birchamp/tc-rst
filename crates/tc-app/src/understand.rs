@@ -74,6 +74,8 @@ pub(crate) struct LoadedBook {
     /// Read with the Door43 helps, whatever the project's helps setting: the check lists'
     /// reading (Q33).
     door43: bool,
+    /// The original-language text, cut into verses at the first check that shows it.
+    original: std::sync::OnceLock<LoadedText>,
 }
 
 impl LoadedBook {
@@ -84,6 +86,19 @@ impl LoadedBook {
 
     pub(crate) fn pane(&self, id: &str) -> Option<&LoadedText> {
         self.panes.iter().find(|p| p.id == id).map(|p| &p.text)
+    }
+
+    /// The book's original-language text (the UGNT or the UHB of its testament).
+    pub(crate) fn original(&self) -> &LoadedText {
+        self.original.get_or_init(|| {
+            self.resources
+                .text(&TextRole::OriginalLanguage)
+                .map_or(LoadedText::Missing, text_state)
+        })
+    }
+
+    pub(crate) fn pins(&self) -> Option<&ProjectPins> {
+        self.pins.as_ref()
     }
 }
 
@@ -268,7 +283,7 @@ fn missing_slot<T>(missing: &Missing) -> Slot<T> {
 
 /// The direction of the helps a rung answered with (#650): its gateway's, when the app knows
 /// the gateway.
-fn rung_dir(pins: Option<&ProjectPins>, rung: Option<Rung>) -> Option<Direction> {
+pub(crate) fn rung_dir(pins: Option<&ProjectPins>, rung: Option<Rung>) -> Option<Direction> {
     let set = pins?.set(rung?)?;
     let gateway = tc_resources::gateways::of_set(set)?;
     Some(match gateway.direction {
@@ -348,6 +363,7 @@ fn load(
         simplified_pin,
         numbering: Numbering::of(register),
         door43: matches!(choice, HelpsChoice::Dcs),
+        original: std::sync::OnceLock::new(),
     }
 }
 
@@ -626,7 +642,7 @@ fn api_spans(spans: Vec<tc_helps::blocks::Span>) -> Vec<ArticleSpan> {
         .collect()
 }
 
-fn blocks(markdown: &str) -> Vec<ArticleBlock> {
+pub(crate) fn blocks(markdown: &str) -> Vec<ArticleBlock> {
     use tc_helps::blocks::BlockKind as Kind;
     tc_helps::blocks::render_article_blocks(markdown)
         .into_iter()
@@ -963,55 +979,77 @@ fn word_body(title: &str, slug: &str, body: &str) -> String {
     }
 }
 
+/// The article `link` names: its title and markdown, and the part its language comes from.
+/// Translation Academy's is found by slug, a word's by folder and slug.
+fn find_article<'a>(
+    loaded: &'a LoadedBook,
+    link: &ArticleLink,
+) -> (Option<(&'a str, &'a str)>, HelpsPart) {
+    let helps = &loaded.resources.helps;
+    match link {
+        ArticleLink::Academy { slug } => (
+            Slug::parse(slug).ok().and_then(|slug| {
+                MANUALS.iter().find_map(|manual| {
+                    let id = AcademyArticleId::Dcs {
+                        manual: *manual,
+                        slug: slug.clone(),
+                    };
+                    helps
+                        .academy_article(&id)
+                        .map(|f| (f.item.title.as_str(), f.item.body.as_str()))
+                })
+            }),
+            HelpsPart::Notes,
+        ),
+        ArticleLink::Words { category, slug } => (
+            category
+                .as_deref()
+                .and_then(WordCategory::parse)
+                .zip(Slug::parse(slug).ok())
+                .and_then(|(category, slug)| {
+                    helps.word_article(&WordArticleId::Dcs { category, slug })
+                })
+                .map(|f| (f.item.title.as_str(), f.item.body.as_str())),
+            HelpsPart::WordLinks,
+        ),
+    }
+}
+
+/// The article behind a check or a help, as the screens draw it.
+pub(crate) fn article_view(loaded: &LoadedBook, link: &ArticleLink) -> ArticleView {
+    let (found, part) = find_article(loaded, link);
+    let rung = match loaded.resources.parts.get(&part) {
+        Some(PartStatus::Loaded { rung, .. }) => *rung,
+        _ => None,
+    };
+    match found {
+        Some((title, body)) => {
+            let body = match link {
+                ArticleLink::Academy { .. } => body.to_owned(),
+                ArticleLink::Words { slug, .. } => word_body(title, slug, body),
+            };
+            ArticleView::Found {
+                title: title.to_owned(),
+                blocks: blocks(&body),
+                dir: rung_dir(loaded.pins.as_ref(), rung).unwrap_or(Direction::Ltr),
+            }
+        }
+        None => ArticleView::Missing,
+    }
+}
+
+/// The title of the article `link` names, when the resources carry it.
+pub(crate) fn article_title(loaded: &LoadedBook, link: &ArticleLink) -> Option<String> {
+    find_article(loaded, link)
+        .0
+        .map(|(title, _)| title.to_owned())
+}
+
 impl Handle<Article> for App {
     async fn handle(&self, req: Article) -> Result<ArticleView, ApiError> {
         let session = self.read(&req.at)?;
         let loaded = self.loaded_book(&session, req.book).await?;
-        let helps = &loaded.resources.helps;
-        let (found, part) = match &req.link {
-            ArticleLink::Academy { slug } => (
-                Slug::parse(slug).ok().and_then(|slug| {
-                    MANUALS.iter().find_map(|manual| {
-                        let id = AcademyArticleId::Dcs {
-                            manual: *manual,
-                            slug: slug.clone(),
-                        };
-                        helps
-                            .academy_article(&id)
-                            .map(|f| (f.item.title.clone(), f.item.body.clone()))
-                    })
-                }),
-                HelpsPart::Notes,
-            ),
-            ArticleLink::Words { category, slug } => (
-                category
-                    .as_deref()
-                    .and_then(WordCategory::parse)
-                    .zip(Slug::parse(slug).ok())
-                    .and_then(|(category, slug)| {
-                        helps.word_article(&WordArticleId::Dcs { category, slug })
-                    })
-                    .map(|f| {
-                        (
-                            f.item.title.clone(),
-                            word_body(&f.item.title, slug, &f.item.body),
-                        )
-                    }),
-                HelpsPart::WordLinks,
-            ),
-        };
-        let rung = match loaded.resources.parts.get(&part) {
-            Some(PartStatus::Loaded { rung, .. }) => *rung,
-            _ => None,
-        };
-        Ok(match found {
-            Some((title, body)) => ArticleView::Found {
-                title,
-                blocks: blocks(&body),
-                dir: rung_dir(loaded.pins.as_ref(), rung).unwrap_or(Direction::Ltr),
-            },
-            None => ArticleView::Missing,
-        })
+        Ok(article_view(&loaded, &req.link))
     }
 }
 

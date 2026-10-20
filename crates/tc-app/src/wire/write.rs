@@ -7,7 +7,7 @@ use tc_api::ids::ConflictRef;
 use tc_api::shown::{PersonLabel, Who};
 use tc_api::write::{Ack, ConflictBrief, SavedValue};
 use tc_journal::fold::PersonLabel as Label;
-use tc_journal::record::VerseValue;
+use tc_journal::record::{CheckValue, VerseValue};
 use tc_journal::{DeviceId, Record};
 use unicode_normalization::UnicodeNormalization;
 
@@ -71,6 +71,56 @@ pub fn ack(
         new_conflicts,
         saved: vec![SavedValue { record, text }],
         rows: Vec::new(),
+        disk_warning,
+    })
+}
+
+/// The `Ack` of a decision save the store answered. `shown` is the decision token the request
+/// carried; `comment` is the comment the request asked to store, which the `Ack` hands back as
+/// what the check comment's field saved (the stored one, read from the batch's change of the
+/// decision). `rows` are the check's row as the newest snapshot shows it.
+pub fn ack_decision(
+    reply: &StoreReply,
+    read: &CountingSnapshot,
+    shown: &EditToken,
+    comment: &str,
+    me: DeviceId,
+    rows: Vec<tc_api::check::RailRowPatch>,
+) -> Result<Ack, WireError> {
+    let key = shown.key();
+    let record = record_ref(key).ok_or_else(|| WireError::Record(format!("{key:?}")))?;
+    let (stored_as, disk_warning) = stored(&reply.stored);
+    let (tokens, text) = match reply.stored {
+        Stored::Unchanged => (vec![token_update(key, shown)?], comment.to_owned()),
+        Stored::Durable | Stored::WrittenNotDurable(_) => {
+            let tokens = reply
+                .tokens
+                .iter()
+                .map(|(key, token)| token_update(key, token))
+                .collect::<Result<Vec<_>, _>>()?;
+            let stored = reply
+                .changes
+                .iter()
+                .filter_map(|id| read.body(id))
+                .filter(|body| body.record.key() == *key)
+                .find_map(|body| match body.record {
+                    Record::Check {
+                        value: CheckValue::Decision(decision),
+                        ..
+                    } => Some(decision.comment.unwrap_or_default()),
+                    _ => None,
+                });
+            (tokens, stored.unwrap_or_else(|| comment.to_owned()))
+        }
+    };
+    let new_conflicts = new_conflicts(reply, read, &record, me)?;
+    Ok(Ack {
+        view: view(reply.seq),
+        stored: stored_as,
+        tokens,
+        new_conflicts,
+        saved: vec![SavedValue { record, text }],
+        rows,
         disk_warning,
     })
 }
