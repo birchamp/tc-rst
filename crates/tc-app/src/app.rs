@@ -201,6 +201,14 @@ pub(crate) struct Inner {
     /// The (package, book) pairs this app session downloaded, which Get source texts counts
     /// per package (tC4 `installedSrc`, B9a).
     pub(crate) downloaded: Mutex<std::collections::BTreeSet<(String, tc_core::BookId)>>,
+    /// The plans a person is reading: upgrades, gateway changes and re-pins (C8).
+    pub(crate) plans: crate::upgrades::KeptPlans,
+    /// The offers and plans a test or a parity capture scripted (C8).
+    #[cfg(feature = "test-hooks")]
+    pub(crate) scripted_resources: crate::upgrades::ScriptedResources,
+    /// The server's uploads, which the guided fix's file install reads (C8). Given once, by the
+    /// binary that runs the server.
+    pub(crate) uploads: std::sync::OnceLock<crate::fixes::Uploads>,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -462,6 +470,10 @@ impl App {
             sync: crate::sync::ScriptedSync::default(),
             resources_door43,
             downloaded: Mutex::new(std::collections::BTreeSet::new()),
+            plans: crate::upgrades::KeptPlans::default(),
+            uploads: std::sync::OnceLock::new(),
+            #[cfg(feature = "test-hooks")]
+            scripted_resources: crate::upgrades::ScriptedResources::default(),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]
@@ -561,6 +573,12 @@ impl App {
     /// What the reads of projects have cost so far (§8.1).
     pub fn counters(&self) -> AppCounts {
         self.inner.counters.read()
+    }
+
+    /// Gives the app the server's uploaded files: the guided fix installs a file the person
+    /// chose. Once; the first call wins.
+    pub fn provide_uploads(&self, uploads: crate::fixes::Uploads) {
+        let _ = self.inner.uploads.set(uploads);
     }
 
     /// The request guard of a project-scoped query (§4.3): the screen's session at `at`, or

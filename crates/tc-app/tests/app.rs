@@ -55,5 +55,6 @@ mod app {
     mod sync;
     mod translate;
     pub mod understand;
+    mod upgrades;
     mod wire;
 }

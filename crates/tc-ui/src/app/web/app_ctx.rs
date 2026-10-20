@@ -128,6 +128,11 @@ pub struct AppState {
     /// Get source texts' form (tC4 `src`, B9a), kept across the dialog's openings as tC4
     /// keeps it.
     pub src: ArcRwSignal<crate::app::sources::SourcesForm>,
+    /// The release upgrades of Get source texts and their confirmation (tC4 `upgrade`, C8).
+    pub up: ArcRwSignal<crate::app::upgrades::UpgradeState>,
+    /// The change of checking language and its confirmation (tC4 `gatewayBusy`,
+    /// `gatewayPreview`, `gatewayError`, C8).
+    pub gw: ArcRwSignal<crate::app::upgrades::GatewayState>,
     /// A refused open, on Home (tC4 `bookError`; B3 sets it).
     pub book_error: ArcRwSignal<Option<HomeBanner>>,
     /// The checkpoint of the project just left failed (tC4 `commitError`; D1 sets it).
@@ -178,6 +183,8 @@ impl AppState {
             od: ArcRwSignal::new(None),
             st: ArcRwSignal::new(None),
             src: ArcRwSignal::new(crate::app::sources::SourcesForm::default()),
+            up: ArcRwSignal::new(crate::app::upgrades::UpgradeState::default()),
+            gw: ArcRwSignal::new(crate::app::upgrades::GatewayState::default()),
             book_error: ArcRwSignal::new(None),
             commit_error: ArcRwSignal::new(None),
             syncing: ArcRwSignal::new(None),
@@ -436,6 +443,9 @@ impl Actions {
             Pending::Sync(project) => self.sync_now(project),
             Pending::Catalog => self.catalog_now(),
             Pending::Download => self.download_now(),
+            Pending::Updates => self.check_updates_now(),
+            Pending::UpgradeSet(rung) => self.upgrade_set_now(rung),
+            Pending::UpgradeText(repo) => self.upgrade_text_now(repo),
         }
     }
 
@@ -460,6 +470,9 @@ impl Actions {
             Pending::Catalog => self.catalog_dropped(),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
             Pending::Download
+            | Pending::Updates
+            | Pending::UpgradeSet(_)
+            | Pending::UpgradeText(_)
             | Pending::Link(..)
             | Pending::SignIn { .. }
             | Pending::CheckSignIn

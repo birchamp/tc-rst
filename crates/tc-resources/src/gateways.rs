@@ -334,7 +334,7 @@ impl Gateway {
     }
 }
 
-fn account(name: &str) -> AccountName {
+pub(crate) fn account(name: &str) -> AccountName {
     match name.parse() {
         Ok(owner) => owner,
         // Every owner in GATEWAYS is a valid Door43 account name; the unit test
@@ -398,7 +398,10 @@ pub fn owner_for_repo_name(name: &RepoName) -> Option<&'static str> {
 /// A pin among `installed` whose repository is `repo`, preferring the bundled suite's
 /// identity when several commits are installed (tC4 `preferredNamedPin`), else the first.
 /// A pin with no flavor is never taken: tC4 pins only what its metadata identifies.
-fn preferred<'a>(installed: &'a [ResourcePin], repo: &RepoRef) -> Option<&'a ResourcePin> {
+pub(crate) fn preferred<'a>(
+    installed: &'a [ResourcePin],
+    repo: &RepoRef,
+) -> Option<&'a ResourcePin> {
     let mut matches = installed
         .iter()
         .filter(|p| p.flavor.is_some() && p.is_repo(repo));

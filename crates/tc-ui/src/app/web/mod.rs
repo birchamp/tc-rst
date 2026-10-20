@@ -24,6 +24,7 @@ mod state;
 mod stream;
 mod translate;
 pub mod understand;
+mod upgrades;
 mod view_error;
 
 use std::any::Any;

@@ -22,7 +22,7 @@ use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::ProjectRef;
 use tc_api::token::TokenTextError;
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::{Choice, Command, Draft, DraftField, SectionValue};
+use tc_journal::command::{Choice, Command, Draft, DraftField, SectionValue, UpgradePlan};
 use tc_journal::fold::{ConflictId, Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
 use tc_journal::{BookId, ChangeId, DeviceId, RecordKey, ShownToken};
@@ -439,6 +439,18 @@ impl StoreCommand {
             },
             listed,
         )
+    }
+
+    /// `ApplyUpgrade` (STORAGE §5.8, unit C8): a plan made off the actor from one snapshot, each
+    /// change naming the heads its record had there. The store writes the whole plan as one
+    /// batch, or refuses with `PlanStale` when some record's heads moved.
+    pub fn apply_upgrade(plan: UpgradePlan) -> Self {
+        let listed = plan
+            .changes
+            .iter()
+            .map(|change| (change.record.key(), change.parents.clone()))
+            .collect();
+        Self::new(Command::ApplyUpgrade { plan }, listed)
     }
 
     /// The UI request this command answers: its batch's event is announced as that

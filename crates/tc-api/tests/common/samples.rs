@@ -173,7 +173,9 @@ pub fn resources() -> Vec<ResourceRefusal> {
         ResourceRefusal::UpgradeFailed {
             reason: s("the archive is damaged"),
         },
-        ResourceRefusal::GatewayFailed,
+        ResourceRefusal::GatewayFailed {
+            reason: "the notes of Titus could not be read".to_owned(),
+        },
         ResourceRefusal::GatewayBlocked {
             books: s("Titus, Ruth"),
         },

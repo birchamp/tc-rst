@@ -939,13 +939,16 @@
     "wire": {
       "type": "resources",
       "value": {
-        "type": "gatewayFailed"
+        "type": "gatewayFailed",
+        "value": {
+          "reason": "the notes of Titus could not be read"
+        }
       }
     },
     "code": null,
     "key": "gateway.failed",
     "vars": {},
-    "detail": null
+    "detail": "the notes of Titus could not be read"
   },
   {
     "wire": {

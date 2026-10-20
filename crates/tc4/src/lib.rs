@@ -21,7 +21,7 @@ use tc_app::{App, AppDeps};
 use tc_server::{AppLock, AppLockError, Server, ServerConfig, Stdio};
 
 use args::{Args, USAGE};
-use join::AppBackend;
+use join::{AppBackend, ServerUploads};
 
 /// How long a new `tc4` waits for an old one that is still closing (AD39).
 const LOCK_WAIT: Duration = Duration::from_secs(10);
@@ -241,6 +241,10 @@ fn serve(args: &Args) -> ExitCode {
         Ok(app) => app,
         Err(error) => return start_failed(error),
     };
+    // The guided fix installs a file the person chose, which the server stored.
+    app.provide_uploads(Arc::new(ServerUploads(Arc::clone(
+        server.handle().uploads(),
+    ))));
     // Nothing else may be on stdout before this line, and the token is in no other place.
     if say(&serde_json::json!({"url": server.address().url, "token": server.address().token}))
         .is_err()

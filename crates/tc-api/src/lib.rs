@@ -141,8 +141,6 @@ macro_rules! endpoint_table {
             query "check/open": $crate::check::Open => $crate::check::CheckSessionView;
             query "check/rows": $crate::check::Rows => $crate::check::RowsView;
 
-            query "resources/fixState": $crate::check::FixState
-                => Option<$crate::check::FixView>;
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;
             command "settings/save": $crate::settings::Save => ();
@@ -159,6 +157,19 @@ macro_rules! endpoint_table {
             query [Sources] "resources/catalog": $crate::resources::Catalog
                 => $crate::resources::CatalogView;
             job [Sources] "resources/download": $crate::resources::Download => $crate::ids::JobId;
+            query [Sources] "resources/checkUpdates": $crate::resources::CheckUpdates
+                => $crate::resources::UpdatesView;
+            job [Sources] "resources/planUpgrade": $crate::resources::PlanUpgrade
+                => $crate::ids::JobId;
+            job "resources/planGateway": $crate::resources::PlanGateway => $crate::ids::JobId;
+            command "resources/applyPlan": $crate::resources::ApplyPlan
+                => $crate::resources::PlanApplied;
+            query "resources/fixState": $crate::resources::FixState
+                => Option<$crate::resources::FixView>;
+            job [Fix] "resources/fixFetch": $crate::resources::FixFetch => $crate::ids::JobId;
+            command "resources/fixSideload": $crate::resources::FixSideload => ();
+            command "resources/fixRepin": $crate::resources::FixRepin
+                => $crate::resources::PlanView;
         }
     };
 }
