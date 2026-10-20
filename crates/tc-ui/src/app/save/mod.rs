@@ -265,8 +265,9 @@ struct Field {
     /// A line for this field went to the mirror and no removal followed.
     mirrored: bool,
     notice: Option<Notice>,
-    /// The newest refresh the field has not taken.
-    waiting: Option<(Pair, Option<PersonLabel>)>,
+    /// The newest refresh the field has not taken, with the tokens of the other records it
+    /// read (a section card's other verses, as `open_over`'s `rest`).
+    waiting: Option<(Pair, Vec<ShownToken>, Option<PersonLabel>)>,
     /// The navigation gate has retried this field's failure, or the failure came during it.
     gate_retried: bool,
     /// A save was asked for and the field had no open: send it once an open is listed.
@@ -370,7 +371,7 @@ impl Field {
 
     fn note_waiting(&mut self) {
         if self.is_dirty()
-            && let Some((pair, by)) = &self.waiting
+            && let Some((pair, _, by)) = &self.waiting
             && self.differs_from_base(pair)
         {
             self.notice = Some(Notice { by: by.clone() });
@@ -454,7 +455,7 @@ impl SaveMachine {
     /// As [`open`](Self::open) for a field that displays several records, a section card: its
     /// saves and drafts are based on the tokens of all of them, `pair.token` first and `rest`
     /// after, in the order the card shows the verses. A field the machine already holds keeps
-    /// the base it has, as `open` does.
+    /// the base it has, as `open` does, unless it takes the read whole.
     pub fn open_over(
         &mut self,
         key: BufferKey,
@@ -468,7 +469,7 @@ impl SaveMachine {
             field.editor = Some(Editor { focused: false });
             field.scope = scope;
             let shown = field.current.clone();
-            out.extend(self.refresh(&key, pair, None));
+            out.extend(self.refresh_over(&key, pair, rest, None));
             self.pump(now, &mut out);
             let shown = self.fields.get(&key).map_or(shown, |f| f.current.clone());
             // `Show` is for an editor already on screen; this one shows what is returned.
@@ -741,16 +742,27 @@ impl SaveMachine {
         match answered {
             Answered::Acked(ack) => {
                 // A verse save also writes the verse's reflowed alignment (R25, Q-6), whose
-                // token comes back beside the verse's: the field's token is its value's.
+                // token comes back beside the verse's: the field's token is its value's. A
+                // section card is based on every verse it displays, and its `Ack` answers each,
+                // in the order of the base (`section_ack`): cutting the base to the first verse
+                // would have the next save read the whole text as that verse.
                 let own = match ack.saved.as_slice() {
                     [saved] => ack
                         .tokens
                         .iter()
                         .find(|t| t.record == saved.record)
-                        .map(|token| (saved, token)),
+                        .and_then(|token| match field.base.len() {
+                            0 | 1 => Some(vec![token.token.clone()]),
+                            n => ack
+                                .tokens
+                                .get(..n)
+                                .filter(|all| all.first() == Some(token))
+                                .map(|all| all.iter().map(|t| t.token.clone()).collect()),
+                        })
+                        .map(|base| (saved, base)),
                     _ => None,
                 };
-                let Some((saved, token)) = own else {
+                let Some((saved, base)) = own else {
                     fail(
                         key,
                         field,
@@ -762,7 +774,7 @@ impl SaveMachine {
                     return out;
                 };
                 field.reissues = 0;
-                field.base = vec![token.token.clone()];
+                field.base = base;
                 field.persisted = Some(saved.text.clone());
                 field.pair_view = field
                     .pair_view
@@ -771,7 +783,7 @@ impl SaveMachine {
                 if field
                     .waiting
                     .as_ref()
-                    .is_some_and(|(pair, _)| !field.is_newer(pair))
+                    .is_some_and(|(pair, ..)| !field.is_newer(pair))
                 {
                     field.waiting = None;
                 }
@@ -884,6 +896,17 @@ impl SaveMachine {
         pair: Pair,
         by: Option<PersonLabel>,
     ) -> Vec<Command> {
+        self.refresh_over(key, pair, Vec::new(), by)
+    }
+
+    /// As [`refresh`](Self::refresh) for a read of several records, a section card's.
+    fn refresh_over(
+        &mut self,
+        key: &BufferKey,
+        pair: Pair,
+        rest: Vec<ShownToken>,
+        by: Option<PersonLabel>,
+    ) -> Vec<Command> {
         let mut out = Vec::new();
         let Some(field) = self.fields.get_mut(key) else {
             return out;
@@ -903,14 +926,14 @@ impl SaveMachine {
             field
                 .waiting
                 .as_ref()
-                .is_none_or(|(held, _)| match (pair.view, held.view) {
+                .is_none_or(|(held, ..)| match (pair.view, held.view) {
                     (Some(view), Some(held)) => view >= held,
                     _ => true,
                 });
         if !newer_than_waiting {
             return out;
         }
-        field.waiting = Some((pair, by));
+        field.waiting = Some((pair, rest, by));
         if field.is_saving() {
             // Judged when the reply has come: it may be this field's own save.
             return out;
@@ -1435,7 +1458,7 @@ fn take_waiting(key: &BufferKey, field: &mut Field, out: &mut Vec<Command>) {
     if field.is_saving() || !field.is_clean_state() || field.focused() {
         return;
     }
-    let Some((pair, _)) = field.waiting.take() else {
+    let Some((pair, rest, _)) = field.waiting.take() else {
         return;
     };
     if !field.is_newer(&pair) {
@@ -1443,7 +1466,7 @@ fn take_waiting(key: &BufferKey, field: &mut Field, out: &mut Vec<Command>) {
     }
     field.current = pair.value.clone();
     field.persisted = Some(pair.value.clone());
-    field.base = vec![pair.token];
+    field.base = std::iter::once(pair.token).chain(rest).collect();
     field.pair_view = field.pair_view.max(pair.view);
     field.touched = false;
     field.notice = None;

@@ -294,6 +294,34 @@ browserTest('paragraph_and_poetry_lines_from_the_card_land_in_the_verse_before',
   }, { hooks: true });
 }, { hooks: true });
 
+// A page that reloads while a section save runs sends that save again with no card. The card
+// opened afterwards is based on every verse it shows: a base cut to the first verse made its
+// next save write the whole text into verse 9.
+browserTest('a_section_card_opened_after_a_reload_during_its_save_saves_each_verse', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTitus2(page);
+    await pill(page, '9–10').click();
+    await typing(page, '9–10').fill(`9 ${NINE}\n10 ${TEN}`);
+    await env.call('test/hold', { request: newRequestId(), at: 'save' });
+    await saveButton(page).click();
+    await until('saving', async () => (await indicator(page).getAttribute('data-state')) === 'saving', 5_000);
+    await page.reload();
+    await page.getByTestId('account-menu').waitFor();
+    await env.call('test/release', { request: newRequestId(), at: 'save' });
+    await until('stored', async () => (await verseOf(env, '10')).words.value === TEN);
+    if (!(await pill(page, '9–10').isVisible())) await openTitus2(page);
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    await pill(page, '9–10').click();
+    assert.equal(await typing(page, '9–10').inputValue(), `9 ${NINE}\n10 ${TEN}`);
+    await typing(page, '9–10').fill(`9 ${NINE} amén\n10 ${TEN}`);
+    await saveButton(page).click();
+    await card(page).waitFor({ state: 'detached' });
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    assert.equal((await verseOf(env, '9')).words.value, `${NINE} amén`);
+    assert.equal((await verseOf(env, '10')).words.value, TEN);
+  }, { hooks: true });
+}, { hooks: true });
+
 // #241: a held number takes the press and selects no text; Escape on a word puts it back.
 browserTest('a_held_number_selects_no_text_and_escape_puts_it_back', async () => {
   await withApp(async ({ page }) => {

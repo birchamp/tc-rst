@@ -1610,3 +1610,102 @@ fn a_section_card_is_based_on_every_verse_it_displays() {
         "{sent:?}"
     );
 }
+
+/// A section save's `Ack`: the card's text under the first verse, and a token for each verse it
+/// displayed, in order (`tc_app::wire::write::section_ack`).
+fn section_ack(text: &str, tokens: &[u64], view: u64) -> tc_api::write::Ack {
+    let mut ack = super::save_kit::ack(text, tokens[0], view);
+    for (n, token) in tokens.iter().enumerate().skip(1) {
+        ack.tokens.push(tc_api::write::TokenUpdate {
+            record: tc_api::ids::RecordRef::parse(&format!(r#"{{"kind":"verse{n}"}}"#)).unwrap(),
+            token: tok(*token),
+        });
+    }
+    ack
+}
+
+fn send_of(commands: &[Command]) -> (tc_api::ids::RequestId, Vec<tc_api::token::ShownToken>) {
+    commands
+        .iter()
+        .find_map(|c| match c {
+            Command::Send { sent, base, .. } => Some((sent.request, base.clone())),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no send in {commands:?}"))
+}
+
+/// An `Ack` keeps a section card based on every verse it displays: a base cut to the first
+/// verse made the next save write the whole text into that verse.
+#[test]
+fn a_section_ack_keeps_the_card_based_on_every_verse() {
+    let mut m = SaveMachine::new(instance(), ids());
+    let k = key_of(FieldKind::Section, "TIT 2:9-10");
+    let at = FieldScope::Project(Some(scope(1)));
+    m.open_over(
+        k.clone(),
+        at,
+        pair("9 a\n10 b", 1, Some(1)),
+        vec![tok(2)],
+        0.0,
+    );
+    m.focus(&k, 0.0);
+    m.typed(&k, "9 a2\n10 b", tc_ui::app::save::Source::Input, 1.0);
+    let (request, base) = send_of(&m.save(&k, 2.0));
+    assert_eq!(base, [tok(1), tok(2)]);
+    // The text changed while the save ran, so the field stays dirty after the Ack.
+    m.typed(&k, "9 a2\n\t10 b", tc_ui::app::save::Source::Program, 3.0);
+    m.reply(
+        &k,
+        request,
+        Answered::Acked(section_ack("9 a2\n10 b", &[11, 12], 2)),
+        4.0,
+    );
+    assert_eq!(m.base(&k), Some(&[tok(11), tok(12)][..]));
+    let (_, base) = send_of(&m.save(&k, 5.0));
+    assert_eq!(base, [tok(11), tok(12)]);
+}
+
+/// A section save restored after a reload is answered with no card; the card opened again
+/// takes a newer read whole, every verse's token with it, and keeps the `Ack`'s tokens over an
+/// older read.
+#[test]
+fn a_section_card_opened_over_its_answered_save_names_every_verse() {
+    for (read_seq, expected) in [(9, [tok(21), tok(22)]), (1, [tok(11), tok(12)])] {
+        let mut m = SaveMachine::new(instance(), ids());
+        let k = key_of(FieldKind::Section, "TIT 2:9-10");
+        let at = FieldScope::Project(Some(scope(1)));
+        let entry = tc_api::buffer::BufferEntry {
+            api: 1,
+            instance: instance(),
+            base: vec![tok(1), tok(2)],
+            text: "9 a\n10 b".into(),
+            sent: Some(SentSave {
+                request: tc_api::ids::RequestId::from_bytes([7; 16]),
+                text: "9 a\n10 b".into(),
+                scope: Some(scope(1)),
+            }),
+            at: tc_api::ids::WallMs(1),
+            draft: None,
+        };
+        let (request, base) = send_of(&m.restore(k.clone(), entry, at.clone(), 0.0));
+        assert_eq!(base, [tok(1), tok(2)]);
+        m.reply(
+            &k,
+            request,
+            Answered::Acked(section_ack("9 a\n10 b", &[11, 12], 5)),
+            1.0,
+        );
+        let (shown, _) = m.open_over(
+            k.clone(),
+            at,
+            super::save_kit::pair_at("9 a\n10 b", 21, 1, read_seq),
+            vec![tok(22)],
+            2.0,
+        );
+        assert_eq!(shown, "9 a\n10 b");
+        m.focus(&k, 2.0);
+        m.typed(&k, "9 a amén\n10 b", tc_ui::app::save::Source::Input, 3.0);
+        let (_, base) = send_of(&m.save(&k, 4.0));
+        assert_eq!(base, expected, "read at {read_seq}");
+    }
+}
