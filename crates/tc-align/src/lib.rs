@@ -54,7 +54,7 @@ pub use tc_journal::record::{AlignmentGroup, AlignmentValue, ResourceRef, Source
 pub use value::{
     Basis, Malformed, VerseState, VerseStatus, holds_the_words_of, needs_review, verse_status,
 };
-pub use words::{Occurrence, SourceVerse, TargetVerse, WordId};
+pub use words::{Occurrence, SourceBook, SourceVerse, TargetVerse, WordId};
 
 /// Errors reading external data into alignment values.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

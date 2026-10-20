@@ -310,6 +310,9 @@ struct Opts {
     /// The project pins the translation words too, at a release a newer one of which no longer
     /// has the article of some of its decided words checks; the notes are at their newest.
     words: bool,
+    /// With `texts`: Titus 1:1's alignment is marked done and vouches for its verse under the
+    /// pinned original text, as Mark valid leaves it.
+    first_valid: bool,
     trouble: Trouble,
 }
 
@@ -406,7 +409,20 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
             id: "ult".parse().unwrap(),
             pin: old_ult,
         }];
+        let verse_text = |n: u16| {
+            records.iter().find_map(|r| match r {
+                Record::Verse {
+                    book: BookId::Titus,
+                    chapter,
+                    verse,
+                    value: tc_journal::record::VerseValue::Text { words, layout, .. },
+                } if chapter.get() == 1 && verse.get() == n => Some(format!("{words}{layout}")),
+                _ => None,
+            })
+        };
+        let first_md5 = verse_text(1).map(|text| tc_align::TargetVerse::new(&text).md5());
         for verse in 1..=3u16 {
+            let valid = opts.first_valid && verse == 1;
             records.push(Record::Alignment {
                 book: BookId::Titus,
                 chapter: tc_journal::ChapterNo::new(1).unwrap(),
@@ -415,10 +431,13 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
                     span_end: tc_journal::VerseNo::new(verse).unwrap(),
                     alignments: Vec::new(),
                     word_bank: Vec::new(),
-                    target_verse_md5: tc_journal::Md5::of(b"Paul"),
+                    target_verse_md5: match first_md5 {
+                        Some(md5) if valid => md5,
+                        _ => tc_journal::Md5::of(b"Paul"),
+                    },
                     source_version: "dcs::unfoldingWord/el-x-koine_ugnt@v0.34".into(),
                     source: Some(ugnt.resource()),
-                    done: false,
+                    done: valid,
                     marked_invalid: false,
                     dismissed: false,
                     extra: tc_journal::json::JsonMap::default(),
@@ -1695,6 +1714,59 @@ async fn ugnt_upgrade_counts_the_verses_whose_alignments_it_marks_and_keeps_ever
         "v88",
         "the gateway Bible is not touched"
     );
+}
+
+/// The state of Titus 1:1's row on the Align rail.
+async fn rail_state_of_1_1(w: &World) -> tc_api::align::RailState {
+    let rail = ok(
+        &w.t.app,
+        &tc_api::align::Index {
+            at: w.at.clone(),
+            book: BookId::Titus,
+        },
+    )
+    .await;
+    rail.items
+        .iter()
+        .find(|i| (i.place.chapter, i.place.verse) == (1, 1))
+        .map(|i| i.status.state)
+        .expect("Titus 1:1 has a row")
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ugnt_upgrade_marks_1_1_invalid_in_align() {
+    // tC4 #722: after the UGNT upgrade a verse aligned under the old text lost its verse
+    // button. The rail and the picker's Align card read the pin's sha, so 1:1 shows as needing
+    // review, and its links are still there to review.
+    let w = build(
+        0,
+        0,
+        None,
+        Opts {
+            texts: true,
+            first_valid: true,
+            ..Opts::default()
+        },
+    )
+    .await;
+    use tc_api::align::RailState;
+    assert_eq!(
+        rail_state_of_1_1(&w).await,
+        RailState::Valid,
+        "aligned under v0.34"
+    );
+    let aligned = alignment_heads(&w);
+    let view = plan_text(&w, "el-x-koine_ugnt", 50).await;
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, view.plan, 51)).await,
+        PlanApplied::Applied
+    );
+    assert_eq!(
+        rail_state_of_1_1(&w).await,
+        RailState::Invalid,
+        "the verse needs review against v0.35"
+    );
+    assert_eq!(alignment_heads(&w), aligned, "its links are kept");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -373,7 +373,7 @@ fn load(
 impl App {
     /// The open session's resources of `book`, read at its first need and kept with the
     /// previous book's.
-    async fn loaded_book(
+    pub(crate) async fn loaded_book(
         &self,
         session: &Arc<ProjectSession>,
         book: BookId,

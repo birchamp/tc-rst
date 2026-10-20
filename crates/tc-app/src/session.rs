@@ -74,6 +74,8 @@ pub struct ProjectSession {
     books: crate::understand::BookCache,
     /// The check lists this open has derived (B5a).
     checks: crate::check::CheckCache,
+    /// The open aligner (B6).
+    pub(crate) align: crate::align::AlignCache,
 }
 
 impl ProjectSession {
@@ -621,6 +623,7 @@ impl SessionRegistry {
             view: AtomicU64::new(first.seq()),
             books: Default::default(),
             checks: Default::default(),
+            align: Default::default(),
         });
         // Subscribed before the slot is open, so no step of the store is missed.
         let events = handle.subscribe();
@@ -706,6 +709,16 @@ impl SessionRegistry {
         } = leave;
         let registry = self.clone();
         self.inner.runtime.spawn(async move {
+            // The links of an open aligner are saved first: the leave checkpoint (and the quit's)
+            // must hold them (AD18).
+            session
+                .align
+                .finish(
+                    &registry.inner.reports,
+                    registry.inner.clock.now(),
+                    session.scope.project.as_str(),
+                )
+                .await;
             let started = registry.inner.clock.now();
             let outcome = session
                 .handle

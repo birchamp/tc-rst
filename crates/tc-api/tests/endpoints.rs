@@ -60,6 +60,14 @@ const PHASE_0: &[&str] = &[
     "resources/fixState",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",
+    // B6: the aligner's rail, its session and its save.
+    "align/index",
+    "align/open",
+    "align/edit",
+    "align/keepReflow",
+    "align/suggest",
+    "align/flush",
+    "align/close",
     // B9a: Project settings from Home, and Get source texts with its downloads.
     "settings/viewFromHome",
     "resources/sources",

@@ -46,6 +46,9 @@ pub fn Check() -> impl IntoView {
         Some((_, book, CheckView::Tool(tool))) => {
             check_session(&s, &actions, book, tool).into_any()
         }
+        Some((_, book, CheckView::Align)) => {
+            crate::views::align::align_workspace(&s, &actions, book).into_any()
+        }
     })
     .into_any()
 }

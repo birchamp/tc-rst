@@ -61,6 +61,11 @@ pub enum Effect {
         aligner: AlignerId,
         state: AlignSave,
     },
+    /// The suggestion engine's state changed: the open aligner's view is read again, because
+    /// the view carries the state (a `Resync` does the same, APP-DESIGN 5.4).
+    Suggest {
+        at: Scope,
+    },
 }
 
 /// The effects of one delivery, in the order to run them. Every delivery has at least one.
@@ -107,6 +112,7 @@ pub fn react(incoming: &Incoming) -> Vec<Effect> {
                     aligner: *aligner,
                     state: state.clone(),
                 }],
+                SessionEvent::Suggest { .. } => vec![Effect::Suggest { at: at.clone() }],
             },
         },
     }

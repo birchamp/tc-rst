@@ -105,6 +105,9 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   its rail calls an alignment valid when only its words are wrong.
 - A carry-over that loses no link is saved when the translator leaves the verse
   (APP-DESIGN AD19); tC4 writes nothing at open (#787).
+- Align's cards are a Tab stop while words are chosen, and Enter or Space places them, so a
+  person who cannot drag or point can align (#568); tC4 4.0 has no key for it. Every card also
+  shows the pinned verse's words (#790, above).
 - A verse that still holds the alignment markup of the file it was added from does not
   open in Align, and no verse save writes an alignment over it (#794). This is tC4's open
   PR #799.

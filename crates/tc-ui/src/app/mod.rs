@@ -16,6 +16,7 @@
 #![deny(clippy::indexing_slicing)]
 
 pub mod account;
+pub mod align;
 pub mod boot;
 pub mod buffer;
 pub mod cache;

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
 use crate::account::AccountView;
-use crate::align::AlignSave;
+use crate::align::{AlignSave, SuggestStatus, Testament};
 use crate::check::CheckListRef;
 use crate::ids::{
     AlignerId, ProjectRef, RecordRef, RequestId, Scope, ServerInstance, StoryNo, ViewSeq,
@@ -87,6 +87,12 @@ pub enum SessionEvent {
     AlignSave {
         aligner: AlignerId,
         state: AlignSave,
+    },
+    /// Where the suggestion engine stands for a testament of this project (B6). Every aligner
+    /// view carries it again, so a gap cannot leave a stale row standing.
+    Suggest {
+        testament: Testament,
+        status: SuggestStatus,
     },
 }
 

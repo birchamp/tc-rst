@@ -167,6 +167,12 @@ scoped!(
     crate::resources::FixFetch,
     crate::resources::FixSideload,
     crate::resources::FixRepin,
+    crate::align::Open,
+    crate::align::Edit,
+    crate::align::KeepReflow,
+    crate::align::Suggest,
+    crate::align::Flush,
+    crate::align::Close,
 );
 unscoped!(
     crate::app::Quit,

@@ -9,6 +9,7 @@
 //! reads of a project cost, and [`wire`] converts the seam's types into tc-api's.
 
 pub mod account;
+mod align;
 pub mod app;
 pub mod backend;
 pub mod bundle;

@@ -215,6 +215,12 @@ impl Aligner {
         self.stale = false;
     }
 
+    /// The caller has stored the value as it stands: it is no longer to be saved, until the
+    /// translator changes it again.
+    pub fn mark_saved(&mut self) {
+        self.changed = false;
+    }
+
     /// A stored alignment made for another span, kept aside when the verse opened.
     pub fn earlier(&self) -> Option<&AlignmentValue> {
         self.earlier.as_ref()
@@ -302,14 +308,15 @@ impl Aligner {
         self.edit(|v, _| v.split(card))
     }
 
-    /// Start the verse over.
+    /// Start the verse over. Standing suggestions go: they were drawn from links that are gone
+    /// (tC4 #758).
     pub fn clear(&mut self) {
-        // Clearing cannot fail; the edit path only adds the sorts, the settle and the
-        // rebind.
+        // Clearing cannot fail; the edit path only adds the sorts and the settle.
         let _ = self.edit(|v, verse| {
             v.clear(verse);
             Ok(())
         });
+        self.proposals.clear();
     }
 
     /// Mark valid: the verse is done, words left in the bank or not (D73).

@@ -149,6 +149,8 @@ pub struct AppState {
     pub u: super::understand::UnderstandState,
     /// The Check screen (B5a).
     pub c: super::check::CheckState,
+    /// The Align tool (B6).
+    pub a: super::align::AlignState,
     /// `/ui/<build>/`, where the logo and the catalogs are.
     pub base: Arc<str>,
     /// What the server holds: the internet switch, the account, the saved language, the
@@ -196,6 +198,7 @@ impl AppState {
                 place.map_or(1, |p| p.chapter),
             ),
             c: super::check::CheckState::new(),
+            a: super::align::AlignState::new(),
             base: Arc::from(base),
             server,
         }

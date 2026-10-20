@@ -1,0 +1,24 @@
+[
+  {
+    "type": "off"
+  },
+  {
+    "type": "reading"
+  },
+  {
+    "type": "none"
+  },
+  {
+    "type": "ready",
+    "value": {
+      "verses": 1,
+      "boosted": false
+    }
+  },
+  {
+    "type": "error",
+    "value": {
+      "reason": "the engine stopped"
+    }
+  }
+]

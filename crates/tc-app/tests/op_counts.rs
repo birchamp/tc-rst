@@ -19,6 +19,7 @@ mod rail_differential;
 mod store_world;
 
 mod op_counts {
+    mod align;
     mod check;
     pub mod corpus;
     pub mod harness;

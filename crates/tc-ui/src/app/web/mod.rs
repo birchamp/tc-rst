@@ -7,6 +7,7 @@
 //! completion never meets a disposed one; Leptos context values are wrapped in `SendWrapper`,
 //! which is sound because a browser runs the UI on one thread; and nothing panics.
 
+pub mod align;
 mod api;
 pub mod app_ctx;
 pub(crate) mod bridge;
@@ -179,6 +180,23 @@ impl Runtime {
         id
     }
 
+    /// An aligner's save state, as its latest view or the answer to a flush says: what the
+    /// indicator and the close guard count (B6, 5.4).
+    pub fn align_save(&self, aligner: tc_api::ids::AlignerId, save: tc_api::align::AlignSave) {
+        self.0.state.align_saves.update(|map| {
+            map.insert(aligner, save);
+        });
+        self.0.saves.server_states_changed();
+    }
+
+    /// The aligner is closed or gone: nothing of it waits to be saved.
+    pub fn align_forget(&self, aligner: tc_api::ids::AlignerId) {
+        self.0.state.align_saves.update(|map| {
+            map.remove(&aligner);
+        });
+        self.0.saves.server_states_changed();
+    }
+
     pub fn unlisten(&self, id: ListenerId) {
         self.0
             .listeners
@@ -280,6 +298,8 @@ impl Runtime {
                 });
                 self.0.saves.server_states_changed();
             }
+            // The Align screen reads its view again: its listener sees the frame.
+            Effect::Suggest { .. } => {}
         }
     }
 

@@ -6,6 +6,7 @@
 #![deny(clippy::indexing_slicing)]
 
 pub mod account_menu;
+pub mod align;
 pub mod book_rail;
 pub mod check;
 pub mod conflict_markers;
@@ -13,6 +14,7 @@ pub mod draft_chrome;
 pub mod help_panel;
 pub mod helps_panel;
 pub mod home;
+pub mod item_nav;
 pub mod modals;
 pub mod open_progress;
 pub mod panel_icons;
