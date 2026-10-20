@@ -423,6 +423,10 @@ impl ProjectStore for ScenarioStore {
         self.backend.copy(folder, name)
     }
 
+    fn create(&self, new: super::NewProjectSpec) -> Result<(), super::CreateFailure> {
+        self.backend.create(new)
+    }
+
     fn trust_lock(&self, folder: &ProjectRef) {
         self.backend.trust_lock(folder);
     }

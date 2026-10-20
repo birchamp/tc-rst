@@ -54,6 +54,10 @@ pub struct CurrentGateway {
     pub autonym: String,
 }
 
+/// The font Project settings and New Bible show first, and the one a project that holds none
+/// shows (tC4 `SCRIPT_FONTS[0]`).
+pub const DEFAULT_FONT: &str = "Noto Sans (default)";
+
 /// The values the dialog showed, which a save is made from (AD14, tC4's compare-and-swap of
 /// `readSettingsWithMd5`): the project must still hold them, or nothing is saved.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

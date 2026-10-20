@@ -573,6 +573,24 @@ impl ProjectStore for StoreBackend {
         }
     }
 
+    fn create(&self, new: super::NewProjectSpec) -> Result<(), super::CreateFailure> {
+        use super::CreateFailure;
+        let created = self.store.create(&tc_store::NewProject {
+            name: new.folder.as_str().to_owned(),
+            kind: new.kind,
+            records: new.records,
+            books: Vec::new(),
+        });
+        match created {
+            Ok(_) => Ok(()),
+            Err(tc_store::CreateError::NameExists(_)) => Err(CreateFailure::NameExists),
+            Err(tc_store::CreateError::Refused(tc_store::CommandError::Refused(
+                tc_store::Refusal::NotValidInBurrito(why),
+            ))) => Err(CreateFailure::NotHeld(why)),
+            Err(error) => Err(CreateFailure::Failed(error.to_string())),
+        }
+    }
+
     fn trust_lock(&self, folder: &ProjectRef) {
         lock(&self.trusted).insert(folder.clone());
     }
@@ -752,7 +770,7 @@ pub(crate) fn open_phase(phase: tc_store::Phase) -> OpenPhase {
 
 /// The pins a new project gets (tC4 `INSTALLED_SUITE`), which an open writes into a project
 /// that holds none (tC4 #766): every group or, should one not convert, none.
-fn creation_pins() -> Vec<(PinGroup, PinGroupValue)> {
+pub(crate) fn creation_pins() -> Vec<(PinGroup, PinGroupValue)> {
     let pins = tc_resources::suite::project_pins();
     PinGroup::ALL
         .into_iter()

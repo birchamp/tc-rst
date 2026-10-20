@@ -47,7 +47,7 @@ fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
 }
 
 /// Every file under `folder` on disk, by its path relative to it.
-fn files_on_disk(folder: &Path) -> BTreeMap<String, Vec<u8>> {
+pub(super) fn files_on_disk(folder: &Path) -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
     let mut stack = vec![folder.to_owned()];
     while let Some(dir) = stack.pop() {
@@ -68,25 +68,25 @@ fn files_on_disk(folder: &Path) -> BTreeMap<String, Vec<u8>> {
     out
 }
 
-struct OnDisk {
-    dir: TempDir,
-    projects: PathBuf,
+pub(super) struct OnDisk {
+    pub(super) dir: TempDir,
+    pub(super) projects: PathBuf,
 }
 
 impl OnDisk {
-    fn new() -> OnDisk {
+    pub(super) fn new() -> OnDisk {
         let dir = tempfile::tempdir().unwrap();
         let projects = dir.path().join("projects");
         std::fs::create_dir(&projects).unwrap();
         OnDisk { dir, projects }
     }
 
-    fn app_data(&self) -> PathBuf {
+    pub(super) fn app_data(&self) -> PathBuf {
         self.dir.path().join("app-data")
     }
 
     /// An app with test hooks on, its store on this computer's files.
-    async fn start(&self) -> TestApp {
+    pub(super) async fn start(&self) -> TestApp {
         let projects = self.projects.clone();
         TestApp::start_with(self.dir.path(), &Parts::new(), move |config, deps| {
             config.projects = ProjectsFolder::Given(projects);
