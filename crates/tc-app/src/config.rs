@@ -177,9 +177,10 @@ pub enum RootChoice {
     /// The local folder was already there: an earlier first launch chose it.
     ExistingLocal,
     /// The local folder exists and so does the default one. The local folder is there only
-    /// because an earlier first launch chose it and filled it, so it is used and the default
-    /// one, which appeared later, is named in the report. Using the default instead would
-    /// stop listing projects the person already works in.
+    /// because an earlier first launch chose it or a copy of a read-only project made it, so
+    /// it is the root, and the default one is listed beside it and named in the report. Using
+    /// the default as the root instead would not change what is listed, but a new project
+    /// would go into a folder that may be the synced one.
     LocalBesideDefault { default: PathBuf },
     /// First launch: no client copies the default folder, so it is created.
     FirstLaunch,
@@ -204,11 +205,11 @@ impl RootChoice {
 /// moves a project and a launch never lists fewer projects than the one before it; only a
 /// first launch, when neither default exists, looks at the cloud detection.
 ///
-/// When both exist, the local folder wins: no app path creates it except a first launch that
-/// found the default synced, so it holds the projects earlier launches listed, and a default
-/// folder made later by hand or by a sync client does not replace it. The default folder's
-/// projects, if it has any, are not listed; [`RootChoice::LocalBesideDefault`] names it so
-/// the report says so.
+/// When both exist, the local folder is the root: a first launch that found the default synced
+/// or a copy of a read-only project made it, so it holds projects earlier launches listed, and
+/// a default folder made later by hand or by a sync client does not replace it. The default
+/// folder is listed beside it; [`RootChoice::LocalBesideDefault`] names it, so the report
+/// says so and the app starts its store.
 pub fn choose_projects_root(
     folder: &ProjectsFolder,
     env: &HostEnv,

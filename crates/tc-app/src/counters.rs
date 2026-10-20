@@ -163,6 +163,18 @@ impl CountingSnapshot {
         self.snapshot.fold().projected(key)
     }
 
+    /// Whether the record has two versions that disagree and are listed as a conflict. Heads
+    /// that merge without disagreement are not one: a change over them keeps both.
+    pub fn in_conflict(&self, key: &RecordKey) -> bool {
+        matches!(
+            self.key_state(key),
+            Some(KeyState {
+                state: tc_journal::fold::Resolved::Conflict(_),
+                ..
+            })
+        )
+    }
+
     pub fn heads(&self, key: &RecordKey) -> Vec<ChangeId> {
         self.count(AppCounter::RecordsRead, 1);
         self.snapshot.fold().heads(key)
@@ -246,9 +258,25 @@ impl CountingSnapshot {
         decisions
     }
 
+    /// Every decision of `tool` on one book or on the stories, with the state its decision
+    /// file carries (R1). A book's decisions are read against the book's text, so a book
+    /// counts as one projection of its text.
+    pub fn decisions(&self, tool: ToolId, collection: Collection) -> Vec<ProjectedDecision> {
+        let decisions = self.snapshot.fold().decisions(tool, collection);
+        self.count(AppCounter::KeysProbed, decisions.len());
+        if matches!(collection, Collection::Book(_)) {
+            self.count(AppCounter::BookUsfm, 1);
+        }
+        decisions
+    }
+
     /// The texts the checks of `collection` are read against, for a decision shown on a check
-    /// under another key than its own (§7.7). Each text is read when it is asked for.
+    /// under another key than its own (§7.7): one projection of the book's text, and each
+    /// check's text is read when it is asked for.
     pub fn check_texts(&self, collection: Collection) -> CheckTexts<'_> {
+        if matches!(collection, Collection::Book(_)) {
+            self.count(AppCounter::BookUsfm, 1);
+        }
         self.snapshot.fold().check_texts(collection)
     }
 

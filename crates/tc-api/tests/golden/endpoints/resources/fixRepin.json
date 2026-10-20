@@ -1,0 +1,84 @@
+{
+  "path": "resources/fixRepin",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "tool": "translationWords",
+    "unit": {
+      "type": "book",
+      "value": "TIT"
+    },
+    "sha": "2222222222222222222222222222222222222222"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "plan": 4,
+      "what": {
+        "type": "repin",
+        "value": {
+          "rung": "fallback",
+          "language": "en",
+          "moves": [
+            {
+              "repo": "es-419_tn",
+              "from": "v66",
+              "to": "v67",
+              "published": "2026-10-02T14:03:11Z"
+            }
+          ]
+        }
+      },
+      "decisionsAtRisk": 4,
+      "rows": [
+        {
+          "tool": "translationWords",
+          "unit": {
+            "type": "book",
+            "value": "TIT"
+          },
+          "decisions": 2,
+          "against": "es-419_twl",
+          "carry": {
+            "carried": 2,
+            "checkAgain": 0
+          }
+        },
+        {
+          "tool": "translationNotes",
+          "unit": {
+            "type": "book",
+            "value": "TIT"
+          },
+          "decisions": 2,
+          "against": "es-419_tn",
+          "carry": null
+        }
+      ],
+      "blocked": [
+        {
+          "tool": "translationNotes",
+          "unit": {
+            "type": "stories"
+          },
+          "reason": "versificationUnknown"
+        }
+      ],
+      "alignments": 12
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

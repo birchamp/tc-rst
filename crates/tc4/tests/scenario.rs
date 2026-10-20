@@ -86,7 +86,7 @@ fn serve_sample(extra: &[&str]) -> (TempDir, PathBuf, PathBuf, String) {
     );
     // The whole line, so a format string that lost a continuation fails here.
     let refused =
-        "refused sample_burrito_obs, 53 mismatches (docs/evidence/state-seed-check-2026-10-18.md):";
+        "refused sample_burrito_obs, 52 mismatches (docs/evidence/state-seed-check-2026-10-18.md):";
     assert!(
         stderr
             .lines()

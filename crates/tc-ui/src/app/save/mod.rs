@@ -724,11 +724,21 @@ impl SaveMachine {
         field.retry_at = None;
         match answered {
             Answered::Acked(ack) => {
-                let ([saved], [token]) = (ack.saved.as_slice(), ack.tokens.as_slice()) else {
+                // A verse save also writes the verse's reflowed alignment (R25, Q-6), whose
+                // token comes back beside the verse's: the field's token is its value's.
+                let own = match ack.saved.as_slice() {
+                    [saved] => ack
+                        .tokens
+                        .iter()
+                        .find(|t| t.record == saved.record)
+                        .map(|token| (saved, token)),
+                    _ => None,
+                };
+                let Some((saved, token)) = own else {
                     fail(
                         key,
                         field,
-                        SaveError::BadAck("an Ack for one field holds one value and one token"),
+                        SaveError::BadAck("an Ack for one field holds one value and its token"),
                         &ctx,
                         &mut out,
                     );

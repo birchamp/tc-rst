@@ -28,10 +28,10 @@
   },
   "totals": {
     "rows": 130,
-    "same": 9,
+    "same": 14,
     "declared": 0,
-    "differs": 56,
-    "unported": 65,
+    "differs": 68,
+    "unported": 48,
     "failed": 0
   },
   "rows": [
@@ -114,11 +114,32 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B4a",
-        "dom": "B4a",
-        "meaning": "B4a"
+      "status": "differs",
+      "by": "B4a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
+        "rustSha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "3e27eb9e669b3cf153ed6418ca4a7e7ddb19bc88bbec2d03b415730c91075a7e",
+        "rustSha256": "c3bb32908edbb4610d1856f313bf2801de6f9e47c3d533f552d89a540882c41a",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 1351: tC4               \"“It is necessary to stop them … they should”\" | rust               \"“It is necessary to stop them”\"",
+          "line 1378: tC4               \"“It is necessary … teaching what they should not”\" | rust               \"“teaching what they should not”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1196,11 +1217,31 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B4a",
-        "dom": "B4a",
-        "meaning": "B4a"
+      "status": "differs",
+      "by": "B4a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
+        "rustSha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "8252bdeb4bb17728b64be6834f74ddc0db7492dc1bb26e3466a73db46b105f9e",
+        "rustSha256": "54c358010d2e89dd1a1070ca545e927f79740ff85fc325aeea63f137e7330320",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 1346: tC4               \"“It is necessary to stop them … they should”\" | rust               \"“It is necessary to stop them”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1220,11 +1261,29 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B4a",
-        "dom": "B4a",
-        "meaning": "B4a"
+      "status": "same",
+      "by": "B4a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
+        "rustSha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "4eadd4501bc0afaf5835272e9a343f38c7273091f49c825608fdc22187d5db82",
+        "rustSha256": "f4c2c428bb904325cf65ed0396f1c759ebabfa4eadea3952ed998dc7d7454d15",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -2102,10 +2161,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "4c19305741884f5670bd92668c545db23c677e56b1ab69c03aca18b55ac8679a",
+        "rustSha256": "4c19305741884f5670bd92668c545db23c677e56b1ab69c03aca18b55ac8679a",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "a574a6d2d41e972c69838729770cf35b90ed54c4a3dd623539e3eda212859718",
+        "rustSha256": "95822d8d8c7e7ee1da659b002d779f074c8bfdd1ef73594806754123f4e44c31",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 383: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 384: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
       }
     },
     {
@@ -2113,10 +2189,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "ba1ad5b83071b0dbd651ea6487af98bf3b5f08ac0f923cc18950f27d9340b138",
+        "rustSha256": "ba1ad5b83071b0dbd651ea6487af98bf3b5f08ac0f923cc18950f27d9340b138",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "e73b60c709a8658227d64099cae8542286d004baecfe2267945ad3bcfd22fed5",
+        "rustSha256": "e0a32a2447ae16d3348b459b75f405c190b66ba1b523342312853b17efc0a655",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 381: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 382: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
       }
     },
     {
@@ -2124,10 +2217,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "3fbc8120a721c1e840095eda0f0f8bc5ead80cca02e16d776b2a5e0a86823698",
+        "rustSha256": "3fbc8120a721c1e840095eda0f0f8bc5ead80cca02e16d776b2a5e0a86823698",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "0000d5e4ae3302fe621539135ec912d597f8f28f6d36a7f3630d6324b7a67c90",
+        "rustSha256": "726a1ce19ccdbefaa0a280c606f98254c8e3f7e2b0eb045cc6289bc5e6ee8284",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 383: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 384: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
       }
     },
     {
@@ -2135,10 +2245,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "05ffc6c2fa9a0b1a483c80d314c11d1fbf34c9377d29bb9e5d81f7a56f75238d",
+        "rustSha256": "05ffc6c2fa9a0b1a483c80d314c11d1fbf34c9377d29bb9e5d81f7a56f75238d",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "e9cf88b7b4ecc21b846e59e2fb62dfa7bc643cce8eb4ecbe5bc9fdecd45a9d06",
+        "rustSha256": "12ee68df901015b8d367ad2c0d39f255f6640898d6ca2a5ae8536a751aa7d450",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 386: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 387: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
       }
     },
     {
@@ -2146,10 +2273,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "29bf10cfe6015871b7344d34ba28912e5ccd012bf0e50b54976683fcfc5f5487",
+        "rustSha256": "29bf10cfe6015871b7344d34ba28912e5ccd012bf0e50b54976683fcfc5f5487",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "8391c6a4e1ded09be09a99335bc52e9daee1028f1884f53c660bd7c86afeecfe",
+        "rustSha256": "301987dd0987b54929e7b117a5ab5037f37f3a3fc11c3cab1734f11b49df91c8",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 371: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 372: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
       }
     },
     {
@@ -2159,8 +2303,8 @@
       "locale": "en",
       "status": "unported",
       "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+        "pixels": "B5b",
+        "dom": "B5b"
       }
     },
     {
@@ -2168,10 +2312,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "same",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
+        "rustSha256": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "40e2b5d497d427db76e6ad24bb7d4bb44639e1031418ea2e65c42047908dceac",
+        "rustSha256": "8baa5062b18d7076a5f02a3d86ff983c724b007639e3f01322a28abd4d2db83c",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2179,10 +2337,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "same",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "89858eb16f35e15f338130051bcae33dddd2384da20cfa0465daf07612406e22",
+        "rustSha256": "89858eb16f35e15f338130051bcae33dddd2384da20cfa0465daf07612406e22",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "e6ec6edc5cf7aadaf7e1c074b9c57e5090d476459bbc5abcdb17190cc9bc9102",
+        "rustSha256": "9f254792060ba210732bd18c166f960d32a10d38a7d34206b4f2f6f0f9d58b66",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2190,10 +2362,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "same",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "d1d397c64baf4f0174a287b5c03224aaaed93658c74435503ee8cc396d48f74b",
+        "rustSha256": "d1d397c64baf4f0174a287b5c03224aaaed93658c74435503ee8cc396d48f74b",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "0ce5e9514d6780aecbcfa809775f2651701f196f7f853dc6091fb8aad65e9398",
+        "rustSha256": "62e7e9495889a6b80aab1e4afd08e8024f70d0f1416b24fb7889ef28d9e1f587",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2201,10 +2387,26 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "fb822d6702c7c5765302149053bbed325d7eaf894395aa81308508d71fe07644",
+        "rustSha256": "039ac001029c92a87923547da9f12159bba8cdd6a5f18e5eff7b0656ce5a9e3a",
+        "mismatched": 157305,
+        "outsideMasks": 157305,
+        "masks": [],
+        "diff": "diffs/gateway-change-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "307c6512c12e141bd324b7473ab25b7e2dfbea047ef88127c732a741c1048a42",
+        "rustSha256": "d2b6ada2baf4392222f16861dd4cb1bc72164aeebe1d20643121d50668958cd1",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 152: tC4                     \" Another project is open now. Open this project and choose the language again.\" | rust                     \" There is no room left on the disk.\""
+        ]
       }
     },
     {
@@ -2212,10 +2414,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C8",
-        "dom": "C8"
+      "status": "same",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "007ac25fcc03a358d7ac30b4261514267c972c418ba2b94f85fdd33f8e10f619",
+        "rustSha256": "007ac25fcc03a358d7ac30b4261514267c972c418ba2b94f85fdd33f8e10f619",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "0d8e0376fcf837052d4e3014c2951307222fbd450aa9173ff58b2cd73cfdbe43",
+        "rustSha256": "07f06f137c27edc7f6aff3028dcb9b209b29f067d458cfd9ef49e34826da9f60",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2395,10 +2611,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C6",
-        "dom": "C6"
+      "status": "differs",
+      "by": "C6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "1ffb2352f50c09d4669d64e9b2ee2b221c7bdb84783b11ed3efea1f92fb51495",
+        "rustSha256": "740c1637b2eca83db2b573437f92b254b818c09f131dd887666b35799c1e698c",
+        "mismatched": 118575,
+        "outsideMasks": 118575,
+        "masks": [],
+        "diff": "diffs/add-book-pick.png"
+      },
+      "dom": {
+        "tc4Sha256": "04e374938f7d2155f447d6a5e77e9af88a734b432f6d91a9f65763db107631cc",
+        "rustSha256": "402278804867d5f618c314e5d820daf92452128ec7d55eb5fc9babdcc3f9ae0b",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 32: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 39: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 40: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 41: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 42: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
       }
     },
     {
@@ -2406,10 +2642,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C6",
-        "dom": "C6"
+      "status": "differs",
+      "by": "C6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "6aeda2a77ed618dab2cdcdd31cf1188713c7abfb5b9fcd8ad6d524ad0eab0d37",
+        "rustSha256": "10cc361ebe5c2cc3d4cbd2252909d5f6ccc677896b87404a2eadf2151f5b854b",
+        "mismatched": 91144,
+        "outsideMasks": 91144,
+        "masks": [],
+        "diff": "diffs/add-book-pick-multi.png"
+      },
+      "dom": {
+        "tc4Sha256": "7bcd87758ec1760922dce9e47d44847a972648da15b8037eb4a20352e6356e29",
+        "rustSha256": "a3b8088e00568ac00163692ec8812513715b938abe749503f0efbe514d90dbfb",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 32: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 39: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 40: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 41: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 42: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
       }
     },
     {
@@ -2417,10 +2673,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C6",
-        "dom": "C6"
+      "status": "differs",
+      "by": "C6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "6582ae7a035549d0e96ac1b1b07ca76b814df81e295e71238b3a1ec68059fa7f",
+        "rustSha256": "dd626cb36dcc33ee618c190ca3b4e002ea4e77e5a4f2351f3d294657594deb88",
+        "mismatched": 124007,
+        "outsideMasks": 124007,
+        "masks": [],
+        "diff": "diffs/add-book-usfm.png"
+      },
+      "dom": {
+        "tc4Sha256": "43ab21cd6c87a9a6db48a5cdc39226c90c493ea2863ca11ccab8f6b861a1ef98",
+        "rustSha256": "3e9d096d4c04b5091a87083f04b86ba24bb28cbdbc637a687b1f147fc4d32bbe",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 32: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 39: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 40: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 41: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 42: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
       }
     },
     {
@@ -2428,10 +2704,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "C6",
-        "dom": "C6"
+      "status": "differs",
+      "by": "C6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "61d2576fef3b1d7b2c2b59e9595a4cf3f579292918bbc8a81f05e1515bab04f4",
+        "rustSha256": "1656695f2c9eeedf237faaae4fd9bee4d9fe32103c07bc9aa17d68c2d322588d",
+        "mismatched": 91148,
+        "outsideMasks": 91148,
+        "masks": [],
+        "diff": "diffs/add-book-usfm-files.png"
+      },
+      "dom": {
+        "tc4Sha256": "eaabf6fb5824b5476f13b2e10b7f808cdb2ef06a3bb57e8ffff54de5dec684b5",
+        "rustSha256": "8d360f50b0b10762e4cd9892afffb96619222bb124576aff89f775d6679d54a4",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 32: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 39: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 40: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 41: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 42: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
       }
     },
     {

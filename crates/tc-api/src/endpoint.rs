@@ -162,6 +162,12 @@ scoped!(
     crate::session::OtherComputerClosed,
     crate::resources::Download,
     crate::check::Decide,
+    crate::resources::PlanUpgrade,
+    crate::resources::PlanGateway,
+    crate::resources::ApplyPlan,
+    crate::resources::FixFetch,
+    crate::resources::FixSideload,
+    crate::resources::FixRepin,
 );
 unscoped!(
     crate::app::Quit,
@@ -176,6 +182,11 @@ unscoped!(
     crate::session::Open,
     crate::door43::OpenDoor43,
     crate::door43::SyncProject,
+    crate::settings::Save,
+    crate::create::Bible,
+    crate::create::Obs,
+    crate::create::AddBlankBooks,
+    crate::create::AddUsfmBooks,
 );
 #[cfg(feature = "test-hooks")]
 scoped!(crate::test::SaveVerse);

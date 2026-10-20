@@ -64,6 +64,7 @@ fn every_shared_type_round_trips() {
     use tc_api::app::*;
     use tc_api::buffer::*;
     use tc_api::check::*;
+    use tc_api::create::*;
     use tc_api::door43::*;
     use tc_api::error::*;
     use tc_api::event::*;
@@ -132,6 +133,10 @@ fn every_shared_type_round_trips() {
             OpenRefusal,
             LockHolder,
             CreateRefusal,
+            SettingsRefusal,
+            UsfmProblem,
+            UsfmVerdict,
+            UsfmOutcome,
             ImportRefusal,
             ExportRefusal,
             SyncFailure,

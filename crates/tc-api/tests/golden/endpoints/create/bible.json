@@ -1,0 +1,32 @@
+{
+  "path": "create/bible",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "29292929292929292929292929292929",
+    "details": {
+      "name": "Kanuri Bible",
+      "languageName": "Kanuri",
+      "code": "acm-x-lebarabi-c",
+      "door43Code": "acm-x-lebarabic",
+      "direction": "rtl",
+      "font": "Noto Sans (default)"
+    },
+    "versification": "eng"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "project": "kanuri_bible"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

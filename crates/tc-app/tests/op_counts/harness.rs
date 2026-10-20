@@ -107,6 +107,11 @@ impl Scale {
             .at
     }
 
+    /// The app's data folder, where the machine's resources are installed.
+    pub fn app_data(&self) -> std::path::PathBuf {
+        self._t.app_data.clone()
+    }
+
     /// The screen session's scope, once [`Self::open`] ran.
     pub fn scope(&self) -> Scope {
         self.app.sessions().open_sessions()[0].at.clone()

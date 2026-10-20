@@ -783,6 +783,39 @@ fn load_texts(store: &ResourceStore, pins: &ProjectPins, book: BookId) -> Vec<So
     texts
 }
 
+/// What the literal pane has of a book, for a new blank book's chapters, verses and
+/// paragraphs (tC4 `seedInitialUsfm`, #574).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PaneBook {
+    /// The book's USFM, byte for byte.
+    Text(String),
+    /// The project pins no pane, or the pane's resource is not on this computer or does not
+    /// hold the book: the blank book takes the chapters and verses of its versification.
+    Absent,
+    /// The pane's resource is installed and cannot be read. A skeleton in its place would
+    /// stay in the book for good, so the book is not added until it can be read.
+    Unreadable(String),
+}
+
+/// The book in the project's literal Bible pane: the pane that
+/// [`literal_pane_id`](crate::gateway_change::literal_pane_id) picks of the pins' panes.
+pub fn literal_pane_book(store: &ResourceStore, pins: &ProjectPins, book: BookId) -> PaneBook {
+    let ids: Vec<PaneId> = pins.extra_scripture.iter().map(|p| p.id.clone()).collect();
+    let Some(id) = crate::gateway_change::literal_pane_id(&ids) else {
+        return PaneBook::Absent;
+    };
+    let Some(pane) = pins.extra_scripture.iter().find(|p| &p.id == id) else {
+        return PaneBook::Absent;
+    };
+    match load_usfm(store, &pane.pin, None, book) {
+        TextStatus::Loaded { usfm, .. } => PaneBook::Text(usfm),
+        TextStatus::Missing(Missing::Unreadable { source, problem }) => {
+            PaneBook::Unreadable(format!("{source}: {problem}"))
+        }
+        TextStatus::Missing(_) => PaneBook::Absent,
+    }
+}
+
 fn load_usfm(
     store: &ResourceStore,
     pin: &ResourcePin,

@@ -87,7 +87,7 @@ fn a_scenario_read_from_disk_equals_the_one_assembled_in_memory() {
     }
 }
 
-/// The OBS sample fails B1a's check with the 53 mismatches the storage team owns
+/// The OBS sample fails B1a's check with the 52 mismatches the storage team owns (53 until C6 listed settings.json)
 /// (`docs/evidence/state-seed-check-2026-10-18.md`). This test changes the day they fix them:
 /// then the OBS project loads, and Home shows both cards (B2). That day, recapture B2's rows
 /// (`node parity/app/capture-rust.mjs --unit B2 --only home,add-project,new-bible,new-obs,import,add-book,account-menu,app-language,help,about,feedback`

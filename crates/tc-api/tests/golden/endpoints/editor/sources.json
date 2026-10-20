@@ -16,6 +16,7 @@
       "panes": [
         {
           "id": "ult",
+          "version": "v91",
           "dir": "ltr",
           "text": {
             "type": "ready",
@@ -48,6 +49,7 @@
         },
         {
           "id": "ust",
+          "version": "v88",
           "dir": "ltr",
           "text": {
             "type": "notInstalled"
@@ -55,6 +57,7 @@
         },
         {
           "id": "glt",
+          "version": null,
           "dir": "rtl",
           "text": {
             "type": "error",
@@ -64,6 +67,14 @@
           }
         }
       ],
+      "original": {
+        "id": "orig",
+        "version": "v0.34",
+        "dir": "ltr",
+        "text": {
+          "type": "missing"
+        }
+      },
       "frame": {
         "type": "mapped",
         "value": {

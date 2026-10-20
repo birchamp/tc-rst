@@ -243,8 +243,9 @@ test('every state of states.mjs is recorded, as states.mjs describes it', () => 
 test('every case names a recorded state, a §7.4 group and a unique name', () => {
   const names = CASES.map((c) => c.name);
   assert.equal(new Set(names).size, names.length, 'two cases share a name');
-  // B2 D10 moved three Home cases into home-held, home-open and home-checkpoint.
-  assert.equal(groups.length, 21);
+  // B2 D10 moved three Home cases into home-held, home-open and home-checkpoint; C8 split the
+  // re-pin confirmation off M9, which B5a draws with the Check picker.
+  assert.equal(groups.length, 22);
   for (const c of CASES) {
     assert.match(c.name, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${c.name} is not kebab-case`);
     assert.ok(!SCREEN_LIST.some((s) => s.name === c.name), `case ${c.name} is named like a baseline screen`);
@@ -391,7 +392,7 @@ function textsUnder(root, testid) {
 
 test('each M9 confirmation tC4 drew shows a row exactly for the checks its offer moves', () => {
   const setCases = [];
-  for (const c of CASES.filter((x) => x.group === 'M9')) {
+  for (const c of CASES.filter((x) => x.group === 'M9' || x.group === 'M9b')) {
     const entry = casesFile.cases.find((e) => e.name === c.name);
     const root = readJson(path.join(HERE, entry.dom)).root;
     const dialog = root.find((line) => line.includes('data-testid="upgrade-confirm"'));
@@ -449,7 +450,7 @@ test('each M9 set preview has a consequence and a plan row exactly for the check
   const kit = await loadPatchKit(process.env.TC4_ROOT);
   const readS = (name) => readState(name).s;
   let checked = 0;
-  for (const c of CASES.filter((x) => x.group === 'M9')) {
+  for (const c of CASES.filter((x) => x.group === 'M9' || x.group === 'M9b')) {
     const { s } = caseData(c, readState(c.state), readS, kit);
     const preview = s.upgrade.preview;
     if (preview.kind === 'text') continue;

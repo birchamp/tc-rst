@@ -15,6 +15,7 @@ use tc_api::ids::{JobId, ProjectRef};
 use tc_api::jobs::{Get as JobsGet, JobOutcome, JobState};
 use tc_api::prefs::{DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetDraftUnit};
 use tc_api::refusal::Message;
+use tc_api::resources::GatewayPackage;
 use tc_api::session::{Close, Open, OpenUnit, OpenedProject};
 use tc_core::BookId;
 use wasm_bindgen_futures::spawn_local;
@@ -153,6 +154,15 @@ fn refused_banner(error: &ApiError) -> HomeBanner {
     }
 }
 
+/// What an open that Settings asked for goes on to do.
+enum After {
+    Nothing,
+    /// Get source texts shows over the project.
+    Sources,
+    /// The change of checking language is asked over the project.
+    Gateway(Box<GatewayPackage>),
+}
+
 impl Actions {
     // ---- the open (S14) --------------------------------------------------------------------
 
@@ -163,7 +173,7 @@ impl Actions {
             OpenTarget::Book(book) => OpenUnit::Book(book),
             OpenTarget::Story(story) => OpenUnit::Story(story),
         };
-        self.open(project, Some(unit), None, false);
+        self.open(project, Some(unit), None, After::Nothing);
     }
 
     /// The Resume card (tC4's `ResumeCard`): the project opens at the record's book and
@@ -181,14 +191,20 @@ impl Actions {
                 chapter,
                 tool: resume.tool,
             }),
-            false,
+            After::Nothing,
         );
     }
 
     /// Settings' "Manage source texts" (tC4 `openSettingsProject`, then `openSources`): the
     /// project opens at its first book, and Get source texts shows over it.
     pub fn open_then_sources(&self, project: ProjectRef) {
-        self.open(project, None, None, true);
+        self.open(project, None, None, After::Sources);
+    }
+
+    /// Settings' checking-language card (tC4 `chooseSettingsGateway`): the project opens, and the
+    /// change of checking language is asked over it.
+    pub fn open_then_gateway(&self, project: ProjectRef, package: GatewayPackage) {
+        self.open(project, None, None, After::Gateway(Box::new(package)));
     }
 
     fn open(
@@ -196,7 +212,7 @@ impl Actions {
         project: ProjectRef,
         unit: Option<OpenUnit>,
         landing: Option<Landing>,
-        sources: bool,
+        after: After,
     ) {
         let attempt = next(&OPENS);
         let s = self.s().clone();
@@ -231,8 +247,10 @@ impl Actions {
             match ended {
                 Some(Ok(opened)) => {
                     this.opened(opened, unit, landing);
-                    if sources {
-                        this.open_sources();
+                    match after {
+                        After::Nothing => {}
+                        After::Sources => this.open_sources(),
+                        After::Gateway(package) => this.ask_gateway_change(*package),
                     }
                 }
                 Some(Err(error)) => {

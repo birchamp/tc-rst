@@ -255,6 +255,25 @@ fn resource_keys() -> Vec<tc_api::query::QueryKey> {
     ]
 }
 
+impl CachedQuery for tc_api::editor::Chapters {
+    /// Translate's text: any change in the book (B4a), and the project's conflicts, which
+    /// `ChaptersView::conflicts` counts across every book.
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        use tc_api::{event::Aspect, query::QueryKey};
+        project_read(
+            &self.at,
+            vec![
+                QueryKey::Book(self.book),
+                QueryKey::Aspect(Aspect::Conflicts),
+            ],
+        )
+    }
+
+    fn view(ok: &Self::Ok) -> Option<tc_api::ids::ViewSeq> {
+        Some(ok.view)
+    }
+}
+
 impl CachedQuery for tc_api::editor::Sources {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         project_read(&self.at, resource_keys())
@@ -318,7 +337,7 @@ impl CachedQuery for tc_api::check::Rows {
     }
 }
 
-impl CachedQuery for tc_api::check::FixState {
+impl CachedQuery for tc_api::resources::FixState {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         project_read(&self.at, resource_keys())
     }

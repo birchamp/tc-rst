@@ -3,8 +3,8 @@
 
 use tc_api::refusal::{
     CreateRefusal, ExchangeRefusal, ExportRefusal, FeedbackRefusal, ImportRefusal, LockHolder,
-    OpenDoor43Refusal, OpenRefusal, PrefsRefusal, Refusal, ResourceRefusal, ShareRefusal,
-    SignInRefusal, SyncBlock, SyncFailure, SyncRefusal, UploadRefusal,
+    OpenDoor43Refusal, OpenRefusal, PrefsRefusal, Refusal, ResourceRefusal, SettingsRefusal,
+    ShareRefusal, SignInRefusal, SyncBlock, SyncFailure, SyncRefusal, UploadRefusal,
 };
 
 fn s(text: &str) -> String {
@@ -31,11 +31,35 @@ pub fn open() -> Vec<OpenRefusal> {
 pub fn create() -> Vec<CreateRefusal> {
     vec![
         CreateRefusal::NameInUse { abbr: s("kr_ulb") },
+        CreateRefusal::NameRequired,
+        CreateRefusal::CodeRequired,
+        CreateRefusal::AbbrRequired,
+        CreateRefusal::CodeNotHeld {
+            code: s("acm-x-lebarabic"),
+            reason: s("a language tag part is longer than eight letters"),
+        },
         CreateRefusal::Failed {
             reason: s("No space left on device (os error 28)"),
         },
         CreateRefusal::CopyUnsafe {
             reason: tc_api::write::ReadOnlyReason::CloudSynced,
+        },
+    ]
+}
+
+pub fn settings() -> Vec<SettingsRefusal> {
+    vec![
+        SettingsRefusal::Changed,
+        SettingsRefusal::DirectionNotSaved {
+            reason: s("No space left on device (os error 28)"),
+        },
+        SettingsRefusal::FontNotSaved {
+            reason: s("No space left on device (os error 28)"),
+            direction_saved: false,
+        },
+        SettingsRefusal::FontNotSaved {
+            reason: s("No space left on device (os error 28)"),
+            direction_saved: true,
         },
     ]
 }
@@ -149,7 +173,9 @@ pub fn resources() -> Vec<ResourceRefusal> {
         ResourceRefusal::UpgradeFailed {
             reason: s("the archive is damaged"),
         },
-        ResourceRefusal::GatewayFailed,
+        ResourceRefusal::GatewayFailed {
+            reason: "the notes of Titus could not be read".to_owned(),
+        },
         ResourceRefusal::GatewayBlocked {
             books: s("Titus, Ruth"),
         },
@@ -198,6 +224,7 @@ pub fn refusals() -> Vec<Refusal> {
     let mut all = Vec::new();
     all.extend(open().into_iter().map(Refusal::Open));
     all.extend(create().into_iter().map(Refusal::Create));
+    all.extend(settings().into_iter().map(Refusal::Settings));
     all.extend(import().into_iter().map(Refusal::Import));
     all.extend(export().into_iter().map(Refusal::Export));
     all.extend(sync().into_iter().map(Refusal::Sync));

@@ -1,4 +1,7 @@
 {
+  "addBook.notAdded": "{file} was not added: {reason}",
+  "addBook.usfmDamaged": "{file} cannot be added: {reason}",
+  "addBook.usfmReading": "Reading the file…",
   "check.markLookAgain": "This check was not saved: the check or its verse changed while you were looking. Look at it again, then mark it again. Nothing was lost.",
   "check.markNotSaved": "This check was not saved: {reason}. Mark it again to try again. Nothing was lost.",
   "drafts.offer.copyText": "Copy text",
@@ -45,6 +48,10 @@
   "refusal.open.lock-held": "Another program is using this project (process {pid} on {host}). Close it, or restart the computer, then open the project again. Nothing was changed.",
   "refusal.open.lock-held-unnamed": "Another program is using this project. Close it, or restart the computer, then open the project again. Nothing was changed.",
   "refusal.open.newer-format": "This project was saved by a newer translationCore (project format {format}). Update translationCore, then open the project again. Nothing was changed.",
+  "settings.changed": "This project's settings changed after this dialog opened, so nothing was saved. Close this dialog and open Settings again.",
+  "settings.directionNotSaved": "The text direction was not saved. Nothing was changed.",
+  "settings.fontNotSaved": "The font was not saved. Nothing was changed.",
+  "settings.fontNotSavedAfterDirection": "The font was not saved. The text direction was saved.",
   "syncResult.alignmentsMany": "{n} verses have two alignments to review.",
   "syncResult.alignmentsOne": "1 verse has two alignments to review.",
   "syncResult.error.keptStopped": "Your teammates' changes were received and kept, but the sync stopped. Ask for help.",
@@ -56,5 +63,8 @@
   "syncResult.error.tc4TeamRepository": "This project is shared by translationCore 4, so the sync stopped. Nothing changed. Move the team to the new translationCore first.",
   "syncResult.error.unexpected": "The sync stopped for a reason translationCore did not expect. Ask for help.",
   "syncResult.receivedKept": "Your teammates' changes were received and kept.",
-  "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed."
+  "translate.changedWhileTyping": "{name} changed this verse while you were typing. Your text will be kept as a second version.",
+  "translate.changedWhileTypingUnnamed": "This verse was changed while you were typing. Your text will be kept as a second version.",
+  "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed.",
+  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code."
 }
