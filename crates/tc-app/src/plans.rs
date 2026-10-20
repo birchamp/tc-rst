@@ -290,7 +290,7 @@ pub fn plan_decisions(
         on_unit(affected.collection);
         let list = sources.list(affected.tool, affected.collection, &list_source, &spec)?;
         let mut carried = carry::plan(&list.items, &pin.resource, &candidate.decisions);
-        keep_in_place(&mut carried);
+        keep_in_place(&mut carried, &|key| read.in_conflict(key));
         let texts = read.check_texts(affected.collection);
         let targets: BTreeMap<CheckTarget, Arc<TargetText>> = carried
             .entries
@@ -356,18 +356,42 @@ fn book_scope(read: &CountingSnapshot, collection: Collection) -> Vec<tc_burrito
     }
 }
 
-/// Leaves where they are, as decisions no list places, the moves that meet another decision,
-/// so the dialog counts them as checks to check again and nothing is written for them.
-fn keep_in_place(plan: &mut carry::Plan) {
-    for entry in &mut plan.entries {
-        if matches!(
-            entry.outcome,
-            Outcome::Moves {
-                contested: true,
-                ..
+/// Leaves where they are, as decisions no list places, those the plan cannot write without
+/// replacing or hiding one: a move that meets another decision, and anything over a record in
+/// conflict, whose own key or target is one. A change over a conflict's heads would end it and
+/// show only one version. A move onto the key of a decision that is left in place is left too,
+/// so the pass runs until nothing more is held.
+fn keep_in_place(plan: &mut carry::Plan, in_conflict: &dyn Fn(&RecordKey) -> bool) {
+    let mut held: BTreeSet<CheckKey> = BTreeSet::new();
+    for entry in &plan.entries {
+        let target = match &entry.outcome {
+            Outcome::Stays { .. } => None,
+            Outcome::Moves { to, .. } => Some(to),
+            Outcome::Unplaced => continue,
+        };
+        for key in std::iter::once(&entry.key).chain(target) {
+            if in_conflict(&RecordKey::Check(key.clone())) {
+                held.insert(key.clone());
             }
-        ) {
-            entry.outcome = Outcome::Unplaced;
+        }
+    }
+    loop {
+        let mut more = false;
+        for entry in &mut plan.entries {
+            let hold = match &entry.outcome {
+                Outcome::Stays { .. } => held.contains(&entry.key),
+                Outcome::Moves { to, contested, .. } => {
+                    *contested || held.contains(&entry.key) || held.contains(to)
+                }
+                Outcome::Unplaced => false,
+            };
+            if hold {
+                entry.outcome = Outcome::Unplaced;
+                more |= held.insert(entry.key.clone());
+            }
+        }
+        if !more {
+            return;
         }
     }
 }
@@ -750,5 +774,90 @@ mod tests {
             changes_of(&plan, &items).is_empty(),
             "neither decision is replaced, hidden or merged"
         );
+    }
+
+    /// A random project of decisions on the first verse's notes, each with the quote of some
+    /// note of it and maybe a check id the list lacks, so the real `carry::plan` finds stays,
+    /// moves, swaps, chains, contested moves and unplaced decisions; some records, and some
+    /// keys a decision moves onto, are in conflict.
+    mod no_loss {
+        use proptest::prelude::*;
+        use tc_check::carry::StoredDecision;
+
+        use super::*;
+
+        fn conflicted_heads(
+            conflicted: BTreeSet<CheckKey>,
+        ) -> impl Fn(&RecordKey) -> Vec<ChangeId> {
+            move |key| {
+                let mut heads = heads_of(key);
+                if matches!(key, RecordKey::Check(k) if conflicted.contains(k)) {
+                    heads.push(ChangeId::from_bytes([7; 32]));
+                }
+                heads
+            }
+        }
+
+        proptest! {
+            #[test]
+            fn a_carry_over_never_closes_a_conflict_nor_drops_a_judgement_or_comment(
+                specs in prop::collection::vec((0..4usize, 0..4usize, any::<bool>(), any::<bool>()), 1..8),
+                note_conflicts in 0u8..16,
+            ) {
+                let items = items();
+                let mut keys = BTreeSet::new();
+                let mut conflicted = BTreeSet::new();
+                let mut stored = Vec::new();
+                for (n, (at, quoting, unknown_id, in_conflict)) in specs.into_iter().enumerate() {
+                    let mut key = items[at].key.clone();
+                    if unknown_id {
+                        key.check_id = tc_check::CheckId::parse(&format!("z{n}z")).unwrap();
+                    }
+                    if !keys.insert(key.clone()) {
+                        continue;
+                    }
+                    let mut was = decision(&items[at], resource('1'));
+                    was.context.insert("quoteString".into(), Json::from(items[quoting].quote.as_str()));
+                    was.comment = Some(format!("comment {n}"));
+                    was.judgement.status = [UserStatus::Valid, UserStatus::Invalid, UserStatus::Todo]
+                        .get(n % 3)
+                        .copied();
+                    if in_conflict {
+                        conflicted.insert(key.clone());
+                    }
+                    stored.push(StoredDecision::of(key, was));
+                }
+                for (i, item) in items.iter().take(4).enumerate() {
+                    if note_conflicts >> i & 1 == 1 {
+                        conflicted.insert(item.key.clone());
+                    }
+                }
+                let heads = conflicted_heads(conflicted.clone());
+                let mut plan = carry::plan(&items, &resource('2'), &stored);
+                keep_in_place(&mut plan, &|key| heads(key).len() > 1);
+                let written = carry_changes(&heads, &plan, &items, PinGroup::Primary);
+
+                let mut now: BTreeMap<CheckKey, Option<DecisionRecord>> = stored
+                    .iter()
+                    .map(|s| (s.key.clone(), Some(s.decision.clone())))
+                    .collect();
+                for change in &written {
+                    let Record::Check { key, value } = &change.record else {
+                        panic!("{change:?}")
+                    };
+                    prop_assert!(!conflicted.contains(key), "{key:?} is in conflict and was written");
+                    now.insert(key.clone(), match value {
+                        CheckValue::Decision(d) => Some(d.clone()),
+                        _ => None,
+                    });
+                }
+                for was in &stored {
+                    let kept = now.values().flatten().any(|d| {
+                        d.comment == was.decision.comment && d.judgement == was.decision.judgement
+                    });
+                    prop_assert!(kept, "{:?} is lost", was.decision.comment);
+                }
+            }
+        }
     }
 }

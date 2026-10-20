@@ -163,6 +163,18 @@ impl CountingSnapshot {
         self.snapshot.fold().projected(key)
     }
 
+    /// Whether the record has two versions that disagree and are listed as a conflict. Heads
+    /// that merge without disagreement are not one: a change over them keeps both.
+    pub fn in_conflict(&self, key: &RecordKey) -> bool {
+        matches!(
+            self.key_state(key),
+            Some(KeyState {
+                state: tc_journal::fold::Resolved::Conflict(_),
+                ..
+            })
+        )
+    }
+
     pub fn heads(&self, key: &RecordKey) -> Vec<ChangeId> {
         self.count(AppCounter::RecordsRead, 1);
         self.snapshot.fold().heads(key)

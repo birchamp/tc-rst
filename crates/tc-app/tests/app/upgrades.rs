@@ -27,7 +27,7 @@ use tc_check::{CheckItem, CheckKey, DecisionRecord};
 use tc_core::BookId;
 use tc_door43_fake::{CommitSeed, FakeDoor43, ReleaseKind, RepoSeed, SeedFile};
 use tc_helps::tsv::{TsvScope, parse_notes};
-use tc_journal::command::{PlannedChange, UpgradePlan};
+use tc_journal::command::{Command, DecisionChange, DecisionEdit, PlannedChange, UpgradePlan};
 use tc_journal::fold::ProjectKind;
 use tc_journal::keys::PinGroup;
 use tc_journal::record::{CheckValue, Record};
@@ -322,6 +322,8 @@ enum Trouble {
     /// The first decision is two decisions with check ids v91 does not have, each recording
     /// the quote of the one v91 note that both come to.
     TwoOnOneCheck,
+    /// The second decision has two heads: this computer's judgement and a teammate's.
+    ConflictedDecision,
 }
 
 /// A project that pins an original-language text and a gateway Bible pane as well, and holds
@@ -448,6 +450,11 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
         })
         .unwrap();
     assert_valid_burrito(&fs, &folder);
+    if opts.trouble == Trouble::ConflictedDecision {
+        two_heads(&backend, &folder, 1, |handle| {
+            decision_edits(handle, &decided[1].0, &tn)
+        });
+    }
     let dir = tempfile::tempdir().unwrap();
     let projects = dir.path().join("projects");
     std::fs::create_dir_all(&projects).unwrap();
@@ -519,6 +526,59 @@ fn v91_quote_of(key: &CheckKey) -> String {
     .unwrap()
     .quote
     .to_string()
+}
+
+/// Two heads on a record, from two edits of one token: the second did not see the first, as when
+/// a teammate's sync brings a different version of what this computer also changed.
+fn two_heads(
+    backend: &tc_app::backend::store::StoreBackend,
+    folder: &Path,
+    conflicts: usize,
+    edits: impl FnOnce(&tc_store::ProjectHandle) -> [Command; 2],
+) {
+    let handle = backend
+        .store()
+        .open(folder, &tc_store::OpenOptions::default())
+        .unwrap();
+    for edit in edits(&handle) {
+        handle.submit(edit).wait().unwrap();
+    }
+    assert_eq!(handle.snapshot().fold().conflict_count(), conflicts);
+    handle.close().unwrap();
+}
+
+/// This computer's judgement of a check, and one that disagrees with it.
+fn decision_edits(
+    handle: &tc_store::ProjectHandle,
+    check: &CheckKey,
+    tn: &ResourcePin,
+) -> [Command; 2] {
+    let (chapter, verse) = check.target.parts();
+    let verse = super::common::tit(
+        chapter.as_str().parse().unwrap(),
+        verse.as_str().parse().unwrap(),
+    );
+    let shown = handle
+        .snapshot()
+        .token(&RecordKey::Check(check.clone()), None)
+        .unwrap();
+    let verse_shown = handle.snapshot().token(&verse, None).unwrap();
+    [
+        (tc_check::UserStatus::Todo, "mine"),
+        (tc_check::UserStatus::Invalid, "theirs"),
+    ]
+    .map(|(status, comment)| Command::SaveDecision {
+        shown: shown.clone(),
+        verse_shown: verse_shown.clone(),
+        value: DecisionEdit {
+            basis: None,
+            resource: tn.resource(),
+            changes: vec![
+                DecisionChange::Status(Some(status)),
+                DecisionChange::Comment(Some(comment.to_owned())),
+            ],
+        },
+    })
 }
 
 async fn ok<E: Endpoint>(app: &tc_app::App, req: &E) -> E::Ok {
@@ -1945,6 +2005,65 @@ async fn upgrade_titus(w: &World, id: u8) -> Outcome {
         on_new: held(&new),
         on_old: held(&w.tn.resource()),
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_upgrade_keeps_a_decision_in_conflict_and_both_versions_of_it() {
+    let w = build(
+        6,
+        0,
+        None,
+        Opts {
+            trouble: Trouble::ConflictedDecision,
+            ..Opts::default()
+        },
+    )
+    .await;
+    let key = RecordKey::Check(w.decided[1].0.clone());
+    let heads_before = heads(&w, &key);
+    assert_eq!(heads_before.len(), 2);
+    let (changes_before, conflicts_before) =
+        (changes(&w), handle(&w).snapshot().fold().conflict_count());
+    assert_eq!(conflicts_before, 1);
+
+    let done = upgrade_titus(&w, 50).await;
+
+    // The conflicted decision is not carried over: it comes back as a check to do again.
+    assert_eq!((done.carried, done.check_again), (5, 1));
+    assert_eq!((done.on_new, done.on_old), (5, 1));
+    assert_eq!(
+        changes(&w) - changes_before,
+        6,
+        "the pins and five decisions"
+    );
+    assert_eq!(
+        heads(&w, &key),
+        heads_before,
+        "no change closed the conflict"
+    );
+    let snapshot = handle(&w).snapshot();
+    assert_eq!(snapshot.fold().conflict_count(), 1);
+    let mut versions: Vec<(Option<tc_check::UserStatus>, Option<String>)> = heads_before
+        .iter()
+        .map(|head| match snapshot.fold().body(head).unwrap().record {
+            Record::Check {
+                value: CheckValue::Decision(d),
+                ..
+            } => (d.judgement.status, d.comment),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    versions.sort_by_key(|(_, comment)| comment.clone());
+    assert_eq!(
+        versions,
+        [
+            (Some(tc_check::UserStatus::Todo), Some("mine".to_owned())),
+            (
+                Some(tc_check::UserStatus::Invalid),
+                Some("theirs".to_owned())
+            ),
+        ]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
