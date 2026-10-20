@@ -44,6 +44,20 @@ fn strings(value: &Value) -> Vec<String> {
         .collect()
 }
 
+/// The format before each verse that has words, keyed by the verse before it.
+fn lines_before_words(b: &SectionBuffer) -> Vec<(String, Option<ParaFormat>)> {
+    let groups = b.groups();
+    let placed_after = |key: &str| {
+        groups
+            .windows(2)
+            .any(|pair| pair[0].key == key && pair[1].at.is_some())
+    };
+    b.formats()
+        .into_iter()
+        .filter(|(key, _)| placed_after(key))
+        .collect()
+}
+
 #[test]
 fn expand_keys_is_tc4s() {
     for case in vectors()["expand"].as_array().unwrap() {
@@ -112,9 +126,19 @@ fn the_port_reads_every_text_as_tc4_does() {
             .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
             .collect();
         assert_eq!(verses, wanted, "verses of {at}");
+        // A declared difference (B4b): when the section's first verse has no text, the first
+        // line written keeps the paragraph or poetry line typed before it, which tC4's
+        // `serializeDraft` drops, so a Place session's text saves the formats it holds.
+        let first_is_stub = b.groups().first().is_some_and(|g| g.at.is_none());
+        let lead = match b.block_at(0).filter(|_| first_is_stub) {
+            Some(ParaFormat::P) => "\n",
+            Some(ParaFormat::Q1) => "\t",
+            Some(ParaFormat::Q2) => "\t\t",
+            None => "",
+        };
         assert_eq!(
             b.serialize(),
-            case["serialized"].as_str().unwrap(),
+            format!("{lead}{}", case["serialized"].as_str().unwrap()),
             "serialized {at}"
         );
         for (pin, indices) in case["canDrop"].as_object().unwrap() {
@@ -611,6 +635,37 @@ fn joined_span_collapses_blank_lines_to_one_space() {
     assert_eq!(verses_of(&b), [pair("3", "a b\n\nc d")]);
 }
 
+/// #598 in one Place session: a number moved from one word to another and back leaves the
+/// verses as they were, and the text the session writes reads back the same. The card read its
+/// own text again after each drop, and the line break each drop wrote stayed in verse 10 ("b\nc")
+/// with a new paragraph before it.
+#[test]
+fn a_number_moved_twice_in_one_place_session_adds_no_line() {
+    let k = keys(&["9", "10"]);
+    let b = placed("9 a b c", &k, &[("10", 1), ("10", 2), ("10", 1)]);
+    assert_eq!(verses_of(&b), [pair("9", "a"), pair("10", "b c")]);
+    assert_eq!(b.formats(), [("9".to_owned(), None)]);
+    let back = SectionBuffer::parse(&b.serialize(), &k);
+    assert_eq!(verses_of(&back), verses_of(&b));
+    assert_eq!(back.formats(), b.formats());
+}
+
+/// When the section's first verse has no words, the text a Place session writes keeps the
+/// format typed before its first line, which tC4's `serializeDraft` drops, so the save reads the
+/// session's formats.
+#[test]
+fn the_first_line_written_keeps_its_format_when_the_first_verse_has_no_words() {
+    let k = keys(&["1", "2", "3", "4", "5"]);
+    let b = placed("\t2-3 0 x", &k, &[("4", 1)]);
+    assert_eq!(b.serialize(), "\t2-3 0\n4 x");
+    let back = SectionBuffer::parse(&b.serialize(), &k);
+    assert_eq!(back.formats(), b.formats());
+    assert_eq!(
+        b.formats().first(),
+        Some(&("1".to_owned(), Some(ParaFormat::Q1)))
+    );
+}
+
 // ---------------------------------------------------------------------------------------------
 // Properties.
 // ---------------------------------------------------------------------------------------------
@@ -650,7 +705,10 @@ proptest! {
     }
 
     /// A drop never changes the words or their separators, and the Type text it writes reads
-    /// back as the same words with every pin where it was.
+    /// back as the same words with every pin where it was, the same verses and the same line
+    /// before each verse with words: the card holds one reading through a Place session and the
+    /// save reads the text it writes, as tC4's Save reads its session. (The text has no line
+    /// for a verse with no words, so the save leaves the line before it as it was.)
     #[test]
     fn a_placement_never_changes_the_words(
         text in text_strategy(),
@@ -676,6 +734,8 @@ proptest! {
         for pin in b.pins() {
             prop_assert_eq!(back.marker(pin), b.marker(pin), "pin {}", pin);
         }
+        prop_assert_eq!(back.verses(), b.verses());
+        prop_assert_eq!(lines_before_words(&back), lines_before_words(&b));
     }
 
     /// The Type text is a fixed point of reading it and writing it again: a card that switches

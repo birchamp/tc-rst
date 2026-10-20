@@ -14,9 +14,9 @@
 //! - pins that share a word are one span, the verses' text in order (#63);
 //! - a pin with no word is a stub verse: it has no text.
 //!
-//! Where tC4 keeps the Place state beside the text, the card here keeps only the text and parses
-//! it (a drop writes the text again), so the buffer, the mirror and the server's draft hold the
-//! whole card in one string.
+//! The card holds one reading through a Place session, as tC4 does, and writes it out as its
+//! text after each drop, so the buffer, the mirror and the server's draft hold the whole card in
+//! one string, and the save reads that string as the session's verses and formats.
 
 use std::collections::BTreeMap;
 
@@ -546,20 +546,22 @@ impl SectionBuffer {
             .collect()
     }
 
-    /// The pinned word list written back as Type-mode text, one verse per line (#54).
+    /// The pinned word list written back as Type-mode text, one verse per line (#54). When the
+    /// section's first verse has no text, the first line keeps the format typed before it,
+    /// which tC4's `serializeDraft` drops: reading the text gives the buffer's formats back.
     pub fn serialize(&self) -> String {
         let verses = self.verses();
         let groups = self.groups();
         groups
             .iter()
-            .filter_map(|g| {
+            .enumerate()
+            .filter_map(|(i, g)| {
                 verses
                     .iter()
                     .find(|(key, _)| *key == g.key)
-                    .map(|(_, text)| (g, text))
+                    .map(|(_, text)| (i, g, text))
             })
-            .enumerate()
-            .map(|(i, (g, text))| {
+            .map(|(i, g, text)| {
                 let line = format!("{} {}", g.key, escape_body(text, &self.pins));
                 if i == 0 {
                     line

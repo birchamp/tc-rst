@@ -5,8 +5,9 @@
 //! leaving the textarea send only the card's draft, Cancel discards the card, its buffer entry
 //! and its draft, and a Save that leaves the section with no words asks first (#600).
 //!
-//! The card's one value is its Type text (`tc_api::model::section`); Place reads it, and a
-//! drop writes it again, so the buffer holds the placements too. Its base is the tokens of
+//! The card's one value is its Type text (`tc_api::model::section`); Place reads it once, as
+//! tC4's session does, and each drop writes the session out again, so the buffer holds the
+//! placements too. Its base is the tokens of
 //! every verse it displays (STORAGE §5.2).
 
 use std::collections::BTreeMap;
@@ -124,9 +125,17 @@ pub fn SectionEditor(
         let shown = SendWrapper::new(shown);
         Effect::new(move |_| typed.set(shown.get()));
     }
+    // tC4's Place session: Place reads the text once and a drop moves only the pins of that
+    // reading. Reading the written text again after each drop made every verse boundary a line
+    // break the next move kept inside a verse.
+    let session: RwSignal<Option<SectionBuffer>> = RwSignal::new(None);
     let buffer = {
         let keys = keys.clone();
-        Memo::new(move |_| typed.with(|text| SectionBuffer::parse(text, &keys)))
+        Memo::new(move |_| {
+            session
+                .get()
+                .unwrap_or_else(|| typed.with(|text| SectionBuffer::parse(text, &keys)))
+        })
     };
     let empties = Memo::new(move |_| buffer.with(SectionBuffer::is_empty));
     let mode = RwSignal::new(Mode::Type);
@@ -212,11 +221,13 @@ pub fn SectionEditor(
                 // Back to Type writes the section as the Place reading has it: one line per
                 // verse that has text.
                 let written = buffer.with_untracked(SectionBuffer::serialize);
+                session.set(None);
                 if typed.with_untracked(|now| *now != written) {
                     set_text.run(written);
                 }
                 focus_area();
             } else {
+                session.set(Some(buffer.get_untracked()));
                 saves.blur(&key);
             }
             mode.set(to);
@@ -298,6 +309,13 @@ pub fn SectionEditor(
         .into_any()
     };
 
+    // A drop: the session moves on, and the card's text is the session written out, so the
+    // buffer, the mirror and Save carry the placements.
+    let place = Callback::new(move |next: SectionBuffer| {
+        let written = next.serialize();
+        session.set(Some(next));
+        set_text.run(written);
+    });
     let field = {
         let (saves, key) = (
             SendWrapper::new(saves.clone()),
@@ -316,7 +334,7 @@ pub fn SectionEditor(
                 typed.get_untracked(),
                 saving,
             ),
-            Mode::Place => place_view(buffer, set_text, dir, saving),
+            Mode::Place => place_view(buffer, place, dir, saving),
         }
     };
 
@@ -451,7 +469,7 @@ fn type_field(
 #[allow(clippy::too_many_lines)]
 fn place_view(
     buffer: Memo<SectionBuffer>,
-    set_text: Callback<String>,
+    place: Callback<SectionBuffer>,
     dir: &'static str,
     inert: Memo<bool>,
 ) -> AnyView {
@@ -481,7 +499,7 @@ fn place_view(
         };
         let next = buffer.with_untracked(|b| b.drop_pin(&pin, index));
         if let Some(next) = next {
-            set_text.run(next.serialize());
+            place.run(next);
         }
         held.set(None);
         hover.set(None);

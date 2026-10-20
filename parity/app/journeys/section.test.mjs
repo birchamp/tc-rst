@@ -294,6 +294,31 @@ browserTest('paragraph_and_poetry_lines_from_the_card_land_in_the_verse_before',
   }, { hooks: true });
 }, { hooks: true });
 
+// #598 in one Place session: a number moved twice is a move of the number only. The card read its
+// own text again after each drop, so the second move kept a line break inside verse 10 and the
+// save wrote a paragraph before it.
+browserTest('a_number_moved_twice_in_place_keeps_the_text_and_adds_no_paragraph', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTitus2(page);
+    await pill(page, '9–10').click();
+    await typing(page, '9–10').fill(`9 ${NINE} ${TEN}`);
+    await page.getByRole('tab', { name: 'Place verse numbers' }).click();
+    await bank(page).getByRole('button', { name: 'Move where verse 10 begins' }).click();
+    await page.getByRole('button', { name: 'Begin verse 10 at no' }).click();
+    const pin = words(page).getByRole('button', { name: 'Move where verse 10 begins' });
+    await pin.click();
+    await page.getByRole('button', { name: 'Begin verse 10 at sino' }).click();
+    await pin.click();
+    await page.getByRole('button', { name: 'Begin verse 10 at no' }).click();
+    await saveButton(page).click();
+    await card(page).waitFor({ state: 'detached' });
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    assert.equal((await verseOf(env, '9')).words.value, NINE);
+    assert.equal((await verseOf(env, '10')).words.value, TEN);
+    assert.equal((await verseOf(env, '10')).format, null, 'no paragraph was typed');
+  }, { hooks: true });
+}, { hooks: true });
+
 // D7: the card is read-only while its save runs. Tab on a line and a drop of a number picked up
 // before Save change nothing, so the save that comes back closes the card; a change there left
 // the card dirty, and its next save wrote verse 10 into verse 9.
