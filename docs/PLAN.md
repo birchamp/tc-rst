@@ -169,6 +169,13 @@ And these (unit C6):
 - A project whose projects folder cannot keep a copy safe is copied to this computer's local
   projects folder, and Home lists it there (Q-30). tC4 has no such copy.
 
+And this (unit B4b):
+
+- While a section card holds text it has not saved, the save indicator reads "Unsaved
+  changes". tC4 4.0's indicator follows only its verse saves and reads "Saved" then, even
+  when every word of the section has just been deleted and nothing is stored. The M18 case
+  `section-empty-confirm` shows it, with a residual.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can
