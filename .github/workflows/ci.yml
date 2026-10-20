@@ -41,6 +41,8 @@ jobs:
         with:
           node-version: 22
       - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs
+      - name: rebuild process tools
+        run: node --test .audit/tools/*.test.mjs .audit/workflows/*.test.mjs
 
   # The long variant of the project store's model-based property test (docs/STORAGE.md §16.1):
   # the histories the reviews found, then 5,000 random histories of saves, kills, damaged

@@ -6,3 +6,5 @@ node_modules/
 /e2e/playwright-report/
 .DS_Store
 .claude/worktrees/
+/.enjoy-lane/
+/.enjoy-logs/
