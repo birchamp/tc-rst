@@ -191,7 +191,7 @@ the rebuild fixed it or does as tC4 does:
 | #484 | Add a book from a USFM file | unit todo | C6 | J9 `add_a_missing_book_from_a_file_and_refuse_one_present` | One batch (#767), the alignment split (#553), `addBook.usfmExists`. |
 | #564 | Add-a-book USFM step polish | unit todo | C6 | `removing_rows_from_25_aligned_books_removes_the_intended_rows` | Label "Add book" while disabled; keep an Add error until the next Add; classify each file once. |
 | #502 | Two USFM files never reach the review page | unit todo | F1 | J9 `a_two_file_drop_is_one_new_project` | Port the J9 case. |
-| #619 | Quotes and bold in helps, not raw `>` and `__` | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | B3: `tc_helps::blocks`, tC4's renderer, held to tC4's own output on every Titus note (608 blocks). B5b: the Check article panel draws the same blocks. |
+| #619 | Quotes and bold in helps, not raw `>` and `__` | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` (tc-helps); `a_checks_article_is_the_helps_blocks` (tc-app) | B3: `tc_helps::blocks`, tC4's renderer, held to tC4's own output on every Titus note (608 blocks). B5b: the Check drawer draws the same blocks, from `check/article`, which answers what `helps/article` answers for the same link. Done. |
 | #621 | Superscript verse numbers in the simplified-text tab | covered | B3 | journey `simplified_tab_verse_numbers_are_superscript` | Done by B3, the source verse's `c:v` in another numbering. |
 | #628 | Full Markdown in helps | covered | B3 | `ta_article_with_a_table_renders_a_table` (tc-helps); journey `an_article_draws_its_table_numbers_and_nesting` | Done by B3 for tables, numbered items and nested lists, a declared difference the owner was told (DELTA-10-19 §5). Links stay their label until tC4 decides. Installed images are not drawn: tA names them by Door43 address, which no install keeps on this computer yet. |
 | #602 | Resize the helps panel by dragging | unit todo | B4a (B3 done) | `helps_panel_width_follows_the_divider_drag` | B3: the divider resizes the panel within 280 to 720 px; one show/hide button. B4a reuses both. |
@@ -199,8 +199,8 @@ the rebuild fixed it or does as tC4 does:
 | #234 | Widen the helps pane | covered | B3 | `helps_panel_width_follows_the_divider_drag` | Done by B3 with #602's divider. |
 | #728 | Make "Draft section" look like a button | unit todo | B4a | DOM parity of `en-translate-tit1` | `Button(Secondary, Sm)`, end-aligned, accent text while enabled. |
 | #650 | An Arabic gateway package end to end | covered | B3 | journey `arabic_helps_panes_are_rtl_in_an_english_interface` | Done by B3: each helps slot carries its gateway's direction (`rung_dir`), and the cards, questions, simplified text and article read in it. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B4a, B5b, B6, G2 | J10 `rtl_project_drafts_checks_and_aligns` | Each journey adds the Arabic case; G2 captures the `ar` screens. |
-| #614 | Four English literals in design-system props | unit todo | B4b, B5b, C6, A5 | port of tC4 `ds-labels` a–d | Pass the catalog strings; consider making them required props. |
+| #29 | Right-to-left and complex scripts end to end | unit todo | B4a, B6, G2 (B5b done) | J10 `rtl_project_drafts_checks_and_aligns` | Each journey adds the Arabic case; G2 captures the `ar` screens. |
+| #614 | Four English literals in design-system props | unit todo | B4b, C6, A5 (B5b done) | port of tC4 `ds-labels` a–d; journey `academy_drawer_close_label_is_in_the_shown_language` | Pass the catalog strings; consider making them required props. B5b passes the Check drawer's eyebrow, title and close label from the catalog. |
 | #702 | Text zoom sliders | not applicable | — | — | tC4 4.1.0. |
 | #719 | Add source Bibles to a project | not applicable | later B9a | — | tC4 4.1.0. |
 | #615 | The Understand journey after the Resume journey | not applicable | C3 (J16 port) | — | The fix is inside tC4's J16 at the reference; port J16 as written. |
@@ -213,9 +213,9 @@ the rebuild fixed it or does as tC4 does:
 | #765 | Hebrew quote shown instead of English when it has a maqaf | covered | tc-helps | `genesis_maqaf_quotes_title_in_the_ult` (to add) | No fix. The converter B3 or B5a builds from the ULT keeps nested `\zaln`; test 0 Hebrew titles over all of Genesis. |
 | #664 | Test the Hebrew highlight with a maqaf | covered | tc-helps | `every_jonah_note_quote_finds_its_words_in_the_uhb_verse` | None beyond #765. |
 | #769 | Group notes by figure, and fold groups | reference change | tc-check, tc-helps, B5a, B7, A3, A6a | `rail_groups_by_figure_in_first_note_order`; `group_counts_ignore_the_filter`; `fold_survives_a_restart`; `next_into_a_folded_group_unfolds_it`; `fold_all_keeps_the_active_group_open` | See DELTA §3.7 and §3.12.1. Update APP-DESIGN §3.8 and §4.9. |
-| #762 | Note at 80ch, source texts side by side | reference change | B5b | `compare_card_columns_fit_the_width` (port of `compare-card.spec.ts`) | See DELTA §3.12.1. |
-| #737 | A drag across draft words selects whole words | unit todo | B5b | `a_drag_selects_whole_words_and_mark_valid_saves_them` (port of the `checkKeyboard` and J4 drag cases) | Build `drag_range`. Next or Previous before marking drops the selection (tC4's Q2). |
-| #726 | Previous and Next beside the marking buttons | unit todo | B5b, B6, tc-ui | port of `item-navigation.spec.ts` | Build ItemNavButton on the gallery-proven Button styling; test ids `check-prev` and `check-next`. |
+| #762 | Note at 80ch, source texts side by side | covered | B5b | journey `compare_card_columns_fit_the_width` (port of `compare-card.spec.ts`) | Done by B5b: tC4 9ad4d5c's compare card and `Check.jsx` widths (DELTA §3.12.1): the detail fills the window, lines stop at 80ch, the original and gateway texts are cards in a wrapping row, "Your translation" a card of its own. The 12 session screens differ from the d310bf3 baseline in pixels and DOM for this reason (residuals); A6a recaptures them when the reference moves. |
+| #737 | A drag across draft words selects whole words | covered | B5b | `a_drag_selects_whole_words_and_mark_valid_saves_them` (tc-app proptest against `from_indices`; journey of the same name); `tc_api::model::selection` and `WordNav` tests | Done by B5b: `drag_range`, and the keyboard after a drag as tC4's `checkKeyboard` cases (Space toggles the word the drag started on, Shift+Right extends from it); Next or Previous before marking drops the selection (tC4's Q2). |
+| #726 | Previous and Next beside the marking buttons | covered | B5b (B6 for Align) | journeys `item_navigation_{translationNotes,translationWords}_{en,ar}_marking_row_boundaries_tab_and_wrapping` (port of `item-navigation.spec.ts`) | Done by B5b for Check: `ItemNavButton` on the DS Button, test ids `check-prev` and `check-next`, the painted row, 14 px end gaps, 30 px pills, arrows turned in right-to-left, Tab following the row, wrapping at 620 px. B6 reuses it for Align. |
 | #764 | Progress bars look empty at low progress | covered | B5a | `check_progress_bar_is_visible_after_one_resolved_item` (tc-ui) | Done by B5a: the helps tools' bars (picker cards, rail header) fill at least 6 px once one check is resolved and name their count (`aria-label`); the Align and Community Checking bars are tC4's. Declared difference (residuals `check-picker`, `en-check-picker`, `guided-fix`); tell the owner. |
 | #757 | Clear every selected word with one button | not applicable | B5b | — | Open tC4 enhancement, outside 4.0. Keep the selection as one local value. |
 | #661 | A tW-only pin change does not count rows that lose their article | rebuild bug | tc-check; C8, B5a | `a_tw_only_change_that_drops_a_decided_article_is_counted` | See §1 row 11. |
@@ -253,12 +253,12 @@ the rebuild fixed it or does as tC4 does:
 | #580 | Invalid stays Invalid after a language change and back | covered | tc-check | `a_change_back_to_the_resource_a_decision_was_made_against_revives_it` | A decision invalidated only by the change becomes valid again; tC4 brings it back as To do (STORAGE §7.7 difference). |
 | #579 | Name a gateway language the same way everywhere | unit todo | C8 (B9a done) | `gateway_change_dialog_names_both_languages_by_autonym` | Use the autonym, never the code, including both buttons. B9a: Project settings and Get source texts name a package by its autonym (`settings_from_home_show_the_sample_as_tc4_does`, journey `source-texts`). |
 | #621 | Superscript verse numbers in the simplified tab | covered | B3 | `simplified_tab_verse_numbers_are_superscript` | Done by B3 (§3). |
-| #619 | Quotes and bold in helps | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | As in §3, with #628's differences. |
+| #619 | Quotes and bold in helps | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | As in §3, with #628's differences. Done by B5b for the Check drawer. |
 | #601 | Sticky article header | covered | B3 | `article_close_button_visible_after_scroll` | Done by B3 (§3). |
 | #602 | Resize the helps panel | unit todo | B4a (B3 done) | `helps_panel_width_follows_the_divider_drag` | As in §3. |
 | #606 | Third-party licenses in About, offline | unit todo | A5, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). B9a: nothing in the app installs an Aquifer resource yet (APP-DESIGN §4.6), so the attribution goes with the unit that first installs one. |
-| #532 | Show a verse's new draft on return to the check | unit todo | B5b, C4 | `check_shows_new_draft_after_switching_back` | Read the verse again on return or when the book text arrives. |
-| #42 | Keyboard pass on the Check pages | unit todo | B5b (B5a done) | journeys `check_keyboard_picker_guided_fix_and_rail`, `check_keyboard_on_a_psalms_sized_rail`; `rail_keys_are_tc4s_roving_pattern` (tc-ui, the `railKeyDown` cases) | B5a: the picker's stops with the ring, the guided fix holding and returning the focus, the rail taking the focus once and being one Tab stop with tC4's keys, Tab out of the list, Back to the card, also on a virtual rail of Psalms' size. B5b: the detail column's stops, the drawer, the target words. #769's heading stops wait for the reference move. |
+| #532 | Show a verse's new draft on return to the check | covered | B5b (C4 for the writes) | journey `check_shows_new_draft_after_switching_back`; `check_shows_new_draft_after_switching_back` (tc-ui, the selection rule) | Done by B5b: a change that names the open list reads the active check again, so a verse drafted while the checker was in another mode shows on return, with its words as the new tappable ones and the stored selection for them. The journey changes the verse through `test/saveVerse` where Translate's save will. |
+| #42 | Keyboard pass on the Check pages | covered | B5b (B5a done) | journeys `check_keyboard_picker_guided_fix_and_rail`, `check_keyboard_on_a_psalms_sized_rail`, `check_keyboard_detail_drawer_words_marks_and_comment`; `rail_keys_are_tc4s_roving_pattern` and the `WordNav` cases (tc-ui) | B5a: the picker's stops with the ring, the guided fix holding and returning the focus, the rail taking the focus once and being one Tab stop with tC4's keys, Tab out of the list, Back to the card, also on a virtual rail of Psalms' size. B5b: Tab from the rail into the detail, Learn more, the Academy drawer holding the focus and returning it, the target words as one stop with Shift+arrow selection, the marking row in order, the comment and Done returning the focus to its button. #769's heading stops wait for the reference move. |
 | #513 | Resuming into tN stalls | covered | B5a | journey `resume_and_tab_click_open_the_tool_once` | Done by B5a: one `check/open` per resume, which settles. |
 | #501 | Opening Check changes `resources.json` | covered | B5a; C8 | `open_check_preflight_offer_close_leaves_pins_unchanged` (tc-app) | Done by B5a: the picker, the guided fix's offer and a tool's rail submit no command and leave the pins as they were. C8 ports J12's "pins never move without the accept". |
 | #722 | Verse button missing after the UGNT upgrade | unit todo | C8, B6 | J12 `ugnt_upgrade_marks_1_1_invalid_in_align` | The pin moves only after the download. |
@@ -359,7 +359,7 @@ the rebuild fixed it or does as tC4 does:
 | #278 | Show the build in the app | unit todo | A5, G1 | `about_commit_matches_the_release_record` | G1 sets `TC4_BUILD_COMMIT` for server and wasm. |
 | #167 | Which interface languages | covered | tc-ui | `the_registry_names_the_ten_decided_locales_each_with_a_catalog` | None. |
 | #37 | Unused catalog keys | not applicable | tc-ui | — | Optional: check that each rebuild key is used. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B4a, B5b, B6, G1 | Arabic IME Playwright case; Graphite probe | Use logical properties where tC4's physical ones break right to left, and record it. |
+| #29 | Right-to-left and complex scripts end to end | unit todo | B4a, B6, G2 (B5b done) | Arabic IME Playwright case; Graphite probe | Use logical properties where tC4's physical ones break right to left, and record it. |
 | #701 | Urdu (Devanagari) direction | rebuild bug | tc-resources | `ur_deva_helps_read_left_to_right_and_are_named_in_devanagari` | See §1 row 12. |
 | #548 | Dropdown follow-ups | covered | tc-ui | `a_book_matches_by_name_or_code_prefix`; gallery `select-search` | None. |
 | #552 | Move the dropdown onto a library | rebuild bug | tc-ui | ds-gallery `Select/disabled-while-open` | See §1 row 13. |
@@ -367,7 +367,7 @@ the rebuild fixed it or does as tC4 does:
 | #611 | macOS manifest hashes before codesign | not applicable | G1 | — | If the release writes binary hashes, compute them after signing. |
 | #700 | Cache the bundle in CI | not applicable | — | — | tC4 CI. |
 | #546 | Release v4.0.0 | not applicable | — | — | Recapture and sweep again when v4.0.0 is tagged. |
-| #42 | Keyboard pass on the Check pages | unit todo | B5b (B5a done) | port of `check-keyboard.spec.ts` | As in §4. |
+| #42 | Keyboard pass on the Check pages | covered | B5b (B5a done) | port of `check-keyboard.spec.ts` | As in §4. |
 | #568 | A keyboard-only user cannot align | unit todo | B6 | `align_by_keyboard_only` | As in §2. |
 | #599 | Keep the mode switch centred | unit todo | A5 | `switcher_stays_centred_while_the_save_indicator_changes` | Within 1 px, in en and ar. |
 | #505 | No Project settings in the top bar | unit todo | A5 | DOM parity of the in-project screens | Settings open from the Home card (B2). |
@@ -383,7 +383,7 @@ the rebuild fixed it or does as tC4 does:
 | #622 | Add five interface languages | covered | tc-ui | `the_registry_names_the_ten_decided_locales_each_with_a_catalog` | None. |
 | #649 | Add Arabic | covered | tc-ui | catalog and tracking tests | A5 ports app-language b2 and g. |
 | #612 | Hindi labels keep letter spacing | covered | tc-ui | `vendored_assets` | B11 uses a tracking token where tC4 has a literal value. |
-| #614 | Four English literals in design-system props | unit todo | screen units | tC4 `ds-labels` a–d | As in §3. |
+| #614 | Four English literals in design-system props | unit todo | B4b, C6, A5 (B5b done) | tC4 `ds-labels` a–d | As in §3. |
 | #632 | Help links stay in the panel on modified clicks | unit todo | A5, G1 | tC4 help case f | G1's `openExternal` refuses same-origin addresses. |
 | #634 | The Message box has no accessible name | unit todo | A5 | tC4 `feedback.spec` case 3 | Give the TextArea an id. |
 | #639 | Remove the Windows native title bar | unit todo | G1 | `windows_window_has_no_native_bar_and_keeps_zoom_and_reload` | Keep an application menu for reload and zoom keys. |
@@ -437,10 +437,9 @@ Follow-ups the fix units left (2026-10-19):
   alignment files can call a record valid that the rail calls Invalid: use
   `tc_align::needs_review` for both. tc-store's two reflow call sites should call
   `tc_align::reflow_edit(value, before, after)`, which follows each link by position (Q30 a).
-- **B5b, C4 (Check):** the Check screen still picks its selectable target words from the shown
-  text; take them from `tc_usfm::target_words`, as the aligner and the export do (FIX-text), so an
-  unknown marker's `|attributes` never show as words. *(B5a draws no target words: the item
-  detail, where they are, is B5b's, so this moved there.)*
+- **B5b, C4 (Check):** *(done by B5b)* the Check screen's selectable target words come from
+  `tc_usfm::target_words`, as the aligner and the export do (FIX-text): `check/item` cuts them with
+  `tc_check::selection::target_words`, so an unknown marker's `|attributes` never show as words.
 - **C6 (or a C1b follow-up):** build the owner's "Copy to this computer" answer (APP-DESIGN, Owner's
   answers, 2026-10-19): for a project in a projects folder on a FAT32 or exFAT drive or a synced
   folder, copy it with its unsaved texts into the app's local projects folder (checked safe; no folder

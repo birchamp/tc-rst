@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "527f290d49bacc6a",
+      "ui": "1202ce2e738f6c22",
       "commit": "dev",
       "api": 1
     }
@@ -30,8 +30,8 @@
     "rows": 130,
     "same": 9,
     "declared": 0,
-    "differs": 44,
-    "unported": 77,
+    "differs": 56,
+    "unported": 65,
     "failed": 0
   },
   "rows": [
@@ -159,11 +159,35 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "07ad4e490db11161a113349fba1d84b62518c3a451286bb51b31b22f1f02a191",
+        "rustSha256": "7583b8fffa79b360f867d08e0a6b40134b768fcfae38d3873d728d76f3f03fd9",
+        "mismatched": 420926,
+        "outsideMasks": 420926,
+        "masks": [],
+        "diff": "diffs/check-tn-session.png"
+      },
+      "dom": {
+        "tc4Sha256": "5bca731316468791d28941e6aa84ef2287c2824d7af61dc2555a51dc4f5f86ec",
+        "rustSha256": "73332b87ee86e57f3e8f0c8965b07cc86fae7f4144a13b728d3a45464bd6cdca",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"1 of 112 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 512: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1242,11 +1266,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "278a4f03c5814c009d70db396de28cecaa7040a9faf161ad4a00879e8713fa3e",
+        "rustSha256": "6d43e30102ddd6fd92a59320aa52f5fe8912260d5ae8f80b889648c7babd5189",
+        "mismatched": 314401,
+        "outsideMasks": 314401,
+        "masks": [],
+        "diff": "diffs/en-check-tw-session.png"
+      },
+      "dom": {
+        "tc4Sha256": "42722932a2449308f770f2601b28c0619ede8136cd072b4fbc70e05f6cb59ed7",
+        "rustSha256": "6e3de8339851dd3bb047f6a11c522a74c1ff89fdd33bb5ab6db89c6d72a471fe",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1254,11 +1302,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "3a9da9304caea4441a70665ea5a3e9ffc35e037a6b50a16df7d351c09b536d7b",
+        "rustSha256": "4318772b0143dcc636f96e4536e1f34abf7fb6b5fd09932c17c33aaa5c45c8dd",
+        "mismatched": 178750,
+        "outsideMasks": 178750,
+        "masks": [],
+        "diff": "diffs/en-check-tw-article.png"
+      },
+      "dom": {
+        "tc4Sha256": "b4d49169a9a0a6d40226ab420d409fb597085e7d11af5e5d24ce1c5f14f9e0ce",
+        "rustSha256": "ceef42f6a159fa6b56647d7f6ca23caa6a7731e8ecead5db4f97641c8848f01e",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1266,11 +1338,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e55099cf15f3f2dbc441e511aa4ffec480c0556040aed9a45e86009abd3ce5d8",
+        "rustSha256": "eb95e50736c2af5a70956b37daff71e00c8acf13da9e1eb184c5719d4567083b",
+        "mismatched": 387707,
+        "outsideMasks": 387707,
+        "masks": [],
+        "diff": "diffs/en-check-tn-session.png"
+      },
+      "dom": {
+        "tc4Sha256": "5f4b3bfdca2e9687025a74e8582134971aeea09a376513f0c96285d5f7a500ce",
+        "rustSha256": "4affd29333da07ca568fcdce49580aa69dc0549eef92683cd966cca13a01610c",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1278,11 +1374,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0aba39a0233cfbf39d367d087ddb04b2f3273372e9a605b2a1533f00a7e8b3b6",
+        "rustSha256": "f5eabe1fd9ddd495b5c719ab836b198dba66c42a414c6baadfdd1d61fbc64247",
+        "mismatched": 212429,
+        "outsideMasks": 212429,
+        "masks": [],
+        "diff": "diffs/en-check-ta-drawer.png"
+      },
+      "dom": {
+        "tc4Sha256": "599addd7dd4e404cbe3fcaf7c4f4fae03d61b290d60a670ad368d88cbd7b9087",
+        "rustSha256": "52683ef170430b9218a8fd8dfdb158078f8eebe8e65feeb6b158c3565d09b4e5",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1338,11 +1458,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "ar",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "5c7b8d085a48e1f4c93b20ab28626d68f5d3637172be5223cef948a408b1cfaa",
+        "rustSha256": "f3d317dbfa24176d6e4fd19756d3d8bbea503e364b4b458db65ac68b528805fe",
+        "mismatched": 323670,
+        "outsideMasks": 323670,
+        "masks": [],
+        "diff": "diffs/ar-check-tw-session.png"
+      },
+      "dom": {
+        "tc4Sha256": "5335857c6c9d47166c5ddb2036690bb1067a96f4599da2ef32aceb946f31b216",
+        "rustSha256": "3cac6f38532bec909773e07c8017b98f0a8395593a793879ab9c7933d1105f04",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 2 من أصل 182\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1350,11 +1494,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f19896cc9ea4649a4b9ce3071eac92a048991f0fd615928660040607f011755f",
+        "rustSha256": "e7c0f7d87417b14e5e496a49a5af0515887e8b9eb5496e12977d332516fcfabd",
+        "mismatched": 106138,
+        "outsideMasks": 106138,
+        "masks": [],
+        "diff": "diffs/en-check-tw-session-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "9873f927c42a7cee097216deb8b414e00dbf466b2a43d8278612382c20c30971",
+        "rustSha256": "b50fea7215985b156fc447aa5ef99e9641ef0bbe51c29a5390008df6a6305dd2",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1362,11 +1530,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "ar",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "ee47a0f3f72874972a0a4a9977a945f71d6d9b76823bcae06ed99c371346d9b0",
+        "rustSha256": "6c2e22ab942e61ffd2c1c024afa2981649c49502b0d0b613a80d6f624f95a89d",
+        "mismatched": 94439,
+        "outsideMasks": 94439,
+        "masks": [],
+        "diff": "diffs/ar-check-tw-session-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "76e62fefed2aa0fb22a309bb984ac0ad5abdb5375b5cee8dd0fba5e7d45d38cf",
+        "rustSha256": "9f483e61679f37e52124c71424e5cc5964e52fd20996f19b9ef84e01f7d4c7dc",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 2 من أصل 182\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1374,11 +1566,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0f5e62bcd951a4092b25f47a1ad32a0396eefe2d8915cd69684aa86e0c383a3a",
+        "rustSha256": "eb95e50736c2af5a70956b37daff71e00c8acf13da9e1eb184c5719d4567083b",
+        "mismatched": 509333,
+        "outsideMasks": 509333,
+        "masks": [],
+        "diff": "diffs/en-check-tn-session-row.png"
+      },
+      "dom": {
+        "tc4Sha256": "0784e877e880d7087ca29abc7ccb5711ddb03aca0ce96c26edbe32a4ce98ef88",
+        "rustSha256": "e82643149ec6defa6da5fa60fb67821430c1915476ed777c923720d466ff51d0",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1386,11 +1602,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "ar",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "91c56b63b44a56edc174cb4a3c28f69abb7a71c4e1d8467bcaee646699ad7402",
+        "rustSha256": "618e227d4fb645f821483a6f0bec96a3999a9474092b93bdc0cbb8aa602686fa",
+        "mismatched": 477516,
+        "outsideMasks": 477516,
+        "masks": [],
+        "diff": "diffs/ar-check-tn-session-row.png"
+      },
+      "dom": {
+        "tc4Sha256": "a80aa7b5dd6443598f909aa04811988149616f367494cf8cadd9bb4ee3892de3",
+        "rustSha256": "b5bbf2f243139cfea48639617e8eab395266375c32020f4641558cb28ce495bb",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 0 من أصل 157\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"غير صالح · 0\" | rust               \"غير صالح · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1398,11 +1638,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "22f577c2692653fb04ab53ebc54d96bfa39c385878c6312ed14fb13f3a952b64",
+        "rustSha256": "cbeb678f7c28c82dc13e6b0f61d5ddcc059bc2334697d48509848fe848243449",
+        "mismatched": 105888,
+        "outsideMasks": 105888,
+        "masks": [],
+        "diff": "diffs/en-check-tn-session-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "06e81cf07db937d02e57869547cd86b9a4b5733c2867ee76cd5a6db676524647",
+        "rustSha256": "4308191c854769934f62b9cfaf1eca50cf262097d992e38c000316c999bd1054",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -1410,11 +1674,35 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "ar",
-      "status": "unported",
-      "missing": {
-        "pixels": "B5b",
-        "dom": "B5b",
-        "meaning": "B5b"
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "7cd38212ff8871f115033e457c3634f0fcdc8d34ae788054bad80c8499ba5959",
+        "rustSha256": "254eb5cbaba546dc291d3e9086eea974a348e14544c649f55575c7f50574769a",
+        "mismatched": 94467,
+        "outsideMasks": 94467,
+        "masks": [],
+        "diff": "diffs/ar-check-tn-session-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "e0475064415c34699c39081b338ee882e94fd7af16308595cfdb86bd9fe70b4d",
+        "rustSha256": "7ece7e88185d7666c73530f3a12fe21df2d95c85ce447178f8012c94b51024b7",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 0 من أصل 157\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"غير صالح · 0\" | rust               \"غير صالح · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -2439,19 +2727,19 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B5a",
+      "by": "B5b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "ffd98654007b6601bfcb2914279ca95367a4a8087a08510f12e242d8cfc7773e",
-        "rustSha256": "4f7f7dd5462b7e904518cc2c0b121f389fd779c08c312f18f4e05d62427132cd",
-        "mismatched": 308475,
-        "outsideMasks": 308475,
+        "rustSha256": "823adda095f059620b972189232f70051bc4e5be8454f8d909b4a27aad95be04",
+        "mismatched": 424215,
+        "outsideMasks": 424215,
         "masks": [],
         "diff": "diffs/check-rail-empty.png"
       },
       "dom": {
         "tc4Sha256": "ea55ef943049fd5b96cbb0175f3170bbc6a7bd59d4aa3833c5620c5e11ff4d22",
-        "rustSha256": "1f1f108b16ff0ed51d15f63a373fa509aeb927eeecdf324686c799a21717be3d",
+        "rustSha256": "a816df962381ba73a3c595e90c775a8967c65e6887f2dd610eaf030cf6accae3",
         "scope": null,
         "same": false,
         "declared": [],
