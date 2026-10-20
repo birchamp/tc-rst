@@ -489,15 +489,20 @@ fn pack_round_trip_and_salvage() {
             );
 
             let mut damaged = pack.bytes.clone();
-            let mut touched = BTreeSet::new();
             for (at, bit) in &flips {
                 let at = at.index(damaged.len());
                 damaged[at] ^= 1 << bit;
-                touched.insert(at);
             }
             if damaged == pack.bytes {
                 return Ok(());
             }
+            // Repeated flips can restore a byte; salvage depends on the final bytes.
+            let touched: BTreeSet<usize> = damaged
+                .iter()
+                .zip(&pack.bytes)
+                .enumerate()
+                .filter_map(|(at, (after, before))| (after != before).then_some(at))
+                .collect();
             let read = read_pack(&pack.path.to_string(), &damaged, project());
             prop_assert!(
                 matches!(read.status, PackStatus::Damaged(_)),
@@ -527,6 +532,20 @@ fn pack_round_trip_and_salvage() {
             Ok(())
         },
     );
+}
+
+#[test]
+fn restoring_a_flipped_byte_keeps_its_line_salvageable() {
+    let lines = changes(1);
+    let pack = seal(&spec(local(9)), &lines).unwrap().packs.remove(0);
+    let mut damaged = pack.bytes.clone();
+    let line_start = damaged.iter().position(|b| *b == b'\n').unwrap() + 1;
+    damaged[line_start + 10] ^= 1 << 6;
+    damaged[line_start + 10] ^= 1 << 6;
+    damaged[0] ^= 1;
+    let read = read_pack(&pack.path.to_string(), &damaged, project());
+    assert!(matches!(read.status, PackStatus::Damaged(_)));
+    assert_eq!(read.entries, lines);
 }
 
 /// A valid change whose line, with its tab, hash and line feed, is `len` bytes long.
