@@ -12,6 +12,10 @@ use crate::ids::{ProjectRef, RequestId, UploadId};
 use crate::refusal::CreateRefusal;
 use crate::shown::Direction;
 
+/// The version of the bundled drafting sources that Add a book names (tC4 `SUITE_VERSION`).
+/// tc-app's tests hold it to the pins a new project gets.
+pub const SUITE_VERSION: &str = "v91";
+
 /// What New Bible and New Open Bible Stories ask for (tC4's `np`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]

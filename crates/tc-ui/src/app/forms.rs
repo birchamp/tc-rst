@@ -4,8 +4,10 @@
 
 use std::collections::BTreeSet;
 
+use tc_api::create::{Claims, Details, UsfmProblem, UsfmVerdict};
 use tc_api::home::{HomeCard, LanguageSuggestion};
-use tc_api::ids::ProjectRef;
+use tc_api::ids::{ProjectRef, RequestId, UploadId};
+use tc_api::refusal::CreateRefusal;
 use tc_api::shown::{Direction, Known};
 use tc_core::BookId;
 
@@ -46,6 +48,10 @@ pub struct NewProjectForm {
     pub show_advanced: bool,
     pub busy: bool,
     pub error: Option<String>,
+    /// The id of the attempt in flight or lost, kept so that a press after a lost reply is
+    /// answered from the server's reply cache and creates nothing twice (A-27). An edit or an
+    /// answer ends the attempt.
+    pub request: Option<RequestId>,
 }
 
 impl NewProjectForm {
@@ -65,6 +71,7 @@ impl NewProjectForm {
             show_advanced: false,
             busy: false,
             error: None,
+            request: None,
         }
     }
 
@@ -104,6 +111,58 @@ impl NewProjectForm {
         self.door43_code = None;
         self.unusable_code = None;
     }
+
+    /// What Create sends (tC4's `np` as the create reads it).
+    pub fn details(&self) -> Details {
+        Details {
+            name: self.name.clone(),
+            language_name: self.lang_name.clone(),
+            code: self.code.clone(),
+            door43_code: self.door43_code.clone(),
+            direction: self.dir,
+            font: self.font.clone(),
+        }
+    }
+
+    /// The press of Create (tC4 `createBible`, `createObs`): nothing while an attempt runs;
+    /// the form's own refusal when the name or the code is missing (`problem`); else the
+    /// attempt's id and what it sends, the button disabled until the answer. `fresh` makes the
+    /// id of a new attempt.
+    pub fn press(
+        &mut self,
+        fresh: impl FnOnce() -> RequestId,
+    ) -> Option<Result<(RequestId, Details), CreateRefusal>> {
+        if self.busy {
+            return None;
+        }
+        let details = self.details();
+        if let Err(problem) = details.folder() {
+            return Some(Err(problem));
+        }
+        self.busy = true;
+        self.error = None;
+        let request = *self.request.get_or_insert_with(fresh);
+        Some(Ok((request, details)))
+    }
+
+    /// The server answered: the attempt is over, with the words of its refusal if it had one.
+    pub fn answered(&mut self, error: Option<String>) {
+        self.busy = false;
+        self.request = None;
+        self.error = error;
+    }
+
+    /// No answer came (the connection broke): the attempt may have been carried out, so the
+    /// next press sends the same id and gets that attempt's reply.
+    pub fn lost(&mut self, error: String) {
+        self.busy = false;
+        self.error = Some(error);
+    }
+
+    /// A field changed: what the next press sends is another request.
+    pub fn edited(&mut self) {
+        self.request = None;
+    }
 }
 
 /// The sentence under the language row after a choice (Q35).
@@ -140,6 +199,45 @@ pub enum AddBookStep {
     Usfm,
 }
 
+/// A file picked for Add a book: its name, and what the server made of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsfmEntry {
+    /// Names the file in the list whatever is removed meanwhile: the server's answer for a file
+    /// finds its row by this.
+    pub id: u32,
+    pub name: String,
+    pub state: UsfmState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UsfmState {
+    /// Being sent to the server and read there.
+    Reading,
+    /// Uploaded and read: the file, and what it is.
+    Read {
+        upload: UploadId,
+        verdict: UsfmVerdict,
+    },
+    /// It could not be sent or read.
+    Unreadable(String),
+}
+
+/// A row of the USFM step: the file, and whether it can be added (tC4's `StatusDot` and caption).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsfmRow {
+    pub id: u32,
+    pub name: String,
+    pub state: RowState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowState {
+    Reading,
+    Adds(BookId),
+    Refused(UsfmProblem),
+    Unreadable(String),
+}
+
 /// tC4's `ab`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddBookForm {
@@ -150,8 +248,13 @@ pub struct AddBookForm {
     pub book: BookId,
     pub multi: bool,
     pub books: BTreeSet<BookId>,
+    /// The picked files, in the order they were picked (#484).
+    pub files: Vec<UsfmEntry>,
+    next_file: u32,
     pub busy: bool,
     pub error: Option<String>,
+    /// The id of the add in flight or lost: see [`NewProjectForm::request`].
+    pub request: Option<RequestId>,
 }
 
 impl AddBookForm {
@@ -162,21 +265,214 @@ impl AddBookForm {
             Known::Known(books) => books.iter().map(|b| b.book).collect(),
             Known::Unknown => Vec::new(),
         };
+        Self::of(card.project.clone(), card.name.clone(), existing)
+    }
+
+    /// The form for a project just created, which holds no book (tC4 `createBible` ends in
+    /// `openAddBook`).
+    pub fn of_new(project: ProjectRef, name: String) -> Self {
+        Self::of(project, name, Vec::new())
+    }
+
+    fn of(project: ProjectRef, project_name: String, existing: Vec<BookId>) -> Self {
         let book = BookId::ALL
             .into_iter()
             .find(|book| !existing.contains(book))
             .unwrap_or(BookId::Genesis);
         Self {
-            project: card.project.clone(),
-            project_name: card.name.clone(),
+            project,
+            project_name,
             existing,
             step: AddBookStep::Method,
             book,
             multi: false,
             books: BTreeSet::new(),
+            files: Vec::new(),
+            next_file: 0,
             busy: false,
             error: None,
+            request: None,
         }
+    }
+
+    /// The books the pick step would add: those ticked in the grid, or the one chosen, apart
+    /// from those the project holds (tC4 `addBooks`: adding must never touch a book that
+    /// carries drafts).
+    pub fn picked(&self) -> Vec<BookId> {
+        let wanted: Vec<BookId> = if self.multi {
+            BookId::ALL
+                .into_iter()
+                .filter(|book| self.books.contains(book))
+                .collect()
+        } else {
+            vec![self.book]
+        };
+        wanted
+            .into_iter()
+            .filter(|book| !self.existing.contains(book))
+            .collect()
+    }
+
+    /// The pick that names a book the project holds, for the warning (tC4 `existingPicked`).
+    pub fn held_picks(&self) -> Vec<BookId> {
+        let wanted: Vec<BookId> = if self.multi {
+            self.books.iter().copied().collect()
+        } else {
+            vec![self.book]
+        };
+        wanted
+            .into_iter()
+            .filter(|book| self.existing.contains(book))
+            .collect()
+    }
+
+    /// A book of the grid ticked or unticked.
+    pub fn toggle(&mut self, book: BookId) {
+        if self.existing.contains(&book) {
+            return;
+        }
+        if !self.books.remove(&book) {
+            self.books.insert(book);
+        }
+    }
+
+    /// The press of Create book (tC4 `addBooks`): the books to add and the id of the attempt, or
+    /// `Err` when none is picked. Nothing while an attempt runs.
+    pub fn press_blank(
+        &mut self,
+        fresh: impl FnOnce() -> RequestId,
+    ) -> Option<Result<(RequestId, Vec<BookId>), ()>> {
+        if self.busy {
+            return None;
+        }
+        let books = self.picked();
+        if books.is_empty() {
+            return Some(Err(()));
+        }
+        self.busy = true;
+        self.error = None;
+        Some(Ok((*self.request.get_or_insert_with(fresh), books)))
+    }
+
+    /// A file picked: its row reads until the server says what it is. Its id finds the row
+    /// again.
+    pub fn add_file(&mut self, name: String) -> u32 {
+        let id = self.next_file;
+        self.next_file += 1;
+        self.files.push(UsfmEntry {
+            id,
+            name,
+            state: UsfmState::Reading,
+        });
+        self.request = None;
+        id
+    }
+
+    /// The server read file `id`; a file removed meanwhile has no row to change.
+    pub fn file_read(&mut self, id: u32, state: UsfmState) {
+        if let Some(entry) = self.files.iter_mut().find(|e| e.id == id) {
+            entry.state = state;
+        }
+    }
+
+    /// Remove (✕): the file leaves, and the verdicts of the others are judged again.
+    pub fn remove_file(&mut self, id: u32) {
+        self.files.retain(|entry| entry.id != id);
+        self.request = None;
+    }
+
+    /// Each file's row, judged in order (tC4 `classifyUsfmFiles`): a book the project holds or
+    /// an earlier file claimed is refused in its row.
+    pub fn rows(&self) -> Vec<UsfmRow> {
+        let mut claims = Claims::default();
+        self.files
+            .iter()
+            .map(|entry| {
+                let state = match &entry.state {
+                    UsfmState::Reading => RowState::Reading,
+                    UsfmState::Unreadable(reason) => RowState::Unreadable(reason.clone()),
+                    UsfmState::Read { verdict, .. } => match verdict {
+                        UsfmVerdict::Refused(problem) => RowState::Refused(problem.clone()),
+                        UsfmVerdict::Book { book } => {
+                            match claims.claim(&entry.name, *book, self.existing.contains(book)) {
+                                Ok(book) => RowState::Adds(book),
+                                Err(problem) => RowState::Refused(problem),
+                            }
+                        }
+                    },
+                };
+                UsfmRow {
+                    id: entry.id,
+                    name: entry.name.clone(),
+                    state,
+                }
+            })
+            .collect()
+    }
+
+    /// The files Add would add.
+    pub fn addable(&self) -> usize {
+        self.rows()
+            .iter()
+            .filter(|row| matches!(row.state, RowState::Adds(_)))
+            .count()
+    }
+
+    /// Add is disabled while it runs, while a file is still read, and with nothing to add
+    /// (tC4 `ab-usfm-add`; the label stays "Add book", #564).
+    pub fn add_disabled(&self) -> bool {
+        self.busy
+            || self.addable() == 0
+            || self
+                .files
+                .iter()
+                .any(|entry| entry.state == UsfmState::Reading)
+    }
+
+    /// The press of Add (tC4 `addUsfmBooks`): the id of the attempt and the files to send, in
+    /// order. The server judges every file again; the ones the rows refuse go too, so that
+    /// their uploads are deleted with the rest.
+    pub fn press_usfm(
+        &mut self,
+        fresh: impl FnOnce() -> RequestId,
+    ) -> Option<(RequestId, Vec<tc_api::create::UsfmFile>)> {
+        if self.add_disabled() {
+            return None;
+        }
+        let files = self
+            .files
+            .iter()
+            .filter_map(|entry| match &entry.state {
+                UsfmState::Read { upload, .. } => Some(tc_api::create::UsfmFile {
+                    upload: upload.clone(),
+                    name: entry.name.clone(),
+                }),
+                _ => None,
+            })
+            .collect();
+        self.busy = true;
+        self.error = None;
+        Some((*self.request.get_or_insert_with(fresh), files))
+    }
+
+    /// The server answered an add: the books it added leave the list and join the project's
+    /// books; a refused or unwritten file stays in its row with the words of its reason.
+    pub fn added(&mut self, added: &[(String, BookId)], error: Option<String>) {
+        self.busy = false;
+        self.request = None;
+        self.error = error;
+        for (name, book) in added {
+            self.files.retain(|entry| entry.name != *name);
+            if !self.existing.contains(book) {
+                self.existing.push(*book);
+            }
+        }
+    }
+
+    /// The add may have been carried out; the next press sends the same id.
+    pub fn lost(&mut self, error: String) {
+        self.busy = false;
+        self.error = Some(error);
     }
 }
 

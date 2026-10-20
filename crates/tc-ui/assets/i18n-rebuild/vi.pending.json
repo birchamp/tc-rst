@@ -1,5 +1,7 @@
 [
+  "addBook.notAdded",
   "addBook.usfmDamaged",
+  "addBook.usfmReading",
   "drafts.offer.copyText",
   "drafts.offer.discard",
   "drafts.offer.found",

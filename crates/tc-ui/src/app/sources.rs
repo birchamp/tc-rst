@@ -3,9 +3,9 @@
 //! and the download are the server's.
 
 use tc_api::home::{HomeCard, ProjectKind};
-use tc_api::ids::{JobId, ProjectRef};
+use tc_api::ids::{JobId, ProjectRef, RequestId};
 use tc_api::resources::{GatewayPackage, PackageRow, SourcesView};
-use tc_api::settings::{GatewayCard, SettingsView};
+use tc_api::settings::{GatewayCard, Save, SettingsView, ShownValues};
 use tc_api::shown::{Direction, Known};
 use tc_core::BookId;
 
@@ -38,6 +38,11 @@ pub struct SettingsForm {
     pub busy: bool,
     pub error: Option<String>,
     pub gateway: GatewayState,
+    /// The direction and font the project held when they were read: what Save says the dialog
+    /// showed (AD14).
+    pub shown: Option<ShownValues>,
+    /// The id of the save in flight or lost (A-27); an edit or an answer ends it.
+    pub request: Option<RequestId>,
 }
 
 impl SettingsForm {
@@ -64,6 +69,8 @@ impl SettingsForm {
             busy: false,
             error: None,
             gateway: GatewayState::Loading,
+            shown: None,
+            request: None,
         }
     }
 
@@ -73,6 +80,10 @@ impl SettingsForm {
         if *project != self.project {
             return;
         }
+        self.shown = Some(ShownValues {
+            direction: view.direction,
+            font: view.font.clone(),
+        });
         self.dir = view.direction;
         self.font = view.font.unwrap_or_else(|| SCRIPT_FONTS[0].to_owned());
         self.lang_name = view.language_name;
@@ -93,6 +104,48 @@ impl SettingsForm {
 
     pub fn save_disabled(&self) -> bool {
         self.busy || !self.loaded
+    }
+
+    /// The press of Save changes (tC4 `saveSettings`): nothing while a save runs or before the
+    /// project's values came; else the request, with the id of the attempt.
+    pub fn press_save(&mut self, fresh: impl FnOnce() -> RequestId) -> Option<Save> {
+        if self.save_disabled() {
+            return None;
+        }
+        let shown = self.shown.clone()?;
+        self.busy = true;
+        self.error = None;
+        Some(Save {
+            request: *self.request.get_or_insert_with(fresh),
+            project: self.project.clone(),
+            shown,
+            direction: self.dir,
+            font: self.font.clone(),
+        })
+    }
+
+    /// The server answered a save of `project`: a refusal's words stay in the dialog. A reply
+    /// for another project's dialog changes nothing (tC4 #641).
+    pub fn answered(&mut self, project: &ProjectRef, error: Option<String>) {
+        if *project != self.project {
+            return;
+        }
+        self.busy = false;
+        self.request = None;
+        self.error = error;
+    }
+
+    /// No answer came: the save may have been carried out, and the next press sends its id.
+    pub fn lost(&mut self, project: &ProjectRef, error: String) {
+        if *project == self.project {
+            self.busy = false;
+            self.error = Some(error);
+        }
+    }
+
+    /// The direction or the font changed: a save of the new values is another request.
+    pub fn edited(&mut self) {
+        self.request = None;
     }
 
     /// The subtitle's book count is one book or many (`settings.subtitleOne`).

@@ -898,3 +898,14 @@ async fn copy_to_this_computer_is_refused_where_the_local_folder_is_synced_too()
     assert!(files(&world.fs, Path::new("/local")).is_empty());
     t.app.sessions().leave_screen(&open.at).unwrap();
 }
+
+/// Add a book names the version of the drafting sources a new project is pinned to.
+#[test]
+fn the_suite_version_add_a_book_names_is_the_pinned_literal_bible() {
+    let pins = tc_resources::suite::project_pins();
+    let literal = &pins.extra_scripture[0].pin;
+    assert!(
+        literal.to_string().contains(tc_api::create::SUITE_VERSION),
+        "{literal}"
+    );
+}

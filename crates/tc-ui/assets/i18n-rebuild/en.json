@@ -1,5 +1,7 @@
 {
+  "addBook.notAdded": "{file} was not added: {reason}",
   "addBook.usfmDamaged": "{file} cannot be added: {reason}",
+  "addBook.usfmReading": "Reading the file…",
   "drafts.offer.copyText": "Copy text",
   "drafts.offer.discard": "Discard",
   "drafts.offer.found": "Unsaved text from your last session was found for {place}.",
