@@ -257,6 +257,11 @@ pub struct SectionBuffer {
     seps: Vec<String>,
     markers: Vec<Option<usize>>,
     blocks: BTreeMap<usize, ParaFormat>,
+    /// The blocks typed on lines that hold words: a verse number on a line of its own leaves
+    /// its line out, so it is not read as the line before the next verse with words.
+    own: BTreeMap<usize, ParaFormat>,
+    /// The pins typed on a line of their own, with the format that line asks for.
+    bare: BTreeMap<String, Option<ParaFormat>>,
 }
 
 fn tokenize_line(rest: &str, words: &mut Vec<String>, seps: &mut Vec<String>, is_last: bool) {
@@ -311,6 +316,8 @@ impl SectionBuffer {
         let mut seps: Vec<String> = Vec::new();
         let mut found: Vec<Option<(usize, usize)>> = vec![None; pins.len()];
         let mut blocks: BTreeMap<usize, ParaFormat> = BTreeMap::new();
+        let mut own: BTreeMap<usize, ParaFormat> = BTreeMap::new();
+        let mut bare: BTreeMap<String, Option<ParaFormat>> = BTreeMap::new();
         let lines: Vec<&str> = text.split('\n').collect();
         let last_line = lines.len().saturating_sub(1);
         let mut preceded_by_blank = false;
@@ -328,12 +335,22 @@ impl SectionBuffer {
             let tabs = line.bytes().take_while(|&b| b == b'\t').count();
             let mut rest = line.get(tabs..).unwrap_or_default();
             let marker = marker_line(rest, &pins);
-            if let Some(format) = line_format(tabs, preceded_by_blank, marker.is_some()) {
+            let format = line_format(tabs, preceded_by_blank, marker.is_some());
+            let alone = marker.is_some_and(|(_, after)| after.is_empty());
+            if let Some(format) = format {
                 blocks.insert(words.len(), format);
+                if !alone {
+                    own.insert(words.len(), format);
+                }
             }
             preceded_by_blank = false;
             if let Some((run, after)) = marker {
                 for pin in run {
+                    if alone {
+                        bare.insert(pin.clone(), format);
+                    } else {
+                        bare.remove(pin);
+                    }
                     if let Some(at) = pins.iter().position(|p| p == pin)
                         && let Some(slot) = found.get_mut(at)
                     {
@@ -356,6 +373,8 @@ impl SectionBuffer {
                 words,
                 seps,
                 blocks: BTreeMap::new(),
+                own: BTreeMap::new(),
+                bare,
             };
         }
         let markers = resolve_pins(&found, words.len());
@@ -366,6 +385,8 @@ impl SectionBuffer {
             seps,
             markers,
             blocks,
+            own,
+            bare,
         }
     }
 
@@ -526,22 +547,23 @@ impl SectionBuffer {
             .collect()
     }
 
-    /// The marker before each verse after the first, as the typed lines ask (tC4's
-    /// `groupFormats`): `formats[i]` is for the verse whose key is `.0`, the one that comes
-    /// before the verse the format was typed on.
+    /// The marker before each verse after the first, as the typed lines ask: `formats[i]` is
+    /// for the verse whose key is `.0`, the one that comes before the verse the format was
+    /// typed on. A verse with no words keeps what its own line asks for, and one typed on no
+    /// line has no entry: the line before it stays as it is. tC4's `groupFormats` gives a
+    /// verse with no words none, and its line's format to the next verse with words, which
+    /// moved a seeded book's poetry lines (B4b, a declared difference).
     pub fn formats(&self) -> Vec<(String, Option<ParaFormat>)> {
         let groups = self.groups();
         groups
             .windows(2)
-            .map(|pair| {
-                let format = pair
-                    .get(1)
-                    .and_then(|next| next.at)
-                    .and_then(|at| self.blocks.get(&at).copied());
-                (
-                    pair.first().map(|g| g.key.clone()).unwrap_or_default(),
-                    format,
-                )
+            .filter_map(|pair| {
+                let (before, next) = (pair.first()?, pair.get(1)?);
+                let format = match next.at {
+                    Some(at) => self.own.get(&at).copied(),
+                    None => *self.bare.get(next.members.first()?)?,
+                };
+                Some((before.key.clone(), format))
             })
             .collect()
     }
@@ -566,7 +588,7 @@ impl SectionBuffer {
                 if i == 0 {
                     line
                 } else {
-                    indented(g.at.and_then(|at| self.blocks.get(&at).copied()), line)
+                    indented(g.at.and_then(|at| self.own.get(&at).copied()), line)
                 }
             })
             .collect::<Vec<_>>()

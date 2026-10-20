@@ -3,6 +3,7 @@
 //! (`tc_app::section::section_values`) tested on its own, and the whole save runs on the store
 //! through `test/saveSection`, until C2's `editor/saveSection` takes the same request.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -205,6 +206,30 @@ fn a_typed_paragraph_or_poetry_line_sets_the_layout_of_the_verse_before() {
     assert_eq!(layout_of(&values[0]), Some("\n"));
 }
 
+/// A seeded book has the source's paragraph and poetry lines before its undrafted verses. A
+/// section save that leaves such a verse undrafted keeps the line before it, and gives it to no
+/// other verse; tC4 moved it onto the next verse with words (a declared difference, B4b).
+#[test]
+fn a_verse_left_undrafted_keeps_the_line_before_it() {
+    let shown = vec![
+        (3, text("c", "\n\\q1\n", 3)),
+        (4, text("___", "\n", 4)),
+        (5, text("e", "\n", 5)),
+    ];
+    let (_, opened) = reopened(&shown);
+    assert_eq!(opened, "3 c\n\t4 \n5 e");
+    let values = section_values("3 c2\n\t4 \n5 e", &shown).unwrap();
+    assert_eq!(words_of(&values[0]), Some("c2"));
+    assert_eq!(layout_of(&values[0]), Some("\n\\q1\n"));
+    assert_eq!((&values[1], &values[2]), (&None, &None));
+    // Every verse a stub: the card opens empty, and typing verse 1 keeps every line.
+    let shown: Vec<(u16, VerseValue)> = (1..=4).map(|n| (n, text("___", "\n\\q1\n", n))).collect();
+    let values = section_values("1 a", &shown).unwrap();
+    assert_eq!(words_of(&values[0]), Some("a"));
+    assert_eq!(layout_of(&values[0]), Some("\n\\q1\n"));
+    assert_eq!(&values[1..], [None, None, None]);
+}
+
 /// The verses as the card opens them after `after` is stored: a span's key, the format from the
 /// layout of the verse before, the stub as no text (tc-app's `editor/chapters` and tc-ui's
 /// `card_verses`).
@@ -293,23 +318,19 @@ fn typed_strategy() -> impl Strategy<Value = String> {
     proptest::collection::vec(line, 0..7).prop_map(|lines| lines.join("\n"))
 }
 
-/// The line typed before each verse that has text, named by the verse before it. A line before
-/// a verse with no words has no word to rest on, and tC4's reading gives it to the next word.
-fn formats_before_text(buffer: &SectionBuffer) -> Vec<(String, Option<ParaFormat>)> {
-    let with_text: Vec<String> = buffer.verses().into_iter().map(|(key, _)| key).collect();
-    buffer
-        .formats()
-        .into_iter()
-        .zip(buffer.new_keys().into_iter().skip(1))
-        .filter(|(_, next)| with_text.contains(next))
-        .map(|(format, _)| format)
-        .collect()
+/// The `\\p`, `\\q1` or `\\q2` line after verse `n` as displayed: the line before the next verse.
+fn shown_line_after(shown: &[(u16, VerseValue)], n: u16) -> Option<ParaFormat> {
+    shown.iter().find_map(|(verse, value)| match value {
+        VerseValue::Text { layout, last, .. } if last.get().max(*verse) == n => gap_marker(layout),
+        _ => None,
+    })
 }
 
 proptest! {
     /// The differential test of AD24: the values tc-app writes for a card's text, opened again
     /// in a card, read as the same verses with the same bodies and the same line before each
-    /// verse with text as the card held when Save was pressed: what a translator saw is stored.
+    /// verse as the card held when Save was pressed: what a translator saw is stored. A verse
+    /// with no words that the text gives no line keeps the line it had.
     #[test]
     fn a_saved_section_opens_again_as_the_card_showed_it(
         shown in shown_strategy(),
@@ -327,7 +348,21 @@ proptest! {
         prop_assert_eq!(&new_keys, &card.new_keys(), "{:?}", after);
         let again = SectionBuffer::parse(&text, &new_keys);
         prop_assert_eq!(again.verses(), card.verses(), "{:?}", text);
-        prop_assert_eq!(formats_before_text(&again), formats_before_text(&card), "{:?}", text);
+        if card.is_empty() {
+            // #600: the lines between the verses stay; the reopened card is empty.
+            return Ok(());
+        }
+        let typed_lines: BTreeMap<String, Option<ParaFormat>> = card.formats().into_iter().collect();
+        let lines: BTreeMap<String, Option<ParaFormat>> = again.formats().into_iter().collect();
+        for pair in card.groups().windows(2) {
+            let before = &pair[0];
+            let last: u16 = before.members.last().unwrap().parse().unwrap();
+            let want = typed_lines
+                .get(&before.key)
+                .copied()
+                .unwrap_or_else(|| shown_line_after(&shown, last));
+            prop_assert_eq!(lines.get(&before.key), Some(&want), "{:?} {:?}", text, after);
+        }
     }
 }
 

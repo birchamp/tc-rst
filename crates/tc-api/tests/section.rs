@@ -44,6 +44,24 @@ fn strings(value: &Value) -> Vec<String> {
         .collect()
 }
 
+/// A line that holds only a verse number (or a run) and asks for a format: tabs before it, or
+/// a blank line.
+fn number_alone_with_a_format(text: &str) -> bool {
+    let mut blank_before = false;
+    text.split('\n').any(|line| {
+        let rest = line.trim_start_matches('\t');
+        let number = rest.trim_end();
+        let alone = !number.is_empty()
+            && number.split('-').count() <= 2
+            && number
+                .split('-')
+                .all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+        let found = alone && (rest.len() < line.len() || blank_before);
+        blank_before = line.trim().is_empty();
+        found
+    })
+}
+
 /// The format before each verse that has words, keyed by the verse before it.
 fn lines_before_words(b: &SectionBuffer) -> Vec<(String, Option<ParaFormat>)> {
     let groups = b.groups();
@@ -55,6 +73,14 @@ fn lines_before_words(b: &SectionBuffer) -> Vec<(String, Option<ParaFormat>)> {
     b.formats()
         .into_iter()
         .filter(|(key, _)| placed_after(key))
+        .collect()
+}
+
+/// The non-blank lines of a Type text without their leading tabs.
+fn lines_of(text: &str) -> Vec<&str> {
+    text.split('\n')
+        .map(|line| line.trim_start_matches('\t'))
+        .filter(|line| !line.trim().is_empty())
         .collect()
 }
 
@@ -136,11 +162,16 @@ fn the_port_reads_every_text_as_tc4_does() {
             Some(ParaFormat::Q2) => "\t\t",
             None => "",
         };
-        assert_eq!(
-            b.serialize(),
-            format!("{lead}{}", case["serialized"].as_str().unwrap()),
-            "serialized {at}"
-        );
+        let ours = b.serialize();
+        let theirs = format!("{lead}{}", case["serialized"].as_str().unwrap());
+        if number_alone_with_a_format(text) {
+            // The other declared difference (B4b): a format typed on a verse number's own line
+            // stays with that verse, where tC4 writes it before the next verse with words. The
+            // lines are the same; only their formats may differ.
+            assert_eq!(lines_of(&ours), lines_of(&theirs), "serialized {at}");
+        } else {
+            assert_eq!(ours, theirs, "serialized {at}");
+        }
         for (pin, indices) in case["canDrop"].as_object().unwrap() {
             let allowed: Vec<usize> = indices
                 .as_array()
@@ -664,6 +695,24 @@ fn the_first_line_written_keeps_its_format_when_the_first_verse_has_no_words() {
         b.formats().first(),
         Some(&("1".to_owned(), Some(ParaFormat::Q1)))
     );
+}
+
+/// A declared difference (B4b): a format typed on the line of a verse with no words stays the
+/// line before that verse, where tC4 gives it to the next verse with words; a verse with no
+/// words and no line of its own has no format, so the save leaves the line before it as it is.
+#[test]
+fn a_verse_with_no_words_keeps_the_line_before_it() {
+    let b = SectionBuffer::parse("3 c\n\t4 \n5 e", &keys(&["3", "4", "5"]));
+    assert_eq!(b.blocks().get(&1), Some(&ParaFormat::Q1), "tC4's reading");
+    assert_eq!(
+        b.formats(),
+        [
+            ("3".to_owned(), Some(ParaFormat::Q1)),
+            ("4".to_owned(), None)
+        ]
+    );
+    let b = SectionBuffer::parse("1 a", &keys(&["1", "2", "3", "4"]));
+    assert_eq!(b.formats(), []);
 }
 
 // ---------------------------------------------------------------------------------------------
