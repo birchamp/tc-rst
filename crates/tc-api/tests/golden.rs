@@ -29,8 +29,8 @@ use tc_api::check::{
     AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
     CheckSessionView, CheckUnit, Dot, DroppedNote, FixState, FixView, NextCheck, NoteCategory,
     Open as CheckOpen, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch,
-    RailRows, RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard,
-    ToolState,
+    RailRows, RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, StoryItem,
+    StoryItemView, StoryPane, Tool, ToolCard, ToolState,
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
@@ -45,7 +45,7 @@ use tc_api::event::{
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::helps::{
     Article, ArticleLink, ArticleView, LitVerse, NoteCard, PaneFocus, Passage, PassageView,
-    ReadySlot, SimplifiedVerse, Slot, WordCard,
+    ReadySlot, SimplifiedVerse, Slot, Story as HelpsStory, StoryArticle, WordCard,
 };
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
@@ -78,6 +78,7 @@ use tc_api::session::{
 };
 use tc_api::settings::{CurrentGateway, GatewayCard, SettingsView, ViewFromHome};
 use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
+use tc_api::story;
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
@@ -156,7 +157,10 @@ fn check_places() -> Vec<CheckPlace> {
 }
 
 fn check_units() -> Vec<CheckUnit> {
-    vec![CheckUnit::Book(BookId::Psalms), CheckUnit::Stories]
+    vec![
+        CheckUnit::Book(BookId::Psalms),
+        CheckUnit::Story(StoryNo::new(7).unwrap()),
+    ]
 }
 
 fn ack() -> Ack {
@@ -1444,7 +1448,7 @@ impl Example for Picker {
     fn example() -> Self {
         Picker {
             at: scope(),
-            book: BookId::Titus,
+            unit: CheckUnit::Book(BookId::Titus),
         }
     }
 }
@@ -1481,12 +1485,161 @@ impl Example for PickerView {
                     })),
                 },
             ],
-            align: CardCount::Counted(AlignProgress {
+            align: Some(CardCount::Counted(AlignProgress {
                 done: 0,
                 total: 5,
                 next: Some("1:1".into()),
-            }),
+            })),
             old_twl: None,
+        }
+    }
+}
+
+impl Example for HelpsStory {
+    fn example() -> Self {
+        HelpsStory {
+            at: scope(),
+            story: StoryNo::new(1).unwrap(),
+        }
+    }
+}
+
+impl Example for StoryArticle {
+    fn example() -> Self {
+        StoryArticle {
+            at: scope(),
+            link: ArticleLink::Academy {
+                slug: "figs-metaphor".into(),
+            },
+        }
+    }
+}
+
+impl Example for story::List {
+    fn example() -> Self {
+        story::List { at: scope() }
+    }
+}
+
+impl Example for story::StoryList {
+    fn example() -> Self {
+        story::StoryList {
+            stories: vec![
+                story::StoryRow {
+                    story: StoryNo::new(1).unwrap(),
+                    title: "La Creación".into(),
+                    drafted: Known::Known(13),
+                },
+                story::StoryRow {
+                    story: StoryNo::new(2).unwrap(),
+                    title: String::new(),
+                    drafted: Known::Unknown,
+                },
+            ],
+        }
+    }
+}
+
+impl Example for story::Open {
+    fn example() -> Self {
+        story::Open {
+            at: scope(),
+            story: StoryNo::new(1).unwrap(),
+        }
+    }
+}
+
+impl Example for story::StoryView {
+    fn example() -> Self {
+        story::StoryView {
+            story: StoryNo::new(1).unwrap(),
+            title: "La Creación".into(),
+            reference: "Una historia de la Biblia: Génesis 1-2".into(),
+            frames: vec![
+                story::FrameView {
+                    text: "Así fue como Dios hizo todo.".into(),
+                    image: Some(
+                        "/media/obs/uW~obs_images_360~7146d5b504f6b63b9e11f7dc0b18c594d0ae179d/360px/obs-en-01-01.jpg"
+                            .into(),
+                    ),
+                },
+                story::FrameView {
+                    text: String::new(),
+                    image: None,
+                },
+            ],
+            gateway: Some(story::GatewayStory {
+                title: "The Creation".into(),
+                reference: "A Bible story from: Genesis 1-2".into(),
+                frames: vec!["This is how God made everything.".into(), String::new()],
+            }),
+            source: Some(story::SourceNotice::Mismatch {
+                message: "the gateway story has 15 frames, the project's has 16".into(),
+            }),
+            source_version: Some("v9".into()),
+            image_note: Some(story::ImageNote {
+                wanted: 16,
+                packs: vec![
+                    story::PackReport {
+                        pin: "git.door43.org/uW/obs_images_360@7146d5b504f6".into(),
+                        installed_at: None,
+                        via: None,
+                        files: 0,
+                        error: Some("not installed".into()),
+                    },
+                    story::PackReport {
+                        pin: "git.door43.org/uW/obs_images_361@aaaaaaaaaaaa".into(),
+                        installed_at: Some("/home/ana/resources/obs_images_361".into()),
+                        via: Some(story::PackVia::Metadata),
+                        files: 0,
+                        error: Some("the listing could not be read".into()),
+                    },
+                ],
+            }),
+            comments: vec![story::FrameComment {
+                frame: 0,
+                text: "Check the title with the team.".into(),
+                at: WallMs(1_790_000_000_000),
+            }],
+        }
+    }
+}
+
+impl Example for StoryItem {
+    fn example() -> Self {
+        StoryItem {
+            at: scope(),
+            list: CheckListRef {
+                tool: Tool::TranslationNotes,
+                unit: CheckUnit::Story(StoryNo::new(1).unwrap()),
+            },
+            index: 0,
+        }
+    }
+}
+
+impl Example for StoryItemView {
+    fn example() -> Self {
+        StoryItemView {
+            index: 0,
+            place: frame_place(1, 0),
+            title: "The Creation".into(),
+            note: vec![ArticleBlock::new(
+                BlockKind::P,
+                0,
+                spans(
+                    " can also be translated as: “About how God made the world”.",
+                    "This title",
+                ),
+            )],
+            article: Some(ArticleLink::Academy {
+                slug: "translate-titles".into(),
+            }),
+            gateway: StoryPane::Text {
+                tokens: vec!["The".into(), " ".into(), "Creation".into()],
+                lit: vec![0, 2],
+            },
+            target: "La Creación".into(),
         }
     }
 }
@@ -1977,7 +2130,7 @@ fn session_events() -> Vec<SessionEvent> {
                     },
                     CheckListRef {
                         tool: Tool::TranslationWords,
-                        unit: CheckUnit::Stories,
+                        unit: CheckUnit::Story(StoryNo::new(12).unwrap()),
                     },
                 ],
                 records: vec![RecordChange {

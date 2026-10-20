@@ -4,7 +4,7 @@
 //! depends on the other. This program is the one place that knows both, so the application
 //! is a backend here by a newtype and every answer is mapped one to one.
 
-use tc_server::{Answer, Backend, Bytes, EventSource, Next, Then};
+use tc_server::{Answer, Backend, Bytes, EventSource, MediaFile, Next, Then};
 
 /// The application, as the server's backend.
 pub(crate) struct AppBackend(pub(crate) tc_app::App);
@@ -29,6 +29,14 @@ impl Backend for AppBackend {
 
     async fn quitting(&self) {
         self.0.quitting().await;
+    }
+
+    async fn obs_picture(&self, pack: &str, path: &str) -> Option<MediaFile> {
+        let file = self.0.obs_picture(pack, path).await?;
+        Some(MediaFile {
+            bytes: file.bytes,
+            content_type: file.content_type,
+        })
     }
 }
 

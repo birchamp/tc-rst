@@ -102,6 +102,8 @@ pub(crate) fn literal_pane(ids: &[String]) -> Option<String> {
 #[derive(Default)]
 pub(crate) struct BookCache {
     books: tokio::sync::Mutex<Vec<Arc<LoadedBook>>>,
+    /// A story project's resources (B7).
+    obs: crate::story::ObsCache,
 }
 
 impl BookCache {
@@ -109,6 +111,11 @@ impl BookCache {
     /// lacked.
     pub(crate) async fn forget(&self) {
         self.books.lock().await.clear();
+        self.obs.forget().await;
+    }
+
+    pub(crate) fn obs(&self) -> &crate::story::ObsCache {
+        &self.obs
     }
 }
 
@@ -143,7 +150,7 @@ fn helps_setting() -> Option<RecordKey> {
 /// The versions of what a book's resources are read under: each pin group's, the helps
 /// setting's and the versification's heads. They are in memory, so a book read again costs no
 /// value read.
-fn resources_stamp(read: &CountingSnapshot) -> Vec<Vec<ChangeId>> {
+pub(crate) fn resources_stamp(read: &CountingSnapshot) -> Vec<Vec<ChangeId>> {
     PinGroup::ALL
         .into_iter()
         .map(RecordKey::Pins)
@@ -251,7 +258,7 @@ fn text_state(status: &TextStatus) -> LoadedText {
 }
 
 /// A slot that is not ready, in tC4's states (`SlotState`, `tC4:src/views/HelpsPanel.jsx:109`).
-fn missing_slot<T>(missing: &Missing) -> Slot<T> {
+pub(crate) fn missing_slot<T>(missing: &Missing) -> Slot<T> {
     match missing {
         Missing::NotPinned | Missing::NotCovered { .. } | Missing::NotInAquifer => Slot::None,
         Missing::NotInstalled(_) | Missing::AquiferNotInstalled(_) => Slot::Fetch,
@@ -268,7 +275,7 @@ fn missing_slot<T>(missing: &Missing) -> Slot<T> {
 
 /// The direction of the helps a rung answered with (#650): its gateway's, when the app knows
 /// the gateway.
-fn rung_dir(pins: Option<&ProjectPins>, rung: Option<Rung>) -> Option<Direction> {
+pub(crate) fn rung_dir(pins: Option<&ProjectPins>, rung: Option<Rung>) -> Option<Direction> {
     let set = pins?.set(rung?)?;
     let gateway = tc_resources::gateways::of_set(set)?;
     Some(match gateway.direction {
@@ -278,7 +285,7 @@ fn rung_dir(pins: Option<&ProjectPins>, rung: Option<Rung>) -> Option<Direction>
 }
 
 /// A part's slot, with `items` when it loaded.
-fn slot<T>(
+pub(crate) fn slot<T>(
     status: Option<&PartStatus>,
     pins: Option<&ProjectPins>,
     items: impl FnOnce() -> Vec<T>,
@@ -615,7 +622,7 @@ fn in_chapter(chapter: &RefPart, wanted: u16) -> bool {
     chapter.as_str().parse::<u16>().ok() == Some(wanted)
 }
 
-fn api_spans(spans: Vec<tc_helps::blocks::Span>) -> Vec<ArticleSpan> {
+pub(crate) fn api_spans(spans: Vec<tc_helps::blocks::Span>) -> Vec<ArticleSpan> {
     spans
         .into_iter()
         .map(|s| ArticleSpan {
@@ -626,7 +633,7 @@ fn api_spans(spans: Vec<tc_helps::blocks::Span>) -> Vec<ArticleSpan> {
         .collect()
 }
 
-fn blocks(markdown: &str) -> Vec<ArticleBlock> {
+pub(crate) fn blocks(markdown: &str) -> Vec<ArticleBlock> {
     use tc_helps::blocks::BlockKind as Kind;
     tc_helps::blocks::render_article_blocks(markdown)
         .into_iter()
@@ -650,7 +657,7 @@ fn blocks(markdown: &str) -> Vec<ArticleBlock> {
 
 /// tC4's number for an occurrence: `-1` for every one, `0` for none, and 1 where the
 /// resource records none.
-fn occurrence(o: Occurrence) -> i32 {
+pub(crate) fn occurrence(o: Occurrence) -> i32 {
     match o {
         Occurrence::NotTied => 0,
         Occurrence::Nth(n) => i32::try_from(n.get()).unwrap_or(i32::MAX),
@@ -659,7 +666,7 @@ fn occurrence(o: Occurrence) -> i32 {
     }
 }
 
-fn item_id(id: &HelpItemId) -> String {
+pub(crate) fn item_id(id: &HelpItemId) -> String {
     match id {
         HelpItemId::Row(row) => row.as_str().to_owned(),
         HelpItemId::Aquifer(content) => content.as_str().to_owned(),
@@ -667,7 +674,7 @@ fn item_id(id: &HelpItemId) -> String {
 }
 
 /// A words article's name: its slug, or an Aquifer article's content id.
-fn word_slug(id: &WordArticleId) -> String {
+pub(crate) fn word_slug(id: &WordArticleId) -> String {
     match id {
         WordArticleId::Dcs { slug, .. } => slug.as_str().to_owned(),
         WordArticleId::Aquifer(content) => content.as_str().to_owned(),
@@ -676,7 +683,7 @@ fn word_slug(id: &WordArticleId) -> String {
 
 /// The manuals tC4 probes for a note's article, in its order (`TA_SECTIONS`,
 /// `tC4:src/data/articles.ts:18`).
-const MANUALS: [Manual; 4] = [
+pub(crate) const MANUALS: [Manual; 4] = [
     Manual::Translate,
     Manual::Checking,
     Manual::Process,
@@ -955,7 +962,7 @@ impl Handle<Passage> for App {
 /// A words article as tC4's pane draws it: the whole file, its `# Title` line included
 /// (`readTwArticle`, `tC4:src/data/articles.ts:57-66`). tc-helps keeps the title apart; an
 /// article whose file had no title line has the slug for its title, and gets no heading back.
-fn word_body(title: &str, slug: &str, body: &str) -> String {
+pub(crate) fn word_body(title: &str, slug: &str, body: &str) -> String {
     if title == slug {
         body.to_owned()
     } else {
@@ -963,55 +970,81 @@ fn word_body(title: &str, slug: &str, body: &str) -> String {
     }
 }
 
+/// A Translation Academy or Translation Words article of `helps`, as `helps/article` and
+/// `helps/storyArticle` answer. `academy` and `words` are the parts whose rung gives the
+/// article's direction: a book's notes and word links, or a story's.
+pub(crate) fn article_view(
+    resources: &BookResourcesRef<'_>,
+    link: &ArticleLink,
+    (academy, words): (HelpsPart, HelpsPart),
+) -> ArticleView {
+    let helps = resources.helps;
+    let (found, part) = match link {
+        ArticleLink::Academy { slug } => (
+            Slug::parse(slug).ok().and_then(|slug| {
+                MANUALS.iter().find_map(|manual| {
+                    let id = AcademyArticleId::Dcs {
+                        manual: *manual,
+                        slug: slug.clone(),
+                    };
+                    helps
+                        .academy_article(&id)
+                        .map(|f| (f.item.title.clone(), f.item.body.clone()))
+                })
+            }),
+            academy,
+        ),
+        ArticleLink::Words { category, slug } => (
+            category
+                .as_deref()
+                .and_then(WordCategory::parse)
+                .zip(Slug::parse(slug).ok())
+                .and_then(|(category, slug)| {
+                    helps.word_article(&WordArticleId::Dcs { category, slug })
+                })
+                .map(|f| {
+                    (
+                        f.item.title.clone(),
+                        word_body(&f.item.title, slug, &f.item.body),
+                    )
+                }),
+            words,
+        ),
+    };
+    let rung = match resources.parts.get(&part) {
+        Some(PartStatus::Loaded { rung, .. }) => *rung,
+        _ => None,
+    };
+    match found {
+        Some((title, body)) => ArticleView::Found {
+            title,
+            blocks: blocks(&body),
+            dir: rung_dir(resources.pins, rung).unwrap_or(Direction::Ltr),
+        },
+        None => ArticleView::Missing,
+    }
+}
+
+/// What an article is read from: a book's or a story project's loaded helps.
+pub(crate) struct BookResourcesRef<'a> {
+    pub(crate) helps: &'a tc_helps::Helps,
+    pub(crate) parts: &'a std::collections::BTreeMap<HelpsPart, PartStatus>,
+    pub(crate) pins: Option<&'a ProjectPins>,
+}
+
 impl Handle<Article> for App {
     async fn handle(&self, req: Article) -> Result<ArticleView, ApiError> {
         let session = self.read(&req.at)?;
         let loaded = self.loaded_book(&session, req.book).await?;
-        let helps = &loaded.resources.helps;
-        let (found, part) = match &req.link {
-            ArticleLink::Academy { slug } => (
-                Slug::parse(slug).ok().and_then(|slug| {
-                    MANUALS.iter().find_map(|manual| {
-                        let id = AcademyArticleId::Dcs {
-                            manual: *manual,
-                            slug: slug.clone(),
-                        };
-                        helps
-                            .academy_article(&id)
-                            .map(|f| (f.item.title.clone(), f.item.body.clone()))
-                    })
-                }),
-                HelpsPart::Notes,
-            ),
-            ArticleLink::Words { category, slug } => (
-                category
-                    .as_deref()
-                    .and_then(WordCategory::parse)
-                    .zip(Slug::parse(slug).ok())
-                    .and_then(|(category, slug)| {
-                        helps.word_article(&WordArticleId::Dcs { category, slug })
-                    })
-                    .map(|f| {
-                        (
-                            f.item.title.clone(),
-                            word_body(&f.item.title, slug, &f.item.body),
-                        )
-                    }),
-                HelpsPart::WordLinks,
-            ),
-        };
-        let rung = match loaded.resources.parts.get(&part) {
-            Some(PartStatus::Loaded { rung, .. }) => *rung,
-            _ => None,
-        };
-        Ok(match found {
-            Some((title, body)) => ArticleView::Found {
-                title,
-                blocks: blocks(&body),
-                dir: rung_dir(loaded.pins.as_ref(), rung).unwrap_or(Direction::Ltr),
+        Ok(article_view(
+            &BookResourcesRef {
+                helps: &loaded.resources.helps,
+                parts: &loaded.resources.parts,
+                pins: loaded.pins.as_ref(),
             },
-            None => ArticleView::Missing,
-        })
+            &req.link,
+            (HelpsPart::Notes, HelpsPart::WordLinks),
+        ))
     }
 }
 

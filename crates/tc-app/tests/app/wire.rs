@@ -314,10 +314,19 @@ fn every_record_kind_maps_to_its_change_part() {
         tw_story.checks,
         [CheckListRef {
             tool: Tool::TranslationWords,
-            unit: CheckUnit::Stories
+            unit: CheckUnit::Story(wire_story(3))
         }]
     );
     assert_eq!(tw_story.stories, [wire_story(3)]);
+    // A frame's text names both of its story's lists, as a verse's does its book's.
+    let frame_text = parts(vec![RecordKey::Frame(story(3), FrameNo(4))]);
+    assert_eq!(
+        frame_text.checks,
+        [Tool::TranslationNotes, Tool::TranslationWords].map(|tool| CheckListRef {
+            tool,
+            unit: CheckUnit::Story(wire_story(3))
+        })
+    );
 
     let aspects = |key| parts(vec![key]).aspects;
     assert_eq!(aspects(RecordKey::Pins(PinGroup::Primary)), [Aspect::Pins]);

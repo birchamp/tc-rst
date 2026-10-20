@@ -1,0 +1,42 @@
+{
+  "path": "story/list",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "stories": [
+        {
+          "story": 1,
+          "title": "La Creación",
+          "drafted": {
+            "type": "known",
+            "value": 13
+          }
+        },
+        {
+          "story": 2,
+          "title": "",
+          "drafted": {
+            "type": "unknown"
+          }
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

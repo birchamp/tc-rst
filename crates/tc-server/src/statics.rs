@@ -8,6 +8,8 @@
 use std::path::{Component, Path as FsPath, PathBuf};
 use std::sync::Arc;
 
+use crate::backend::Backend;
+use crate::state::AppState;
 use axum::extract::{Path, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -118,5 +120,30 @@ fn content_type(file: &FsPath) -> &'static str {
         Some("ico") => "image/x-icon",
         Some("txt") => "text/plain; charset=utf-8",
         _ => "application/octet-stream",
+    }
+}
+
+/// `GET /media/obs/{pack}/{path}`: a picture of an installed pack (§5.3). The backend decides
+/// what it serves; the answer is cached by the page for the launch, since a pack's id names
+/// its commit.
+pub(crate) async fn obs_picture<B: Backend>(
+    State(state): State<AppState<B>>,
+    Path((pack, path)): Path<(String, String)>,
+) -> Response {
+    match state.backend.obs_picture(&pack, &path).await {
+        Some(file) => {
+            let mut response = file.bytes.into_response();
+            let headers = response.headers_mut();
+            headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static(file.content_type),
+            );
+            headers.insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("private, max-age=3600"),
+            );
+            response
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
     }
 }

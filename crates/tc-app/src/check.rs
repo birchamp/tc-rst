@@ -28,11 +28,14 @@ use tc_api::check::{
     AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
     CheckSessionView, CheckUnit, Dot, DroppedNote, FixState, FixView, NextCheck, NoteCategory,
     Open, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows,
-    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard, ToolState,
-    WordCategory,
+    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, StoryItem, StoryItemView,
+    StoryPane, Tool, ToolCard, ToolState, WordCategory,
 };
-use tc_api::ids::{CheckSessionId, ViewSeq};
-use tc_check::derive::{BookSpec, CheckList, notes_for_book, word_links_for_book};
+use tc_api::ids::{CheckSessionId, StoryNo, ViewSeq};
+use tc_check::derive::{
+    BookSpec, CheckList, notes_for_book, notes_for_stories, word_links_for_book,
+    word_links_for_stories,
+};
 use tc_check::fix::{self, Machine, Preflight, PreflightState};
 use tc_check::{CheckItem, CheckState, CheckTarget, Collection, Ladder, Pin, ToolId};
 use tc_core::BookId;
@@ -46,6 +49,7 @@ use crate::counters::{AppCounter, CountingSnapshot};
 use crate::dispatch::Handle;
 use crate::numbering::Numbering;
 use crate::session::ProjectSession;
+use crate::story::LoadedObs;
 use crate::understand::{LoadedBook, LoadedText, project_pins, versification};
 
 /// The tools of the picker, in tC4's order (`TOOL_SLOT`).
@@ -217,10 +221,27 @@ fn pins_of(read: &CountingSnapshot) -> Result<Option<ProjectPins>, ApiError> {
     })
 }
 
+/// The collection a unit's decisions are kept under: a book's, or the stories' (one file of
+/// decisions for the fifty).
+fn collection_of(unit: CheckUnit) -> Collection {
+    match unit {
+        CheckUnit::Book(book) => Collection::Book(book),
+        CheckUnit::Story(_) => Collection::Stories,
+    }
+}
+
+/// What a unit is called in a report.
+fn unit_name(unit: CheckUnit) -> String {
+    match unit {
+        CheckUnit::Book(book) => book.code().to_owned(),
+        CheckUnit::Story(story) => format!("story {}", story.get()),
+    }
+}
+
 fn preflight(
     pins: Option<&ProjectPins>,
     tool: Tool,
-    book: BookId,
+    unit: CheckUnit,
     installed: &[fix::Installed],
 ) -> Preflight {
     let machine = Machine {
@@ -230,7 +251,7 @@ fn preflight(
     fix::preflight(
         pins.map(|p| p as &dyn Ladder),
         tool_id(tool),
-        Collection::Book(book),
+        collection_of(unit),
         &machine,
     )
 }
@@ -283,18 +304,7 @@ fn derive(
         pin: citation(resolution.0),
         rung: rung(resolution.1),
     };
-    let empty_with = |empty, dropped| Derived {
-        items: Vec::new(),
-        order: Vec::new(),
-        terms: Vec::new(),
-        term_of: Vec::new(),
-        titles: Vec::new(),
-        places: Vec::new(),
-        dropped,
-        citation: citation.clone(),
-        resolution: resolution.0.resource.clone(),
-        empty: Some(empty),
-    };
+    let empty_with = |empty, dropped| empty_derived(&citation, resolution.0, empty, dropped);
     let part = match tool {
         Tool::TranslationNotes => HelpsPart::Notes,
         Tool::TranslationWords => HelpsPart::WordLinks,
@@ -354,7 +364,88 @@ fn derive(
         };
         return Ok(empty_with(empty, dropped));
     }
-    let items = list.items;
+    let ids = loaded.pane_ids();
+    let literal = crate::understand::literal_pane(&ids)
+        .and_then(|id| loaded.pane(&id))
+        .and_then(|text| match text {
+            LoadedText::Ready(book) => Some(book),
+            _ => None,
+        });
+    assemble(list.items, dropped, citation, resolution.0, |item| {
+        title(loaded, literal, item)
+    })
+}
+
+/// Derives `tool`'s list of one story from the loaded story resources: the open story's
+/// notes or word links (tC4 `deriveObsItems`). A story has no numbering to map and no scope.
+fn derive_story(
+    loaded: &LoadedObs,
+    tool: Tool,
+    story: StoryNo,
+    resolution: (&Pin, tc_check::Rung),
+) -> Result<Derived, String> {
+    let citation = ResourceCitation {
+        pin: citation(resolution.0),
+        rung: rung(resolution.1),
+    };
+    let part = match tool {
+        Tool::TranslationNotes => HelpsPart::ObsNotes,
+        Tool::TranslationWords => HelpsPart::ObsWordLinks,
+    };
+    match loaded.resources.parts.get(&part) {
+        Some(PartStatus::Loaded { .. }) => {}
+        Some(PartStatus::Missing(missing)) => return Err(format!("{missing:?}")),
+        None => return Err(format!("no {part:?} were read")),
+    }
+    let helps = &loaded.resources.helps;
+    let list = match tool {
+        Tool::TranslationNotes => notes_for_stories(helps.notes(), Some(story.get())),
+        Tool::TranslationWords => word_links_for_stories(helps.word_links(), Some(story.get())),
+    };
+    if list.items.is_empty() {
+        return Ok(empty_derived(
+            &citation,
+            resolution.0,
+            CheckEmpty::None,
+            None,
+        ));
+    }
+    // A story has one source text and no original language: a check is titled by its quote,
+    // which is the gateway story's own words.
+    assemble(list.items, None, citation, resolution.0, |item| {
+        item.original_title()
+    })
+}
+
+/// A list with no check to show.
+fn empty_derived(
+    citation: &ResourceCitation,
+    resolution: &Pin,
+    empty: CheckEmpty,
+    dropped: Option<DroppedNote>,
+) -> Derived {
+    Derived {
+        items: Vec::new(),
+        order: Vec::new(),
+        terms: Vec::new(),
+        term_of: Vec::new(),
+        titles: Vec::new(),
+        places: Vec::new(),
+        dropped,
+        citation: citation.clone(),
+        resolution: resolution.resource.clone(),
+        empty: Some(empty),
+    }
+}
+
+/// The list's rows' fixed parts, from its items.
+fn assemble(
+    items: Vec<CheckItem>,
+    dropped: Option<DroppedNote>,
+    citation: ResourceCitation,
+    resolution: &Pin,
+    title_of: impl Fn(&CheckItem) -> String,
+) -> Result<Derived, String> {
     let places = items
         .iter()
         .map(|item| place(&item.key.target))
@@ -378,17 +469,7 @@ fn derive(
         .map(|item| at.get(item.group_id.as_str()).copied())
         .collect();
     let terms: Vec<String> = slugs.into_iter().map(str::to_owned).collect();
-    let ids = loaded.pane_ids();
-    let literal = crate::understand::literal_pane(&ids)
-        .and_then(|id| loaded.pane(&id))
-        .and_then(|text| match text {
-            LoadedText::Ready(book) => Some(book),
-            _ => None,
-        });
-    let titles = items
-        .iter()
-        .map(|item| title(loaded, literal, item))
-        .collect();
+    let titles = items.iter().map(title_of).collect();
     Ok(Derived {
         items,
         order,
@@ -398,7 +479,7 @@ fn derive(
         places,
         dropped,
         citation,
-        resolution: resolution.0.resource.clone(),
+        resolution: resolution.resource.clone(),
         empty: None,
     })
 }
@@ -419,12 +500,19 @@ fn flags(state: &CheckState) -> RowFlags {
 }
 
 /// Each check's row as the snapshot `read` shows its decisions.
-fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, book: BookId) -> Vec<RailRow> {
+fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, unit: CheckUnit) -> Vec<RailRow> {
     if derived.items.is_empty() {
         return Vec::new();
     }
-    let collection = Collection::Book(book);
-    let decisions = read.check_decisions(tool_id(tool), collection);
+    let collection = collection_of(unit);
+    // A story's session reads that story's decisions only.
+    let decisions = match unit {
+        CheckUnit::Book(_) => read.check_decisions(tool_id(tool), collection),
+        CheckUnit::Story(story) => match tc_journal::StoryNo::new(story.get()) {
+            Some(story) => read.story_decisions(tool_id(tool), story),
+            None => Vec::new(),
+        },
+    };
     // A decision shown under another key than its own is assessed against that check's text,
     // read once per target the placement asks for.
     let texts = read.check_texts(collection);
@@ -471,60 +559,75 @@ struct Ready {
 }
 
 impl App {
-    /// The list of `tool` in `book` as the session's newest snapshot shows it: derived when
+    /// The list of `tool` in `unit` as the session's newest snapshot shows it: derived when
     /// its key is new, its rows recomputed when the snapshot moved. `None` when the tool is
     /// not ready.
     async fn with_list<T>(
         &self,
         session: &Arc<ProjectSession>,
         tool: Tool,
-        book: BookId,
+        unit: CheckUnit,
         installed: &[fix::Installed],
         answer: impl FnOnce(&ListEntry, &CountingSnapshot) -> T,
     ) -> Result<Result<T, Preflight>, ApiError> {
         let read = session.read();
         let pins = pins_of(&read)?;
-        let pre = preflight(pins.as_ref(), tool, book, installed);
+        let pre = preflight(pins.as_ref(), tool, unit, installed);
         let ready = match (&pre.state, &pre.resolution) {
             (PreflightState::Ready, Some(resolution)) => Ready {
                 key: ListKey {
                     resolution: resolution.pin.resource.clone(),
-                    numbering: Numbering::of(versification(&read).as_ref())
-                        .project_scheme()
-                        .map(|s| s.name()),
-                    scope: book_scope(&read, book),
+                    // A story has no verse numbering and no scope to map or cut by.
+                    numbering: match unit {
+                        CheckUnit::Book(_) => Numbering::of(versification(&read).as_ref())
+                            .project_scheme()
+                            .map(|s| s.name()),
+                        CheckUnit::Story(_) => None,
+                    },
+                    scope: match unit {
+                        CheckUnit::Book(book) => book_scope(&read, book),
+                        CheckUnit::Story(_) => None,
+                    },
                 },
                 pin: resolution.pin.clone(),
                 rung: resolution.rung,
             },
             _ => return Ok(Err(pre)),
         };
-        let list = CheckListRef {
-            tool,
-            unit: CheckUnit::Book(book),
-        };
+        let list = CheckListRef { tool, unit };
         let mut lists = session.checks().lists.lock().await;
         let fresh = lists.get(&list).is_none_or(|e| e.key != ready.key);
         if fresh {
-            let loaded = self.loaded_book_for_checks(session, book).await?;
-            let numbering = loaded.numbering;
             let key = ready.key.clone();
-            let derived = tokio::task::spawn_blocking(move || {
-                derive(
-                    &loaded,
-                    tool,
-                    book,
-                    numbering,
-                    key.scope.as_ref(),
-                    (&ready.pin, ready.rung),
-                )
-            })
-            .await
+            let derived = match unit {
+                CheckUnit::Book(book) => {
+                    let loaded = self.loaded_book_for_checks(session, book).await?;
+                    let numbering = loaded.numbering;
+                    tokio::task::spawn_blocking(move || {
+                        derive(
+                            &loaded,
+                            tool,
+                            book,
+                            numbering,
+                            key.scope.as_ref(),
+                            (&ready.pin, ready.rung),
+                        )
+                    })
+                    .await
+                }
+                CheckUnit::Story(story) => {
+                    let loaded = self.loaded_obs(session).await?;
+                    tokio::task::spawn_blocking(move || {
+                        derive_story(&loaded, tool, story, (&ready.pin, ready.rung))
+                    })
+                    .await
+                }
+            }
             .map_err(|stopped| {
                 self.internal(
                     "a check list could not be derived",
                     crate::reports::facts(serde_json::json!({
-                        "book": book.code(),
+                        "unit": unit_name(unit),
                         "stopped": crate::jobs::stop_reason(stopped),
                     })),
                 )
@@ -533,7 +636,7 @@ impl App {
                 self.internal(
                     "a check list could not be derived",
                     crate::reports::facts(serde_json::json!({
-                        "book": book.code(),
+                        "unit": unit_name(unit),
                         "reason": reason,
                     })),
                 )
@@ -541,7 +644,7 @@ impl App {
             self.inner
                 .counters
                 .add(AppCounter::ItemsDerived, derived.items.len() as u64);
-            let rows = rows(&read, &derived, tool, book);
+            let rows = rows(&read, &derived, tool, unit);
             let view = view_of(&read);
             lists.insert(
                 list,
@@ -559,11 +662,11 @@ impl App {
         let Some(entry) = lists.get_mut(&list) else {
             return Err(self.internal(
                 "a check list was lost from its cache",
-                crate::reports::facts(serde_json::json!({ "book": book.code() })),
+                crate::reports::facts(serde_json::json!({ "unit": unit_name(unit) })),
             ));
         };
         if entry.seq != read.seq() {
-            let now = rows(&read, &entry.derived, tool, book);
+            let now = rows(&read, &entry.derived, tool, unit);
             let view = view_of(&read);
             for ((old, new), stamp) in entry.rows.iter_mut().zip(now).zip(&mut entry.stamps) {
                 if *old != new {
@@ -629,17 +732,6 @@ fn session_view(
     }
 }
 
-fn book_of(list: &CheckListRef) -> Result<BookId, ApiError> {
-    match list.unit {
-        CheckUnit::Book(book) => Ok(book),
-        // The stories' checks come with the OBS screens (B7).
-        CheckUnit::Stories => Err(ApiError::BadRequest {
-            field: "list".to_owned(),
-            reason: "the stories' check lists are not served yet".to_owned(),
-        }),
-    }
-}
-
 // ---------------------------------------------------------------------------------------
 // check/picker
 // ---------------------------------------------------------------------------------------
@@ -651,7 +743,7 @@ impl Handle<Picker> for App {
         let mut tools = Vec::new();
         for tool in TOOLS {
             let counted = self
-                .with_list(&session, tool, req.book, &installed, |entry, _| {
+                .with_list(&session, tool, req.unit, &installed, |entry, _| {
                     let progress = entry.progress();
                     CheckProgress {
                         decided: progress.decided,
@@ -666,7 +758,7 @@ impl Handle<Picker> for App {
                 .await;
             let read = session.read();
             let pins = pins_of(&read)?;
-            let pre = preflight(pins.as_ref(), tool, req.book, &installed);
+            let pre = preflight(pins.as_ref(), tool, req.unit, &installed);
             let progress = match counted {
                 Ok(Ok(progress)) => Some(CardCount::Counted(progress)),
                 Ok(Err(_)) => None,
@@ -699,7 +791,11 @@ impl Handle<Picker> for App {
             pins_of(&read)?.and_then(|pins| pins.old_twl_pin().map(|pin| pin.repo.to_string()));
         Ok(PickerView {
             tools,
-            align: align_card(&read, req.book),
+            // A story has no Align tool: the entry is absent, not disabled (tC4 D74 §8).
+            align: match req.unit {
+                CheckUnit::Book(book) => Some(align_card(&read, book)),
+                CheckUnit::Story(_) => None,
+            },
             old_twl,
         })
     }
@@ -770,11 +866,10 @@ fn align_card(read: &CountingSnapshot, book: BookId) -> CardCount<AlignProgress>
 impl Handle<Open> for App {
     async fn handle(&self, req: Open) -> Result<CheckSessionView, ApiError> {
         let session = self.read(&req.at)?;
-        let book = book_of(&req.list)?;
         let installed = installed(self)?;
         let list = req.list;
         let app = self.clone();
-        self.with_list(&session, list.tool, book, &installed, |entry, read| {
+        self.with_list(&session, list.tool, list.unit, &installed, |entry, read| {
             session_view(&app, list, entry, read, req.since)
         })
         .await?
@@ -785,21 +880,26 @@ impl Handle<Open> for App {
 impl Handle<Rows> for App {
     async fn handle(&self, req: Rows) -> Result<RowsView, ApiError> {
         let session = self.read(&req.at)?;
-        let book = book_of(&req.list)?;
         let installed = installed(self)?;
         let app = self.clone();
         let since = req.since;
         let answer = self
-            .with_list(&session, req.list.tool, book, &installed, |entry, read| {
-                if entry.session != since.session || since.view < entry.built {
-                    return RowsView::Reopen;
-                }
-                RowsView::Changed {
-                    view: view_of(read),
-                    rows: changed_since(&app, entry, since.view),
-                    progress: entry.progress(),
-                }
-            })
+            .with_list(
+                &session,
+                req.list.tool,
+                req.list.unit,
+                &installed,
+                |entry, read| {
+                    if entry.session != since.session || since.view < entry.built {
+                        return RowsView::Reopen;
+                    }
+                    RowsView::Changed {
+                        view: view_of(read),
+                        rows: changed_since(&app, entry, since.view),
+                        progress: entry.progress(),
+                    }
+                },
+            )
             .await?;
         // A tool that stopped being ready is opened again, which shows why.
         Ok(answer.unwrap_or(RowsView::Reopen))
@@ -813,14 +913,13 @@ impl Handle<Rows> for App {
 impl Handle<FixState> for App {
     async fn handle(&self, req: FixState) -> Result<Option<FixView>, ApiError> {
         let session = self.read(&req.at)?;
-        let book = book_of(&req.list)?;
         let installed = installed(self)?;
         let read = session.read();
         let pins = pins_of(&read)?;
         let Some(pins) = pins else {
             return Ok(None);
         };
-        let pre = preflight(Some(&pins), req.list.tool, book, &installed);
+        let pre = preflight(Some(&pins), req.list.tool, req.list.unit, &installed);
         // Only a card whose pinned resource is missing offers the fix (tC4 `ToolNeeds`).
         if !matches!(
             pre.state,
@@ -846,5 +945,111 @@ impl Handle<FixState> for App {
                 })
                 .collect(),
         }))
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// check/storyItem
+// ---------------------------------------------------------------------------------------
+
+/// The article a story check links to: a note's Translation Academy article, a word link's
+/// Translation Words article.
+fn story_article(item: &CheckItem) -> Option<tc_api::helps::ArticleLink> {
+    if item.group_id.is_empty() {
+        return None;
+    }
+    Some(match item.category {
+        tc_check::Category::Note(_) => tc_api::helps::ArticleLink::Academy {
+            slug: item.group_id.clone(),
+        },
+        tc_check::Category::Word(word) => tc_api::helps::ArticleLink::Words {
+            category: Some(word.folder().to_owned()),
+            slug: item.group_id.clone(),
+        },
+    })
+}
+
+impl Handle<StoryItem> for App {
+    async fn handle(&self, req: StoryItem) -> Result<StoryItemView, ApiError> {
+        let CheckUnit::Story(story) = req.list.unit else {
+            return Err(ApiError::BadRequest {
+                field: "list".to_owned(),
+                reason: "a story's check is of a story".to_owned(),
+            });
+        };
+        let session = self.read(&req.at)?;
+        let installed = installed(self)?;
+        let index = usize::try_from(req.index).unwrap_or(usize::MAX);
+        let (item, title, place) = self
+            .with_list(
+                &session,
+                req.list.tool,
+                req.list.unit,
+                &installed,
+                |entry, _| {
+                    Some((
+                        entry.derived.items.get(index)?.clone(),
+                        entry.derived.titles.get(index)?.clone(),
+                        entry.derived.places.get(index)?.clone(),
+                    ))
+                },
+            )
+            .await?
+            .map_err(|_| ApiError::ToolNotReady)?
+            .ok_or_else(|| ApiError::BadRequest {
+                field: "index".to_owned(),
+                reason: format!("the list has no check {}", req.index),
+            })?;
+        let CheckPlace::Frame { frame, .. } = &place else {
+            return Err(ApiError::BadRequest {
+                field: "list".to_owned(),
+                reason: "a story's check is on a frame".to_owned(),
+            });
+        };
+        let frame = usize::from(*frame);
+        let loaded = self.loaded_obs(&session).await?;
+        let gateway = loaded
+            .resources
+            .stories
+            .iter()
+            .find(|g| g.number == story.get())
+            .and_then(|g| match frame {
+                0 => Some(g.title.as_str()),
+                n => g.frames.get(n - 1).map(|f| f.text.as_str()),
+            })
+            .map(tc_helps::highlight::tokenize_plain)
+            .filter(|tokens| !tokens.is_empty());
+        let gateway = match gateway {
+            Some(tokens) => {
+                let lit = tc_helps::highlight::highlight_plain(&tokens, &item.quote)
+                    .into_iter()
+                    .map(count)
+                    .collect();
+                StoryPane::Text {
+                    tokens: tokens.into_iter().map(|t| t.text).collect(),
+                    lit,
+                }
+            }
+            None => StoryPane::Missing,
+        };
+        let read = session.read();
+        let target = read
+            .check_texts(Collection::Stories)
+            .text(&item.key.target)
+            .map(|text| text.content().to_owned())
+            .unwrap_or_default();
+        Ok(StoryItemView {
+            index: req.index,
+            place,
+            title,
+            note: item
+                .note
+                .as_deref()
+                .map(|note| crate::understand::blocks(&note.replace("\\n", "\n")))
+                .unwrap_or_default(),
+            article: story_article(&item),
+            gateway,
+            target,
+        })
     }
 }

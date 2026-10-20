@@ -45,15 +45,15 @@ impl QueryKey {
             Self::Story(story) => parts.stories.contains(story),
             // A check list is derived from the pinned resources and from the presence of its
             // book. `ChangeParts` names a story whether it was added, removed or edited, and
-            // a story's presence cannot be told from its text here, so any story change
-            // counts; a book's text edit does not, because the server names the lists it
-            // re-assessed in `checks`.
+            // a story's presence cannot be told from its text here, so any change of its own
+            // story counts; a book's text edit does not, because the server names the lists
+            // it re-assessed in `checks`.
             Self::CheckList(list) => {
                 parts.checks.contains(list)
                     || parts.aspects.contains(&Aspect::Pins)
                     || match list.unit {
                         CheckUnit::Book(book) => book_changed(book),
-                        CheckUnit::Stories => !parts.stories.is_empty(),
+                        CheckUnit::Story(story) => parts.stories.contains(&story),
                     }
             }
             Self::Record(record) => parts.records.iter().any(|r| &r.record == record),

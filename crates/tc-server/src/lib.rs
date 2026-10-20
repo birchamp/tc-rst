@@ -48,7 +48,7 @@ use tokio::sync::watch;
 
 pub use applock::{AppLock, AppLockError, Holder};
 pub use axum::body::Bytes;
-pub use backend::{Answer, Backend, EventSource, Next, Then};
+pub use backend::{Answer, Backend, EventSource, MediaFile, Next, Then};
 pub use downloads::{DownloadError, Downloads};
 #[cfg(feature = "test-hooks")]
 pub use hooks::{CRASH_EXIT_CODE, Ended, Ender, ExitProcess, RecordingEnder};
@@ -346,6 +346,7 @@ fn router<B: Backend>(state: AppState<B>) -> Router {
             post(uploads::upload).layer(DefaultBodyLimit::disable()),
         )
         .route("/download/{id}/{name}", get(downloads::download))
+        .route("/media/obs/{pack}/{*path}", get(statics::obs_picture::<B>))
         .route(
             "/api/v1/{service}/{name}",
             // The handler reads the body itself, against `Limits::api_body`.

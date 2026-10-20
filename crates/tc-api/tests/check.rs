@@ -408,9 +408,10 @@ fn a_place_reads_back_as_the_text_it_was_written_as() {
 }
 
 #[test]
-fn a_check_list_names_its_book_or_the_stories() {
+fn a_check_list_names_its_book_or_its_story() {
     // `CheckListRef { tool, book }` had no form for the stories, though a check's tool and
-    // its unit are what tc-check keys a list by (`Collection::Stories`).
+    // its unit are what tc-check keys a list by (`Collection::Stories`); a story's session is
+    // the open story's.
     let titus: CheckListRef = serde_json::from_value(json!({
         "tool": "translationNotes", "unit": {"type": "book", "value": "TIT"}
     }))
@@ -422,15 +423,15 @@ fn a_check_list_names_its_book_or_the_stories() {
             unit: CheckUnit::Book(BookId::Titus)
         }
     );
-    let stories: CheckListRef = serde_json::from_value(json!({
-        "tool": "translationWords", "unit": {"type": "stories"}
+    let story: CheckListRef = serde_json::from_value(json!({
+        "tool": "translationWords", "unit": {"type": "story", "value": 3}
     }))
     .unwrap();
     assert_eq!(
-        stories,
+        story,
         CheckListRef {
             tool: Tool::TranslationWords,
-            unit: CheckUnit::Stories
+            unit: CheckUnit::Story(StoryNo::new(3).unwrap())
         }
     );
     // The first form, a book beside the tool, is not read as a list of anything.
@@ -444,7 +445,7 @@ fn a_check_list_names_its_book_or_the_stories() {
 fn a_change_can_name_the_story_check_lists_it_touched() {
     let stories = CheckListRef {
         tool: Tool::TranslationNotes,
-        unit: CheckUnit::Stories,
+        unit: CheckUnit::Story(StoryNo::new(3).unwrap()),
     };
     let titus = CheckListRef {
         tool: Tool::TranslationNotes,
