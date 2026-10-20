@@ -292,8 +292,8 @@
       "domSha256": "431a203119f84da37ac7d5581127db692d50ae3b20defe608a7a9acb01424ef3",
       "actions": "actions/upgrade-repin.json",
       "actionsSha256": "f56d7f0929373c2b9432500e92089eb0c264979a6e0297a92ae842d6874fe763",
-      "domUnit": "B5a",
-      "pixelsUnit": "B5a",
+      "domUnit": "B5b",
+      "pixelsUnit": "B5b",
       "scope": null
     },
     {

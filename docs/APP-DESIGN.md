@@ -2856,7 +2856,7 @@ The groups, which the gate reads (keep the backticks and the four cells):
 | `S12` | OBS Community Checking (`CommunityChecking.jsx`, `StoryCommunityChecking`), with its layout choice | B8 | B8 |
 | `S14` | the open overlay (`OpenProgress.jsx`) with its three captions | B3 | B3 |
 | `M9` | the release upgrade confirmation (`UpgradeSet.jsx`): a set, harmless, blocked, failed, scripture text | C8 | C8 |
-| `M9b` | the same confirmation titled "Re-pin" (`UpgradeSet.jsx`, `offer.kind` repin), over the Check picker that the guided fix's screen leaves *(C8: split from `M9`, whose rows are drawn over Get source texts; this one is drawn over B5a's Check picker, which C8 cannot show, so B5a captures it with the guided fix)* | B5a | B5a |
+| `M9b` | the same confirmation titled "Re-pin" (`UpgradeSet.jsx`, `offer.kind` repin), over the Check picker that the guided fix's screen leaves *(C8: split from `M9`, whose rows are drawn over Get source texts; this one is drawn over B5a's Check picker, which C8 cannot show, so B5a was to capture it with the guided fix. Merge of C8, 2026-10-19: B5a landed with the three ways drawn and not wired, and C8 landed with their endpoints and no modal, so no screen reaches this confirmation yet. Wiring the three ways (download with its progress, a file install, the re-pin that opens this confirmation) and capturing this case moved to B5b, the next unit on the Check screens)* | B5b | B5b |
 | `M10` | the gateway change (`GatewayChange.jsx`): the change, busy, blocked, failed to apply, failed preview | C8 | C8 |
 | `M18` | "Remove all the text of section …?" (`SectionEditor.jsx:244-255`, tC4 #600) | B4b | B4b |
 | `license` | the License dialog (`AccountMenu.jsx`, `LicenseDialog`) | A5 | B2 |
