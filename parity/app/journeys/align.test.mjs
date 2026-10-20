@@ -208,6 +208,30 @@ browserTest('fast_clicks_in_the_page_are_queued_not_refused', async () => {
   });
 });
 
+/** A verse is not left while its links cannot be saved (a full disk): the server refuses the
+ * switch, and the page shows the verse that stays open, with its links, not an error. */
+browserTest('a_refused_verse_switch_keeps_the_open_verse_shown', async () => {
+  await withApp(async ({ page }) => {
+    await openAlign(page);
+    await chip(page, 'fe').click();
+    await card(page, 'πίστιν').click();
+    await until('seven words placed', async () => (await placed(page)) === '7 of 27 words placed');
+    // The server's answer when the links of 1:1 cannot be saved (tc-app
+    // `leaving_a_verse_saves_it_first_and_a_failure_keeps_the_person_there`).
+    await page.route('**/api/v1/align/open', (route) => {
+      const verse = route.request().postDataJSON().verse;
+      if (verse?.chapter !== 1 || verse?.verse !== 2) return route.fallback();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{"type":"err","value":{"type":"notSaved","value":{"type":"disk","value":"full"}}}' });
+    });
+    await page.locator('[data-testid="align-verse-list"] [data-ref="1:2"]').click();
+    await until('verse 1:1 is open again', async () => (await page.getByTestId('align-verse-list').locator('[data-selected="true"]').getAttribute('data-ref')) === '1:1');
+    await page.getByTestId('align-bank').waitFor();
+    assert.equal(await page.getByTestId('align-error').count(), 0, 'no error stands in for the open verse');
+    assert.equal(await page.getByTestId('align-item-counter').textContent(), 'Item 1 of 5');
+    assert.equal(await placed(page), '7 of 27 words placed', 'the links of 1:1 are shown');
+  });
+});
+
 /** Suggestions (tC4 #1, D72): the switch trains the engine in the background, Suggest proposes
  * links as dashed chips that are not links, and Accept all places them. */
 browserTest('align_suggestions_through_the_page', async () => {

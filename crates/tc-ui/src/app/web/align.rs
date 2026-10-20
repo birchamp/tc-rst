@@ -119,9 +119,10 @@ pub struct AlignState {
     pub how: ArcRwSignal<bool>,
     /// A Suggest is on its way: the button waits for its answer.
     pub asking: ArcRwSignal<bool>,
-    /// The aligner the server holds for this page and the open it belongs to: what the tool
-    /// asks the server to close when it is left for another book.
-    pub open: ArcRwSignal<Option<(tc_api::ids::Scope, tc_api::ids::AlignerId)>>,
+    /// The aligner the server holds for this page, the open it belongs to and its verse: what
+    /// the tool asks the server to close when it is left for another book, and the verse shown
+    /// again when the server refuses to leave it.
+    pub open: ArcRwSignal<Option<(tc_api::ids::Scope, tc_api::ids::AlignerId, AlignPlace)>>,
     /// The verse each book was last at, kept in memory only (tC4 `toolPos`, §4.2).
     pub remembered: ArcRwSignal<Vec<(BookId, AlignPlace)>>,
 }
@@ -259,7 +260,7 @@ impl Actions {
     /// aligner the server holds is closed, so its links are saved and it does not wait for the
     /// project to be left (at Home the server's own leave saves it).
     pub(super) fn reset_align(&self) {
-        if let Some((at, aligner)) = self.s().a.open.try_update(Option::take).flatten() {
+        if let Some((at, aligner, _)) = self.s().a.open.try_update(Option::take).flatten() {
             let this = self.clone();
             spawn_local(async move {
                 let close = Close {
@@ -347,7 +348,7 @@ impl Actions {
                 }
                 // The verse that was open could not be saved, so it stays open: the server
                 // answers its own view, and the indicator says why it did not save.
-                Err(CallError::Api(ApiError::NotSaved(_))) => this.reopen_open_verse(),
+                Err(CallError::Api(ApiError::NotSaved(_))) => this.reopen_open_verse(place),
                 Err(CallError::Api(ApiError::StaleScope { .. }) | CallError::Dropped) => {}
                 Err(error) => {
                     a.screen.try_set(Screen::Failed(error.to_string()));
@@ -368,16 +369,18 @@ impl Actions {
         self.open_align(Some(place));
     }
 
-    fn reopen_open_verse(&self) {
-        // With no verse left to name, `None` resumes where the book does; a refused leave has
-        // one: the verse still open.
-        let held = self.s().a.screen.with_untracked(|s| match s {
-            Screen::Ready(view) => Some(view.place),
-            _ => None,
-        });
+    /// The verse the server holds, opened again. Read from `open`, not the screen: an open on
+    /// its way has already put the screen at Loading. `asked` is the open that was refused, so
+    /// a refusal of the held verse itself ends here.
+    fn reopen_open_verse(&self, asked: Option<AlignPlace>) {
+        let held = self
+            .s()
+            .a
+            .open
+            .with_untracked(|o| o.as_ref().map(|(_, _, place)| *place));
         match held {
-            Some(place) => self.open_align(Some(place)),
-            None => {
+            Some(place) if asked != Some(place) => self.open_align(Some(place)),
+            _ => {
                 self.s().a.screen.try_set(Screen::Failed(String::new()));
             }
         }
@@ -388,7 +391,7 @@ impl Actions {
     fn align_view(&self, view: AlignerView) {
         let a = &self.s().a;
         if let Some((at, _)) = self.align_scope() {
-            a.open.try_set(Some((at, view.aligner)));
+            a.open.try_set(Some((at, view.aligner, view.place)));
         }
         self.runtime().align_save(view.aligner, view.save.clone());
         // Only a change is announced: every row of the rail reads the open verse.
@@ -447,7 +450,7 @@ impl Actions {
                 // read again.
                 Err(CallError::Api(ApiError::StaleSession)) => {
                     QUEUE.with(|q| q.borrow_mut().drop_waiting());
-                    this.reopen_open_verse();
+                    this.reopen_open_verse(None);
                 }
                 Err(CallError::Api(ApiError::NotSaved(_))) => {
                     QUEUE.with(|q| q.borrow_mut().drop_waiting());
@@ -455,7 +458,7 @@ impl Actions {
                 Err(CallError::Api(ApiError::StaleScope { .. }) | CallError::Dropped) => {}
                 Err(_) => {
                     QUEUE.with(|q| q.borrow_mut().drop_waiting());
-                    this.reopen_open_verse();
+                    this.reopen_open_verse(None);
                 }
             }
         });
