@@ -75,6 +75,7 @@ pub fn AddBook() -> impl IntoView {
         Arc::new(move || {
             let (actions, ab) = (actions.clone(), ab.clone());
             (move || match step.get() {
+                // tC4's `footer={null}`: the first step has no footer row (`footer_shown`).
                 AddBookStep::Method => ().into_any(),
                 AddBookStep::Pick => {
                     let (back, create, ab) = (actions.clone(), actions.clone(), ab.clone());
@@ -165,6 +166,7 @@ pub fn AddBook() -> impl IntoView {
         close_label: Some(Signal::derive(|| t(keys::new_bible::CLOSE, &[]))),
         on_close: Some(Callback::new(move |()| close.close_modal())),
         footer: Some(footer),
+        footer_shown: Some(Signal::derive(move || step.get() != AddBookStep::Method)),
         children: Some(children),
         ..Default::default()
     })

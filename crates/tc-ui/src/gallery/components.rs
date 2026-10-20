@@ -1153,6 +1153,7 @@ fn modal(p: Props) -> AnyView {
         on_close: p.screen_handler("onClose"),
         closable: p.handler_on("onClose"),
         footer: children_fn(&p, "footer"),
+        footer_shown: None,
         children: children_fn(&p, "children"),
         attrs: p.rest(),
         live_attrs: Vec::new(),
