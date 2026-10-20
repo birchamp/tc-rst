@@ -103,6 +103,10 @@ impl App {
         };
         let ladder: &dyn Ladder = &pins;
         let preflight = fix::preflight(Some(ladder), core_tool(tool), core_unit(unit), &machine);
+        // A tool that can open has nothing to fix.
+        if preflight.state == fix::PreflightState::Ready {
+            return Ok(None);
+        }
         let Some(fix) = fix::guided_fix(ladder, &preflight, &machine) else {
             return Ok(None);
         };

@@ -41,7 +41,7 @@ use tc_helps::WordArticleId;
 use tc_journal::command::PlannedChange;
 use tc_journal::keys::PinGroup;
 use tc_journal::record::{CheckValue, Record, Scope as BookScope};
-use tc_journal::{Cause, RecordKey};
+use tc_journal::{Cause, ChangeId, RecordKey};
 use tc_versification::Scheme;
 
 use crate::counters::CountingSnapshot;
@@ -182,6 +182,12 @@ pub fn plan_decisions(
             if !change::unit_moves(current, next, tool, collection, local) {
                 continue;
             }
+            // A book that holds no decision of the tool costs a range read, not a projection.
+            if let Collection::Book(book) = collection
+                && read.decisions_of(tool, book).is_empty()
+            {
+                continue;
+            }
             let decisions: Vec<StoredDecision> = read
                 .decisions(tool, collection)
                 .into_iter()
@@ -297,7 +303,8 @@ pub fn plan_decisions(
                 check_again: count(summary.invalidated),
             }),
         });
-        for change in carry_changes(read, &carried, &list.items, rung.into()) {
+        let heads = |key: &RecordKey| read.heads(key);
+        for change in carry_changes(&heads, &carried, &list.items, rung.into()) {
             writes.insert(change.record.key(), change);
         }
     }
@@ -339,7 +346,7 @@ fn book_scope(read: &CountingSnapshot, collection: Collection) -> Vec<tc_burrito
 
 /// The changes one unit's carry-over writes, one per record (STORAGE §5.8 step 2).
 fn carry_changes(
-    read: &CountingSnapshot,
+    heads: &dyn Fn(&RecordKey) -> Vec<ChangeId>,
     plan: &carry::Plan,
     items: &[CheckItem],
     group: PinGroup,
@@ -349,7 +356,7 @@ fn carry_changes(
     let write = |key: &CheckKey, value: CheckValue| {
         let record = RecordKey::Check(key.clone());
         PlannedChange {
-            parents: read.heads(&record),
+            parents: heads(&record),
             record: Record::Check {
                 key: key.clone(),
                 value,
@@ -451,5 +458,269 @@ fn book_spec<'a>(book: BookId, spec: &'a UnitSpec<'a>) -> BookSpec<'a> {
         resource_frame: tc_versification::StandardScheme::Eng.scheme(),
         project_frame: Some(spec.frame),
         scope: spec.scope,
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    //! How a carry-over becomes changes: one change per record, never a replacement of a
+    //! record the plan did not read, never a loss of what a decision holds.
+
+    use tc_check::carry::Entry;
+    use tc_check::{Judgement, UserStatus};
+    use tc_helps::tsv::{TsvScope, parse_notes};
+    use tc_journal::Json;
+    use tc_journal::decision::verse_text_md5_v1;
+
+    use super::*;
+
+    const TIT_V86: &str =
+        include_str!("../../../fixtures/tc4/test-fixtures/resources/en_tn@v86/TIT.tsv");
+
+    fn items() -> Vec<CheckItem> {
+        let notes = parse_notes(TIT_V86, TsvScope::Book(BookId::Titus))
+            .unwrap()
+            .notes;
+        let eng = tc_versification::StandardScheme::Eng.scheme();
+        notes_for_book(
+            &notes,
+            &BookSpec {
+                book: BookId::Titus,
+                resource_frame: eng,
+                project_frame: Some(eng),
+                scope: &[],
+            },
+        )
+        .items
+    }
+
+    fn resource(sha: char) -> ResourceRef {
+        ResourceRef {
+            repo_path: "git.door43.org/unfoldingWord/en_tn".into(),
+            sha: tc_journal::GitOid::parse(&sha.to_string().repeat(40)).unwrap(),
+        }
+    }
+
+    fn decision(item: &CheckItem, resource: ResourceRef) -> DecisionRecord {
+        let mut context = item.journal_context();
+        context.insert("tcExtra".into(), Json::from("kept"));
+        DecisionRecord {
+            context,
+            category: Some("translate".into()),
+            judgement: Judgement {
+                selections: None,
+                nothing_to_select: true,
+                status: Some(UserStatus::Valid),
+                verse_text_md5: verse_text_md5_v1("Paul"),
+            },
+            comment: Some("a translator's comment".into()),
+            bookmarked: true,
+            resource,
+            imported_invalid: false,
+            dismissed: false,
+            extra: tc_journal::json::JsonMap::default(),
+        }
+    }
+
+    fn heads_of(key: &RecordKey) -> Vec<ChangeId> {
+        // A head per record, told apart by the key's text.
+        let mut bytes = [0u8; 32];
+        for (i, b) in format!("{key:?}").bytes().enumerate() {
+            bytes[i % 32] ^= b;
+        }
+        vec![ChangeId::from_bytes(bytes)]
+    }
+
+    fn changes_of(plan: &carry::Plan, items: &[CheckItem]) -> BTreeMap<RecordKey, PlannedChange> {
+        carry_changes(&heads_of, plan, items, PinGroup::Primary)
+            .into_iter()
+            .map(|c| (c.record.key(), c))
+            .collect()
+    }
+
+    fn decision_of(change: &PlannedChange) -> &DecisionRecord {
+        match &change.record {
+            Record::Check {
+                value: CheckValue::Decision(d),
+                ..
+            } => d,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_decision_that_stays_takes_the_new_resource_and_keeps_every_word_the_person_wrote() {
+        let items = items();
+        let old = resource('1');
+        let new = resource('2');
+        let was = decision(&items[0], old);
+        let plan = carry::Plan {
+            resource: new.clone(),
+            entries: vec![Entry {
+                key: items[0].key.clone(),
+                decision: was.clone(),
+                outcome: Outcome::Stays {
+                    item: 0,
+                    by: carry::Match::Identity,
+                },
+            }],
+            undecided: 0,
+        };
+        let written = changes_of(&plan, &items);
+        let change = &written[&RecordKey::Check(items[0].key.clone())];
+        let now = decision_of(change);
+        assert_eq!(now.resource, new);
+        assert_eq!(now.judgement, was.judgement);
+        assert_eq!(now.comment, was.comment);
+        assert!(now.bookmarked);
+        assert_eq!(
+            now.context.get("tcExtra"),
+            Some(&Json::from("kept")),
+            "a context field only the old record holds stays"
+        );
+        assert_eq!(
+            change.parents,
+            heads_of(&RecordKey::Check(items[0].key.clone()))
+        );
+        assert_eq!(
+            change.cause,
+            Cause::CarryOver {
+                group: PinGroup::Primary
+            }
+        );
+    }
+
+    #[test]
+    fn a_decision_already_on_the_new_resource_is_not_written_again() {
+        let items = items();
+        let new = resource('2');
+        let plan = carry::Plan {
+            resource: new.clone(),
+            entries: vec![Entry {
+                key: items[0].key.clone(),
+                decision: DecisionRecord {
+                    context: items[0].journal_context(),
+                    ..decision(&items[0], new)
+                },
+                outcome: Outcome::Stays {
+                    item: 0,
+                    by: carry::Match::Identity,
+                },
+            }],
+            undecided: 0,
+        };
+        assert!(changes_of(&plan, &items).is_empty());
+    }
+
+    #[test]
+    fn a_decision_no_list_places_is_not_touched() {
+        let items = items();
+        let plan = carry::Plan {
+            resource: resource('2'),
+            entries: vec![Entry {
+                key: items[0].key.clone(),
+                decision: decision(&items[0], resource('1')),
+                outcome: Outcome::Unplaced,
+            }],
+            undecided: 3,
+        };
+        assert!(changes_of(&plan, &items).is_empty());
+    }
+
+    #[test]
+    fn a_move_writes_the_old_key_as_moved_and_the_decision_at_the_new_key() {
+        let items = items();
+        let was = decision(&items[0], resource('1'));
+        let plan = carry::Plan {
+            resource: resource('2'),
+            entries: vec![Entry {
+                key: items[0].key.clone(),
+                decision: was.clone(),
+                outcome: Outcome::Moves {
+                    item: 1,
+                    to: items[1].key.clone(),
+                    by: carry::Match::CheckId,
+                    contested: false,
+                },
+            }],
+            undecided: 0,
+        };
+        let written = changes_of(&plan, &items);
+        assert_eq!(written.len(), 2);
+        let old = &written[&RecordKey::Check(items[0].key.clone())];
+        assert!(matches!(
+            &old.record,
+            Record::Check { value: CheckValue::MovedTo { to }, .. } if *to == items[1].key
+        ));
+        let arrived = &written[&RecordKey::Check(items[1].key.clone())];
+        assert_eq!(decision_of(arrived).judgement, was.judgement);
+        assert_eq!(decision_of(arrived).comment, was.comment);
+        assert_eq!(decision_of(arrived).resource, resource('2'));
+    }
+
+    #[test]
+    fn two_decisions_that_would_swap_places_each_land_once() {
+        let items = items();
+        let (a, b) = (decision(&items[0], resource('1')), {
+            let mut b = decision(&items[1], resource('1'));
+            b.comment = Some("the other".into());
+            b
+        });
+        let moves = |from: usize, to: usize, decision: &DecisionRecord| Entry {
+            key: items[from].key.clone(),
+            decision: decision.clone(),
+            outcome: Outcome::Moves {
+                item: to,
+                to: items[to].key.clone(),
+                by: carry::Match::Place,
+                contested: false,
+            },
+        };
+        let plan = carry::Plan {
+            resource: resource('2'),
+            entries: vec![moves(0, 1, &a), moves(1, 0, &b)],
+            undecided: 0,
+        };
+        let written = changes_of(&plan, &items);
+        assert_eq!(written.len(), 2, "one change for each record");
+        assert_eq!(
+            decision_of(&written[&RecordKey::Check(items[1].key.clone())]).comment,
+            a.comment
+        );
+        assert_eq!(
+            decision_of(&written[&RecordKey::Check(items[0].key.clone())]).comment,
+            b.comment
+        );
+    }
+
+    #[test]
+    fn a_move_onto_a_check_another_decision_holds_stays_where_it_is() {
+        let items = items();
+        let plan = carry::Plan {
+            resource: resource('2'),
+            entries: vec![
+                Entry {
+                    key: items[0].key.clone(),
+                    decision: decision(&items[0], resource('1')),
+                    outcome: Outcome::Moves {
+                        item: 1,
+                        to: items[1].key.clone(),
+                        by: carry::Match::Place,
+                        contested: true,
+                    },
+                },
+                Entry {
+                    key: items[1].key.clone(),
+                    decision: decision(&items[1], resource('1')),
+                    outcome: Outcome::Unplaced,
+                },
+            ],
+            undecided: 0,
+        };
+        assert!(
+            changes_of(&plan, &items).is_empty(),
+            "neither decision is replaced, hidden or merged"
+        );
     }
 }

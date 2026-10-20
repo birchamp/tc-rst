@@ -120,9 +120,20 @@ impl KeptPlans {
 // The installed resources a plan reads
 // ---------------------------------------------------------------------------------------
 
-/// [`PlanSources`] over this computer's resource store.
+/// [`PlanSources`] over this computer's resource store. A resource's coverage and articles are
+/// read once for the plan, however many units ask.
 pub(crate) struct StoreSources<'a> {
     pub store: &'a ResourceStore,
+    coverage: std::sync::Mutex<std::collections::HashMap<ResourceRef, Option<Coverage>>>,
+}
+
+impl<'a> StoreSources<'a> {
+    pub(crate) fn new(store: &'a ResourceStore) -> Self {
+        Self {
+            store,
+            coverage: std::sync::Mutex::default(),
+        }
+    }
 }
 
 fn pin_of(resource: &ResourceRef) -> Option<ResourcePin> {
@@ -134,8 +145,14 @@ fn pin_of(resource: &ResourceRef) -> Option<ResourcePin> {
 
 impl PlanSources for StoreSources<'_> {
     fn coverage(&self, resource: &ResourceRef) -> Option<Coverage> {
-        let pin = pin_of(resource)?;
-        tc_resources::resolve::LocalCoverage::local_books(self.store, &pin).map(|b| b.coverage())
+        lock(&self.coverage)
+            .entry(resource.clone())
+            .or_insert_with(|| {
+                let pin = pin_of(resource)?;
+                tc_resources::resolve::LocalCoverage::local_books(self.store, &pin)
+                    .map(|b| b.coverage())
+            })
+            .clone()
     }
 
     fn articles(&self, resource: &ResourceRef) -> Option<BTreeSet<WordArticleId>> {
@@ -465,7 +482,7 @@ impl App {
                     collections: plans::collections(&read, stories),
                     numbering,
                 };
-                let sources = StoreSources { store: &store };
+                let sources = StoreSources::new(&store);
                 let cancelled = || cancel.as_ref().is_some_and(|c| c.is_cancelled());
                 let on_unit = |collection: Collection| {
                     if let Some(progress) = &progress {

@@ -23,9 +23,9 @@ use tc_app::backend::{ProjectHandle, StoreCommand};
 use tc_app::config::ProjectsFolder;
 use tc_check::derive::{BookSpec, notes_for_book};
 use tc_check::status::{Edit, Triage, decision_edit};
-use tc_check::{CheckItem, CheckKey, DecisionRecord, ToolId};
+use tc_check::{CheckItem, CheckKey, DecisionRecord};
 use tc_core::BookId;
-use tc_door43_fake::FakeDoor43;
+use tc_door43_fake::{CommitSeed, FakeDoor43, ReleaseKind, RepoSeed, SeedFile};
 use tc_helps::tsv::{TsvScope, parse_notes};
 use tc_journal::command::{PlannedChange, UpgradePlan};
 use tc_journal::fold::ProjectKind;
@@ -133,6 +133,40 @@ fn orphan(of: &(CheckKey, DecisionRecord), id: &str) -> (CheckKey, DecisionRecor
     (key, record)
 }
 
+/// Two releases of the Greek New Testament, made of a fixture's files under its name: the text
+/// the project's alignments point at, and the one that replaces it.
+async fn add_texts(fake: &FakeDoor43) {
+    let release = |tag: &str| CommitSeed {
+        message: format!("Release {tag}"),
+        files: export("en_ult@v89", "unfoldingWord/el-x-koine_ugnt"),
+        tag: Some(tag.to_owned()),
+        release: Some(ReleaseKind::Published),
+    };
+    fake.add_repo(RepoSeed {
+        owner: "unfoldingWord".into(),
+        name: "el-x-koine_ugnt".into(),
+        subject: "Greek New Testament".into(),
+        language: "el-x-koine".into(),
+        topics: vec!["tc-ready".into()],
+        private: false,
+        commits: vec![release("v0.34"), release("v0.35")],
+    })
+    .await
+    .unwrap();
+}
+
+async fn text_pin(fake: &FakeDoor43, repo: &str, tag: &str) -> ResourcePin {
+    let sha = fake.resolve("unfoldingWord", repo, tag).await.unwrap();
+    ResourcePin::new(
+        format!("git.door43.org/unfoldingWord/{repo}")
+            .parse()
+            .unwrap(),
+        sha.parse().unwrap(),
+    )
+    .with_version(tag.parse().unwrap())
+    .with_flavor("scripture/textTranslation")
+}
+
 struct World {
     _dir: TempDir,
     t: TestApp,
@@ -140,7 +174,6 @@ struct World {
     fs: FaultFs,
     at: Scope,
     tn: ResourcePin,
-    twl: ResourcePin,
     decided: Vec<(CheckKey, DecisionRecord)>,
 }
 
@@ -148,6 +181,43 @@ struct World {
 /// pinned at v86 on both rungs and `decided` notes decisions, an app over it, and a fake Door43
 /// that serves v86 and v91.
 async fn world(decided: usize, orphans: usize) -> World {
+    world_with(decided, orphans, None).await
+}
+
+async fn world_with(decided: usize, orphans: usize, vrs: Option<&[u8]>) -> World {
+    build(decided, orphans, vrs, Opts::default()).await
+}
+
+/// What a world is made with beyond the sample's Titus and notes.
+#[derive(Default)]
+struct Opts {
+    /// The project pins an original-language text and a gateway Bible pane, and holds aligned
+    /// verses.
+    texts: bool,
+    /// The bundled store this launch seeds from.
+    bundle: Option<std::path::PathBuf>,
+    /// The notes release the project pins is installed before the app starts, as an earlier
+    /// version of the app left it.
+    pinned_installed: bool,
+}
+
+/// A project that pins an original-language text and a gateway Bible pane as well, and holds
+/// aligned verses.
+async fn world_with_texts(decided: usize) -> World {
+    build(
+        decided,
+        0,
+        None,
+        Opts {
+            texts: true,
+            ..Opts::default()
+        },
+    )
+    .await
+}
+
+async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -> World {
+    let texts = opts.texts;
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let tn = release(&fake, "en_tn", "v86").await;
     let twl = release(&fake, "en_twl", "v86").await;
@@ -158,13 +228,52 @@ async fn world(decided: usize, orphans: usize) -> World {
         let made = orphan(&decided[0], &format!("zz{n}z"));
         decided.push(made);
     }
-    let mut records = sample_records(&BTreeMap::from([(BookId::Titus, titus)]), None);
-    let pins = ProjectPins {
+    let mut records = sample_records(&BTreeMap::from([(BookId::Titus, titus)]), vrs);
+    let mut pins = ProjectPins {
         primary: Some(english(&tn, &twl)),
         fallback: Some(english(&tn, &twl)),
         ..ProjectPins::default()
     };
-    for group in [PinGroup::Primary, PinGroup::Fallback] {
+    if texts {
+        add_texts(&fake).await;
+        let ugnt = text_pin(&fake, "el-x-koine_ugnt", "v0.34").await;
+        pins.original_language.nt = Some(ugnt.clone());
+        let old_ult = ResourcePin::new(
+            "git.door43.org/unfoldingWord/en_ult".parse().unwrap(),
+            "5".repeat(40).parse().unwrap(),
+        )
+        .with_version("v88".parse().unwrap())
+        .with_flavor("scripture/textTranslation");
+        pins.extra_scripture = vec![tc_resources::ScripturePane {
+            id: "ult".parse().unwrap(),
+            pin: old_ult,
+        }];
+        for verse in 1..=3u16 {
+            records.push(Record::Alignment {
+                book: BookId::Titus,
+                chapter: tc_journal::ChapterNo::new(1).unwrap(),
+                verse: tc_journal::VerseNo::new(verse).unwrap(),
+                value: tc_journal::record::AlignmentValue {
+                    span_end: tc_journal::VerseNo::new(verse).unwrap(),
+                    alignments: Vec::new(),
+                    word_bank: Vec::new(),
+                    target_verse_md5: tc_journal::Md5::of(b"Paul"),
+                    source_version: "dcs::unfoldingWord/el-x-koine_ugnt@v0.34".into(),
+                    source: Some(ugnt.resource()),
+                    done: false,
+                    marked_invalid: false,
+                    dismissed: false,
+                    extra: tc_journal::json::JsonMap::default(),
+                },
+            });
+        }
+    }
+    let groups: &[PinGroup] = if texts {
+        &PinGroup::ALL
+    } else {
+        &[PinGroup::Primary, PinGroup::Fallback]
+    };
+    for &group in groups {
         records.push(Record::Pins {
             group,
             value: pins.group_value(group).unwrap(),
@@ -192,12 +301,27 @@ async fn world(decided: usize, orphans: usize) -> World {
     let projects = dir.path().join("projects");
     std::fs::create_dir_all(&projects).unwrap();
     let url = fake.url().to_owned();
+    if opts.pinned_installed {
+        let store = tc_resources::ResourceStore::open(
+            dir.path().join("app-data").join(tc_app::RESOURCES_FOLDER),
+        )
+        .unwrap();
+        let zip = zip_declaring("en_tn@v86", "unfoldingWord/en_tn", &tn.sha.to_hex());
+        tc_resources::install_dcs_zip(&store, &tn, &zip, 1 << 30).unwrap();
+    }
+    let bundle = opts.bundle.clone();
     let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         config.door43 = url.parse().unwrap();
+        config.bundle = bundle;
         deps.store = StoreChoice::Given(Arc::new(backend));
     })
     .await;
+    if opts.bundle.is_some() {
+        while matches!(t.app.startup(), tc_api::event::StartupState::Preparing(_)) {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }
     let at = open(&t, PROJECT).await;
     internet(&t, true, 1).await;
     World {
@@ -207,7 +331,6 @@ async fn world(decided: usize, orphans: usize) -> World {
         fs,
         at,
         tn,
-        twl,
         decided,
     }
 }
@@ -308,52 +431,1101 @@ fn resource_of(w: &World, key: &CheckKey) -> tc_check::ResourceRef {
     }
 }
 
+fn heads(w: &World, key: &RecordKey) -> Vec<tc_journal::ChangeId> {
+    w.t.app.read(&w.at).unwrap().read().heads(key)
+}
+
+fn handle(w: &World) -> Arc<dyn ProjectHandle> {
+    w.t.app.read(&w.at).unwrap().handle().clone()
+}
+
+/// How many changes the project's journal holds.
+fn changes(w: &World) -> usize {
+    handle(w).snapshot().fold().len()
+}
+
+fn commands(w: &World) -> u64 {
+    handle(w).counters().commands
+}
+
+fn confirm(w: &World, plan: PlanId, id: u8) -> ApplyPlan {
+    ApplyPlan {
+        request: rid(id),
+        at: w.at.clone(),
+        plan,
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn smoke_upgrade_a_set() {
+async fn checking_for_updates_names_what_moved_and_writes_nothing() {
+    let w = world(6, 0).await;
+    let (before, commands_before) = (changes(&w), commands(&w));
+    let found = ok(&w.t.app, &CheckUpdates { at: w.at.clone() }).await;
+    let moves = |rung: SetRung| {
+        found
+            .sets
+            .iter()
+            .find(|s| s.rung == rung)
+            .map(|s| {
+                s.moves
+                    .iter()
+                    .map(|m| (m.repo.as_str(), m.from.as_str(), m.to.as_str()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap()
+    };
+    // Notes have a newer release; the links are at the newest, so only the notes are offered.
+    assert_eq!(moves(SetRung::Primary), [("en_tn", "v86", "v91")]);
+    assert_eq!(moves(SetRung::Fallback), [("en_tn", "v86", "v91")]);
+    assert_eq!(found.sets[0].language, "en");
+    assert!(found.texts.is_empty() && found.texts_error.is_none());
+    assert_eq!((changes(&w), commands(&w)), (before, commands_before));
+    assert!(
+        w.t.app.read(&w.at).is_ok() && installed_tn(&w).is_empty(),
+        "asking installs nothing"
+    );
+}
+
+fn installed_tn(w: &World) -> Vec<String> {
+    let store =
+        tc_resources::ResourceStore::open(w.t.app_data.join(tc_app::RESOURCES_FOLDER)).unwrap();
+    store
+        .installed_dcs_pins()
+        .unwrap()
+        .iter()
+        .map(|p| format!("{}", p.repo.repo().name))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn j12_an_upgrade_moves_one_sets_pins_and_carries_decisions_in_one_batch() {
     let w = world(12, 2).await;
-    let updates = ok(&w.t.app, &CheckUpdates { at: w.at.clone() }).await;
-    println!("{updates:#?}");
+    let fallback_before = heads(&w, &RecordKey::Pins(PinGroup::Fallback));
+    let verse_heads = heads(&w, &super::common::tit(1, 1));
     let view = plan_set(&w, SetRung::Primary, 50).await;
-    println!("{view:#?}");
-    let applied = ok(
+    // The release is installed before the plan is read, and no pin has moved yet.
+    assert_eq!(installed_tn(&w), ["en_tn"]);
+    assert_eq!(
+        pins_of(&w)
+            .primary
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .sha,
+        w.tn.sha
+    );
+    let PlanWhat::Set {
+        rung,
+        language,
+        moves,
+    } = &view.what
+    else {
+        panic!("{:?}", view.what)
+    };
+    assert_eq!((*rung, language.as_str()), (SetRung::Primary, "en"));
+    assert_eq!(moves.len(), 1);
+    // 14 decisions were made against v86: 12 find their check in v91 (four of them under a
+    // quote v91 punctuates differently) and two are on checks v91 does not have.
+    assert_eq!(view.decisions_at_risk, 14);
+    let [row] = &view.rows[..] else {
+        panic!("{:?}", view.rows)
+    };
+    assert_eq!(
+        (row.tool, row.unit),
+        (Tool::TranslationNotes, CheckUnit::Book(BookId::Titus))
+    );
+    assert_eq!((row.decisions, row.against.as_str()), (14, "en_tn"));
+    let carry = row.carry.unwrap();
+    assert_eq!((carry.carried, carry.check_again), (12, 2));
+    assert!(view.blocked.is_empty() && view.alignments.is_none());
+
+    let (changes_before, commands_before) = (changes(&w), commands(&w));
+    let applied = ok(&w.t.app, &confirm(&w, view.plan, 51)).await;
+    assert_eq!(applied, PlanApplied::Applied);
+    handle(&w).wait_idle();
+    // One command wrote the whole plan: the primary pins and the twelve decisions.
+    assert_eq!(commands(&w) - commands_before, 1);
+    assert_eq!(changes(&w) - changes_before, 13);
+    let pins = pins_of(&w);
+    let moved = pins
+        .primary
+        .as_ref()
+        .unwrap()
+        .pin(SetSlot::TranslationNotes)
+        .unwrap();
+    assert_eq!(
+        moved.version.as_ref().map(ToString::to_string).as_deref(),
+        Some("v91")
+    );
+    assert_ne!(moved.sha, w.tn.sha);
+    assert!(
+        moved.books.is_some(),
+        "coverage is recorded for the new pin (D41)"
+    );
+    // The other language set, the text and the other pins are as they were.
+    assert_eq!(
+        heads(&w, &RecordKey::Pins(PinGroup::Fallback)),
+        fallback_before
+    );
+    assert_eq!(
+        pins.fallback
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .sha,
+        w.tn.sha
+    );
+    assert_eq!(heads(&w, &super::common::tit(1, 1)), verse_heads);
+    // Each carried decision now records v91; the two with no check there are kept as they were.
+    let (carried, orphans) = w.decided.split_at(12);
+    for (key, was) in carried {
+        let now = resource_of(&w, key);
+        assert_eq!(now.sha, moved.sha, "{}", key.check_id);
+        assert_ne!(now.sha, was.resource.sha);
+    }
+    for (key, was) in orphans {
+        assert_eq!(
+            resource_of(&w, key),
+            was.resource,
+            "{} is kept",
+            key.check_id
+        );
+    }
+    assert_valid_burrito(
+        &w.fs,
+        &Path::new(crate::store_world::PROJECTS).join(PROJECT),
+    );
+    // Nothing is left to confirm: the plan is spent.
+    assert_eq!(
+        err(&w.t.app, &confirm(&w, view.plan, 52)).await,
+        ApiError::NotSaved(NotSaved::PlanStale)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_download_that_fails_or_cannot_be_trusted_moves_no_pin() {
+    use tc_door43_fake::{Fault, FaultRule};
+    for (fault, id) in [
+        (Fault::BreakOff { after: 400 }, 60),
+        (Fault::SbRevision("0".repeat(40)), 61),
+    ] {
+        let w = world(6, 0).await;
+        w.fake
+            .inject(FaultRule::once("GET", "/unfoldingWord/en_tn/sb/v91", fault));
+        let (before, commands_before) = (changes(&w), commands(&w));
+        let job = ok(
+            &w.t.app,
+            &PlanUpgrade {
+                request: rid(id),
+                at: w.at.clone(),
+                offer: OfferRef::Set {
+                    rung: SetRung::Primary,
+                },
+            },
+        )
+        .await;
+        match ended(&w.t.app, job).await {
+            JobState::Failed(_) => {}
+            other => panic!("{other:?}"),
+        }
+        assert_eq!((changes(&w), commands(&w)), (before, commands_before));
+        assert_eq!(
+            pins_of(&w)
+                .primary
+                .unwrap()
+                .pin(SetSlot::TranslationNotes)
+                .unwrap()
+                .sha,
+            w.tn.sha
+        );
+        assert!(installed_tn(&w).is_empty(), "nothing half installed");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stale_confirm_shows_the_dialog_again_with_new_counts() {
+    // tC4 #595: the preview is read once; a teammate's work that arrives before the confirm
+    // makes the plan stale, and the person reads the plan made again before anything is written.
+    let w = world(12, 0).await;
+    let view = plan_set(&w, SetRung::Primary, 50).await;
+    assert_eq!(view.rows[0].carry.unwrap().carried, 12);
+    // A teammate marks one of the decisions To do.
+    let (key, was) = w.decided[0].clone();
+    let session = w.t.app.read(&w.at).unwrap();
+    let mut todo = was.clone();
+    todo.judgement.status = Some(tc_check::UserStatus::Todo);
+    todo.judgement.nothing_to_select = false;
+    let record = RecordKey::Check(key.clone());
+    let teammate = UpgradePlan {
+        changes: vec![PlannedChange {
+            parents: session.read().heads(&record),
+            record: Record::Check {
+                key: key.clone(),
+                value: CheckValue::Decision(todo),
+            },
+            cause: Cause::Edit,
+        }],
+    };
+    session
+        .handle()
+        .submit(StoreCommand::apply_upgrade(teammate))
+        .await
+        .unwrap();
+    let before = changes(&w);
+    let again = ok(&w.t.app, &confirm(&w, view.plan, 51)).await;
+    let PlanApplied::Replanned(fresh) = again else {
+        panic!("{again:?}")
+    };
+    // Nothing was written, and the figures are of the project as it is now.
+    assert_eq!(changes(&w), before);
+    assert_ne!(fresh.plan, view.plan);
+    assert_eq!(
+        fresh.rows[0].carry.unwrap().carried,
+        11,
+        "one decision is no longer decided"
+    );
+    assert_eq!(
+        err(&w.t.app, &confirm(&w, view.plan, 52)).await,
+        ApiError::NotSaved(NotSaved::PlanStale),
+        "the plan that was read is gone"
+    );
+    // Confirming what was read last writes it, and the teammate's To do stands.
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, fresh.plan, 53)).await,
+        PlanApplied::Applied
+    );
+    match session.read().projected(&record) {
+        Some(Record::Check {
+            value: CheckValue::Decision(d),
+            ..
+        }) => {
+            assert_eq!(d.judgement.status, Some(tc_check::UserStatus::Todo));
+            assert_ne!(d.resource.sha, w.tn.sha, "and it moved with the release");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_save_keeps_the_plan_for_the_retry() {
+    let w = world(6, 0).await;
+    let view = plan_set(&w, SetRung::Primary, 50).await;
+    let before = changes(&w);
+    w.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+    match err(&w.t.app, &confirm(&w, view.plan, 51)).await {
+        ApiError::NotSaved(NotSaved::Disk(_)) => {}
+        other => panic!("{other:?}"),
+    }
+    w.fs.fail_writes(None);
+    assert_eq!(
+        changes(&w),
+        before,
+        "a failed save changes no pin and no decision"
+    );
+    assert_eq!(
+        pins_of(&w)
+            .primary
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .sha,
+        w.tn.sha
+    );
+    // The plan is still there: the same dialog confirms it when the disk has room.
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, view.plan, 52)).await,
+        PlanApplied::Applied
+    );
+    assert_eq!(changes(&w) - before, 7);
+}
+
+// ---- J13: a new checking language ------------------------------------------------------------
+
+/// A resource fixture as a Door43 repository's files: its `metadata.json` naming `repo`, and each
+/// fixture file at the ingredient path the metadata lists it under.
+fn export(fixture_dir: &str, repo: &str) -> Vec<SeedFile> {
+    let dir = repo_root()
+        .join("fixtures/tc4/test-fixtures/resources")
+        .join(fixture_dir);
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("metadata.json")).unwrap()).unwrap();
+    let dcs = metadata["identification"]["primary"]["dcs"]
+        .as_object_mut()
+        .unwrap();
+    let revision = dcs.values().next().unwrap().clone();
+    dcs.clear();
+    dcs.insert(repo.to_owned(), revision);
+    let listed: Vec<String> = metadata["ingredients"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect();
+    let mut files = vec![SeedFile::regular(
+        "metadata.json",
+        serde_json::to_vec_pretty(&metadata).unwrap(),
+    )];
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        if name == "metadata.json" || name == "README.md" {
+            continue;
+        }
+        let ingredient = listed
+            .iter()
+            .find(|i| i.trim_start_matches("ingredients/").replace('/', "-") == name)
+            .unwrap_or_else(|| panic!("{name} is not an ingredient of {fixture_dir}"));
+        files.push(SeedFile::regular(ingredient, std::fs::read(&path).unwrap()));
+    }
+    files
+}
+
+/// The Spanish suite beside the seeded `es-419_tn`: links, words and academy made of the English
+/// fixtures under their Spanish names.
+async fn add_spanish_suite(fake: &FakeDoor43) {
+    for (name, subject, fixture_dir) in [
+        ("es-419_twl", "TSV Translation Words Links", "en_twl@v86"),
+        ("es-419_tw", "Translation Words", "en_tw@v87"),
+        ("es-419_ta", "Translation Academy", "en_ta@v86"),
+    ] {
+        fake.add_repo(RepoSeed {
+            owner: "es-419_gl".into(),
+            name: name.into(),
+            subject: subject.into(),
+            language: "es-419".into(),
+            topics: vec!["tc-ready".into()],
+            private: false,
+            commits: vec![CommitSeed {
+                message: "Release v1".into(),
+                files: export(fixture_dir, &format!("es-419_gl/{name}")),
+                tag: Some("v1".into()),
+                release: Some(ReleaseKind::Published),
+            }],
+        })
+        .await
+        .unwrap();
+    }
+}
+
+fn spanish() -> tc_api::resources::GatewayRef {
+    tc_api::resources::GatewayRef {
+        language: "es-419".into(),
+        owner: "es-419_gl".into(),
+    }
+}
+
+async fn install_spanish_suite(w: &World) {
+    add_spanish_suite(&w.fake).await;
+    let job = ok(
         &w.t.app,
-        &ApplyPlan {
-            request: rid(51),
+        &tc_api::resources::Download {
+            request: rid(70),
             at: w.at.clone(),
-            plan: view.plan,
+            gateway: spanish(),
+            book: BookId::Titus,
+            repos: ["es-419_tn", "es-419_twl", "es-419_tw", "es-419_ta"]
+                .map(str::to_owned)
+                .to_vec(),
         },
     )
     .await;
-    assert_eq!(applied, PlanApplied::Applied);
-    println!(
-        "{:#?}",
-        pins_of(&w).primary.unwrap().pin(SetSlot::TranslationNotes)
+    assert_eq!(
+        ended(&w.t.app, job).await,
+        JobState::Done(JobOutcome::Finished)
     );
-    for (key, _) in &w.decided {
-        println!("{} {:?}", key.check_id, resource_of(&w, key).sha.to_hex());
-    }
-    let _ = (
-        &w.fake,
-        &w.fs,
-        &w.tn,
-        &w.twl,
-        PlanId::new(0),
-        NotSaved::PlanStale,
-        PlanWhat::Gateway as fn(_) -> _,
-        Tool::TranslationNotes,
-        CheckUnit::Stories,
-        ToolId::TranslationNotes,
-        StoreCommand::apply_upgrade as fn(_) -> _,
-        UpgradePlan { changes: vec![] },
-        PlannedChange {
-            record: Record::Pins {
-                group: PinGroup::Primary,
-                value: Default::default(),
-            },
-            parents: vec![],
-            cause: Cause::Edit,
+}
+
+async fn plan_gateway(w: &World, id: u8) -> PlanView {
+    let job = ok(
+        &w.t.app,
+        &tc_api::resources::PlanGateway {
+            request: rid(id),
+            at: w.at.clone(),
+            gateway: spanish(),
         },
+    )
+    .await;
+    match ended(&w.t.app, job).await {
+        JobState::Done(JobOutcome::PlanReady(view)) => *view,
+        other => panic!("{other:?}"),
+    }
+}
+
+fn spanish_tn(w: &World) -> tc_check::ResourceRef {
+    let primary = pins_of(w).primary.unwrap();
+    primary.pin(SetSlot::TranslationNotes).unwrap().resource()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn j13_a_new_checking_language_moves_the_primary_set_and_keeps_the_english_fallback() {
+    let w = world(12, 2).await;
+    install_spanish_suite(&w).await;
+    let fallback_before = heads(&w, &RecordKey::Pins(PinGroup::Fallback));
+    let (changes_before, commands_before) = (changes(&w), commands(&w));
+    let view = plan_gateway(&w, 71).await;
+    // Planning wrote nothing, and both languages are named as the person knows them (#579).
+    assert_eq!(
+        (changes(&w), commands(&w)),
+        (changes_before, commands_before)
     );
-    let _: Option<&dyn ProjectHandle> = None;
-    let _ = err::<CheckUpdates>;
+    let PlanWhat::Gateway(change) = &view.what else {
+        panic!("{:?}", view.what)
+    };
+    assert_eq!(change.from.as_ref().unwrap().autonym, "English");
+    assert_eq!(change.to.autonym, "Español (Latinoamérica)");
+    assert!(change.images.is_none());
+    // 14 notes decisions were made against English: seven find their check in the Spanish
+    // notes and seven (the two with no check anywhere among them) come back as work.
+    assert_eq!(view.decisions_at_risk, 14);
+    let [row] = &view.rows[..] else {
+        panic!("{:?}", view.rows)
+    };
+    assert_eq!(
+        (row.tool, row.unit),
+        (Tool::TranslationNotes, CheckUnit::Book(BookId::Titus))
+    );
+    let carry = row.carry.unwrap();
+    assert_eq!((carry.carried, carry.check_again), (7, 7));
+    assert!(view.blocked.is_empty());
+
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, view.plan, 72)).await,
+        PlanApplied::Applied
+    );
+    handle(&w).wait_idle();
+    assert_eq!(commands(&w) - commands_before, 1, "one batch");
+    let pins = pins_of(&w);
+    let primary = pins.primary.as_ref().unwrap();
+    assert_eq!(primary.gateway.named().unwrap().language, "es-419");
+    for slot in [
+        SetSlot::TranslationNotes,
+        SetSlot::TranslationWordsLinks,
+        SetSlot::TranslationWords,
+        SetSlot::TranslationAcademy,
+    ] {
+        let pin = primary.pin(slot).unwrap();
+        assert!(
+            pin.repo.repo().name.to_string().starts_with("es-419_"),
+            "{slot:?}"
+        );
+    }
+    // The English fallback is as it was: the same record, untouched.
+    assert_eq!(
+        heads(&w, &RecordKey::Pins(PinGroup::Fallback)),
+        fallback_before
+    );
+    assert_eq!(
+        pins.fallback
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .sha,
+        w.tn.sha
+    );
+    // The seven carried decisions record the Spanish notes now; every other decision is kept
+    // exactly as it was, and none is deleted.
+    let spanish = spanish_tn(&w);
+    let on_spanish = w
+        .decided
+        .iter()
+        .filter(|(key, _)| resource_of(&w, key) == spanish)
+        .count();
+    assert_eq!(on_spanish, 7);
+    for (key, was) in &w.decided {
+        let now = resource_of(&w, key);
+        assert!(now == spanish || now == was.resource, "{}", key.check_id);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_gateway_plan_that_cannot_read_a_resource_says_so_and_changes_nothing() {
+    // tC4's D30 sweep: a count made over a resource that could not be read would understate the
+    // change, so the preview fails, with Close and no Change button, instead.
+    let w = world(12, 0).await;
+    install_spanish_suite(&w).await;
+    let store =
+        tc_resources::ResourceStore::open(w.t.app_data.join(tc_app::RESOURCES_FOLDER)).unwrap();
+    let notes = store
+        .installed_dcs_pins()
+        .unwrap()
+        .into_iter()
+        .find(|p| p.repo.repo().name.to_string() == "es-419_tn")
+        .unwrap();
+    let installed = store.dcs(&notes).unwrap().unwrap();
+    std::fs::remove_file(installed.dir().join("content/ingredients/TIT.tsv")).unwrap();
+    let before = changes(&w);
+    let job = ok(
+        &w.t.app,
+        &tc_api::resources::PlanGateway {
+            request: rid(71),
+            at: w.at.clone(),
+            gateway: spanish(),
+        },
+    )
+    .await;
+    match ended(&w.t.app, job).await {
+        JobState::Failed(ApiError::Refused(tc_api::Refusal::Resources(
+            tc_api::refusal::ResourceRefusal::GatewayFailed { reason },
+        ))) => assert!(reason.contains("es-419_tn"), "{reason}"),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(changes(&w), before);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn gateway_preview_appears_while_the_open_verse_keeps_changing() {
+    // tC4 #595: the preview was read again for as long as the project kept changing. It is read
+    // once, from one snapshot; typing in the open verse touches no record the plan names, so
+    // the confirm that follows applies.
+    let w = world(12, 2).await;
+    install_spanish_suite(&w).await;
+    let session = w.t.app.read(&w.at).unwrap();
+    let key = super::common::tit(1, 1);
+    let typing = {
+        let session = session.clone();
+        tokio::spawn(async move {
+            for n in 0..40 {
+                let token = session.read().mint(&key, None).unwrap();
+                let words = format!("Paul, a servant of God {n}");
+                let _ = session
+                    .handle()
+                    .submit(StoreCommand::save_verse(token, words))
+                    .await;
+            }
+        })
+    };
+    let view = plan_gateway(&w, 71).await;
+    typing.await.unwrap();
+    assert_eq!(view.rows[0].carry.unwrap().carried, 7);
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, view.plan, 72)).await,
+        PlanApplied::Applied,
+        "the verse edits moved no record the plan wrote"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_project_whose_numbering_is_unknown_cannot_carry_its_decisions_over() {
+    // The decisions cannot be placed under verse numbers the project may not have, so the
+    // change is blocked and says why, and nothing is written.
+    let mut eng: serde_json::Value =
+        serde_json::from_str(tc_versification::StandardScheme::Eng.json()).unwrap();
+    eng["maxVerses"]["TIT"][0] = serde_json::json!(17);
+    let vrs = serde_json::to_vec(&eng).unwrap();
+    let w = world_with(6, 0, Some(&vrs)).await;
+    install_spanish_suite(&w).await;
+    let view = plan_gateway(&w, 71).await;
+    assert!(view.rows.is_empty());
+    let [blocked] = &view.blocked[..] else {
+        panic!("{:?}", view.blocked)
+    };
+    assert_eq!(
+        (blocked.tool, blocked.unit, blocked.reason),
+        (
+            Tool::TranslationNotes,
+            CheckUnit::Book(BookId::Titus),
+            tc_api::resources::BlockReason::VersificationUnknown
+        )
+    );
+    let before = changes(&w);
+    match err(&w.t.app, &confirm(&w, view.plan, 72)).await {
+        ApiError::Refused(tc_api::Refusal::Resources(
+            tc_api::refusal::ResourceRefusal::GatewayBlocked { books },
+        )) => assert_eq!(books, "TIT"),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(changes(&w), before);
+}
+
+// ---- J3: the guided fix ----------------------------------------------------------------------
+
+use tc_api::resources::{FixFetch, FixRepin, FixSideload, FixState};
+
+fn fix_state(w: &World) -> FixState {
+    FixState {
+        at: w.at.clone(),
+        tool: Tool::TranslationNotes,
+        unit: CheckUnit::Book(BookId::Titus),
+    }
+}
+
+/// A burrito zip of the fixture's export that declares `commit` as its revision.
+fn zip_declaring(fixture_dir: &str, repo: &str, commit: &str) -> Vec<u8> {
+    use std::io::Write;
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    for file in export(fixture_dir, repo) {
+        let bytes = if file.path == "metadata.json" {
+            let mut metadata: serde_json::Value = serde_json::from_slice(&file.bytes).unwrap();
+            let dcs = metadata["identification"]["primary"]["dcs"]
+                .as_object_mut()
+                .unwrap();
+            for value in dcs.values_mut() {
+                value["revision"] = serde_json::json!(commit);
+            }
+            serde_json::to_vec(&metadata).unwrap()
+        } else {
+            file.bytes
+        };
+        writer.start_file(&file.path, options).unwrap();
+        writer.write_all(&bytes).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+/// The server's uploaded files, as a test keeps them.
+#[derive(Default)]
+struct Uploaded(std::sync::Mutex<BTreeMap<tc_api::ids::UploadId, tc_app::UploadedFile>>);
+
+impl tc_app::UploadedFiles for Uploaded {
+    fn take(&self, id: &tc_api::ids::UploadId) -> Option<tc_app::UploadedFile> {
+        self.0.lock().unwrap().remove(id)
+    }
+}
+
+impl Uploaded {
+    fn put(&self, dir: &Path, bytes: &[u8]) -> tc_api::ids::UploadId {
+        let id = tc_api::ids::UploadId::parse("0123456789abcdef0123456789abcdef").unwrap();
+        let path = dir.join("upload.zip");
+        std::fs::write(&path, bytes).unwrap();
+        self.0.lock().unwrap().insert(
+            id.clone(),
+            tc_app::UploadedFile {
+                name: "en_tn.zip".into(),
+                path,
+            },
+        );
+        id
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_guided_fix_names_the_missing_pin_and_the_other_versions_installed() {
+    let w = world(6, 0).await;
+    let view = ok(&w.t.app, &fix_state(&w))
+        .await
+        .expect("the notes are not installed");
+    assert_eq!(view.pin.repo_path, "git.door43.org/unfoldingWord/en_tn");
+    assert_eq!(view.pin.version.as_deref(), Some("v86"));
+    assert_eq!(view.pin.sha, w.tn.sha.to_hex());
+    assert_eq!(view.rung, SetRung::Primary);
+    assert!(view.candidates.is_empty() && view.candidates_error.is_none());
+    // Planning a release upgrade installs v91 and moves no pin: v91 is now a version to move to.
+    plan_set(&w, SetRung::Primary, 50).await;
+    let view = ok(&w.t.app, &fix_state(&w)).await.unwrap();
+    let versions: Vec<_> = view
+        .candidates
+        .iter()
+        .map(|c| c.version.as_deref())
+        .collect();
+    assert_eq!(versions, [Some("v91")]);
+    // The Words tool of this project pins links only at v86, which is not here either.
+    let words = FixState {
+        tool: Tool::TranslationWords,
+        ..fix_state(&w)
+    };
+    assert_eq!(
+        ok(&w.t.app, &words).await.unwrap().pin.repo_path,
+        "git.door43.org/unfoldingWord/en_twl"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn j3_fetching_the_pinned_version_installs_that_commit_and_moves_no_pin() {
+    let w = world(6, 0).await;
+    let before = changes(&w);
+    let job = ok(
+        &w.t.app,
+        &FixFetch {
+            request: rid(80),
+            at: w.at.clone(),
+            tool: Tool::TranslationNotes,
+            unit: CheckUnit::Book(BookId::Titus),
+        },
+    )
+    .await;
+    assert_eq!(
+        ended(&w.t.app, job).await,
+        JobState::Done(JobOutcome::Finished)
+    );
+    let store =
+        tc_resources::ResourceStore::open(w.t.app_data.join(tc_app::RESOURCES_FOLDER)).unwrap();
+    let installed = store.installed_dcs_pins().unwrap();
+    assert_eq!(installed.len(), 1);
+    assert_eq!(installed[0].sha, w.tn.sha, "exactly the pinned commit");
+    assert_eq!(changes(&w), before, "no pin and no decision moved");
+    assert!(
+        ok(&w.t.app, &fix_state(&w)).await.is_none(),
+        "the tool can open now: nothing is left to fix"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_download_of_another_commit_than_the_pinned_one_is_refused() {
+    use tc_door43_fake::{Fault, FaultRule};
+    let w = world(6, 0).await;
+    w.fake.inject(FaultRule::once(
+        "GET",
+        "/unfoldingWord/en_tn/sb/",
+        Fault::SbRevision("0".repeat(40)),
+    ));
+    let job = ok(
+        &w.t.app,
+        &FixFetch {
+            request: rid(80),
+            at: w.at.clone(),
+            tool: Tool::TranslationNotes,
+            unit: CheckUnit::Book(BookId::Titus),
+        },
+    )
+    .await;
+    match ended(&w.t.app, job).await {
+        JobState::Failed(ApiError::Refused(tc_api::Refusal::Resources(
+            tc_api::refusal::ResourceRefusal::FixFailed { .. },
+        ))) => {}
+        other => panic!("{other:?}"),
+    }
+    assert!(installed_tn(&w).is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_file_is_installed_only_when_it_declares_the_pinned_commit() {
+    let w = world(6, 0).await;
+    let uploads = Arc::new(Uploaded::default());
+    w.t.app.provide_uploads(uploads.clone());
+    let dir = w._dir.path();
+    let sideload = |upload, request| FixSideload {
+        request: rid(request),
+        at: w.at.clone(),
+        tool: Tool::TranslationNotes,
+        unit: CheckUnit::Book(BookId::Titus),
+        upload,
+    };
+    // A release of the same repository with another commit: refused, nothing installed.
+    let other = zip_declaring("en_tn@v86", "unfoldingWord/en_tn", &"1".repeat(40));
+    let id = uploads.put(dir, &other);
+    match err(&w.t.app, &sideload(id, 81)).await {
+        ApiError::Refused(tc_api::Refusal::Resources(
+            tc_api::refusal::ResourceRefusal::FixFailed { .. },
+        )) => {}
+        other => panic!("{other:?}"),
+    }
+    assert!(installed_tn(&w).is_empty());
+    // The file that declares exactly the pinned commit is installed.
+    let right = zip_declaring("en_tn@v86", "unfoldingWord/en_tn", &w.tn.sha.to_hex());
+    let id = uploads.put(dir, &right);
+    ok(&w.t.app, &sideload(id, 82)).await;
+    assert_eq!(installed_tn(&w), ["en_tn"]);
+    assert!(ok(&w.t.app, &fix_state(&w)).await.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_re_pin_is_planned_and_confirmed_like_an_upgrade() {
+    let w = world(12, 2).await;
+    plan_set(&w, SetRung::Primary, 50).await; // installs v91, moves nothing
+    let candidate = ok(&w.t.app, &fix_state(&w))
+        .await
+        .unwrap()
+        .candidates
+        .remove(0);
+    let view = ok(
+        &w.t.app,
+        &FixRepin {
+            request: rid(82),
+            at: w.at.clone(),
+            tool: Tool::TranslationNotes,
+            unit: CheckUnit::Book(BookId::Titus),
+            sha: candidate.sha.clone(),
+        },
+    )
+    .await;
+    let PlanWhat::Repin { rung, moves, .. } = &view.what else {
+        panic!("{:?}", view.what)
+    };
+    assert_eq!(*rung, SetRung::Primary);
+    assert_eq!(
+        (moves[0].from.as_str(), moves[0].to.as_str()),
+        ("v86", "v91")
+    );
+    let carry = view.rows[0].carry.unwrap();
+    assert_eq!((carry.carried, carry.check_again), (12, 2));
+    assert_eq!(
+        pins_of(&w)
+            .primary
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .sha,
+        w.tn.sha,
+        "the pin moves when the person confirms"
+    );
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, view.plan, 83)).await,
+        PlanApplied::Applied
+    );
+    assert_eq!(
+        pins_of(&w)
+            .primary
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .sha
+            .to_hex(),
+        candidate.sha
+    );
+}
+
+// ---- scripture texts ---------------------------------------------------------------------------
+
+async fn plan_text(w: &World, repo: &str, id: u8) -> PlanView {
+    let job = ok(
+        &w.t.app,
+        &PlanUpgrade {
+            request: rid(id),
+            at: w.at.clone(),
+            offer: OfferRef::Text {
+                repo: repo.to_owned(),
+            },
+        },
+    )
+    .await;
+    match ended(&w.t.app, job).await {
+        JobState::Done(JobOutcome::PlanReady(view)) => *view,
+        other => panic!("{other:?}"),
+    }
+}
+
+fn alignment_heads(w: &World) -> Vec<Vec<tc_journal::ChangeId>> {
+    (1..=3)
+        .map(|verse| {
+            heads(
+                w,
+                &RecordKey::Alignment(
+                    BookId::Titus,
+                    tc_journal::ChapterNo::new(1).unwrap(),
+                    tc_journal::VerseNo::new(verse).unwrap(),
+                ),
+            )
+        })
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn updates_offer_each_scripture_text_with_a_newer_release() {
+    let w = world_with_texts(3).await;
+    let found = ok(&w.t.app, &CheckUpdates { at: w.at.clone() }).await;
+    let texts: Vec<_> = found
+        .texts
+        .iter()
+        .map(|t| {
+            (
+                t.kind,
+                t.change.repo.as_str(),
+                t.change.from.as_str(),
+                t.change.to.as_str(),
+            )
+        })
+        .collect();
+    use tc_api::resources::TextKind;
+    assert_eq!(
+        texts,
+        [
+            (TextKind::Original, "el-x-koine_ugnt", "v0.34", "v0.35"),
+            (TextKind::Gateway, "en_ult", "v88", "v89"),
+        ]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ugnt_upgrade_counts_the_verses_whose_alignments_it_marks_and_keeps_every_alignment() {
+    // tC4 #722 and J12: the pin moves only after the text is installed and the person accepts;
+    // an original-language text marks every alignment of the books it covers for review and
+    // deletes none, and the confirmation states the verse count.
+    let w = world_with_texts(3).await;
+    let aligned = alignment_heads(&w);
+    let view = plan_text(&w, "el-x-koine_ugnt", 50).await;
+    assert_eq!(view.alignments, Some(3));
+    assert_eq!(
+        view.decisions_at_risk, 0,
+        "no check decision depends on the original text"
+    );
+    assert!(view.rows.is_empty() && view.blocked.is_empty());
+    assert_eq!(
+        pins_of(&w)
+            .original_language
+            .nt
+            .unwrap()
+            .version
+            .unwrap()
+            .to_string(),
+        "v0.34",
+        "nothing moved before the accept"
+    );
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, view.plan, 51)).await,
+        PlanApplied::Applied
+    );
+    let pins = pins_of(&w);
+    assert_eq!(
+        pins.original_language
+            .nt
+            .unwrap()
+            .version
+            .unwrap()
+            .to_string(),
+        "v0.35"
+    );
+    assert_eq!(
+        alignment_heads(&w),
+        aligned,
+        "every alignment is kept as it was"
+    );
+    assert_eq!(
+        pins.extra_scripture[0]
+            .pin
+            .version
+            .as_ref()
+            .unwrap()
+            .to_string(),
+        "v88",
+        "the gateway Bible is not touched"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_gateway_bible_upgrade_moves_its_pane_and_nothing_else() {
+    let w = world_with_texts(3).await;
+    let aligned = alignment_heads(&w);
+    let view = plan_text(&w, "en_ult", 50).await;
+    assert_eq!(
+        view.alignments, None,
+        "a gateway Bible changes no alignment"
+    );
+    assert!(view.harmless());
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, view.plan, 51)).await,
+        PlanApplied::Applied
+    );
+    let pins = pins_of(&w);
+    assert_eq!(
+        pins.extra_scripture[0]
+            .pin
+            .version
+            .as_ref()
+            .unwrap()
+            .to_string(),
+        "v89"
+    );
+    assert_eq!(
+        pins.original_language
+            .nt
+            .unwrap()
+            .version
+            .unwrap()
+            .to_string(),
+        "v0.34"
+    );
+    assert_eq!(alignment_heads(&w), aligned);
+    for (key, was) in &w.decided {
+        assert_eq!(resource_of(&w, key), was.resource, "no decision changed");
+    }
+}
+
+// ---- bundled-upgrade ---------------------------------------------------------------------------
+
+use super::seed::bundle_build;
+
+/// A bundle of the one release the project could be offered from the installer: `en_tn` v91.
+fn bundle_of_notes() -> &'static Path {
+    static BUNDLE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    BUNDLE.get_or_init(|| {
+        let out = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("c8-bundle-notes");
+        let _ = std::fs::remove_dir_all(&out);
+        let from = repo_root().join("bundle/en");
+        let built =
+            bundle_build::build_bundle(&from, &out, &|pin| pin.repo.name().as_str() == "en_tn")
+                .unwrap_or_else(|e| panic!("the bundle could not be built: {e}"));
+        assert_eq!(built.installed.len(), 1, "{built:?}");
+        out
+    })
+}
+
+/// Every file of the install folder of `en_tn`, by path, with its bytes.
+fn installed_files(w: &World, sha: &tc_core::GitOid) -> BTreeMap<String, Vec<u8>> {
+    let store =
+        tc_resources::ResourceStore::open(w.t.app_data.join(tc_app::RESOURCES_FOLDER)).unwrap();
+    let pin = store
+        .installed_dcs_pins()
+        .unwrap()
+        .into_iter()
+        .find(|p| p.sha == *sha)
+        .unwrap_or_else(|| panic!("{sha} is not installed"));
+    let install = store.dcs(&pin).unwrap().unwrap();
+    install
+        .files()
+        .map(|path| (path.to_owned(), install.read(path).unwrap()))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bundled_upgrade_leaves_the_pinned_release_and_the_projects_pins_as_they_were() {
+    // tC4 #528: an app upgrade brings a newer bundled release. The release the project pins
+    // stays on this computer, byte for byte, and no pin moves of its own accord (#259): the
+    // newer release is an offer the person accepts or leaves.
+    let w = build(
+        6,
+        0,
+        None,
+        Opts {
+            bundle: Some(bundle_of_notes().to_owned()),
+            pinned_installed: true,
+            ..Opts::default()
+        },
+    )
+    .await;
+    let bundled: tc_core::GitOid = "e586762e330f482a60c52aedd1c7b3a2f155df8a".parse().unwrap();
+    // Both releases are installed: the pinned v86 as it was, and the bundle's v91 beside it.
+    let pinned = installed_files(&w, &w.tn.sha);
+    assert!(!installed_files(&w, &bundled).is_empty());
+    assert_eq!(
+        pinned,
+        {
+            let zip = zip_declaring("en_tn@v86", "unfoldingWord/en_tn", &w.tn.sha.to_hex());
+            let expected = tempfile::tempdir().unwrap();
+            let store = tc_resources::ResourceStore::open(expected.path().join("r")).unwrap();
+            tc_resources::install_dcs_zip(&store, &w.tn, &zip, 1 << 30).unwrap();
+            let install = store.dcs(&w.tn).unwrap().unwrap();
+            install
+                .files()
+                .map(|p| (p.to_owned(), install.read(p).unwrap()))
+                .collect::<BTreeMap<_, _>>()
+        },
+        "the pinned release is untouched by the seed"
+    );
+    // No pin and no decision moved, and the pinned notes can still open.
+    assert_eq!(
+        pins_of(&w)
+            .primary
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .sha,
+        w.tn.sha
+    );
+    assert_eq!(
+        pins_of(&w)
+            .fallback
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .sha,
+        w.tn.sha
+    );
+    for (key, was) in &w.decided {
+        assert_eq!(resource_of(&w, key), was.resource);
+    }
+    assert!(
+        ok(&w.t.app, &fix_state(&w)).await.is_none(),
+        "nothing to fix: the pinned notes are here"
+    );
 }
