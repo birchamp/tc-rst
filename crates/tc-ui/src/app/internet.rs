@@ -52,6 +52,8 @@ pub enum Pending {
     UpgradeSet(tc_api::resources::SetRung),
     /// A scripture text's Upgrade (C8, tC4 `upgradeText`), by its repository's name.
     UpgradeText(String),
+    /// The guided fix's "Download it" (B5b, tC4 `fixFetch`), for the screen the id names.
+    Fix(u64),
 }
 
 impl Pending {
@@ -67,6 +69,7 @@ impl Pending {
             Self::CheckSignIn => NetKind::CheckSignIn,
             Self::Profile => NetKind::Profile,
             Self::OpenDoor43 => NetKind::Open,
+            Self::Fix(_) => NetKind::Fix,
             Self::Catalog
             | Self::Download
             | Self::Updates

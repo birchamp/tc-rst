@@ -67,13 +67,18 @@ fn bare(mark: impl IntoView + 'static, style: Css, attrs: Attrs) -> impl IntoVie
 /// handlers.
 #[component]
 pub fn DropZone(
-    #[prop(optional, into)] title: Option<String>,
+    #[prop(optional, into)] title: MaybeProp<String>,
     #[prop(optional, into)] hint: Option<String>,
+    #[prop(optional, into)] disabled: Signal<bool>,
     #[prop(optional)] on_click: Option<Callback<web_sys::Event>>,
     #[prop(optional)] style: Css,
     #[prop(optional)] attrs: Attrs,
 ) -> impl IntoView {
-    let title = title.unwrap_or_else(|| "Drop your file here, or browse".into());
+    let title = move || {
+        title
+            .get()
+            .unwrap_or_else(|| "Drop your file here, or browse".into())
+    };
     let s = css! {
         "width": "100%",
         "padding": "34px 20px",
@@ -89,6 +94,7 @@ pub fn DropZone(
         border: Some(Edge::DashedTone.into()),
         radius: Some(Corner::Xl.into()),
         interactive: Some(Interactive::Choice),
+        disabled,
         on_click,
         style: s.into(),
         attrs,

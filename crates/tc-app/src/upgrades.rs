@@ -516,7 +516,7 @@ impl App {
 
     /// The next scripted plan, when a test or a capture scripted one.
     #[cfg(feature = "test-hooks")]
-    fn scripted_plan(&self) -> Option<PlanView> {
+    pub(crate) fn scripted_plan(&self) -> Option<PlanView> {
         lock(&self.inner.scripted_resources.plans).pop_front()
     }
 

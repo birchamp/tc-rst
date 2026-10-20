@@ -4,7 +4,7 @@
 
 use tc_api::Reply;
 use tc_api::check::{
-    CheckListRef, CheckSessionView, CheckUnit, Open, RailRow, RailRows, RailSince, Tool,
+    CheckListRef, CheckSessionView, CheckUnit, Item, Open, RailRow, RailRows, RailSince, Tool,
 };
 use tc_app::App;
 use tc_journal::RecordKey;
@@ -97,6 +97,41 @@ async fn check_open_cached_derives_nothing() {
     assert!(small.app.records_read <= 2 * 7, "{small:?}");
     // The first of the two opens was a UI without a rail: it is sent whole, once.
     assert_eq!(small.app.rows_serialized, large.app.rows_serialized);
+}
+
+/// B5b: showing a check of a list already open costs the check: its verse's chapter keys and
+/// records, never the list, the book's text or the helps again, and the same on the larger
+/// corpus.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn check_item_costs_its_verse_not_the_book() {
+    let ((small, large), (store, _)) = costs_what_it_touches(
+        "showing a check of the Psalms notes",
+        OnStore::AppCounts,
+        async |s: &Scale| {
+            opened(s).await;
+            open_tool(s, Tool::TranslationNotes, None).await;
+        },
+        async |s: &Scale| {
+            let item = ok(
+                &s.app,
+                &Item {
+                    at: s.scope(),
+                    list: list(Tool::TranslationNotes),
+                    index: 0,
+                },
+            )
+            .await;
+            assert!(!item.title.is_empty());
+        },
+    )
+    .await;
+    for cost in [small, large, store] {
+        assert_eq!(cost.app.items_derived, 0, "{cost:?}");
+        assert_eq!(cost.app.rows_serialized, 0, "{cost:?}");
+    }
+    // The pins and the numbering, the verse's chapter (Psalm 119 has 176 verses) and its record.
+    assert!(small.app.keys_probed <= 200, "{small:?}");
+    assert!(small.app.records_read <= 20, "{small:?}");
 }
 
 /// A teammate's edit of a verse arrives by sync and takes the words of its decided checks

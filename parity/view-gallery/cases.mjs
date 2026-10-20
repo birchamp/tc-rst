@@ -117,6 +117,31 @@ const upgradeConfirmation = ({ updates, plan, offer = 'upgrade-set-primary', app
   }
 };
 
+/** B5b's route to the re-pin confirmation: the internet off, the Check picker of Titus, the
+ * Translation Words card's "Fix this…", and an installed version chosen. The sample holds no other
+ * copy of es-419 TWL, so `resources/fixState` is answered once with one installed version added
+ * over the server's own reply (the release name the case writes, a commit of its own), and the plan
+ * is scripted with the recorded gateway change's counts, as tC4's case borrows them. */
+const repinConfirmation = async (app, env) => {
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.home();
+  await script(env, { type: 'plan', value: { plan: 93, what: { type: 'repin', value: { rung: 'primary', language: 'es-419', moves: [twlMove] } }, decisionsAtRisk: 2, rows: [wordsRow(carried(2, 0))], blocked: [], alignments: null } });
+  await app.openTitus();
+  await app.openCheck();
+  await app.page.route('**/api/v1/resources/fixState', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const pin = body.value.pin;
+    const candidate = { repoPath: pin.repoPath, version: nextVersion(pin.version), sha: '19'.repeat(20) };
+    await route.fulfill({ response, json: { ...body, value: { ...body.value, candidates: [candidate] } } });
+  }, { times: 1 });
+  await app.page.getByTestId('fix-translationWords').click();
+  await app.page.getByTestId('guided-fix').waitFor();
+  await app.page.getByTestId(`fix-repin-${'19'.repeat(6)}`).click();
+  await app.page.getByTestId('upgrade-confirm').waitFor();
+  await app.page.getByTestId('guided-fix').waitFor({ state: 'detached' });
+};
+
 /** The change of checking language over Understand, from Project settings, the plan scripted. */
 const gatewayScripted = (plan, after = async () => {}) => async (app, env) => {
   await app.page.unrouteAll({ behavior: 'ignoreErrors' });
@@ -399,6 +424,7 @@ export const CASES = [
     },
     why: 'The confirmation of an upgrade of the Greek New Testament text (UpgradeSet.jsx TextUpgrade), with the number of Titus verses whose alignments it marks invalid, counted by tC4\'s rule over the sample\'s alignment file.' },
   { name: 'upgrade-repin', group: 'M9b', state: 'guided-fix',
+    rust: repinConfirmation,
     patch: (s, ctx) => {
       const from = s.fix.pin;
       const offer = { rung: s.fix.rung, upgrades: [{ repoPath: from.repoPath, slots: ['translationWordsLinks'], from, to: { repoPath: from.repoPath, version: nextVersion(from.version), flavor: from.flavor }, publishedAt: null }], current: [], kind: 'repin' };

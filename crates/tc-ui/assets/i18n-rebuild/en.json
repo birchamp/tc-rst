@@ -4,6 +4,8 @@
   "addBook.usfmReading": "Reading the file…",
   "align.unavailable.alignedInText.body": "This verse came from a file that holds its alignment inside the text, and aligning it here would write over that. Nothing is lost. The rest of {book} aligns normally.",
   "align.unavailable.alignedInText.title": "This verse already holds its alignment",
+  "check.markLookAgain": "This check was not saved: the check or its verse changed while you were looking. Look at it again, then mark it again. Nothing was lost.",
+  "check.markNotSaved": "This check was not saved: {reason}. Mark it again to try again. Nothing was lost.",
   "drafts.offer.copyText": "Copy text",
   "drafts.offer.discard": "Discard",
   "drafts.offer.found": "Unsaved text from your last session was found for {place}.",

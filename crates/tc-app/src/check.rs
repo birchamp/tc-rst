@@ -17,6 +17,10 @@
 //! - **Titles** are the gateway words that render each quote in the literal source pane, read at
 //!   the place the resource gives the check (its own numbering), else the original quote (tC4
 //!   `gatewayTitleFor`).
+//! - **The item detail and the marks** (unit B5b) are in [`item`]: `check/item`, `check/article`
+//!   and `check/decide`.
+
+mod item;
 
 use std::cell::OnceCell;
 use std::collections::HashMap;
@@ -36,6 +40,7 @@ use tc_check::fix::{self, Machine, Preflight, PreflightState};
 use tc_check::{CheckItem, CheckState, CheckTarget, Collection, Ladder, Pin, ToolId};
 use tc_core::BookId;
 use tc_helps::{HelpsPart, Occurrence};
+use tc_journal::fold::ProjectedDecision;
 use tc_journal::record::{BookPresence, ResourceRef, Scope as BookScope};
 use tc_journal::{Record, RecordKey};
 use tc_resources::{Missing, PartStatus, ProjectPins};
@@ -157,6 +162,11 @@ struct ListEntry {
     stamps: Vec<ViewSeq>,
     /// The view the list was derived at: a UI's view older than it cannot be patched.
     built: ViewSeq,
+    /// The fold's decisions of the list's tool and book as of `seq`, and for each check the one
+    /// shown on it (an index into `decisions`): what `check/item` shows of a check.
+    states: Vec<CheckState>,
+    decisions: Vec<ProjectedDecision>,
+    shown: Vec<Option<usize>>,
 }
 
 impl ListEntry {
@@ -417,10 +427,23 @@ fn flags(state: &CheckState) -> RowFlags {
     }
 }
 
+/// The checks of a list as a snapshot shows their decisions.
+struct Assessed {
+    rows: Vec<RailRow>,
+    states: Vec<CheckState>,
+    decisions: Vec<ProjectedDecision>,
+    shown: Vec<Option<usize>>,
+}
+
 /// Each check's row as the snapshot `read` shows its decisions.
-fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, book: BookId) -> Vec<RailRow> {
+fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, book: BookId) -> Assessed {
     if derived.items.is_empty() {
-        return Vec::new();
+        return Assessed {
+            rows: Vec::new(),
+            states: Vec::new(),
+            decisions: Vec::new(),
+            shown: Vec::new(),
+        };
     }
     let collection = Collection::Book(book);
     let decisions = read.check_decisions(tool_id(tool), collection);
@@ -445,7 +468,7 @@ fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, book: BookId) ->
         Some(&derived.resolution),
         text,
     );
-    session
+    let rows = session
         .states
         .iter()
         .enumerate()
@@ -459,7 +482,16 @@ fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, book: BookId) ->
             category: Some(category(derived.items[i].category)),
             marker: None,
         })
-        .collect()
+        .collect();
+    let shown = (0..session.states.len())
+        .map(|i| session.shown(i))
+        .collect();
+    Assessed {
+        rows,
+        states: session.states,
+        decisions,
+        shown,
+    }
 }
 
 /// A tool that is ready, with what its list is derived under.
@@ -540,7 +572,7 @@ impl App {
             self.inner
                 .counters
                 .add(AppCounter::ItemsDerived, derived.items.len() as u64);
-            let rows = rows(&read, &derived, tool, book);
+            let assessed = rows(&read, &derived, tool, book);
             let view = view_of(&read);
             lists.insert(
                 list,
@@ -549,9 +581,12 @@ impl App {
                     session: next_session(),
                     derived: Arc::new(derived),
                     seq: read.seq(),
-                    stamps: vec![view; rows.len()],
-                    rows,
+                    stamps: vec![view; assessed.rows.len()],
+                    rows: assessed.rows,
                     built: view,
+                    states: assessed.states,
+                    decisions: assessed.decisions,
+                    shown: assessed.shown,
                 },
             );
         }
@@ -564,12 +599,15 @@ impl App {
         if entry.seq != read.seq() {
             let now = rows(&read, &entry.derived, tool, book);
             let view = view_of(&read);
-            for ((old, new), stamp) in entry.rows.iter_mut().zip(now).zip(&mut entry.stamps) {
+            for ((old, new), stamp) in entry.rows.iter_mut().zip(now.rows).zip(&mut entry.stamps) {
                 if *old != new {
                     *old = new;
                     *stamp = view;
                 }
             }
+            entry.states = now.states;
+            entry.decisions = now.decisions;
+            entry.shown = now.shown;
             entry.seq = read.seq();
         }
         Ok(Ok(answer(entry, &read)))

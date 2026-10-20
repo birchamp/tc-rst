@@ -7,6 +7,7 @@
 //! `takeSpans`. A differential test in tc-app holds this copy to tc-helps' own.
 
 pub mod draft;
+pub mod selection;
 
 use serde::{Deserialize, Serialize};
 

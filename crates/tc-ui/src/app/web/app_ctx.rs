@@ -449,6 +449,7 @@ impl Actions {
             Pending::Updates => self.check_updates_now(),
             Pending::UpgradeSet(rung) => self.upgrade_set_now(rung),
             Pending::UpgradeText(repo) => self.upgrade_text_now(repo),
+            Pending::Fix(id) => self.fix_fetch_now(id),
         }
     }
 
@@ -472,7 +473,9 @@ impl Actions {
             }
             Pending::Catalog => self.catalog_dropped(),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
+            // Not now: the download never started, and the guided fix is as it was.
             Pending::Download
+            | Pending::Fix(_)
             | Pending::Updates
             | Pending::UpgradeSet(_)
             | Pending::UpgradeText(_)

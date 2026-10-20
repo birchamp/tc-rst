@@ -78,6 +78,9 @@ fn unreadable(reason: String) -> ApiError {
 impl Handle<ViewFromHome> for App {
     async fn handle(&self, req: ViewFromHome) -> Result<SettingsView, ApiError> {
         let folder = req.project;
+        // `session/close` answers before its leave writes the derived files: read them only
+        // once that leave, or a close, is over, so a change made just before going Home shows.
+        self.inner.sessions.settled(&folder).await;
         let listed = self.inner.home.listed(&folder);
         let looked_for = folder.clone();
         let read = self

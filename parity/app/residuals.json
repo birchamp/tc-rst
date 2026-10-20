@@ -54,6 +54,12 @@
       "why": "A sync that stops for a reason no other sentence names shows one fixed sentence, before and after the teammates' work was received, where tC4 4.0 shows \"The sync stopped: {reason}\" with Door43's words or an I/O reason that can name a file (tc_api test io_reason_renders_without_the_path; journey sync-button). No baseline sync stops so.",
       "cites": "Q36 (TC4-DELTA-2026-10-19 §5); #724 item 6",
       "until": null
+    },
+    {
+      "id": "check-comment-saved-on-leaving",
+      "why": "A check comment still being typed when the checker moves to another check, goes Home or leaves Check is saved with the check it was typed on, as its Done does (the editor leaving saves its text, and a draft of it stays in the buffer until then); tC4 drops it (`tC4:src/views/Check.jsx`, the editor's reset on a new item). Nothing a translator types is lost. No baseline screen has an editor open (journey `check_comment_saved_on_leaving_the_item`; tc-ui test `check_comment_saves_on_done_and_on_the_gate`).",
+      "cites": "AGENTS.md \"Matching tC4\"; APP-DESIGN §6.5, RT-10, Q-25; B5b D5",
+      "until": null
     }
   ],
   "rows": {
@@ -437,7 +443,7 @@
         "pixels",
         "dom"
       ],
-      "why": "The item detail beside the rail is unit B5b's, which captures this case again with its session screens: until then the detail column is empty. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid. The rail header's bar carries tC4 #764's declared difference (see check-picker)."
+      "why": "The item detail beside the rail is B5b's (captured again with its session screens): its compare card is tC4 9ad4d5c's (C40, #762), not the d310bf3 baseline's stacked card, as the session screens' residuals say, and the sample's Learn more link reads \"Translation Academy\" in both. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid. The rail header's bar carries tC4 #764's declared difference (see check-picker)."
     },
     "translate-tit1": {
       "layers": [
@@ -566,6 +572,97 @@
         "dom"
       ],
       "why": "The failed open's text. tC4 shows the message of the exception it caught (\"Failed to fetch\"); the rebuild says that the server reported a bug (\"internal error\"), because a request the page cannot complete is a refusal or a report with its own words (APP-DESIGN 3.5), not a browser's. Everything else, the box, its title and Retry, is tC4's, and the rail beside it too.",
+      "until": null
+    },
+    "ar-check-tn-session-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. 620 px wide and right to left: the source texts stack."
+    },
+    "ar-check-tn-session-row": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. Right to left, scrolled to the marking row."
+    },
+    "ar-check-tw-session": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). Right to left."
+    },
+    "ar-check-tw-session-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide and right to left: the source texts stack."
+    },
+    "check-tn-session": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. The sample's Learn more link reads \"Translation Academy\" in both (es-419_ta v4 is vendored on neither side)."
+    },
+    "en-check-ta-drawer": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. The Translation Academy drawer over the session; the drawer is tC4's (DS Drawer, 751 of 751 gallery DOM)."
+    },
+    "en-check-tn-session": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree."
+    },
+    "en-check-tn-session-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. 620 px wide: the source texts stack, since two do not fit in a row."
+    },
+    "en-check-tn-session-row": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. Scrolled to the marking row: the compare card above it is the taller C40 card."
+    },
+    "en-check-tw-article": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The article drawer over the session; the article's blocks, its title and its path line are tC4's."
+    },
+    "en-check-tw-session": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`)."
+    },
+    "en-check-tw-session-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide: the source texts stack."
+    },
+    "upgrade-repin": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The re-pin confirmation is tC4's pixel for pixel, with the counts tC4's case borrows from the recorded gateway change, scripted for the Rust server (`test/script`); the sample holds no other copy of es-419 TWL, so the route adds one installed version to the server's `resources/fixState` reply, as the case writes the release name. Behind it, the picker's Translation Notes bar carries tC4 #764's declared difference (its count for screen readers, `aria-label` \"1 of 112 resolved\", see check-picker); the scrim hides the bar's fill, so only the DOM shows it. Every other line of the DOM, every computed style included, is tC4's.",
       "until": null
     }
   }

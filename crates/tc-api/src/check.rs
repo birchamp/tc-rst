@@ -1,6 +1,6 @@
 //! The Check screen's types (APP-DESIGN §3.7, AD17): the parts a write's `Ack` and a change
-//! scope carry (unit A1), and the tool picker, the rail and the guided fix (unit B5a). B5b adds
-//! the item view.
+//! scope carry (unit A1), the tool picker, the rail and the guided fix (unit B5a), and the item
+//! detail and the marks (unit B5b).
 //!
 //! A check is not always at `chapter:verse` with numbers. tC4's resources put a Psalms
 //! superscription at verse `front`, a note on several verses at `1,3,8,12`, a note on a
@@ -14,8 +14,11 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
-use crate::ids::{CheckSessionId, IdError, RefPart, Scope, StoryNo, ViewSeq};
-use crate::shown::ConflictMarker;
+use crate::helps::ArticleLink;
+use crate::ids::{CheckSessionId, IdError, RefPart, RequestId, Scope, StoryNo, ViewSeq};
+use crate::model::ArticleBlock;
+use crate::shown::{ConflictMarker, Direction, Shown};
+use crate::token::ShownToken;
 
 /// A checking tool, by tC4's tool id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -545,4 +548,259 @@ pub enum RowsView {
         progress: RailProgress,
     },
     Reopen,
+}
+
+// ---------------------------------------------------------------------------------------
+// The item detail (unit B5b): `check/item`, `check/article`
+// ---------------------------------------------------------------------------------------
+
+/// `check/item`: one check of an open list, with what the detail column shows (tC4's
+/// `CheckDetail`). Reading it writes nothing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Item {
+    pub at: Scope,
+    pub list: CheckListRef,
+    /// The check's index in the list (`RailRow::index`).
+    pub index: u32,
+}
+
+/// One check as the detail shows it. The decision and the draft words each carry the token of
+/// the version shown, so a mark never claims a version it did not show (AD37).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct CheckItemView {
+    pub index: u32,
+    /// The session view this read was made at: the comment's field takes the decision it shows
+    /// only from a read at least as new as its own (AD37).
+    pub view: ViewSeq,
+    /// The help row the check comes from; a mark names it with the place.
+    pub check_id: String,
+    pub place: CheckPlace,
+    /// The heading: the gateway words that render the quote, else the original quote.
+    pub title: String,
+    /// What to check (a note's blocks); empty for a check that has none.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub note: Vec<ArticleBlock>,
+    /// The direction the note reads in: the gateway language's (#650).
+    pub helps_dir: Option<Direction>,
+    /// The check's article, and its title when the pinned resources carry it.
+    pub article: CheckArticle,
+    pub original: OriginalView,
+    pub gateway: GatewayView,
+    pub target: TargetWords,
+    pub decision: Shown<DecisionView>,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub notices: Vec<CheckNotice>,
+}
+
+/// The article behind a check (tC4's "Learn more" link).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct CheckArticle {
+    pub link: ArticleLink,
+    /// The article's title; none when the resources do not carry the article.
+    pub title: Option<String>,
+    /// The folder of a tW article or the thematic category of a tN one, in the drawer's eyebrow.
+    pub category: Category,
+}
+
+/// The original-language row of the compare card (tC4's `OrigPane`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum OriginalView {
+    /// The verse, or `None` when the original has no text at the check's place.
+    Ready {
+        testament: Testament,
+        verse: Option<String>,
+    },
+    /// The project's numbering differs from the original's.
+    CrossFrame { testament: Testament },
+    /// The original-language text is not on this computer.
+    Unavailable { testament: Testament },
+    Error {
+        testament: Testament,
+        reason: String,
+    },
+}
+
+/// The testament of the book the original text is of: its label and its script.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum Testament {
+    Ot,
+    Nt,
+}
+
+/// The gateway row of the compare card (tC4's `UltPane`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum GatewayView {
+    /// The project lists no gateway source text.
+    NoPane,
+    /// The project's numbering differs from the pane's.
+    CrossFrame,
+    Pane {
+        /// The pane's id (`ult`): the literal Bible, else the first listed.
+        pane: String,
+        text: GatewayText,
+    },
+}
+
+/// What a gateway pane has at the check's place.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum GatewayText {
+    /// The verse as tokens, and the tokens that render the check's quote.
+    Verse {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        tokens: Vec<String>,
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        lit: Vec<u32>,
+    },
+    /// The pane holds no verse at the place.
+    Absent,
+    NotInstalled,
+    Missing,
+    Error {
+        reason: String,
+    },
+}
+
+/// The words of the draft verse the checker taps, and the ones the stored decision marks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct TargetWords {
+    /// The verse's words in order, as `tc_usfm::target_words` cuts them. Empty: not drafted.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub words: Vec<String>,
+    /// Indices into `words` the stored selections mark.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub selected: Vec<u32>,
+    /// The verse the words come from, as shown; none when the check names no verse text
+    /// (a chapter's front, a list of verses).
+    pub verse: Option<ShownToken>,
+}
+
+/// The decision as the buttons show it (tC4's `status`, `reminders` and `comments`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionView {
+    /// The status shown: an invalidated decision shows Invalid unless the person set To do.
+    pub status: Option<DecisionStatus>,
+    pub nothing_to_select: bool,
+    pub bookmarked: bool,
+    /// The check comment as stored.
+    pub comment: Option<String>,
+    /// The decision no longer holds.
+    pub invalidated: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum DecisionStatus {
+    Valid,
+    Invalid,
+    Todo,
+}
+
+/// A statement above the compare card (tC4's `CheckSessionNotices`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum CheckNotice {
+    /// This many decisions of the list no longer hold and need review; none was discarded.
+    Invalidated { count: u32 },
+}
+
+/// `check/article`: the article behind a check, read from the resource the list derives from
+/// (Q33), which the reading panes' helps setting does not change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CheckArticleRead {
+    pub at: Scope,
+    pub list: CheckListRef,
+    pub index: u32,
+}
+
+// ---------------------------------------------------------------------------------------
+// Marks (unit B5b): `check/decide`
+// ---------------------------------------------------------------------------------------
+
+/// `check/decide`: one act on a check, saved at once (AD20). The check is named by its place and
+/// its help row's id, not by an index into a list that may be derived again; `decision` and
+/// `verse` are the tokens of what the detail showed. The reply is an `Ack` whose rows are the
+/// check's new row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Decide {
+    pub at: Scope,
+    pub request: RequestId,
+    pub list: CheckListRef,
+    pub place: CheckPlace,
+    /// The help row the check comes from (`CheckItemView::check_id`).
+    pub check_id: String,
+    pub decision: ShownToken,
+    pub verse: Option<ShownToken>,
+    pub edit: DecideEdit,
+}
+
+/// What the person did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum DecideEdit {
+    /// Mark valid with the tapped words (indices into the shown `words`); none is "nothing to
+    /// select".
+    Valid {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        words: Vec<u32>,
+    },
+    Invalid,
+    Todo,
+    Bookmark {
+        on: bool,
+    },
+    /// The check comment; an empty one removes it.
+    Comment {
+        text: String,
+    },
 }
