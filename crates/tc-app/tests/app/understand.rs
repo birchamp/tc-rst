@@ -33,7 +33,7 @@ pub async fn start(name: &str) -> (tempfile::TempDir, TestApp) {
 }
 
 /// The same, its Bible project created in another versification (New Bible offers six).
-async fn start_in(name: &str, scheme: StandardScheme) -> (tempfile::TempDir, TestApp) {
+pub(super) async fn start_in(name: &str, scheme: StandardScheme) -> (tempfile::TempDir, TestApp) {
     let files = scenario(name).files().iter().map(|(path, bytes)| {
         let vrs = path.ends_with("sample_burrito/ingredients/vrs.json");
         let bytes = if vrs {
@@ -46,7 +46,7 @@ async fn start_in(name: &str, scheme: StandardScheme) -> (tempfile::TempDir, Tes
     start_over(&ScenarioState::from_files(files).unwrap()).await
 }
 
-async fn start_over(state: &ScenarioState) -> (tempfile::TempDir, TestApp) {
+pub(super) async fn start_over(state: &ScenarioState) -> (tempfile::TempDir, TestApp) {
     let (backend, report) = MemoryBackend::from_scenario(state).unwrap();
     assert!(report.refused.len() <= 1, "{:?}", report.refused);
     let dir = tempfile::tempdir().unwrap();
@@ -172,7 +172,7 @@ async fn going_home_closes_the_screen_session() {
     );
 }
 
-async fn at(t: &TestApp) -> Scope {
+pub(super) async fn at(t: &TestApp) -> Scope {
     opened(&t.app).await.session.at
 }
 

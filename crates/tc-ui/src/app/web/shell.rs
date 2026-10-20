@@ -26,6 +26,7 @@ use crate::views::home::Home;
 use crate::views::modals::add_book::AddBook;
 use crate::views::modals::add_project::AddProject;
 use crate::views::modals::feedback::Feedback;
+use crate::views::modals::gateway_change::GatewayChange;
 use crate::views::modals::guided_fix::GuidedFix;
 use crate::views::modals::import::Import;
 use crate::views::modals::new_bible::{NewBible, NewObs};
@@ -34,6 +35,7 @@ use crate::views::modals::project_settings::ProjectSettings;
 use crate::views::modals::share::ShareDialog;
 use crate::views::modals::sign_in::ShareSignIn;
 use crate::views::modals::source_texts::SourceTexts;
+use crate::views::modals::upgrade_set::UpgradeSet;
 use crate::views::open_progress::OpenProgress;
 use crate::views::story_draft::StoryDraft;
 use crate::views::story_understand::StoryUnderstand;
@@ -96,7 +98,10 @@ pub fn App() -> impl IntoView {
             {home_dialogs(&ctx.s)}
             {move || settings_open.get().then(|| view! { <ProjectSettings /> })}
             {move || sources_open.get().then(|| view! { <SourceTexts /> })}
-            // GatewayChange, UpgradeSet (C8) mount here, before GuidedFix and ShareSignIn.
+            // The confirmations that Get source texts and Project settings open; each shows while
+            // its state holds a plan. GuidedFix (B5a) mounts after them, before ShareSignIn.
+            <GatewayChange />
+            <UpgradeSet />
             {move || fix_open.get().then(|| view! { <GuidedFix /> })}
             {move || sign_in_open.get().map(|_| view! { <ShareSignIn /> })}
             {move || share_open.get().then(|| view! { <ShareDialog /> })}
@@ -491,9 +496,10 @@ fn main_view(s: &AppState) -> AnyView {
         Screen::Home => view! { <Home /> }.into_any(),
         Screen::Understand => view! { <Understand /> }.into_any(),
         Screen::Check => view! { <Check /> }.into_any(),
+        Screen::Draft => view! { <crate::views::translate::Translate /> }.into_any(),
         Screen::StoryUnderstand => view! { <StoryUnderstand /> }.into_any(),
         Screen::StoryDraft => view! { <StoryDraft /> }.into_any(),
-        // B4a Translate, B8 Community Checking.
-        Screen::Draft | Screen::CommunityChecking | Screen::Nothing => ().into_any(),
+        // B8 Community Checking.
+        Screen::CommunityChecking | Screen::Nothing => ().into_any(),
     }
 }

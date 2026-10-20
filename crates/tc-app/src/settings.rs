@@ -5,14 +5,20 @@
 
 use serde_json::Value;
 use tc_api::ApiError;
+use tc_api::jobs::{OpenPhase, Phase};
+use tc_api::refusal::SettingsRefusal;
 use tc_api::refusal::{OpenRefusal, Refusal};
 use tc_api::resources::{FromInstalls, GatewayRef};
-use tc_api::settings::{CurrentGateway, GatewayCard, SettingsView, ViewFromHome};
+use tc_api::settings::{
+    CurrentGateway, DEFAULT_FONT, GatewayCard, Save, SettingsView, ShownValues, ViewFromHome,
+};
 use tc_api::shown::Direction;
 use tc_journal::fold::DerivedFile;
+use tc_journal::keys::SettingKey;
+use tc_journal::{Json, Record, RecordKey};
 
 use crate::app::App;
-use crate::backend::StoreError;
+use crate::backend::{StoreCommand, StoreError};
 use crate::dispatch::Handle;
 use crate::home::card_facts;
 use crate::resources::package;
@@ -73,6 +79,7 @@ impl Handle<ViewFromHome> for App {
     async fn handle(&self, req: ViewFromHome) -> Result<SettingsView, ApiError> {
         let folder = req.project;
         let listed = self.inner.home.listed(&folder);
+        let looked_for = folder.clone();
         let read = self
             .with_store(move |store| {
                 let entry = match listed {
@@ -81,7 +88,7 @@ impl Handle<ViewFromHome> for App {
                         .list()?
                         .projects
                         .into_iter()
-                        .find(|e| e.folder == folder)
+                        .find(|e| e.folder == looked_for)
                         .ok_or(StoreError::NotAProject)?,
                 };
                 let peek = store.peek(&entry.folder)?;
@@ -94,6 +101,31 @@ impl Handle<ViewFromHome> for App {
             StoreError::NotAProject => ApiError::Refused(Refusal::Open(OpenRefusal::NotAProject)),
             StoreError::Other(reason) => unreadable(reason),
         })?;
+        // A project with no book yet has none of its derived files (a create before its first
+        // book, STORAGE §5.10): its settings and pins are in its history only. The dialog reads
+        // them there, through the registry's one open, rather than show a new project's
+        // direction and font as the defaults.
+        let (settings, resources) = if settings.is_none() && resources.is_none() {
+            let lease = self
+                .inner
+                .sessions
+                .open_side(
+                    &folder,
+                    crate::jobs::ProgressSink::new(Phase::Open(OpenPhase::ReadingChanges)),
+                )
+                .await
+                .map_err(crate::wire::error::open_failure)?;
+            let read = lease.session().read();
+            let filled = (
+                settings.or_else(|| read.render(&DerivedFile::Settings)),
+                resources.or_else(|| read.render(&DerivedFile::Resources)),
+            );
+            drop(lease);
+            self.inner.sessions.settled(&folder).await;
+            filled
+        } else {
+            (settings, resources)
+        };
         let (language_name, direction, font) =
             settings_values(settings.as_deref()).map_err(unreadable)?;
         let current = pinned_gateway(resources.as_deref()).map_err(unreadable)?;
@@ -122,6 +154,107 @@ impl Handle<ViewFromHome> for App {
             gateway: GatewayCard { current, options },
         })
     }
+}
+
+/// The text of a top-level `settings.json` key as the fold projects it.
+fn setting_text(read: &crate::counters::CountingSnapshot, key: &str) -> Option<String> {
+    let key = RecordKey::Setting(SettingKey::parse(key).ok()?);
+    match read.projected(&key) {
+        Some(Record::Setting {
+            value: Some(Json::Str(text)),
+            ..
+        }) if !text.is_empty() => Some(text),
+        _ => None,
+    }
+}
+
+impl Handle<Save> for App {
+    /// Save changes from a Home card's Project settings (AD14): the project opens through the
+    /// registry's one open of the folder, so a card clicked meanwhile shares the session
+    /// (AD38); what the dialog showed must still be what the project holds, or nothing is
+    /// saved; then each setting that changed is a batch of its own (R18's fallback), and the
+    /// refusal says which was written.
+    async fn handle(&self, req: Save) -> Result<(), ApiError> {
+        let lease = self
+            .inner
+            .sessions
+            .open_side(
+                &req.project,
+                crate::jobs::ProgressSink::new(Phase::Open(OpenPhase::ReadingChanges)),
+            )
+            .await
+            .map_err(crate::wire::error::open_failure)?;
+        let outcome = save_settings(lease.session(), &req).await;
+        drop(lease);
+        self.inner.sessions.settled(&req.project).await;
+        self.inner.bus.publish(tc_api::event::Event::HomeCard {
+            project: req.project,
+        });
+        outcome
+    }
+}
+
+async fn save_settings(
+    session: &crate::session::ProjectSession,
+    req: &Save,
+) -> Result<(), ApiError> {
+    let refused = |refusal| ApiError::Refused(Refusal::Settings(refusal));
+    let handle = session.handle();
+    // One snapshot decides: the equality check and both tokens are of the same fold, so a
+    // token names only heads the dialog's values came from.
+    let read = session.read();
+    let held = ShownValues {
+        direction: match setting_text(&read, "textDirection").as_deref() {
+            Some("rtl") => Direction::Rtl,
+            _ => Direction::Ltr,
+        },
+        font: setting_text(&read, "textFont"),
+    };
+    if held != req.shown {
+        return Err(refused(SettingsRefusal::Changed));
+    }
+    let direction_changed = req.direction != req.shown.direction;
+    let font_changed = match &req.shown.font {
+        Some(font) => *font != req.font,
+        None => req.font != DEFAULT_FONT,
+    };
+    let write = |key: &'static str, text: String| {
+        let key = SettingKey::parse(key).map_err(|e| e.to_string())?;
+        let token = read
+            .mint(&RecordKey::Setting(key), None)
+            .map_err(|e| e.to_string())?;
+        Ok::<_, String>(
+            StoreCommand::set_setting(token, Some(Json::Str(text))).requested_by(req.request),
+        )
+    };
+    let direction_text = match req.direction {
+        Direction::Ltr => "ltr",
+        Direction::Rtl => "rtl",
+    };
+    if direction_changed {
+        let command = write("textDirection", direction_text.to_owned())
+            .map_err(|reason| refused(SettingsRefusal::DirectionNotSaved { reason }))?;
+        handle.submit(command).await.map_err(|error| {
+            refused(SettingsRefusal::DirectionNotSaved {
+                reason: error.to_string(),
+            })
+        })?;
+    }
+    if font_changed {
+        let command = write("textFont", req.font.clone()).map_err(|reason| {
+            refused(SettingsRefusal::FontNotSaved {
+                reason,
+                direction_saved: direction_changed,
+            })
+        })?;
+        handle.submit(command).await.map_err(|error| {
+            refused(SettingsRefusal::FontNotSaved {
+                reason: error.to_string(),
+                direction_saved: direction_changed,
+            })
+        })?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

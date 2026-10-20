@@ -28,6 +28,7 @@ pub mod align;
 pub mod app;
 pub mod buffer;
 pub mod check;
+pub mod create;
 pub mod door43;
 pub mod editor;
 pub mod endpoint;
@@ -132,6 +133,7 @@ macro_rules! endpoint_table {
 
             query "editor/book": $crate::editor::Book => $crate::editor::BookView;
             query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;
+            query "editor/chapters": $crate::editor::Chapters => $crate::editor::ChaptersView;
 
             query "helps/passage": $crate::helps::Passage => $crate::helps::PassageView;
             query "helps/article": $crate::helps::Article => $crate::helps::ArticleView;
@@ -146,15 +148,35 @@ macro_rules! endpoint_table {
             query "check/rows": $crate::check::Rows => $crate::check::RowsView;
             query "check/storyItem": $crate::check::StoryItem => $crate::check::StoryItemView;
 
-            query "resources/fixState": $crate::check::FixState
-                => Option<$crate::check::FixView>;
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;
+            command "settings/save": $crate::settings::Save => ();
+
+            command "create/bible": $crate::create::Bible => $crate::create::Created;
+            command "create/obs": $crate::create::Obs => $crate::create::Created;
+            command "create/addBlankBooks": $crate::create::AddBlankBooks
+                => $crate::create::BooksAdded;
+            query "create/reviewUsfm": $crate::create::ReviewUsfm => $crate::create::UsfmVerdict;
+            command "create/addUsfmBooks": $crate::create::AddUsfmBooks
+                => $crate::create::UsfmAdded;
 
             query "resources/sources": $crate::resources::Sources => $crate::resources::SourcesView;
             query [Sources] "resources/catalog": $crate::resources::Catalog
                 => $crate::resources::CatalogView;
             job [Sources] "resources/download": $crate::resources::Download => $crate::ids::JobId;
+            query [Sources] "resources/checkUpdates": $crate::resources::CheckUpdates
+                => $crate::resources::UpdatesView;
+            job [Sources] "resources/planUpgrade": $crate::resources::PlanUpgrade
+                => $crate::ids::JobId;
+            job "resources/planGateway": $crate::resources::PlanGateway => $crate::ids::JobId;
+            command "resources/applyPlan": $crate::resources::ApplyPlan
+                => $crate::resources::PlanApplied;
+            query "resources/fixState": $crate::resources::FixState
+                => Option<$crate::resources::FixView>;
+            job [Fix] "resources/fixFetch": $crate::resources::FixFetch => $crate::ids::JobId;
+            command "resources/fixSideload": $crate::resources::FixSideload => ();
+            command "resources/fixRepin": $crate::resources::FixRepin
+                => $crate::resources::PlanView;
         }
     };
 }

@@ -4,6 +4,8 @@
 //! depends on the other. This program is the one place that knows both, so the application
 //! is a backend here by a newtype and every answer is mapped one to one.
 
+use std::sync::Arc;
+
 use tc_server::{Answer, Backend, Bytes, EventSource, MediaFile, Next, Then};
 
 /// The application, as the server's backend.
@@ -69,3 +71,15 @@ fn answer(answer: tc_app::Answer) -> Answer {
 // Both crates end a test crash with the same code, which the process tests look for.
 #[cfg(feature = "test-hooks")]
 const _: () = assert!(tc_app::hooks::CRASH_EXIT_CODE == tc_server::CRASH_EXIT_CODE);
+
+/// The server's uploaded files, as the application reads them.
+pub struct ServerUploads(pub Arc<tc_server::Uploads>);
+
+impl tc_app::UploadedFiles for ServerUploads {
+    fn take(&self, id: &tc_api::ids::UploadId) -> Option<tc_app::UploadedFile> {
+        self.0.take(id).map(|upload| tc_app::UploadedFile {
+            name: upload.name,
+            path: upload.path,
+        })
+    }
+}

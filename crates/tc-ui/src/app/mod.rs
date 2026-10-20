@@ -39,7 +39,9 @@ pub mod shell;
 pub mod sources;
 pub mod story;
 pub mod sync;
+pub mod translate;
 pub mod understand;
+pub mod upgrades;
 
 #[cfg(all(target_arch = "wasm32", feature = "app"))]
 pub mod web;

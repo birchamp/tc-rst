@@ -28,5 +28,7 @@ mod app {
     mod sse;
     mod story;
     mod sync;
+    mod translate;
     mod understand;
+    mod upgrades;
 }

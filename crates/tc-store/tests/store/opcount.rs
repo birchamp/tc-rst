@@ -500,3 +500,66 @@ fn the_fold_cache_is_kept_by_every_open_of_the_same_encoding() {
     let (again, _) = open_once(&fs, &folder);
     assert_eq!(again.journal_files_cached, again.journal_files_read);
 }
+
+/// An action costs what it touches: a book added with its text writes one pending file with one
+/// batch and reads nothing the open had not read, whatever the project holds (PERFORMANCE rule 2).
+#[test]
+fn adding_a_book_from_a_file_costs_the_book_not_the_project() {
+    let usfm = ult("TIT");
+    let mut writes = Vec::new();
+    for corpus in [psalms(), psalms_x10()] {
+        let fs = corpus.fs.copy();
+        let rig = rig_as(fs.clone(), APP, "host-1");
+        let handle = rig
+            .store
+            .open(&corpus.folder, &OpenOptions::default())
+            .unwrap();
+        handle.wait_idle();
+        let book = [
+            tc_journal::BookId::Titus,
+            tc_journal::BookId::Jude,
+            tc_journal::BookId::Philemon,
+        ]
+        .into_iter()
+        .find(|b| {
+            handle
+                .snapshot()
+                .fold()
+                .heads(&tc_journal::RecordKey::BookPresence(*b))
+                .is_empty()
+        })
+        .unwrap();
+        fs.clear_log();
+        let read_before = fs.bytes_read();
+        let before = handle.counters();
+        let reply = handle
+            .submit(tc_journal::command::Command::AddBookText {
+                book,
+                scope: tc_journal::record::Scope::Whole,
+                usfm: usfm.clone(),
+                file_name: "TIT.usfm".into(),
+            })
+            .wait()
+            .unwrap();
+        assert!(reply.changes.len() > 46 * 2);
+        let log = fs.log();
+        let opened = fs.opened();
+        let read = fs.bytes_read() - read_before;
+        let delta = handle.counters().since(&before);
+        assert!(
+            opened.is_empty(),
+            "an add opened a file the open had not: {opened:?}"
+        );
+        assert!(read < 64 * 1024, "an add read {read} bytes");
+        let created = log.iter().filter(|op| op.kind == OpKind::Create).count();
+        assert_eq!(created, 1, "one pending file for the whole book: {log:?}");
+        let flushes = if cfg!(windows) { 3 } else { 2 };
+        assert_eq!(delta.fsyncs, flushes, "one durable write");
+        writes.push(log.len());
+        handle.close().unwrap();
+    }
+    assert_eq!(
+        writes[0], writes[1],
+        "the same write points on both corpora"
+    );
+}

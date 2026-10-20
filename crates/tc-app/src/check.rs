@@ -26,10 +26,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tc_api::ApiError;
 use tc_api::check::{
     AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
-    CheckSessionView, CheckUnit, Dot, DroppedNote, FixState, FixView, NextCheck, NoteCategory,
-    Open, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows,
-    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, StoryItem, StoryItemView,
-    StoryPane, Tool, ToolCard, ToolState, WordCategory,
+    CheckSessionView, CheckUnit, Dot, DroppedNote, NextCheck, NoteCategory, Open, Picker,
+    PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows, RailSince,
+    ResourceCitation, RowFlags, Rows, RowsView, Rung, StoryItem, StoryItemView, StoryPane, Tool,
+    ToolCard, ToolState, WordCategory,
 };
 use tc_api::ids::{CheckSessionId, StoryNo, ViewSeq};
 use tc_check::derive::{
@@ -48,6 +48,7 @@ use crate::app::App;
 use crate::counters::{AppCounter, CountingSnapshot};
 use crate::dispatch::Handle;
 use crate::numbering::Numbering;
+use crate::plans::core_unit;
 use crate::session::ProjectSession;
 use crate::story::LoadedObs;
 use crate::understand::{LoadedBook, LoadedText, project_pins, versification};
@@ -221,15 +222,6 @@ fn pins_of(read: &CountingSnapshot) -> Result<Option<ProjectPins>, ApiError> {
     })
 }
 
-/// The collection a unit's decisions are kept under: a book's, or the stories' (one file of
-/// decisions for the fifty).
-fn collection_of(unit: CheckUnit) -> Collection {
-    match unit {
-        CheckUnit::Book(book) => Collection::Book(book),
-        CheckUnit::Story(_) => Collection::Stories,
-    }
-}
-
 /// What a unit is called in a report.
 fn unit_name(unit: CheckUnit) -> String {
     match unit {
@@ -251,7 +243,7 @@ fn preflight(
     fix::preflight(
         pins.map(|p| p as &dyn Ladder),
         tool_id(tool),
-        collection_of(unit),
+        core_unit(unit),
         &machine,
     )
 }
@@ -504,7 +496,7 @@ fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, unit: CheckUnit)
     if derived.items.is_empty() {
         return Vec::new();
     }
-    let collection = collection_of(unit);
+    let collection = core_unit(unit);
     // A story's session reads that story's decisions only.
     let decisions = match unit {
         CheckUnit::Book(_) => read.check_decisions(tool_id(tool), collection),
@@ -903,48 +895,6 @@ impl Handle<Rows> for App {
             .await?;
         // A tool that stopped being ready is opened again, which shows why.
         Ok(answer.unwrap_or(RowsView::Reopen))
-    }
-}
-
-// ---------------------------------------------------------------------------------------
-// resources/fixState
-// ---------------------------------------------------------------------------------------
-
-impl Handle<FixState> for App {
-    async fn handle(&self, req: FixState) -> Result<Option<FixView>, ApiError> {
-        let session = self.read(&req.at)?;
-        let installed = installed(self)?;
-        let read = session.read();
-        let pins = pins_of(&read)?;
-        let Some(pins) = pins else {
-            return Ok(None);
-        };
-        let pre = preflight(Some(&pins), req.list.tool, req.list.unit, &installed);
-        // Only a card whose pinned resource is missing offers the fix (tC4 `ToolNeeds`).
-        if !matches!(
-            pre.state,
-            PreflightState::Fetch | PreflightState::Unavailable
-        ) {
-            return Ok(None);
-        }
-        let machine = Machine {
-            installed: &installed,
-            online: true,
-        };
-        Ok(fix::guided_fix(&pins, &pre, &machine).map(|offer| FixView {
-            tool: req.list.tool,
-            pin: citation(&offer.pin),
-            rung: rung(offer.rung),
-            candidates: offer
-                .candidates
-                .iter()
-                .map(|c| PinCitation {
-                    repo_path: c.resource.repo_path.to_string(),
-                    version: c.version.clone(),
-                    sha: c.resource.sha.to_hex(),
-                })
-                .collect(),
-        }))
     }
 }
 

@@ -59,6 +59,7 @@ use tc_door43::check_names;
 
 use crate::error::{InstallError, Refusal, StoreError};
 use crate::held;
+use crate::layout;
 use crate::pin::{AquiferPin, BookCoverage, ResourcePin, Sha256};
 use crate::resolve::LocalCoverage;
 
@@ -255,6 +256,17 @@ impl Installed {
             }
             _ => None,
         }
+    }
+
+    /// The path of `book`'s table (`TIT.tsv`, or `19-PSA.tsv` in a release that numbers its
+    /// books), wherever the release filed it; `None` when the install holds none.
+    pub fn book_table(&self, book: BookId) -> Option<&str> {
+        layout::book_file(self.files(), book, "tsv")
+    }
+
+    /// The Open Bible Stories table (`OBS.tsv`, or `<prefix>_OBS.tsv`).
+    pub fn stories_table(&self) -> Option<&str> {
+        layout::obs_table(self.files())
     }
 
     /// Every file, sorted by path.

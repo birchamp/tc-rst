@@ -585,7 +585,7 @@ pub enum HelpsTab {
     Words,
     Questions,
     Simplified,
-    /// A story's user comments, on Translate (tC4 shows it with `comments`).
+    /// Translate's own tab (#252): the user comments of the chapter, or of the story.
     Comments,
 }
 
@@ -612,8 +612,9 @@ impl HelpsTab {
         .find(|tab| tab.as_str() == text)
     }
 
-    /// The tab a panel shows when the one chosen is not among its own (tC4's `shownTab`): a
-    /// story has no simplified text, and the Comments tab is Translate's.
+    /// The tab a panel shows when the one chosen is not among its own (tC4's `shownTab`):
+    /// Comments is Translate's only, so a panel with no comments shows Notes in its place, and a
+    /// story has no simplified text.
     pub fn shown(self, comments: bool, story: bool) -> Self {
         match self {
             Self::Comments if !comments => Self::Notes,

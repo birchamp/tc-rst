@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use leptos::html;
 use leptos::prelude::*;
+use tc_api::editor::CommentView;
 use tc_api::helps::{ArticleLink, ArticleView, PassageView, ReadySlot, Slot};
 use tc_api::model::{ArticleBlock, BlockKind};
 use tc_api::shown::Direction as TextDir;
@@ -65,14 +66,15 @@ pub struct StoryPanel {
 }
 
 /// tC4's `HelpsPanel` for a chapter: `focus_verses` are the focused unit's verses (none: the
-/// whole chapter), `pane` the source pane whose words title the cards. A story's panel is
-/// `story`.
+/// whole chapter), `pane` the source pane whose words title the cards, `comments` the book's
+/// user comments for Translate's Comments tab (none: no such tab). A story's panel is `story`.
 #[component]
 pub fn HelpsPanel(
     chapter: u16,
     focus_verses: Memo<Option<Vec<String>>>,
     helps: Signal<Load<Arc<PassageView>>>,
     pane: String,
+    #[prop(optional)] comments: Option<Signal<Vec<CommentView>>>,
     #[prop(optional)] story: Option<StoryPanel>,
 ) -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
@@ -80,7 +82,12 @@ pub fn HelpsPanel(
     };
     let shown = s.u.helps.clone();
     let width = s.u.helps_width.clone();
-    let tab = s.u.helps_tab.clone();
+    let has_comments = comments.is_some() || story.as_ref().is_some_and(|s| s.comments.is_some());
+    let is_story = story.is_some();
+    let tab = {
+        let tab = s.u.helps_tab.clone();
+        Memo::new(move |_| tab.get().shown(has_comments, is_story))
+    };
     let panel = NodeRef::<html::Aside>::new();
     let style = move || {
         let mut css = crate::css! { "position": "relative" };
@@ -103,12 +110,9 @@ pub fn HelpsPanel(
     let label = Memo::new(move |_| {
         helps.with(|h| simplified_label(h.value().and_then(|v| v.simplified_pin.as_deref())))
     });
-    let has_comments = story.as_ref().is_some_and(|s| s.comments.is_some());
-    let is_story = story.is_some();
     // The frame in focus leads (owner ruling 2026-09-18, #331): its first card scrolls into view.
     let list_ref = NodeRef::<html::Div>::new();
     if let Some(story) = story.clone() {
-        let tab = tab.clone();
         Effect::new(move |_| {
             let frame = story.focus_frame.get();
             let _ = tab.get();
@@ -123,7 +127,6 @@ pub fn HelpsPanel(
     }
     let switcher = {
         let actions = actions.clone();
-        let tab = tab.clone();
         move || {
             let mut options = vec![
                 SwitcherOption::new("notes", t(keys::helps::NOTES, &[])),
@@ -139,12 +142,7 @@ pub fn HelpsPanel(
                     t(keys::helps::COMMENTS, &[]),
                 ));
             }
-            let value = {
-                let tab = tab.clone();
-                Signal::derive(move || {
-                    Some(tab.get().shown(has_comments, is_story).as_str().to_owned())
-                })
-            };
+            let value = Signal::derive(move || Some(tab.get().as_str().to_owned()));
             let actions = actions.clone();
             let on_change = Callback::new(move |v: String| {
                 if let Some(tab) = HelpsTab::parse(&v) {
@@ -166,7 +164,7 @@ pub fn HelpsPanel(
     let content = {
         let (s, actions, story) = (s.clone(), actions.clone(), story.clone());
         move || {
-            let tab = tab.get().shown(has_comments, is_story);
+            let tab = tab.get();
             helps.with(|loaded| match loaded {
                 Load::Loading => {
                     let style = crate::css! {
@@ -186,10 +184,13 @@ pub fn HelpsPanel(
                     }
                     .into_any()
                 }
-                Load::Ready(view) | Load::Refreshing(view) => {
-                    helps_tab(&s, &actions, tab, view, chapter, focus_verses, &pane, story.as_ref())
-                        .into_any()
-                }
+                Load::Ready(view) | Load::Refreshing(view) => match (tab, comments) {
+                    (HelpsTab::Comments, Some(comments)) => {
+                        comments_tab(&s, comments, chapter, focus_verses).into_any()
+                    }
+                    _ => helps_tab(&s, &actions, tab, view, chapter, focus_verses, &pane, story.as_ref())
+                        .into_any(),
+                },
             })
         }
     };
@@ -339,7 +340,7 @@ fn helps_tab(
         HelpsTab::Questions => questions_tab(s, &view.questions, focus, frame),
         HelpsTab::Simplified => simplified_tab(&view.simplified, focus),
         HelpsTab::Comments => match story.and_then(|s| s.comments) {
-            Some(comments) => comments_tab(s, comments),
+            Some(comments) => story_comments_tab(s, comments),
             None => ().into_any(),
         },
     }
@@ -359,7 +360,10 @@ fn card_lit(
 }
 
 /// tC4's `CommentsTab` of a story: the newest comment of each frame, in frame order.
-fn comments_tab(s: &crate::app::web::AppState, comments: Memo<Arc<Vec<FrameComment>>>) -> AnyView {
+fn story_comments_tab(
+    s: &crate::app::web::AppState,
+    comments: Memo<Arc<Vec<FrameComment>>>,
+) -> AnyView {
     let dir = match s.project.with_untracked(|p| p.as_ref().map(|p| p.dir)) {
         Some(TextDir::Rtl) => "rtl",
         _ => "ltr",
@@ -392,6 +396,49 @@ fn comments_tab(s: &crate::app::web::AppState, comments: Memo<Arc<Vec<FrameComme
         })
         .collect_view()
         .into_any()
+}
+
+/// tC4's `CommentsTab`: each verse's newest comment in focus, as typed, in the project's
+/// direction (#657).
+fn comments_tab(
+    s: &crate::app::web::AppState,
+    comments: Signal<Vec<CommentView>>,
+    chapter: u16,
+    focus_verses: Memo<Option<Vec<String>>>,
+) -> AnyView {
+    let dir = match s.project.with_untracked(|p| p.as_ref().map(|p| p.dir)) {
+        Some(TextDir::Rtl) => "rtl",
+        _ => "ltr",
+    };
+    let card = crate::css! {
+        "border": "var(--stroke) solid var(--border)",
+        "border-radius": "var(--radius-lg)",
+        "padding": 14,
+        "background": "#fff",
+    }
+    .to_style();
+    let text = crate::css! { "white-space": "pre-wrap", "text-align": "start" }.to_style();
+    let focus = focus_verses.get();
+    comments.with(|all| {
+        let shown = crate::app::translate::comments_in_focus(all, chapter, focus.as_deref());
+        if shown.is_empty() {
+            return empty_tab(focus.as_deref());
+        }
+        shown
+            .into_iter()
+            .map(|c| {
+                let n = c.verse.to_string();
+                let label = t(keys::understand::VERSE_ONE, &[("n", &n)]);
+                view! {
+                    <div data-testid="helps-comment" data-frame=n style=card.clone()>
+                        <Overline>{label}</Overline>
+                        <p dir=dir style=text.clone()>{c.text.clone()}</p>
+                    </div>
+                }
+            })
+            .collect_view()
+            .into_any()
+    })
 }
 
 /// tC4's `SlotState`: a tab with nothing to show says why.

@@ -43,6 +43,22 @@ pub enum CheckUnit {
     Story(StoryNo),
 }
 
+/// The decisions one plan row moves: a book's, or the fifty stories' (tc-check `Collection`),
+/// which a story project keeps in one file whatever story is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum CheckCollection {
+    Book(#[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))] BookId),
+    Stories,
+}
+
 /// One tool's check list for one book, or for one story.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -547,35 +563,6 @@ pub enum RowsView {
         progress: RailProgress,
     },
     Reopen,
-}
-
-// ---------------------------------------------------------------------------------------
-// The guided fix (M11, unit B5a): `resources/fixState`
-// ---------------------------------------------------------------------------------------
-
-/// `resources/fixState`: what the guided fix offers for a tool whose pinned resource is not on this
-/// computer (tC4 `openFix`): the pin to get and the installed versions of its repository a
-/// re-pin could move to. Reading it changes nothing. C8 builds the three ways.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct FixState {
-    pub at: Scope,
-    pub list: CheckListRef,
-}
-
-/// The guided fix of one tool; `None` when nothing is missing, or the pin is one no file can
-/// satisfy.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
-pub struct FixView {
-    pub tool: Tool,
-    pub pin: PinCitation,
-    pub rung: Rung,
-    /// Installed commits of the same repository: the re-pin choices.
-    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
-    pub candidates: Vec<PinCitation>,
 }
 
 // ---------------------------------------------------------------------------------------

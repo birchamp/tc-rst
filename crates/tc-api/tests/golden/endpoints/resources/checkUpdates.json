@@ -1,0 +1,54 @@
+{
+  "path": "resources/checkUpdates",
+  "kind": "query",
+  "net": "sources",
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "sets": [
+        {
+          "rung": "primary",
+          "language": "es-419",
+          "moves": [
+            {
+              "repo": "es-419_tn",
+              "from": "v66",
+              "to": "v67",
+              "published": "2026-10-02T14:03:11Z"
+            }
+          ]
+        },
+        {
+          "rung": "fallback",
+          "language": "en",
+          "moves": []
+        }
+      ],
+      "texts": [
+        {
+          "kind": "original",
+          "change": {
+            "repo": "el-x-koine_ugnt",
+            "from": "v0.34",
+            "to": "v0.35",
+            "published": null
+          }
+        }
+      ],
+      "textsError": "Door43 did not answer"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "sources"
+    }
+  }
+}

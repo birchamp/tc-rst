@@ -19,6 +19,14 @@ pub fn book_rail(s: &AppState, actions: &Actions, book: &BookView) -> AnyView {
     let title = Signal::derive(move || format!("{} · {count}", t(keys::draft::BOOKS, &[])));
     let editing = s.editing.clone();
     let off = Signal::derive(move || editing.with(|e| e.is_open()));
+    // tC4's `off`: a tile that is off shows no hand.
+    let cursor = Signal::derive(move || {
+        if off.get() {
+            crate::css! { "cursor": "default" }
+        } else {
+            crate::css::Css::new()
+        }
+    });
     let chapter = s.u.chapter.clone();
     let rows = book
         .rail
@@ -45,6 +53,7 @@ pub fn book_rail(s: &AppState, actions: &Actions, book: &BookView) -> AnyView {
                         meta=Some(format!("{n}%"))
                         meta_title=t(keys::draft::BOOK_PERCENT_TITLE, &[("n", &n.to_string())])
                         disabled=off
+                        style=cursor
                         on_click=open
                     />
                 }
@@ -57,6 +66,7 @@ pub fn book_rail(s: &AppState, actions: &Actions, book: &BookView) -> AnyView {
                         percent=0.0
                         meta=Some(String::new())
                         disabled=off
+                        style=cursor
                         on_click=open
                     />
                 }

@@ -1,0 +1,29 @@
+{
+  "path": "create/reviewUsfm",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "file": {
+      "upload": "00112233445566778899aabbccddeeff",
+      "name": "57-TIT.usfm"
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "type": "book",
+      "value": {
+        "book": "TIT"
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
