@@ -2,12 +2,12 @@
 //! tool's pinned resource is not on this computer, and the dialog names it and the three ways to
 //! get it: download the pinned version, move the pin to an installed version of the same
 //! repository, or install it from a file that declares the pinned commit. Opening it changes
-//! nothing. The three ways run with C8; until then their controls are drawn and do nothing.
+//! nothing. C8 serves the three ways (`resources/fixFetch`, `fixSideload`, `fixRepin`); their controls are drawn and do nothing until the screen wires them.
 
 use std::sync::Arc;
 
 use leptos::prelude::*;
-use tc_api::check::{FixView, PinCitation};
+use tc_api::resources::{FixView, PinLabel};
 
 use crate::app::web::check::Fix;
 use crate::app::web::{AppCtx, use_app};
@@ -18,7 +18,7 @@ use crate::ds::{
 use crate::i18n::{keys, t};
 
 /// `es-419_twl · v18`, or the first 12 digits of the commit with no tag (tC4's `label`).
-fn label(pin: &PinCitation) -> String {
+fn label(pin: &PinLabel) -> String {
     let repo = pin.repo_path.rsplit('/').next().unwrap_or(&pin.repo_path);
     let version = pin
         .version
@@ -27,7 +27,7 @@ fn label(pin: &PinCitation) -> String {
     format!("{repo} · {version}")
 }
 
-fn repo_name(pin: &PinCitation) -> String {
+fn repo_name(pin: &PinLabel) -> String {
     pin.repo_path
         .rsplit('/')
         .next()
@@ -128,8 +128,9 @@ pub fn GuidedFix() -> impl IntoView {
         let fix = fix.clone();
         Signal::derive(move || {
             let tool = fix.with(|f| match f {
-                Some(Fix::Ready(view)) => Some(view.tool),
-                Some(Fix::Loading(tool) | Fix::Failed(tool, _)) => Some(*tool),
+                Some(Fix::Ready(tool, _) | Fix::Loading(tool) | Fix::Failed(tool, _)) => {
+                    Some(*tool)
+                }
                 None => None,
             });
             let tool = tool
@@ -146,7 +147,7 @@ pub fn GuidedFix() -> impl IntoView {
                 .map(|b| b.english_name().to_owned())
                 .unwrap_or_default();
             fix.with(|f| match f {
-                Some(Fix::Ready(view)) => t(
+                Some(Fix::Ready(_, view)) => t(
                     keys::fix::SUBTITLE,
                     &[("pin", &label(&view.pin)), ("book", &book)],
                 ),
@@ -180,7 +181,7 @@ pub fn GuidedFix() -> impl IntoView {
             let fix = fix.clone();
             (move || {
                 fix.with(|f| match f {
-                    Some(Fix::Ready(view)) => options(view),
+                    Some(Fix::Ready(_, view)) => options(view),
                     Some(Fix::Failed(_, error)) => {
                         let error = error.clone();
                         view! {

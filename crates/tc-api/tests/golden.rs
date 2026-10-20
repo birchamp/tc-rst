@@ -33,15 +33,19 @@ use tc_api::buffer::{
 };
 use tc_api::check::{
     AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
-    CheckSessionView, CheckUnit, Dot, DroppedNote, FixState, FixView, NextCheck, NoteCategory,
-    Open as CheckOpen, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch,
-    RailRows, RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard,
-    ToolState,
+    CheckSessionView, CheckUnit, Dot, DroppedNote, NextCheck, NoteCategory, Open as CheckOpen,
+    Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows, RailSince,
+    ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard, ToolState,
+};
+use tc_api::create::{
+    AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
+    UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
-    Book, BookView, CommentView, FrameRow, PaneChapter, PaneText, PaneVerse, RailBook, RowSource,
-    SourceFrame, SourcePane, Sources, SourcesView,
+    Book, BookView, ChapterText, Chapters, ChaptersView, CommentView, FrameRow, PaneChapter,
+    PaneText, PaneVerse, RailBook, RowSource, SourceFrame, SourcePane, Sources, SourcesView,
+    VerseRow,
 };
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
@@ -74,15 +78,21 @@ use tc_api::prefs::{
 };
 use tc_api::refusal::Message;
 use tc_api::resources::{
-    Catalog, CatalogView, Download, FromInstalls, GatewayPackage, GatewayRef, PackageRole,
-    PackageRow, Seen, SourceGateway, Sources as SourceTexts, SourcesView as SourceTextsView,
+    ApplyPlan, BlockReason, BlockedUnit, Carry, Catalog, CatalogView, CheckUpdates, Download,
+    FixFetch, FixRepin, FixSideload, FixState, FixView, FromInstalls, GatewayChange,
+    GatewayPackage, GatewayRef, ImageChange, OfferRef, PackageRole, PackageRow, PinLabel,
+    PlanApplied, PlanGateway, PlanRow, PlanUpgrade, PlanView, PlanWhat, RepoMove, Seen, SetOffer,
+    SetRung, SourceGateway, Sources as SourceTexts, SourcesView as SourceTextsView, TextKind,
+    TextOffer, UpdatesView,
 };
 use tc_api::session::{
     BufferSlot, Close, CopyProject, DiscardDraft, DraftKind, DraftOffer, Drafts, Keep, KeepDraft,
     KeptDraft, KeptPlace, OfferedDrafts, Open, OpenUnit, OpenedProject, OtherComputerClosed,
     ProjectCopy, Settles, StoredDraftId,
 };
-use tc_api::settings::{CurrentGateway, GatewayCard, SettingsView, ViewFromHome};
+use tc_api::settings::{
+    CurrentGateway, GatewayCard, Save, SettingsView, ShownValues, ViewFromHome,
+};
 use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
@@ -522,6 +532,132 @@ impl Example for ViewFromHome {
     }
 }
 
+impl Example for Save {
+    fn example() -> Self {
+        Save {
+            request: request(40),
+            project: ProjectRef::parse("es-419_tit_equipo").unwrap(),
+            shown: ShownValues {
+                direction: Direction::Ltr,
+                font: None,
+            },
+            direction: Direction::Rtl,
+            font: "Scheherazade New — Arabic script".into(),
+        }
+    }
+}
+
+fn details() -> Details {
+    Details {
+        name: "Kanuri Bible".into(),
+        language_name: "Kanuri".into(),
+        code: "acm-x-lebarabi-c".into(),
+        door43_code: Some("acm-x-lebarabic".into()),
+        direction: Direction::Rtl,
+        font: "Noto Sans (default)".into(),
+    }
+}
+
+impl Example for Bible {
+    fn example() -> Self {
+        Bible {
+            request: request(41),
+            details: details(),
+            versification: "eng".into(),
+        }
+    }
+}
+
+impl Example for Obs {
+    fn example() -> Self {
+        Obs {
+            request: request(42),
+            details: details(),
+        }
+    }
+}
+
+impl Example for Created {
+    fn example() -> Self {
+        Created {
+            project: ProjectRef::parse("kanuri_bible").unwrap(),
+        }
+    }
+}
+
+impl Example for AddBlankBooks {
+    fn example() -> Self {
+        AddBlankBooks {
+            request: request(43),
+            project: ProjectRef::parse("kanuri_bible").unwrap(),
+            books: vec![BookId::Titus, BookId::Philemon],
+        }
+    }
+}
+
+impl Example for BooksAdded {
+    fn example() -> Self {
+        BooksAdded {
+            added: vec![BookId::Titus],
+        }
+    }
+}
+
+fn usfm_file(name: &str) -> UsfmFile {
+    UsfmFile {
+        upload: UploadId::parse("00112233445566778899aabbccddeeff").unwrap(),
+        name: name.into(),
+    }
+}
+
+impl Example for ReviewUsfm {
+    fn example() -> Self {
+        ReviewUsfm {
+            file: usfm_file("57-TIT.usfm"),
+        }
+    }
+}
+
+impl Example for UsfmVerdict {
+    fn example() -> Self {
+        UsfmVerdict::Book {
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for AddUsfmBooks {
+    fn example() -> Self {
+        AddUsfmBooks {
+            request: request(44),
+            project: ProjectRef::parse("kanuri_bible").unwrap(),
+            files: vec![usfm_file("57-TIT.usfm"), usfm_file("old-TIT.usfm")],
+        }
+    }
+}
+
+impl Example for UsfmAdded {
+    fn example() -> Self {
+        UsfmAdded {
+            rows: vec![
+                UsfmRow {
+                    name: "57-TIT.usfm".into(),
+                    outcome: UsfmOutcome::Added {
+                        book: BookId::Titus,
+                    },
+                },
+                UsfmRow {
+                    name: "old-TIT.usfm".into(),
+                    outcome: UsfmOutcome::Refused(UsfmProblem::TwoFiles {
+                        book: BookId::Titus,
+                        first: "57-TIT.usfm".into(),
+                    }),
+                },
+            ],
+        }
+    }
+}
+
 fn spanish() -> GatewayRef {
     GatewayRef {
         language: "es-419".into(),
@@ -622,6 +758,232 @@ impl Example for Download {
             gateway: spanish(),
             book: BookId::Titus,
             repos: vec!["es-419_glt".into(), "es-419_tn".into()],
+        }
+    }
+}
+
+fn tn_move() -> RepoMove {
+    RepoMove {
+        repo: "es-419_tn".into(),
+        from: "v66".into(),
+        to: "v67".into(),
+        published: Some("2026-10-02T14:03:11Z".into()),
+    }
+}
+
+impl Example for CheckUpdates {
+    fn example() -> Self {
+        CheckUpdates { at: scope() }
+    }
+}
+
+impl Example for UpdatesView {
+    fn example() -> Self {
+        UpdatesView {
+            sets: vec![
+                SetOffer {
+                    rung: SetRung::Primary,
+                    language: "es-419".into(),
+                    moves: vec![tn_move()],
+                },
+                SetOffer {
+                    rung: SetRung::Fallback,
+                    language: "en".into(),
+                    moves: Vec::new(),
+                },
+            ],
+            texts: vec![TextOffer {
+                kind: TextKind::Original,
+                change: RepoMove {
+                    repo: "el-x-koine_ugnt".into(),
+                    from: "v0.34".into(),
+                    to: "v0.35".into(),
+                    published: None,
+                },
+            }],
+            texts_error: Some("Door43 did not answer".into()),
+        }
+    }
+}
+
+impl Example for PlanUpgrade {
+    fn example() -> Self {
+        PlanUpgrade {
+            request: request(22),
+            at: scope(),
+            offer: OfferRef::Set {
+                rung: SetRung::Primary,
+            },
+        }
+    }
+}
+
+impl Example for PlanGateway {
+    fn example() -> Self {
+        PlanGateway {
+            request: request(23),
+            at: scope(),
+            gateway: GatewayRef {
+                language: "en".into(),
+                owner: "unfoldingWord".into(),
+            },
+        }
+    }
+}
+
+impl Example for ApplyPlan {
+    fn example() -> Self {
+        ApplyPlan {
+            request: request(24),
+            at: scope(),
+            plan: tc_api::ids::PlanId::new(3),
+        }
+    }
+}
+
+fn gateway_plan() -> PlanView {
+    PlanView {
+        plan: tc_api::ids::PlanId::new(4),
+        what: PlanWhat::Gateway(Box::new(GatewayChange {
+            from: Some(spanish_package()),
+            to: english_package(),
+            images: Some(ImageChange {
+                from: None,
+                to: Some("en_obs-images".into()),
+            }),
+        })),
+        decisions_at_risk: 4,
+        rows: vec![
+            PlanRow {
+                tool: Tool::TranslationWords,
+                unit: CheckUnit::Book(BookId::Titus),
+                decisions: 2,
+                against: "es-419_twl".into(),
+                carry: Some(Carry {
+                    carried: 2,
+                    check_again: 0,
+                }),
+            },
+            PlanRow {
+                tool: Tool::TranslationNotes,
+                unit: CheckUnit::Book(BookId::Titus),
+                decisions: 2,
+                against: "es-419_tn".into(),
+                carry: None,
+            },
+        ],
+        blocked: vec![BlockedUnit {
+            tool: Tool::TranslationNotes,
+            unit: CheckUnit::Stories,
+            reason: BlockReason::VersificationUnknown,
+        }],
+        alignments: Some(12),
+    }
+}
+
+fn spanish_package() -> GatewayPackage {
+    GatewayPackage {
+        gateway: spanish(),
+        name: "Latin American Spanish".into(),
+        autonym: "Español (Latinoamérica)".into(),
+        direction: Direction::Ltr,
+        seen: Seen {
+            tn: "v66".into(),
+            tw: "v66".into(),
+            ta: "v66".into(),
+        },
+    }
+}
+
+impl Example for PlanApplied {
+    fn example() -> Self {
+        PlanApplied::Replanned(Box::new(PlanView {
+            what: PlanWhat::Set {
+                rung: SetRung::Primary,
+                language: "es-419".into(),
+                moves: vec![tn_move()],
+            },
+            ..gateway_plan()
+        }))
+    }
+}
+
+impl Example for PlanView {
+    fn example() -> Self {
+        PlanView {
+            what: PlanWhat::Repin {
+                rung: SetRung::Fallback,
+                language: "en".into(),
+                moves: vec![tn_move()],
+            },
+            ..gateway_plan()
+        }
+    }
+}
+
+impl Example for FixState {
+    fn example() -> Self {
+        FixState {
+            at: scope(),
+            tool: Tool::TranslationWords,
+            unit: CheckUnit::Book(BookId::Titus),
+        }
+    }
+}
+
+fn pin_label(version: Option<&str>, sha: &str) -> PinLabel {
+    PinLabel {
+        repo_path: "git.door43.org/es-419_gl/es-419_twl".into(),
+        version: version.map(str::to_owned),
+        sha: sha.into(),
+    }
+}
+
+impl Example for FixView {
+    fn example() -> Self {
+        FixView {
+            pin: pin_label(Some("v18"), "1111111111111111111111111111111111111111"),
+            rung: SetRung::Primary,
+            candidates: vec![pin_label(
+                Some("v19"),
+                "2222222222222222222222222222222222222222",
+            )],
+            candidates_error: None,
+        }
+    }
+}
+
+impl Example for FixFetch {
+    fn example() -> Self {
+        FixFetch {
+            request: request(25),
+            at: scope(),
+            tool: Tool::TranslationWords,
+            unit: CheckUnit::Book(BookId::Titus),
+        }
+    }
+}
+
+impl Example for FixSideload {
+    fn example() -> Self {
+        FixSideload {
+            request: request(26),
+            at: scope(),
+            tool: Tool::TranslationWords,
+            unit: CheckUnit::Book(BookId::Titus),
+            upload: tc_api::ids::UploadId::parse("0123456789abcdef0123456789abcdef").unwrap(),
+        }
+    }
+}
+
+impl Example for FixRepin {
+    fn example() -> Self {
+        FixRepin {
+            request: request(27),
+            at: scope(),
+            tool: Tool::TranslationWords,
+            unit: CheckUnit::Book(BookId::Titus),
+            sha: "2222222222222222222222222222222222222222".into(),
         }
     }
 }
@@ -1246,6 +1608,7 @@ impl Example for SourcesView {
             panes: vec![
                 SourcePane {
                     id: "ult".into(),
+                    version: Some("v91".into()),
                     dir: Direction::Ltr,
                     text: PaneText::Ready(PaneChapter {
                         sections: vec![1, 4],
@@ -1270,17 +1633,25 @@ impl Example for SourcesView {
                 },
                 SourcePane {
                     id: "ust".into(),
+                    version: Some("v88".into()),
                     dir: Direction::Ltr,
                     text: PaneText::NotInstalled,
                 },
                 SourcePane {
                     id: "glt".into(),
+                    version: None,
                     dir: Direction::Rtl,
                     text: PaneText::Error {
                         reason: "the book could not be read".into(),
                     },
                 },
             ],
+            original: Some(SourcePane {
+                id: "orig".into(),
+                version: Some("v0.34".into()),
+                dir: Direction::Ltr,
+                text: PaneText::Missing,
+            }),
             // A project in another numbering: `rsc` Jonah 2 holds `eng` 1:17 and 2:1-10.
             frame: SourceFrame::Mapped {
                 rows: vec![
@@ -1303,6 +1674,68 @@ impl Example for SourcesView {
                     },
                 ],
             },
+        }
+    }
+}
+
+impl Example for Chapters {
+    fn example() -> Self {
+        Chapters {
+            at: scope(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for ChaptersView {
+    fn example() -> Self {
+        let words = |value: &str, marker: Option<ConflictMarker>| Shown {
+            value: value.into(),
+            token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            marker,
+        };
+        ChaptersView {
+            view: ViewSeq::new(42),
+            chapters: vec![ChapterText {
+                chapter: 3,
+                sections: vec![1, 4],
+                verses: vec![
+                    VerseRow {
+                        key: RefPart::parse("1").unwrap(),
+                        record: record(r#"{"book":"TIT","chapter":3,"kind":"verse","verse":1}"#),
+                        drafted: true,
+                        text: "Recuérdales que se sujeten".into(),
+                        lead: None,
+                        before: Some(0),
+                        words: words("Recuérdales que se sujeten", None),
+                    },
+                    VerseRow {
+                        key: RefPart::parse("2-3").unwrap(),
+                        record: record(r#"{"book":"TIT","chapter":3,"kind":"verse","verse":2}"#),
+                        drafted: true,
+                        text: "que no hablen mal de nadie, que sean amables".into(),
+                        lead: Some(1),
+                        before: None,
+                        words: words(
+                            "\\q1 que no hablen mal de nadie,\n\\q2 que sean amables",
+                            Some(ConflictMarker {
+                                conflict: ConflictRef::parse(&"e".repeat(64)).unwrap(),
+                                versions: 2,
+                            }),
+                        ),
+                    },
+                    VerseRow {
+                        key: RefPart::parse("4").unwrap(),
+                        record: record(r#"{"book":"TIT","chapter":3,"kind":"verse","verse":4}"#),
+                        drafted: false,
+                        text: String::new(),
+                        lead: None,
+                        before: None,
+                        words: words("___", None),
+                    },
+                ],
+            }],
+            conflicts: 1,
         }
     }
 }
@@ -1835,29 +2268,6 @@ impl Example for RowsView {
     }
 }
 
-impl Example for FixState {
-    fn example() -> Self {
-        FixState {
-            at: scope(),
-            list: CheckListRef {
-                tool: Tool::TranslationWords,
-                unit: CheckUnit::Book(BookId::Titus),
-            },
-        }
-    }
-}
-
-impl Example for Option<FixView> {
-    fn example() -> Self {
-        Some(FixView {
-            tool: Tool::TranslationWords,
-            pin: pin_citation("es-419_gl/es-419_twl", Some("v18"), 'c'),
-            rung: Rung::Primary,
-            candidates: vec![pin_citation("es-419_gl/es-419_twl", None, 'e')],
-        })
-    }
-}
-
 impl Example for Script {
     fn example() -> Self {
         Script {
@@ -2018,7 +2428,13 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
+            "resources/applyPlan",
             "resources/download",
+            "resources/fixFetch",
+            "resources/fixRepin",
+            "resources/fixSideload",
+            "resources/planGateway",
+            "resources/planUpgrade",
             "session/close",
             "session/copy",
             "session/discardDraft",
@@ -2230,6 +2646,12 @@ fn events() -> Vec<Event> {
                 restored: 0,
                 missing_pins: 5,
             })),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(12),
+            kind: JobKind::GatewayPlan,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::PlanReady(Box::new(gateway_plan()))),
         }),
         Event::ProjectsChanged,
         Event::HomeCard {

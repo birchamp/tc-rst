@@ -11,12 +11,13 @@ use std::cell::Cell;
 use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::check::{
-    CheckListRef, CheckSessionView, CheckUnit, FixState, FixView, Open, RailRow, RailRows,
-    RailSince, Rows, RowsView, Tool,
+    CheckListRef, CheckSessionView, CheckUnit, Open, RailRow, RailRows, RailSince, Rows, RowsView,
+    Tool,
 };
 use tc_api::model::rail::{self, Filter, SortMode};
 use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, RecordPlace};
 use tc_api::query::QueryKey;
+use tc_api::resources::{FixState, FixView};
 use wasm_bindgen_futures::spawn_local;
 
 use super::ListenerId;
@@ -47,7 +48,7 @@ pub enum Session {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Fix {
     Loading(Tool),
-    Ready(FixView),
+    Ready(Tool, FixView),
     Failed(Tool, String),
 }
 
@@ -252,14 +253,21 @@ impl Actions {
         s.layers.dialog.try_set(Some(Dialog::GuidedFix));
         let this = self.clone();
         spawn_local(async move {
-            let result = this.runtime().read_once(&FixState { at, list }).await;
+            let result = this
+                .runtime()
+                .read_once(&FixState {
+                    at,
+                    tool: list.tool,
+                    unit: list.unit,
+                })
+                .await;
             let fix = &this.s().c.fix;
             if !fix.with_untracked(|f| matches!(f, Some(Fix::Loading(t)) if *t == tool)) {
                 return;
             }
             match result {
                 Ok(Some(view)) => {
-                    fix.try_set(Some(Fix::Ready(view)));
+                    fix.try_set(Some(Fix::Ready(tool, view)));
                 }
                 // Nothing is missing any more: there is nothing to fix.
                 Ok(None) | Err(CallError::Dropped) => {

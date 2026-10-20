@@ -201,6 +201,14 @@ pub(crate) struct Inner {
     /// The (package, book) pairs this app session downloaded, which Get source texts counts
     /// per package (tC4 `installedSrc`, B9a).
     pub(crate) downloaded: Mutex<std::collections::BTreeSet<(String, tc_core::BookId)>>,
+    /// The plans a person is reading: upgrades, gateway changes and re-pins (C8).
+    pub(crate) plans: crate::upgrades::KeptPlans,
+    /// The offers and plans a test or a parity capture scripted (C8).
+    #[cfg(feature = "test-hooks")]
+    pub(crate) scripted_resources: crate::upgrades::ScriptedResources,
+    /// The server's uploads, which the guided fix's file install reads (C8). Given once, by the
+    /// binary that runs the server.
+    pub(crate) uploads: std::sync::OnceLock<crate::fixes::Uploads>,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -289,14 +297,36 @@ impl App {
         // named was checked above.
         let (store, on_disk): (Arc<dyn ProjectStore>, _) = match store {
             StoreChoice::OnDisk => {
-                let backend = Arc::new(
+                let backend =
                     StoreBackend::on_disk(&config.app_data, &projects.path).map_err(|e| {
                         StartError::AppData {
                             path: config.app_data.clone(),
                             reason: e.to_string(),
                         }
+                    })?;
+                // Where a copy of a project goes when the projects folder is what made it
+                // read-only (Q-30); a folder of an earlier copy is listed from the start.
+                // A folder someone named (`--projects`, the tests and the captures) has no
+                // second folder beside it: the person's own would be listed among theirs. Where
+                // the local folder is the root, the default one is beside it, so a launch after
+                // the first copy still lists the projects of the launch before.
+                let beside = match &projects.chosen {
+                    RootChoice::Given => None,
+                    RootChoice::LocalBesideDefault { default } => Some(default.clone()),
+                    _ => crate::config::local_projects_root(&host)
+                        .ok()
+                        .filter(|local| *local != projects.path),
+                };
+                let backend = match beside {
+                    Some(other) => backend.with_local_projects(other.clone()).map_err(|e| {
+                        StartError::ProjectsFolder {
+                            path: other,
+                            reason: e.to_string(),
+                        }
                     })?,
-                );
+                    None => backend,
+                };
+                let backend = Arc::new(backend);
                 (backend.clone(), Some(backend))
             }
             StoreChoice::Given(store) => (store, None),
@@ -440,6 +470,10 @@ impl App {
             sync: crate::sync::ScriptedSync::default(),
             resources_door43,
             downloaded: Mutex::new(std::collections::BTreeSet::new()),
+            plans: crate::upgrades::KeptPlans::default(),
+            uploads: std::sync::OnceLock::new(),
+            #[cfg(feature = "test-hooks")]
+            scripted_resources: crate::upgrades::ScriptedResources::default(),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]
@@ -539,6 +573,12 @@ impl App {
     /// What the reads of projects have cost so far (§8.1).
     pub fn counters(&self) -> AppCounts {
         self.inner.counters.read()
+    }
+
+    /// Gives the app the server's uploaded files: the guided fix installs a file the person
+    /// chose. Once; the first call wins.
+    pub fn provide_uploads(&self, uploads: crate::fixes::Uploads) {
+        let _ = self.inner.uploads.set(uploads);
     }
 
     /// The request guard of a project-scoped query (§4.3): the screen's session at `at`, or
@@ -655,7 +695,7 @@ fn projects_folder_record(projects: &ProjectsRoot) -> Option<Value> {
             "path": path, "choice": "firstLaunchSynced", "syncedBy": synced_by,
         })),
         RootChoice::LocalBesideDefault { default } => Some(json!({
-            "path": path, "choice": "localBesideDefault", "notListed": default.display().to_string(),
+            "path": path, "choice": "localBesideDefault", "alsoListed": default.display().to_string(),
         })),
         RootChoice::Given | RootChoice::Existing | RootChoice::ExistingLocal => None,
     }

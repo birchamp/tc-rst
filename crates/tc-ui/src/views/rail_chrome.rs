@@ -101,13 +101,5 @@ pub fn rail_number_button(
         .attr("style", style)
         .add_any_attr(spread(&attrs))
         .on(leptos::ev::click, move |_| on_click.run(()))
-        .on(
-            leptos::ev::capture(leptos::ev::pointerdown),
-            move |e: web_sys::PointerEvent| {
-                if disabled.get_untracked() {
-                    e.prevent_default();
-                }
-            },
-        )
         .child(label)
 }

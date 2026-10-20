@@ -1,0 +1,28 @@
+{
+  "path": "resources/fixFetch",
+  "kind": "startJob",
+  "net": "fix",
+  "request": {
+    "request": "19191919191919191919191919191919",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "tool": "translationWords",
+    "unit": {
+      "type": "book",
+      "value": "TIT"
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "fix"
+    }
+  }
+}

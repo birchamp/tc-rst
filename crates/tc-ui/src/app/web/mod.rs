@@ -12,6 +12,7 @@ mod api;
 pub mod app_ctx;
 pub(crate) mod bridge;
 pub mod check;
+mod create;
 pub(crate) mod js;
 mod panic;
 #[cfg(feature = "test-hooks")]
@@ -22,7 +23,9 @@ mod shell;
 mod sources;
 mod state;
 mod stream;
+mod translate;
 pub mod understand;
+mod upgrades;
 mod view_error;
 
 use std::any::Any;
@@ -536,6 +539,8 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     if probe {
         probe::register(&saves);
     }
+    #[cfg(feature = "test-hooks")]
+    translate::register(&saves);
     saves.restore(&hello);
     saves.guard_close();
     let runtime = Runtime::new(api, cache, state, saves.clone(), Rc::clone(busy));

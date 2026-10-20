@@ -585,6 +585,8 @@ pub enum HelpsTab {
     Words,
     Questions,
     Simplified,
+    /// Translate's own tab (#252): the user comments of the chapter.
+    Comments,
 }
 
 impl HelpsTab {
@@ -594,13 +596,30 @@ impl HelpsTab {
             Self::Words => "words",
             Self::Questions => "questions",
             Self::Simplified => "simplified",
+            Self::Comments => "comments",
         }
     }
 
     pub fn parse(text: &str) -> Option<Self> {
-        [Self::Notes, Self::Words, Self::Questions, Self::Simplified]
-            .into_iter()
-            .find(|tab| tab.as_str() == text)
+        [
+            Self::Notes,
+            Self::Words,
+            Self::Questions,
+            Self::Simplified,
+            Self::Comments,
+        ]
+        .into_iter()
+        .find(|tab| tab.as_str() == text)
+    }
+
+    /// The tab a panel shows (tC4's `shownTab`): Comments is Translate's only, so a panel
+    /// with no comments shows Notes in its place.
+    pub fn shown(self, comments: bool) -> Self {
+        if self == Self::Comments && !comments {
+            Self::Notes
+        } else {
+            self
+        }
     }
 }
 

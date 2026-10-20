@@ -1,0 +1,30 @@
+{
+  "path": "create/addBlankBooks",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+    "project": "kanuri_bible",
+    "books": [
+      "TIT",
+      "PHM"
+    ]
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "added": [
+        "TIT"
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

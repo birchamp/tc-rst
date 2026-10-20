@@ -1,0 +1,29 @@
+{
+  "path": "resources/planGateway",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "17171717171717171717171717171717",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "gateway": {
+      "language": "en",
+      "owner": "unfoldingWord"
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -67,15 +67,16 @@ export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
  * `body({ env, page, context, errors, allow })`; `scenario` names another parity scenario
  * (`en-pins` for B3, `shared` for B10). `init(context, env)` runs before the page
  * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass. With
- * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`).
+ * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`). With `hooks`, the page is the
+ * test build's (`TC4_UI_HOOKS`), whose verse card saves through `test/saveVerse` (B4a).
  */
-export async function withApp(body, { locale = 'en', probe = false, init, seed, door43: fake = false, scenario: named = 'sample' } = {}) {
+export async function withApp(body, { locale = 'en', probe = false, hooks = false, init, seed, door43: fake = false, scenario: named = 'sample' } = {}) {
   const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });
   const door43 = fake ? await startDoor43Fake(setup.door43) : undefined;
   const scenario = seed ? 'store' : named;
   let env;
   try {
-    env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe ? setup.hooks : setup.ui, door43 });
+    env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe || hooks ? setup.hooks : setup.ui, door43 });
   } catch (error) {
     await door43?.close();
     await browser.close();

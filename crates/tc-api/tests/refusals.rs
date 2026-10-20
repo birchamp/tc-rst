@@ -190,6 +190,7 @@ fn other_keys() -> Vec<(&'static str, BTreeSet<String>)> {
 fn every_refusal_family_has_a_sample_of_every_variant() {
     assert_every_variant(&samples::open());
     assert_every_variant(&samples::create());
+    assert_every_variant(&samples::settings());
     assert_every_variant(&samples::import());
     assert_every_variant(&samples::export());
     assert_every_variant(&samples::sync_blocks());

@@ -165,6 +165,8 @@ timestamp is rewritten in tC4's own form.
 - **Owner:** storage.
 - **Fix:** list `DerivedFile::Settings` for both kinds, and `checking/settings.json` in STORAGE
   §3.2.
+- **Done (C6, 2026-10-19):** `derived_files()` lists `DerivedFile::Settings` for both kinds. STORAGE §3.2
+  still lacks the line; the storage branch owns that file.
 
 ### 4.3 The OBS text pin's relationship makes `metadata.json` invalid (pin groups `Primary` and `Fallback`)
 

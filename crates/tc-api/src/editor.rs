@@ -1,12 +1,12 @@
-//! The `editor` service's reads (APP-DESIGN §3.7, §3.9, unit B3): the open book with its rail
-//! and comments, and the source panes of a chapter. Translate's chapter model and the saves
-//! come with B4a and C2.
+//! The `editor` service's reads (APP-DESIGN §3.7, §3.9, units B3 and B4a): the open book with
+//! its rail and comments, the source panes of a chapter, and the translation's text of the
+//! book's chapters. The saves come with C2.
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
-use crate::ids::{RefPart, Scope, WallMs};
-use crate::shown::{Direction, Known};
+use crate::ids::{RecordRef, RefPart, Scope, ViewSeq, WallMs};
+use crate::shown::{Direction, Known, Shown};
 
 /// `editor/book`: the book Understand and Translate show.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +76,9 @@ pub struct Sources {
 pub struct SourcesView {
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub panes: Vec<SourcePane>,
+    /// The original-language text of the book's testament (Translate's Greek or Hebrew chip);
+    /// none when the project pins none. Its `id` is `orig`.
+    pub original: Option<SourcePane>,
     /// How the project numbers the chapter's verses against the sources (tC4's `sourceRefs`).
     pub frame: SourceFrame,
 }
@@ -139,6 +142,9 @@ pub enum RowSource {
 pub struct SourcePane {
     /// The pane's id, such as `ult`: the UI names it from its catalog (`source.ult`).
     pub id: String,
+    /// The pinned version, `v91` (Translate's caption "· v91 · pinned"); none when the pin
+    /// names no version.
+    pub version: Option<String>,
     pub dir: Direction,
     pub text: PaneText,
 }
@@ -198,4 +204,72 @@ pub struct PaneVerse {
     /// The poetry level of the last paragraph marker between the previous verse's text and
     /// this verse (`\q1` before `\v 5`); none when there is none.
     pub before: Option<u8>,
+}
+
+/// `editor/chapters`: the translation's text of every chapter of the open book. Translate reads
+/// it once per book, so a chapter switch reads nothing of the translation (AD16).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Chapters {
+    pub at: Scope,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+    pub book: BookId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct ChaptersView {
+    /// The session view the read was made at: an editor's value and token are a pair of this
+    /// view (AD37).
+    pub view: ViewSeq,
+    /// The book's chapters in order.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub chapters: Vec<ChapterText>,
+    /// The project's verse conflicts that are open, all books: the toolbar's "N conflicts ·
+    /// Review" (tC4's `verseConflicts`, #679).
+    pub conflicts: u32,
+}
+
+/// One chapter of the translation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterText {
+    pub chapter: u16,
+    /// The first verse of each of the translation's own `\ts\*` sections, ascending, by the
+    /// panes' rule; empty when the translation marks none. The grid uses them when the source
+    /// marks none (tC4's `chapterSections`).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub sections: Vec<u16>,
+    /// The chapter's verses in order, a span (`4-5`) as one; a verse inside a span or not in
+    /// the translation has no row.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub verses: Vec<VerseRow>,
+}
+
+/// One verse of the translation as Translate shows it (tC4's `bookModel` entry).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct VerseRow {
+    /// `4`, or `4-5` for a span.
+    pub key: RefPart,
+    /// The verse's record: the open editor matches an `Ack` and a `Changed` frame's authors to
+    /// it ("Juan changed this verse while you were typing").
+    pub record: RecordRef,
+    /// Its words hold text: neither empty nor the stub `___` (#572).
+    pub drafted: bool,
+    /// The text the grid shows, whitespace collapsed; empty when not drafted.
+    pub text: String,
+    /// As [`PaneVerse::lead`]: the poetry level of a paragraph marker that opens the verse's
+    /// own text.
+    pub lead: Option<u8>,
+    /// As [`PaneVerse::before`]: the poetry level of the last paragraph marker after the
+    /// previous verse's text.
+    pub before: Option<u8>,
+    /// What the verse box edits: the verse's whole `words`, every poem line with its markers
+    /// (#786, Q-20), with the token of the version shown and its conflict marker.
+    pub words: Shown<String>,
 }

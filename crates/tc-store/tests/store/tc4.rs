@@ -381,3 +381,64 @@ fn a_derived_file_that_is_not_utf8_never_stops_the_project() {
     handle.close().unwrap();
     assert_valid_burrito(&fs, &folder);
 }
+
+/// The first records of a project whose language has `tag` and the name "Lengua".
+fn project_in(name: &str, tag: &str) -> NewProject {
+    let languages =
+        format!(r#"[{{"name":{{"en":"Lengua"}},"scriptDirection":"rtl","tag":"{tag}"}}]"#);
+    let mut project = titus_project(name);
+    for record in &mut project.records {
+        if let tc_journal::Record::ProjectMeta {
+            field: tc_journal::MetaField::Languages,
+            value,
+        } = record
+        {
+            *value = Some(tc_journal::json::parse(languages.as_bytes()).unwrap());
+        }
+    }
+    project
+}
+
+/// tC4 #582: Door43 lists codes with a part over eight letters, which a Scripture Burrito
+/// cannot hold. tC4 stored "und" and dropped the language's name and direction. Create refuses
+/// before any folder exists, so no half project and no staging folder is left.
+#[test]
+fn create_refuses_a_language_tag_the_burrito_cannot_hold() {
+    let rig = rig(FaultFs::new());
+    for tag in ["acm-x-lebarabic", "alk-alakatapue"] {
+        let result = rig.store.create(&project_in("Lengua", tag));
+        assert!(
+            matches!(
+                result,
+                Err(CreateError::Refused(tc_store::CommandError::Refused(
+                    tc_store::Refusal::NotValidInBurrito(_)
+                )))
+            ),
+            "{tag}: {result:?}"
+        );
+        assert!(
+            files(&rig.fs, Path::new(PROJECTS)).is_empty(),
+            "{tag}: something was written"
+        );
+    }
+}
+
+/// tC4 #386: regional and private-use tags are kept as written, with the name and direction.
+#[test]
+fn create_keeps_regional_language_tags() {
+    let rig = rig(FaultFs::new());
+    for (n, tag) in ["es-419", "pt-BR", "x-ug", "acm-x-lebarabi-c"]
+        .into_iter()
+        .enumerate()
+    {
+        let name = format!("Lengua{n}");
+        let folder = rig.store.create(&project_in(&name, tag)).unwrap();
+        let metadata: serde_json::Value =
+            serde_json::from_slice(&rig.fs.peek(&folder.join("metadata.json")).unwrap()).unwrap();
+        let language = &metadata["languages"][0];
+        assert_eq!(language["tag"], tag);
+        assert_eq!(language["name"]["en"], "Lengua");
+        assert_eq!(language["scriptDirection"], "rtl");
+        assert_valid_burrito(&rig.fs, &folder);
+    }
+}

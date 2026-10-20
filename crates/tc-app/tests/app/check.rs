@@ -5,10 +5,11 @@
 use std::sync::Arc;
 
 use tc_api::check::{
-    CardCount, CheckListRef, CheckProgress, CheckSessionView, CheckUnit, FixState, Open, Picker,
-    PickerView, RailRows, RailSince, Rows, RowsView, Rung, Tool, ToolState,
+    CardCount, CheckListRef, CheckProgress, CheckSessionView, CheckUnit, Open, Picker, PickerView,
+    RailRows, RailSince, Rows, RowsView, Rung, Tool, ToolState,
 };
 use tc_api::ids::Scope;
+use tc_api::resources::{FixState, SetRung};
 use tc_api::{ApiError, Reply};
 use tc_app::App;
 use tc_app::backend::memory::MemoryBackend;
@@ -22,6 +23,14 @@ use super::understand::{ok, opened, start};
 
 fn list(tool: Tool) -> CheckListRef {
     CheckListRef {
+        tool,
+        unit: CheckUnit::Book(BookId::Titus),
+    }
+}
+
+fn fix_state(at: &Scope, tool: Tool) -> FixState {
+    FixState {
+        at: at.clone(),
         tool,
         unit: CheckUnit::Book(BookId::Titus),
     }
@@ -151,27 +160,14 @@ async fn the_english_picker_is_tc4s() {
 async fn the_guided_fix_names_the_missing_pin() {
     let (_dir, t) = start("sample").await;
     let at = opened(&t.app).await.session.at;
-    let fix = ok(
-        &t.app,
-        &FixState {
-            at: at.clone(),
-            list: list(Tool::TranslationWords),
-        },
-    )
-    .await
-    .expect("Translation Words has a fix");
+    let fix = ok(&t.app, &fix_state(&at, Tool::TranslationWords))
+        .await
+        .expect("Translation Words has a fix");
     assert_eq!(fix.pin.repo_path, "git.door43.org/es-419_gl/es-419_twl");
     assert_eq!(fix.pin.sha, "c2d9547ec95e40c2ba085c597b127c94733feb8a");
-    assert_eq!(fix.rung, Rung::Primary);
+    assert_eq!(fix.rung, SetRung::Primary);
     assert!(fix.candidates.is_empty());
-    let ready = ok(
-        &t.app,
-        &FixState {
-            at,
-            list: list(Tool::TranslationNotes),
-        },
-    )
-    .await;
+    let ready = ok(&t.app, &fix_state(&at, Tool::TranslationNotes)).await;
     assert_eq!(ready, None, "a ready tool needs no fix");
 }
 
@@ -300,14 +296,7 @@ async fn open_check_preflight_offer_close_leaves_pins_unchanged() {
     };
     let before = pins(&backend);
     picker(&t.app, &at).await;
-    ok(
-        &t.app,
-        &FixState {
-            at: at.clone(),
-            list: list(Tool::TranslationWords),
-        },
-    )
-    .await;
+    ok(&t.app, &fix_state(&at, Tool::TranslationWords)).await;
     open_tool(&t.app, &at, Tool::TranslationNotes, None).await;
     picker(&t.app, &at).await;
     assert!(backend.submitted(&project).is_empty());

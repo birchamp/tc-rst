@@ -157,6 +157,21 @@ And these (unit B10):
   words and the reason, which can name a file on the translator's computer, stay in the
   problem report. tC4 4.0 shows "The sync stopped: {reason}" (#724, Q36).
 
+And these (unit C6):
+
+- A book is added from a USFM file in one batch, whole or not at all, and the alignments of an
+  aligned file are kept (#767, #553). tC4 4.0 writes the stub book first and the verses after, so a
+  stop between leaves a stub book that every retry refuses, and the app never refuses a book for
+  its size.
+- Add a book does not warn that creating a book the project holds again "will replace the
+  existing book and its drafts". Adding never replaces a book, in tC4 as here.
+- A new project's language is named by what the person typed, else by the shipped Door43 list,
+  else by its code. tC4 4.0 took the name from the platform's own table. The Door43 code a
+  person was offered another for is kept in the project's settings (`door43Language`), since a
+  Scripture Burrito has no field for it (Q35).
+- A project whose projects folder cannot keep a copy safe is copied to this computer's local
+  projects folder, and Home lists it there (Q-30). tC4 has no such copy.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

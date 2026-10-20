@@ -26,10 +26,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tc_api::ApiError;
 use tc_api::check::{
     AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
-    CheckSessionView, CheckUnit, Dot, DroppedNote, FixState, FixView, NextCheck, NoteCategory,
-    Open, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows,
-    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard, ToolState,
-    WordCategory,
+    CheckSessionView, CheckUnit, Dot, DroppedNote, NextCheck, NoteCategory, Open, Picker,
+    PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows, RailSince,
+    ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard, ToolState, WordCategory,
 };
 use tc_api::ids::{CheckSessionId, ViewSeq};
 use tc_check::derive::{BookSpec, CheckList, notes_for_book, word_links_for_book};
@@ -750,48 +749,5 @@ impl Handle<Rows> for App {
             .await?;
         // A tool that stopped being ready is opened again, which shows why.
         Ok(answer.unwrap_or(RowsView::Reopen))
-    }
-}
-
-// ---------------------------------------------------------------------------------------
-// resources/fixState
-// ---------------------------------------------------------------------------------------
-
-impl Handle<FixState> for App {
-    async fn handle(&self, req: FixState) -> Result<Option<FixView>, ApiError> {
-        let session = self.read(&req.at)?;
-        let book = book_of(&req.list)?;
-        let installed = installed(self)?;
-        let read = session.read();
-        let pins = pins_of(&read)?;
-        let Some(pins) = pins else {
-            return Ok(None);
-        };
-        let pre = preflight(Some(&pins), req.list.tool, book, &installed);
-        // Only a card whose pinned resource is missing offers the fix (tC4 `ToolNeeds`).
-        if !matches!(
-            pre.state,
-            PreflightState::Fetch | PreflightState::Unavailable
-        ) {
-            return Ok(None);
-        }
-        let machine = Machine {
-            installed: &installed,
-            online: true,
-        };
-        Ok(fix::guided_fix(&pins, &pre, &machine).map(|offer| FixView {
-            tool: req.list.tool,
-            pin: citation(&offer.pin),
-            rung: rung(offer.rung),
-            candidates: offer
-                .candidates
-                .iter()
-                .map(|c| PinCitation {
-                    repo_path: c.resource.repo_path.to_string(),
-                    version: c.version.clone(),
-                    sha: c.resource.sha.to_hex(),
-                })
-                .collect(),
-        }))
     }
 }

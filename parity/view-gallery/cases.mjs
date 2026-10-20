@@ -55,6 +55,117 @@ const heldOpen = (progress) => async (app, env) => {
   await app.page.locator(`[data-testid="open-progress"][data-stage="${stage}"]`).waitFor();
   if (progress?.total) await app.page.getByText(`${progress.done} of ${progress.total}`, { exact: false }).waitFor();
 };
+/** C8's route to the change of checking language: Home, the Bible sample's Settings, English
+ * chosen on the Checking language card, which opens the project and asks the change. */
+const gatewayChange = async (app) => {
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.home();
+  await app.card(BIBLE).getByRole('button', { name: 'Settings', exact: true }).click();
+  await app.page.getByTestId('settings-gateway-en::unfoldingWord').click();
+  await app.page.getByTestId('gateway-change').waitFor();
+};
+/** C8's data for the confirmations the mock draws with hand-made carry-over counts (the cases'
+ * `why`): the offers the server answers and the plan it makes, scripted through `test/script`
+ * (a test hook, never in a release build), and the route to the confirmation from Home. The
+ * rows are the recorded gateway change's, as tC4's own cases borrow them. */
+const unit = { type: 'book', value: 'TIT' };
+const planRow = (tool, decisions, against, carry) => ({ tool, unit, decisions, against, carry });
+const wordsRow = (carry) => planRow('translationWords', 2, 'es-419_twl', carry);
+const notesRow = (carry) => planRow('translationNotes', 2, 'es-419_tn', carry);
+const carried = (carriedN, checkAgain) => ({ carried: carriedN, checkAgain });
+const move = (repo, from, to) => ({ repo, from, to, published: null });
+const tnMove = move('es-419_tn', 'v66', 'v67');
+const twlMove = move('es-419_twl', 'v18', 'v19');
+const taMove = move('es-419_ta', 'v4', 'v5');
+const setPlan = (moves, rows, blocked = []) => ({
+  plan: 90, what: { type: 'set', value: { rung: 'primary', language: 'es-419', moves } },
+  decisionsAtRisk: rows.reduce((n, r) => n + r.decisions, 0), rows, blocked, alignments: null,
+});
+const offers = (primaryMoves, texts = [], sets = true) => ({
+  sets: sets ? [{ rung: 'primary', language: 'es-419', moves: primaryMoves }, { rung: 'fallback', language: 'en', moves: [] }] : [],
+  texts, textsError: null,
+});
+const script = (env, next) => env.call('test/script', { request: newRequestId(), next });
+
+/** Home, the internet on, the offers and the plan scripted, the Bible sample's Settings, Manage
+ * source texts, Check for updates, and the offer's Upgrade: the confirmation over Get source
+ * texts. `apply` presses Upgrade too, which the server refuses (a scripted plan is kept under no
+ * id: PlanStale, tC4's "the plan no longer matches the project"). */
+const upgradeConfirmation = ({ updates, plan, offer = 'upgrade-set-primary', apply = false }) => async (app, env) => {
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.home();
+  await env.call('net/set', { request: newRequestId(), on: true });
+  await script(env, { type: 'updates', value: updates });
+  await script(env, { type: 'plan', value: plan });
+  await app.card(BIBLE).getByRole('button', { name: 'Settings', exact: true }).click();
+  await app.page.getByTestId('settings-manage-sources').click();
+  await app.page.getByTestId('sources-modal').waitFor();
+  await app.page.getByTestId('check-updates').click();
+  await app.page.getByTestId(offer).waitFor();
+  await app.page.getByTestId(offer).click();
+  await app.page.getByTestId('upgrade-confirm').waitFor();
+  // Pressing the offer scrolled Get source texts to it; tC4's shot is the dialog at its top.
+  await app.page.evaluate(() => {
+    for (const el of document.querySelectorAll('[data-testid="sources-modal"] *')) if (el.scrollTop > 0) el.scrollTop = 0;
+  });
+  // The question was answered and the release is in: the switch goes back off, as tC4's shot has it.
+  await env.call('net/set', { request: newRequestId(), on: false });
+  await app.page.locator('[data-testid="account-menu"][data-internet="off"]').waitFor();
+  if (apply) {
+    await app.page.getByTestId('upgrade-apply').click();
+    await app.page.getByTestId('upgrade-confirm-error').waitFor();
+  }
+};
+
+/** The change of checking language over Understand, from Project settings, the plan scripted. */
+const gatewayScripted = (plan, after = async () => {}) => async (app, env) => {
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.home();
+  await script(env, { type: 'plan', value: plan });
+  await app.card(BIBLE).getByRole('button', { name: 'Settings', exact: true }).click();
+  await app.page.getByTestId('settings-gateway-en::unfoldingWord').click();
+  await app.page.getByTestId('gateway-change').waitFor();
+  await after(app, env);
+};
+/** The confirm held on the server: the dialog while the change is written (tC4 #580). */
+const holdApply = async (app) => {
+  await app.page.route('**/api/v1/resources/applyPlan', () => {});
+  await app.page.getByTestId('gateway-confirm').click();
+  await app.page.locator('[data-testid="gateway-confirm"][disabled]').waitFor();
+};
+/** The save refused: a disk with no room, the reason the dialog states under "The change was not applied". */
+const failApply = async (app) => {
+  await app.page.route('**/api/v1/resources/applyPlan', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ type: 'err', value: { type: 'notSaved', value: { type: 'disk', value: 'There is no room left on the disk.' } } }),
+  }));
+  await app.page.getByTestId('gateway-confirm').click();
+  await app.page.getByTestId('gateway-error').waitFor();
+};
+/** A plan that could not be made: the server's refusal, as tC4's preview fails with the browser's. */
+const gatewayFails = async (app) => {
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.page.route('**/api/v1/resources/planGateway', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ type: 'err', value: { type: 'refused', value: { type: 'resources', value: { type: 'gatewayFailed', value: { reason: FETCH_FAILED } } } } }),
+  }));
+  await app.home();
+  await app.card(BIBLE).getByRole('button', { name: 'Settings', exact: true }).click();
+  await app.page.getByTestId('settings-gateway-en::unfoldingWord').click();
+  await app.page.getByTestId('gateway-error').waitFor();
+};
+const gatewayPlan = (rows, blocked = []) => ({
+  plan: 91,
+  what: {
+    type: 'gateway',
+    value: {
+      from: { gateway: { language: 'es-419', owner: 'es-419_gl' }, name: 'Spanish (Latin American)', autonym: 'Español (Latinoamérica)', direction: 'ltr', seen: { tn: 'v66', tw: 'v37', ta: 'v4' } },
+      to: { gateway: { language: 'en', owner: 'unfoldingWord' }, name: 'English', autonym: 'English', direction: 'ltr', seen: { tn: 'v89', tw: 'v89', ta: 'v89' } },
+      images: null,
+    },
+  },
+  decisionsAtRisk: rows.reduce((n, r) => n + r.decisions, 0), rows, blocked, alignments: null,
+});
 const openProgress = (phase, done = 0, total = null) => ({ phase: { type: 'open', value: phase }, done, total, item: null });
 
 /** B5a's route to a Translation Notes session of Titus: the picker, its card, and `check/open`
@@ -259,19 +370,24 @@ export const CASES = [
 
   // ---- M9: the release upgrade confirmation -------------------------------------------------
   { name: 'upgrade-set', group: 'M9', state: 'sources', patch: (s, ctx) => upgradeSetPatch(s, ctx),
+    rust: upgradeConfirmation({ updates: offers([tnMove, twlMove]), plan: setPlan([tnMove, twlMove], [wordsRow(carried(2, 0)), notesRow(carried(0, 1))]) }),
     why: 'The confirmation of an upgrade of the primary set (es-419 tN and TWL to their next release) over Source texts, with the offers behind it: a row for each Titus check whose resource moves, by tC4\'s own rule over the sample\'s decision files. The mock has no newer release, so the carry-over counts of the rows are borrowed from the recorded gateway change.' },
   { name: 'upgrade-set-harmless', group: 'M9', state: 'sources', patch: (s, ctx) => upgradeSetPatch(s, ctx, { moved: ['translationAcademy'] }),
+    rust: upgradeConfirmation({ updates: offers([taMove]), plan: setPlan([taMove], []) }),
     why: 'An upgrade of the primary set that moves only es-419 tA, which no check resolves through, so tC4\'s rule finds no decision made against the release being left: the green headline, no rows.' },
   { name: 'upgrade-set-blocked', group: 'M9', state: 'sources',
+    rust: upgradeConfirmation({ updates: offers([tnMove, twlMove]), plan: setPlan([tnMove, twlMove], [wordsRow(null), notesRow(carried(0, 1))], [{ tool: 'translationWords', unit, reason: 'noResource' }]) }),
     patch: (s, ctx) => upgradeSetPatch(s, ctx, { blocked: [{ tool: 'translationWords', book: 'TIT' }] }),
     why: 'The upgrade of es-419 tN and TWL when the es-419 tW articles that Titus\'s new word links derive against are not on this machine, so tC4 blocks Titus for Translation Words (gatewayChangePlan, state.jsx:1007-1016, #643): no carry-over row for it, the callout, Upgrade disabled (UpgradeSet.jsx BlockedCallout). Which releases are installed is not drawn, so the blocked entry is written here.' },
   { name: 'upgrade-set-error', group: 'M9', state: 'sources',
+    rust: upgradeConfirmation({ updates: offers([tnMove, twlMove]), plan: setPlan([tnMove, twlMove], [wordsRow(carried(2, 0)), notesRow(carried(0, 1))]), apply: true }),
     patch: (s, ctx) => {
       const patch = upgradeSetPatch(s, ctx);
       return { ...patch, upgrade: { ...patch.upgrade, error: ctx.kit.t('upgrade.failed', { reason: ctx.kit.t('upgrade.stale') }) } };
     },
     why: 'The same upgrade after Upgrade failed because the plan no longer matches the project (upgrade.stale, as state.jsx:1480 and 4806 write it).' },
   { name: 'upgrade-text', group: 'M9', state: 'sources',
+    rust: upgradeConfirmation({ updates: offers([], [{ kind: 'original', change: move('el-x-koine_ugnt', 'v0.34', 'v0.35') }], false), plan: { plan: 92, what: { type: 'text', value: { kind: 'original', change: move('el-x-koine_ugnt', 'v0.34', 'v0.35') } }, decisionsAtRisk: 0, rows: [], blocked: [], alignments: titusAlignedVerses() }, offer: 'upgrade-text-apply-el-x-koine_ugnt' }),
     patch: (s) => {
       const pin = s.projectPins.resources.originalLanguage.nt;
       const offer = { repoPath: pin.repoPath, kind: 'original', slots: [{ group: 'originalLanguage', testament: 'nt' }], fromPins: [pin], from: pin, to: { repoPath: pin.repoPath, version: nextVersion(pin.version), flavor: pin.flavor }, publishedAt: null };
@@ -282,7 +398,7 @@ export const CASES = [
       };
     },
     why: 'The confirmation of an upgrade of the Greek New Testament text (UpgradeSet.jsx TextUpgrade), with the number of Titus verses whose alignments it marks invalid, counted by tC4\'s rule over the sample\'s alignment file.' },
-  { name: 'upgrade-repin', group: 'M9', state: 'guided-fix',
+  { name: 'upgrade-repin', group: 'M9b', state: 'guided-fix',
     patch: (s, ctx) => {
       const from = s.fix.pin;
       const offer = { rung: s.fix.rung, upgrades: [{ repoPath: from.repoPath, slots: ['translationWordsLinks'], from, to: { repoPath: from.repoPath, version: nextVersion(from.version), flavor: from.flavor }, publishedAt: null }], current: [], kind: 'repin' };
@@ -293,16 +409,23 @@ export const CASES = [
 
   // ---- M10: the gateway change -------------------------------------------------------------
   { name: 'gateway-change', group: 'M10', state: 'gateway',
+    // The Rust app: Project settings of the Bible sample, the English package chosen, which opens the project and asks the change.
+    rust: gatewayChange,
     why: 'The change of the checking language to English from Project settings, with tC4\'s carry-over counts for Titus.' },
   { name: 'gateway-change-busy', group: 'M10', state: 'gateway', patch: () => ({ gatewayBusy: true }),
+    rust: gatewayScripted(gatewayPlan([wordsRow(carried(2, 0)), notesRow(carried(0, 1))]), holdApply),
+    held: true, heldRequests: ['/api/v1/resources/applyPlan'],
     why: 'The same after Change: committed, both buttons disabled and no close (GatewayChange.jsx, #580). The mock commits too fast to photograph it.' },
   { name: 'gateway-change-blocked', group: 'M10', state: 'gateway',
+    rust: gatewayScripted(gatewayPlan([wordsRow(carried(2, 0)), notesRow(carried(0, 1))], [{ tool: 'translationNotes', unit, reason: 'noResource' }])),
     patch: (s) => ({ gatewayPreview: { ...s.gatewayPreview, blocked: [{ tool: 'translationNotes', book: 'TIT' }] } }),
     why: 'The same when English would not cover Titus for Translation Notes: blocked, Change disabled.' },
   { name: 'gateway-change-error', group: 'M10', state: 'gateway',
+    rust: gatewayScripted(gatewayPlan([wordsRow(carried(2, 0)), notesRow(carried(0, 1))]), failApply),
     patch: (s, { kit }) => ({ gatewayError: kit.t('gateway.otherProject') }),
     why: 'The same after the commit failed: "The change was not applied" with the refusal commitGatewayChange throws when another project is open now (state.jsx confirmGatewayChange).' },
   { name: 'gateway-change-failed', group: 'M10', state: 'gateway',
+    rust: gatewayFails,
     patch: (s) => ({ gatewayBusy: false, gatewayPreview: { failed: true, gateway: s.gatewayPreview.gateway, projectId: s.gatewayPreview.projectId }, gatewayError: FETCH_FAILED }),
     why: 'The dialog of a preview that failed to read (askGatewayChange\'s catch): the error and Close, no counts and no Change.' },
 
@@ -381,6 +504,8 @@ export const CASES = [
   { name: 'add-book-usfm', group: 'add-book', state: 'add-book-usfm',
     why: 'Add books from USFM files, before a file is chosen.' },
   { name: 'add-book-usfm-files', group: 'add-book', state: 'add-book-usfm-files',
+    // The Rust app: the state's own route, the file input having the same test id (C6).
+    rust: (app, env) => stateNamed('add-book-usfm-files').route(app, env),
     why: 'Add books from USFM files: 57-TIT.usfm refused (Titus is in the project), 58-PHM.txt valid.' },
 
   // ---- feedback ------------------------------------------------------------------------------

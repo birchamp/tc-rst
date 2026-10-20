@@ -21,7 +21,7 @@ use tc_resources::{ResourceStore, content_files_opened, content_files_written};
 
 #[allow(dead_code)]
 #[path = "../../examples/bundle_store/build.rs"]
-mod bundle_build;
+pub(super) mod bundle_build;
 
 use super::common::{TestApp, hello_value, rid};
 

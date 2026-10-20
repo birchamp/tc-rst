@@ -3,7 +3,7 @@
 //! failed read keeps Save disabled), and the rows of a package.
 
 use tc_api::home::{BookTileView, Door43Card, HomeCard, ProjectKind};
-use tc_api::ids::ProjectRef;
+use tc_api::ids::{ProjectRef, RequestId};
 use tc_api::resources::{
     FromInstalls, GatewayPackage, GatewayRef, PackageRole, PackageRow, Seen, SourcesView,
 };
@@ -183,4 +183,46 @@ fn the_current_package_compares_its_owner_without_letter_case() {
     assert!(src.is_checkable(&package("en", "unfoldingWord")));
     src.not_read();
     assert!(src.needs_internet);
+}
+
+fn rid(n: u8) -> RequestId {
+    RequestId::from_bytes([n; 16])
+}
+
+/// tC4 `saveSettings` and AD14: Save is for the values the dialog showed, sends the direction
+/// and font chosen, waits for its answer, and a lost reply is retried as the same request.
+#[test]
+fn save_sends_what_was_shown_and_what_was_chosen_once() {
+    let mut st = SettingsForm::of(&card("alef", &[BookId::Titus]));
+    assert_eq!(st.press_save(|| rid(1)), None, "before the values came");
+    let alef = st.project.clone();
+    st.read(&alef, view());
+    st.dir = Direction::Ltr;
+    st.font = "Charis SIL".into();
+    st.edited();
+    let save = st.press_save(|| rid(1)).unwrap();
+    assert_eq!(save.request, rid(1));
+    assert_eq!(save.shown.direction, Direction::Rtl);
+    assert_eq!(
+        save.shown.font.as_deref(),
+        Some("Scheherazade New — Arabic script")
+    );
+    assert_eq!(
+        (save.direction, save.font.as_str()),
+        (Direction::Ltr, "Charis SIL")
+    );
+    assert_eq!(st.press_save(|| rid(2)), None, "disabled while it runs");
+    st.lost(&alef, "the server did not answer".into());
+    assert_eq!(
+        st.press_save(|| rid(3)).unwrap().request,
+        rid(1),
+        "a retry of the lost reply"
+    );
+    st.answered(&alef, Some("This project's settings changed.".into()));
+    assert!(!st.busy && st.error.is_some());
+    // The next attempt is a new request, and an answer for another project's dialog is ignored.
+    assert_eq!(st.press_save(|| rid(4)).unwrap().request, rid(4));
+    let bet = ProjectRef::parse("bet").unwrap();
+    st.answered(&bet, None);
+    assert!(st.busy);
 }
