@@ -1569,3 +1569,44 @@ fn a_late_reply_for_an_older_request_is_ignored() {
     assert!(commands.is_empty());
     assert!(matches!(page.state(&k), Some(FieldSave::Saving { .. })));
 }
+
+/// B4b: a section card displays every verse of its section, so its save and its draft are
+/// based on the tokens of all of them, in the order the card shows them (STORAGE §5.2, R6).
+#[test]
+fn a_section_card_is_based_on_every_verse_it_displays() {
+    let mut m = SaveMachine::new(instance(), ids());
+    let k = key_of(FieldKind::Section, "TIT 2:9-10");
+    let (_, commands) = m.open_over(
+        k.clone(),
+        FieldScope::Project(Some(scope(1))),
+        pair("", 1, Some(1)),
+        vec![tok(2), tok(3)],
+        0.0,
+    );
+    assert!(commands.is_empty());
+    assert_eq!(m.base(&k), Some(&[tok(1), tok(2), tok(3)][..]));
+    // Typing and a pause send a draft over all three tokens and no save.
+    m.focus(&k, 0.0);
+    let typed = m.typed(&k, "9 a\n10 b", tc_ui::app::save::Source::Program, 10.0);
+    let later = m.tick(10_000.0);
+    assert!(
+        typed
+            .iter()
+            .chain(&later)
+            .all(|c| !matches!(c, Command::Send { .. })),
+        "{typed:?} {later:?}"
+    );
+    assert!(later.iter().any(|c| matches!(
+        c,
+        Command::Draft { base, .. } if *base == [tok(1), tok(2), tok(3)]
+    )));
+    // Save sends the text over all three.
+    let sent = m.save(&k, 10_001.0);
+    assert!(
+        sent.iter().any(|c| matches!(
+            c,
+            Command::Send { base, .. } if *base == [tok(1), tok(2), tok(3)]
+        )),
+        "{sent:?}"
+    );
+}

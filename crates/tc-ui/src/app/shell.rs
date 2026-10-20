@@ -81,7 +81,12 @@ pub enum Editing {
     #[default]
     None,
     Verse(BufferKey),
-    Section(BufferKey),
+    /// A section card (B4b) with the verse keys it was opened with: the card keeps that verse
+    /// set whatever the rows regroup to (tC4's `startSection`).
+    Section {
+        key: BufferKey,
+        keys: Vec<String>,
+    },
     Frame(BufferKey),
 }
 

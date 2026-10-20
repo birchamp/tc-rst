@@ -448,6 +448,21 @@ impl SaveMachine {
         pair: Pair,
         now: Ms,
     ) -> (String, Vec<Command>) {
+        self.open_over(key, scope, pair, Vec::new(), now)
+    }
+
+    /// As [`open`](Self::open) for a field that displays several records, a section card: its
+    /// saves and drafts are based on the tokens of all of them, `pair.token` first and `rest`
+    /// after, in the order the card shows the verses. A field the machine already holds keeps
+    /// the base it has, as `open` does.
+    pub fn open_over(
+        &mut self,
+        key: BufferKey,
+        scope: FieldScope,
+        pair: Pair,
+        rest: Vec<ShownToken>,
+        now: Ms,
+    ) -> (String, Vec<Command>) {
         let mut out = Vec::new();
         if let Some(field) = self.fields.get_mut(&key) {
             field.editor = Some(Editor { focused: false });
@@ -461,6 +476,7 @@ impl SaveMachine {
             return (shown, out);
         }
         let mut field = Field::new(rules(key.field.kind), scope, self.instance, pair);
+        field.base.extend(rest);
         field.editor = Some(Editor { focused: false });
         let shown = field.current.clone();
         self.fields.insert(key, field);

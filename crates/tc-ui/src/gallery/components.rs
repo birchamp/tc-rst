@@ -1192,6 +1192,7 @@ fn verse_marker(p: Props) -> AnyView {
         size: p.num("size").unwrap_or(d.size),
         state: p.keyword("state").unwrap_or_default(),
         on_pick_up: handler(&p, "onPickUp"),
+        on_pointer_up: None,
         label: p.str("label"),
         style: p.css("style"),
         attrs: p.rest(),

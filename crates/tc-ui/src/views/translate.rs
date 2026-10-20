@@ -7,7 +7,8 @@
 //! `editor/chapters` (the translation of every chapter, AD16) per book, and `editor/sources`
 //! and `helps/passage` per chapter. The verse card is a save-machine field (6.5): its value and
 //! token are the pair it opened with (AD37), a refresh of the chapter's read goes to the machine,
-//! and the card says when a change came in while the person typed. The section card is B4b's.
+//! and the card says when a change came in while the person typed. The section card is
+//! `section_editor`'s: it replaces the cell of the row that holds its first verse.
 
 use std::sync::Arc;
 
@@ -31,12 +32,13 @@ use super::conflict_markers::{conflict_verse, conflicts_button};
 use super::draft_chrome::{HAIR, cell, chip_style, draft_pill, editing_card};
 use super::helps_panel::{HelpsPanel, HelpsToggleButton};
 use super::panel_icons::rail_icon;
+use super::section_editor::SectionEditor;
 use super::source_verse::source_verse;
 use crate::app::save::{FieldScope, Pair, Source, View};
 use crate::app::shell::Editing;
 use crate::app::translate::{
-    SourcePlace, box_text, changed_while_typing, editing_focus, editing_verse, range_span,
-    sections, shown_words, source_place, source_unit, target_paragraphs,
+    SourcePlace, box_text, changed_while_typing, editing_focus, editing_section, editing_verse,
+    range_span, sections, shown_words, source_place, source_unit, target_paragraphs,
 };
 use crate::app::understand::{HelpFocus, UnitMode, literal_pane};
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
@@ -830,13 +832,25 @@ fn target_cell(
                 .filter(|v| keys.contains(v))
         })
     };
+    // The row that holds a section card's first verse hosts the card, whatever the rows regroup
+    // to meanwhile: the card keeps the verse set it was opened with (tC4's `startSection`).
+    let open_section = {
+        let (editing, keys) = (editing.clone(), keys.to_vec());
+        Memo::new(move |_| {
+            editing.with(|e| {
+                editing_section(e, book, chapter)
+                    .filter(|open| open.first().is_some_and(|first| keys.contains(first)))
+                    .map(<[String]>::to_vec)
+            })
+        })
+    };
     let pill = {
-        let span = span.to_owned();
+        let (span, keys, actions) = (span.to_owned(), keys.to_vec(), actions.clone());
         move || {
-            let span = span.clone();
+            let (span, keys, actions) = (span.clone(), keys.clone(), actions.clone());
             (mode.get() == UnitMode::Section).then(move || {
-                // #728: a quiet pill at rest, so it reads as a button. B4b opens the section
-                // card from it; while a card is open it is off, as the switch is.
+                // #728: a quiet pill at rest, so it reads as a button. It opens the section
+                // card; while a card is open it is off, as the switch is.
                 let style = Signal::derive(move || {
                     if off.get() {
                         crate::css::Css::new()
@@ -844,8 +858,21 @@ fn target_cell(
                         crate::css! { "color": "var(--accent)" }
                     }
                 });
+                // A press on an off pill keeps the focus in the open card.
+                let hold = Callback::new(move |e: web_sys::PointerEvent| {
+                    if off.get_untracked() {
+                        e.prevent_default();
+                    }
+                });
                 view! {
-                    <Button variant=ButtonVariant::Secondary size=Size::Sm disabled=off style=style>
+                    <Button
+                        variant=ButtonVariant::Secondary
+                        size=Size::Sm
+                        disabled=off
+                        style=style
+                        on_pointer_down_capture=hold
+                        on_click=Callback::new(move |_| actions.start_section(chapter, &keys))
+                    >
                         {t(keys::draft::DRAFT_SECTION, &[("span", &span)])}
                     </Button>
                 }
@@ -899,7 +926,7 @@ fn target_cell(
         }
     };
     let card = {
-        let (actions, open) = (actions.clone(), open.clone());
+        let (actions, open, editing) = (actions.clone(), open.clone(), editing.clone());
         move || {
             let verse = open_verse.get()?;
             let key = editing.with_untracked(|e| match e {
@@ -911,14 +938,29 @@ fn target_cell(
             })
         }
     };
-    view! {
-        <div style=style.to_style()>
-            <div style=head.to_style()>{pill}</div>
-            {paras}
-            {card}
-        </div>
-    }
-    .into_any()
+    let section_card = {
+        let (actions, open) = (actions.clone(), open.clone());
+        move |keys: Vec<String>| {
+            let key = editing.with_untracked(|e| match e {
+                Editing::Section { key, .. } => Some(key.clone()),
+                _ => None,
+            })?;
+            Some(view! {
+                <SectionEditor key=key keys=keys text=text at=open.at.clone() chapter=chapter dir=dir actions=actions.clone() />
+            })
+        }
+    };
+    // A section card replaces the whole cell, the pill and the paragraphs with it (tC4).
+    let content = move || match open_section.get() {
+        Some(keys) => section_card(keys).into_any(),
+        None => view! {
+            <div style=head.to_style()>{pill.clone()}</div>
+            {paras.clone()}
+            {card.clone()}
+        }
+        .into_any(),
+    };
+    view! { <div style=style.to_style()>{content}</div> }.into_any()
 }
 
 /// tC4's `TargetVerse` with its number: the drafted words (a click revises the verse in Verse

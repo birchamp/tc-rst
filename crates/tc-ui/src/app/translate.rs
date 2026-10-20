@@ -4,7 +4,9 @@
 use tc_api::buffer::{BufferKey, FieldKey, FieldKind, FieldPlace};
 use tc_api::editor::{ChapterText, CommentView, PaneChapter, RowSource, SourceFrame, VerseRow};
 use tc_api::ids::{ProjectId, ProjectRef};
+use tc_api::model::section::SectionVerse;
 use tc_api::shown::{PersonLabel, Who};
+use tc_api::token::ShownToken;
 use tc_core::BookId;
 
 use crate::app::shell::{Editing, js_trim};
@@ -258,10 +260,79 @@ pub fn editing_verse(editing: &Editing, book: BookId, chapter: u16) -> Option<St
     (b == book && c == chapter).then_some(verse)
 }
 
-/// tC4's `editingFocus`: the helps follow the open card's verses; none when no card is open
-/// in this chapter.
+/// tC4's `editingFocus`: the helps follow the open card's verses, a section card's whole
+/// section; none when no card is open in this chapter.
 pub fn editing_focus(editing: &Editing, book: BookId, chapter: u16) -> Option<Vec<String>> {
-    editing_verse(editing, book, chapter).map(|v| vec![v])
+    editing_section(editing, book, chapter)
+        .map(<[String]>::to_vec)
+        .or_else(|| editing_verse(editing, book, chapter).map(|v| vec![v]))
+}
+
+/// A section field's place in the draft buffer: `TIT 2:9-10`, from the first verse to the last
+/// of the keys, whatever spans they hold, so a section is the same place before and after a
+/// join.
+pub fn section_place(book: BookId, chapter: u16, keys: &[String]) -> String {
+    let first = keys
+        .first()
+        .and_then(|k| leading_num(k))
+        .map_or_else(String::new, |n| n.to_string());
+    let last = keys
+        .last()
+        .map(|k| k.rsplit('-').next().unwrap_or(k))
+        .unwrap_or_default();
+    format!("{} {chapter}:{first}-{last}", book.code())
+}
+
+/// The buffer key of the section card over `keys` of the open project.
+pub fn section_key(
+    project: &ProjectRef,
+    id: &ProjectId,
+    book: BookId,
+    chapter: u16,
+    keys: &[String],
+) -> Option<BufferKey> {
+    Some(BufferKey {
+        project: project.clone(),
+        id: id.clone(),
+        field: FieldKey {
+            kind: FieldKind::Section,
+            place: FieldPlace::parse(&section_place(book, chapter, keys)).ok()?,
+        },
+    })
+}
+
+/// The verse keys of the section card open in `book` and `chapter`.
+pub fn editing_section(editing: &Editing, book: BookId, chapter: u16) -> Option<&[String]> {
+    let Editing::Section { key, keys } = editing else {
+        return None;
+    };
+    let (b, c, _) = parse_verse_place(key.field.place.as_str())?;
+    (b == book && c == chapter).then_some(keys.as_slice())
+}
+
+/// The verses a section card opens on, from the rows of its keys: what it types, tC4's
+/// `verses` of `SectionEditor` (`body` is the verse's words trimmed, none for the stub).
+pub fn card_verses(rows: &[&VerseRow]) -> Vec<SectionVerse> {
+    rows.iter()
+        .map(|row| SectionVerse {
+            key: row.key.as_str().to_owned(),
+            drafted: row.drafted,
+            body: if row.drafted {
+                js_trim(&row.words.value).to_owned()
+            } else {
+                String::new()
+            },
+            format: row.format,
+        })
+        .collect()
+}
+
+/// The tokens a section card is based on: each verse's, then those of the verses it covers,
+/// in the order the card shows them (STORAGE §5.2 asks for every verse it displays).
+pub fn card_tokens(rows: &[&VerseRow]) -> Vec<ShownToken> {
+    rows.iter()
+        .flat_map(|row| std::iter::once(row.words.token.clone()).chain(row.covered.iter().cloned()))
+        .collect()
 }
 
 /// "Juan changed this verse while you were typing. Your text will be kept as a second
