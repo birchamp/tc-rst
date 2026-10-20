@@ -153,6 +153,13 @@ impl<S: ProjectStore> ProjectStore for CountingStore<S> {
         self.inner.copy(folder, name)
     }
 
+    fn create(
+        &self,
+        new: tc_app::backend::NewProjectSpec,
+    ) -> Result<(), tc_app::backend::CreateFailure> {
+        self.inner.create(new)
+    }
+
     fn trust_lock(&self, folder: &ProjectRef) {
         self.inner.trust_lock(folder);
     }
@@ -303,6 +310,13 @@ impl ProjectStore for SharedStore {
 
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
         self.0.copy(folder, name)
+    }
+
+    fn create(
+        &self,
+        new: tc_app::backend::NewProjectSpec,
+    ) -> Result<(), tc_app::backend::CreateFailure> {
+        self.0.create(new)
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {

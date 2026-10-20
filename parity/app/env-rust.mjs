@@ -238,6 +238,8 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
     origin,
     token,
     projects,
+    /** The run's projects folder, where the app writes what it creates. */
+    projectsDir: path.join(dir, 'projects'),
     call,
     /** The fake Door43 tc4 signs in to, or null. */
     door43: door43 ?? null,

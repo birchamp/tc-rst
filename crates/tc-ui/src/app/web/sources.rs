@@ -1,6 +1,6 @@
 //! The actions of Project settings and Get source texts (unit B9a; tC4 `openSettings`,
 //! `manageSettingsSources`, `openSources`, `pickGateway`, `setSourceBook`, `loadPackage`,
-//! `downloadPackage`). Saving the settings is C6's; the checking-language change and the
+//! `downloadPackage`). Saving the settings is in `create.rs`; the checking-language change and the
 //! release upgrades are C8's.
 
 use leptos::prelude::*;
@@ -75,17 +75,15 @@ impl Actions {
         });
     }
 
-    /// The direction chips and the font (tC4 `patchSt`).
+    /// The direction chips and the font (tC4 `patchSt`): what Save sends is another request.
     pub fn patch_st(&self, patch: impl FnOnce(&mut SettingsForm)) {
         self.s().st.try_update(|st| {
             if let Some(st) = st {
                 patch(st);
+                st.edited();
             }
         });
     }
-
-    /// Save changes: C6 saves the settings through the single open (AD14).
-    pub fn save_settings(&self) {}
 
     /// A package of the Checking language card: C8 opens the project and asks the gateway
     /// change (tC4 `chooseSettingsGateway`).

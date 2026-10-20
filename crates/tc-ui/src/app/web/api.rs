@@ -102,6 +102,45 @@ impl Api {
         reload_on_version_error(interpret::<E::Ok>(status, &text))
     }
 
+    /// `POST /api/v1/uploads`: a file the person picked, sent as the request body, with its name
+    /// and its flow in two headers (APP-DESIGN 5.5). The reply is the stored file's id.
+    pub async fn upload(
+        &self,
+        file: &web_sys::File,
+        flow: tc_api::upload::UploadFlow,
+    ) -> Result<tc_api::upload::UploadView, CallError> {
+        use tc_api::upload::{UPLOAD_FLOW_HEADER, UPLOAD_NAME_HEADER, UPLOADS_PATH};
+        let _work = self.busy.begin();
+        let headers = Headers::new().map_err(unreachable)?;
+        headers
+            .set(TOKEN_HEADER, self.token.as_str())
+            .map_err(unreachable)?;
+        headers
+            .set(API_VERSION_HEADER, &API_VERSION.to_string())
+            .map_err(unreachable)?;
+        let name = js_sys::encode_uri_component(&file.name());
+        headers
+            .set(UPLOAD_NAME_HEADER, &String::from(name))
+            .map_err(unreachable)?;
+        headers
+            .set(UPLOAD_FLOW_HEADER, flow.header_value())
+            .map_err(unreachable)?;
+        let init = RequestInit::new();
+        init.set_method("POST");
+        init.set_headers(&headers);
+        init.set_body(file);
+        let request = Request::new_with_str_and_init(UPLOADS_PATH, &init).map_err(unreachable)?;
+        let promise = js::window()
+            .map_err(unreachable)?
+            .fetch_with_request(&request);
+        let response = JsFuture::from(promise).await.map_err(unreachable)?;
+        let response = response
+            .dyn_into::<Response>()
+            .map_err(|_| unreadable("fetch did not give a response"))?;
+        let (status, text) = read_text(response).await?;
+        reload_on_version_error(interpret::<tc_api::upload::UploadView>(status, &text))
+    }
+
     /// A file of the UI, such as a catalog.
     pub(super) async fn get_text(&self, url: &str) -> Result<String, CallError> {
         let _work = self.busy.begin();

@@ -33,7 +33,7 @@ use super::{Runtime, ServerState, bridge, js};
 use crate::app::account::{SignInFlow, SignInForm, SignInNext};
 use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
-use crate::app::forms::{AddBookForm, AddBookStep, ImportForm, ImportKind, NewProjectForm};
+use crate::app::forms::{AddBookForm, ImportForm, ImportKind, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
 use crate::app::open_door43::OpenForm;
 use crate::app::save::indicator::Retry;
@@ -721,10 +721,13 @@ impl Actions {
         s.layers.dialog.try_set(Some(Dialog::AddBook));
     }
 
+    /// A field of New Bible or New Open Bible Stories changed: what the next Create sends is
+    /// another request.
     pub fn patch_np(&self, patch: impl FnOnce(&mut NewProjectForm)) {
         self.s().np.try_update(|np| {
             if let Some(np) = np {
                 patch(np);
+                np.edited();
             }
         });
     }
@@ -785,15 +788,6 @@ impl Actions {
 
     /// A card's conflict chip: B11 opens the project's conflict review.
     pub fn open_project_conflicts(&self, _project: ProjectRef) {}
-
-    /// New Bible's Create: C6.
-    pub fn create_bible(&self) {}
-
-    /// New Open Bible Stories' Create: C6.
-    pub fn create_obs(&self) {}
-
-    /// Add a book's method step: C6 draws the pick and USFM steps it leads to.
-    pub fn ab_choose(&self, _step: AddBookStep) {}
 
     /// Import's kind step: F1 draws the files step it leads to.
     pub fn import_pick_kind(&self, _kind: ImportKind) {}

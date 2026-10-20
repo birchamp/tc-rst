@@ -32,6 +32,10 @@ use tc_api::check::{
     RailRows, RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard,
     ToolState,
 };
+use tc_api::create::{
+    AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
+    UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
+};
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
     Book, BookView, ChapterText, Chapters, ChaptersView, CommentView, FrameRow, PaneChapter,
@@ -77,7 +81,9 @@ use tc_api::session::{
     KeptDraft, KeptPlace, OfferedDrafts, Open, OpenUnit, OpenedProject, OtherComputerClosed,
     ProjectCopy, Settles, StoredDraftId,
 };
-use tc_api::settings::{CurrentGateway, GatewayCard, SettingsView, ViewFromHome};
+use tc_api::settings::{
+    CurrentGateway, GatewayCard, Save, SettingsView, ShownValues, ViewFromHome,
+};
 use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
@@ -513,6 +519,132 @@ impl Example for ViewFromHome {
     fn example() -> Self {
         ViewFromHome {
             project: ProjectRef::parse("es-419_tit_equipo").unwrap(),
+        }
+    }
+}
+
+impl Example for Save {
+    fn example() -> Self {
+        Save {
+            request: request(40),
+            project: ProjectRef::parse("es-419_tit_equipo").unwrap(),
+            shown: ShownValues {
+                direction: Direction::Ltr,
+                font: None,
+            },
+            direction: Direction::Rtl,
+            font: "Scheherazade New — Arabic script".into(),
+        }
+    }
+}
+
+fn details() -> Details {
+    Details {
+        name: "Kanuri Bible".into(),
+        language_name: "Kanuri".into(),
+        code: "acm-x-lebarabi-c".into(),
+        door43_code: Some("acm-x-lebarabic".into()),
+        direction: Direction::Rtl,
+        font: "Noto Sans (default)".into(),
+    }
+}
+
+impl Example for Bible {
+    fn example() -> Self {
+        Bible {
+            request: request(41),
+            details: details(),
+            versification: "eng".into(),
+        }
+    }
+}
+
+impl Example for Obs {
+    fn example() -> Self {
+        Obs {
+            request: request(42),
+            details: details(),
+        }
+    }
+}
+
+impl Example for Created {
+    fn example() -> Self {
+        Created {
+            project: ProjectRef::parse("kanuri_bible").unwrap(),
+        }
+    }
+}
+
+impl Example for AddBlankBooks {
+    fn example() -> Self {
+        AddBlankBooks {
+            request: request(43),
+            project: ProjectRef::parse("kanuri_bible").unwrap(),
+            books: vec![BookId::Titus, BookId::Philemon],
+        }
+    }
+}
+
+impl Example for BooksAdded {
+    fn example() -> Self {
+        BooksAdded {
+            added: vec![BookId::Titus],
+        }
+    }
+}
+
+fn usfm_file(name: &str) -> UsfmFile {
+    UsfmFile {
+        upload: UploadId::parse("00112233445566778899aabbccddeeff").unwrap(),
+        name: name.into(),
+    }
+}
+
+impl Example for ReviewUsfm {
+    fn example() -> Self {
+        ReviewUsfm {
+            file: usfm_file("57-TIT.usfm"),
+        }
+    }
+}
+
+impl Example for UsfmVerdict {
+    fn example() -> Self {
+        UsfmVerdict::Book {
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for AddUsfmBooks {
+    fn example() -> Self {
+        AddUsfmBooks {
+            request: request(44),
+            project: ProjectRef::parse("kanuri_bible").unwrap(),
+            files: vec![usfm_file("57-TIT.usfm"), usfm_file("old-TIT.usfm")],
+        }
+    }
+}
+
+impl Example for UsfmAdded {
+    fn example() -> Self {
+        UsfmAdded {
+            rows: vec![
+                UsfmRow {
+                    name: "57-TIT.usfm".into(),
+                    outcome: UsfmOutcome::Added {
+                        book: BookId::Titus,
+                    },
+                },
+                UsfmRow {
+                    name: "old-TIT.usfm".into(),
+                    outcome: UsfmOutcome::Refused(UsfmProblem::TwoFiles {
+                        book: BookId::Titus,
+                        first: "57-TIT.usfm".into(),
+                    }),
+                },
+            ],
         }
     }
 }

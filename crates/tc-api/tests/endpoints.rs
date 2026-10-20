@@ -65,6 +65,13 @@ const PHASE_0: &[&str] = &[
     "resources/sources",
     "resources/catalog",
     "resources/download",
+    // C6: create, add books, and save settings.
+    "settings/save",
+    "create/bible",
+    "create/obs",
+    "create/addBlankBooks",
+    "create/reviewUsfm",
+    "create/addUsfmBooks",
     "test/quiet",
     "test/echo",
     "test/crash",

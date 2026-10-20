@@ -127,7 +127,7 @@ the rebuild fixed it or does as tC4 does:
 | #796 (export) | Never drop a verse's alignment silently, and keep imported markup | unit todo | D2 | `export_reports_and_keeps_a_verse_that_needs_review`; `export_keeps_inline_zaln_bytes_even_with_a_matching_record`; `a_record_with_nothing_placed_exports_the_stored_bytes` | Weave only a verse that passes `needs_review` and whose words match. Otherwise write the stored bytes and name the verse in a notice. Check for inline `\zaln` before validity (tC4 PR #799). |
 | #795 | One hash for the aligner and the alignment files | covered | tc-store, tc-align | `an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen` (to add, from the scratch test that passed) | The rebuild stamps `plain_text_v1` of the stored NFC verse everywhere. The display half is #796 (word list). |
 | #794 | Do not align over a verse that holds imported alignment markup | rebuild bug | tc-align, tc-store; B6, I | `a_verse_that_holds_alignment_markup_does_not_open` | See §1 row 7. I lists such tC4 books in the import report. |
-| #553 | Keep the alignments of an aligned USFM file on import or Add a book | unit todo | I, C6 | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` | Both paths call `split_aligned`. A verse it refuses keeps its text, is counted, and falls under #794. Compare in NFC (#793) and per verse with x-ref (#409). |
+| #553 | Keep the alignments of an aligned USFM file on import or Add a book | unit todo | I (C6 done) | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` | Both paths call `split_aligned`. A verse it refuses keeps its text, is counted, and falls under #794. Compare in NFC (#793) and per verse with x-ref (#409). |
 | #793 | Suggestions: Hebrew source words in two Unicode forms | rebuild bug | tc-align; B6 | `memory_trained_on_nfc_records_suggests_for_raw_source_words` | See §1 row 8. |
 | #792 | A span made while an alignment save waits leaves orphan records | not applicable | tc-store; B6 | scratch `zz792_late_alignment_save_after_join` (passed) | No book-wide buffer. A late save after a join is kept and offered at the joined run ("Use as a starting point"). |
 | #791 | Tell a translator when a teammate aligned the same verse differently | unit todo | E1a, B11 | J26 step `two_actors_align_one_verse_and_the_row_and_review_show_it` | Storage keeps both as a conflict. B10 built the sync result's note "1 verse has two alignments to review." with Review (`a_verse_with_two_alignments_is_named_and_offers_review`, `the_toast_counts_verse_conflicts_alignments_and_the_rest_apart`); the per-verse rows of D108 (book, chapter, verse and teammate) wait for tC4 to ship them; B11 shows the "2 versions" marker in Align. |
@@ -170,11 +170,11 @@ the rebuild fixed it or does as tC4 does:
 | #118 | Understand: Section view in projects with other verse numbers | covered | B3, B4a | `cross_frame_project_shows_the_verse_only_statement_instead_of_the_switch` (B3 journey); `a_project_in_another_numbering_reads_each_verse_where_the_sources_have_it` (tc-app); `cross_frame_translate_shows_the_mapped_source_verse` (B4a journey) | Done by B3 and B4a: one unit per project verse, each the source verse the project's numbering names (`editor/sources` `frame`), `understand.crossFrameVerseOnly` in place of the switch on both screens, `understand.frameUnavailable` when the scheme is unknown. |
 | #55 | Draft book introductions | not applicable | — | — | tC4 4.1.0. The introduction is kept byte for byte. |
 | #27 | Merge concurrent edits automatically | covered | tc-journal | `merge_bookmark_and_status`; `loss_check_two_ways_visible` | None. |
-| #767 | Import creates an empty book after the size warning | unit todo | C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent`; J9 en_ult EXO and LEV add whole | See §1 row 17. Make the fallback safe, or get the one-batch command (a change to Q-17). Vendor `addBook.usfmTooLarge` if a refusal stays. |
+| #767 | Import creates an empty book after the size warning | covered | C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent`; `a_psalm_adds_whole_with_every_verse_and_its_selah` | See §1 row 17. C6 built the one-batch command `AddBookText` (APP-DESIGN C6 D3). No refusal stays, so `addBook.usfmTooLarge` is not vendored: the rebuild never refuses a book for its size. |
 | #782 | Words inside nested alignments are dropped | rebuild bug | tc-usfm | `shown_text_reads_words_inside_nested_alignments` | See §1 row 2. |
 | #773 | A reordered quote picks up words from elsewhere | reference change | tc-helps | `a_reordered_quote_lights_only_its_own_phrase` | The check area shows it is a rebuild bug today (§1 row 1). |
 | #664 | Test the Hebrew highlight with a maqaf | covered | tc-helps | `hebrew_quotes_split_maqaf_compounds_into_the_aligned_words` | Pin tC4's GEN 1:5, 1:7 and 1:28 cases. |
-| #553 | Keep the alignments of an aligned USFM file | unit todo | C6, F1, I; B6, D2 | `aligned_titus_added_as_a_book_has_no_inline_zaln` | Split on Add a book as on import, and list kept verses. Unit I also splits tC4 4.0 verses that hold `\zaln`. Kept verses: Align unavailable, reflow skipped, export bytes kept (#794). |
+| #553 | Keep the alignments of an aligned USFM file | unit todo | F1, I; B6, D2 (C6 done) | `aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records`; `a_verse_whose_alignment_does_not_read_apart_keeps_its_text_as_written` | Split on Add a book as on import (C6: `AddBookText`), and list kept verses (C6 keeps a verse that does not read apart as written; the list of them is F1's). Unit I also splits tC4 4.0 verses that hold `\zaln`. Kept verses: Align unavailable, reflow skipped, export bytes kept (#794). |
 | #420 | Keep a character style around an aligned word | covered | tc-usfm; D2 | `weave_writes_what_tc4_writes` | Add to PLAN's declared differences. |
 | #638 | Spike on a context-aware USFM editor | not applicable | — | — | tC4 research. |
 | #600 | Save a section after deleting all of its text | unit todo | B4b | `emptied_section_save_asks_then_writes_stubs` | Port the confirmation; one change per emptied verse; Keep editing writes nothing; a span stays a span. |
@@ -185,11 +185,11 @@ the rebuild fixed it or does as tC4 does:
 | #574 | The book's name in a new blank book's header | covered | tc-store | `a_seed_keeps_structure_and_drops_words` | J7 asserts the header. Optional: a seed test for a source with no `\h`. |
 | #572 | A span counts as all of its verses in the drafted percentage | covered | B2, B3 | `joining_verses_keeps_the_drafted_percentage` | Done by B2 and B3: the tiles and the rail count with `drafted::count_verse`. The poem-verse rule is a declared difference the owner was told (DELTA-10-19 §5). |
 | #603 | A tooltip on each book's percentage | covered | B3 | journey `a_tile_opens_understand_at_chapter_1_with_the_rails_tooltips` | Done by B3: `draft.bookPercentTitle` on each rail row. |
-| #577 | "1 chapter" and "1 verse" | unit todo | C6, F1 | `one_chapter_book_says_1_chapter` | Choose the singular keys when the count is 1. |
+| #577 | "1 chapter" and "1 verse" | unit todo | F1 (C6 done: `one_chapter_book_says_1_chapter`) | `one_chapter_book_says_1_chapter` | Choose the singular keys when the count is 1. |
 | #507 | Open a new project in Understand | unit todo | B7 (B3 done) | journey `a_tile_opens_understand_at_chapter_1_with_the_rails_tooltips` | B3: an open with no remembered place lands in Understand at chapter 1; a remembered place still wins. B7: a story project at story 1. |
 | #499 | Use the Bible name typed on the import review page | unit todo | F1, I | `typed_import_name_is_the_project_name` | Leave review-edited fields out of the P9 comparison, or the import refuses. |
-| #484 | Add a book from a USFM file | unit todo | C6 | J9 `add_a_missing_book_from_a_file_and_refuse_one_present` | One batch (#767), the alignment split (#553), `addBook.usfmExists`. |
-| #564 | Add-a-book USFM step polish | unit todo | C6 | `removing_rows_from_25_aligned_books_removes_the_intended_rows` | Label "Add book" while disabled; keep an Add error until the next Add; classify each file once. |
+| #484 | Add a book from a USFM file | covered | C6 | `usfm_files_add_whole_books_and_refuse_the_rest_in_their_rows`; `a_book_from_a_file_is_refused_when_present_or_when_the_file_does_not_read`; journey `create` | One batch (#767), the alignment split (#553), `addBook.usfmExists`. |
+| #564 | Add-a-book USFM step polish | covered | C6 | `removing_rows_from_25_aligned_books_removes_the_intended_rows`; `an_add_keeps_its_error_until_the_next_add_and_the_books_it_added_leave_the_list`; `usfm_rows_are_judged_again_at_every_add_and_remove` | Label "Add book" while disabled; keep an Add error until the next Add; classify each file once (the server reads a file once, `create/reviewUsfm`). |
 | #502 | Two USFM files never reach the review page | unit todo | F1 | J9 `a_two_file_drop_is_one_new_project` | Port the J9 case. |
 | #619 | Quotes and bold in helps, not raw `>` and `__` | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | B3: `tc_helps::blocks`, tC4's renderer, held to tC4's own output on every Titus note (608 blocks). B5b: the Check article panel draws the same blocks. |
 | #621 | Superscript verse numbers in the simplified-text tab | covered | B3 | journey `simplified_tab_verse_numbers_are_superscript` | Done by B3, the source verse's `c:v` in another numbering. |
@@ -200,7 +200,7 @@ the rebuild fixed it or does as tC4 does:
 | #728 | Make "Draft section" look like a button | covered | B4a | pixel and DOM parity of `en-translate-tit1` and `translate-tit1` (the two differ only by C39's note titles) | Done by B4a: `Button(Secondary, Sm)`, end-aligned, accent text while enabled. |
 | #650 | An Arabic gateway package end to end | covered | B3 | journey `arabic_helps_panes_are_rtl_in_an_english_interface` | Done by B3: each helps slot carries its gateway's direction (`rung_dir`), and the cards, questions, simplified text and article read in it. |
 | #29 | Right-to-left and complex scripts end to end | unit todo | B5b, B6, G2 (B4a's case done) | J10 `rtl_project_drafts_checks_and_aligns`; B4a `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime` | Each journey adds the Arabic case; G2 captures the `ar` screens. B4a: Arabic typed through an IME composition into the verse card while a teammate's change arrives keeps every keystroke and saves as a second version. |
-| #614 | Four English literals in design-system props | unit todo | B4b, B5b, C6, A5 | port of tC4 `ds-labels` a–d | Pass the catalog strings; consider making them required props. |
+| #614 | Four English literals in design-system props | unit todo | B4b, B5b, A5 (C6 done: Add a book passes the catalog strings to its Select and its remove button) | port of tC4 `ds-labels` a–d | Pass the catalog strings; consider making them required props. |
 | #702 | Text zoom sliders | not applicable | — | — | tC4 4.1.0. |
 | #719 | Add source Bibles to a project | not applicable | later B9a | — | tC4 4.1.0. |
 | #615 | The Understand journey after the Resume journey | not applicable | C3 (J16 port) | — | The fix is inside tC4's J16 at the reference; port J16 as written. |
@@ -302,20 +302,20 @@ the rebuild fixed it or does as tC4 does:
 | #161 | Two device ids under one name after a computer change | unit todo | S2, X | `a_new_device_copies_the_profile_and_both_group_as_mine`; `copied_username_is_replaced_by_the_first_signed_in_fetch` | The profile copy is untested. A hand-copied folder copies the first person's name; tell the owner. |
 | #160 | Record four sync risks | not applicable | P | — | tC4 documentation. P owns the scale risk. |
 | #78 | See the history of my changes | unit todo | B11, C7a | `verse_history_lists_every_version_with_person_and_time` | Restore sends `Command::Restore` with the shown token. |
-| #582 | Create a project in a language Door43 lists | rebuild bug | tc-store (S1); C6, B2 | `create_refuses_a_language_tag_the_burrito_cannot_hold` | See §1 row 16 and Q35. |
+| #582 | Create a project in a language Door43 lists | covered | tc-store (S1); C6, B2 | `create_refuses_a_language_tag_the_burrito_cannot_hold` | See §1 row 16 and Q35. |
 | #496 | Hide "Stay signed in" when it cannot work | unit todo | A8 | `no_keychain_hides_stay_signed_in` | Show "Your sign-in lasts for one app session." Declared difference; amend APP-DESIGN §4.7. |
 | #27 | Merge concurrent edits | covered | tc-journal, tc-store | `merge_bookmark_and_status`; `a_stale_token_makes_a_conflict_never_a_revert` | None. |
 | #24 | Team sync round 1 epic | unit todo | X, E1a | one named test per tC4 guarantee in `docs/evidence/sync-<date>.md` | Put the tC4 G-id in each test or its comment. |
 | #802 | Refuse a book save over newer text | covered | tc-store, A4b | `loss_f5_stale_buffer_never_reverts` | A4b adds a two-tab Playwright case. |
 | #791 | Tell a translator about a teammate's alignment | reference change | B10, E1a | `two_different_alignments_of_one_verse_are_listed_once` | Port D108's rows when tC4 ships them, worded as "a verse with two alignments to review". Until then the toast counts such verses in one note (B10; PLAN, a declared difference). |
-| #767 | Import creates an empty book | rebuild bug | tc-store; C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent` | See §1 row 17. The rebuild never refuses a book for its size. |
+| #767 | Import creates an empty book | covered | tc-store; C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent` | See §1 row 17. The rebuild never refuses a book for its size. |
 | 5fefba8 (D104) | tC4 journal pieces up to 8 MiB | reference change | I | `tc4_project_with_a_6_8_mib_book_add_segment_imports_whole` | Port the validator with 8 MiB. |
-| #553 | Keep an aligned USFM file's alignments | unit todo | I, C6 | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` | One function for both paths; coordinate with #794. |
-| #484 | Add a book from a USFM file | unit todo | C6 | J9 `add_a_missing_book_from_a_file_and_refuse_one_present` | Built on the #767 command. |
+| #553 | Keep an aligned USFM file's alignments | unit todo | I (C6 done) | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` | One function for both paths; coordinate with #794. |
+| #484 | Add a book from a USFM file | covered | C6 | see the first #484 row | Built on the #767 command. |
 | #499 | Use the typed Bible name | unit todo | F1, I | `typed_import_name_is_the_project_name` | Leave review-edited fields out of the P9 comparison. |
 | #502 | Two USFM files never reach review | unit todo | F1 | J9 `a_two_file_drop_is_one_new_project` | Each book in one Import batch. |
-| #492 | Guess a language code from the name | unit todo | B2, C6 | `language_suggestions_rank_as_tc4_offline` | Ship `langnames.json`; never let a suggestion become "Undetermined" (#582). |
-| #386 | Keep regional language tags | unit todo | S1, C6 | `create_keeps_regional_language_tags` | Right today (es-419, pt-BR, x-ug kept), but no test proves it. |
+| #492 | Guess a language code from the name | covered | B2, C6 | `language_suggestions_rank_as_tc4_offline` | Ship `langnames.json`; never let a suggestion become "Undetermined" (#582). |
+| #386 | Keep regional language tags | covered | S1, C6 | `create_keeps_regional_language_tags` (tc-store and tc-app); journey `create` (`language-tags`) | es-419, pt-BR, x-ug and the adjusted `acm-x-lebarabi-c` are kept. |
 | #529 | Remove unused checkingLanguage writes | covered | tc-journal; I | I `imported_obsolete_checking_language_is_kept_and_ignored` | Nothing writes it. |
 | #530 | Upload details in a dialog | not applicable | B2 | — | No project keeps "Upload changes" (Q2). |
 | #514 | Account menu and asking before internet use | unit todo | A5, A8 | port of tC4's `internet-consent` menu cases | Three menu states; Escape returns focus. |
@@ -441,10 +441,13 @@ Follow-ups the fix units left (2026-10-19):
   text; take them from `tc_usfm::target_words`, as the aligner and the export do (FIX-text), so an
   unknown marker's `|attributes` never show as words. *(B5a draws no target words: the item
   detail, where they are, is B5b's, so this moved there.)*
-- **C6 (or a C1b follow-up):** build the owner's "Copy to this computer" answer (APP-DESIGN, Owner's
-  answers, 2026-10-19): for a project in a projects folder on a FAT32 or exFAT drive or a synced
-  folder, copy it with its unsaved texts into the app's local projects folder (checked safe; no folder
-  picker) and list it on Home. C1b shipped the interim refusal (`CreateRefusal::CopyUnsafe`).
+- **C6 (done on the server; the button waits for the read-only banner, which no unit has
+  drawn):** the owner's "Copy to this computer" answer (APP-DESIGN, Owner's answers, 2026-10-19)
+  is built: for a project in a projects folder on a FAT32 or exFAT drive or a synced folder,
+  `session/copy` copies it with its unsaved texts into the app's local projects folder (checked
+  safe; no folder picker), and Home lists it (APP-DESIGN C6 D9). `CreateRefusal::CopyUnsafe`
+  stays only where the local folder is unsafe too. The banner's button calls `session/copy` with
+  the open project's scope, then `tc_ui::app::offer::copy` and the open of the copy.
 - **D2 (export):** the export and the aligner share `tc_usfm::target_words` and
   `tc_align::needs_review`; keep it that way.
 
@@ -504,10 +507,11 @@ Follow-ups the fix units left (2026-10-19):
 - **C2:** a save replaces `words` only (#786); Resume banner after a span save (#576).
 - **C4:** re-read the draft on return (#532).
 - **C5:** compare stored source words with resources in NFC (#768).
-- **C6:** one-batch add from USFM, refuse only what a record cannot hold (#767); split
+- **C6 (done):** one-batch add from USFM, refuse only what a record cannot hold (#767); split
   aligned files (#553); singular keys (#577); the USFM method step (#484); dialog polish
   (#564); language suggestions (#492); regional tags test (#386); Select and SearchField
-  labels (#614).
+  labels (#614). Left for others: the list of verses kept as written (#553, F1), and the OBS
+  front and back matter and licence, which are carried files and need S2's blob store.
 - **C7a:** Keep this version (#679); Restore (#78); review choices (#25). **C7b:** after
   Q-9 (#25).
 - **C8:** preview computed once (#595); autonyms in the dialog (#579); pins never move

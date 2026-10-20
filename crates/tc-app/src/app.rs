@@ -289,14 +289,36 @@ impl App {
         // named was checked above.
         let (store, on_disk): (Arc<dyn ProjectStore>, _) = match store {
             StoreChoice::OnDisk => {
-                let backend = Arc::new(
+                let backend =
                     StoreBackend::on_disk(&config.app_data, &projects.path).map_err(|e| {
                         StartError::AppData {
                             path: config.app_data.clone(),
                             reason: e.to_string(),
                         }
+                    })?;
+                // Where a copy of a project goes when the projects folder is what made it
+                // read-only (Q-30); a folder of an earlier copy is listed from the start.
+                // A folder someone named (`--projects`, the tests and the captures) has no
+                // second folder beside it: the person's own would be listed among theirs. Where
+                // the local folder is the root, the default one is beside it, so a launch after
+                // the first copy still lists the projects of the launch before.
+                let beside = match &projects.chosen {
+                    RootChoice::Given => None,
+                    RootChoice::LocalBesideDefault { default } => Some(default.clone()),
+                    _ => crate::config::local_projects_root(&host)
+                        .ok()
+                        .filter(|local| *local != projects.path),
+                };
+                let backend = match beside {
+                    Some(other) => backend.with_local_projects(other.clone()).map_err(|e| {
+                        StartError::ProjectsFolder {
+                            path: other,
+                            reason: e.to_string(),
+                        }
                     })?,
-                );
+                    None => backend,
+                };
+                let backend = Arc::new(backend);
                 (backend.clone(), Some(backend))
             }
             StoreChoice::Given(store) => (store, None),
@@ -655,7 +677,7 @@ fn projects_folder_record(projects: &ProjectsRoot) -> Option<Value> {
             "path": path, "choice": "firstLaunchSynced", "syncedBy": synced_by,
         })),
         RootChoice::LocalBesideDefault { default } => Some(json!({
-            "path": path, "choice": "localBesideDefault", "notListed": default.display().to_string(),
+            "path": path, "choice": "localBesideDefault", "alsoListed": default.display().to_string(),
         })),
         RootChoice::Given | RootChoice::Existing | RootChoice::ExistingLocal => None,
     }

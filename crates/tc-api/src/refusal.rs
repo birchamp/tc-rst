@@ -41,6 +41,7 @@ pub trait Message {
 pub enum Refusal {
     Open(OpenRefusal),
     Create(CreateRefusal),
+    Settings(SettingsRefusal),
     Import(ImportRefusal),
     Export(ExportRefusal),
     Sync(SyncFailure),
@@ -59,6 +60,7 @@ impl Refusal {
         match self {
             Self::Open(r) => r,
             Self::Create(r) => r,
+            Self::Settings(r) => r,
             Self::Import(r) => r,
             Self::Export(r) => r,
             Self::Sync(r) => r,
@@ -166,7 +168,7 @@ impl Message for OpenRefusal {
     }
 }
 
-/// Creating a project (unit C6).
+/// Creating a project and adding books (unit C6).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(
@@ -180,12 +182,25 @@ pub enum CreateRefusal {
     NameInUse {
         abbr: String,
     },
+    /// The form's name is empty.
+    NameRequired,
+    /// The form's language code is empty.
+    CodeRequired,
+    /// Neither the name nor the code has a letter or a digit of the Latin alphabet, so no
+    /// folder name can be made of them.
+    AbbrRequired,
+    /// A Scripture Burrito cannot hold the language code (a part over eight letters, #582).
+    /// Nothing was created.
+    CodeNotHeld {
+        code: String,
+        reason: String,
+    },
     Failed {
         reason: String,
     },
     /// A copy of a read-only project would open read-only for the same reason: the projects
     /// folder itself is on a drive that cannot keep a project safe, or a cloud client copies
-    /// it (C1b). No copy is made.
+    /// it, and the local projects folder is no safer (C1b, Q-30). No copy is made.
     CopyUnsafe {
         reason: crate::write::ReadOnlyReason,
     },
@@ -198,6 +213,10 @@ impl Message for CreateRefusal {
     fn key(&self) -> &'static str {
         match self {
             Self::NameInUse { .. } => "wizard.nameInUse",
+            Self::NameRequired => "wizard.nameRequired",
+            Self::CodeRequired => "wizard.codeRequired",
+            Self::AbbrRequired => "wizard.abbrRequired",
+            Self::CodeNotHeld { .. } => "wizard.codeNotHeld",
             Self::Failed { .. } => "wizard.error",
             Self::CopyUnsafe { .. } => "readOnly.copyUnsafe",
         }
@@ -205,13 +224,74 @@ impl Message for CreateRefusal {
     fn vars(&self) -> Vec<(&'static str, String)> {
         match self {
             Self::NameInUse { abbr } => vec![("abbr", abbr.clone())],
-            Self::Failed { .. } | Self::CopyUnsafe { .. } => Vec::new(),
+            Self::CodeNotHeld { code, .. } => vec![("code", code.clone())],
+            Self::NameRequired
+            | Self::CodeRequired
+            | Self::AbbrRequired
+            | Self::Failed { .. }
+            | Self::CopyUnsafe { .. } => Vec::new(),
         }
     }
     fn detail(&self) -> Option<&str> {
         match self {
-            Self::Failed { reason } => Some(reason),
-            Self::NameInUse { .. } | Self::CopyUnsafe { .. } => None,
+            Self::Failed { reason } | Self::CodeNotHeld { reason, .. } => Some(reason),
+            Self::NameInUse { .. }
+            | Self::NameRequired
+            | Self::CodeRequired
+            | Self::AbbrRequired
+            | Self::CopyUnsafe { .. } => None,
+        }
+    }
+}
+
+/// Saving a project's settings from Home (unit C6). With R18's fallback the direction and the
+/// font are two batches, so a refusal says which was written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum SettingsRefusal {
+    /// The project's settings are not what the dialog showed (a teammate's work arrived, or
+    /// another program changed the file): nothing was saved. The dialog reads them again.
+    Changed,
+    /// The direction was not saved, and the font was not tried.
+    DirectionNotSaved { reason: String },
+    /// The font was not saved; `direction_saved` says whether the direction was.
+    FontNotSaved {
+        reason: String,
+        direction_saved: bool,
+    },
+}
+
+impl Message for SettingsRefusal {
+    fn code(&self) -> Option<&'static str> {
+        None
+    }
+    fn key(&self) -> &'static str {
+        match self {
+            Self::Changed => "settings.changed",
+            Self::DirectionNotSaved { .. } => "settings.directionNotSaved",
+            Self::FontNotSaved {
+                direction_saved: false,
+                ..
+            } => "settings.fontNotSaved",
+            Self::FontNotSaved {
+                direction_saved: true,
+                ..
+            } => "settings.fontNotSavedAfterDirection",
+        }
+    }
+    fn vars(&self) -> Vec<(&'static str, String)> {
+        Vec::new()
+    }
+    fn detail(&self) -> Option<&str> {
+        match self {
+            Self::Changed => None,
+            Self::DirectionNotSaved { reason } | Self::FontNotSaved { reason, .. } => Some(reason),
         }
     }
 }

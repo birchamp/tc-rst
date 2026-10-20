@@ -523,9 +523,9 @@ impl FoldState {
         if !self.pin_keys.is_empty() {
             out.insert(DerivedFile::Resources);
         }
-        if self.kind == super::ProjectKind::Bible {
-            out.insert(DerivedFile::Settings);
-        }
+        // Every project has the file, a story project too: tC4 derives it for both (J20,
+        // `journalingStore.ts` "resources.json and settings.json are ALWAYS derivable").
+        out.insert(DerivedFile::Settings);
         if let Some(k) = self.key_idx(&RecordKey::Versification)
             && !matches!(self.entry(k).projected, Projected::Nothing)
         {

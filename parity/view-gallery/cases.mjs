@@ -358,6 +358,8 @@ export const CASES = [
   { name: 'add-book-usfm', group: 'add-book', state: 'add-book-usfm',
     why: 'Add books from USFM files, before a file is chosen.' },
   { name: 'add-book-usfm-files', group: 'add-book', state: 'add-book-usfm-files',
+    // The Rust app: the state's own route, the file input having the same test id (C6).
+    rust: (app, env) => stateNamed('add-book-usfm-files').route(app, env),
     why: 'Add books from USFM files: 57-TIT.usfm refused (Titus is in the project), 58-PHM.txt valid.' },
 
   // ---- feedback ------------------------------------------------------------------------------
