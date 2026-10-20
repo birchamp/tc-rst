@@ -27,8 +27,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tc_align::SourceBook;
 use tc_api::ApiError;
 use tc_api::align::{
-    AlignSave, AlignerView, Close, Edit, Flush, Index, IndexView, KeepReflow, Open, Opened,
-    SuggestStatus,
+    AlignSave, AlignerView, Close, Edit, Flush, Index, IndexView, KeepReflow, Open, OpenVerse,
+    Opened, SuggestStatus,
 };
 use tc_api::ids::AlignerId;
 use tokio::sync::Mutex;
@@ -145,7 +145,12 @@ impl HandleRequest<Open> for App {
             Some(at) => (at.chapter, at.verse),
             None => match resume(&session.read(), req.book) {
                 Some(at) => at,
-                None => return Ok(Opened::Blocked(tc_api::align::Blocked::Undrafted)),
+                None => {
+                    return Ok(Opened::Blocked {
+                        why: tc_api::align::Blocked::Undrafted,
+                        at: None,
+                    });
+                }
             },
         };
         let cache = session.align();
@@ -180,7 +185,10 @@ impl HandleRequest<Open> for App {
         }
         let id = AlignerId::new(ALIGNERS.fetch_add(1, Ordering::Relaxed) + 1);
         match prepare(self, &session, id, req.book, chapter, verse).await? {
-            Prepared::Blocked(why) => Ok(Opened::Blocked(why)),
+            Prepared::Blocked(why) => Ok(Opened::Blocked {
+                why,
+                at: Some(OpenVerse { chapter, verse }),
+            }),
             Prepared::Ready(ready) => {
                 let handle = actor::spawn(self.align_env(&session), *ready);
                 let view = handle.ask(|reply| Cmd::View { ctx, reply }).await?;

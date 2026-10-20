@@ -21,17 +21,17 @@
       }
     },
     "build": {
-      "ui": "527f290d49bacc6a",
+      "ui": "512b2b337a39217a",
       "commit": "dev",
       "api": 1
     }
   },
   "totals": {
     "rows": 130,
-    "same": 9,
+    "same": 17,
     "declared": 0,
-    "differs": 44,
-    "unported": 77,
+    "differs": 51,
+    "unported": 62,
     "failed": 0
   },
   "rows": [
@@ -171,11 +171,35 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6",
-        "meaning": "B6"
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "4806f0b5818dfca6f5ff87043f71475e88fe43d4816564aafab68d96f8d610b0",
+        "rustSha256": "8f01c125790516aa98b1f9353809943bb3f415c6580e9ccfebdfb67a1be755d7",
+        "mismatched": 45720,
+        "outsideMasks": 45720,
+        "masks": [],
+        "diff": "diffs/align-workspace.png"
+      },
+      "dom": {
+        "tc4Sha256": "9fe56c2fe5e44a7ad57d244c225371aabab9eb0f33f050611c5210fdd35a6a0d",
+        "rustSha256": "5e1f6b38cb668b7d5bb53d59cb243659e8ffbe5cfbda5404af4bb5fcbe8a79f7",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -183,11 +207,35 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6",
-        "meaning": "B6"
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e0019b625ec7e70a1209de728765e61535a565c4b69c3145d8151066e7e7da47",
+        "rustSha256": "bcf419a1de1cb357faad85eb9fcff3aa1d0a8aa9f96e70e137bc0c2a54b58faa",
+        "mismatched": 24682,
+        "outsideMasks": 24682,
+        "masks": [],
+        "diff": "diffs/align-original.png"
+      },
+      "dom": {
+        "tc4Sha256": "650ef40cba639e131f6168814af2cf15ebb962a56f305b58085d31afc04448fb",
+        "rustSha256": "1870afdb5212ae8cfdc2740cc917ef5b3d0c44b41eeb5434c5c472c275522d10",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 459: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 467: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 479: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 487: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -195,11 +243,35 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6",
-        "meaning": "B6"
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "d0314087f33005433c559588d7124bd0e3e2eb59a2207db0ac94a3090749c775",
+        "rustSha256": "a35887ec546ae6317d1e49a0b49d3c61d1a40dd34088d3c9260408be15abd9bd",
+        "mismatched": 284817,
+        "outsideMasks": 284817,
+        "masks": [],
+        "diff": "diffs/align-workspace-row.png"
+      },
+      "dom": {
+        "tc4Sha256": "943124b6d160acc80a041b3d7218fa1db6e08a873779f8f0a541194197577eee",
+        "rustSha256": "f2d07aa7933fd55ad7477976f62c004334acd043557848b13b44d85867d24d21",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -207,11 +279,35 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "ar",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6",
-        "meaning": "B6"
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "cef41294a8f07aec9867b55e62a85ce919c06a2fda5f4d1b6158fbb7526fa62d",
+        "rustSha256": "2ee6ebe7fa173d70677fdca270aa087c141701fa053accd6e562adfabea9942a",
+        "mismatched": 272950,
+        "outsideMasks": 272950,
+        "masks": [],
+        "diff": "diffs/ar-align-workspace-row.png"
+      },
+      "dom": {
+        "tc4Sha256": "bf307f76c2299caf949e2c89772c14de1f7a614d3fca5299a3d8117fd95d2422",
+        "rustSha256": "b3f370fa9b2af133b72eea44a2a5fc362d53f06db768b8a4fc68f7dacec0515b",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -219,11 +315,35 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6",
-        "meaning": "B6"
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "dee7d41db6dddba12e2dbc9ca5d74ec38b443d0ee5e64e4b938abb8d9fadc7a6",
+        "rustSha256": "3cff17ef41f02301cc24afa9787b3710144418a6d9703fd570ba0f69356c565a",
+        "mismatched": 40058,
+        "outsideMasks": 40058,
+        "masks": [],
+        "diff": "diffs/align-workspace-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "0c8312f3eea1c8bf9368fce860b7502d96100264bb2a049295651e94080d0a9e",
+        "rustSha256": "614103bec75d67ed1e472125c41431376c9514482d40c94d76b21d05a590b567",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -231,11 +351,35 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "ar",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6",
-        "meaning": "B6"
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f0ad20d4b4a5876cedfe24dfb89f57d917aed5593130a4a934ca69970b7ebd6e",
+        "rustSha256": "0f628469ef0539643546ae72570b5e47ffc1d162942ba2b510e43e77028d83dc",
+        "mismatched": 39874,
+        "outsideMasks": 39874,
+        "masks": [],
+        "diff": "diffs/ar-align-workspace-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "969b26d67e6a1dc4d86337f5737e83dcd7dbf35c6bfceaf66a5377c51f721437",
+        "rustSha256": "e663c8dd270a5b18d01b594de0bebe330130e96cf959123385f505ef9e5f93b8",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -2494,10 +2638,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "7b32a9733ce94fadc8f2c20353ec550a549ca65dc808f2d03a4954ff28e071bf",
+        "rustSha256": "7b32a9733ce94fadc8f2c20353ec550a549ca65dc808f2d03a4954ff28e071bf",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "1a34b4c733e831678fefee3be3cdced75a85d7cb8989572ff91327787ae0a059",
+        "rustSha256": "ae97b3149d119fb4e9a2a869541bb02fa28c8422ec65d7ff4abb927b7a80c4d5",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2505,10 +2663,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "57e36d77db065168b33876562baa3244d26a47ee6a14f6e15a40d29219050077",
+        "rustSha256": "57e36d77db065168b33876562baa3244d26a47ee6a14f6e15a40d29219050077",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "50c6682e789a014862673acd0d3139bc2f8b9cc05a137b3a4bb8d5b6ca9ac7fe",
+        "rustSha256": "3ce7891d609f529549d83265c71ee945e921ac926940682377326be7fec6540c",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2516,10 +2688,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "94d6f33197e4ac5eb315f15589a1366ac5a9dd1b049105a79808feb424dbf2d0",
+        "rustSha256": "94d6f33197e4ac5eb315f15589a1366ac5a9dd1b049105a79808feb424dbf2d0",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "17cac7fea9e1b6303d3be755e641fe5f7a773f384f30fba73b57843007739a01",
+        "rustSha256": "d60d8254aca68c9e20f28a353caceac552827cbf84244cf439d27237d56ea716",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2527,10 +2713,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "ddd3162b714410c34a00954ca686307d35036adb6ec3bf750e3a8bba2c7fc284",
+        "rustSha256": "ddd3162b714410c34a00954ca686307d35036adb6ec3bf750e3a8bba2c7fc284",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "16b5b88a6cdea18997a28339c1cdf224596143d705c81f81cf5f66b1f56941ce",
+        "rustSha256": "170bef92babf3c679d91354f6f951b78c124163d270b1797ecf6e68d49089908",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2538,10 +2738,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "346db33ffc8dd535451bb3af362dacd3c09832c41843c6cd176c5a454ed55605",
+        "rustSha256": "346db33ffc8dd535451bb3af362dacd3c09832c41843c6cd176c5a454ed55605",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "5b4ccf406acabffc9010a76dd6faeb255a93e8fe15078f1bbf174481e2034b5c",
+        "rustSha256": "85c3f128b07ca566f9894d70a7bef861e522ccf985f988876b15aa09de462f77",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2549,10 +2763,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b85b2dffcb96f675dbd79c23997d2d83ae417b6537dce58ca7d18018012a3c5f",
+        "rustSha256": "b85b2dffcb96f675dbd79c23997d2d83ae417b6537dce58ca7d18018012a3c5f",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "b087bd6fd12ff699bf26cf73e5586f59e34a4ac9c7e9fa6f0911560332e48ae6",
+        "rustSha256": "aa8a640d71907025fcce36fea83ebef3eb0c904191b0b809239b3d28ba5d4830",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2560,10 +2788,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e0f59409d7a644ab0f88fc341c8ef874847f26812abf28d66a83aa271097fd05",
+        "rustSha256": "e0f59409d7a644ab0f88fc341c8ef874847f26812abf28d66a83aa271097fd05",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "51b139806bf143033ed4bab2fd9d20577de339697147e44a07988d29e405499f",
+        "rustSha256": "189abd7442471cfd7427b0058951be9e52902905ab080aa78a2a7b85a5e1244d",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2571,10 +2813,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "244997f250d1f4d23b6333229091e8811915f4f90e7a94c9fb57a911c2798aaf",
+        "rustSha256": "244997f250d1f4d23b6333229091e8811915f4f90e7a94c9fb57a911c2798aaf",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "4d65f84c8f682f57e023729d9bfc4011d2c0f5ee687aeae4415e1cec1da71dbc",
+        "rustSha256": "0169a83cda305782715633cd153aab870e57ad66601692c05220ccd2bd2e6e6c",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2582,10 +2838,26 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B6",
-        "dom": "B6"
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "d33ab980d03ede0a8931f1e7c7e37e604d27bbcd3173aa43be939a2d0346810e",
+        "rustSha256": "83cced400641a08cb6a31d240893babe9f249006b46048f5bbfcc128f25316eb",
+        "mismatched": 597,
+        "outsideMasks": 597,
+        "masks": [],
+        "diff": "diffs/align-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "44381ce33f455721bdc0ab187418ba218b04acb570ae0c49ae498e5aba293c83",
+        "rustSha256": "a095ed66221c680f55b3c2c639a3c18a7a035585bd3e0260f519688450b6673d",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 351: tC4                 \"Failed to fetch\" | rust                 \"internal error\""
+        ]
       }
     },
     {

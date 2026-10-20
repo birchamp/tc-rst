@@ -1590,7 +1590,7 @@ impl Example for AlignEditRequest {
             aligner: AlignerId::new(5),
             seq: 3,
             edit: AlignEdit::ClickBank {
-                index: 0,
+                word: align_word("de", 1, 2),
                 click: BankClick::Toggle,
             },
         }
@@ -1637,7 +1637,7 @@ impl Example for AlignSave {
 fn align_edits() -> Vec<AlignEdit> {
     vec![
         AlignEdit::ClickBank {
-            index: 2,
+            word: align_word("Dios", 1, 1),
             click: BankClick::Range,
         },
         AlignEdit::PlaceSelection { card: 1 },
@@ -1676,6 +1676,23 @@ fn align_blocked() -> Vec<Blocked> {
         Blocked::VersificationUnknown,
         Blocked::NoCounterpart,
         Blocked::AlignedInText,
+    ]
+}
+
+fn align_opened() -> Vec<Opened> {
+    vec![
+        Opened::example(),
+        Opened::Blocked {
+            why: Blocked::Missing,
+            at: Some(OpenVerse {
+                chapter: 1,
+                verse: 6,
+            }),
+        },
+        Opened::Blocked {
+            why: Blocked::Undrafted,
+            at: None,
+        },
     ]
 }
 
@@ -2385,6 +2402,7 @@ fn shared_types_have_golden_json() {
         ("types/buffer.json", buffer()),
         ("types/align-edits.json", wire_samples(&align_edits())),
         ("types/align-blocked.json", wire_samples(&align_blocked())),
+        ("types/align-opened.json", wire_samples(&align_opened())),
         (
             "types/suggest-statuses.json",
             wire_samples(&suggest_statuses()),
@@ -2439,6 +2457,7 @@ fn no_golden_file_is_left_without_its_endpoint_or_type() {
         "uploads",
         "align-edits",
         "align-blocked",
+        "align-opened",
         "suggest-statuses",
         "check-places",
         "check-units",

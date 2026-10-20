@@ -90,7 +90,7 @@ async fn align_edit_touches_one_verse() {
                     aligner: view.aligner,
                     seq: view.seq,
                     edit: AlignEdit::ClickBank {
-                        index: 0,
+                        word: view.bank[0].clone(),
                         click: BankClick::Plain,
                     },
                 },

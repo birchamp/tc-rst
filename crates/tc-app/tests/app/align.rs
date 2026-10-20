@@ -119,12 +119,18 @@ async fn flush(app: &App, at: &Scope, n: u8) -> AlignSave {
     .await
 }
 
-/// The bank chip of `word`, by its place in the bank.
-fn chip(view: &AlignerView, word: &str) -> u32 {
+/// The bank chip of `word`.
+fn chip(view: &AlignerView, word: &str) -> Word {
     view.bank
         .iter()
-        .position(|w| w.word == word)
-        .unwrap_or_else(|| panic!("{word} is not in the bank: {:?}", view.bank)) as u32
+        .find(|w| w.word == word)
+        .cloned()
+        .unwrap_or_else(|| panic!("{word} is not in the bank: {:?}", view.bank))
+}
+
+/// The place of the chip of `word` in the bank.
+fn place_in_bank(view: &AlignerView, word: &str) -> u32 {
+    view.bank.iter().position(|w| w.word == word).unwrap() as u32
 }
 
 /// The card whose original word is `word`.
@@ -150,7 +156,7 @@ async fn place(
         view,
         n,
         AlignEdit::ClickBank {
-            index: chip(view, word),
+            word: chip(view, word),
             click: BankClick::Plain,
         },
     )
@@ -244,7 +250,7 @@ async fn titus_1_1_opens_as_tc4s_workspace() {
         &view,
         61,
         AlignEdit::ClickBank {
-            index: 0,
+            word: view.bank[0].clone(),
             click: BankClick::Plain,
         },
     )
@@ -262,7 +268,13 @@ async fn a_verse_with_nothing_to_align_says_why() {
     let at = opened(&t.app).await.session.at;
     assert_eq!(
         open_verse(&t.app, &at, 1, 6).await,
-        Opened::Blocked(Blocked::Undrafted)
+        Opened::Blocked {
+            why: Blocked::Undrafted,
+            at: Some(OpenVerse {
+                chapter: 1,
+                verse: 6
+            })
+        }
     );
     let reply = t
         .app
@@ -326,14 +338,18 @@ async fn several_selected_words_are_placed_in_one_edit() {
     let (_dir, t, _) = start("sample").await;
     let at = opened(&t.app).await.session.at;
     let view = ready(&t.app, &at, 1, 1).await;
-    let (a, b) = (chip(&view, "conocimiento"), chip(&view, "piedad"));
+    let (a, b) = (
+        place_in_bank(&view, "conocimiento"),
+        place_in_bank(&view, "piedad"),
+    );
+    let (wa, wb) = (chip(&view, "conocimiento"), chip(&view, "piedad"));
     let one = edit(
         &t.app,
         &at,
         &view,
         61,
         AlignEdit::ClickBank {
-            index: a,
+            word: wa,
             click: BankClick::Plain,
         },
     )
@@ -345,7 +361,7 @@ async fn several_selected_words_are_placed_in_one_edit() {
         &one,
         62,
         AlignEdit::ClickBank {
-            index: b,
+            word: wb,
             click: BankClick::Toggle,
         },
     )
@@ -383,7 +399,7 @@ async fn an_edit_of_an_old_view_is_stale_not_applied() {
         &view,
         61,
         AlignEdit::ClickBank {
-            index: 0,
+            word: view.bank[0].clone(),
             click: BankClick::Plain,
         },
     )
@@ -596,7 +612,7 @@ async fn a_verse_changed_by_a_teammate_opens_with_the_notice() {
         &view,
         61,
         AlignEdit::ClickBank {
-            index: 0,
+            word: view.bank[0].clone(),
             click: BankClick::Plain,
         },
     )

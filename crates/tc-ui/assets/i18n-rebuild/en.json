@@ -1,4 +1,6 @@
 {
+  "align.unavailable.alignedInText.body": "This verse came from a file that holds its alignment inside the text, and aligning it here would write over that. Nothing is lost. The rest of {book} aligns normally.",
+  "align.unavailable.alignedInText.title": "This verse already holds its alignment",
   "drafts.offer.copyText": "Copy text",
   "drafts.offer.discard": "Discard",
   "drafts.offer.found": "Unsaved text from your last session was found for {place}.",

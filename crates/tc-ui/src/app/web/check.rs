@@ -206,6 +206,7 @@ impl Actions {
 
     /// The Check screen of a project or book that is no longer shown: nothing of it stays.
     pub(super) fn reset_check(&self) {
+        self.reset_align();
         next_open();
         self.stop_rail_listener();
         let c = &self.s().c;

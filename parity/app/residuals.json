@@ -422,6 +422,62 @@
       ],
       "why": "Urdu in Devanagari script (ur-deva) reads left to right and is named उर्दू (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), where tC4 4.0's registry names it اردو in Arabic script, right to left: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style and Understand behind the dialog included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it (a mask's rectangle must lie in the window).",
       "until": null
+    },
+    "align-workspace": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "align-original": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "align-workspace-row": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "ar-align-workspace-row": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "align-workspace-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "ar-align-workspace-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "align-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The failed open's text. tC4 shows the message of the exception it caught (\"Failed to fetch\"); the rebuild says that the server reported a bug (\"internal error\"), because a request the page cannot complete is a refusal or a report with its own words (APP-DESIGN 3.5), not a browser's. Everything else, the box, its title and Retry, is tC4's, and the rail beside it too.",
+      "until": null
     }
   }
 }

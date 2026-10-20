@@ -22,6 +22,8 @@ use tc_api::prefs::PlaceMode;
 pub enum CheckView {
     Picker,
     Tool(Tool),
+    /// The Align tool (B6): its rail of verses beside one verse's aligner.
+    Align,
 }
 
 /// Where an open lands in Check: the remembered tool, at once, else the picker.

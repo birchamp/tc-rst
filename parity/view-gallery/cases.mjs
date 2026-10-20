@@ -78,6 +78,29 @@ const checkTn = (edit, ready) => async (app) => {
   await app.page.getByTestId('open-translationNotes').click();
   await ready(app.page);
 };
+/** B6: the Rust Align tool with its first `align/open` answered as `edit` says (or held), to show
+ * a state tC4's `openAlign` settles that the sample's verse never reaches. */
+const alignOpen = (edit, ready) => async (app) => {
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.home();
+  await app.openTitus();
+  await app.openCheck();
+  if (edit === 'hold') {
+    await app.page.route('**/api/v1/align/open', () => {});
+  } else {
+    await app.page.route('**/api/v1/align/open', async (route) => {
+      await route.fulfill({ json: edit });
+    }, { times: 1 });
+  }
+  await app.page.getByTestId('open-align').click();
+  await ready(app.page);
+};
+const alignBlocked = (why) => alignOpen({ type: 'ok', value: { type: 'blocked', value: { why, at: { chapter: 1, verse: 1 } } } },
+  (page) => page.getByTestId('align-unavailable').waitFor());
+const ALIGN_BLOCKED = {
+  undrafted: 'undrafted', unpinned: 'unpinned', missing: 'missing', 'versification-unavailable': 'versificationUnavailable',
+  'no-counterpart': 'noCounterpart', 'versification-unknown': 'versificationUnknown', unreadable: 'unreadable',
+};
 /** The server's session with no row: tC4's `emptyCheckSession`. */
 const emptyReply = (empty, dropped = null) => (body) => ({
   ...body,
@@ -436,11 +459,14 @@ export const CASES = [
   ...ALIGN_UNAVAILABLE.map((kind) => ({
     name: `align-unavailable-${kind}`, group: 'align-unavailable', state: 'align',
     patch: (s) => ({ alignSession: { unavailable: kind, seq: s.alignSession.seq } }),
+    rust: alignBlocked(ALIGN_BLOCKED[kind]),
     why: `Align when the verse cannot be aligned: ${kind}, exactly what openAlign settles (state.jsx:5096-5141).`,
   })),
   { name: 'align-loading', group: 'align-unavailable', state: 'align', patch: (s) => ({ alignSession: { loading: true, seq: s.alignSession.seq } }),
+    rust: alignOpen('hold', (page) => page.getByText('Opening the alignment…').waitFor()), held: true, heldRequests: ['/api/v1/align/open'],
     why: 'Align while the verse loads.' },
   { name: 'align-error', group: 'align-unavailable', state: 'align', patch: (s) => ({ alignSession: { error: FETCH_FAILED, seq: s.alignSession.seq } }),
+    rust: alignOpen({ type: 'err', value: { type: 'internal', value: { report: 1 } } }, (page) => page.getByTestId('align-error').waitFor()),
     why: 'Align after the verse failed to read: the error and Retry (openAlign\'s catch).' },
 
   // ---- home ----------------------------------------------------------------------------------

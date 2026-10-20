@@ -338,8 +338,13 @@ pub struct OpenVerse {
 )]
 pub enum Opened {
     Ready(Box<AlignerView>),
-    /// There is nothing to align here; the screen says why. Nothing is lost.
-    Blocked(Blocked),
+    /// There is nothing to align here; the screen says why. Nothing is lost. `at` is the verse
+    /// that was asked for or that the book resumes at, so the rail can show it as the open one;
+    /// none when the book has no drafted verse.
+    Blocked {
+        why: Blocked,
+        at: Option<OpenVerse>,
+    },
 }
 
 /// What a click, a drop or a button does to the open verse (tC4's `applyAlignEdit` family).
@@ -353,9 +358,11 @@ pub enum Opened {
     deny_unknown_fields
 )]
 pub enum AlignEdit {
-    /// A click, or Enter or Space, on the bank chip at `index`, with the keys held.
+    /// A click, or Enter or Space, on a bank chip, with the keys held. The chip is named by
+    /// its word, not its place: a click made before the reply to the one before it came must
+    /// still mean the chip the person saw.
     ClickBank {
-        index: u32,
+        word: Word,
         click: BankClick,
     },
     /// A click on a card while bank words are selected: the selection is placed on it.

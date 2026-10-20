@@ -2,7 +2,11 @@
   {
     "type": "clickBank",
     "value": {
-      "index": 2,
+      "word": {
+        "word": "Dios",
+        "occurrence": 1,
+        "occurrences": 1
+      },
       "click": "range"
     }
   },

@@ -352,9 +352,18 @@ impl Actor {
             }
         };
         match edit {
-            AlignEdit::ClickBank { index, click } => {
+            AlignEdit::ClickBank { word, click } => {
+                // A word that is not in the shown bank any more (placed meanwhile) is no click.
+                let Some(index) = self
+                    .aligner
+                    .shown_bank()
+                    .iter()
+                    .position(|w| w.word == word.word && w.occurrence == word.occurrence)
+                else {
+                    return Applied::Nothing;
+                };
                 self.aligner.click_bank_word(
-                    at(index),
+                    index,
                     match click {
                         BankClick::Plain => Click::Plain,
                         BankClick::Toggle => Click::Toggle,

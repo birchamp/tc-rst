@@ -467,14 +467,20 @@ fn card_keys(open: impl Fn() + Clone + 'static) -> impl Fn(web_sys::KeyboardEven
 }
 
 /// The Align card (Bible only).
-fn align_card(progress: &CardCount<AlignProgress>) -> impl IntoView + use<> {
+fn align_card(actions: &Actions, progress: &CardCount<AlignProgress>) -> impl IntoView + use<> {
     let done = align_done(progress);
     let count = count_line(Some(progress), |p: &AlignProgress| (p.done, p.total));
     let next = next_verse(progress);
     let style = picker_card().merge(&crate::css! { "cursor": "pointer" });
     let open_style = cta_style().merge(&crate::css! { "align-self": "flex-start" });
-    // Align opens with B6.
-    let open = || {};
+    let next_place = match progress {
+        CardCount::Counted(p) => p.next.as_deref().and_then(crate::app::align::parse_place),
+        CardCount::Failed { .. } => None,
+    };
+    let open = {
+        let actions = actions.clone();
+        move || actions.start_aligning(next_place)
+    };
     view! {
         <div
             data-testid="align-card"
@@ -483,7 +489,10 @@ fn align_card(progress: &CardCount<AlignProgress>) -> impl IntoView + use<> {
             role="button"
             tabindex="0"
             style=style.to_style()
-            on:click=move |_| open()
+            on:click={
+                let open = open.clone();
+                move |_| open()
+            }
             on:keydown=card_keys(open)
         >
             <div style=picker_title().to_style()>{t(keys::nav::ALIGN, &[])}</div>
@@ -581,7 +590,7 @@ fn grid(s: &AppState, actions: &Actions, view: &PickerView, book: BookId) -> imp
     view! {
         <div style=style.to_style()>
             {cards}
-            {align_card(&view.align)}
+            {align_card(actions, &view.align)}
             {community_card(actions, book)}
         </div>
     }
