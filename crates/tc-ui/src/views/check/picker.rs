@@ -23,6 +23,16 @@ use crate::i18n::{Key, keys, t, t_dyn};
 
 const MONO: &str = "var(--font-mono)";
 
+/// tC4's `openSources` buttons: the dialog opens over the picker, and a card around the button
+/// does not also open its tool.
+fn open_sources(actions: &Actions) -> Callback<leptos::ev::MouseEvent> {
+    let actions = actions.clone();
+    Callback::new(move |e: leptos::ev::MouseEvent| {
+        e.stop_propagation();
+        actions.open_sources();
+    })
+}
+
 pub(super) fn tool_name(tool: Tool) -> Key {
     match tool {
         Tool::TranslationWords => keys::check::tool::TRANSLATION_WORDS,
@@ -275,12 +285,12 @@ fn tool_needs(actions: &Actions, card: &ToolCard) -> Option<AnyView> {
                 .into_any(),
             )
         }
-        // The source texts dialog is B9a's: its button is drawn, and opens it from then.
         "unpinned" | "not-covered" => Some(
             view! {
                 <Button
                     size=Size::Sm
                     variant=ButtonVariant::Secondary
+                    on_click=open_sources(actions)
                     style=crate::css! { "color": "var(--uw-ocean)" }
                 >
                     {t(keys::check::fix::GET_RESOURCES, &[])}
@@ -295,9 +305,10 @@ fn tool_needs(actions: &Actions, card: &ToolCard) -> Option<AnyView> {
 
 /// tC4's `FallbackWarning`: the tool opens on the English fallback because the pinned primary
 /// is not on this computer.
-fn fallback_warning(tool: Tool, missing: &PinCitation) -> impl IntoView + use<> {
+fn fallback_warning(actions: &Actions, tool: Tool, missing: &PinCitation) -> impl IntoView + use<> {
     let repo = missing.repo_path.clone();
     let version = missing.version.clone().unwrap_or_default();
+    let open = open_sources(actions);
     view! {
         <Callout
             tone=CalloutTone::Warn
@@ -310,6 +321,7 @@ fn fallback_warning(tool: Tool, missing: &PinCitation) -> impl IntoView + use<> 
                     size=Size::Sm
                     variant=ButtonVariant::Secondary
                     attrs=Attrs::from([("data-testid", format!("fetch-primary-{}", tool_id(tool)).as_str())])
+                    on_click=open
                     style=crate::css! { "color": "var(--tc-warn-text)", "border-color": "rgba(229,157,51,.5)" }
                 >
                     {t(keys::check::fix::DOWNLOAD, &[])}
@@ -401,7 +413,7 @@ fn tool_card(actions: &Actions, card: &ToolCard, book: BookId) -> impl IntoView 
     let body = match (ready, card.fallback_for.as_ref()) {
         (true, Some(missing)) => view! {
             {open_button()}
-            {fallback_warning(tool, missing)}
+            {fallback_warning(actions, tool, missing)}
             {progress_block()}
         }
         .into_any(),
