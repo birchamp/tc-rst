@@ -196,10 +196,19 @@ pub fn ProgressBar(
     #[prop(optional, into)] value: Signal<f64>,
     #[prop(optional)] tone: Tone,
     #[prop(default = 5.0)] height: f64,
+    /// The name a screen reader reads for the bar.
+    #[prop(default = None)]
+    label: Option<String>,
+    /// The smallest fill in px once the value is above 0 (see [`Progress`]).
+    #[prop(default = None)]
+    min_fill: Option<f64>,
     #[prop(optional)] style: Css,
     #[prop(optional)] attrs: Attrs,
 ) -> impl IntoView {
-    view! { <Progress value=Signal::derive(move || Some(value.get())) tone=tone height=height style=style attrs=attrs /> }
+    match label {
+        Some(label) => view! { <Progress value=Signal::derive(move || Some(value.get())) tone=tone height=height label=label min_fill=min_fill style=style attrs=attrs /> }.into_any(),
+        None => view! { <Progress value=Signal::derive(move || Some(value.get())) tone=tone height=height min_fill=min_fill style=style attrs=attrs /> }.into_any(),
+    }
 }
 
 /// StatusDot.jsx: a round state pip for checking items, save state and conflict rows. `todo`

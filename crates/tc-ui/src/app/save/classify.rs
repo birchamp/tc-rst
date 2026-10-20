@@ -59,6 +59,7 @@ pub fn classify(reply: Result<Ack, CallError>) -> Answered {
             ) => Answered::Failed(SaveError::NotSaved(reason)),
             error @ (ApiError::BadRequest { .. }
             | ApiError::StaleSession
+            | ApiError::ToolNotReady
             | ApiError::Refused(_)
             | ApiError::NeedsInternet(_)
             | ApiError::NeedsSignIn(_)

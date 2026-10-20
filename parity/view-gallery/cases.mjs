@@ -57,6 +57,34 @@ const heldOpen = (progress) => async (app, env) => {
 };
 const openProgress = (phase, done = 0, total = null) => ({ phase: { type: 'open', value: phase }, done, total, item: null });
 
+/** B5a's route to a Translation Notes session of Titus: the picker, its card, and `check/open`
+ * answered once by `edit` over the server's own reply (the session as the server read it, with
+ * only what the case shows changed), or held unanswered (`edit` = 'hold'). `ready` waits for the
+ * state the case shows. The item detail beside the rail is B5b's. */
+const checkTn = (edit, ready) => async (app) => {
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.home();
+  await app.openTitus();
+  await app.openCheck();
+  if (edit === 'hold') {
+    await app.page.route('**/api/v1/check/open', () => {});
+  } else if (edit) {
+    await app.page.route('**/api/v1/check/open', async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({ response, json: edit(body) });
+    }, { times: 1 });
+  }
+  await app.page.getByTestId('open-translationNotes').click();
+  await ready(app.page);
+};
+/** The server's session with no row: tC4's `emptyCheckSession`. */
+const emptyReply = (empty, dropped = null) => (body) => ({
+  ...body,
+  value: { ...body.value, rows: { type: 'full', value: [] }, progress: { decided: 0, total: 0 }, empty, dropped, start: 0 },
+});
+const emptyShown = (empty) => (page) => page.locator(`[data-testid="check-empty"][data-empty="${empty}"]`).waitFor();
+
 /** The next release name after `version` (v66 -> v67, v0.34 -> v0.35). */
 const nextVersion = (version) => version.replace(/(\d+)$/, (n) => String(Number(n) + 1));
 
@@ -358,26 +386,50 @@ export const CASES = [
 
   // ---- check-empty ---------------------------------------------------------------------------
   { name: 'check-empty-none', group: 'check-empty', state: 'check-tn', patch: (s) => emptySession(s, 'none'),
+    rust: checkTn(emptyReply('none'), emptyShown('none')),
     why: 'The Translation Notes session of a book its pinned resource lists no checks for (state.jsx emptyCheckSession).' },
   { name: 'check-empty-all-dropped', group: 'check-empty', state: 'check-tn',
     patch: (s) => emptySession(s, 'all-dropped', { crossFrame: true, dropped: { count: s.checkSession.items.length, scheme: 'vul', reasons: ['no-chapter'] } }),
+    rust: checkTn(emptyReply('allDropped', { count: 112, scheme: 'vul' }), emptyShown('all-dropped')),
     why: 'The session when none of the 112 checks has a verse in the project\'s numbering: a project in another versification (vul here) than the resource\'s (deriveCheckItems). The sample is eng, so the scheme is written here.' },
   { name: 'check-empty-missing', group: 'check-empty', state: 'check-tn', patch: (s) => emptySession(s, 'missing'),
+    rust: checkTn(emptyReply('missing'), emptyShown('missing')),
     why: 'The session when the pinned resource has no file for the book.' },
   { name: 'check-empty-versification-unavailable', group: 'check-empty', state: 'check-tn', patch: (s) => emptySession(s, 'versification-unavailable', { crossFrame: true }),
+    rust: checkTn(emptyReply('versificationUnavailable'), emptyShown('versification-unavailable')),
     why: 'The session when the project\'s numbering data could not be loaded.' },
   { name: 'check-empty-versification-unknown', group: 'check-empty', state: 'check-tn', patch: (s) => emptySession(s, 'versification-unknown', { crossFrame: true }),
+    rust: checkTn(emptyReply('versificationUnknown'), emptyShown('versification-unknown')),
     why: 'The session when the project\'s versification is not known.' },
   { name: 'check-deriving', group: 'check-empty', state: 'check-tn', patch: (s) => ({ checkSession: { loading: true, seq: s.checkSession.seq } }),
+    rust: checkTn('hold', (page) => page.getByText('Deriving the check list…').waitFor()), held: true, heldRequests: ['/api/v1/check/open'],
     why: '"Deriving the check list…" while the session opens (state.jsx openCheckTool).' },
   { name: 'check-error', group: 'check-empty', state: 'check-tn', patch: (s) => ({ checkSession: { loading: false, error: FETCH_FAILED, seq: s.checkSession.seq } }),
+    rust: checkTn(() => ({ type: 'err', value: { type: 'internal', value: { report: 1 } } }), (page) => page.getByTestId('check-error').waitFor()),
     why: 'The session after its derivation failed to read (openCheckTool\'s catch).' },
   { name: 'check-rail-empty', group: 'check-empty', state: 'check-tn',
     steps: [{ do: 'click', target: '[data-testid^="filter-"][data-count="0"]' }],
+    rust: async (app) => { await checkTn(null, (page) => page.getByTestId('check-list').waitFor())(app); await app.page.locator('[data-testid^="filter-"][data-count="0"]').first().click(); await app.page.getByTestId('rail-empty').waitFor(); },
     why: 'A rail filter that matches nothing: "Nothing matches this filter." (Check.jsx).' },
   { name: 'check-picker-no-items', group: 'check-empty', state: 'check-picker',
     patch: (s) => ({ pickerProgress: { ...s.pickerProgress, translationNotes: { done: 0, total: 0, dropped: null, nextItem: null, empty: 'none' } } }),
     steps: [{ do: 'refocus', target: '[role="tab"][aria-selected="true"]' }],
+    rust: async (app) => {
+      await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+      await app.home();
+      await app.openTitus();
+      // B5a: `check/picker` answered once with the Translation Notes card counted empty.
+      await app.page.route('**/api/v1/check/picker', async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        const tools = body.value.tools.map((card) => (card.tool === 'translationNotes'
+          ? { ...card, progress: { type: 'counted', value: { decided: 0, total: 0, dropped: null, next: null } } } : card));
+        await route.fulfill({ response, json: { ...body, value: { ...body.value, tools } } });
+      }, { times: 1 });
+      await app.openCheck();
+      await app.page.getByText('No items in this book yet').waitFor();
+      await app.page.locator('[role="tab"][aria-selected="true"]').focus();
+    },
     why: 'The tool picker with a Translation Notes card for a book with no checks: "No items in this book yet" (state.jsx loadPickerProgress).' },
 
   // ---- align-unavailable ---------------------------------------------------------------------

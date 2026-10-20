@@ -343,6 +343,7 @@ fn progress(p: Props) -> AnyView {
         height: p.num("height").unwrap_or(d.height),
         size: p.num("size").unwrap_or(d.size),
         label: p.str("label"),
+        min_fill: None,
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -614,6 +615,8 @@ fn progress_bar(p: Props) -> AnyView {
         value: num_or(&p, "value", 0.0),
         tone: p.keyword("tone").unwrap_or_default(),
         height: p.num("height").unwrap_or(d.height),
+        label: None,
+        min_fill: None,
         style: p.css("style"),
         attrs: p.rest(),
     })

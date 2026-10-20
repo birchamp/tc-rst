@@ -11,6 +11,8 @@
 
 #[path = "support/counting_store.rs"]
 mod counting_store;
+#[path = "support/rail_differential.rs"]
+mod rail_differential;
 #[path = "support/store_world.rs"]
 mod store_world;
 
@@ -18,6 +20,7 @@ mod app {
     mod account;
     mod app_data;
     mod app_start;
+    mod check;
     pub mod common;
     mod dispatch;
     mod drafted;
@@ -49,6 +52,6 @@ mod app {
     mod store;
     mod store_scenario;
     mod sync;
-    mod understand;
+    pub mod understand;
     mod wire;
 }

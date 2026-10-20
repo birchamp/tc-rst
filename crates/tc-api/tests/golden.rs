@@ -26,8 +26,11 @@ use tc_api::buffer::{
     BufferEntry, BufferKey, BufferLine, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave,
 };
 use tc_api::check::{
-    Category, CheckListRef, CheckPlace, CheckUnit, Dot, NoteCategory, RailRow, RailRowPatch,
-    RowFlags, Tool,
+    AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
+    CheckSessionView, CheckUnit, Dot, DroppedNote, FixState, FixView, NextCheck, NoteCategory,
+    Open as CheckOpen, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch,
+    RailRows, RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard,
+    ToolState,
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
@@ -50,8 +53,9 @@ use tc_api::home::{
     StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
 };
 use tc_api::ids::{
-    AlignerId, ConflictRef, Epoch, JobId, LocaleId, ProjectId, ProjectRef, RecordRef, RefPart,
-    ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId, ViewSeq, WallMs,
+    AlignerId, CheckSessionId, ConflictRef, Epoch, JobId, LocaleId, ProjectId, ProjectRef,
+    RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId, ViewSeq,
+    WallMs,
 };
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
@@ -179,11 +183,14 @@ fn ack() -> Ack {
         rows: vec![RailRowPatch {
             row: RailRow {
                 index: 7,
+                check_id: "abcd".into(),
                 place: verse_place(BookId::Titus, "1", "4"),
                 title: "faith".into(),
                 flags: RowFlags {
                     dot: Dot::Valid,
                     decided: true,
+                    invalidated: false,
+                    invalid: false,
                     bookmarked: false,
                     commented: true,
                 },
@@ -1157,8 +1164,9 @@ fn opened() -> OpenedProject {
         books: vec![BookId::Jonah, BookId::Titus],
         draft_unit: DraftUnit::Section,
         place: Some(KeptPlace {
-            mode: PlaceMode::Read,
+            mode: PlaceMode::Check,
             chapter: 2,
+            tool: Some(Tool::TranslationNotes),
         }),
     }
 }
@@ -1412,6 +1420,159 @@ impl Example for ArticleView {
             ],
             dir: Direction::Ltr,
         }
+    }
+}
+
+// ---- B5a: the tool picker, a tool's rail, the guided fix -------------------------------------
+
+fn titus_tn() -> CheckListRef {
+    CheckListRef {
+        tool: Tool::TranslationNotes,
+        unit: CheckUnit::Book(BookId::Titus),
+    }
+}
+
+fn pin_citation(repo: &str, version: Option<&str>, sha: char) -> PinCitation {
+    PinCitation {
+        repo_path: format!("git.door43.org/{repo}"),
+        version: version.map(str::to_owned),
+        sha: sha.to_string().repeat(40),
+    }
+}
+
+impl Example for Picker {
+    fn example() -> Self {
+        Picker {
+            at: scope(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for PickerView {
+    fn example() -> Self {
+        PickerView {
+            tools: vec![
+                ToolCard {
+                    tool: Tool::TranslationWords,
+                    state: ToolState::Fetch,
+                    pin: Some(pin_citation("es-419_gl/es-419_twl", Some("v18"), 'c')),
+                    rung: Some(Rung::Primary),
+                    fallback_for: None,
+                    progress: None,
+                },
+                ToolCard {
+                    tool: Tool::TranslationNotes,
+                    state: ToolState::Ready,
+                    pin: Some(pin_citation("es-419_gl/es-419_tn", Some("v20"), 'a')),
+                    rung: Some(Rung::Primary),
+                    fallback_for: None,
+                    progress: Some(CardCount::Counted(CheckProgress {
+                        decided: 1,
+                        total: 112,
+                        dropped: Some(DroppedNote {
+                            count: 2,
+                            scheme: Some("rsc".into()),
+                        }),
+                        next: Some(NextCheck {
+                            title: "knowledge".into(),
+                            place: verse_place(BookId::Titus, "1", "1"),
+                        }),
+                    })),
+                },
+            ],
+            align: CardCount::Counted(AlignProgress {
+                done: 0,
+                total: 5,
+                next: Some("1:1".into()),
+            }),
+            old_twl: None,
+        }
+    }
+}
+
+impl Example for CheckOpen {
+    fn example() -> Self {
+        CheckOpen {
+            at: scope(),
+            list: titus_tn(),
+            since: Some(RailSince {
+                session: CheckSessionId::new(3),
+                view: ViewSeq::new(40),
+            }),
+        }
+    }
+}
+
+impl Example for CheckSessionView {
+    fn example() -> Self {
+        CheckSessionView {
+            session: CheckSessionId::new(3),
+            list: titus_tn(),
+            view: ViewSeq::new(41),
+            rows: RailRows::Full(vec![Ack::example().rows[0].row.clone()]),
+            terms: vec![],
+            progress: RailProgress {
+                decided: 1,
+                total: 112,
+            },
+            citation: Some(ResourceCitation {
+                pin: pin_citation("es-419_gl/es-419_tn", Some("v20"), 'a'),
+                rung: Rung::Primary,
+            }),
+            dropped: None,
+            empty: Some(CheckEmpty::AllDropped),
+            start: 7,
+        }
+    }
+}
+
+impl Example for Rows {
+    fn example() -> Self {
+        Rows {
+            at: scope(),
+            list: titus_tn(),
+            since: RailSince {
+                session: CheckSessionId::new(3),
+                view: ViewSeq::new(41),
+            },
+        }
+    }
+}
+
+impl Example for RowsView {
+    fn example() -> Self {
+        RowsView::Changed {
+            view: ViewSeq::new(44),
+            rows: Ack::example().rows,
+            progress: RailProgress {
+                decided: 2,
+                total: 112,
+            },
+        }
+    }
+}
+
+impl Example for FixState {
+    fn example() -> Self {
+        FixState {
+            at: scope(),
+            list: CheckListRef {
+                tool: Tool::TranslationWords,
+                unit: CheckUnit::Book(BookId::Titus),
+            },
+        }
+    }
+}
+
+impl Example for Option<FixView> {
+    fn example() -> Self {
+        Some(FixView {
+            tool: Tool::TranslationWords,
+            pin: pin_citation("es-419_gl/es-419_twl", Some("v18"), 'c'),
+            rung: Rung::Primary,
+            candidates: vec![pin_citation("es-419_gl/es-419_twl", None, 'e')],
+        })
     }
 }
 
@@ -1714,6 +1875,7 @@ fn api_errors() -> Vec<ApiError> {
             current: Some(Epoch::new(4)),
         },
         ApiError::StaleSession,
+        ApiError::ToolNotReady,
         ApiError::RequestReused,
         ApiError::NotSaved(NotSaved::StaleScope),
         ApiError::Refused(tc_api::Refusal::Prefs(

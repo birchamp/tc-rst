@@ -216,12 +216,12 @@ the rebuild fixed it or does as tC4 does:
 | #762 | Note at 80ch, source texts side by side | reference change | B5b | `compare_card_columns_fit_the_width` (port of `compare-card.spec.ts`) | See DELTA §3.12.1. |
 | #737 | A drag across draft words selects whole words | unit todo | B5b | `a_drag_selects_whole_words_and_mark_valid_saves_them` (port of the `checkKeyboard` and J4 drag cases) | Build `drag_range`. Next or Previous before marking drops the selection (tC4's Q2). |
 | #726 | Previous and Next beside the marking buttons | unit todo | B5b, B6, tc-ui | port of `item-navigation.spec.ts` | Build ItemNavButton on the gallery-proven Button styling; test ids `check-prev` and `check-next`. |
-| #764 | Progress bars look empty at low progress | unit todo | B5a | `check_progress_bar_is_visible_after_one_resolved_item` | On the check bars only: a visible fill once one check is resolved, and the count for screen readers. Declared difference; tell the owner. |
+| #764 | Progress bars look empty at low progress | covered | B5a | `check_progress_bar_is_visible_after_one_resolved_item` (tc-ui) | Done by B5a: the helps tools' bars (picker cards, rail header) fill at least 6 px once one check is resolved and name their count (`aria-label`); the Align and Community Checking bars are tC4's. Declared difference (residuals `check-picker`, `en-check-picker`, `guided-fix`); tell the owner. |
 | #757 | Clear every selected word with one button | not applicable | B5b | — | Open tC4 enhancement, outside 4.0. Keep the selection as one local value. |
 | #661 | A tW-only pin change does not count rows that lose their article | rebuild bug | tc-check; C8, B5a | `a_tw_only_change_that_drops_a_decided_article_is_counted` | See §1 row 11. |
 | #594 | Mark valid on an invalidated check is swallowed | covered | tc-check | `deciding_again_judges_the_text_and_the_list_in_front_of_the_person` | If tC4 rules that To do clears the flag, change `DecisionEdit::apply`. |
 | #595 | The language-change preview retries without limit | unit todo | C8 | `gateway_preview_appears_while_the_open_verse_keeps_changing`; `a_stale_confirm_reshows_the_dialog_with_new_counts` | Compute once from a snapshot; on PlanStale recompute once. |
-| #518 | Polish the return to the last Check tool | unit todo | B5a, B3 | `resume_shows_no_clickable_picker`; `a_tool_chosen_during_resume_stays_open` | Part 3 (the late write) is covered by the prefs flush tests. |
+| #518 | Polish the return to the last Check tool | covered | B5a | `resume_shows_no_clickable_picker` (tc-ui); journey `resume_and_tab_click_open_the_tool_once` | Done by B5a: `session/open`'s kept place carries the Check tool, and an open that lands in Check opens it at once: no picker is drawn meanwhile, and a tab click while it opens keeps it. Part 3 (the late write) is covered by the prefs flush tests. |
 | #628 | Full Markdown in helps | covered | B3 | `ta_article_with_a_table_renders_a_table` | Done by B3 (§3). Links stay plain text until tC4 decides. |
 | #663 | Door43 releases missing books | covered | tc-resources | `coverage_follows_what_the_files_hold` | None. |
 | #139 | Check % on Home tiles | not applicable | B2 if adopted | — | tC4 4.1.0. |
@@ -258,9 +258,9 @@ the rebuild fixed it or does as tC4 does:
 | #602 | Resize the helps panel | unit todo | B4a (B3 done) | `helps_panel_width_follows_the_divider_drag` | As in §3. |
 | #606 | Third-party licenses in About, offline | unit todo | A5, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). B9a: nothing in the app installs an Aquifer resource yet (APP-DESIGN §4.6), so the attribution goes with the unit that first installs one. |
 | #532 | Show a verse's new draft on return to the check | unit todo | B5b, C4 | `check_shows_new_draft_after_switching_back` | Read the verse again on return or when the book text arrives. |
-| #42 | Keyboard pass on the Check pages | unit todo | B5a, B5b | port of `check-keyboard.spec.ts` and `checkKeyboard.test.tsx` | Include the focus-rule table and #769's heading stops. |
-| #513 | Resuming into tN stalls | unit todo | B5a | `resume_and_tab_click_open_the_tool_once` | One open session that settles. |
-| #501 | Opening Check changes `resources.json` | unit todo | B5a, C8 | `open_check_preflight_offer_close_leaves_pins_unchanged` | Opening Check may write only a coverage backfill, on pins that record no books. |
+| #42 | Keyboard pass on the Check pages | unit todo | B5b (B5a done) | journeys `check_keyboard_picker_guided_fix_and_rail`, `check_keyboard_on_a_psalms_sized_rail`; `rail_keys_are_tc4s_roving_pattern` (tc-ui, the `railKeyDown` cases) | B5a: the picker's stops with the ring, the guided fix holding and returning the focus, the rail taking the focus once and being one Tab stop with tC4's keys, Tab out of the list, Back to the card, also on a virtual rail of Psalms' size. B5b: the detail column's stops, the drawer, the target words. #769's heading stops wait for the reference move. |
+| #513 | Resuming into tN stalls | covered | B5a | journey `resume_and_tab_click_open_the_tool_once` | Done by B5a: one `check/open` per resume, which settles. |
+| #501 | Opening Check changes `resources.json` | covered | B5a; C8 | `open_check_preflight_offer_close_leaves_pins_unchanged` (tc-app) | Done by B5a: the picker, the guided fix's offer and a tool's rail submit no command and leave the pins as they were. C8 ports J12's "pins never move without the accept". |
 | #722 | Verse button missing after the UGNT upgrade | unit todo | C8, B6 | J12 `ugnt_upgrade_marks_1_1_invalid_in_align` | The pin moves only after the download. |
 | #766 | A project with no pins gets the creation pins | unit todo | I, F1, E1b, C1a | `open_writes_creation_pins_only_when_none_exist` | Build now, as a declared difference, until the reference includes #766. |
 | #763 | Help shows rc.1 pages | reference change | A5 | help case b `help_home_shows_no_rc1_build_text_offline` | Vendor tc-website dbb7cd0 when the reference moves. |
@@ -367,7 +367,7 @@ the rebuild fixed it or does as tC4 does:
 | #611 | macOS manifest hashes before codesign | not applicable | G1 | — | If the release writes binary hashes, compute them after signing. |
 | #700 | Cache the bundle in CI | not applicable | — | — | tC4 CI. |
 | #546 | Release v4.0.0 | not applicable | — | — | Recapture and sweep again when v4.0.0 is tagged. |
-| #42 | Keyboard pass on the Check pages | unit todo | B5a, B5b | port of `check-keyboard.spec.ts` | As in §4. |
+| #42 | Keyboard pass on the Check pages | unit todo | B5b (B5a done) | port of `check-keyboard.spec.ts` | As in §4. |
 | #568 | A keyboard-only user cannot align | unit todo | B6 | `align_by_keyboard_only` | As in §2. |
 | #599 | Keep the mode switch centred | unit todo | A5 | `switcher_stays_centred_while_the_save_indicator_changes` | Within 1 px, in en and ar. |
 | #505 | No Project settings in the top bar | unit todo | A5 | DOM parity of the in-project screens | Settings open from the Home card (B2). |
@@ -437,9 +437,10 @@ Follow-ups the fix units left (2026-10-19):
   alignment files can call a record valid that the rail calls Invalid: use
   `tc_align::needs_review` for both. tc-store's two reflow call sites should call
   `tc_align::reflow_edit(value, before, after)`, which follows each link by position (Q30 a).
-- **B5a, C4 (Check):** the Check screen still picks its selectable target words from the shown
+- **B5b, C4 (Check):** the Check screen still picks its selectable target words from the shown
   text; take them from `tc_usfm::target_words`, as the aligner and the export do (FIX-text), so an
-  unknown marker's `|attributes` never show as words.
+  unknown marker's `|attributes` never show as words. *(B5a draws no target words: the item
+  detail, where they are, is B5b's, so this moved there.)*
 - **C6 (or a C1b follow-up):** build the owner's "Copy to this computer" answer (APP-DESIGN, Owner's
   answers, 2026-10-19): for a project in a projects folder on a FAT32 or exFAT drive or a synced
   folder, copy it with its unsaved texts into the app's local projects folder (checked safe; no folder
@@ -475,7 +476,8 @@ Follow-ups the fix units left (2026-10-19):
 - **B4b:** emptied section save (#600); pin click-then-click (#598); state hints (#604);
   blank lines in a joined span (#575); VerseMarker label (#614); section-save tests (#786).
 - **B5a:** visible progress bars (#764); resume (#518, #513); keyboard pass (#42); opening
-  Check never moves pins (#501).
+  Check never moves pins (#501). *Done by B5a (#42's picker, dialog and rail parts); #769 waits
+  for the reference move.*
 - **B5b:** drag selection (#737); ItemNavButton (#726); new draft on return (#532); keyboard
   pass (#42); article panel (#619); Drawer label (#614); right-to-left case (#29).
 - **B6:** NFC card labels (#768); no Clear, and Clear drops suggestions (#758); keyboard

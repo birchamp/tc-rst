@@ -7,6 +7,7 @@
 
 pub mod account_menu;
 pub mod book_rail;
+pub mod check;
 pub mod help_panel;
 pub mod helps_panel;
 pub mod home;

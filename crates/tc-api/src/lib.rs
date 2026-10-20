@@ -135,6 +135,12 @@ macro_rules! endpoint_table {
             query "helps/passage": $crate::helps::Passage => $crate::helps::PassageView;
             query "helps/article": $crate::helps::Article => $crate::helps::ArticleView;
 
+            query "check/picker": $crate::check::Picker => $crate::check::PickerView;
+            query "check/open": $crate::check::Open => $crate::check::CheckSessionView;
+            query "check/rows": $crate::check::Rows => $crate::check::RowsView;
+
+            query "resources/fixState": $crate::check::FixState
+                => Option<$crate::check::FixView>;
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;
 

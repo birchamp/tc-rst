@@ -51,6 +51,11 @@ const PHASE_0: &[&str] = &[
     "account/repoLink",
     "account/orgs",
     "door43/open",
+    // B5a: the Check tool picker, a tool's rail and the guided fix.
+    "check/picker",
+    "check/open",
+    "check/rows",
+    "resources/fixState",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",
     // B9a: Project settings from Home, and Get source texts with its downloads.

@@ -268,7 +268,7 @@ pub(crate) fn keyed_list<V: IntoView + 'static>(
 /// back if it is still on the page and the focus fell to the body; focus that something else took
 /// meanwhile stays where it is. A text control keeps its caret across the move, so focusing it
 /// again is enough.
-fn refocus_after_moves() {
+pub(crate) fn refocus_after_moves() {
     use wasm_bindgen::JsCast;
 
     let doc = document();

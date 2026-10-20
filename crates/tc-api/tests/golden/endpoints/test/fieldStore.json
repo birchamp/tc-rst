@@ -42,11 +42,14 @@
         {
           "row": {
             "index": 7,
+            "checkId": "abcd",
             "place": "TIT 1:4",
             "title": "faith",
             "flags": {
               "dot": "valid",
               "decided": true,
+              "invalidated": false,
+              "invalid": false,
               "bookmarked": false,
               "commented": true
             },

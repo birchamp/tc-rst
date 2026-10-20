@@ -21,10 +21,12 @@ use crate::ds::{
 };
 use crate::i18n::{keys, t};
 use crate::views::account_menu::{AccountMenu, InternetDialog};
+use crate::views::check::Check;
 use crate::views::home::Home;
 use crate::views::modals::add_book::AddBook;
 use crate::views::modals::add_project::AddProject;
 use crate::views::modals::feedback::Feedback;
+use crate::views::modals::guided_fix::GuidedFix;
 use crate::views::modals::import::Import;
 use crate::views::modals::new_bible::{NewBible, NewObs};
 use crate::views::modals::open_door43::OpenFromDoor43;
@@ -73,6 +75,10 @@ pub fn App() -> impl IntoView {
         let (dialog, sh) = (ctx.s.layers.dialog.clone(), ctx.s.sh.clone());
         Memo::new(move |_| dialog.get() == Some(Dialog::Share) && sh.with(Option::is_some))
     };
+    let fix_open = {
+        let (dialog, fix) = (ctx.s.layers.dialog.clone(), ctx.s.c.fix.clone());
+        Memo::new(move |_| dialog.get() == Some(Dialog::GuidedFix) && fix.with(Option::is_some))
+    };
     let settings_open = {
         let (dialog, st) = (ctx.s.layers.dialog.clone(), ctx.s.st.clone());
         Memo::new(move |_| dialog.get() == Some(Dialog::Settings) && st.with(Option::is_some))
@@ -88,7 +94,8 @@ pub fn App() -> impl IntoView {
             {home_dialogs(&ctx.s)}
             {move || settings_open.get().then(|| view! { <ProjectSettings /> })}
             {move || sources_open.get().then(|| view! { <SourceTexts /> })}
-            // GatewayChange, UpgradeSet (C8) and GuidedFix (B5a) mount here, before ShareSignIn.
+            // GatewayChange, UpgradeSet (C8) mount here, before GuidedFix and ShareSignIn.
+            {move || fix_open.get().then(|| view! { <GuidedFix /> })}
             {move || sign_in_open.get().map(|_| view! { <ShareSignIn /> })}
             {move || share_open.get().then(|| view! { <ShareDialog /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}
@@ -481,9 +488,9 @@ fn main_view(s: &AppState) -> AnyView {
     match screen {
         Screen::Home => view! { <Home /> }.into_any(),
         Screen::Understand => view! { <Understand /> }.into_any(),
-        // B4a Translate, B5a/B5b Check, B8 Community Checking, B7 the story views.
+        Screen::Check => view! { <Check /> }.into_any(),
+        // B4a Translate, B8 Community Checking, B7 the story views.
         Screen::Draft
-        | Screen::Check
         | Screen::CommunityChecking
         | Screen::StoryUnderstand
         | Screen::StoryDraft

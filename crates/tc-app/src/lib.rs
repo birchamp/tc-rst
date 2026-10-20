@@ -12,6 +12,7 @@ pub mod account;
 pub mod app;
 pub mod backend;
 pub mod bundle;
+mod check;
 pub mod clock;
 pub mod config;
 pub mod counters;

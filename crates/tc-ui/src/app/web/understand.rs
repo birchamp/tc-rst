@@ -111,6 +111,8 @@ fn current(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
 struct Landing {
     mode: PlaceMode,
     chapter: u16,
+    /// The Check tool open when the person left (B5a).
+    tool: Option<tc_api::check::Tool>,
 }
 
 fn view_of(mode: PlaceMode) -> View {
@@ -177,6 +179,7 @@ impl Actions {
             Some(Landing {
                 mode: resume.mode,
                 chapter,
+                tool: resume.tool,
             }),
             false,
         );
@@ -300,6 +303,7 @@ impl Actions {
         let place = landing.or(opened.place.map(|p| Landing {
             mode: p.mode,
             chapter: p.chapter,
+            tool: p.tool,
         }));
         let book = match unit {
             Some(OpenUnit::Book(book)) => Some(book),
@@ -324,6 +328,15 @@ impl Actions {
             flavor,
         }));
         let view = place.map_or(View::Read, |p| view_of(p.mode));
+        // A resume into Check opens its tool at once: no picker shows meanwhile (#518, #513).
+        self.reset_check();
+        if let Some(place) = place
+            && let crate::app::check::CheckView::Tool(tool) =
+                crate::app::check::landing(place.mode, place.tool)
+            && flavor == ProjectFlavor::TextTranslation
+        {
+            self.open_check_tool(tool);
+        }
         s.view.try_set(view);
         // Understand keeps the overlay up, as tC4's 'prepare' stage, until its book is read;
         // the screens later units build have no read yet.
@@ -347,6 +360,7 @@ impl Actions {
     /// (the server ran again) closes nothing.
     pub(super) fn close_session(&self, project: Option<CurrentProject>) {
         let s = self.s();
+        self.reset_check();
         s.u.clear_focus();
         s.u.book.try_set(None);
         s.u.chapter.try_set(1);
@@ -376,6 +390,10 @@ impl Actions {
             let u = &this.s().u;
             u.clear_focus();
             u.chapter.try_set(1);
+            if u.book.get_untracked() != Some(book) {
+                // A tool's list is the book's: another book shows the picker.
+                this.reset_check();
+            }
             u.book.try_set(Some(book));
         });
     }

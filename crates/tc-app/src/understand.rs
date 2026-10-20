@@ -46,7 +46,7 @@ use crate::sources::{ChapterModel, PaneBook, VerseModel, pane_book, verse_range}
 const BOOKS_KEPT: usize = 2;
 
 /// One source text of a loaded book.
-enum LoadedText {
+pub(crate) enum LoadedText {
     Ready(PaneBook),
     NotInstalled,
     Missing,
@@ -65,12 +65,36 @@ pub(crate) struct LoadedBook {
     /// reads again.
     stamp: Vec<Vec<ChangeId>>,
     pins: Option<ProjectPins>,
-    resources: BookResources,
+    pub(crate) resources: BookResources,
     panes: Vec<LoadedPane>,
     simplified: Slot<PaneBook>,
     simplified_pin: Option<String>,
     /// How the project numbers the book's verses against its sources.
-    numbering: Numbering,
+    pub(crate) numbering: Numbering,
+    /// Read with the Door43 helps, whatever the project's helps setting: the check lists'
+    /// reading (Q33).
+    door43: bool,
+}
+
+impl LoadedBook {
+    /// The source panes' ids, in order.
+    pub(crate) fn pane_ids(&self) -> Vec<String> {
+        self.panes.iter().map(|p| p.id.clone()).collect()
+    }
+
+    pub(crate) fn pane(&self, id: &str) -> Option<&LoadedText> {
+        self.panes.iter().find(|p| p.id == id).map(|p| &p.text)
+    }
+}
+
+/// The pane whose words title a help or a check: the literal Bible (`ult`, else `glt`), else
+/// the first pane (tC4's `literalPaneId`).
+pub(crate) fn literal_pane(ids: &[String]) -> Option<String> {
+    ["ult", "glt"]
+        .into_iter()
+        .find(|id| ids.iter().any(|i| i == id))
+        .map(str::to_owned)
+        .or_else(|| ids.first().cloned())
 }
 
 /// The books a session has read, newest last. The lock is held across a load, so two reads of
@@ -130,7 +154,7 @@ fn resources_stamp(read: &CountingSnapshot) -> Vec<Vec<ChangeId>> {
 }
 
 /// The project's versification register, when it has one.
-fn versification(read: &CountingSnapshot) -> Option<VersificationValue> {
+pub(crate) fn versification(read: &CountingSnapshot) -> Option<VersificationValue> {
     match read.projected(&RecordKey::Versification) {
         Some(Record::Versification { value }) => Some(value),
         _ => None,
@@ -323,6 +347,7 @@ fn load(
         simplified,
         simplified_pin,
         numbering: Numbering::of(register),
+        door43: matches!(choice, HelpsChoice::Dcs),
     }
 }
 
@@ -334,17 +359,40 @@ impl App {
         session: &Arc<ProjectSession>,
         book: BookId,
     ) -> Result<Arc<LoadedBook>, ApiError> {
+        let choice = helps_choice(&session.read());
+        self.loaded_book_with(session, book, choice).await
+    }
+
+    /// The book's resources read with the Door43 helps, as the check lists derive from them
+    /// (Q33): the screen's own when its helps setting is Door43.
+    pub(crate) async fn loaded_book_for_checks(
+        &self,
+        session: &Arc<ProjectSession>,
+        book: BookId,
+    ) -> Result<Arc<LoadedBook>, ApiError> {
+        self.loaded_book_with(session, book, HelpsChoice::Dcs).await
+    }
+
+    async fn loaded_book_with(
+        &self,
+        session: &Arc<ProjectSession>,
+        book: BookId,
+        choice: HelpsChoice,
+    ) -> Result<Arc<LoadedBook>, ApiError> {
         let read = session.read();
         let stamp = resources_stamp(&read);
+        let door43 = matches!(choice, HelpsChoice::Dcs);
         let mut books = session.books().books.lock().await;
-        if let Some(found) = books.iter().find(|b| b.book == book && b.stamp == stamp) {
+        if let Some(found) = books
+            .iter()
+            .find(|b| b.book == book && b.stamp == stamp && b.door43 == door43)
+        {
             return Ok(found.clone());
         }
         let pins = project_pins(&read).map_err(|reason| ApiError::BadRequest {
             field: "pins".to_owned(),
             reason,
         })?;
-        let choice = helps_choice(&read);
         let register = versification(&read);
         let app = self.clone();
         let loaded = tokio::task::spawn_blocking(move || {
@@ -361,7 +409,7 @@ impl App {
             )
         })?;
         let loaded = Arc::new(loaded);
-        books.retain(|b| b.book != book);
+        books.retain(|b| b.book != book || b.door43 != door43);
         books.push(loaded.clone());
         let over = books.len().saturating_sub(BOOKS_KEPT);
         books.drain(..over);
@@ -424,6 +472,7 @@ impl App {
                 .map(|place| KeptPlace {
                     mode: place.mode,
                     chapter: place.chapter,
+                    tool: place.tool,
                 })
         });
         Ok(JobOutcome::Opened(Box::new(OpenedProject {
@@ -556,7 +605,7 @@ impl Handle<Sources> for App {
 
 /// A help's reference as tC4's `contextId.reference` holds it: the chapter and verse parts
 /// as written (`1:1`, `1:intro`, `front:intro`, `1:1-3`).
-fn parts(reference: &HelpRef) -> Option<(RefPart, RefPart)> {
+pub(crate) fn parts(reference: &HelpRef) -> Option<(RefPart, RefPart)> {
     let text = reference.tsv_text();
     let (chapter, verse) = text.split_once(':')?;
     Some((RefPart::parse(chapter).ok()?, RefPart::parse(verse).ok()?))

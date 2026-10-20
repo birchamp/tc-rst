@@ -28,7 +28,7 @@ use super::scenario::scenario;
 
 /// An app over a parity scenario's projects with its resources installed, as `tc4 serve
 /// --scenario` starts.
-async fn start(name: &str) -> (tempfile::TempDir, TestApp) {
+pub async fn start(name: &str) -> (tempfile::TempDir, TestApp) {
     start_over(scenario(name)).await
 }
 
@@ -58,7 +58,7 @@ async fn start_over(state: &ScenarioState) -> (tempfile::TempDir, TestApp) {
     (dir, t)
 }
 
-async fn ok<E: tc_api::Endpoint>(app: &App, req: &E) -> E::Ok {
+pub async fn ok<E: tc_api::Endpoint>(app: &App, req: &E) -> E::Ok {
     match app.request(req).await.unwrap() {
         Reply::Ok(ok) => ok,
         Reply::Err(e) => panic!("{}: {e:?}", E::PATH),
@@ -92,7 +92,7 @@ async fn open(app: &App, project: &str, unit: Option<OpenUnit>) -> JobState {
     ended(app, job).await
 }
 
-async fn opened(app: &App) -> OpenedProject {
+pub async fn opened(app: &App) -> OpenedProject {
     match open(app, "sample_burrito", Some(OpenUnit::Book(BookId::Titus))).await {
         JobState::Done(JobOutcome::Opened(opened)) => *opened,
         other => panic!("{other:?}"),

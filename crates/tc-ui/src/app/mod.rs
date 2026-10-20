@@ -19,6 +19,7 @@ pub mod account;
 pub mod boot;
 pub mod buffer;
 pub mod cache;
+pub mod check;
 pub mod client;
 pub mod confirm;
 pub mod effects;

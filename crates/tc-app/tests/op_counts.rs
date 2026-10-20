@@ -13,10 +13,13 @@
 
 #[path = "app/common.rs"]
 mod common;
+#[path = "support/rail_differential.rs"]
+mod rail_differential;
 #[path = "support/store_world.rs"]
 mod store_world;
 
 mod op_counts {
+    mod check;
     pub mod corpus;
     pub mod harness;
     mod home;
