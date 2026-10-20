@@ -188,6 +188,10 @@ And these (unit B4b):
 - When a section's first verse has no words, the text a Place session writes keeps the format
   of its first line, so a save from Place keeps it. tC4 4.0's `serializeDraft` drops it (its
   own Save reads the session, not the text).
+- A typed span followed by an empty pin inside it keeps every other pin through Place and
+  back to Type. For `1-4 0` followed by bare `2`, pins 1, 3 and 4 stay on the word and pin 2
+  stays in the bank. tC4's serializer drops pin 1. The rebuild writes the covering span and
+  then its empty interior override, preserving verse boundaries as well as words and formats.
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

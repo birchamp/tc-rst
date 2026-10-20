@@ -59,7 +59,34 @@ fn number_alone(text: &str) -> bool {
 
 /// Compare tC4's other lines exactly; the round-trip tests separately require every
 /// explicitly typed empty verse's format. Leading spaces escape literal number-only text.
-fn lines_without_unplaced_numbers<'a>(text: &'a str, b: &SectionBuffer) -> Vec<&'a str> {
+fn lines_without_unplaced_numbers(text: &str, b: &SectionBuffer) -> Vec<String> {
+    let groups = b.groups();
+    let formats = b.formats();
+    let mut covering = BTreeMap::new();
+    for (last, group) in groups.iter().enumerate() {
+        let Some(at) = group.at else { continue };
+        let Some(first) = groups.iter().position(|g| g.at == Some(at)) else {
+            continue;
+        };
+        let holes: Vec<usize> = (first..last).filter(|&i| groups[i].at.is_none()).collect();
+        if !holes.is_empty()
+            && holes.iter().all(|&i| {
+                i > 0
+                    && formats
+                        .iter()
+                        .any(|(before, _)| *before == groups[i - 1].key)
+            })
+        {
+            covering.insert(
+                format!(
+                    "{}-{}",
+                    groups[first].members.first().unwrap(),
+                    group.members.last().unwrap()
+                ),
+                group.key.clone(),
+            );
+        }
+    }
     let omitted: Vec<String> = b
         .groups()
         .into_iter()
@@ -69,6 +96,14 @@ fn lines_without_unplaced_numbers<'a>(text: &'a str, b: &SectionBuffer) -> Vec<&
     lines_of(text)
         .into_iter()
         .filter(|line| !omitted.iter().any(|key| key == line.trim_end()))
+        .map(|line| match line.split_once(' ') {
+            // tC4 serializes only the last part of a discontiguous stack. The rebuild
+            // covers it and defers the explicit bare overrides, preserving the other pins.
+            Some((key, body)) if covering.contains_key(key) => {
+                format!("{} {body}", covering[key])
+            }
+            _ => line.to_owned(),
+        })
         .collect()
 }
 
@@ -168,6 +203,12 @@ fn the_port_reads_every_text_as_tc4_does() {
                 lines_of(&theirs),
                 "serialized {at}"
             );
+            let back = SectionBuffer::parse(&ours, &k);
+            for pin in b.pins() {
+                assert_eq!(back.marker(pin), b.marker(pin), "pin {pin} of {at}");
+            }
+            assert_eq!(back.verses(), b.verses(), "verses of {at}");
+            assert_eq!(back.formats(), b.formats(), "formats of {at}");
         } else {
             assert_eq!(ours, theirs, "serialized {at}");
         }
@@ -739,6 +780,56 @@ fn a_place_session_keeps_explicit_formats_on_verses_without_words() {
     let back = SectionBuffer::parse(&written, &k);
     assert_eq!(back.formats(), b.formats());
     assert!(!back.formats().iter().any(|(before, _)| before == "9"));
+}
+
+/// A later empty pin can split a typed span without removing its other stacked pins.
+/// Type serialization must preserve that interior override after the span's words.
+#[test]
+fn an_empty_pin_inside_a_typed_span_preserves_the_other_stacked_pins() {
+    let k = keys(&["1-2", "3", "4"]);
+    for prefix in ["", "\t", "\t\t", "\n"] {
+        for empty in ["2", "\t2", "\t\t2", "\n2"] {
+            let text = format!("{prefix}1-4 0\n{empty}");
+            let b = SectionBuffer::parse(&text, &k);
+            assert_eq!(b.words(), ["0"], "{text:?}");
+            assert_eq!(b.marker("1"), Some(0));
+            assert_eq!(b.marker("2"), None);
+            assert_eq!(b.marker("3"), Some(0));
+            assert_eq!(b.marker("4"), Some(0));
+            let written = b.serialize();
+            let back = SectionBuffer::parse(&written, &k);
+            assert_eq!(back.words(), b.words(), "{written:?}");
+            for pin in b.pins() {
+                assert_eq!(back.marker(pin), b.marker(pin), "{pin}: {written:?}");
+            }
+            assert_eq!(back.verses(), b.verses(), "{written:?}");
+            assert_eq!(back.formats(), b.formats(), "{written:?}");
+            assert_eq!(back.serialize(), written, "{text:?}");
+        }
+    }
+}
+
+#[test]
+fn sparse_stacked_pins_and_multiple_bare_overrides_round_trip() {
+    for (text, k) in [
+        ("1-5 a  b\n\t3", keys(&["1", "3", "5"])),
+        ("1-5 a  b\n2\n\t\t4", keys(&["1", "2", "3", "4", "5"])),
+        (
+            "1-5 a  b\n\n2\n4\n6 c\nd",
+            keys(&["1", "2", "3", "4", "5", "6"]),
+        ),
+    ] {
+        let b = SectionBuffer::parse(text, &k);
+        let written = b.serialize();
+        let back = SectionBuffer::parse(&written, &k);
+        assert_eq!(back.words(), b.words(), "{written:?}");
+        for pin in b.pins() {
+            assert_eq!(back.marker(pin), b.marker(pin), "{pin}: {written:?}");
+        }
+        assert_eq!(back.verses(), b.verses(), "{written:?}");
+        assert_eq!(back.formats(), b.formats(), "{written:?}");
+        assert_eq!(back.serialize(), written, "{text:?}");
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

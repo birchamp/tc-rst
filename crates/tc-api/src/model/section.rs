@@ -575,27 +575,61 @@ impl SectionBuffer {
     pub fn serialize(&self) -> String {
         let verses = self.verses();
         let groups = self.groups();
-        groups
-            .iter()
-            .enumerate()
-            .filter_map(|(i, g)| {
-                let (text, format) = match verses.iter().find(|(key, _)| *key == g.key) {
-                    Some((_, text)) => (
-                        text.as_str(),
-                        g.at.and_then(|at| self.own.get(&at).copied()),
-                    ),
-                    // No typed line means keep the stored format; an unindented typed line
-                    // means remove it. Only the latter has an entry in `bare`.
-                    None => ("", *self.bare.get(g.members.first()?)?),
-                };
-                Some((i, g, text, format))
-            })
-            .map(|(i, g, text, format)| {
-                let line = format!("{} {}", g.key, escape_body(text, &self.pins));
-                if i == 0 { line } else { indented(format, line) }
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+        let line = |i: usize, g: &Group, key: &str| {
+            let (text, format) = match verses.iter().find(|(key, _)| *key == g.key) {
+                Some((_, text)) => (
+                    text.as_str(),
+                    g.at.and_then(|at| self.own.get(&at).copied()),
+                ),
+                // No typed line means keep the stored format; an unindented typed line
+                // means remove it. Only the latter has an entry in `bare`.
+                None => ("", *self.bare.get(g.members.first()?)?),
+            };
+            let line = format!("{key} {}", escape_body(text, &self.pins));
+            Some(if i == 0 { line } else { indented(format, line) })
+        };
+        let mut lines = Vec::new();
+        let mut overrides = Vec::new();
+        let mut i = 0;
+        while let Some(first) = groups.get(i) {
+            let mut end = i;
+            if let Some(at) = first.at {
+                for (j, next) in groups.iter().enumerate().skip(i + 1) {
+                    if next.at.is_some_and(|next| next != at) {
+                        break;
+                    }
+                    if next.at == Some(at) {
+                        end = j;
+                    }
+                }
+            }
+            let Some(last) = groups.get(end) else { break };
+            let key = if end > i {
+                // A later bare pin can split a span into discontiguous stacks. Write the
+                // covering span first, then its empty interior pins after all words: before
+                // the words those pins would take word 0 from the span on the next parse.
+                for (j, group) in groups.iter().enumerate().take(end).skip(i + 1) {
+                    if group.at.is_none()
+                        && let Some(line) = line(j, group, &group.key)
+                    {
+                        overrides.push(line);
+                    }
+                }
+                format!(
+                    "{}-{}",
+                    first.members.first().unwrap_or(&first.key),
+                    last.members.last().unwrap_or(&last.key)
+                )
+            } else {
+                last.key.clone()
+            };
+            if let Some(line) = line(end, last, &key) {
+                lines.push(line);
+            }
+            i = end + 1;
+        }
+        lines.extend(overrides);
+        lines.join("\n")
     }
 
     /// May `pin` begin at word `index`? Never the first verse (fixed), never past a later
