@@ -13,8 +13,8 @@ use leptos::prelude::*;
 use tc_api::create::UsfmProblem;
 use tc_core::BookId;
 
-use super::source_texts::{CHAPTERS, book_options};
-use crate::app::forms::{AddBookForm, AddBookStep, RowState, UsfmRow};
+use super::source_texts::book_options;
+use crate::app::forms::{AddBookForm, AddBookStep, RowState, UsfmRow, book_info_key, chapters};
 use crate::app::web::{Actions, AppCtx, use_app};
 use crate::ds::{
     Attrs, Button, ButtonVariant, Callout, CalloutTone, Corner, DropZone, Edge, Fill, FilterChip,
@@ -26,13 +26,6 @@ use crate::i18n::{keys, t, t_dyn};
 /// The drafting sources the pick step names (tC4 `SUITE_VERSION`).
 fn suite_version() -> &'static str {
     tc_api::create::SUITE_VERSION
-}
-
-fn chapters(book: BookId) -> u16 {
-    CHAPTERS
-        .get(usize::from(book.ordinal()) - 1)
-        .copied()
-        .unwrap_or(0)
 }
 
 fn row_words(row: &UsfmRow) -> String {
@@ -408,16 +401,11 @@ fn single(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl Into
                 },
                 &[],
             );
-            let n = chapters(book);
             t(
-                if n == 1 {
-                    keys::add_book::INFO_ONE
-                } else {
-                    keys::add_book::INFO
-                },
+                book_info_key(book),
                 &[
                     ("name", &book.english_name()),
-                    ("chapters", &n),
+                    ("chapters", &chapters(book)),
                     ("testament", &testament),
                 ],
             )

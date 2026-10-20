@@ -8,7 +8,8 @@ use tc_api::refusal::CreateRefusal;
 use tc_api::shown::{Direction, Known};
 use tc_core::BookId;
 use tc_ui::app::forms::{
-    AddBookForm, AddBookStep, CodeOffer, NewProjectForm, RowState, UsfmState, code_offer,
+    AddBookForm, AddBookStep, CodeOffer, NewProjectForm, RowState, UsfmState, book_info_key,
+    chapters, code_offer,
 };
 
 fn suggestion(
@@ -328,4 +329,72 @@ fn an_add_keeps_its_error_until_the_next_add_and_the_books_it_added_leave_the_li
     let (request, _) = form.press_usfm(|| rid(3)).unwrap();
     assert_eq!(request, rid(3));
     assert_eq!(form.error, None);
+}
+
+/// tC4 #577: a book of one chapter says "1 chapter", the others say how many.
+#[test]
+fn one_chapter_book_says_1_chapter() {
+    for book in [
+        BookId::Obadiah,
+        BookId::Philemon,
+        BookId::SecondJohn,
+        BookId::ThirdJohn,
+        BookId::Jude,
+    ] {
+        assert_eq!(chapters(book), 1, "{book}");
+        assert_eq!(book_info_key(book), tc_ui::i18n::keys::add_book::INFO_ONE);
+    }
+    assert_eq!(chapters(BookId::Psalms), 150);
+    assert_eq!(chapters(BookId::Revelation), 22);
+    assert_eq!(
+        book_info_key(BookId::Titus),
+        tc_ui::i18n::keys::add_book::INFO
+    );
+    // Every book that has one chapter in tC4's table is one of those five.
+    let singles: Vec<BookId> = BookId::ALL
+        .into_iter()
+        .filter(|b| chapters(*b) == 1)
+        .collect();
+    assert_eq!(singles.len(), 5);
+}
+
+/// tC4 #564: removing rows from a long list removes the rows asked for, whatever the list
+/// became meanwhile, and the others keep their verdicts.
+#[test]
+fn removing_rows_from_25_aligned_books_removes_the_intended_rows() {
+    let mut form = AddBookForm::open(&card_with(&[]));
+    let ids: Vec<u32> = BookId::ALL
+        .into_iter()
+        .take(25)
+        .enumerate()
+        .map(|(n, book)| {
+            let name = format!("{}.usfm", book.code());
+            let id = form.add_file(name);
+            form.file_read(id, read(u8::try_from(n).unwrap(), book));
+            id
+        })
+        .collect();
+    for gone in [ids[3], ids[10], ids[24], ids[0]] {
+        form.remove_file(gone);
+    }
+    let rows = form.rows();
+    let names: Vec<&str> = rows.iter().map(|row| row.name.as_str()).collect();
+    // The first 25 books are GEN to 1CH; the fourth, eleventh, twenty-fifth and first are gone.
+    let all: Vec<String> = BookId::ALL
+        .into_iter()
+        .take(25)
+        .map(|b| format!("{}.usfm", b.code()))
+        .collect();
+    let expected: Vec<&str> = all
+        .iter()
+        .enumerate()
+        .filter(|(n, _)| ![0, 3, 10, 24].contains(n))
+        .map(|(_, name)| name.as_str())
+        .collect();
+    assert_eq!(names, expected);
+    assert!(
+        rows.iter()
+            .all(|row| matches!(row.state, RowState::Adds(_)))
+    );
+    assert_eq!(form.addable(), 21);
 }

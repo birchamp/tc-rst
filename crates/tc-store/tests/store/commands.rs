@@ -1101,6 +1101,43 @@ fn aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records() {
     assert!(tc_usfm::codec::join_verse(&words, &layout).starts_with("Paul, a servant"));
 }
 
+/// tC4 #767 (DELTA C37): a poetry book adds whole, every verse present with its text, and its
+/// alignments split out; the Selah inside `\qs` stays in the verse.
+#[test]
+fn a_psalm_adds_whole_with_every_verse_and_its_selah() {
+    let (base, folder) = rich();
+    let (_rig, handle) = open(&base, &folder);
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/tc4/test-fixtures/en_ult/PSA-3.usfm");
+    let usfm = std::fs::read_to_string(path).unwrap();
+    submit(&handle, add_text(BookId::Psalms, usfm)).unwrap();
+    let fold = handle.snapshot().fold().clone();
+    let mut words = Vec::new();
+    for v in 1..=2 {
+        match fold.projected(&vkey(BookId::Psalms, 3, v)) {
+            Some(Record::Verse {
+                value: VerseValue::Text {
+                    words: w, layout, ..
+                },
+                ..
+            }) => {
+                assert!(
+                    !w.contains("\\zaln") && !layout.contains("\\zaln"),
+                    "verse {v}"
+                );
+                words.push(w);
+            }
+            other => panic!("verse {v}: {other:?}"),
+        }
+    }
+    assert!(words.iter().any(|w| w.contains("Selah")), "{words:?}");
+    let alignments = book_keys(&handle, BookId::Psalms)
+        .iter()
+        .filter(|k| matches!(k, RecordKey::Alignment(..)))
+        .count();
+    assert_eq!(alignments, 2);
+}
+
 /// §13.5: a verse whose markup does not read apart keeps its text as written, and the rest
 /// of the book still adds.
 #[test]

@@ -157,6 +157,23 @@ async fn new_bible_is_created_whole_and_a_blank_book_makes_it_a_valid_burrito() 
     );
 
     assert_valid_burrito(&world.fs, &world.folder(&created.project));
+    // Adding a book leaves the pins the project was created with as they were (tC4 #766).
+    let pins =
+        project_files(&world, &created.project)["ingredients/checking/resources.json"].clone();
+    post(
+        &t.app,
+        &AddBlankBooks {
+            request: rid(22),
+            project: created.project.clone(),
+            books: vec![BookId::Jude],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        project_files(&world, &created.project)["ingredients/checking/resources.json"],
+        pins
+    );
     let meta = metadata(&world, &created.project);
     assert_eq!(meta["languages"][0]["tag"], "acm-x-lebarabi-c");
     assert_eq!(meta["languages"][0]["scriptDirection"], "rtl");
@@ -183,7 +200,7 @@ async fn new_bible_is_created_whole_and_a_blank_book_makes_it_a_valid_burrito() 
         .find(|c| c.project == created.project)
         .unwrap();
     match &card.books {
-        Known::Known(books) => assert_eq!(books.len(), 1),
+        Known::Known(books) => assert_eq!(books.len(), 2),
         other => panic!("{other:?}"),
     }
 }
