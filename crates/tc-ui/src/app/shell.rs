@@ -91,26 +91,7 @@ impl Editing {
     }
 }
 
-/// JavaScript's `\s`: what tC4's `split(/\s+/)` and `trim()` treat as space. Rust's
-/// `char::is_whitespace` adds U+0085 and leaves out U+FEFF.
-pub fn js_space(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r' | ' ' | '\u{A0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200A}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202F}'
-                | '\u{205F}'
-                | '\u{3000}'
-                | '\u{FEFF}'
-    )
-}
-
-/// JavaScript's `trim()`.
-pub fn js_trim(text: &str) -> &str {
-    text.trim_matches(js_space)
-}
+pub use tc_api::model::{js_space, js_trim};
 
 /// The project chip's initials (`tC4:src/App.jsx:99`): `(name || '?').split(/\s+/).map((w) =>
 /// w[0]).slice(0, 2).join('').toUpperCase()`. A name of spaces gives nothing, and a name that
