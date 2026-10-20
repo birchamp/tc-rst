@@ -280,6 +280,24 @@ impl CountingSnapshot {
         self.snapshot.fold().check_texts(collection)
     }
 
+    /// Every decision of `tool` on one story's frames: what a story's Check session opens with.
+    pub fn story_decisions(
+        &self,
+        tool: ToolId,
+        story: tc_journal::StoryNo,
+    ) -> Vec<ProjectedDecision> {
+        let decisions = self.snapshot.fold().story_decisions(tool, story);
+        self.count(AppCounter::RecordsRead, decisions.len());
+        decisions
+    }
+
+    /// Every comment record of one story: on its frames and on its frame checks.
+    pub fn story_comments_of(&self, story: tc_journal::StoryNo) -> Vec<RecordKey> {
+        let keys = self.snapshot.fold().story_comments_of(story);
+        self.count(AppCounter::KeysProbed, keys.len());
+        keys
+    }
+
     pub fn alignments_of(&self, book: BookId) -> Vec<RecordKey> {
         let keys = self.snapshot.fold().alignments_of(book);
         self.count(AppCounter::KeysProbed, keys.len());

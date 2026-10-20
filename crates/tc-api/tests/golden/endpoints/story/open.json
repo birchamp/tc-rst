@@ -1,0 +1,80 @@
+{
+  "path": "story/open",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "story": 1
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "story": 1,
+      "title": "La Creación",
+      "reference": "Una historia de la Biblia: Génesis 1-2",
+      "frames": [
+        {
+          "text": "Así fue como Dios hizo todo.",
+          "image": "/media/obs/uW~obs_images_360~7146d5b504f6b63b9e11f7dc0b18c594d0ae179d/360px/obs-en-01-01.jpg"
+        },
+        {
+          "text": "",
+          "image": null
+        }
+      ],
+      "gateway": {
+        "title": "The Creation",
+        "reference": "A Bible story from: Genesis 1-2",
+        "frames": [
+          "This is how God made everything.",
+          ""
+        ]
+      },
+      "source": {
+        "type": "mismatch",
+        "value": {
+          "message": "the gateway story has 15 frames, the project's has 16"
+        }
+      },
+      "sourceVersion": "v9",
+      "imageNote": {
+        "wanted": 16,
+        "packs": [
+          {
+            "pin": "git.door43.org/uW/obs_images_360@7146d5b504f6",
+            "installedAt": null,
+            "via": null,
+            "files": 0,
+            "error": "not installed"
+          },
+          {
+            "pin": "git.door43.org/uW/obs_images_361@aaaaaaaaaaaa",
+            "installedAt": "/home/ana/resources/obs_images_361",
+            "via": "metadata",
+            "files": 0,
+            "error": "the listing could not be read"
+          }
+        ]
+      },
+      "comments": [
+        {
+          "frame": 0,
+          "text": "Check the title with the team.",
+          "at": 1790000000000
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

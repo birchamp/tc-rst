@@ -25,7 +25,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use tc_api::check::{CheckUnit, Tool};
+use tc_api::check::{CheckCollection, CheckUnit, Tool};
 use tc_api::resources::{BlockReason, BlockedUnit, Carry, PlanRow};
 use tc_check::carry::{self, Outcome, StoredDecision};
 use tc_check::change::{self, Unit};
@@ -127,17 +127,19 @@ pub fn core_tool(tool: Tool) -> ToolId {
     }
 }
 
-pub fn api_unit(collection: Collection) -> CheckUnit {
+pub fn api_unit(collection: Collection) -> CheckCollection {
     match collection {
-        Collection::Book(book) => CheckUnit::Book(book),
-        Collection::Stories => CheckUnit::Stories,
+        Collection::Book(book) => CheckCollection::Book(book),
+        Collection::Stories => CheckCollection::Stories,
     }
 }
 
+/// The collection a unit's decisions are kept under: a book's, or the stories' (one file of
+/// decisions for the fifty).
 pub fn core_unit(unit: CheckUnit) -> Collection {
     match unit {
         CheckUnit::Book(book) => Collection::Book(book),
-        CheckUnit::Stories => Collection::Stories,
+        CheckUnit::Story(_) => Collection::Stories,
     }
 }
 

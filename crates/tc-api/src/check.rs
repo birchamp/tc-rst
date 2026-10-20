@@ -29,8 +29,9 @@ pub enum Tool {
     TranslationWords,
 }
 
-/// What one check list covers: a book, or the fifty stories of Open Bible Stories
-/// (tc-check `Collection`).
+/// What one check list covers: a book, or one story of Open Bible Stories. A story's session
+/// is scoped to the open story, as a book's is to the open book (tC4 `deriveObsItems`); its
+/// decisions are the collection `Stories`'s (tc-check `Collection`), one file for the fifty.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(
@@ -42,10 +43,26 @@ pub enum Tool {
 )]
 pub enum CheckUnit {
     Book(#[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))] BookId),
+    Story(StoryNo),
+}
+
+/// The decisions one plan row moves: a book's, or the fifty stories' (tc-check `Collection`),
+/// which a story project keeps in one file whatever story is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum CheckCollection {
+    Book(#[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))] BookId),
     Stories,
 }
 
-/// One tool's check list for one book, or for the stories.
+/// One tool's check list for one book, or for one story.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -268,27 +285,28 @@ pub struct RailRowPatch {
 // The tool picker (unit B5a): `check/picker`
 // ---------------------------------------------------------------------------------------
 
-/// `check/picker`: the tool picker of a book (tC4's `runPreflight` and `loadPickerProgress`):
-/// whether each checking tool can open, and how far each has come. Reading it writes nothing
-/// (tC4 #501). A tool's list is derived once and kept for its session (`check/open`).
+/// `check/picker`: the tool picker of a book or a story (tC4's `runPreflight` and
+/// `loadPickerProgress`): whether each checking tool can open, and how far each has come.
+/// Reading it writes nothing (tC4 #501). A tool's list is derived once and kept for its
+/// session (`check/open`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Picker {
     pub at: Scope,
-    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
-    pub book: BookId,
+    pub unit: CheckUnit,
 }
 
 /// The picker's cards: the two helps tools in tC4's order (Translation Words, then
-/// Translation Notes), then Align's.
+/// Translation Notes), then Align's, which a story has none of (tC4 D74 §8: the entry is
+/// absent, not disabled).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct PickerView {
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub tools: Vec<ToolCard>,
-    pub align: CardCount<AlignProgress>,
+    pub align: Option<CardCount<AlignProgress>>,
     /// The project's pre-release words-links pin, named once above the cards (tC4
     /// `OldTwlNotice`, D97 ruling 6): its repository path.
     pub old_twl: Option<String>,
@@ -803,4 +821,68 @@ pub enum DecideEdit {
     Comment {
         text: String,
     },
+}
+
+// ---------------------------------------------------------------------------------------
+// A story's check (unit B7): `check/storyItem`
+// ---------------------------------------------------------------------------------------
+
+/// `check/storyItem`: one check of an open story session, as the item detail shows it.
+/// Reading it writes nothing. B5b's `check/item` carries decisions, the target's selectable
+/// words and the notices; until C4 writes a story's decisions this is the story card alone
+/// (the compare card's gateway row, tC4 `StoryPane`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StoryItem {
+    pub at: Scope,
+    pub list: CheckListRef,
+    pub index: u32,
+}
+
+/// One check of a story.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct StoryItemView {
+    pub index: u32,
+    pub place: CheckPlace,
+    /// The quote the check is about, in the gateway language: the item's title.
+    pub title: String,
+    /// The note's text as blocks (Translation Notes); empty for a words link.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub note: Vec<crate::model::ArticleBlock>,
+    /// The direction of the gateway language the note is in (#650); none when the app knows no
+    /// gateway by the resolving set's language, and the note then takes the page's.
+    pub note_dir: Option<crate::shown::Direction>,
+    /// The article the check links to: the note's Translation Academy article, or the word's.
+    pub article: Option<crate::helps::ArticleLink>,
+    /// The gateway story's frame (the title for frame 0): tC4's `StoryPane`.
+    pub gateway: StoryPane,
+    /// The frame's text in the project; empty when it is not drafted.
+    pub target: String,
+}
+
+/// The compare card's gateway row of a story check.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum StoryPane {
+    /// The frame's gateway text as tokens (words and what lies between them), with the
+    /// indices of the tokens that render the check's quote (tC4's `tokenizePlain` and
+    /// `matchPlainQuote`).
+    Text {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        tokens: Vec<String>,
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        lit: Vec<u32>,
+    },
+    /// The gateway story is not on this computer, or has no text for the frame
+    /// (`storyDraft.sourceMissing`).
+    Missing,
 }

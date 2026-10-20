@@ -2,7 +2,7 @@
 //! dialogs hold while a plan is made, shown, confirmed again after the project moved, or refused
 //! by the disk, and the words they say. tC4's `UpgradeSet.jsx` and `GatewayChange.jsx`.
 
-use tc_api::check::{CheckUnit, Tool};
+use tc_api::check::{CheckCollection, Tool};
 use tc_api::ids::{PlanId, ProjectRef};
 use tc_api::resources::{
     BlockReason, BlockedUnit, Carry, GatewayPackage, GatewayRef, PlanRow, PlanView, PlanWhat,
@@ -44,7 +44,7 @@ fn change(repo: &str) -> RepoMove {
 fn row(tool: Tool, book: BookId, decisions: u32, carry: Option<(u32, u32)>) -> PlanRow {
     PlanRow {
         tool,
-        unit: CheckUnit::Book(book),
+        unit: CheckCollection::Book(book),
         decisions,
         against: "es-419_twl".into(),
         carry: carry.map(|(carried, check_again)| Carry {
@@ -165,7 +165,7 @@ fn confirming_sends_one_request_and_a_blocked_plan_is_never_sent() {
         Vec::new(),
         vec![BlockedUnit {
             tool: Tool::TranslationWords,
-            unit: CheckUnit::Book(BookId::Titus),
+            unit: CheckCollection::Book(BookId::Titus),
             reason: BlockReason::NoResource,
         }],
     );
@@ -360,7 +360,7 @@ fn a_row_says_what_carried_over_or_how_many_decisions_it_was_checked_against() {
 fn the_blocked_callout_gives_the_remedy_of_the_first_reason() {
     let unit = |reason| BlockedUnit {
         tool: Tool::TranslationNotes,
-        unit: CheckUnit::Book(BookId::Titus),
+        unit: CheckCollection::Book(BookId::Titus),
         reason,
     };
     assert_eq!(

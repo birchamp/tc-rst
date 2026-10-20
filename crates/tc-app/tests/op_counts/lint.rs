@@ -68,13 +68,15 @@ const COSTS_LESS: &[(&str, &[&str])] = &[
         ],
     ),
     (
-        "one chapter, one book, or the stories of an OBS project",
+        "one chapter, one book, one story, or the stories of an OBS project",
         &[
             "chapters_of",
             "chapter_keys",
             "decisions_of",
             "alignments_of",
             "comments_of",
+            "story_decisions",
+            "story_comments_of",
             "book_keys",
             "book_heads_seen",
             "book_files",

@@ -41,7 +41,7 @@ async fn picker(app: &App, at: &Scope) -> PickerView {
         app,
         &Picker {
             at: at.clone(),
-            book: BookId::Titus,
+            unit: CheckUnit::Book(BookId::Titus),
         },
     )
     .await
@@ -99,7 +99,7 @@ async fn the_sample_picker_is_tc4s() {
     assert_eq!(place(progress), "TIT 1:1");
     assert_eq!(progress.dropped, None);
     match &view.align {
-        CardCount::Counted(align) => {
+        Some(CardCount::Counted(align)) => {
             assert_eq!((align.done, align.total), (0, 5));
             assert_eq!(align.next.as_deref(), Some("1:1"));
         }

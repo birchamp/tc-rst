@@ -55,6 +55,7 @@ mod app {
     pub mod state_seed;
     mod store;
     pub mod store_scenario;
+    mod story;
     mod sync;
     mod translate;
     pub mod understand;

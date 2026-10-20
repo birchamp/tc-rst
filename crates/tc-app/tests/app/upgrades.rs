@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tc_api::ApiError;
-use tc_api::check::{CheckUnit, Tool};
+use tc_api::check::{CheckCollection, CheckUnit, Tool};
 use tc_api::ids::{JobId, PlanId, Scope};
 use tc_api::jobs::{JobOutcome, JobState};
 use tc_api::net::Set;
@@ -838,7 +838,7 @@ async fn j12_an_upgrade_moves_one_sets_pins_and_carries_decisions_in_one_batch()
     };
     assert_eq!(
         (row.tool, row.unit),
-        (Tool::TranslationNotes, CheckUnit::Book(BookId::Titus))
+        (Tool::TranslationNotes, CheckCollection::Book(BookId::Titus))
     );
     assert_eq!((row.decisions, row.against.as_str()), (14, "en_tn"));
     let carry = row.carry.unwrap();
@@ -1188,7 +1188,7 @@ async fn j13_a_new_checking_language_moves_the_primary_set_and_keeps_the_english
     };
     assert_eq!(
         (row.tool, row.unit),
-        (Tool::TranslationNotes, CheckUnit::Book(BookId::Titus))
+        (Tool::TranslationNotes, CheckCollection::Book(BookId::Titus))
     );
     let carry = row.carry.unwrap();
     assert_eq!((carry.carried, carry.check_again), (7, 7));
@@ -1391,7 +1391,7 @@ async fn a_project_whose_numbering_is_unknown_cannot_carry_its_decisions_over() 
         (blocked.tool, blocked.unit, blocked.reason),
         (
             Tool::TranslationNotes,
-            CheckUnit::Book(BookId::Titus),
+            CheckCollection::Book(BookId::Titus),
             tc_api::resources::BlockReason::VersificationUnknown
         )
     );
@@ -1993,7 +1993,7 @@ async fn a_tw_only_change_that_drops_a_decided_article_is_counted() {
     };
     assert_eq!(
         (row.tool, row.unit),
-        (Tool::TranslationWords, CheckUnit::Book(BookId::Titus))
+        (Tool::TranslationWords, CheckCollection::Book(BookId::Titus))
     );
     assert_eq!(
         row.decisions as usize, citing_god,

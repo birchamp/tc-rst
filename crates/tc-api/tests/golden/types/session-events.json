@@ -39,7 +39,8 @@
             {
               "tool": "translationWords",
               "unit": {
-                "type": "stories"
+                "type": "story",
+                "value": 12
               }
             }
           ],

@@ -8,8 +8,9 @@ use crate::attrs::Attrs;
 use crate::ds::Overline;
 use crate::ds::spread;
 
-/// tC4's `RailShell`: the rail's width, panel surface, header and scrolling list.
-pub fn rail_shell(title: Signal<String>, children: AnyView) -> impl IntoView {
+/// tC4's `RailShell`: the rail's width, panel surface, header and scrolling list. `attrs` are
+/// its `...rest` (the story rail's test id).
+pub fn rail_shell(title: Signal<String>, attrs: Attrs, children: AnyView) -> impl IntoView {
     let aside = crate::css! {
         "width": "var(--rail-width)",
         "flex": "none",
@@ -30,7 +31,7 @@ pub fn rail_shell(title: Signal<String>, children: AnyView) -> impl IntoView {
         "min-height": 0,
     };
     view! {
-        <aside style=aside.to_style()>
+        <aside {..spread(&attrs)} style=aside.to_style()>
             <div style=head.to_style()>
                 <Overline>{move || title.get()}</Overline>
             </div>
@@ -52,19 +53,21 @@ pub fn rail_group(active: Signal<bool>, children: AnyView) -> impl IntoView {
 }
 
 /// tC4's `RailNumbers`: the five-column grid under the active row.
-pub fn rail_numbers(children: AnyView) -> impl IntoView {
+pub fn rail_numbers(attrs: Attrs, children: AnyView) -> impl IntoView {
     let style = crate::css! {
         "display": "grid",
         "grid-template-columns": "repeat(5,1fr)",
         "gap": 6,
         "padding": "2px 12px 12px",
     };
-    view! { <div style=style.to_style()>{children}</div> }
+    view! { <div {..spread(&attrs)} style=style.to_style()>{children}</div> }
 }
 
-/// tC4's `RailNumberButton`: a chapter or a frame; `selected` is the one in view.
+/// tC4's `RailNumberButton`: a chapter or a frame; `selected` is the one in view, `drafted`
+/// (frames) tints a unit with text so the rail shows progress at a glance.
 pub fn rail_number_button(
     selected: Signal<bool>,
+    drafted: Signal<bool>,
     disabled: Signal<bool>,
     on_click: Callback<()>,
     attrs: Attrs,
@@ -85,6 +88,8 @@ pub fn rail_number_button(
         };
         css.extend(&if on {
             crate::css! { "background": "var(--accent)", "color": "#fff", "border-color": "var(--accent)" }
+        } else if drafted.get() {
+            crate::css! { "background": "var(--surface-accent-soft)", "color": "var(--text-accent)", "border-color": "var(--border)" }
         } else {
             crate::css! { "background": "#fff", "color": "var(--text-tertiary)", "border-color": "var(--border)" }
         });

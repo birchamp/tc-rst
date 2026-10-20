@@ -4,6 +4,7 @@
     "value": "PSA"
   },
   {
-    "type": "stories"
+    "type": "story",
+    "value": 7
   }
 ]

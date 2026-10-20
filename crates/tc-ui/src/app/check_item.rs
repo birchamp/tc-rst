@@ -418,7 +418,7 @@ pub fn parse_comment_place(text: &str) -> Option<(CheckListRef, CheckPlace, Stri
     let check_id = parts.next().filter(|id| !id.is_empty())?.to_owned();
     let unit = match &place {
         CheckPlace::Verse { book, .. } => CheckUnit::Book(*book),
-        CheckPlace::Frame { .. } => CheckUnit::Stories,
+        CheckPlace::Frame { story, .. } => CheckUnit::Story(*story),
     };
     Some((CheckListRef { tool, unit }, place, check_id))
 }

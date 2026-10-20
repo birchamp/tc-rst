@@ -31,6 +31,25 @@ pub trait Backend: Send + Sync + 'static {
 
     /// Resolves once the application asked to quit (`app/quit`).
     fn quitting(&self) -> impl Future<Output = ()> + Send;
+
+    /// A picture of an installed Open Bible Stories pack, for `GET /media/obs/{pack}/{path}`
+    /// (§5.3). `pack` is one URL segment naming the pack and `path` the file below its
+    /// `ingredients/`, both as the page was given them; the application checks both and
+    /// answers `None` for anything it does not serve. A backend with no pictures keeps this.
+    fn obs_picture(
+        &self,
+        _pack: &str,
+        _path: &str,
+    ) -> impl Future<Output = Option<MediaFile>> + Send {
+        async { None }
+    }
+}
+
+/// A file the page fetches by URL, whole.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaFile {
+    pub bytes: Vec<u8>,
+    pub content_type: &'static str,
 }
 
 /// One reader's place in the event stream.

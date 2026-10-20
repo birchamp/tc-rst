@@ -5,9 +5,8 @@
 use std::sync::Arc;
 
 use leptos::prelude::*;
-use tc_api::check::{CheckEmpty, RailRow, Tool};
+use tc_api::check::{CheckEmpty, CheckListRef, CheckUnit, RailRow, Tool};
 use tc_api::model::rail::{self, Filter, GroupLabel, SortMode};
-use tc_core::BookId;
 use wasm_bindgen::JsCast;
 
 use super::picker::{dropped_note, rung_key, tool_name};
@@ -139,7 +138,11 @@ fn filter_key(filter: Filter) -> String {
     format!("check.filter.{}", filter.id())
 }
 
-fn sort_key(mode: SortMode) -> String {
+/// A sort's label; a story's By verse is By frame (tC4 `check.sort.byFrame`).
+fn sort_key(mode: SortMode, story: bool) -> String {
+    if story && mode == SortMode::ByVerse {
+        return "check.sort.byFrame".to_owned();
+    }
     format!("check.sort.{}", mode.id())
 }
 
@@ -302,9 +305,16 @@ fn focus_is_unmoved() -> bool {
 }
 
 /// tC4's `CheckRail`.
-fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: BookId) -> AnyView {
+fn check_rail(
+    s: &AppState,
+    actions: &Actions,
+    rail: &Rail,
+    tool: Tool,
+    kind: CheckUnit,
+) -> AnyView {
     let c = s.c.clone();
-    let unit = book.english_name().to_owned();
+    let story = matches!(kind, CheckUnit::Story(_));
+    let unit = super::picker::unit_label(kind);
     let terms = Arc::new(rail.view.terms.clone());
     let rows = Arc::new(rail.rows.clone());
     let progress = rail.view.progress;
@@ -416,7 +426,7 @@ fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: Bo
                             style=rail_chip(shown == mode).to_style()
                             on:click=move |_| actions.set_check_sort(mode)
                         >
-                            {t_dyn(&sort_key(mode), &[], None)}
+                            {t_dyn(&sort_key(mode, story), &[], None)}
                         </button>
                     }
                 })
@@ -700,7 +710,8 @@ enum Shown {
 pub fn check_session(
     s: &AppState,
     actions: &Actions,
-    book: BookId,
+    at: tc_api::ids::Scope,
+    unit: CheckUnit,
     tool: Tool,
 ) -> impl IntoView + use<> {
     let session = s.c.session.clone();
@@ -757,16 +768,35 @@ pub fn check_session(
                 let (session, s, actions) = (session.clone(), s.clone(), actions.clone());
                 move || {
                     session.with(|session| match session {
-                        Some(Session::Open(rail)) => check_rail(&s, &actions, rail, tool, book),
+                        Some(Session::Open(rail)) => check_rail(&s, &actions, rail, tool, unit),
                         _ => ().into_any(),
                     })
                 }
             };
+            // Row patches update the rail without remounting the detail or its comment field.
+            let detail = match unit {
+                CheckUnit::Book(book) => super::detail::check_detail(&s, &actions, book, tool),
+                CheckUnit::Story(_) => {
+                    let total = session.with_untracked(|session| match session {
+                        Some(Session::Open(rail)) => rail.rows.len(),
+                        _ => 0,
+                    });
+                    super::story::story_detail(
+                        &s,
+                        &actions,
+                        at.clone(),
+                        CheckListRef { tool, unit },
+                        total,
+                    )
+                }
+            };
+            let academy = matches!(unit, CheckUnit::Book(_))
+                .then(|| super::detail::academy_drawer(&s, &actions));
             view! {
                 <div data-testid="check-session" style=root.to_style()>
                     {rail}
-                    <main style=main.to_style()>{super::detail::check_detail(&s, &actions, book, tool)}</main>
-                    {super::detail::academy_drawer(&s, &actions)}
+                    <main style=main.to_style()>{detail}</main>
+                    {academy}
                 </div>
             }
             .into_any()

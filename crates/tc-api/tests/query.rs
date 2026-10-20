@@ -34,10 +34,10 @@ fn tn(book: BookId) -> CheckListRef {
     }
 }
 
-fn tn_stories() -> CheckListRef {
+fn tn_story(number: u8) -> CheckListRef {
     CheckListRef {
         tool: Tool::TranslationNotes,
-        unit: CheckUnit::Stories,
+        unit: CheckUnit::Story(story(number)),
     }
 }
 
@@ -47,7 +47,7 @@ fn every_kind_of_key() -> Vec<QueryKey> {
         QueryKey::Book(BookId::Titus),
         QueryKey::Story(story(7)),
         QueryKey::CheckList(tn(BookId::Titus)),
-        QueryKey::CheckList(tn_stories()),
+        QueryKey::CheckList(tn_story(7)),
         QueryKey::Record(record(r#"{"kind":"verse"}"#)),
         QueryKey::Aspect(Aspect::Settings),
     ]
@@ -99,24 +99,28 @@ fn a_check_list_follows_its_rows_its_book_and_the_pins() {
 
 #[test]
 fn a_story_check_list_is_not_a_book_check_list() {
-    // The OBS stories have check lists of their own (tc-check `Collection::Stories`). The
-    // first build named a list by book only, so a change to a story check list had no name.
-    let stories = QueryKey::CheckList(tn_stories());
-    assert!(stories.depends_on(&parts(|p| p.checks.push(tn_stories()))));
-    assert!(stories.depends_on(&parts(|p| p.stories.push(story(12)))));
-    assert!(stories.depends_on(&parts(|p| p.aspects.push(Aspect::Pins))));
-    let tw_stories = CheckListRef {
+    // A story has check lists of its own (tc-check `Collection::Stories`), one session per
+    // open story. The first build named a list by book only, so a change to a story check list
+    // had no name.
+    let list = QueryKey::CheckList(tn_story(7));
+    assert!(list.depends_on(&parts(|p| p.checks.push(tn_story(7)))));
+    assert!(list.depends_on(&parts(|p| p.stories.push(story(7)))));
+    assert!(list.depends_on(&parts(|p| p.aspects.push(Aspect::Pins))));
+    // Another story's change, or its list, does not move this story's list.
+    assert!(!list.depends_on(&parts(|p| p.stories.push(story(12)))));
+    assert!(!list.depends_on(&parts(|p| p.checks.push(tn_story(12)))));
+    let tw_story = CheckListRef {
         tool: Tool::TranslationWords,
-        unit: CheckUnit::Stories,
+        unit: CheckUnit::Story(story(7)),
     };
-    assert!(!stories.depends_on(&parts(|p| p.checks.push(tw_stories))));
+    assert!(!list.depends_on(&parts(|p| p.checks.push(tw_story))));
     // A book's list and a book's text do not move a story list, and the other way round.
-    assert!(!stories.depends_on(&parts(|p| p.checks.push(tn(BookId::Titus)))));
-    assert!(!stories.depends_on(&parts(|p| p.books.push(BookId::Titus))));
-    assert!(!stories.depends_on(&parts(|p| p.chapters.push(chapter(BookId::Titus, 1)))));
+    assert!(!list.depends_on(&parts(|p| p.checks.push(tn(BookId::Titus)))));
+    assert!(!list.depends_on(&parts(|p| p.books.push(BookId::Titus))));
+    assert!(!list.depends_on(&parts(|p| p.chapters.push(chapter(BookId::Titus, 1)))));
     let titus = QueryKey::CheckList(tn(BookId::Titus));
-    assert!(!titus.depends_on(&parts(|p| p.checks.push(tn_stories()))));
-    assert!(!titus.depends_on(&parts(|p| p.stories.push(story(12)))));
+    assert!(!titus.depends_on(&parts(|p| p.checks.push(tn_story(7)))));
+    assert!(!titus.depends_on(&parts(|p| p.stories.push(story(7)))));
 }
 
 #[test]

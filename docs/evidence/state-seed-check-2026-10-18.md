@@ -134,6 +134,9 @@ timestamp is rewritten in tC4's own form.
 - **Fix:** read and write frame 0 as tC4 does: frame 0 is the title text of `TITLE_RE`, and the
   splice writes `# N. ` and the title (`# N.` for an empty one). STORAGE §7.7's sentence would
   say so.
+- **Done (B7, 2026-10-19):** `template_frame` reads frame 0 as tC4's `TITLE_RE` does, and
+  `splice_story` writes it as `writeTitle` does, keeping the line's own number. STORAGE §7.7
+  and §3.2 still carry the old sentence; the storage branch owns that file.
 
 ### 4.2 `checking/settings.json` is not a derived file of an OBS project
 
@@ -165,8 +168,9 @@ timestamp is rewritten in tC4's own form.
 - **Owner:** storage.
 - **Fix:** list `DerivedFile::Settings` for both kinds, and `checking/settings.json` in STORAGE
   §3.2.
-- **Done (C6, 2026-10-19):** `derived_files()` lists `DerivedFile::Settings` for both kinds. STORAGE §3.2
-  still lacks the line; the storage branch owns that file.
+- **Done (C6, 2026-10-19; B7 made the identical change):** `derived_files()` lists
+  `DerivedFile::Settings` for both kinds. STORAGE §3.2 still lacks the line; the storage branch
+  owns that file.
 
 ### 4.3 The OBS text pin's relationship makes `metadata.json` invalid (pin groups `Primary` and `Fallback`)
 
@@ -208,6 +212,9 @@ timestamp is rewritten in tC4's own form.
 - **Owner:** storage.
 - **Fix:** skip a pin whose flavor type is not `scripture`, `parascriptural` or `peripheral`
   (or has no `/`), as tC4 does; then follow tC4's row order and first-row-per-repository rule.
+- **Done in part (B7, 2026-10-19):** `relationships` skips a pin whose flavor is no scripture,
+  parascriptural or peripheral, or has no `/`, as tC4 does, so the OBS pin groups hold no
+  anomaly. The row order and the first-row-per-repository rule are still the storage team's.
 
 ## 5. Findings outside the check
 
@@ -251,6 +258,8 @@ reading the file back (`tc_obs::decode_story`, as an outside edit is read) names
 reformatted, and the bytes differ from what tC4 or a teammate's tC4-compatible writer makes.
 **Fix:** splice a frame as `writeFrame` does (the region replaced by `['', …text lines, '']`,
 or the template's empty form for an empty text).
+
+5.1 is fixed (B7, with 4.1); 5.2 is still open.
 
 ## 6. Declared differences
 

@@ -46,6 +46,7 @@ pub mod settings;
 pub mod share;
 pub mod sources;
 mod startup;
+pub mod story;
 pub mod sync;
 mod translate;
 mod understand;

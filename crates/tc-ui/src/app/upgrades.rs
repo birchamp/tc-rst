@@ -8,7 +8,7 @@
 //! one shown, so the person reads the new figures before anything is written. A failed save
 //! leaves the plan on screen with the reason, and Confirm tries again (tC4 #580).
 
-use tc_api::check::{CheckUnit, Tool};
+use tc_api::check::{CheckCollection, Tool};
 use tc_api::ids::ProjectRef;
 use tc_api::resources::{
     BlockReason, BlockedUnit, GatewayPackage, PlanRow, PlanView, PlanWhat, RepoMove, SetRung,
@@ -299,10 +299,10 @@ pub fn tool_key(tool: Tool) -> crate::i18n::Key {
 }
 
 /// The unit's name: a book's English name, or the stories'.
-pub fn unit_name(unit: CheckUnit) -> String {
+pub fn unit_name(unit: CheckCollection) -> String {
     match unit {
-        CheckUnit::Book(book) => book.english_name().to_owned(),
-        CheckUnit::Stories => "Open Bible Stories".to_owned(),
+        CheckCollection::Book(book) => book.english_name().to_owned(),
+        CheckCollection::Stories => "Open Bible Stories".to_owned(),
     }
 }
 

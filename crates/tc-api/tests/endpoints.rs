@@ -61,6 +61,12 @@ const PHASE_0: &[&str] = &[
     "check/item",
     "check/article",
     "check/decide",
+    // B7: the stories of an Open Bible Stories project, their helps and their checks.
+    "story/list",
+    "story/open",
+    "helps/story",
+    "helps/storyArticle",
+    "check/storyItem",
     "resources/fixState",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",

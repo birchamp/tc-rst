@@ -292,8 +292,8 @@ impl CachedQuery for tc_api::helps::Article {
     }
 }
 
-/// The Check picker (B5a): both tools' lists, the book's verses for the Align card, and the
-/// pins the preflight reads.
+/// The Check picker (B5a): both tools' lists, the book's verses for the Align card (a story has
+/// none: its own text), and the pins the preflight reads.
 impl CachedQuery for tc_api::check::Picker {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         use tc_api::check::{CheckListRef, CheckUnit, Tool};
@@ -302,18 +302,68 @@ impl CachedQuery for tc_api::check::Picker {
         let list = |tool| {
             QueryKey::CheckList(CheckListRef {
                 tool,
-                unit: CheckUnit::Book(self.book),
+                unit: self.unit,
             })
+        };
+        let text = match self.unit {
+            CheckUnit::Book(book) => QueryKey::Book(book),
+            CheckUnit::Story(story) => QueryKey::Story(story),
         };
         project_read(
             &self.at,
             vec![
                 list(Tool::TranslationWords),
                 list(Tool::TranslationNotes),
-                QueryKey::Book(self.book),
+                text,
                 QueryKey::Aspect(Aspect::Pins),
             ],
         )
+    }
+}
+
+/// The stories' rail (B7): every story's row follows any change of a story.
+impl CachedQuery for tc_api::story::List {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            (1..=tc_api::ids::StoryNo::COUNT)
+                .filter_map(|n| tc_api::ids::StoryNo::new(n).ok())
+                .map(tc_api::query::QueryKey::Story)
+                .collect(),
+        )
+    }
+}
+
+/// One story (B7): its text and its comments, the pictures and the gateway story its pins give.
+impl CachedQuery for tc_api::story::Open {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        let mut keys = resource_keys();
+        keys.push(tc_api::query::QueryKey::Story(self.story));
+        project_read(&self.at, keys)
+    }
+}
+
+impl CachedQuery for tc_api::helps::Story {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}
+
+impl CachedQuery for tc_api::helps::StoryArticle {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}
+
+/// One check of a story, kept by the open session (B7): the story's text and its checks.
+impl CachedQuery for tc_api::check::StoryItem {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        let mut keys = resource_keys();
+        keys.push(tc_api::query::QueryKey::CheckList(self.list));
+        if let tc_api::check::CheckUnit::Story(story) = self.list.unit {
+            keys.push(tc_api::query::QueryKey::Story(story));
+        }
+        project_read(&self.at, keys)
     }
 }
 

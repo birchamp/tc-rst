@@ -37,6 +37,7 @@ use crate::app::check_item::{self, DecisionWrites, MarkFailure};
 use crate::app::client::{CallError, Transport};
 use crate::app::fix::{Fix, FixScreen};
 use crate::app::save::{FieldScope, Pair, Source, View};
+use crate::app::shell::ProjectFlavor;
 
 /// An open tool's rail.
 #[derive(Debug, Clone, PartialEq)]
@@ -284,15 +285,24 @@ fn rows_of(view: &CheckSessionView) -> Vec<RailRow> {
 }
 
 impl Actions {
-    fn check_list(&self, tool: Tool) -> Option<(tc_api::ids::Scope, CheckListRef)> {
+    /// What the open project's checks are of: the open book, or the open story.
+    pub(super) fn check_unit(&self) -> Option<CheckUnit> {
         let s = self.s();
-        let at = s.project.get_untracked()?.at;
-        let book = s.u.book.get_untracked()?;
+        match s.project.get_untracked()?.flavor {
+            ProjectFlavor::TextTranslation => Some(CheckUnit::Book(s.u.book.get_untracked()?)),
+            ProjectFlavor::TextStories => Some(CheckUnit::Story(crate::app::story::story_of(
+                s.u.chapter.get_untracked(),
+            )?)),
+        }
+    }
+
+    fn check_list(&self, tool: Tool) -> Option<(tc_api::ids::Scope, CheckListRef)> {
+        let at = self.s().project.get_untracked()?.at;
         Some((
             at,
             CheckListRef {
                 tool,
-                unit: CheckUnit::Book(book),
+                unit: self.check_unit()?,
             },
         ))
     }
@@ -318,15 +328,20 @@ impl Actions {
             let place = RecordPlace {
                 at: at.clone(),
                 request: js::random_request_id(),
-                place: PlaceUpdate::Book {
-                    book: match list.unit {
-                        CheckUnit::Book(book) => book,
-                        CheckUnit::Stories => return,
+                place: match list.unit {
+                    CheckUnit::Book(book) => PlaceUpdate::Book {
+                        book,
+                        mode: Some(PlaceMode::Check),
+                        chapter: None,
+                        verse: PlaceChange::Keep,
+                        tool: Some(tool),
                     },
-                    mode: Some(PlaceMode::Check),
-                    chapter: None,
-                    verse: PlaceChange::Keep,
-                    tool: Some(tool),
+                    CheckUnit::Story(story) => PlaceUpdate::Story {
+                        story,
+                        mode: Some(PlaceMode::Check),
+                        frame: PlaceChange::Keep,
+                        tool: Some(tool),
+                    },
                 },
             };
             let _ = this.runtime().api().call(&place).await;
@@ -417,11 +432,11 @@ impl Actions {
     }
 
     /// Retry on a picker whose read failed (tC4's `preflight-retry`).
-    pub fn reload_picker(&self, book: tc_core::BookId) {
+    pub fn reload_picker(&self, unit: CheckUnit) {
         if let Some(project) = self.s().project.get_untracked() {
             self.runtime().cache().refresh(&tc_api::check::Picker {
                 at: project.at,
-                book,
+                unit,
             });
         }
     }
@@ -553,7 +568,9 @@ impl Actions {
         let CheckView::Tool(tool) = self.s().c.view.get_untracked() else {
             return None;
         };
-        self.check_list(tool)
+        let (at, list) = self.check_list(tool)?;
+        // Story detail has its own read and no Bible marking row until C4.
+        matches!(list.unit, CheckUnit::Book(_)).then_some((at, list))
     }
 
     /// The detail and everything that belongs to it goes: another tool, the picker, or no

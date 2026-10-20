@@ -465,8 +465,8 @@ fn blocked_books(blocked: &[tc_api::resources::BlockedUnit]) -> String {
     let mut books: Vec<String> = blocked
         .iter()
         .map(|b| match b.unit {
-            tc_api::check::CheckUnit::Book(book) => book.code().to_owned(),
-            tc_api::check::CheckUnit::Stories => "OBS".to_owned(),
+            tc_api::check::CheckCollection::Book(book) => book.code().to_owned(),
+            tc_api::check::CheckCollection::Stories => "OBS".to_owned(),
         })
         .collect();
     books.dedup();

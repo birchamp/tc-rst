@@ -8,8 +8,11 @@
 mod detail;
 mod picker;
 mod rail;
+mod story;
 
 use leptos::prelude::*;
+
+use tc_api::check::CheckUnit;
 
 use crate::app::check::CheckView;
 use crate::app::shell::ProjectFlavor;
@@ -22,34 +25,41 @@ pub fn tool_name_key(tool: tc_api::check::Tool) -> crate::i18n::Key {
     picker::tool_name(tool)
 }
 
-/// tC4's `Check`: the session of the open tool, else the picker. A story project's Check is
-/// B7's.
+/// tC4's `Check`: the session of the open tool, else the picker, of the open book or the open
+/// story.
 #[component]
 pub fn Check() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
     let shown = {
-        let (project, book, view) = (s.project.clone(), s.u.book.clone(), s.c.view.clone());
+        let (project, book, chapter, view) = (
+            s.project.clone(),
+            s.u.book.clone(),
+            s.u.chapter.clone(),
+            s.c.view.clone(),
+        );
         Memo::new(move |_| {
-            let bible = project.with(|p| {
-                p.as_ref()
-                    .is_some_and(|p| p.flavor == ProjectFlavor::TextTranslation)
-            });
-            let book = book.get().filter(|_| bible)?;
-            let at = project.with(|p| p.as_ref().map(|p| p.at.clone()))?;
-            Some((at, book, view.get()))
+            let (at, flavor) = project.with(|p| p.as_ref().map(|p| (p.at.clone(), p.flavor)))?;
+            let unit = match flavor {
+                ProjectFlavor::TextTranslation => CheckUnit::Book(book.get()?),
+                ProjectFlavor::TextStories => {
+                    CheckUnit::Story(crate::app::story::story_of(chapter.get())?)
+                }
+            };
+            Some((at, unit, view.get()))
         })
     };
     (move || match shown.get() {
         None => ().into_any(),
-        Some((at, book, CheckView::Picker)) => picker::picker(&s, &actions, at, book).into_any(),
-        Some((_, book, CheckView::Tool(tool))) => {
-            check_session(&s, &actions, book, tool).into_any()
+        Some((at, unit, CheckView::Picker)) => picker::picker(&s, &actions, at, unit).into_any(),
+        Some((at, unit, CheckView::Tool(tool))) => {
+            check_session(&s, &actions, at, unit, tool).into_any()
         }
-        Some((_, book, CheckView::Align)) => {
+        Some((_, CheckUnit::Book(book), CheckView::Align)) => {
             crate::views::align::align_workspace(&s, &actions, book).into_any()
         }
+        Some((_, CheckUnit::Story(_), CheckView::Align)) => ().into_any(),
     })
     .into_any()
 }

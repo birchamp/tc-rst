@@ -37,6 +37,8 @@ use crate::views::modals::sign_in::ShareSignIn;
 use crate::views::modals::source_texts::SourceTexts;
 use crate::views::modals::upgrade_set::UpgradeSet;
 use crate::views::open_progress::OpenProgress;
+use crate::views::story_draft::StoryDraft;
+use crate::views::story_understand::StoryUnderstand;
 use crate::views::understand::Understand;
 
 /// tC4's `App`: the frame, the top bar, the screen in its boundary, and the dialogs in tC4's
@@ -495,10 +497,9 @@ fn main_view(s: &AppState) -> AnyView {
         Screen::Understand => view! { <Understand /> }.into_any(),
         Screen::Check => view! { <Check /> }.into_any(),
         Screen::Draft => view! { <crate::views::translate::Translate /> }.into_any(),
-        // B8 Community Checking, B7 the story views.
-        Screen::CommunityChecking
-        | Screen::StoryUnderstand
-        | Screen::StoryDraft
-        | Screen::Nothing => ().into_any(),
+        Screen::StoryUnderstand => view! { <StoryUnderstand /> }.into_any(),
+        Screen::StoryDraft => view! { <StoryDraft /> }.into_any(),
+        // B8 Community Checking.
+        Screen::CommunityChecking | Screen::Nothing => ().into_any(),
     }
 }

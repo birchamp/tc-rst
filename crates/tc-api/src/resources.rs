@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
-use crate::check::{CheckUnit, Tool};
+use crate::check::{CheckCollection, CheckUnit, Tool};
 use crate::ids::{PlanId, RequestId, Scope, UploadId};
 use crate::shown::Direction;
 
@@ -439,7 +439,7 @@ pub struct ImageChange {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlanRow {
     pub tool: Tool,
-    pub unit: CheckUnit,
+    pub unit: CheckCollection,
     /// Its decisions made against the resource it leaves.
     pub decisions: u32,
     /// The repository it was checked against.
@@ -463,7 +463,7 @@ pub struct Carry {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BlockedUnit {
     pub tool: Tool,
-    pub unit: CheckUnit,
+    pub unit: CheckCollection,
     pub reason: BlockReason,
 }
 

@@ -146,11 +146,15 @@ pub(crate) fn relationships(value: &PinGroupValue) -> Vec<Value> {
             return;
         };
         let id = repo.split_once('/').map_or(repo, |(_, rest)| rest);
-        let (relation, flavor) = flavor.split_once('/').unwrap_or(("source", flavor));
-        let relation = if relation == "scripture" {
-            "source"
-        } else {
-            relation
+        // tC4's `relationshipsFromPins`: only these types have a relationship the Burrito
+        // schema accepts; any other (`gloss/textStories`, the OBS source text) has no row.
+        let Some((relation, flavor)) = flavor.split_once('/').filter(|(_, f)| !f.is_empty()) else {
+            return;
+        };
+        let relation = match relation {
+            "scripture" => "source",
+            "parascriptural" | "peripheral" => relation,
+            _ => return,
         };
         let mut r = serde_json::Map::new();
         r.insert("relationType".into(), json!(relation));

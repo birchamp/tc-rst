@@ -29,5 +29,6 @@ mod op_counts {
     mod probes;
     mod section;
     mod session;
+    mod story;
     mod understand;
 }

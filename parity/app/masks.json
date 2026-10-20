@@ -76,48 +76,47 @@
     {
       "id": "q2-obs-card",
       "ruling": "Q2",
-      "why": "The rebuild syncs OBS projects, so the shared OBS card reads \"Sync with Door43\" where tC4 reads \"Upload changes\".",
+      "why": "The rebuild syncs OBS projects, so the shared OBS card reads \"Sync with Door43\" where tC4 reads \"Upload changes\". The longer label also moves the element: it is 148 px wide and 15 px lower in the Rust page, so the rectangle covers both.",
       "target": {
         "testid": "share-card-<OBS>"
       },
       "rust": null,
-      "rustAbsent": "The seed check refuses the OBS sample until the storage team's fix (APP-DESIGN §4.2, B1b; residuals.json), so the Rust Home has no OBS card to read \"Sync with Door43\".",
       "rects": {
         "shared-home": {
-          "x": 866,
+          "x": 856,
           "y": 236,
-          "width": 138,
-          "height": 31
+          "width": 148,
+          "height": 46
         },
         "sync-internet-consent": {
-          "x": 866,
+          "x": 856,
           "y": 236,
-          "width": 138,
-          "height": 31
+          "width": 148,
+          "height": 46
         },
         "sync-failed": {
-          "x": 866,
+          "x": 856,
           "y": 236,
-          "width": 138,
-          "height": 31
+          "width": 148,
+          "height": 46
         },
         "sync-ok": {
-          "x": 866,
+          "x": 856,
           "y": 236,
-          "width": 138,
-          "height": 31
+          "width": 148,
+          "height": 46
         },
         "sync-ok-teammates": {
-          "x": 866,
+          "x": 856,
           "y": 236,
-          "width": 138,
-          "height": 31
+          "width": 148,
+          "height": 46
         },
         "sync-ok-restored": {
-          "x": 866,
+          "x": 856,
           "y": 236,
-          "width": 138,
-          "height": 31
+          "width": 148,
+          "height": 46
         }
       },
       "meaning": {

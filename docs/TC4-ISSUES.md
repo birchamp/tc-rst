@@ -186,7 +186,7 @@ the rebuild fixed it or does as tC4 does:
 | #572 | A span counts as all of its verses in the drafted percentage | covered | B2, B3 | `joining_verses_keeps_the_drafted_percentage` | Done by B2 and B3: the tiles and the rail count with `drafted::count_verse`. The poem-verse rule is a declared difference the owner was told (DELTA-10-19 §5). |
 | #603 | A tooltip on each book's percentage | covered | B3 | journey `a_tile_opens_understand_at_chapter_1_with_the_rails_tooltips` | Done by B3: `draft.bookPercentTitle` on each rail row. |
 | #577 | "1 chapter" and "1 verse" | unit todo | F1 (C6 done: `one_chapter_book_says_1_chapter`) | `one_chapter_book_says_1_chapter` | Choose the singular keys when the count is 1. |
-| #507 | Open a new project in Understand | unit todo | B7 (B3 done) | journey `a_tile_opens_understand_at_chapter_1_with_the_rails_tooltips` | B3: an open with no remembered place lands in Understand at chapter 1; a remembered place still wins. B7: a story project at story 1. |
+| #507 | Open a new project in Understand | covered | B3, B7 | journeys `a_tile_opens_understand_at_chapter_1_with_the_rails_tooltips`, `j25_a_story_opens_with_its_rail_its_units_and_a_comment_box_that_takes_no_typing` | Done by B3 and B7: an open with no remembered place lands in Understand at chapter 1, a story project at story 1; a remembered place still wins. |
 | #499 | Use the Bible name typed on the import review page | unit todo | F1, I | `typed_import_name_is_the_project_name` | Leave review-edited fields out of the P9 comparison, or the import refuses. |
 | #484 | Add a book from a USFM file | covered | C6 | `usfm_files_add_whole_books_and_refuse_the_rest_in_their_rows`; `a_book_from_a_file_is_refused_when_present_or_when_the_file_does_not_read`; journey `create` | One batch (#767), the alignment split (#553), `addBook.usfmExists`. |
 | #564 | Add-a-book USFM step polish | covered | C6 | `removing_rows_from_25_aligned_books_removes_the_intended_rows`; `an_add_keeps_its_error_until_the_next_add_and_the_books_it_added_leave_the_list`; `usfm_rows_are_judged_again_at_every_add_and_remove` | Label "Add book" while disabled; keep an Add error until the next Add; classify each file once (the server reads a file once, `create/reviewUsfm`). |
@@ -300,7 +300,7 @@ the rebuild fixed it or does as tC4 does:
 | #674 | Sync rules and the three-translator fixture | covered | tc-journal; X | `fold_converges_under_any_union`; `conservation` | X ports tC4's team-sync fixture cases as one library scenario. |
 | #673 | Spike on Door43 clone and push | not applicable | — | — | Pankosmia routes the rebuild does not use. |
 | #766 | Pin the source texts when an import has no pins | reference change | C8, F1, I, E1b, X | `open_writes_creation_pins_only_when_none_exist` | The check verifier says build it now (§4). |
-| #549 | Show a story project's own pictures | rebuild bug | tc-obs; B7, I | `a_project_picture_without_a_role_is_the_project_rung` | See §1 row 15. |
+| #549 | Show a story project's own pictures | rebuild bug | tc-obs; B7, I | `a_project_picture_without_a_role_is_the_project_rung` | See §1 row 15. B7 serves the pictures of an installed pack at `/media/obs` and finds none of a project's own: no screen reaches a story project that carries pictures until X, F1 and E1b can bring one in, so the route for them is built with that unit. |
 | #161 | Two device ids under one name after a computer change | unit todo | S2, X | `a_new_device_copies_the_profile_and_both_group_as_mine`; `copied_username_is_replaced_by_the_first_signed_in_fetch` | The profile copy is untested. A hand-copied folder copies the first person's name; tell the owner. |
 | #160 | Record four sync risks | not applicable | P | — | tC4 documentation. P owns the scale risk. |
 | #78 | See the history of my changes | unit todo | B11, C7a | `verse_history_lists_every_version_with_person_and_time` | Restore sends `Command::Restore` with the shown token. |
@@ -498,7 +498,7 @@ Follow-ups the fix units left (2026-10-19):
   C8's upgrade) and #29's right-to-left project (`a_right_to_left_project_aligns_with_its_bank_right_to_left`,
   through C6's create), and #409's span with x-ref in the open aligner
   (`an_imported_span_with_x_ref_opens_with_every_link`); its writing waits for D2 and I.*
-- **B7:** a story project opens at story 1 (#507).
+- **B7:** a story project opens at story 1 (#507). *Done by B7. #549 waits for a project that carries pictures; #769's fold headings for the stories' groups wait for the reference move. Story-check Previous/Next follow the resource's item order, matching tC4; moving frame focus or clicking a help card keeps an expanded note expanded, as tC4 does.*
 - **B9a:** autonyms (#579); downloads always from production (#120); one settings read
   (#641). The Aquifer attribution (#606) and Q34's Portuguese Bible (#720) wait for a unit that
   installs an Aquifer resource (APP-DESIGN §4.6).

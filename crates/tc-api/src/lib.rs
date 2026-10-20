@@ -48,6 +48,7 @@ pub mod resources;
 pub mod session;
 pub mod settings;
 pub mod shown;
+pub mod story;
 #[cfg(feature = "test-hooks")]
 pub mod test;
 pub mod token;
@@ -136,6 +137,11 @@ macro_rules! endpoint_table {
 
             query "helps/passage": $crate::helps::Passage => $crate::helps::PassageView;
             query "helps/article": $crate::helps::Article => $crate::helps::ArticleView;
+            query "helps/story": $crate::helps::Story => $crate::helps::PassageView;
+            query "helps/storyArticle": $crate::helps::StoryArticle => $crate::helps::ArticleView;
+
+            query "story/list": $crate::story::List => $crate::story::StoryList;
+            query "story/open": $crate::story::Open => $crate::story::StoryView;
 
             query "check/picker": $crate::check::Picker => $crate::check::PickerView;
             query "check/open": $crate::check::Open => $crate::check::CheckSessionView;
@@ -151,6 +157,7 @@ macro_rules! endpoint_table {
             command "align/suggest": $crate::align::Suggest => $crate::align::AlignerView;
             command "align/flush": $crate::align::Flush => $crate::align::AlignSave;
             command "align/close": $crate::align::Close => $crate::align::AlignSave;
+            query "check/storyItem": $crate::check::StoryItem => $crate::check::StoryItemView;
 
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;

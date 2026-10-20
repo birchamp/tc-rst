@@ -61,6 +61,9 @@ pub struct UnderstandState {
     pub article: ArcRwSignal<Option<ArticleState>>,
     /// Section or Verse, as this computer last showed the open project.
     pub unit_mode: ArcRwSignal<UnitMode>,
+    /// The frame in focus on the story screens (tC4 `storyFrame`; 0 is the title). A story's
+    /// number is kept in `chapter`, where tC4 keeps it.
+    pub story_frame: ArcRwSignal<Option<u16>>,
 }
 
 impl UnderstandState {
@@ -78,6 +81,7 @@ impl UnderstandState {
             helps_active: ArcRwSignal::new(None),
             article: ArcRwSignal::new(None),
             unit_mode: ArcRwSignal::new(UnitMode::Section),
+            story_frame: ArcRwSignal::new(None),
         }
     }
 
@@ -334,7 +338,17 @@ impl Actions {
         });
         s.u.book
             .try_set(book.filter(|_| flavor == ProjectFlavor::TextTranslation));
-        s.u.chapter.try_set(place.map_or(1, |p| p.chapter.max(1)));
+        // A story project opens at the story a tile names, else where the person left it, else
+        // at story 1 (#507); the number is kept where a Bible keeps its chapter.
+        let chapter = match unit {
+            Some(OpenUnit::Story(story)) if flavor == ProjectFlavor::TextStories => {
+                u16::from(story.get())
+            }
+            _ => place.map_or(1, |p| p.chapter.max(1)),
+        };
+        s.u.chapter.try_set(chapter);
+        s.u.story_frame
+            .try_set((flavor == ProjectFlavor::TextStories).then_some(1));
         s.editing.try_set(Editing::None);
         s.view_error.try_set(None);
         s.project.try_set(Some(CurrentProject {
@@ -351,14 +365,13 @@ impl Actions {
         if let Some(place) = place
             && let crate::app::check::CheckView::Tool(tool) =
                 crate::app::check::landing(place.mode, place.tool)
-            && flavor == ProjectFlavor::TextTranslation
         {
             self.open_check_tool(tool);
         }
         s.view.try_set(view);
-        // Understand keeps the overlay up, as tC4's 'prepare' stage, until its book is read;
-        // the screens later units build have no read yet.
-        if view == View::Read && flavor == ProjectFlavor::TextTranslation {
+        // Understand keeps the overlay up, as tC4's 'prepare' stage, until its book (or its
+        // story) is read; the screens later units build have no read yet.
+        if view == View::Read {
             s.u.opening.try_update(|opening| {
                 if let Some(opening) = opening {
                     opening.preparing();
@@ -382,6 +395,7 @@ impl Actions {
         s.u.clear_focus();
         s.u.book.try_set(None);
         s.u.chapter.try_set(1);
+        s.u.story_frame.try_set(None);
         s.u.opening.try_set(None);
         let Some(project) = project else {
             return;
@@ -444,6 +458,72 @@ impl Actions {
                 },
             };
             let _ = this.runtime().api().call(&place).await;
+        });
+    }
+
+    /// A story of the story rail (tC4 `openStory`): drained first; the story opens at frame 1,
+    /// and the place is remembered. A check list is the story's: another story shows the
+    /// picker.
+    pub fn open_story(&self, story: tc_api::ids::StoryNo) {
+        let this = self.clone();
+        spawn_local(async move {
+            if !this.runtime().saves().gate().await {
+                return;
+            }
+            let s = this.s();
+            if s.u.chapter.get_untracked() != u16::from(story.get()) {
+                this.reset_check();
+            }
+            s.u.helps_hover.try_set(None);
+            s.u.helps_active.try_set(None);
+            s.u.article.try_set(None);
+            s.u.chapter.try_set(u16::from(story.get()));
+            s.u.story_frame.try_set(Some(1));
+            let Some(project) = s.project.get_untracked() else {
+                return;
+            };
+            let mode = match s.view.get_untracked() {
+                View::Draft => PlaceMode::Draft,
+                _ => PlaceMode::Read,
+            };
+            let place = RecordPlace {
+                at: project.at,
+                request: js::random_request_id(),
+                place: PlaceUpdate::Story {
+                    story,
+                    mode: Some(mode),
+                    frame: PlaceChange::Set(1),
+                    tool: None,
+                },
+            };
+            let _ = this.runtime().api().call(&place).await;
+        });
+    }
+
+    /// The frame in focus on a story screen (tC4 `setStoryFrame`): its helps lead, and the place
+    /// is remembered.
+    pub fn set_story_frame(&self, frame: u16) {
+        let s = self.s();
+        s.u.story_frame.try_set(Some(frame));
+        let (Some(project), Some(story)) = (
+            s.project.get_untracked(),
+            crate::app::story::story_of(s.u.chapter.get_untracked()),
+        ) else {
+            return;
+        };
+        let request = RecordPlace {
+            at: project.at,
+            request: js::random_request_id(),
+            place: PlaceUpdate::Story {
+                story,
+                mode: None,
+                frame: PlaceChange::Set(frame),
+                tool: None,
+            },
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            let _ = this.runtime().api().call(&request).await;
         });
     }
 
@@ -516,21 +596,35 @@ impl Actions {
         if same {
             return;
         }
-        let (Some(project), Some(book)) = (s.project.get_untracked(), s.u.book.get_untracked())
-        else {
+        let Some(project) = s.project.get_untracked() else {
             return;
         };
+        let book = s.u.book.get_untracked();
         let attempt = next(&ARTICLES);
         s.u.article
             .try_set(Some(ArticleState::Loading(link.clone())));
         let this = self.clone();
         spawn_local(async move {
-            let request = Article {
-                at: project.at.clone(),
-                book,
-                link: link.clone(),
+            // A story project's helps are its own: no book to name.
+            let result = match book {
+                Some(book) => {
+                    this.runtime()
+                        .read_once(&Article {
+                            at: project.at.clone(),
+                            book,
+                            link: link.clone(),
+                        })
+                        .await
+                }
+                None => {
+                    this.runtime()
+                        .read_once(&tc_api::helps::StoryArticle {
+                            at: project.at.clone(),
+                            link: link.clone(),
+                        })
+                        .await
+                }
             };
-            let result = this.runtime().read_once(&request).await;
             if current(&ARTICLES) != attempt {
                 return;
             }
@@ -543,13 +637,26 @@ impl Actions {
         });
     }
 
-    /// Retry on a tab that failed: the chapter's helps are read again.
+    /// Retry on a tab that failed: the chapter's helps (a story's, its own) are read again.
     pub fn reload_helps(&self) {
         if let Some((at, book, chapter)) = self.place() {
             self.runtime()
                 .cache()
                 .refresh(&tc_api::helps::Passage { at, book, chapter });
+        } else if let Some((at, story)) = self.story_place() {
+            self.runtime()
+                .cache()
+                .refresh(&tc_api::helps::Story { at, story });
         }
+    }
+
+    /// The open story project's scope and story.
+    pub(super) fn story_place(&self) -> Option<(tc_api::ids::Scope, tc_api::ids::StoryNo)> {
+        let s = self.s();
+        Some((
+            s.project.get_untracked()?.at,
+            crate::app::story::story_of(s.u.chapter.get_untracked())?,
+        ))
     }
 
     /// Retry on a pane that failed: the chapter's panes are read again.

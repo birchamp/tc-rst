@@ -375,9 +375,13 @@ impl Handle<Item> for App {
         let book = book_of(&req.list)?;
         let installed = installed(self)?;
         let facts = self
-            .with_list(&session, req.list.tool, book, &installed, |entry, read| {
-                facts(entry, read, req.index)
-            })
+            .with_list(
+                &session,
+                req.list.tool,
+                req.list.unit,
+                &installed,
+                |entry, read| facts(entry, read, req.index),
+            )
             .await?
             .map_err(|_| ApiError::ToolNotReady)?
             .map_err(|reason| {
@@ -445,9 +449,13 @@ impl Handle<CheckArticleRead> for App {
         let book = book_of(&req.list)?;
         let installed = installed(self)?;
         let link = self
-            .with_list(&session, req.list.tool, book, &installed, |entry, _| {
-                entry.derived.items.get(req.index as usize).map(link_of)
-            })
+            .with_list(
+                &session,
+                req.list.tool,
+                req.list.unit,
+                &installed,
+                |entry, _| entry.derived.items.get(req.index as usize).map(link_of),
+            )
             .await?
             .map_err(|_| ApiError::ToolNotReady)?
             .ok_or_else(|| ApiError::BadRequest {
@@ -517,7 +525,7 @@ impl Handle<Decide> for App {
             .reader(&req.at)
             .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
         let handle = session.handle().clone();
-        let book = book_of(&req.list)?;
+        book_of(&req.list)?;
         let installed = installed(self)?;
         let shown = wire::token::edit_token(handle.as_ref(), &req.decision)?;
         let verse = req
@@ -526,14 +534,20 @@ impl Handle<Decide> for App {
             .map(|token| wire::token::edit_token(handle.as_ref(), token))
             .transpose()?;
         let (item, resource, index) = self
-            .with_list(&session, req.list.tool, book, &installed, |entry, _| {
-                let at = find(entry, &req.place, &req.check_id)?;
-                Some((
-                    entry.derived.items.get(at)?.clone(),
-                    entry.derived.resolution.clone(),
-                    at,
-                ))
-            })
+            .with_list(
+                &session,
+                req.list.tool,
+                req.list.unit,
+                &installed,
+                |entry, _| {
+                    let at = find(entry, &req.place, &req.check_id)?;
+                    Some((
+                        entry.derived.items.get(at)?.clone(),
+                        entry.derived.resolution.clone(),
+                        at,
+                    ))
+                },
+            )
             .await?
             .map_err(|_| ApiError::ToolNotReady)?
             // The list was derived again and no longer holds the check the detail showed.
@@ -554,12 +568,18 @@ impl Handle<Decide> for App {
             Ok(reply) => {
                 // The check's row as the newest snapshot shows it: what the write changed.
                 let rows = self
-                    .with_list(&session, req.list.tool, book, &installed, |entry, _| {
-                        entry
-                            .rows
-                            .get(index)
-                            .map(|row| vec![RailRowPatch { row: row.clone() }])
-                    })
+                    .with_list(
+                        &session,
+                        req.list.tool,
+                        req.list.unit,
+                        &installed,
+                        |entry, _| {
+                            entry
+                                .rows
+                                .get(index)
+                                .map(|row| vec![RailRowPatch { row: row.clone() }])
+                        },
+                    )
                     .await
                     .ok()
                     .and_then(Result::ok)

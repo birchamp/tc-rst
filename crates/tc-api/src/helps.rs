@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
-use crate::ids::{RefPart, Scope};
+use crate::ids::{RefPart, Scope, StoryNo};
 use crate::model::ArticleBlock;
 use crate::shown::Direction;
 
@@ -216,4 +216,27 @@ pub enum ArticleView {
         dir: Direction,
     },
     Missing,
+}
+
+/// `helps/story`: the helps of one story of the open Open Bible Stories project: the passage
+/// of `helps/passage` with the story as the chapter and the frame as the verse (0 is the
+/// title), so the helps panel is one component for both kinds of project (tC4 `unitRef`).
+/// The cards carry no pane focus: a story has one source text, and a frame's focus is the
+/// frame. Its `simplified` slot is `None`, because there is no simplified story.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Story {
+    pub at: Scope,
+    pub story: StoryNo,
+}
+
+/// `helps/storyArticle`: a Translation Academy or Translation Words article of the open
+/// story project's helps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StoryArticle {
+    pub at: Scope,
+    pub link: ArticleLink,
 }

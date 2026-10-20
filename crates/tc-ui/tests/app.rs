@@ -28,6 +28,7 @@ mod app {
     mod shell;
     mod sources;
     mod sse;
+    mod story;
     mod sync;
     mod translate;
     mod understand;

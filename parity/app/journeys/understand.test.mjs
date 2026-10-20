@@ -139,6 +139,24 @@ browserTest('a_focused_help_lights_its_words_in_the_passage', async () => {
   }, { scenario: 'en-pins' });
 });
 
+// A click on a card lights it and leaves the other cards as they were: a note the person
+// expanded stays expanded, as tC4 keeps each keyed card.
+browserTest('a_card_click_keeps_an_expanded_note_expanded', async () => {
+  await withApp(async ({ page }) => {
+    await openTitus(page);
+    const notes = page.getByTestId('helps-note');
+    await notes.first().waitFor();
+    const expand = notes.filter({ has: page.getByTestId('note-expand') }).first().getByTestId('note-expand');
+    await expand.click();
+    assert.equal(await expand.getAttribute('aria-expanded'), 'true');
+    const other = await notes.evaluateAll((els) => els.findIndex((el) => !el.querySelector('[data-testid="note-expand"]') && el.dataset.focused !== 'true'));
+    assert.ok(other >= 0, 'a short note that is not lit');
+    await notes.nth(other).click({ position: { x: 8, y: 8 } });
+    await until('the clicked card is lit', async () => (await notes.nth(other).getAttribute('data-focused')) === 'true');
+    assert.equal(await expand.getAttribute('aria-expanded'), 'true', 'the expanded note is still expanded');
+  }, { scenario: 'en-pins' });
+});
+
 // tC4 #602: the divider resizes the panel within 280 to 720 px, toward the passage.
 browserTest('helps_panel_width_follows_the_divider_drag', async () => {
   await withApp(async ({ page }) => {

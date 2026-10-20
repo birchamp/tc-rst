@@ -1,0 +1,77 @@
+{
+  "path": "check/storyItem",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "list": {
+      "tool": "translationNotes",
+      "unit": {
+        "type": "story",
+        "value": 1
+      }
+    },
+    "index": 0
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "index": 0,
+      "place": "OBS 1:0",
+      "title": "The Creation",
+      "note": [
+        {
+          "kind": "p",
+          "quote": 0,
+          "spans": [
+            {
+              "text": "This title",
+              "bold": true
+            },
+            {
+              "text": " can also be translated as: “About how God made the world”."
+            }
+          ],
+          "depth": 0,
+          "number": null,
+          "cells": [],
+          "header": false
+        }
+      ],
+      "noteDir": "ltr",
+      "article": {
+        "type": "academy",
+        "value": {
+          "slug": "translate-titles"
+        }
+      },
+      "gateway": {
+        "type": "text",
+        "value": {
+          "tokens": [
+            "The",
+            " ",
+            "Creation"
+          ],
+          "lit": [
+            0,
+            2
+          ]
+        }
+      },
+      "target": "La Creación"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
