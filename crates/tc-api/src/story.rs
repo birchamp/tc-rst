@@ -1,16 +1,17 @@
 //! The `story` service's reads (APP-DESIGN §3.7, §3.9, unit B7): the stories of the open Open
 //! Bible Stories project, and one story with its gateway story and its pictures. The story's
 //! helps are `helps/story` (B3's `PassageView`, with the story as the chapter and the frame as
-//! the verse); its check lists are `check/*` over `CheckUnit::Story`. The saves (`saveFrame`,
-//! `saveRef`) come with C3.
+//! the verse); its check lists are `check/*` over `CheckUnit::Story`. Saves carry the
+//! token of exactly the frame or reference the field displayed.
 //!
 //! Frame 0 is the story's title. A story's number, its title line and its frames' image lines
-//! are the project's file; this service shows them and writes nothing.
+//! are the project's file; saves retain its template and image lines.
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{Scope, StoryNo, WallMs};
+use crate::ids::{RequestId, Scope, StoryNo, ViewSeq, WallMs};
 use crate::shown::Known;
+use crate::token::ShownToken;
 
 /// `story/list`: the stories the project holds, as the story rail lists them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,6 +60,9 @@ pub struct Open {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct StoryView {
+    pub view: ViewSeq,
+    pub title_token: ShownToken,
+    pub reference_token: ShownToken,
     pub story: StoryNo,
     /// The drafted title (frame 0); empty when none is drafted.
     pub title: String,
@@ -86,6 +90,7 @@ pub struct StoryView {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct FrameView {
+    pub token: ShownToken,
     /// The frame's paragraph; empty when it is not drafted.
     pub text: String,
     /// Where the frame's picture is served (`/media/obs/…`); none when no picture was found
@@ -168,7 +173,80 @@ pub enum PackVia {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct FrameComment {
+    pub token: ShownToken,
     pub frame: u16,
     pub text: String,
     pub at: WallMs,
+}
+
+/// `story/saveFrame`: save the displayed frame, including frame zero (the title).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveFrame {
+    pub at: Scope,
+    pub request: RequestId,
+    pub shown: ShownToken,
+    pub text: String,
+}
+
+/// `story/saveRef`: save the displayed closing reference line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveRef {
+    pub at: Scope,
+    pub request: RequestId,
+    pub shown: ShownToken,
+    pub text: String,
+}
+
+/// Which line of a story a text is saved to, for [`stored_text`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoryLine {
+    Title,
+    Frame,
+    Reference,
+}
+
+/// The text a story field saves, as tC4's `normalizeStoryUnit` makes it before every write
+/// (`src/data/storyScheduler.ts:16-22`): no carriage return and NFC; a frame keeps only its
+/// non-blank lines, and a title or reference line loses its outer white space. A blank line
+/// typed in a frame, or a space after a title, is then saved as tC4 saves it rather than
+/// refused by the story file's rules, which hold for the result.
+pub fn stored_text(line: StoryLine, text: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    let text: String = text.chars().filter(|c| *c != '\r').nfc().collect();
+    match line {
+        StoryLine::Frame => text
+            .split('\n')
+            .filter(|line| !crate::model::js_trim(line).is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        StoryLine::Title | StoryLine::Reference => crate::model::js_trim(&text).to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StoryLine, stored_text};
+
+    #[test]
+    fn a_story_text_is_stored_as_tc4_normalizes_it() {
+        assert_eq!(
+            stored_text(StoryLine::Frame, "\n Uno\r\n\n \u{3000}\ndos\n"),
+            " Uno\ndos"
+        );
+        assert_eq!(stored_text(StoryLine::Frame, "e\u{301}"), "\u{e9}");
+        assert_eq!(stored_text(StoryLine::Frame, "\n\n"), "");
+        assert_eq!(
+            stored_text(StoryLine::Title, " \u{feff}Título\u{a0}\r"),
+            "Título"
+        );
+        assert_eq!(
+            stored_text(StoryLine::Reference, "  Génesis 1  "),
+            "Génesis 1"
+        );
+        assert_eq!(stored_text(StoryLine::Reference, " \n "), "");
+    }
 }

@@ -465,9 +465,15 @@ impl Actions {
     /// and the place is remembered. A check list is the story's: another story shows the
     /// picker.
     pub fn open_story(&self, story: tc_api::ids::StoryNo) {
+        if self.s().editing.with_untracked(|editing| editing.is_open()) {
+            return;
+        }
         let this = self.clone();
         spawn_local(async move {
             if !this.runtime().saves().gate().await {
+                return;
+            }
+            if this.s().editing.with_untracked(|editing| editing.is_open()) {
                 return;
             }
             let s = this.s();

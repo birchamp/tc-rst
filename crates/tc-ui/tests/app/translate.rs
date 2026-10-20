@@ -184,6 +184,7 @@ fn the_comments_tab_shows_each_verses_newest_comment_in_focus() {
         verse,
         text: text.into(),
         at: WallMs(at),
+        token: super::save_kit::tok(at.unsigned_abs()),
     };
     let comments = [
         comment(3, "older", 1),

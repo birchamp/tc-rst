@@ -12,6 +12,7 @@
   "reply": {
     "type": "ok",
     "value": {
+      "view": 42,
       "book": "TIT",
       "chapters": [
         1,
@@ -35,6 +36,7 @@
       ],
       "comments": [
         {
+          "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
           "chapter": 1,
           "verse": 4,
           "text": "Pablo escribe a Tito.",

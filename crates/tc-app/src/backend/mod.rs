@@ -342,6 +342,34 @@ impl StoreCommand {
         )
     }
 
+    /// A comment box blur adds once; later blurs continue the displayed comment.
+    pub fn add_comment(target: tc_journal::record::CommentTarget, text: String) -> Self {
+        Self::new(Command::AddComment { target, text }, Vec::new())
+    }
+
+    pub fn revise_comment(shown: EditToken, text: String) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::ReviseComment {
+                shown: shown.0,
+                text,
+            },
+            listed,
+        )
+    }
+
+    /// OBS frames and their closing reference share the store's validated command.
+    pub fn save_frame(shown: EditToken, text: String) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::SaveFrame {
+                shown: shown.0,
+                text,
+            },
+            listed,
+        )
+    }
+
     /// `AddBook` (STORAGE §5.7): a blank book seeded from the chapters and verses of
     /// `source`. It writes no record that existed, so it carries no token.
     pub fn add_book(book: BookId, source: String) -> Self {

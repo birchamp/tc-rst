@@ -1751,3 +1751,187 @@ fn a_section_card_opened_over_its_answered_save_names_every_verse() {
         assert_eq!(base, expected, "read at {read_seq}");
     }
 }
+
+#[test]
+fn a_new_comment_drafts_on_pauses_and_revises_its_first_acknowledged_identity() {
+    let mut page = Page::new();
+    let k = key_of(FieldKind::Comment, "TIT 1:4");
+    assert_eq!(page.m.open_comment(k.clone(), FieldScope::App), "");
+    page.focus(&k);
+    for text in ["one", "two", "three"] {
+        page.type_text(&k, text);
+        page.advance(2500.0);
+    }
+    assert!(page.sends().is_empty(), "pauses write drafts only");
+    assert_eq!(page.drafts(), ["one", "two", "three"]);
+    page.blur(&k);
+    assert_eq!(page.sent_texts(), ["three"]);
+    assert!(page.sends()[0].1.is_empty(), "first save adds a comment");
+    page.focus(&k);
+    page.type_text(&k, "newer while the reply waits");
+    page.deliver_ok();
+    page.advance(5000.0);
+    assert_eq!(
+        page.sent_texts(),
+        ["three"],
+        "Ack must not blur focused typing"
+    );
+    assert_eq!(page.entry(&k).unwrap().text, "newer while the reply waits");
+    assert_eq!(page.m.base(&k), Some(&[tok(101)][..]));
+    page.blur(&k);
+    assert_eq!(
+        page.sends()[1].1,
+        [tok(101)],
+        "the second save revises the minted comment"
+    );
+    page.deliver_ok();
+    assert_eq!(page.state(&k), Some(FieldSave::Clean));
+    assert!(page.entry(&k).is_none());
+}
+
+#[test]
+fn a_tokenless_comment_restores_its_original_save_and_preserves_newer_typing() {
+    let mut m = SaveMachine::new(instance(), ids());
+    let k = key_of(FieldKind::Comment, "03-07");
+    m.open_comment(k.clone(), FieldScope::App);
+    m.typed(&k, "sent", tc_ui::app::save::Source::Program, 0.0);
+    let (request, base) = send_of(&m.blur(&k, 1.0));
+    assert!(base.is_empty());
+    m.typed(&k, "newer", tc_ui::app::save::Source::Program, 2.0);
+    let entry = tc_api::buffer::BufferEntry {
+        text: m.text(&k).unwrap().to_owned(),
+        ..m.template(&k).unwrap()
+    };
+    let mut reloaded = SaveMachine::new(instance(), ids());
+    let (retried, base) = send_of(&reloaded.restore(k.clone(), entry, FieldScope::App, 3.0));
+    assert_eq!(retried, request, "reload resends the original append id");
+    assert!(base.is_empty());
+    reloaded.reply(&k, retried, Answered::Acked(ack("sent", 8, 2)), 4.0);
+    assert_eq!(reloaded.open_comment(k.clone(), FieldScope::App), "newer");
+    let (revision, base) = send_of(&reloaded.blur(&k, 5.0));
+    assert_ne!(revision, request);
+    assert_eq!(
+        base,
+        [tok(8)],
+        "the unsent text becomes a revision after the first append Ack"
+    );
+}
+
+#[test]
+fn clearing_a_comment_uses_the_save_in_flight_then_its_acknowledged_text() {
+    let mut m = SaveMachine::new(instance(), ids());
+    let k = key_of(FieldKind::Comment, "TIT 1:4");
+    m.open(k.clone(), FieldScope::App, pair("old", 1, Some(1)), 0.0);
+    m.typed(&k, "new saved text", tc_ui::app::save::Source::Program, 1.0);
+    let (request, _) = send_of(&m.blur(&k, 2.0));
+    m.focus(&k, 3.0);
+    let (restored, commands) = m.revert_comment(&k, 4.0);
+    assert_eq!(
+        restored, "new saved text",
+        "a render snapshot must not revert the pending revision"
+    );
+    assert!(
+        !commands
+            .iter()
+            .any(|command| matches!(command, Command::Send { .. }))
+    );
+    m.reply(
+        &k,
+        request,
+        Answered::Acked(ack("new saved text", 2, 2)),
+        5.0,
+    );
+    let (restored, _) = m.revert_comment(&k, 6.0);
+    assert_eq!(restored, "new saved text");
+    assert_eq!(m.state(&k), Some(&FieldSave::Clean));
+}
+
+#[test]
+fn a_comment_remount_reuses_its_acknowledged_identity_while_the_read_is_stale() {
+    let mut m = SaveMachine::new(instance(), ids());
+    let k = key_of(FieldKind::Comment, "TIT 1:4");
+    let at = FieldScope::Project(Some(scope(1)));
+    m.sessions(&[writable(1)], 0.0);
+    m.open_comment(k.clone(), at.clone());
+    m.typed(&k, "newly added", tc_ui::app::save::Source::Program, 1.0);
+    let (request, _) = send_of(&m.blur(&k, 2.0));
+    m.reply(&k, request, Answered::Acked(ack("newly added", 9, 5)), 3.0);
+    m.close(&k, 4.0);
+    assert_eq!(
+        m.keys().count(),
+        0,
+        "a visited clean comment is outside timer/gate/indicator scans"
+    );
+    assert_eq!(m.next_deadline(), None);
+    assert_eq!(m.busy(), 0);
+    // The held editor/book read still says there is no comment at the target.
+    assert_eq!(m.open_comment(k.clone(), at.clone()), "newly added");
+    assert_eq!(m.base(&k), Some(&[tok(9)][..]));
+    m.typed(&k, "a revision", tc_ui::app::save::Source::Program, 5.0);
+    let (request, base) = send_of(&m.blur(&k, 6.0));
+    assert_eq!(
+        base,
+        [tok(9)],
+        "remount cannot append another permanent comment"
+    );
+    m.reply(&k, request, Answered::Acked(ack("a revision", 10, 6)), 7.0);
+    m.close(&k, 8.0);
+    let (shown, _) = m.open(
+        k.clone(),
+        at.clone(),
+        super::save_kit::pair_at("stale", 1, 1, 1),
+        9.0,
+    );
+    assert_eq!(
+        shown, "a revision",
+        "an older nonempty read cannot replace the proved pair either"
+    );
+    m.close(&k, 10.0);
+    let (shown, _) = m.open(
+        k.clone(),
+        at,
+        super::save_kit::pair_at("newer external revision", 11, 1, 7),
+        11.0,
+    );
+    assert_eq!(shown, "newer external revision");
+    m.close(&k, 12.0);
+    m.sessions(&[], 13.0);
+    assert_eq!(
+        m.open_comment(k, FieldScope::Project(Some(scope(2)))),
+        "",
+        "a closed project's pairs cannot leak to another open"
+    );
+}
+
+#[test]
+fn a_new_server_run_forgets_closed_comment_pairs() {
+    let mut m = SaveMachine::new(instance(), ids());
+    let k = key_of(FieldKind::Comment, "03-07");
+    m.open(k.clone(), FieldScope::App, pair("saved", 1, Some(1)), 0.0);
+    m.close(&k, 1.0);
+    m.restarted(ServerInstance::from_bytes([7; 16]));
+    assert_eq!(m.open_comment(k, FieldScope::App), "");
+}
+
+#[test]
+fn an_invalid_text_refusal_keeps_the_field_and_its_actionable_reason_until_retry() {
+    let mut page = Page::new();
+    let k = key_of(FieldKind::StoryRef, "03");
+    page.open(&k, "a reference", 1);
+    page.type_text(&k, "");
+    page.blur(&k);
+    let reason = "A reference needs text <and> must fit on one line.";
+    page.deliver(Answered::Failed(SaveError::NotSaved(NotSaved::Refused(
+        tc_api::write::SaveRefusal::InvalidText {
+            reason: reason.to_owned(),
+        },
+    ))));
+    assert_eq!(page.m.invalid_text_reason().as_deref(), Some(reason));
+    assert_eq!(page.entry(&k).unwrap().text, "");
+    page.type_text(&k, "corrected reference");
+    page.retry();
+    assert_eq!(page.m.invalid_text_reason(), None);
+    assert_eq!(page.sends().last().unwrap().1, [tok(1)]);
+    page.deliver_ok();
+    assert_eq!(page.state(&k), Some(FieldSave::Clean));
+}

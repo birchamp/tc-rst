@@ -20,19 +20,25 @@ fn story(n: u8) -> StoryNo {
 
 fn view() -> StoryView {
     StoryView {
+        view: tc_api::ids::ViewSeq::new(1),
+        title_token: super::save_kit::tok(0),
+        reference_token: super::save_kit::tok(4),
         story: story(1),
         title: "La Creación".into(),
         reference: "Una historia de: Génesis 1-2".into(),
         frames: vec![
             FrameView {
+                token: super::save_kit::tok(1),
                 text: "Así fue.".into(),
                 image: Some("/media/obs/p/a.jpg".into()),
             },
             FrameView {
+                token: super::save_kit::tok(2),
                 text: "  \n ".into(),
                 image: None,
             },
             FrameView {
+                token: super::save_kit::tok(3),
                 text: String::new(),
                 image: None,
             },
@@ -265,7 +271,8 @@ fn the_picture_note_names_each_pack_consulted() {
 
 #[test]
 fn a_frames_box_shows_its_newest_comment() {
-    let comment = |frame, at, text: &str| FrameComment {
+    let comment = |frame, at: i64, text: &str| FrameComment {
+        token: super::save_kit::tok(at.unsigned_abs()),
         frame,
         text: text.into(),
         at: WallMs(at),

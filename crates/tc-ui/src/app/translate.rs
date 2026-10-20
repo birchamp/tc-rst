@@ -2,7 +2,9 @@
 //! `helpsFocus.js` that are not drawing. Pure, so they are tested on the host.
 
 use tc_api::buffer::{BufferKey, FieldKey, FieldKind, FieldPlace};
-use tc_api::editor::{ChapterText, CommentView, PaneChapter, RowSource, SourceFrame, VerseRow};
+use tc_api::editor::{
+    ChapterText, CommentTarget, CommentView, PaneChapter, RowSource, SourceFrame, VerseRow,
+};
 use tc_api::ids::{ProjectId, ProjectRef};
 use tc_api::model::section::SectionVerse;
 use tc_api::shown::{PersonLabel, Who};
@@ -12,6 +14,43 @@ use tc_core::BookId;
 use crate::app::shell::{Editing, js_trim};
 use crate::app::understand::{Unit, key_carries, leading_num};
 use crate::i18n::{keys, t};
+
+/// Comments keep their durable target when a source section or tab groups verses differently.
+pub fn comment_key(
+    project: &ProjectRef,
+    id: &ProjectId,
+    target: &CommentTarget,
+) -> Option<BufferKey> {
+    let place = match target {
+        CommentTarget::Verse {
+            book,
+            chapter,
+            verse,
+        } => verse_place(*book, *chapter, &verse.to_string()),
+        CommentTarget::Frame { story, frame } => format!("{:02}-{frame:02}", story.get()),
+    };
+    Some(BufferKey {
+        project: project.clone(),
+        id: id.clone(),
+        field: FieldKey {
+            kind: FieldKind::Comment,
+            place: FieldPlace::parse(&place).ok()?,
+        },
+    })
+}
+
+/// A restored comment has no mounted box; its field place still names its full save target.
+pub fn comment_target(place: &str) -> Option<CommentTarget> {
+    if let Some((book, chapter, verse)) = parse_verse_place(place) {
+        return Some(CommentTarget::Verse {
+            book,
+            chapter,
+            verse: verse.parse().ok()?,
+        });
+    }
+    let (story, frame) = crate::app::story::parse_frame_place(place)?;
+    Some(CommentTarget::Frame { story, frame })
+}
 
 /// The verse keys of the target chapter, in order.
 pub fn verse_keys(text: &ChapterText) -> Vec<String> {

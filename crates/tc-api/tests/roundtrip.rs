@@ -115,6 +115,7 @@ fn every_shared_type_round_trips() {
             Known<u32>,
             Direction,
             tc_api::editor::DraftField,
+            tc_api::editor::CommentTarget,
             // writes
             Ack,
             Stored,
