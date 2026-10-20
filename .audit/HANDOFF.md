@@ -80,7 +80,7 @@ before restarting; a builder told `cont` continues its branch.
   `done` from `.audit/STATUS.md` plus every unit now on main, and `cont` for each `lane-<unit>` branch
   ahead of main (b4b, b5b if not merged, b7, c5), with a note saying how far each got (read the
   journal of run `wf_c6c6c4ba-a62` if this session's files survive). Restarted runs use the new fix
-  rule above. B5b's earlier minors are in `/tmp/tcgate/b5b-minors.tsv` until they reach
+  rule above. B5b's earlier minors are in `.audit/b5b-minors-pending.tsv` until they reach
   `.audit/minors.tsv`.
 - **S2's redesign** (`.audit/workflows/s2-placement-redesign.js`) on the worktree
   `.claude/worktrees/s2-verify` (branch `s2-verify`, from `19e7fd2`): a placement ledger and a typed
