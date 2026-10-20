@@ -626,7 +626,8 @@ struct Planned {
     at_risk: usize,
 }
 
-/// One change for each pin group the change moves, over the heads the group had in the snapshot.
+/// One change for each pin group the change moves, over the heads the group had in the snapshot;
+/// a group in conflict is refused.
 fn pin_changes(
     read: &CountingSnapshot,
     current: &ProjectPins,
@@ -639,8 +640,15 @@ fn pin_changes(
         if current.group_value(group).map_err(unwritable)? == value {
             continue;
         }
+        let key = RecordKey::Pins(group);
+        // A change over both heads would end the conflict and hide the other computer's pins.
+        if read.in_conflict(&key) {
+            return Err(refused_gateway(
+                "the project's resources have a conflict to resolve first".to_owned(),
+            ));
+        }
         out.push(PlannedChange {
-            parents: read.heads(&RecordKey::Pins(group)),
+            parents: read.heads(&key),
             record: Record::Pins { group, value },
             cause: Cause::Edit,
         });

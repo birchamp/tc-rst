@@ -324,6 +324,11 @@ enum Trouble {
     TwoOnOneCheck,
     /// The second decision has two heads: this computer's judgement and a teammate's.
     ConflictedDecision,
+    /// The primary pins have two heads: this computer's, and a teammate's with other coverage.
+    ConflictedPins,
+    /// The primary pins have two heads that agree: this computer's, and a teammate's that
+    /// removes the links pin and changes the coverage of the notes.
+    MergedPins,
 }
 
 /// A project that pins an original-language text and a gateway Bible pane as well, and holds
@@ -450,10 +455,17 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
         })
         .unwrap();
     assert_valid_burrito(&fs, &folder);
-    if opts.trouble == Trouble::ConflictedDecision {
-        two_heads(&backend, &folder, 1, |handle| {
+    match opts.trouble {
+        Trouble::ConflictedDecision => two_heads(&backend, &folder, 1, |handle| {
             decision_edits(handle, &decided[1].0, &tn)
-        });
+        }),
+        Trouble::ConflictedPins => two_heads(&backend, &folder, 1, |handle| {
+            pins_edits(handle, &pins, SetSlot::TranslationWordsLinks)
+        }),
+        Trouble::MergedPins => two_heads(&backend, &folder, 0, |handle| {
+            pins_edits(handle, &pins, SetSlot::TranslationNotes)
+        }),
+        Trouble::Nothing | Trouble::TwoOnOneCheck => {}
     }
     let dir = tempfile::tempdir().unwrap();
     let projects = dir.path().join("projects");
@@ -578,6 +590,31 @@ fn decision_edits(
                 DecisionChange::Comment(Some(comment.to_owned())),
             ],
         },
+    })
+}
+
+/// The primary pins without the links, and with other coverage for the pin in `slot`: a
+/// disagreement when that is the links the first removes, none when it is the notes.
+fn pins_edits(handle: &tc_store::ProjectHandle, pins: &ProjectPins, slot: SetSlot) -> [Command; 2] {
+    let shown = handle
+        .snapshot()
+        .token(&RecordKey::Pins(PinGroup::Primary), None)
+        .unwrap();
+    let mut without_links = pins.clone();
+    without_links
+        .primary
+        .as_mut()
+        .unwrap()
+        .pins
+        .remove(&SetSlot::TranslationWordsLinks);
+    let mut with_more_books = pins.clone();
+    let set = with_more_books.primary.as_mut().unwrap();
+    let pin = set.pin(slot).unwrap().clone();
+    set.pins
+        .insert(slot, pin.with_books(BookCoverage::WholeCollection));
+    [without_links, with_more_books].map(|pins| Command::SetPins {
+        shown: shown.clone(),
+        value: pins.group_value(PinGroup::Primary).unwrap(),
     })
 }
 
@@ -2089,4 +2126,119 @@ async fn two_decisions_that_come_to_one_check_are_counted_as_checks_to_do_again(
     for (key, was) in &w.decided[..2] {
         assert_eq!(resource_of(&w, key), was.resource);
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_upgrade_does_not_move_pins_that_are_in_conflict() {
+    let w = build(
+        6,
+        0,
+        None,
+        Opts {
+            trouble: Trouble::ConflictedPins,
+            ..Opts::default()
+        },
+    )
+    .await;
+    let key = RecordKey::Pins(PinGroup::Primary);
+    let heads_before = heads(&w, &key);
+    assert_eq!(heads_before.len(), 2);
+    let changes_before = changes(&w);
+
+    let job = ok(
+        &w.t.app,
+        &PlanUpgrade {
+            request: rid(50),
+            at: w.at.clone(),
+            offer: OfferRef::Set {
+                rung: SetRung::Primary,
+            },
+        },
+    )
+    .await;
+    match ended(&w.t.app, job).await {
+        JobState::Failed(ApiError::Refused(tc_api::Refusal::Resources(
+            tc_api::refusal::ResourceRefusal::GatewayFailed { reason },
+        ))) => assert!(reason.contains("conflict"), "{reason}"),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(changes(&w), changes_before);
+    assert_eq!(heads(&w, &key), heads_before);
+    assert_eq!(handle(&w).snapshot().fold().conflict_count(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_download_does_not_adopt_pins_over_a_conflict_and_says_so() {
+    let w = build(
+        6,
+        0,
+        None,
+        Opts {
+            trouble: Trouble::ConflictedPins,
+            ..Opts::default()
+        },
+    )
+    .await;
+    add_repo(&w.fake, "unfoldingWord", "en_ust", "en_ult@v89").await;
+    let key = RecordKey::Pins(PinGroup::Primary);
+    let (heads_before, changes_before) = (heads(&w, &key), changes(&w));
+
+    let job = ok(
+        &w.t.app,
+        &tc_api::resources::Download {
+            request: rid(80),
+            at: w.at.clone(),
+            gateway: tc_api::resources::GatewayRef {
+                language: "en".into(),
+                owner: "unfoldingWord".into(),
+            },
+            book: BookId::Titus,
+            repos: vec!["en_ust".to_owned()],
+        },
+    )
+    .await;
+    match ended(&w.t.app, job).await {
+        JobState::Failed(ApiError::Refused(tc_api::Refusal::Resources(
+            tc_api::refusal::ResourceRefusal::AdoptFailed { error },
+        ))) => assert!(error.contains("conflict"), "{error}"),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(changes(&w), changes_before);
+    assert_eq!(heads(&w, &key), heads_before);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_upgrade_over_pins_with_two_heads_that_agree_keeps_both_teammates_changes() {
+    let w = build(
+        6,
+        0,
+        None,
+        Opts {
+            trouble: Trouble::MergedPins,
+            ..Opts::default()
+        },
+    )
+    .await;
+    let key = RecordKey::Pins(PinGroup::Primary);
+    assert_eq!(heads(&w, &key).len(), 2);
+
+    let done = upgrade_titus(&w, 50).await;
+
+    assert_eq!((done.carried, done.check_again), (6, 0));
+    assert_eq!(heads(&w, &key).len(), 1, "the change is over both heads");
+    let primary = pins_of(&w).primary.unwrap();
+    assert!(
+        primary.pin(SetSlot::TranslationWordsLinks).is_none(),
+        "the teammate's removal stands"
+    );
+    assert_eq!(
+        primary
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .version
+            .as_ref()
+            .map(ToString::to_string)
+            .as_deref(),
+        Some("v91")
+    );
 }
