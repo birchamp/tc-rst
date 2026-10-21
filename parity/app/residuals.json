@@ -605,6 +605,30 @@
       ],
       "why": "The save indicator reads “Unsaved changes” (`data-state=\"dirty\"`, tone `warn`) where tC4 reads “Saved”: tC4's indicator mirrors only its verse scheduler, and a section card's text is not in it until Save, so tC4 says “Saved” while every word of the section has just been deleted and nothing is stored. The rebuild's section card is a field of the save machine (APP-DESIGN §6.5, `SaveRule::OnSaveOnly`), so the indicator says what is true: there are unsaved changes (a declared difference, docs/PLAN.md, unit B4b). Those are the only pixels that differ. In the DOM, besides the indicator's three lines, the textarea keeps the text it opened with as its child text node, where React writes each new value there too (`defaultValue`); the field's value, which is what the person sees and what is saved, is empty on both sides. Every other line of the DOM, every computed style included, is tC4's, and the question, its words, buttons and focus are tC4's.",
       "until": null
+    },
+    "conflict-review": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The review of Titus 1:1 after two teammates changed it on Door43, no version selected. Every pixel and every line of the DOM, computed styles included, is tC4's but for two things. The dates of the versions: each date is when its version was made, so tC4's are its capture's time and the rebuild's are its own run's (the scripted teammates' versions carry the environment's fixed time, 1 October 2026), and the card's `data-ts` is tC4's §8.2 ts there and the rebuild's change id here. The History button under the versions (#78, read only until C7a's Restore): a rebuild-only control (Q-9) that lists every version of the verse with how it came to be. The sync that brings the teammates' versions is scripted (`test/script`, the environment's teammatesChangeOneVerse) until X; the teammates edit Door43's copy of the project, so a version this computer has not synced stays a version of its own.",
+      "until": null
+    },
+    "conflict-review-selected": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The same review with the first version selected: it is outlined and the other fades, and the footer says that Teammate 2's version replaces the other. Every pixel and every line of the DOM, computed styles included, is tC4's but for two things. The dates of the versions: each date is when its version was made, so tC4's are its capture's time and the rebuild's are its own run's (the scripted teammates' versions carry the environment's fixed time, 1 October 2026), and the card's `data-ts` is tC4's §8.2 ts there and the rebuild's change id here. The History button under the versions (#78, read only until C7a's Restore): a rebuild-only control (Q-9) that lists every version of the verse with how it came to be. The sync that brings the teammates' versions is scripted (`test/script`, the environment's teammatesChangeOneVerse) until X; the teammates edit Door43's copy of the project, so a version this computer has not synced stays a version of its own.",
+      "until": null
+    },
+    "conflict-review-mine": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The review with three versions: Titus 1:1 saved on this computer before the sync, then two teammates' versions; Mine is light blue and each teammate's cream (#679). Every pixel and every line of the DOM, computed styles included, is tC4's but for two things. The dates of the versions: each date is when its version was made, so tC4's are its capture's time and the rebuild's are its own run's (the scripted teammates' versions carry the environment's fixed time, 1 October 2026), and the card's `data-ts` is tC4's §8.2 ts there and the rebuild's change id here. The History button under the versions (#78, read only until C7a's Restore): a rebuild-only control (Q-9) that lists every version of the verse with how it came to be. The sync that brings the teammates' versions is scripted (`test/script`, the environment's teammatesChangeOneVerse) until X; the teammates edit Door43's copy of the project, so a version this computer has not synced stays a version of its own.",
+      "until": null
     }
   }
 }
