@@ -1,20 +1,44 @@
 # Handoff: continuing the rebuild (kept current)
 
-## S2 recovery, 2026-10-20
+## S2: where it stands (updated 2026-10-21 16:20 UTC)
 
-The active app owner is the Enjoy **tC4 Rebuild** conversation
-`d8a954f9b59742f2b46a6a53f82e5fd4`, working in `resume-build-lane`, observed at
-`732471fd40c80b5a28e7a5c9686621f9aa8bb15b` after its C2 checkpoint. Its conversation
-was still running; do not change that checkout or launch another app pipeline here.
-This conversation (`19f61dcb-b38a-49aa-9b95-1d8d5dca69fe`) owns S2 proof and safe handoff
-in the isolated `s2-proof-executor` worktree, based on S2 `85fa081`. The original
-`s2-verify` checkout stays untouched. At most these two unit pipelines are active.
+**Owner:** Enjoy conversation `19f61dcb-b38a-49aa-9b95-1d8d5dca69fe`. **Builder:**
+`/home/bot/tc-rst/.worktrees/s2-proof-executor`, branch `s2-proof-executor`. Not pushed, not
+merged into main or `storage`. The other active owner is the **tC4 Rebuild** conversation
+(`d8a954f9…`, branch `resume-build-lane`); never change its checkout. Read, in order:
+`.audit/plans/S2-PROOF-2026-10-21.md` (latest), then `S2-PROOF-2026-10-20.md` (history).
 
-Process adoption is a cherry-pick of `2fe47e2691af7b61a45b05bc5903474412388f4f` onto the
-isolated S2 branch. S2's nightly model job is retained. Adoption checks and the next known
-missing proof are recorded in `.audit/plans/S2-PROOF-2026-10-20.md`; no historical report
-is a current passing receipt. S2 remains unverified and is not integrated into main or
-storage. The older snapshots below are historical context.
+Commits on the branch, oldest first (each passed every AGENTS check on its own tree):
+`451d833` gate repairs, `1ec5bad` process adoption, `f5e1613` S2 proof fixes, `7d3a5d3` model:
+`.tc/external` is no surviving copy, `a8e50e0` two losses the long model found (seal from
+memory; edited records after a lost head), `9d8f11e` merge of the carried/Git fix round
+(`s2-fix-git` 2d4219d), `2619a72` merge of the metadata.json fix round (`s2-fix-meta` 3d9dfaa).
+The last commit merges `s2-fix-proof` 9aa15f3 (tests only: four mutants caught, SOURCE_ALIAS
+retired as equivalent) with 13 review minors in `.audit/minors.tsv`; every AGENTS check passed
+on the merged tree (fmt, clippy, wasm, parity in `.enjoy-logs/s2-merge-proof-precommit.log`;
+1,768 workspace tests in `.enjoy-logs/s2-merge-proof-tests.log`).
+
+Fix round 1 (review `wf_10020f08-0a6`, nine serious findings, all reproduced): every fix commit
+was reviewed independently and accepted (minors only). Reproductions:
+`/home/bot/tc-rst/.worktrees/s2-review-exec-evidence/`. Fixer worktrees `s2-fix-{git,meta,proof}`
+are done and can be removed after the merge.
+
+**Next, in order:** (1) full validation at the merged SHA through `.enjoy-logs/s2-validate-all.sh`
+(suite with receipts, mutation executor `.enjoy-lane/mutation-executor/execute.py --cases all`,
+44 recipes, then four long model seeds); every recipe must be detected and every long seed
+pass; a new long-model failure becomes a named witness, then a product or oracle fix with a
+BEFORE log; (2) re-review only the changed areas; (3) save the verified stage with
+`.audit/tools/lane-state.mjs`; (4) merge into main in a separate worktree (about 12 conflicts:
+see S2-PROOF-2026-10-21.md), with the tc-app/tc-server/tc4 no-hook clippy, Windows VM gates
+and storebench release checks; pushing main needs the owner's say-so in the conversation.
+
+The journal-files state machine is the recommended next storage unit after S2 merges
+(`.audit/plans/JOURNAL-MACHINE-ASSESSMENT.md`). The owner asked to work at High effort for
+speed and to run a final check at a higher effort later.
+
+Local, git-ignored state an agent on this PC can also use: stage reports
+`.enjoy-lane/stages/S2/`, gate receipts `.enjoy-lane/gates/`, logs `.enjoy-logs/`, review and
+fix results `.enjoy-lane/*result*.json`.
 
 Written for the next session that continues this work, on the owner's Linux PC. It is updated at
 each milestone. Check `.audit/STATUS.md`'s recorded ref against the actual builder worktree:
