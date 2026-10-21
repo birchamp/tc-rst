@@ -148,6 +148,11 @@ impl Vfs for PacedVfs {
         self.inner.rename(from, to)
     }
 
+    fn rename_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.pace();
+        self.inner.rename_file_noreplace(from, to)
+    }
+
     fn rename_dir_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
         self.pace();
         self.inner.rename_dir_noreplace(from, to)

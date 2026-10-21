@@ -13,8 +13,9 @@
 //!
 //! A [`git2::Repository`] is not `Sync`: every thread that needs one opens its own [`Git`].
 
-use crate::counters::Counters;
+use crate::counters::{Counters, CountingVfs};
 use crate::hooks::{Failure, Hooks, Point};
+use crate::vfs::{StdFs, Vfs};
 use git2::build::TreeUpdateBuilder;
 use git2::{
     ConfigLevel, ErrorCode, FileMode, ObjectType, Oid, Repository, RepositoryInitOptions,
@@ -47,6 +48,8 @@ pub enum GitError {
     },
     #[error("the project's history: {0}")]
     Other(String),
+    #[error("the project's history: expected a file blob, found {kind:?}")]
+    NotBlob { kind: ObjectType },
     /// The branch is not where the checkpoint read it: someone else moved it.
     #[error("the project's history moved on while a checkpoint was made")]
     HeadMoved,
@@ -164,6 +167,37 @@ const CONFIG: [(&str, bool); 3] = [
     ("core.fsyncObjectFiles", true),
     ("core.logAllRefUpdates", false),
 ];
+
+/// A verified backup is safe to rely on only after its data and every directory name
+/// below the project root are durable. The final file flush also closes Windows' rename
+/// protocol; an existing object may have been restored without any flushes.
+fn sync_blob_backup(
+    fs: &dyn Vfs,
+    files: &[PathBuf],
+    leaf: &Path,
+    objects: &Path,
+    git_dir: &Path,
+) -> Result<(), GitError> {
+    let project = git_dir
+        .parent()
+        .ok_or_else(|| GitError::Other("the object directory has no parent".into()))?;
+    let sync_error = |path: &Path, error: io::Error| {
+        GitError::Other(format!(
+            "the file backup could not flush {}: {error}",
+            path.display()
+        ))
+    };
+    for file in files {
+        fs.sync_file(file).map_err(|e| sync_error(file, e))?;
+    }
+    for dir in [leaf, objects, git_dir, project] {
+        fs.sync_dir(dir).map_err(|e| sync_error(dir, e))?;
+    }
+    for file in files {
+        fs.sync_file(file).map_err(|e| sync_error(file, e))?;
+    }
+    Ok(())
+}
 
 fn open_repo(outside: &Path) -> Result<Repository, git2::Error> {
     Repository::open_ext(
@@ -530,7 +564,10 @@ impl Git {
     pub fn read_blob(&self, oid: GitOid) -> Result<Option<Vec<u8>>, GitError> {
         let odb = at("open its objects", self.repo.odb())?;
         match odb.read(to_oid(oid)?) {
-            Ok(object) => Ok(Some(object.data().to_vec())),
+            Ok(object) if object.kind() == ObjectType::Blob => Ok(Some(object.data().to_vec())),
+            Ok(object) => Err(GitError::NotBlob {
+                kind: object.kind(),
+            }),
             Err(e) if e.code() == ErrorCode::NotFound => Ok(None),
             Err(source) => Err(GitError::Git {
                 what: "read a file's bytes",
@@ -550,7 +587,7 @@ impl Git {
         let odb = at("open its objects", self.repo.odb())?;
         let id = to_oid(oid)?;
         match odb.reader(id) {
-            Ok((mut reader, _, _)) => {
+            Ok((mut reader, _, ObjectType::Blob)) => {
                 let mut buffer = vec![0u8; 64 * 1024];
                 loop {
                     let n = io::Read::read(&mut reader, &mut buffer)
@@ -561,6 +598,7 @@ impl Git {
                     out(&buffer[..n]).map_err(|e| GitError::Other(e.to_string()))?;
                 }
             }
+            Ok((_, _, kind)) => Err(GitError::NotBlob { kind }),
             // A packed object has no stream and libgit2 says "not found" for it too: read it
             // whole, which says whether it is there.
             Err(_) => match self.read_blob(oid)? {
@@ -573,6 +611,81 @@ impl Git {
                 None => Ok(false),
             },
         }
+    }
+
+    /// Reads one blob and makes its physical backup durable before returning `true`.
+    /// A fresh handle avoids an ODB cache standing for a file that has disappeared.
+    /// Loose objects are flushed directly. A packed or alternate-backed blob is copied
+    /// into one new one-object pack, so locating its backup never scans project history.
+    pub fn copy_blob_to_durable(
+        &self,
+        oid: GitOid,
+        out: &mut dyn FnMut(&[u8]) -> io::Result<()>,
+    ) -> Result<bool, GitError> {
+        let id = to_oid(oid)?;
+        let odb = at("open its objects", self.repo.odb())?;
+        let common = self.repo.commondir();
+        let objects = common.join("objects");
+        let hex = oid.to_hex();
+        let fanout = objects.join(&hex[..2]);
+        let loose = fanout.join(&hex[2..]);
+        let fs = CountingVfs::new(Arc::new(StdFs), self.counters.clone());
+        // A reader can come from an alternate after the own loose backend refuses it.
+        // In that case only a newly written pack gives this repository its own backup.
+        let own_loose = std::fs::symlink_metadata(&loose)
+            .is_ok_and(|m| m.is_file() && (!cfg!(windows) || !m.permissions().readonly()))
+            && !objects.join("info/alternates").exists()
+            && std::env::var_os("GIT_ALTERNATE_OBJECT_DIRECTORIES").is_none()
+            && std::env::var_os("GIT_OBJECT_DIRECTORY").is_none();
+        if own_loose {
+            match odb.reader(id) {
+                Ok((mut reader, _, ObjectType::Blob)) => {
+                    let mut buffer = vec![0u8; 64 * 1024];
+                    loop {
+                        let n = io::Read::read(&mut reader, &mut buffer)
+                            .map_err(|e| GitError::Other(e.to_string()))?;
+                        if n == 0 {
+                            break;
+                        }
+                        out(&buffer[..n]).map_err(|e| GitError::Other(e.to_string()))?;
+                    }
+                    sync_blob_backup(&fs, &[loose], &fanout, &objects, common)?;
+                    return Ok(true);
+                }
+                Ok((_, _, kind)) => return Err(GitError::NotBlob { kind }),
+                // No chunks have been delivered: a valid packed copy may still exist.
+                Err(_) => {}
+            }
+        }
+        let Some(bytes) = self.read_blob(oid)? else {
+            return Ok(false);
+        };
+        for chunk in bytes.chunks(64 * 1024) {
+            out(chunk).map_err(|e| GitError::Other(e.to_string()))?;
+        }
+        let pack_dir = objects.join("pack");
+        crate::atomic::atomic_create_dirs(&fs, &pack_dir)
+            .map_err(|e| GitError::Other(e.to_string()))?;
+        let mut builder = at("start a file backup pack", self.repo.packbuilder())?;
+        builder.set_threads(1);
+        at(
+            "add the file to its backup pack",
+            builder.insert_object(id, None),
+        )?;
+        at(
+            "write the file backup pack",
+            builder.write(&pack_dir, 0o644),
+        )?;
+        let name = at("name the file backup pack", builder.name())?
+            .ok_or_else(|| GitError::Other("the file backup pack has no name".into()))?;
+        let files = [
+            pack_dir.join(format!("pack-{name}.pack")),
+            pack_dir.join(format!("pack-{name}.idx")),
+        ];
+        sync_blob_backup(&fs, &files, &pack_dir, &objects, common)?;
+        self.counters.add(&self.counters.git_objects_packed, 1);
+        at("refresh its file backups", odb.refresh())?;
+        Ok(true)
     }
 
     fn count_blob(&self, bytes: u64) {
@@ -1215,6 +1328,194 @@ mod tests {
         assert_eq!(git.read_blob(missing).unwrap(), None);
     }
 
+    #[test]
+    fn a_durable_loose_blob_read_flushes_only_its_backup_and_parent_names() {
+        let (_dir, git) = fresh();
+        let bytes = b"the old recording must outlive replacement of its working file";
+        let oid = git.write_blob(bytes).unwrap();
+        let before = git.counters.read();
+        let mut read = Vec::new();
+        assert!(
+            git.copy_blob_to_durable(oid, &mut |chunk| {
+                read.extend_from_slice(chunk);
+                Ok(())
+            })
+            .unwrap()
+        );
+        assert_eq!(read, bytes);
+        if cfg!(windows) {
+            // libgit2's readonly loose object cannot be opened for FlushFileBuffers.
+            assert_eq!(git.counters.read().since(&before).fsyncs, 8);
+            assert_eq!(git.counters.read().since(&before).git_objects_packed, 1);
+        } else {
+            assert_eq!(git.counters.read().since(&before).fsyncs, 6);
+            assert_eq!(git.counters.read().since(&before).git_objects_packed, 0);
+        }
+    }
+
+    #[test]
+    fn a_durable_packed_blob_read_writes_a_pack_of_only_the_affected_blob() {
+        let (_dir, git) = fresh();
+        let wanted = git.write_blob(b"the recording being replaced").unwrap();
+        let unrelated = git
+            .write_blob(b"unrelated history must not be packed again")
+            .unwrap();
+        let pack_dir = git.git_dir().join("objects/pack");
+        let mut builder = git.repo().packbuilder().unwrap();
+        builder
+            .insert_object(to_oid(wanted).unwrap(), None)
+            .unwrap();
+        builder
+            .insert_object(to_oid(unrelated).unwrap(), None)
+            .unwrap();
+        builder.write(&pack_dir, 0o644).unwrap();
+        drop(builder);
+        let hex = wanted.to_hex();
+        std::fs::remove_file(
+            git.git_dir()
+                .join("objects")
+                .join(&hex[..2])
+                .join(&hex[2..]),
+        )
+        .unwrap();
+        let names = || {
+            std::fs::read_dir(&pack_dir)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect::<BTreeSet<_>>()
+        };
+        let before_names = names();
+        let probe = git.another().unwrap();
+        let before = git.counters.read();
+        let mut read = Vec::new();
+        assert!(
+            probe
+                .copy_blob_to_durable(wanted, &mut |chunk| {
+                    read.extend_from_slice(chunk);
+                    Ok(())
+                })
+                .unwrap()
+        );
+        assert_eq!(read, b"the recording being replaced");
+        assert_eq!(git.counters.read().since(&before).fsyncs, 8);
+        assert_eq!(git.counters.read().since(&before).git_objects_packed, 1);
+        let added = names()
+            .difference(&before_names)
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            added.len(),
+            2,
+            "one pack and its index, never unrelated history"
+        );
+        let isolated = tempfile::tempdir().unwrap();
+        let isolated_objects = isolated.path().join("objects");
+        std::fs::create_dir_all(isolated_objects.join("pack")).unwrap();
+        for name in &added {
+            std::fs::copy(
+                pack_dir.join(name),
+                isolated_objects.join("pack").join(name),
+            )
+            .unwrap();
+        }
+        let own = git2::Odb::new().unwrap();
+        own.add_disk_alternate(isolated_objects.to_str().unwrap())
+            .unwrap();
+        assert_eq!(
+            own.read(to_oid(wanted).unwrap()).unwrap().data(),
+            b"the recording being replaced"
+        );
+        assert!(!own.exists(to_oid(unrelated).unwrap()));
+    }
+
+    #[test]
+    fn a_durable_blob_read_refuses_non_blob_objects_before_delivering_bytes() {
+        let (_dir, git) = fresh();
+        let tree = git
+            .repo()
+            .odb()
+            .unwrap()
+            .write(ObjectType::Tree, b"")
+            .unwrap();
+        let mut delivered = 0;
+        assert!(matches!(
+            git.copy_blob_to_durable(from_oid(tree).unwrap(), &mut |chunk| {
+                delivered += chunk.len();
+                Ok(())
+            }),
+            Err(GitError::NotBlob {
+                kind: ObjectType::Tree
+            })
+        ));
+        assert_eq!(delivered, 0);
+    }
+
+    #[test]
+    fn a_backup_flush_covers_a_recreated_fanout_and_propagates_every_failure() {
+        use crate::fault::{FaultFs, OpKind, PowerLoss};
+        let fs = FaultFs::new();
+        fs.set_power_loss(PowerLoss::Strict);
+        let project = Path::new("/p");
+        let common = project.join(".git");
+        let objects = common.join("objects");
+        let fanout = objects.join("ab");
+        // All directory names and file bytes start unflushed, as a recovery can leave them.
+        fs.create_dir(project).unwrap();
+        fs.create_dir(&common).unwrap();
+        fs.create_dir(&objects).unwrap();
+        fs.create_dir(&fanout).unwrap();
+        // The project's own name was secured when it was created.
+        fs.sync_dir(Path::new("/")).unwrap();
+        let file = fanout.join("old-recording");
+        let bytes = b"old recording in a newly recreated fanout";
+        let mut writer = fs.create_new(&file).unwrap();
+        writer.write_all(bytes).unwrap();
+        drop(writer);
+        assert_eq!(fs.crash(true).peek(&file), None);
+        let pending = fs.copy();
+        fs.clear_log();
+        sync_blob_backup(&fs, std::slice::from_ref(&file), &fanout, &objects, &common).unwrap();
+        assert_eq!(
+            fs.crash(true).peek(&file).as_deref(),
+            Some(bytes.as_slice())
+        );
+        let log = fs.log();
+        let expected = [
+            (OpKind::SyncFile, file.clone()),
+            (OpKind::SyncDir, fanout.clone()),
+            (OpKind::SyncDir, objects.clone()),
+            (OpKind::SyncDir, common.clone()),
+            (OpKind::SyncDir, project.to_owned()),
+            (OpKind::SyncFile, file.clone()),
+        ];
+        assert_eq!(
+            log.iter()
+                .map(|op| (op.kind, op.path.clone()))
+                .collect::<Vec<_>>(),
+            expected
+        );
+        for failure in 0..expected.len() {
+            let failed = pending.copy();
+            failed.clear_log();
+            failed.fail_op(failure as u64, io::ErrorKind::Other);
+            assert!(
+                sync_blob_backup(
+                    &failed,
+                    std::slice::from_ref(&file),
+                    &fanout,
+                    &objects,
+                    &common
+                )
+                .is_err()
+            );
+            assert_eq!(
+                failed.log().len(),
+                failure + 1,
+                "failure {failure} must stop authorization"
+            );
+        }
+    }
+
     /// A blob in a pack streams too (libgit2 streams loose objects only).
     #[test]
     fn a_blob_in_a_pack_is_copied_whole() {
@@ -1456,5 +1757,53 @@ mod tests {
             Git::open(&outside, true, Arc::default(), &hooks),
             Opened::Broken { .. }
         ));
+    }
+    #[test]
+    fn blob_apis_reject_non_blob_objects_before_delivering_any_bytes() {
+        for packed in [false, true] {
+            let (_dir, git) = fresh();
+            let id = git
+                .repo()
+                .odb()
+                .unwrap()
+                .write(ObjectType::Tree, b"")
+                .unwrap();
+            let oid = from_oid(id).unwrap();
+            if packed {
+                let mut builder = git.repo().packbuilder().unwrap();
+                builder.insert_object(id, None).unwrap();
+                builder
+                    .write(&git.git_dir().join("objects/pack"), 0o644)
+                    .unwrap();
+                drop(builder);
+                let hex = id.to_string();
+                std::fs::remove_file(
+                    git.git_dir()
+                        .join("objects")
+                        .join(&hex[..2])
+                        .join(&hex[2..]),
+                )
+                .unwrap();
+            }
+            let probe = git.another().unwrap();
+            assert!(probe.has(oid), "the object exists, packed={packed}");
+            assert!(
+                probe.read_blob(oid).is_err(),
+                "whole-object reads must reject a tree, packed={packed}"
+            );
+            let mut delivered = 0usize;
+            let copied = probe.copy_blob_to(oid, &mut |chunk| {
+                delivered += chunk.len();
+                Ok(())
+            });
+            assert!(
+                copied.is_err(),
+                "streamed reads must reject a tree, packed={packed}"
+            );
+            assert_eq!(
+                delivered, 0,
+                "no non-blob bytes may leave the typed boundary"
+            );
+        }
     }
 }

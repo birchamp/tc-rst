@@ -335,7 +335,9 @@ impl Project {
     }
 
     pub fn notice(&self, notice: tc_journal::fold::Notice, copy: Option<String>) {
-        let notice = self.shared.add_notice(notice, copy);
+        let identity =
+            crate::notices::CopyIdentity::capture(&*self.vfs, &self.folder, copy.as_deref());
+        let notice = self.shared.add_notice(notice, copy, identity);
         self.shared.emit(StoreEvent::Notice(notice));
     }
 
@@ -522,7 +524,15 @@ impl Project {
             .values()
             .filter(|p| p.reconciles.as_ref() == Some(&already))
             .flat_map(|p| p.ids.iter())
-            .filter_map(|id| Some((self.fold.change(id)?.key, *id)))
+            .filter_map(|id| {
+                let view = self.fold.change(id)?;
+                // A surviving member of an incomplete batch has not recorded this edit.
+                // Its bytes must also remain readable before they can replace a new record.
+                if !view.folded || self.fold.raw(id).is_none() {
+                    return None;
+                }
+                Some((view.key, *id))
+            })
             .collect();
         let mut planned = plan.changes;
         if !earlier.is_empty() {

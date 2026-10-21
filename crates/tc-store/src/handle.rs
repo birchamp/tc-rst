@@ -11,7 +11,7 @@ use crate::counters::{Counters, StoreCounters};
 use crate::drafts::{DraftWriter, OfferedDraft};
 use crate::error::StoreError;
 use crate::hooks::{Hooks, Point};
-use crate::notices::StoreNotice;
+use crate::notices::{CopyIdentity, RetainedNotice, StoreNotice};
 use crate::reply::{CommandError, ReadOnlyReason, StoreReply, Stored};
 use std::future::Future;
 use std::path::PathBuf;
@@ -273,7 +273,7 @@ pub(crate) struct Shared {
     pub signing: Arc<TokenKey>,
     facts: RwLock<ProjectFacts>,
     subscribers: Mutex<Vec<Sender<StoreEvent>>>,
-    notices: Mutex<Vec<StoreNotice>>,
+    notices: Mutex<Vec<RetainedNotice>>,
     next_notice: AtomicU64,
     pub counters: Arc<Counters>,
     pub hooks: Arc<Hooks>,
@@ -408,6 +408,7 @@ impl Shared {
         &self,
         notice: tc_journal::fold::Notice,
         copy: Option<String>,
+        identity: CopyIdentity,
     ) -> StoreNotice {
         let notice = StoreNotice {
             id: self.next_notice.fetch_add(1, Ordering::Relaxed),
@@ -417,21 +418,35 @@ impl Shared {
         self.notices
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .push(notice.clone());
+            .push(RetainedNotice {
+                visible: notice.clone(),
+                identity,
+            });
         notice
+    }
+
+    pub(crate) fn retained_notice(&self, id: u64) -> Option<RetainedNotice> {
+        self.notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .find(|n| n.visible.id == id)
+            .cloned()
     }
 
     pub(crate) fn remove_notice(&self, id: u64) -> Option<StoreNotice> {
         let mut notices = self.notices.lock().unwrap_or_else(|e| e.into_inner());
-        let at = notices.iter().position(|n| n.id == id)?;
-        Some(notices.remove(at))
+        let at = notices.iter().position(|n| n.visible.id == id)?;
+        Some(notices.remove(at).visible)
     }
 
     pub(crate) fn notices(&self) -> Vec<StoreNotice> {
         self.notices
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .clone()
+            .iter()
+            .map(|n| n.visible.clone())
+            .collect()
     }
 
     /// Takes away the notices that a hold of `rel` raised: the hold ended (§6.2). The byte
@@ -441,7 +456,7 @@ impl Shared {
         self.notices
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .retain(|n| match &n.notice {
+            .retain(|n| match &n.visible.notice {
                 Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. } => {
                     path.as_str() != rel
                 }
@@ -457,7 +472,7 @@ impl Shared {
         self.notices
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .retain(|n| !matching(&n.notice));
+            .retain(|n| !matching(&n.visible.notice));
     }
 
     /// Takes away the blocked-materialize notice that names `path` alone: the path was
@@ -482,7 +497,7 @@ impl Shared {
             .unwrap_or_else(|e| e.into_inner())
             .iter()
             .any(|n| {
-                matches!(&n.notice, Notice::MaterializeBlocked { paths: p, reason: r } if p == paths && r == reason)
+                matches!(&n.visible.notice, Notice::MaterializeBlocked { paths: p, reason: r } if p == paths && r == reason)
             })
     }
 
@@ -493,7 +508,7 @@ impl Shared {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .iter()
-            .any(|n| match &n.notice {
+            .any(|n| match &n.visible.notice {
                 Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. } => {
                     path.as_str() == rel
                 }

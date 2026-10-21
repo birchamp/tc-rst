@@ -186,6 +186,27 @@ pub fn atomic_write(
     atomic_write_with(vfs, dir, name, bytes, sync_dir, &HeldRetry::SAVE)
 }
 
+/// Creates a complete durable file without replacing any existing name. Preservation
+/// copies use this so a competing creator cannot turn a free name into overwritten work.
+pub fn atomic_create(
+    vfs: &dyn Vfs,
+    dir: &Path,
+    name: &str,
+    bytes: &[u8],
+    sync_dir: SyncDir<'_>,
+) -> Result<(), WriteError> {
+    atomic_write_streamed_to(
+        vfs,
+        dir,
+        name,
+        &mut |out| out(bytes).at("write", dir),
+        sync_dir,
+        &HeldRetry::SAVE,
+        Destination::New,
+    )
+    .map(|_| ())
+}
+
 /// [`atomic_write`] with the retry policy of the caller.
 pub fn atomic_write_with(
     vfs: &dyn Vfs,
@@ -206,8 +227,8 @@ pub enum Written {
     Refused,
 }
 
-/// [`atomic_write_with`] with a last look before the rename: `before_rename` runs once, after
-/// the temp file is complete and flushed, and `Ok(false)` removes the temp file and leaves
+/// [`atomic_write_with`] with a last look before each rename attempt: `before_rename` runs
+/// after the temp file is complete and flushed, and `Ok(false)` removes it and leaves
 /// the target as it is (the compare-and-swap of §5.10 M4 looks at the file again at the
 /// moment that matters, I8).
 pub fn atomic_write_checked(
@@ -245,6 +266,31 @@ pub fn atomic_write_streamed(
     retry: &HeldRetry,
     before_rename: &mut dyn FnMut() -> Result<bool, StoreError>,
 ) -> Result<Written, WriteError> {
+    atomic_write_streamed_to(
+        vfs,
+        dir,
+        name,
+        fill,
+        sync_dir,
+        retry,
+        Destination::Replace(before_rename),
+    )
+}
+
+enum Destination<'a> {
+    New,
+    Replace(&'a mut dyn FnMut() -> Result<bool, StoreError>),
+}
+
+fn atomic_write_streamed_to(
+    vfs: &dyn Vfs,
+    dir: &Path,
+    name: &str,
+    fill: &mut dyn FnMut(&mut Sink<'_>) -> Result<(), StoreError>,
+    sync_dir: SyncDir<'_>,
+    retry: &HeldRetry,
+    destination: Destination<'_>,
+) -> Result<Written, WriteError> {
     let temp = dir.join(temp_name(name));
     let target = dir.join(name);
     let written = (|| {
@@ -252,10 +298,30 @@ pub fn atomic_write_streamed(
         fill(&mut |chunk: &[u8]| file.write_all(chunk))?;
         file.sync_all().at("flush", &temp)?;
         drop(file);
-        if !before_rename()? {
-            return Ok(false);
+        match destination {
+            Destination::Replace(before_rename) => {
+                let mut waits = retry.0.iter();
+                loop {
+                    if !before_rename()? {
+                        return Ok(false);
+                    }
+                    match vfs.rename(&temp, &target) {
+                        Err(e) if vfs.is_held(&e) => match waits.next() {
+                            Some(ms) => vfs.wait_held(Duration::from_millis(*ms)),
+                            None => return Err(StoreError::io("rename", &target, e)),
+                        },
+                        result => {
+                            result.at("rename", &target)?;
+                            break;
+                        }
+                    }
+                }
+            }
+            Destination::New => {
+                retry_held(vfs, retry, || vfs.rename_file_noreplace(&temp, &target))
+                    .at("create without replacement", &target)?;
+            }
         }
-        rename_held(vfs, &temp, &target, retry).at("rename", &target)?;
         Ok(true)
     })();
     match written {
@@ -366,6 +432,48 @@ pub fn atomic_remove_with(
     }
 }
 
+/// What [`atomic_remove_checked`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Removed {
+    Removed,
+    /// The last look refused the removal, leaving the target unchanged.
+    Refused,
+}
+
+/// Removes a file only while the caller's last look still permits it. A held file may
+/// change during the wait, so the check runs before every removal attempt.
+pub fn atomic_remove_checked(
+    vfs: &dyn Vfs,
+    path: &Path,
+    sync_dir: SyncDir<'_>,
+    retry: &HeldRetry,
+    before_remove: &mut dyn FnMut() -> Result<bool, StoreError>,
+) -> Result<Removed, StoreError> {
+    let mut waits = retry.0.iter();
+    loop {
+        if !before_remove()? {
+            return Ok(Removed::Refused);
+        }
+        match vfs.remove_file(path) {
+            Err(e) if vfs.is_held(&e) => match waits.next() {
+                Some(ms) => vfs.wait_held(Duration::from_millis(*ms)),
+                None => return Err(StoreError::io("remove", path, e)),
+            },
+            result => {
+                result.at("remove", path)?;
+                break;
+            }
+        }
+    }
+    if let Some(dir) = path.parent() {
+        match sync_dir {
+            SyncDir::Now => vfs.sync_dir(dir).at("flush the folder", dir)?,
+            SyncDir::Deferred(set) => set.add_dir(dir),
+        }
+    }
+    Ok(Removed::Removed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -383,6 +491,198 @@ mod tests {
         assert_eq!(temp_target(&name), Some("a.batch"));
         assert_eq!(temp_target("a.batch"), None);
         assert_eq!(temp_target(".~a.batch.zz.tmp"), None);
+    }
+
+    #[test]
+    fn a_removal_rechecks_bytes_after_a_sharing_wait() {
+        let fs = setup();
+        let path = Path::new("/p/.tc/f");
+        atomic_write(&fs, Path::new("/p/.tc"), "f", b"old", SyncDir::Now).unwrap();
+        fs.set_busy(path, true);
+        let mut looks = 0;
+        let result =
+            atomic_remove_checked(&fs, path, SyncDir::Now, &HeldRetry::BACKGROUND, &mut || {
+                looks += 1;
+                if looks == 2 {
+                    fs.put_unseen(path, b"outside edit", None);
+                    fs.set_busy(path, false);
+                }
+                Ok(fs.peek(path).as_deref() == Some(b"old"))
+            })
+            .unwrap();
+        assert_eq!(result, Removed::Refused);
+        assert_eq!(fs.peek(path).as_deref(), Some(b"outside edit".as_slice()));
+        assert_eq!(fs.held_waits(), [Duration::from_millis(5)]);
+    }
+
+    #[test]
+    fn a_checked_write_rechecks_bytes_after_a_sharing_wait() {
+        use crate::vfs::{DirEntry, FileMeta, LockHandle, ReadHandle, WriteHandle};
+
+        #[derive(Debug)]
+        struct EditWhileWaiting {
+            fs: FaultFs,
+            target: PathBuf,
+        }
+
+        impl Vfs for EditWhileWaiting {
+            fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+                self.fs.read(path)
+            }
+            fn open(&self, path: &Path) -> io::Result<Box<dyn ReadHandle>> {
+                self.fs.open(path)
+            }
+            fn metadata(&self, path: &Path) -> io::Result<FileMeta> {
+                self.fs.metadata(path)
+            }
+            fn read_dir(&self, path: &Path) -> io::Result<Vec<DirEntry>> {
+                self.fs.read_dir(path)
+            }
+            fn create_new(&self, path: &Path) -> io::Result<Box<dyn WriteHandle>> {
+                self.fs.create_new(path)
+            }
+            fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+                self.fs.rename(from, to)
+            }
+            fn rename_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+                self.fs.rename_file_noreplace(from, to)
+            }
+            fn rename_dir_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+                self.fs.rename_dir_noreplace(from, to)
+            }
+            fn remove_file(&self, path: &Path) -> io::Result<()> {
+                self.fs.remove_file(path)
+            }
+            fn remove_dir_all(&self, path: &Path) -> io::Result<()> {
+                self.fs.remove_dir_all(path)
+            }
+            fn create_dir(&self, path: &Path) -> io::Result<()> {
+                self.fs.create_dir(path)
+            }
+            fn sync_dir(&self, path: &Path) -> io::Result<()> {
+                self.fs.sync_dir(path)
+            }
+            fn sync_file(&self, path: &Path) -> io::Result<()> {
+                self.fs.sync_file(path)
+            }
+            fn lock(&self, path: &Path) -> io::Result<Option<Box<dyn LockHandle>>> {
+                self.fs.lock(path)
+            }
+            fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
+                self.fs.canonicalize(path)
+            }
+            fn outside_dir(&self, path: &Path) -> io::Result<PathBuf> {
+                self.fs.outside_dir(path)
+            }
+            fn wait_held(&self, delay: Duration) {
+                self.fs.wait_held(delay);
+                assert_eq!(
+                    self.fs.peek(&self.target).as_deref(),
+                    Some(b"old".as_slice())
+                );
+                self.fs.put_unseen(&self.target, b"outside edit", None);
+                self.fs.set_busy(&self.target, false);
+            }
+        }
+
+        let fs = setup();
+        let dir = Path::new("/p/.tc");
+        let path = dir.join("f");
+        atomic_write(&fs, dir, "f", b"old", SyncDir::Now).unwrap();
+        fs.set_busy(&path, true);
+        let vfs = EditWhileWaiting {
+            fs: fs.clone(),
+            target: path.clone(),
+        };
+        let mut looks = 0;
+        let result = atomic_write_checked(
+            &vfs,
+            dir,
+            "f",
+            b"project's new text",
+            SyncDir::Now,
+            &HeldRetry::BACKGROUND,
+            &mut || {
+                looks += 1;
+                Ok(fs.peek(&path).as_deref() == Some(b"old".as_slice()))
+            },
+        )
+        .unwrap();
+        assert_eq!(result, Written::Refused);
+        assert_eq!(looks, 2);
+        assert_eq!(fs.held_waits(), [Duration::from_millis(5)]);
+        assert_eq!(fs.peek(&path).as_deref(), Some(b"outside edit".as_slice()));
+    }
+
+    #[test]
+    fn creating_a_copy_never_replaces_an_occupied_name() {
+        let fs = setup();
+        let dir = Path::new("/p/.tc");
+        atomic_create(&fs, dir, "copy", b"earlier work", SyncDir::Now).unwrap();
+        let error = atomic_create(&fs, dir, "copy", b"later work", SyncDir::Now).unwrap_err();
+        assert!(matches!(error, WriteError::NotWritten(_)));
+        assert_eq!(
+            fs.peek(&dir.join("copy")).as_deref(),
+            Some(b"earlier work".as_slice())
+        );
+        assert_eq!(
+            fs.crash(true).peek(&dir.join("copy")).as_deref(),
+            Some(b"earlier work".as_slice())
+        );
+    }
+
+    #[test]
+    fn every_create_kill_point_leaves_an_absent_or_complete_durable_copy() {
+        const KEPT: &[u8] = b"translator bytes kept before any replacement";
+        let dir = Path::new("/p/.tc");
+        let target = dir.join("copy");
+        for power in [PowerLoss::Strict, PowerLoss::KeepSyncedNames] {
+            let base = setup();
+            base.set_power_loss(power);
+            let probe = base.copy();
+            let before = probe.ops();
+            atomic_create(&probe, dir, "copy", KEPT, SyncDir::Now).unwrap();
+            let points = probe.ops() - before;
+            for k in 0..=points {
+                for cut in [false, true] {
+                    for torn in [false, true] {
+                        let fs = base.copy();
+                        fs.set_power_loss(power);
+                        fs.kill_before(k, torn);
+                        let result = atomic_create(&fs, dir, "copy", KEPT, SyncDir::Now);
+                        let after = fs.crash(cut);
+                        let got = after.peek(&target);
+                        if result.is_ok() {
+                            assert_eq!(got.as_deref(), Some(KEPT), "k={k} cut={cut}");
+                        } else {
+                            assert!(
+                                got.is_none() || got.as_deref() == Some(KEPT),
+                                "partial copy at k={k} cut={cut} torn={torn}: {got:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_create_flush_error_after_placement_counts_as_written() {
+        let fs = setup();
+        let dir = Path::new("/p/.tc");
+        fs.fail_op(4, io::ErrorKind::Other);
+        let result = atomic_create(&fs, dir, "copy", b"outside edit", SyncDir::Now);
+        assert!(matches!(result, Err(WriteError::WrittenNotDurable(_))));
+        assert_eq!(
+            fs.peek(&dir.join("copy")).as_deref(),
+            Some(b"outside edit".as_slice())
+        );
+        let result = atomic_create(&fs, dir, "copy", b"later bytes", SyncDir::Now);
+        assert!(matches!(result, Err(WriteError::NotWritten(_))));
+        assert_eq!(
+            fs.peek(&dir.join("copy")).as_deref(),
+            Some(b"outside edit".as_slice())
+        );
     }
 
     /// Whatever write point the writer stops at, with or without a power cut, the target

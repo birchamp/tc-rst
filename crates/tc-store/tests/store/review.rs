@@ -61,13 +61,11 @@ fn usfm_path(folder: &Path) -> PathBuf {
     folder.join("ingredients/TIT.usfm")
 }
 
-fn oid(n: u8) -> GitOid {
-    GitOid::parse(&format!("{n:040x}")).unwrap()
-}
-
 /// Records a carried file the way an import would: its bytes are in the folder, a record
-/// says so.
-fn record_carried(handle: &ProjectHandle, bytes: &[u8]) {
+/// says so. Its identity names a real backup, so removal proves preservation of its History.
+fn record_carried(rig: &Rig, folder: &Path, handle: &ProjectHandle, bytes: &[u8]) {
+    let repo = repo_of(&rig.fs, folder);
+    let oid = GitOid::parse(&repo.blob(bytes).unwrap().to_string()).unwrap();
     handle
         .submit(Command::ApplyUpgrade {
             plan: UpgradePlan {
@@ -75,7 +73,7 @@ fn record_carried(handle: &ProjectHandle, bytes: &[u8]) {
                     record: Record::CarriedFile {
                         path: RepoPath::parse(AUDIO).unwrap(),
                         value: CarriedValue::Present {
-                            oid: oid(7),
+                            oid,
                             size: bytes.len() as u64,
                             md5: Md5::of(bytes),
                         },
@@ -176,7 +174,7 @@ fn a_removed_carried_file_leaves_the_folder_and_the_burrito_stays_valid() {
     let handle = open(&rig, &folder);
     let bytes = b"audio bytes".to_vec();
     rig.fs.put(&folder.join(AUDIO), &bytes, None);
-    record_carried(&handle, &bytes);
+    record_carried(&rig, &folder, &handle, &bytes);
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
     assert_eq!(rig.fs.peek(&folder.join(AUDIO)), Some(bytes));
@@ -210,7 +208,7 @@ fn a_removed_carried_file_that_was_edited_outside_is_not_deleted() {
     let handle = open(&rig, &folder);
     let bytes = b"audio bytes".to_vec();
     rig.fs.put(&folder.join(AUDIO), &bytes, None);
-    record_carried(&handle, &bytes);
+    record_carried(&rig, &folder, &handle, &bytes);
     leave(&handle);
     // The writer's jobs are over, and so is the rig's look at the folder after each: the edit
     // below is the next look's to find, not a change under a job that listed the bytes before.
@@ -243,7 +241,7 @@ fn a_carried_file_edited_outside_is_recorded_and_listed_as_it_is() {
     let handle = open(&rig, &folder);
     let bytes = b"mp3".to_vec();
     rig.fs.put(&folder.join(AUDIO), &bytes, None);
-    record_carried(&handle, &bytes);
+    record_carried(&rig, &folder, &handle, &bytes);
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
 

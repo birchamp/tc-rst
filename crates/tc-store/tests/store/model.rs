@@ -18,7 +18,7 @@
 //!   the record of it, and the app must record them, not write the file over without it;
 //! - every put is in the folder still, is what the project would write there, or is copied to
 //!   `.tc/external/` (§11.1 X1); a put the person overwrote before the app looked is retired,
-//!   and so is a put the app's look found converged or the ledger names as the app's own.
+//!   and so is a put independently observed to equal the complete current projection.
 //!
 //! Two more oracles catch work kept twice or refused: a history with no outside step (a put, a
 //! cut, a deletion or change of a journal file, a lost `.tc/`) shows no outside-edit notice and
@@ -35,8 +35,9 @@
 //! its write points (with or without a power cut, a torn write or not); a kill right after the
 //! rename of a file; outside edits, reverts (keeping the old time or not), same-size damage and
 //! deletions while open and while closed; pending files and packs cut, changed or deleted, in
-//! place while open or while closed, or held open by another program; a lost manifest or heads
-//! files; the person's choice on a held file; restarts; the window's focus; the clock. The
+//! place while open or while closed, or held open by another program; files whose reads are
+//! denied while replacement is allowed; a lost manifest or heads files; the person's choice
+//! on a held file; restarts; the window's focus; the clock. The
 //! generator favours the sequences the reviews found bugs in: a crash followed by damage while
 //! closed, a kill after a rename followed by a revert, a file held around an open.
 
@@ -54,7 +55,10 @@ use tc_store::fault::FaultFs;
 use tc_store::handle::CheckpointSkip;
 use tc_store::ledger::State;
 use tc_store::manifest::Manifest;
-use tc_store::{CheckpointReason, CommandError, Leave, OpenOptions, ProjectHandle};
+use tc_store::{
+    CheckpointReason, CommandError, Leave, Mode, OpenOptions, ProjectHandle, StoreEvent,
+    StoreNotice,
+};
 
 const USFM: &str = "ingredients/TIT.usfm";
 const META: &str = "metadata.json";
@@ -127,9 +131,12 @@ pub enum Step {
     Act { act: Act, kill: Option<Kill> },
     /// The process will die right after it next renames `file` into place.
     KillAfterRename { file: File },
-    /// Another program holds a file open (`on`), or lets go of it: it cannot be read, renamed
-    /// over or removed meanwhile.
+    /// Another program holds a file open (`on`), or lets go of it; a readable pending file
+    /// can still be read while its replacement and removal are denied.
     Lock { what: Holdable, on: bool },
+    /// Reads of a derived file or `metadata.json` are denied (`on`), or allowed again;
+    /// replacement and removal remain permitted unless another hold denies them.
+    DenyRead { file: File, on: bool },
     /// The app opens the project (it does at any act while closed, too).
     Open,
     /// Another program puts new words in verse 1:v of the book file; `told`: the watcher sees it.
@@ -211,6 +218,106 @@ struct Put {
     bytes: Vec<u8>,
     what: String,
     retired: bool,
+    /// What the put shows that the app's last write of the path did not: what another
+    /// program brought, however many puts it took.
+    shows: Vec<Shown>,
+    /// The app looks at it with no placement for its path (the path was deleted or
+    /// `.tc/materialized.json` lost): its base is HEAD's file (R14).
+    unplaced: bool,
+}
+
+/// A value an outside put shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Shown {
+    Verse(u16, String),
+    Name(String),
+}
+
+/// The words of each verse of chapter 1 a book file shows.
+fn chapter_one(bytes: &[u8]) -> BTreeMap<u16, String> {
+    let text = String::from_utf8_lossy(bytes);
+    let mut out = BTreeMap::new();
+    let mut in_one = false;
+    for line in text.lines() {
+        if let Some(chapter) = line.strip_prefix("\\c ") {
+            in_one = chapter.trim() == "1";
+        } else if in_one && let Some(rest) = line.strip_prefix("\\v ") {
+            let (number, words) = rest.split_once(' ').unwrap_or((rest, ""));
+            if let Ok(v) = number.parse() {
+                out.insert(v, words.to_owned());
+            }
+        }
+    }
+    out
+}
+
+fn name_shown(bytes: &[u8]) -> Option<String> {
+    let json: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    json["identification"]["name"]["en"]
+        .as_str()
+        .map(str::to_owned)
+}
+
+/// What `bytes` at `rel` show that `before` did not.
+fn shown_by(rel: &str, before: Option<&[u8]>, bytes: &[u8]) -> Vec<Shown> {
+    debug_assert!(rel == USFM || rel == META);
+    if rel == META {
+        let name = name_shown(bytes);
+        return match name {
+            Some(name) if before.and_then(name_shown).as_ref() != Some(&name) => {
+                vec![Shown::Name(name)]
+            }
+            _ => Vec::new(),
+        };
+    }
+    let old = before.map(chapter_one).unwrap_or_default();
+    chapter_one(bytes)
+        .into_iter()
+        .filter(|(v, words)| old.get(v) != Some(words))
+        .map(|(v, words)| Shown::Verse(v, words))
+        .collect()
+}
+
+/// A complete copy the public notice actually showed, retained across hold ending or dismissal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ObservedCopy {
+    source: String,
+    copy: String,
+    bytes: Vec<u8>,
+}
+
+thread_local! {
+    static TERMINAL_BOUNDARIES: std::cell::Cell<[u64; 2]> =
+        const { std::cell::Cell::new([0, 0]) };
+}
+
+fn terminal_boundaries() -> [u64; 2] {
+    TERMINAL_BOUNDARIES.with(std::cell::Cell::get)
+}
+
+fn count_terminal_boundary(ready: bool) {
+    TERMINAL_BOUNDARIES.with(|counts| {
+        let mut next = counts.get();
+        next[usize::from(!ready)] += 1;
+        counts.set(next);
+    });
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeniedAccess {
+    Read,
+    Replace,
+    ReadAndReplace,
+}
+
+impl DeniedAccess {
+    fn denies_read(self) -> bool {
+        matches!(self, Self::Read | Self::ReadAndReplace)
+    }
+
+    fn denies_replacement(self) -> bool {
+        matches!(self, Self::Replace | Self::ReadAndReplace)
+    }
 }
 
 /// One run of steps against the store.
@@ -222,13 +329,22 @@ pub struct Run {
     next: u32,
     saves: Vec<Save>,
     puts: Vec<Put>,
+    observed_copies: Vec<ObservedCopy>,
     /// Every version of each file the run saw in the folder, oldest first, with its
     /// modification time when the run first saw it.
     versions: BTreeMap<&'static str, Vec<(Vec<u8>, i64)>>,
+    /// The bytes the app last put at each path, as the run saw them appear: a file put back
+    /// to them is the app's own (R2), however the ledger names it.
+    app_wrote: BTreeMap<&'static str, Vec<u8>>,
+    /// What the run last saw at each path.
+    last_seen: BTreeMap<&'static str, Option<Vec<u8>>>,
+    /// Paths the app keeps no placement of since another program deleted them or the
+    /// manifest was lost, until the run sees the app write them again.
+    unplaced: std::collections::BTreeSet<&'static str>,
     /// Whether the kill armed is a power cut.
     power_cut: bool,
-    /// The files another program holds, relative to the folder, and whether they can be read.
-    locked: BTreeMap<String, bool>,
+    /// Access another program denies to files, relative to the folder.
+    locked: BTreeMap<String, DeniedAccess>,
     /// An outside step changed the folder: a put, a cut, a journal file changed, deleted or
     /// held unreadable, `.tc/` lost. Until then the app keeps nothing twice.
     outside: bool,
@@ -239,8 +355,6 @@ pub struct Run {
     /// a journal file it could not read, so until the next open its seal and its checkpoints
     /// stop, and a save of a version whose value lies there is refused.
     journal_held: bool,
-    /// The project's name as the fold showed it at the last check.
-    name: String,
     /// A step that another program acts during checks once it has accounted for it.
     check_later: bool,
     /// Every journal file the run saw, in the order it first saw them: a step names a journal
@@ -300,13 +414,16 @@ impl Run {
             next: 0,
             saves: Vec::new(),
             puts: Vec::new(),
+            observed_copies: Vec::new(),
             versions: BTreeMap::new(),
+            app_wrote: BTreeMap::new(),
+            last_seen: BTreeMap::new(),
+            unplaced: std::collections::BTreeSet::new(),
             power_cut: false,
             locked: BTreeMap::new(),
             outside: false,
             replaced: Vec::new(),
             journal_held: false,
-            name: String::new(),
             journal_seen: Vec::new(),
             check_later: false,
             log: Vec::new(),
@@ -364,7 +481,7 @@ impl Run {
             self.journal_held = self
                 .locked
                 .iter()
-                .any(|(rel, readable)| rel.starts_with(".tc/pending/") && !readable);
+                .any(|(rel, access)| rel.starts_with(".tc/pending/") && access.denies_read());
             self.handle = Some(handle);
             self.log.push(format!("opened (session {})", self.session));
             if !self.died() {
@@ -384,6 +501,10 @@ impl Run {
     /// The process died: the next one finds the files as a kill or a power cut leaves them.
     fn crash(&mut self, power_cut: bool) {
         let fs = self.fs().crash(power_cut);
+        self.observe_notices(&fs);
+        // The narrow metadata witness uses the actual surviving complete Burrito.
+        // A dying FaultRead or in-memory value cannot certify USFM after a power cut.
+        self.observe_complete_metadata(&fs);
         if let Some(handle) = self.handle.take() {
             drop(handle);
         }
@@ -412,6 +533,175 @@ impl Run {
         }
         self.relock();
         self.log.push(format!("crashed (power cut: {power_cut})"));
+    }
+
+    /// An old notice is evidence only while its complete byte copy still exists unchanged.
+    fn observed_copy_exists(&self, fs: &FaultFs, seen: &ObservedCopy) -> bool {
+        fs.peek(&self.path(&seen.copy)).as_deref() == Some(seen.bytes.as_slice())
+    }
+
+    fn observe_notice(&mut self, fs: &FaultFs, notice: &StoreNotice) {
+        let Some(copy) = notice.copy.as_deref() else {
+            return;
+        };
+        if !copy.starts_with(".tc/external/") {
+            return;
+        }
+        let source = match &notice.notice {
+            Notice::OutsideEditRecorded { path, .. }
+            | Notice::OutsideRemovalKept { path, .. }
+            | Notice::DerivedFieldsEdited { path, .. } => path.as_str(),
+            Notice::OutsideEditHeld {
+                path,
+                copy: embedded,
+            }
+            | Notice::StorageDamage {
+                path,
+                copy: embedded,
+            }
+            | Notice::OutsideEditUnreadable {
+                path,
+                copy: embedded,
+                ..
+            }
+            | Notice::FixedFileRestored {
+                path,
+                copy: embedded,
+            } if embedded.as_ref() == copy => path.as_str(),
+            Notice::MetadataEditedOutside { copy: embedded } if embedded.as_ref() == copy => META,
+            _ => return,
+        };
+        let Some(bytes) = fs.peek(&self.path(copy)) else {
+            return;
+        };
+        let seen = ObservedCopy {
+            source: source.to_owned(),
+            copy: copy.to_owned(),
+            bytes,
+        };
+        if !self.observed_copies.contains(&seen) {
+            self.observed_copies.push(seen);
+        }
+    }
+
+    fn observe_notices(&mut self, fs: &FaultFs) {
+        let notices = self
+            .handle
+            .as_ref()
+            .map(ProjectHandle::notices)
+            .unwrap_or_default();
+        for notice in &notices {
+            self.observe_notice(fs, notice);
+        }
+    }
+
+    fn observe_notice_events(
+        &mut self,
+        fs: &FaultFs,
+        events: impl IntoIterator<Item = StoreEvent>,
+    ) {
+        for event in events {
+            if let StoreEvent::Notice(notice) = event {
+                self.observe_notice(fs, &notice);
+            }
+        }
+    }
+
+    fn save_in_notified_copy(&self, save: &Save) -> bool {
+        let source = match save.target {
+            Target::Verse(_) => USFM,
+            Target::Name => META,
+        };
+        let fs = self.fs();
+        self.observed_copies.iter().any(|seen| {
+            seen.source == source
+                && contains(&seen.bytes, &save.text)
+                && self.observed_copy_exists(&fs, seen)
+        })
+    }
+
+    /// Only a live complete projection grants retirement; no ledger entry is evidence.
+    /// A writer an armed kill stopped leaves its handle until `died` runs, and its values
+    /// and page cache need not survive: only a filesystem alive on both sides of the look
+    /// counts. `crash` observes the actual survivor instead.
+    fn observe_live_projection(&mut self) {
+        let fs = self.fs();
+        self.observe_notices(&fs);
+        if fs.is_dead() {
+            return;
+        }
+        let Some(handle) = &self.handle else {
+            return;
+        };
+        let snapshot = handle.snapshot();
+        let fold = snapshot.fold();
+        let before = fold.values_unreadable();
+        let book = fold.render(&DerivedFile::Usfm(TIT));
+        let readable = fold.values_unreadable() == before;
+        drop(snapshot);
+        if fs.is_dead() {
+            return;
+        }
+        if readable && let Some(book) = &book {
+            for put in &mut self.puts {
+                if put.rel == USFM && put.bytes == *book {
+                    put.retired = true;
+                }
+            }
+        }
+        self.observe_live_metadata(&fs);
+    }
+
+    fn observe_live_metadata(&mut self, fs: &FaultFs) {
+        let retired: Vec<bool> = self.puts.iter().map(|p| p.retired).collect();
+        self.observe_complete_metadata(fs);
+        if fs.is_dead() {
+            for (put, was) in self.puts.iter_mut().zip(retired) {
+                put.retired = was;
+            }
+        }
+    }
+
+    /// A group can reach convergence and die before the next model step. Observe the
+    /// actual complete Burrito then, without taking a ledger claim as proof of its bytes.
+    /// This model edits the name and book bytes; broader metadata edits need their own
+    /// convergence oracle before the generator can use them.
+    fn observe_complete_metadata(&mut self, fs: &FaultFs) {
+        let Some(handle) = &self.handle else {
+            return;
+        };
+        let Some(bytes) = fs.peek(&self.path(META)) else {
+            return;
+        };
+        let Ok(document) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            return;
+        };
+        let snapshot = handle.snapshot();
+        let source = snapshot.fold().metadata_source_nfc(
+            (
+                u64::from(tc_journal::FORMAT_MAJOR),
+                u64::from(tc_journal::FORMAT_MINOR),
+            ),
+            true,
+        );
+        if !source.fields.contains_key("identification.name") {
+            return;
+        }
+        let fields_match = source.fields.iter().all(|(path, value)| {
+            tc_burrito::is_derived_field(path)
+                || path.split('.').try_fold(&document, |at, part| at.get(part)) == Some(value)
+        });
+        if !fields_match
+            || !metadata_fields_accounted_for(&document, "", &source.fields)
+            || !burrito_problems(fs, &self.folder).is_empty()
+        {
+            return;
+        }
+        for put in &mut self.puts {
+            if put.rel == META && put.bytes == bytes {
+                put.retired = true;
+            }
+        }
     }
 
     /// Whether the process died during what was just done (a kill armed may stop it at any
@@ -574,8 +864,20 @@ impl Run {
                 }
             }
             Act::Close => {
+                if kill.is_none() {
+                    self.observe_live_projection();
+                } else {
+                    self.observe_notices(&self.fs());
+                }
+                let notices = self.handle().subscribe();
                 let handle = self.handle.take().expect("open");
                 let closed = handle.close();
+                let fs = if self.fs().is_dead() {
+                    self.fs().crash(self.power_cut)
+                } else {
+                    self.fs()
+                };
+                self.observe_notice_events(&fs, notices.try_iter());
                 if self.died() {
                     return Ok(());
                 }
@@ -612,9 +914,9 @@ impl Run {
     /// The files other programs hold, held again on a new process's filesystem.
     fn relock(&self) {
         let fs = self.fs();
-        for (rel, readable) in &self.locked {
-            fs.set_unreadable(&self.path(rel), !readable);
-            fs.set_busy(&self.path(rel), true);
+        for (rel, access) in &self.locked {
+            fs.set_unreadable(&self.path(rel), access.denies_read());
+            fs.set_busy(&self.path(rel), access.denies_replacement());
         }
     }
 
@@ -641,14 +943,20 @@ impl Run {
     }
 
     fn lock(&mut self, what: Holdable, on: bool) -> Result<(), String> {
-        let (rels, readable): (Vec<String>, bool) = match (what, on) {
-            (Holdable::File(file), _) => (vec![file.rel().to_owned()], false),
+        let (rels, access): (Vec<String>, DeniedAccess) = match (what, on) {
+            (Holdable::File(file), _) => {
+                (vec![file.rel().to_owned()], DeniedAccess::ReadAndReplace)
+            }
             (Holdable::Pending { which, readable }, true) => (
                 self.journal_file(Journal::Pending, which)
                     .map(|(rel, _)| rel)
                     .into_iter()
                     .collect(),
-                readable,
+                if readable {
+                    DeniedAccess::Replace
+                } else {
+                    DeniedAccess::ReadAndReplace
+                },
             ),
             (Holdable::Pending { .. }, false) => (
                 self.locked
@@ -656,27 +964,60 @@ impl Run {
                     .filter(|rel| rel.starts_with(".tc/pending/"))
                     .cloned()
                     .collect(),
-                false,
+                DeniedAccess::ReadAndReplace,
             ),
         };
-        let fs = self.fs();
         for rel in rels {
-            if on && !readable && rel.starts_with(".tc/pending/") {
+            if on && access.denies_read() && rel.starts_with(".tc/pending/") {
                 // The fold of the session that cannot read it lacks its saves: a book file
                 // that shows them is kept as someone's work (R4), a copy that stays.
                 self.journal_held = true;
                 self.outside = true;
             }
-            if on {
-                self.locked.insert(rel.clone(), readable);
-            } else {
+            self.set_access(rel, on.then_some(access));
+        }
+        if on {
+            return Ok(());
+        }
+        self.retry_after_release()
+    }
+
+    fn deny_read(&mut self, file: File, on: bool) -> Result<(), String> {
+        let rel = file.rel().to_owned();
+        let access = match (self.locked.get(&rel).copied(), on) {
+            (None | Some(DeniedAccess::Read), true) => Some(DeniedAccess::Read),
+            (Some(DeniedAccess::Replace | DeniedAccess::ReadAndReplace), true) => {
+                Some(DeniedAccess::ReadAndReplace)
+            }
+            (Some(DeniedAccess::Replace | DeniedAccess::ReadAndReplace), false) => {
+                Some(DeniedAccess::Replace)
+            }
+            (None | Some(DeniedAccess::Read), false) => None,
+        };
+        self.set_access(rel, access);
+        if on {
+            return Ok(());
+        }
+        self.retry_after_release()
+    }
+
+    fn set_access(&mut self, rel: String, access: Option<DeniedAccess>) {
+        let fs = self.fs();
+        let path = self.path(&rel);
+        fs.set_unreadable(&path, access.is_some_and(DeniedAccess::denies_read));
+        fs.set_busy(&path, access.is_some_and(DeniedAccess::denies_replacement));
+        match access {
+            Some(access) => {
+                self.locked.insert(rel, access);
+            }
+            None => {
                 self.locked.remove(&rel);
             }
-            let path = self.path(&rel);
-            fs.set_unreadable(&path, on && !readable);
-            fs.set_busy(&path, on);
         }
-        if on || self.handle.is_none() {
+    }
+
+    fn retry_after_release(&mut self) -> Result<(), String> {
+        if self.handle.is_none() {
             return Ok(());
         }
         // The writer tries a refused path again within 3 s; a leave does it now.
@@ -693,6 +1034,7 @@ impl Run {
         told: bool,
         what: String,
     ) {
+        self.observe_live_projection();
         let fs = self.fs();
         let path = self.path(rel);
         let now = fs.peek(&path);
@@ -700,12 +1042,6 @@ impl Run {
             return;
         }
         self.outside = true;
-        // Bytes the ledger names as the app's own: what they show the project holds.
-        let ours = match self.ledger(rel) {
-            Some(State::Placed { placed }) => placed.md5 == md5(&bytes),
-            Some(State::Writing { new, .. }) => new == md5(&bytes),
-            _ => false,
-        };
         // Bytes of an earlier put the app has not looked at yet: the person writes over them.
         for put in &mut self.puts {
             if put.rel == rel && !put.retired && now.as_deref() == Some(put.bytes.as_slice()) {
@@ -721,29 +1057,20 @@ impl Run {
                 fs.put_unseen(&path, &bytes, mtime_ns);
             }
         });
+        // The app's own bytes back again: the app finds the file converged and writes it
+        // from the project, which holds all they show (R2).
+        let retired = self.app_wrote.get(rel) == Some(&bytes);
+        let shows = shown_by(rel, self.app_wrote.get(rel).map(Vec::as_slice), &bytes);
         self.puts.push(Put {
             rel,
             bytes,
             what,
-            retired: ours,
+            retired,
+            shows,
+            unplaced: self.unplaced.contains(rel),
         });
-        // A put of `metadata.json` in the folder that lists the folder as it is now and the
-        // project's name: the app's look finds it converged (R2), whatever happens later. A
-        // put of the book file can make an earlier one so.
-        let name = match &self.handle {
-            Some(handle) => name_of(handle),
-            None => self.name.clone(),
-        };
-        let meta = fs.peek(&self.path(META));
-        for put in &mut self.puts {
-            if put.rel == META
-                && !put.retired
-                && meta.as_deref() == Some(put.bytes.as_slice())
-                && describes_the_folder(&fs, &self.folder, &put.bytes, &name)
-            {
-                put.retired = true;
-            }
-        }
+        // A book put can complete a metadata listing before the next deliberate change.
+        self.observe_live_projection();
     }
 
     fn edit(&mut self, v: u16, told: bool) -> Result<(), String> {
@@ -858,6 +1185,7 @@ impl Run {
 
     /// Another program deletes a derived file: a deletion is never an edit (I11).
     fn delete(&mut self, file: File) -> Result<(), String> {
+        self.observe_live_projection();
         let fs = self.fs();
         let path = self.path(file.rel());
         let Some(now) = fs.peek(&path) else {
@@ -872,6 +1200,7 @@ impl Run {
         self.by_another_program(|| {
             let _ = fs.delete(&path);
         });
+        self.unplaced.insert(file.rel());
         self.settle_put(true)
     }
 
@@ -970,6 +1299,12 @@ impl Run {
         for path in gone {
             if fs.delete(&path).is_ok() {
                 self.outside = true;
+                if !heads {
+                    self.unplaced.extend([USFM, META]);
+                    for put in &mut self.puts {
+                        put.unplaced |= !put.retired;
+                    }
+                }
             }
         }
         Ok(())
@@ -980,6 +1315,7 @@ impl Run {
         if self.handle.is_none() {
             return Ok(());
         }
+        self.observe_live_projection();
         let held = self
             .handle()
             .notices()
@@ -1167,6 +1503,19 @@ impl Run {
         self.in_git(text)
     }
 
+    /// The files of HEAD's tree, read from Git itself.
+    fn head_files(&self) -> BTreeMap<String, Vec<u8>> {
+        let fs = self.fs();
+        if !git_dir_of(&fs, &self.folder).exists() {
+            return BTreeMap::new();
+        }
+        let repo = repo_of(&fs, &self.folder);
+        commits_of(&repo)
+            .first()
+            .map(|head| commit_files(&repo, *head))
+            .unwrap_or_default()
+    }
+
     /// Whether a pack of HEAD's tree holds `text`: the app restores a damaged pack of the
     /// expected set from it (§4.4).
     fn in_git(&self, text: &str) -> bool {
@@ -1218,6 +1567,103 @@ impl Run {
                 }) => format!("{value:?}").contains(&save.text),
                 _ => false,
             })
+    }
+
+    /// Whether the project took the put in as an outside edit (§11.1 X4): a readable change
+    /// History lists names these exact bytes as its source, and every value the put
+    /// brought is a readable version in History. A notice of the recording may be gone
+    /// with a crash; History is where the person finds it.
+    fn recorded_outside(&self, put: &Put) -> bool {
+        let snapshot = self.handle().snapshot();
+        let fold = snapshot.fold();
+        let seen = tc_journal::Md5::of(&put.bytes);
+        let from_these_bytes = fold.record_keys().iter().any(|key| {
+            fold.history(key).iter().any(|id| {
+                fold.body(id).is_some_and(|body| {
+                    matches!(
+                        &body.cause,
+                        tc_journal::Cause::External {
+                            source: tc_journal::ExternalSource::LocalFile { path, seen_md5 },
+                            ..
+                        } if path.as_str() == put.rel && *seen_md5 == seen
+                    )
+                })
+            })
+        });
+        from_these_bytes
+            && put.shows.iter().all(|shown| {
+                let (key, text) = match shown {
+                    Shown::Verse(v, words) => (verse_key(*v), words),
+                    Shown::Name(name) => (RecordKey::ProjectMeta(MetaField::Name), name),
+                };
+                fold.history(&key)
+                    .iter()
+                    .any(|id| match fold.body(id).map(|b| b.record) {
+                        Some(Record::Verse {
+                            value: VerseValue::Text { words, .. },
+                            ..
+                        }) => words == *text,
+                        Some(Record::ProjectMeta {
+                            value: Some(value), ..
+                        }) => format!("{value:?}").contains(text.as_str()),
+                        _ => false,
+                    })
+            })
+    }
+
+    /// Whether the project shows every value the put brought (§11.1 X3 rule 7: a value the
+    /// project shows already is not a change), so nothing in it can be lost.
+    fn shown_by_the_project(&self, put: &Put) -> bool {
+        // The model edits only the name of `metadata.json`; any other field a put of it
+        // shows is one the app derived or wrote, so a put that brings no name brings
+        // nothing of the person's. A book file's other lines need a recording or a notice.
+        if put.rel == META && put.shows.is_empty() {
+            return true;
+        }
+        let snapshot = self.handle().snapshot();
+        let fold = snapshot.fold();
+        !put.shows.is_empty()
+            && put.shows.iter().all(|shown| match shown {
+                Shown::Verse(v, words) => matches!(
+                    fold.projected(&verse_key(*v)),
+                    Some(Record::Verse { value: VerseValue::Text { words: w, .. }, .. }) if w == *words
+                ),
+                Shown::Name(name) => matches!(
+                    fold.projected(&RecordKey::ProjectMeta(MetaField::Name)),
+                    Some(Record::ProjectMeta { value: Some(value), .. }) if format!("{value:?}").contains(name.as_str())
+                ),
+            })
+    }
+
+    /// Whether the app, knowing no placement of the path, takes HEAD's file as the base
+    /// (R14) and the put shows nothing but HEAD's values and the project's: it records
+    /// nothing, and every value it shows is one a commit or the project holds.
+    fn head_based(&self, put: &Put) -> bool {
+        if !put.unplaced {
+            return false;
+        }
+        let Some(head) = self.head_files().remove(put.rel) else {
+            return false;
+        };
+        let snapshot = self.handle().snapshot();
+        let fold = snapshot.fold();
+        let head_verses = chapter_one(&head);
+        put.shows.iter().all(|shown| match shown {
+            Shown::Verse(v, words) => {
+                head_verses.get(v) == Some(words)
+                    || matches!(
+                        fold.projected(&verse_key(*v)),
+                        Some(Record::Verse { value: VerseValue::Text { words: w, .. }, .. }) if w == *words
+                    )
+            }
+            Shown::Name(name) => {
+                name_shown(&head).as_ref() == Some(name)
+                    || matches!(
+                        fold.projected(&RecordKey::ProjectMeta(MetaField::Name)),
+                        Some(Record::ProjectMeta { value: Some(value), .. }) if format!("{value:?}").contains(name.as_str())
+                    )
+            }
+        })
     }
 
     /// Whether a change the fold holds and has not applied (its batch lost a member, §7.4)
@@ -1295,7 +1741,7 @@ impl Run {
         if self.handle.is_none() {
             return Ok(());
         }
-        self.name = name_of(self.handle());
+        self.observe_live_projection();
         let mut lost = Vec::new();
         self.kept_nothing_twice(&mut lost);
         let fs = self.fs();
@@ -1303,6 +1749,24 @@ impl Run {
             .into_iter()
             .filter(|rel| matches!(self.ledger(rel), Some(State::Held { .. })))
             .collect();
+        // A claimed hold imposes a notice obligation; it never proves preservation.
+        for rel in &held_files {
+            let Some(State::Held { held }) = self.ledger(rel) else {
+                continue;
+            };
+            let shown = self.observed_copies.iter().any(|seen| {
+                seen.source == *rel
+                    && seen.copy == held.copy
+                    && md5(&seen.bytes) == held.md5
+                    && self.observed_copy_exists(&fs, seen)
+            });
+            if !shown {
+                lost.push(format!(
+                    "held {rel}: no observed notice leads to its complete copy {}",
+                    held.copy
+                ));
+            }
+        }
         for save in &self.saves {
             if save.fate == Fate::Destroyed {
                 continue;
@@ -1310,12 +1774,12 @@ impl Run {
             if self.in_history(save) {
                 continue;
             }
-            if !save.shown && (self.waiting(save) || self.text_in_external(&save.text)) {
+            if !save.shown && (self.waiting(save) || self.save_in_notified_copy(save)) {
                 continue;
             }
             // A file showing it that the app holds as it is, with a copy and a notice, until
             // the person takes it in or restores it (§6.2 held).
-            if self.text_in_external(&save.text)
+            if self.save_in_notified_copy(save)
                 && held_files.iter().any(|rel| {
                     fs.peek(&self.path(rel))
                         .is_some_and(|b| contains(&b, &save.text))
@@ -1354,45 +1818,41 @@ impl Run {
                 }
             ));
         }
-        let projection = self
-            .handle()
-            .snapshot()
-            .fold()
-            .render(&DerivedFile::Usfm(TIT));
-        // The bytes the ledger names as placed: the app's look found a put converged (R2) or
-        // recorded it (with a copy); either way nothing in it is the app's to keep apart.
-        let placed: Vec<(&str, String)> = [USFM, META]
-            .into_iter()
-            .filter_map(|rel| match self.ledger(rel) {
-                Some(State::Placed { placed }) => Some((rel, placed.md5)),
-                _ => None,
+        let external: Vec<(String, Vec<u8>)> = self
+            .observed_copies
+            .iter()
+            .filter(|seen| self.observed_copy_exists(&fs, seen))
+            .map(|seen| (seen.source.clone(), seen.bytes.clone()))
+            .collect();
+        let credited: Vec<bool> = self
+            .puts
+            .iter()
+            .map(|put| {
+                !put.retired
+                    && (self.recorded_outside(put)
+                        || self.head_based(put)
+                        || self.shown_by_the_project(put))
             })
             .collect();
-        let external: Vec<Vec<u8>> = fs
-            .files_under(&self.path(".tc/external"))
-            .into_values()
-            .collect();
-        for put in &mut self.puts {
+        for (put, credited) in self.puts.iter_mut().zip(credited) {
             if put.retired {
+                continue;
+            }
+            if credited {
+                put.retired = true;
                 continue;
             }
             let on_disk =
                 fs.peek(&self.folder.join(put.rel)).as_deref() == Some(put.bytes.as_slice());
-            if placed.contains(&(put.rel, md5(&put.bytes))) {
-                put.retired = true;
-                continue;
-            }
-            if put.rel == USFM && projection.as_deref() == Some(put.bytes.as_slice()) {
-                // What the project would write there: nothing in the bytes is the app's to
-                // keep apart from the project, now or later.
-                put.retired = true;
-                continue;
-            }
-            if on_disk || external.contains(&put.bytes) {
+            if on_disk
+                || external
+                    .iter()
+                    .any(|(source, bytes)| source == put.rel && *bytes == put.bytes)
+            {
                 continue;
             }
             lost.push(format!(
-                "the {}: not in the folder, not the projection, no copy in .tc/external",
+                "the {}: not in the folder or complete projection, no notified full copy in .tc/external",
                 put.what
             ));
         }
@@ -1428,6 +1888,18 @@ impl Run {
             }
         }
         for rel in [USFM, META] {
+            let now = fs.peek(&self.path(rel));
+            if self.last_seen.get(rel) != Some(&now) {
+                // Bytes no other program put there are the app's: the run's own copy of
+                // what it wrote, never the ledger's word for it.
+                if let Some(bytes) = &now
+                    && !self.puts.iter().any(|p| p.rel == rel && p.bytes == *bytes)
+                {
+                    self.app_wrote.insert(rel, bytes.clone());
+                    self.unplaced.remove(rel);
+                }
+                self.last_seen.insert(rel, now);
+            }
             if let Some(bytes) = fs.peek(&self.path(rel)) {
                 let mtime_ns = tc_store::Vfs::metadata(&fs, &self.path(rel))
                     .map_or(fs.now_ns(), |m| m.mtime_ns);
@@ -1449,6 +1921,7 @@ impl Run {
                 Ok(())
             }
             Step::Lock { what, on } => self.lock(*what, *on),
+            Step::DenyRead { file, on } => self.deny_read(*file, *on),
             Step::Open => self.open(),
             Step::Edit { verse, told } => self.edit(*verse, *told),
             Step::EditName { told } => self.edit_name(*told),
@@ -1560,25 +2033,107 @@ impl Run {
         self.open()?;
         // The last look is not killed.
         self.fs().disarm();
-        let _ = self.handle().leave(Leave::Book(TIT)).wait();
+        let repaired = self.handle().leave(Leave::Book(TIT)).wait();
         self.handle().wait_idle();
         self.check(true)?;
+        let snapshot = self.handle().snapshot();
+        let fold = snapshot.fold();
+        let before = fold.values_unreadable();
+        for file in fold.derived_files() {
+            let _ = fold.render(&file);
+        }
+        let metadata_readable = fold
+            .metadata_heads()
+            .into_iter()
+            .flat_map(|(_, heads)| heads)
+            .all(|id| fold.body(&id).is_some());
+        let readable = metadata_readable
+            && fold.values_unreadable() == before
+            && fold.unreadable_records().is_empty();
+        drop(snapshot);
+        let writable = matches!(self.handle().facts().mode, Mode::Writable);
+        let ready = repaired.is_ok() && writable && readable;
+        count_terminal_boundary(ready);
+        self.log.push(format!(
+            "terminal Burrito boundary: repair={repaired:?}, writable={writable}, readable={readable}"
+        ));
+        if ready {
+            let problems = burrito_problems(&self.fs(), &self.folder);
+            if !problems.is_empty() {
+                return Err(format!(
+                    "terminal repaired Burrito is invalid: {problems:?}"
+                ));
+            }
+        }
+        self.observe_live_projection();
+        let notices = self.handle().subscribe();
         if let Some(handle) = self.handle.take() {
-            handle
-                .close()
-                .map_err(|e| format!("the last close: {e:?}"))?;
+            let closed = handle.close();
+            let fs = self.fs();
+            self.observe_notice_events(&fs, notices.try_iter());
+            closed.map_err(|e| format!("the last close: {e:?}"))?;
+        }
+        if ready {
+            let problems = burrito_problems(&self.fs(), &self.folder);
+            if !problems.is_empty() {
+                return Err(format!("terminal closed Burrito is invalid: {problems:?}"));
+            }
         }
         Ok(())
     }
 
     /// Runs `steps` and the end, and says what was lost.
     pub fn run(steps: &[Step]) -> Result<(), String> {
+        if std::env::var_os("TC_MODEL_TRACE").is_some() {
+            eprintln!("MODEL HISTORY {steps:#?}");
+        }
         let mut run = Self::new();
         let result = steps
             .iter()
             .try_for_each(|step| run.step(step))
             .and_then(|()| run.finish());
         result.map_err(|lost| format!("{lost}\nafter:\n  {}", run.log.join("\n  ")))
+    }
+}
+
+/// Missing or unknown non-derived fields cannot establish convergence, even if every
+/// field the current fold can read happens to match.
+fn metadata_fields_accounted_for(
+    value: &serde_json::Value,
+    path: &str,
+    fields: &BTreeMap<String, serde_json::Value>,
+) -> bool {
+    if tc_burrito::is_derived_field(path) {
+        return true;
+    }
+    if let Some(expected) = fields.get(path) {
+        return value == expected;
+    }
+    // These format defaults carry no authored record. Accept only their exact values;
+    // an added field or a different copyright still needs preservation.
+    match path {
+        "copyright" => {
+            return *value == serde_json::json!({"shortStatements": [{"statement": "Not stated"}]});
+        }
+        "confidential" => return *value == serde_json::Value::Bool(false),
+        "localizedNames" => return *value == serde_json::json!({}),
+        _ => {}
+    }
+    match value {
+        serde_json::Value::Object(children) if !children.is_empty() => {
+            children.iter().all(|(key, child)| {
+                if key.contains('.') {
+                    return false;
+                }
+                let path = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                metadata_fields_accounted_for(child, &path, fields)
+            })
+        }
+        _ => false,
     }
 }
 
@@ -1600,44 +2155,6 @@ fn name_of(handle: &ProjectHandle) -> String {
         }) => format!("{value:?}"),
         _ => String::new(),
     }
-}
-
-/// Whether `metadata.json` bytes are what the project writes now: they list every ingredient
-/// the folder holds, each with the md5 of its bytes in the folder or the md5 the ledger places
-/// there (the app lists a file whose outside edit it has not recorded yet as the bytes it
-/// placed), and the project's name (`name`, as the fold shows it).
-fn describes_the_folder(fs: &FaultFs, folder: &std::path::Path, bytes: &[u8], name: &str) -> bool {
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
-        return false;
-    };
-    let Some(listed) = json["ingredients"].as_object() else {
-        return false;
-    };
-    let on_disk: BTreeMap<String, Vec<u8>> = files(fs, folder)
-        .into_iter()
-        .filter(|(rel, _)| rel.starts_with("ingredients/") && !rel.contains(".~"))
-        .collect();
-    if listed.len() != on_disk.len() {
-        return false;
-    }
-    let manifest: Option<Manifest> = fs
-        .peek(&folder.join(MANIFEST))
-        .and_then(|b| serde_json::from_slice(&b).ok());
-    let placed = |rel: &str| match manifest.as_ref().and_then(|m| m.paths.get(rel)) {
-        Some(entry) => entry.md5().map(str::to_owned),
-        None => None,
-    };
-    let same_files = listed.iter().all(|(rel, entry)| {
-        let listed = entry["checksum"]["md5"].as_str();
-        on_disk.get(rel).is_some_and(|bytes| {
-            listed == Some(md5(bytes).as_str())
-                || (listed.is_some() && listed.map(str::to_owned) == placed(rel))
-        })
-    });
-    let shown = json["identification"]["name"]["en"]
-        .as_str()
-        .unwrap_or_default();
-    same_files && !shown.is_empty() && name.contains(&format!("{shown:?}"))
 }
 
 /// `text` with the words of verse 1:v replaced by `words`.
@@ -1723,6 +2240,7 @@ fn a_step() -> impl Strategy<Value = Step> {
         3 => (an_act(), a_kill()).prop_map(|(act, kill)| Step::Act { act, kill: Some(kill) }),
         2 => a_file().prop_map(|file| Step::KillAfterRename { file }),
         1 => (a_holdable(), any::<bool>()).prop_map(|(what, on)| Step::Lock { what, on }),
+        1 => (a_file(), any::<bool>()).prop_map(|(file, on)| Step::DenyRead { file, on }),
         2 => Just(Step::Open),
         2 => (1u16..=4, any::<bool>()).prop_map(|(verse, told)| Step::Edit { verse, told }),
         1 => any::<bool>().prop_map(|told| Step::EditName { told }),
@@ -1776,6 +2294,23 @@ fn a_chunk() -> impl Strategy<Value = Vec<Step>> {
                 Step::Lock { what, on: false },
             ]
         }),
+        // A replacement is allowed while the file's reads are denied, including after a crash.
+        2 => (a_file(), prop_oneof![(1u16..=4).prop_map(Act::Save), Just(Act::Name)])
+            .prop_map(|(file, save)| {
+                vec![
+                    Step::Open,
+                    match file {
+                        File::Usfm => Step::Edit { verse: 1, told: false },
+                        File::Meta => Step::EditName { told: false },
+                    },
+                    Step::DenyRead { file, on: true },
+                    crash(),
+                    Step::Open,
+                    act(save),
+                    act(Act::Leave),
+                    Step::DenyRead { file, on: false },
+                ]
+            }),
         // A kill right after a rename, and the file held at the next open.
         2 => (a_file(), an_act()).prop_map(|(file, act)| {
             let what = Holdable::File(file);
@@ -1874,11 +2409,18 @@ fn a_history(chunks: usize) -> impl Strategy<Value = Vec<Step>> {
 const ROWS_OUT_OF_REACH: [&str; 4] = ["R1", "R7", "R17", "Removed"];
 
 fn histories(cases: u32, chunks: usize, every_row: bool) {
+    let terminal_before = terminal_boundaries();
     // The histories the reviews found, on every run.
+    held_metadata_retries_keep_the_same_copies_and_notices();
     for (name, history) in named_histories() {
+        let before = terminal_boundaries();
         if let Err(lost) = Run::run(&history) {
             panic!("{name}: {lost}");
         }
+        // Each ends with every block released and a repair that can read what it writes:
+        // an aggregate count would let one blocked witness hide behind another's success.
+        let ready = terminal_boundaries()[0] - before[0];
+        assert_eq!(ready, 1, "{name}: its terminal Burrito was never validated");
     }
     let config = ProptestConfig {
         cases,
@@ -1891,6 +2433,11 @@ fn histories(cases: u32, chunks: usize, every_row: bool) {
             return Err(TestCaseError::fail(lost));
         }
     });
+    let terminal_after = terminal_boundaries();
+    let ready = terminal_after[0] - terminal_before[0];
+    let blocked = terminal_after[1] - terminal_before[1];
+    eprintln!("terminal Burrito boundaries: ready={ready}, blocked={blocked}");
+    assert!(ready > 0, "no terminal repair boundary validated a Burrito");
     let hits = tc_store::ledger::hits();
     if std::env::var_os("TC_MODEL_ROWS").is_some() {
         eprintln!("ledger rows and events taken: {hits:?}");
@@ -2397,8 +2944,114 @@ fn a_held_metadata_json_after_a_kill_past_its_rename() -> Vec<Step> {
     ]
 }
 
+fn an_unreadable_prerender() -> Vec<Step> {
+    vec![
+        Step::Act {
+            act: Act::Section(3),
+            kill: Some(Kill {
+                at: 20,
+                power_cut: true,
+                torn: false,
+            }),
+        },
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 173,
+            at: 52175,
+        },
+        act(Act::Save(1)),
+        Step::Lock {
+            what: Holdable::Pending {
+                which: 34,
+                readable: true,
+            },
+            on: true,
+        },
+        act(Act::Checkpoint),
+        act(Act::Save(2)),
+        Step::Lock {
+            what: Holdable::Pending {
+                which: 34,
+                readable: true,
+            },
+            on: false,
+        },
+        act(Act::Save(3)),
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        Step::Lock {
+            what: Holdable::File(File::Meta),
+            on: true,
+        },
+        Step::Open,
+    ]
+}
+
+fn an_incomplete_outside_batch() -> Vec<Step> {
+    vec![
+        Step::Open,
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::Edit {
+            verse: 2,
+            told: false,
+        },
+        Step::Focus,
+        act(Act::Leave),
+        crash(),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 1,
+            at_line: true,
+        },
+        Step::Open,
+    ]
+}
+
+fn metadata_unreadable_but_replaceable() -> Vec<Step> {
+    vec![
+        Step::Open,
+        Step::EditName { told: false },
+        Step::DenyRead {
+            file: File::Meta,
+            on: true,
+        },
+        act(Act::Save(1)),
+        act(Act::Name),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Meta,
+            on: false,
+        },
+        act(Act::Close),
+        Step::Open,
+    ]
+}
+
 fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
     vec![
+        (
+            "oracle_independence_false_adoption",
+            false_adoption_witness(),
+        ),
+        (
+            "oracle_independence_omitted_notice",
+            omitted_notice_witness(),
+        ),
+        (
+            "metadata_unreadable_but_replaceable",
+            metadata_unreadable_but_replaceable(),
+        ),
+        ("an_unreadable_prerender", an_unreadable_prerender()),
+        ("an_incomplete_outside_batch", an_incomplete_outside_batch()),
+        (
+            "metadata_converges_during_a_book_revert",
+            metadata_converges_during_a_book_revert(),
+        ),
         (
             "a_held_metadata_json_after_a_kill_past_its_rename",
             a_held_metadata_json_after_a_kill_past_its_rename(),
@@ -2467,7 +3120,99 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             "a_converged_metadata_json_written_again",
             a_converged_metadata_json_written_again(),
         ),
+        (
+            "a_revert_after_a_quarantined_pending_and_a_killed_save",
+            a_revert_after_a_quarantined_pending_and_a_killed_save(),
+        ),
+        (
+            "a_revert_after_two_kills_past_the_rename",
+            a_revert_after_two_kills_past_the_rename(),
+        ),
+        (
+            "a_saved_name_whose_last_copy_is_metadata_while_the_book_is_missing",
+            a_saved_name_whose_last_copy_is_metadata_while_the_book_is_missing(),
+        ),
+        (
+            "a_book_file_damaged_with_its_stat_kept",
+            a_book_file_damaged_with_its_stat_kept(),
+        ),
+        (
+            "a_metadata_revert_after_a_held_journal_and_kills_past_its_rename",
+            a_metadata_revert_after_a_held_journal_and_kills_past_its_rename(),
+        ),
+        (
+            "a_book_revert_after_an_outside_edit_and_a_kill_past_its_rename",
+            a_book_revert_after_an_outside_edit_and_a_kill_past_its_rename(),
+        ),
+        (
+            "damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save",
+            damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save(),
+        ),
+        (
+            "a_book_revert_before_tc_is_lost",
+            a_book_revert_before_tc_is_lost(),
+        ),
+        (
+            "damage_twice_then_restore_from_the_project",
+            damage_twice_then_restore_from_the_project(),
+        ),
+        (
+            "a_restored_damage_reverted_with_its_old_time",
+            a_restored_damage_reverted_with_its_old_time(),
+        ),
+        (
+            "a_recorded_revert_whose_pending_file_is_deleted",
+            a_recorded_revert_whose_pending_file_is_deleted(),
+        ),
+        (
+            "a_metadata_revert_recorded_then_its_pending_file_deleted",
+            a_metadata_revert_recorded_then_its_pending_file_deleted(),
+        ),
+        (
+            "reverts_around_kills_a_cut_and_a_lost_manifest",
+            reverts_around_kills_a_cut_and_a_lost_manifest(),
+        ),
+        (
+            "reverts_of_both_files_after_an_unreadable_book_file",
+            reverts_of_both_files_after_an_unreadable_book_file(),
+        ),
     ]
+}
+
+fn false_adoption_witness() -> Vec<Step> {
+    vec![
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::Open,
+        act(Act::Save(2)),
+        act(Act::Leave),
+    ]
+}
+
+fn omitted_notice_witness() -> Vec<Step> {
+    vec![
+        act(Act::Leave),
+        Step::Advance,
+        crash(),
+        Step::Open,
+        Step::Damage { file: File::Usfm },
+        crash(),
+        Step::Open,
+        Step::Choose { take_in: false },
+    ]
+}
+
+/// These run only the generic oracle; independent probe controls remain separate.
+#[test]
+fn oracle_independence_false_adoption() {
+    assert_kept(&false_adoption_witness());
+}
+
+#[test]
+fn oracle_independence_omitted_notice() {
+    assert_kept(&omitted_notice_witness());
 }
 
 fn assert_kept(steps: &[Step]) {
@@ -2562,5 +3307,693 @@ fn a_deleted_book_file_waiting_for_an_unreadable_value_fails_no_checkpoint() {
 
 #[test]
 fn a_held_metadata_json_after_a_kill_past_its_rename_is_not_taken_for_an_edit() {
-    assert_kept(&a_held_metadata_json_after_a_kill_past_its_rename());
+    held_metadata_retries_keep_the_same_copies_and_notices();
+}
+
+fn held_metadata_retries_keep_the_same_copies_and_notices() {
+    let steps = a_held_metadata_json_after_a_kill_past_its_rename();
+    let (prefix, tail) = steps.split_at(steps.len() - 2);
+    assert!(matches!(prefix.last(), Some(Step::Open)));
+    let mut run = Run::new();
+    for step in prefix {
+        run.step(step).unwrap();
+    }
+    assert!(matches!(
+        run.locked.get(META),
+        Some(DeniedAccess::ReadAndReplace)
+    ));
+    assert!(matches!(run.ledger(META), Some(State::Writing { .. })));
+    let metadata_notices = |run: &Run| {
+        run.handle()
+            .notices()
+            .into_iter()
+            .filter(|notice| matches!(&notice.notice, Notice::MetadataEditedOutside { .. }))
+            .collect::<Vec<_>>()
+    };
+    // The earlier outside revert legitimately kept copies. Only this held write and its
+    // release must add none, including when a reused filename would hide a duplicate.
+    let copies = run.fs().files_under(&run.path(".tc/external"));
+    let notices = metadata_notices(&run);
+    for step in tail {
+        run.step(step).unwrap();
+        assert_eq!(
+            run.fs().files_under(&run.path(".tc/external")),
+            copies,
+            "metadata checkpoint/release changed preservation copies after {step:?}"
+        );
+        assert_eq!(
+            metadata_notices(&run),
+            notices,
+            "metadata checkpoint/release reported an extra outside edit after {step:?}"
+        );
+    }
+    run.finish().unwrap();
+}
+
+#[test]
+fn an_unreadable_prerender_never_replaces_the_last_copy_of_a_save() {
+    assert_kept(&an_unreadable_prerender());
+}
+
+fn metadata_converges_during_a_book_revert() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Section(1)),
+        act(Act::Leave),
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: false,
+        },
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: true,
+        },
+    ]
+}
+
+#[test]
+fn a_metadata_revert_is_kept_when_a_book_revert_triggers_its_materialization() {
+    let mut run = Run::new();
+    for step in metadata_converges_during_a_book_revert() {
+        run.step(&step).unwrap();
+    }
+    assert!(
+        run.handle.is_none(),
+        "the metadata rename must trigger the crash"
+    );
+    let metadata = run.puts.iter().find(|put| put.rel == META).unwrap();
+    assert_eq!(run.fs().peek(&run.path(META)), Some(metadata.bytes.clone()));
+    assert!(
+        metadata.retired,
+        "the complete folder established actual convergence"
+    );
+    assert_valid_burrito(&run.fs(), &run.folder);
+    run.finish().unwrap();
+}
+
+#[test]
+fn a_valid_outside_metadata_name_is_not_retired_as_converged_at_a_crash() {
+    let mut run = Run::new();
+    run.step(&Step::Open).unwrap();
+    run.step(&Step::EditName { told: false }).unwrap();
+    let put = run.puts.iter().find(|put| put.rel == META).unwrap();
+    let bytes = put.bytes.clone();
+    assert!(!put.retired);
+    assert_valid_burrito(&run.fs(), &run.folder);
+    let document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(
+        !name_of(run.handle()).contains(document["identification"]["name"]["en"].as_str().unwrap())
+    );
+    run.crash(false);
+    assert!(!run.puts.iter().find(|put| put.rel == META).unwrap().retired);
+    assert_eq!(run.fs().peek(&run.path(META)), Some(bytes.clone()));
+    run.finish().unwrap();
+    assert!(
+        run.fs()
+            .files_under(&run.path(".tc/external"))
+            .values()
+            .any(|copy| *copy == bytes)
+    );
+    run.open().unwrap();
+    assert!(run.in_history(&Save {
+        text: "zq1x".into(),
+        target: Target::Name,
+        session: 0,
+        fate: Fate::Kept,
+        shown: false
+    }));
+    run.finish().unwrap();
+}
+
+#[test]
+fn unreadable_metadata_is_preserved_before_a_permitted_replacement() {
+    assert_kept(&metadata_unreadable_but_replaceable());
+}
+
+#[test]
+fn an_incomplete_outside_batch_is_recorded_again_without_a_retry_loop() {
+    let mut run = Run::new();
+    let mut original = None;
+    for step in an_incomplete_outside_batch() {
+        if let Step::Cut {
+            journal: Journal::Pending,
+            which,
+            ..
+        } = &step
+        {
+            let (_, bytes) = run.journal_file(Journal::Pending, *which).unwrap();
+            let read =
+                tc_journal::pending::read_pending(&bytes, project_of(&run.fs(), &run.folder));
+            assert_eq!(read.entries.len(), 2);
+            let tc_journal::Verified::Change(change) = &read.entries[0] else {
+                panic!("the original outside batch was quarantined");
+            };
+            original = Some((
+                change.body().batch.id,
+                read.entries
+                    .iter()
+                    .map(tc_journal::Verified::id)
+                    .collect::<Vec<_>>(),
+            ));
+        }
+        run.step(&step).unwrap();
+    }
+    let (batch, original_ids) = original.unwrap();
+    let snapshot = run.handle().snapshot();
+    let fold = snapshot.fold();
+    assert!(fold.anomalies().any(|anomaly| matches!(
+        anomaly,
+        tc_journal::fold::Anomaly::IncompleteBatch { batch: held, .. } if *held == batch
+    )));
+    for (verse, text) in [(1, "zq1x"), (2, "zq2x")] {
+        let key = verse_key(verse);
+        let has_text = |id: &tc_journal::ChangeId| {
+            matches!(
+                fold.body(id).map(|body| body.record),
+                Some(Record::Verse { value: VerseValue::Text { words, .. }, .. }) if words == text
+            )
+        };
+        assert!(
+            fold.history(&key).iter().any(has_text),
+            "{text} is not readable in History"
+        );
+        let heads = fold.heads(&key);
+        assert!(
+            heads.iter().any(has_text),
+            "{text} is not a recovery candidate"
+        );
+        for head in heads {
+            let view = fold.change(&head).unwrap();
+            assert!(view.folded);
+            assert!(view.parents.iter().all(|id| !original_ids.contains(id)));
+        }
+    }
+    run.finish().unwrap();
+}
+
+fn a_revert_after_a_quarantined_pending_and_a_killed_save() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        Step::Act {
+            act: Act::Save(2),
+            kill: Some(Kill {
+                at: 3,
+                power_cut: false,
+                torn: false,
+            }),
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 1,
+            told: false,
+        },
+        Step::EditName { told: false },
+    ]
+}
+
+#[test]
+fn a_revert_after_a_quarantined_pending_and_a_killed_save_is_kept() {
+    assert_kept(&a_revert_after_a_quarantined_pending_and_a_killed_save());
+}
+
+fn killed(act: Act, at: u16) -> Step {
+    Step::Act {
+        act,
+        kill: Some(Kill {
+            at,
+            power_cut: false,
+            torn: false,
+        }),
+    }
+}
+
+/// A revert of the book file to the bytes before a write killed past its rename, made while
+/// a save's write was killed again.
+fn a_revert_after_two_kills_past_the_rename() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: false,
+        },
+        killed(Act::Save(1), 5),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        crash(),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn a_revert_after_two_kills_past_the_rename_is_kept() {
+    assert_kept(&a_revert_after_two_kills_past_the_rename());
+}
+
+/// The last copy of a saved name is `metadata.json`, while the book file is missing and
+/// waits for a value it cannot read: no book is listed, so the metadata the app would write
+/// lists no scope.
+fn a_saved_name_whose_last_copy_is_metadata_while_the_book_is_missing() -> Vec<Step> {
+    vec![
+        Step::Open,
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        crash(),
+        Step::Open,
+        act(Act::Name),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Usfm,
+            on: false,
+        },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        killed(Act::Save(1), 0),
+        Step::Delete { file: File::Usfm },
+    ]
+}
+
+#[test]
+fn a_saved_name_whose_last_copy_is_metadata_while_the_book_is_missing_is_kept() {
+    assert_kept(&a_saved_name_whose_last_copy_is_metadata_while_the_book_is_missing());
+}
+
+/// The disk changes a letter of the book file and keeps its size and time while the app is
+/// closed after a crash.
+fn a_book_file_damaged_with_its_stat_kept() -> Vec<Step> {
+    vec![
+        Step::Advance,
+        killed(Act::Name, 0),
+        Step::Damage { file: File::Usfm },
+    ]
+}
+
+#[test]
+fn a_book_file_damaged_with_its_stat_kept_is_repaired() {
+    assert_kept(&a_book_file_damaged_with_its_stat_kept());
+}
+
+fn kill_with(act: Act, at: u16, power_cut: bool, torn: bool) -> Step {
+    Step::Act {
+        act,
+        kill: Some(Kill {
+            at,
+            power_cut,
+            torn,
+        }),
+    }
+}
+
+fn lock(what: Holdable, on: bool) -> Step {
+    Step::Lock { what, on }
+}
+
+fn pending_held(which: u8, readable: bool) -> Holdable {
+    Holdable::Pending { which, readable }
+}
+
+/// Found by the bounded model on 2026-10-20 (round iter-9).
+fn a_metadata_revert_after_a_held_journal_and_kills_past_its_rename() -> Vec<Step> {
+    vec![
+        crash(),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 235,
+            keep: 195,
+            at_line: true,
+        },
+        act(Act::Save(1)),
+        lock(pending_held(153, true), true),
+        act(Act::Checkpoint),
+        act(Act::Save(2)),
+        lock(pending_held(153, true), false),
+        act(Act::Save(3)),
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Checkpoint),
+        act(Act::Leave),
+        lock(Holdable::File(File::Meta), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Meta), false),
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 0,
+        },
+        act(Act::Section(3)),
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Leave),
+        Step::Advance,
+        Step::Revert {
+            file: File::Meta,
+            back: 1,
+            told: false,
+        },
+        Step::DenyRead {
+            file: File::Meta,
+            on: false,
+        },
+    ]
+}
+
+#[test]
+fn a_metadata_revert_after_a_held_journal_and_kills_past_its_rename_is_kept() {
+    assert_kept(&a_metadata_revert_after_a_held_journal_and_kills_past_its_rename());
+}
+
+/// Found by the bounded model on 2026-10-20 (round iter-12).
+fn a_book_revert_after_an_outside_edit_and_a_kill_past_its_rename() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        lock(pending_held(0, false), true),
+        act(Act::Checkpoint),
+        act(Act::Save(2)),
+        lock(pending_held(0, false), false),
+        act(Act::Save(3)),
+        killed(Act::Save(1), 5),
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn a_book_revert_after_an_outside_edit_and_a_kill_past_its_rename_is_kept() {
+    assert_kept(&a_book_revert_after_an_outside_edit_and_a_kill_past_its_rename());
+}
+
+/// Found by the bounded model on 2026-10-20 (round r2-1).
+fn damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save() -> Vec<Step> {
+    vec![
+        kill_with(Act::Checkpoint, 35, true, false),
+        Step::Damage { file: File::Usfm },
+        act(Act::Save(1)),
+        lock(pending_held(203, true), true),
+        act(Act::Checkpoint),
+        act(Act::Save(2)),
+        lock(pending_held(203, true), false),
+        act(Act::Save(3)),
+        kill_with(Act::Save(3), 10, false, true),
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save_is_kept() {
+    assert_kept(&damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save());
+}
+
+/// Found by the bounded model on 2026-10-20 (round r2-2).
+fn a_book_revert_before_tc_is_lost() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Name),
+        act(Act::Leave),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Usfm), false),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(2)),
+        lock(Holdable::File(File::Usfm), false),
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+        crash(),
+        Step::LoseTc { heads: false },
+    ]
+}
+
+#[test]
+fn a_book_revert_before_tc_is_lost_is_kept() {
+    assert_kept(&a_book_revert_before_tc_is_lost());
+}
+
+/// Found by the bounded model on 2026-10-20 (round r2-3).
+fn damage_twice_then_restore_from_the_project() -> Vec<Step> {
+    vec![
+        killed(Act::Save(1), 19),
+        Step::Damage { file: File::Usfm },
+        act(Act::Leave),
+        Step::Advance,
+        crash(),
+        Step::Open,
+        Step::Damage { file: File::Usfm },
+        crash(),
+        Step::Open,
+        Step::Advance,
+        Step::Touch { file: File::Usfm },
+        Step::Focus,
+        Step::Choose { take_in: false },
+    ]
+}
+
+#[test]
+fn damage_twice_then_restore_from_the_project_is_kept() {
+    assert_kept(&damage_twice_then_restore_from_the_project());
+}
+
+/// Found by the bounded model on 2026-10-20 (round r2-4).
+fn a_restored_damage_reverted_with_its_old_time() -> Vec<Step> {
+    vec![
+        act(Act::Leave),
+        Step::Advance,
+        crash(),
+        Step::Open,
+        Step::Damage { file: File::Usfm },
+        crash(),
+        Step::Open,
+        Step::Advance,
+        Step::Touch { file: File::Usfm },
+        Step::Focus,
+        Step::Choose { take_in: false },
+        crash(),
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 0,
+        },
+        killed(Act::Name, 0),
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 0,
+        },
+    ]
+}
+
+#[test]
+fn a_restored_damage_reverted_with_its_old_time_is_repaired() {
+    assert_kept(&a_restored_damage_reverted_with_its_old_time());
+}
+
+/// Found by the bounded model on 2026-10-20 (round r3-11).
+fn a_recorded_revert_whose_pending_file_is_deleted() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        lock(pending_held(0, false), true),
+        act(Act::Checkpoint),
+        act(Act::Save(2)),
+        lock(pending_held(0, false), false),
+        act(Act::Save(3)),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 151,
+            keep: 0,
+            at_line: false,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(3)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+        crash(),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 1,
+        },
+    ]
+}
+
+#[test]
+fn a_recorded_revert_whose_pending_file_is_deleted_is_kept() {
+    assert_kept(&a_recorded_revert_whose_pending_file_is_deleted());
+}
+
+/// Found by the bounded model on 2026-10-20 (round r3-12).
+fn a_metadata_revert_recorded_then_its_pending_file_deleted() -> Vec<Step> {
+    vec![
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Section(3)),
+        lock(Holdable::File(File::Usfm), false),
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Section(3)),
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+        killed(Act::Save(1), 0),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 110,
+        },
+    ]
+}
+
+#[test]
+fn a_metadata_revert_recorded_then_its_pending_file_deleted_is_kept() {
+    assert_kept(&a_metadata_revert_recorded_then_its_pending_file_deleted());
+}
+
+/// Found by the bounded model on 2026-10-20 (round r3-13).
+fn reverts_around_kills_a_cut_and_a_lost_manifest() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        killed(Act::Save(1), 0),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        killed(Act::Leave, 0),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        killed(Act::Save(2), 5),
+        Step::LoseTc { heads: false },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn reverts_around_kills_a_cut_and_a_lost_manifest_are_kept() {
+    assert_kept(&reverts_around_kills_a_cut_and_a_lost_manifest());
+}
+
+/// Found by the bounded model on 2026-10-20 (round r3-14).
+fn reverts_of_both_files_after_an_unreadable_book_file() -> Vec<Step> {
+    vec![
+        Step::Open,
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        crash(),
+        Step::Open,
+        act(Act::Save(1)),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Usfm,
+            on: false,
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Leave),
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn reverts_of_both_files_after_an_unreadable_book_file_are_kept() {
+    assert_kept(&reverts_of_both_files_after_an_unreadable_book_file());
 }

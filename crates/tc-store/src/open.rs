@@ -15,8 +15,8 @@
 
 use crate::appdata::{AppData, rfc3339};
 use crate::atomic::{
-    DirSet, HeldRetry, SyncDir, atomic_create_dirs, atomic_remove_if_free, atomic_write,
-    rename_held,
+    DirSet, HeldRetry, Removed, SyncDir, atomic_create_dirs, atomic_remove_checked,
+    atomic_remove_if_free, atomic_write,
 };
 use crate::clock::Clock;
 use crate::counters::{Counters, CountingVfs};
@@ -653,6 +653,7 @@ fn open_inner(
     for (notice, copy) in notices {
         project.notice(notice, copy);
     }
+    project.renew_quarantine_notices();
     let mut unchecked: Vec<String> = Vec::new();
     if !read_only && write_failed.is_none() {
         match repair_and_classify(&mut project, &mut writer, tracker, identity) {
@@ -1091,13 +1092,13 @@ impl Project {
         let mut dirs = DirSet::new();
         let mut flushed: BTreeSet<String> = BTreeSet::new();
         // Pending files whose every change a valid pack holds: a seal that stopped after K3.
-        let pending: Vec<(String, PendingInfo)> = self
-            .journal
-            .pending
-            .iter()
-            .map(|(rel, p)| (rel.clone(), p.clone()))
-            .collect();
-        for (rel, info) in pending {
+        let pending: Vec<String> = self.journal.pending.keys().cloned().collect();
+        for rel in pending {
+            // Salvaging an earlier path can replace this pending file and its source slot.
+            // Relocate the current slot before removal, including aliases from that salvage.
+            let Some(info) = self.journal.pending.get(&rel).cloned() else {
+                continue;
+            };
             match &info.status {
                 PendingStatus::Valid => {}
                 PendingStatus::Damaged(reason) => {
@@ -1105,7 +1106,11 @@ impl Project {
                     continue;
                 }
                 PendingStatus::Foreign { .. } => {
-                    self.quarantine(&rel, &mut dirs)?;
+                    let abs = self.folder.path(&rel);
+                    let Ok(bytes) = self.vfs.read(&abs) else {
+                        continue;
+                    };
+                    self.quarantine_pending(&rel, &bytes)?;
                     self.journal.pending.remove(&rel);
                     continue;
                 }
@@ -1254,7 +1259,10 @@ impl Project {
                 .map_err(|e| StoreError::io("read", &habs, e))?;
             let hnumber = match self.journal.packs.get(holder).and_then(|p| p.number) {
                 Some(n) => n,
-                None => self.source.add(&habs),
+                None => self
+                    .source
+                    .add_target(&habs)
+                    .map_err(|e| StoreError::io("open the verified holder", &habs, e))?,
             };
             targets.push((
                 JournalFile {
@@ -1278,10 +1286,7 @@ impl Project {
             .map(|(f, n, b)| (f, *n, b.as_slice()))
             .collect();
         match relocation(self.id, (&from, &bytes), &refs) {
-            Some(map) => {
-                self.source.moved(number, map);
-                Ok(true)
-            }
+            Some(map) => Ok(self.source.moved(number, map)),
             None => Ok(false),
         }
     }
@@ -1293,7 +1298,7 @@ impl Project {
         &mut self,
         rel: &str,
         reason: tc_journal::pack::PackError,
-        dirs: &mut DirSet,
+        _dirs: &mut DirSet,
     ) -> Result<(), StoreError> {
         let abs = self.folder.path(rel);
         let Ok(bytes) = self.vfs.read(&abs) else {
@@ -1312,17 +1317,19 @@ impl Project {
             let encoded =
                 encode_pending(&header, &lines).map_err(|e| StoreError::Other(e.to_string()))?;
             let dir = self.folder.path(PENDING);
-            atomic_write(
+            let name = crate::recovery::preserve_bytes(
                 &*self.vfs,
                 &dir,
                 &encoded.name,
                 &encoded.bytes,
-                SyncDir::Now,
-            )
-            .map_err(|e| e.into_inner())?;
-            let new_rel = format!("{PENDING}/{}", encoded.name);
+                Some(&abs),
+            )?;
+            let new_rel = format!("{PENDING}/{name}");
             let new_abs = self.folder.path(&new_rel);
-            let number = self.source.add(&new_abs);
+            let number = self
+                .source
+                .add_target(&new_abs)
+                .map_err(|e| StoreError::io("open the verified salvage", &new_abs, e))?;
             if let Some(old) = self.journal.pending.get(rel).and_then(|p| p.number) {
                 let from = JournalFile {
                     rel: rel.to_owned(),
@@ -1337,7 +1344,11 @@ impl Project {
                     size: encoded.bytes.len() as u64,
                 };
                 match relocation(self.id, (&from, &bytes), &[(&to, number, &encoded.bytes)]) {
-                    Some(map) => self.source.moved(old, map),
+                    Some(map) => {
+                        if !self.source.moved(old, map) {
+                            return Ok(());
+                        }
+                    }
                     None => return Ok(()),
                 }
             }
@@ -1351,42 +1362,175 @@ impl Project {
                 },
             );
         }
-        self.quarantine(rel, dirs)?;
+        let copy = self.quarantine_pending(rel, &bytes)?;
         self.journal.pending.remove(rel);
-        self.notice(
-            Notice::QuarantinedPending {
-                file: rel.into(),
-                reason,
-                salvaged,
-            },
-            None,
-        );
+        if copy.is_none() {
+            self.notice(
+                Notice::QuarantinedPending {
+                    file: rel.into(),
+                    reason,
+                    salvaged,
+                },
+                None,
+            );
+        }
         Ok(())
     }
 
-    /// Moves a file to `.tc/quarantine/`, where it stays until the person dismisses the
-    /// notice (§3.6). A file another program holds stays where it is for the next open, as
-    /// the seal leaves one (§5.11 K4): the open never fails for it, and the session that left
-    /// it never takes it for a second writer's.
-    fn quarantine(&mut self, rel: &str, dirs: &mut DirSet) -> Result<(), StoreError> {
-        let dir = self.folder.path(QUARANTINE);
-        atomic_create_dirs(&*self.vfs, &dir)?;
-        let name = layout::escaped(rel);
+    /// The original is removed only after a distinct exact copy is durable. A failed
+    /// last look or sharing violation leaves the source for the next open as well.
+    pub(crate) fn quarantine_pending(
+        &mut self,
+        rel: &str,
+        bytes: &[u8],
+    ) -> Result<Option<String>, StoreError> {
         let from = self.folder.path(rel);
-        let to = dir.join(&name);
-        match rename_held(&*self.vfs, &from, &to, &HeldRetry::SAVE) {
-            Ok(()) => {}
-            Err(e) if self.vfs.is_held(&e) => {
-                self.journal.left.insert(rel.to_owned());
-                return Ok(());
+        let dir = self.folder.path(QUARANTINE);
+        let base = format!(
+            "pending~{}~{}",
+            layout::escaped(rel),
+            crate::recovery::fingerprint(bytes)
+        );
+        let name = crate::recovery::preserve_bytes(&*self.vfs, &dir, &base, bytes, None)?;
+        let copy = format!("{QUARANTINE}/{name}");
+        // The self-describing durable copy reconstructs its notice even if a crash
+        // occurs before this session publishes the notice or removes the source.
+        self.notice_quarantined(rel, &copy, bytes);
+        let backup = self.folder.path(&copy);
+        let mut backup_missing = false;
+        let removed = atomic_remove_checked(
+            &*self.vfs,
+            &from,
+            SyncDir::Now,
+            &HeldRetry::SAVE,
+            &mut || {
+                if !self.vfs.read(&from).is_ok_and(|current| current == bytes) {
+                    return Ok(false);
+                }
+                if !self.vfs.read(&backup).is_ok_and(|current| current == bytes) {
+                    backup_missing = true;
+                    return Ok(false);
+                }
+                self.vfs
+                    .sync_file(&backup)
+                    .and_then(|()| self.vfs.sync_dir(&dir))
+                    .and_then(|()| self.vfs.sync_file(&backup))
+                    .map_err(|e| StoreError::io("flush the recovery copy", &backup, e))?;
+                Ok(true)
+            },
+        );
+        if backup_missing {
+            for notice in self.shared.notices() {
+                if notice.copy.as_deref() == Some(copy.as_str()) {
+                    self.shared.remove_notice(notice.id);
+                }
             }
-            Err(e) => return Err(StoreError::io("move to quarantine", &from, e)),
+            self.notice(Notice::FileUnreadable {
+                path: rel.into(),
+                reason: "the original save was kept because its recovery copy changed or disappeared".into(),
+            }, None);
         }
-        dirs.add_dir(&dir);
-        if let Some(parent) = from.parent() {
-            dirs.add_dir(parent);
+        match removed {
+            Ok(Removed::Removed) => {}
+            Ok(Removed::Refused) => {
+                self.journal.left.insert(rel.to_owned());
+            }
+            Err(e) if e.io_error().is_some_and(|e| self.vfs.is_held(e)) => {
+                self.journal.left.insert(rel.to_owned());
+            }
+            Err(e) => return Err(e),
         }
-        Ok(())
+        Ok(Some(copy))
+    }
+
+    fn renew_quarantine_notices(&self) {
+        let Ok(entries) = self.vfs.read_dir(&self.folder.path(QUARANTINE)) else {
+            return;
+        };
+        for entry in entries {
+            if entry.kind != crate::vfs::EntryKind::File {
+                continue;
+            }
+            let Some(name) = entry.name.to_str() else {
+                continue;
+            };
+            let Some(rest) = name.strip_prefix("pending~") else {
+                continue;
+            };
+            let Some((escaped, number)) = rest.rsplit_once('~') else {
+                continue;
+            };
+            if number.parse::<u16>().is_err() {
+                continue;
+            }
+            let Some((escaped, digest)) = escaped.rsplit_once('~') else {
+                continue;
+            };
+            if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit()) {
+                continue;
+            }
+            let rel = escaped.replace("%2F", "/").replace("%25", "%");
+            let Some(file) = rel.strip_prefix(".tc/pending/") else {
+                continue;
+            };
+            if file.is_empty() || file.contains('/') || matches!(file, "." | "..") {
+                continue;
+            }
+            let copy = format!("{QUARANTINE}/{name}");
+            if self
+                .shared
+                .notices()
+                .iter()
+                .any(|notice| notice.copy.as_ref() == Some(&copy))
+            {
+                continue;
+            }
+            let Ok(bytes) = self.vfs.read(&self.folder.path(&copy)) else {
+                continue;
+            };
+            if crate::recovery::fingerprint(&bytes) != digest {
+                self.notice(
+                    Notice::FileUnreadable {
+                        path: copy.as_str().into(),
+                        reason: format!(
+                            "this preserved recovery copy changed; its original source was {rel}"
+                        )
+                        .into(),
+                    },
+                    Some(copy),
+                );
+                continue;
+            }
+            self.notice_quarantined(&rel, &copy, &bytes);
+        }
+    }
+
+    fn notice_quarantined(&self, rel: &str, copy: &str, bytes: &[u8]) {
+        if self
+            .shared
+            .notices()
+            .iter()
+            .any(|notice| notice.copy.as_deref() == Some(copy))
+        {
+            return;
+        }
+        let read = read_pending(bytes, self.id);
+        let notice = match read.status {
+            PendingStatus::Damaged(reason) => Notice::QuarantinedPending {
+                file: rel.into(),
+                reason,
+                salvaged: read.entries.len() as u32,
+            },
+            PendingStatus::Foreign { project } => Notice::FileUnreadable {
+                path: rel.into(),
+                reason: format!(
+                    "this save belongs to project {project}; its original bytes were kept"
+                )
+                .into(),
+            },
+            PendingStatus::Valid | PendingStatus::Newer { .. } => return,
+        };
+        self.notice(notice, Some(copy.to_owned()));
     }
 
     /// A new device's profile copies the old one's names (§6.3).

@@ -204,14 +204,25 @@ fn a_book_change_marks_only_that_books_files() {
     }
 }
 
-/// Each buffer is hashed once: a job that finds every file unchanged hashes what it rendered
-/// and nothing else, reads no file back and writes none.
+/// Unchanged ingredient projections are neither read nor replaced. A changed ingredient
+/// gets M1 and final compare-and-swap reads; metadata gets the same two safety reads before
+/// the group's replacement, even when its old size and mtime still match the ledger.
 #[test]
 fn an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once() {
-    let corpus = psalms();
-    let fs = corpus.fs.copy();
-    // Settle the entries: two opens, the clock past the time stamp's tick before each.
-    for _ in 0..2 {
+    let mut counts = Vec::new();
+    for corpus in [psalms(), psalms_x10()] {
+        let fs = corpus.fs.copy();
+        // Settle the entries: two opens, the clock past the time stamp's tick before each.
+        for _ in 0..2 {
+            fs.advance(Duration::from_secs(5));
+            let rig = rig_as(fs.clone(), APP, "host-1");
+            let handle = rig
+                .store
+                .open(&corpus.folder, &OpenOptions::default())
+                .unwrap();
+            handle.wait_idle();
+            handle.close().unwrap();
+        }
         fs.advance(Duration::from_secs(5));
         let rig = rig_as(fs.clone(), APP, "host-1");
         let handle = rig
@@ -219,55 +230,110 @@ fn an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once() {
             .open(&corpus.folder, &OpenOptions::default())
             .unwrap();
         handle.wait_idle();
+        let original = words_of(&handle, &psalm(23, 1));
+        // The text returns to its original bytes, while a decision's stamp changes.
+        save_psalm(&handle, 23, 1, "changed for a moment").unwrap();
+        save_psalm(&handle, 23, 1, &original).unwrap();
+        handle.wait_idle();
+        let preimages = fs.files_under(&corpus.folder.join("ingredients"));
+        let metadata_path = corpus.folder.join("metadata.json");
+        let old_metadata_size = fs.peek(&metadata_path).unwrap().len() as u64;
+        fs.clear_log();
+        let before = handle.counters();
+        handle.leave(Leave::Book(PSA)).wait().unwrap();
+        handle.wait_idle();
+        let cost = handle.counters().since(&before);
+        let opened = fs.opened();
+        let snapshot = handle.snapshot();
+        let rendered: std::collections::BTreeMap<_, _> = snapshot
+            .fold()
+            .render_book(PSA)
+            .into_iter()
+            .map(|(file, bytes)| (corpus.folder.join(file.path()), bytes))
+            .collect();
+        let changed: std::collections::BTreeSet<_> = rendered
+            .iter()
+            .filter(|(path, bytes)| preimages.get(*path) != Some(*bytes))
+            .map(|(path, _)| path.clone())
+            .collect();
+        assert!(!changed.is_empty(), "the decision stamp must change");
+        assert!(
+            changed.len() < rendered.len(),
+            "some projections must be unchanged"
+        );
+        let is_derived = |path: &std::path::PathBuf| {
+            path.strip_prefix(&corpus.folder)
+                .ok()
+                .and_then(|p| p.to_str())
+                .and_then(tc_journal::fold::DerivedFile::from_path)
+                .is_some()
+        };
+        let ingredient_reads: std::collections::BTreeSet<_> = opened
+            .iter()
+            .filter(|path| is_derived(path))
+            .cloned()
+            .collect();
+        let ingredient_writes: std::collections::BTreeSet<_> = fs
+            .log()
+            .into_iter()
+            .filter(|op| op.kind == OpKind::Rename && is_derived(&op.path))
+            .map(|op| op.path)
+            .collect();
+        // Expected changes come from the byte comparison, so reading and gratuitously
+        // rewriting every unchanged file cannot satisfy this oracle.
+        assert_eq!(
+            ingredient_reads, changed,
+            "an unchanged ingredient was read"
+        );
+        assert_eq!(
+            ingredient_writes, changed,
+            "an unchanged ingredient was replaced"
+        );
+        for path in &changed {
+            assert_eq!(
+                opened.iter().filter(|p| *p == path).count(),
+                2,
+                "{}: M1 and the final compare-and-swap, once each",
+                path.display()
+            );
+        }
+        let metadata_reads = opened.iter().filter(|p| **p == metadata_path).count() as u64;
+        assert_eq!(
+            metadata_reads, 2,
+            "metadata must be read before planning and replacement"
+        );
+        assert_eq!(cost.derived_read, changed.len() as u64 + 1, "{cost:?}");
+        assert_eq!(cost.derived_written, changed.len() as u64, "{cost:?}");
+        assert_eq!(cost.projected, rendered.len() as u64, "{cost:?}");
+        // Each rendered buffer is hashed once. Each ingredient read is hashed once, and
+        // metadata adds its two old-byte reads and its one newly rendered buffer.
+        let rendered_bytes: u64 = rendered.values().map(|bytes| bytes.len() as u64).sum();
+        let ingredient_read_bytes: u64 = opened
+            .iter()
+            .filter(|path| is_derived(path))
+            .map(|path| preimages[path].len() as u64)
+            .sum();
+        let metadata_read_bytes = metadata_reads * old_metadata_size;
+        let new_metadata_size = fs.peek(&metadata_path).unwrap().len() as u64;
+        assert_eq!(
+            cost.bytes_hashed,
+            rendered_bytes + ingredient_read_bytes + metadata_read_bytes + new_metadata_size,
+            "each rendered buffer and each comparison read must be hashed once: {cost:?}"
+        );
+        counts.push([
+            cost.projected,
+            cost.derived_read,
+            cost.derived_written,
+            metadata_reads,
+            cost.files_opened,
+            cost.renames,
+        ]);
         handle.close().unwrap();
     }
-    fs.advance(Duration::from_secs(5));
-    let rig = rig_as(fs.clone(), APP, "host-1");
-    let handle = rig
-        .store
-        .open(&corpus.folder, &OpenOptions::default())
-        .unwrap();
-    handle.wait_idle();
-    let original = words_of(&handle, &psalm(23, 1));
-    // A save and the save back: the book is marked, and its files come out as they were.
-    save_psalm(&handle, 23, 1, "changed for a moment").unwrap();
-    save_psalm(&handle, 23, 1, &original).unwrap();
-    handle.wait_idle();
-    fs.clear_log();
-    let before = handle.counters();
-    let sizes: std::collections::BTreeMap<std::path::PathBuf, u64> = fs
-        .files_under(&corpus.folder.join("ingredients"))
-        .into_iter()
-        .map(|(p, b)| (p, b.len() as u64))
-        .collect();
-    handle.leave(Leave::Book(PSA)).wait().unwrap();
-    let cost = handle.counters().since(&before);
-    let before_sizes: u64 = fs.opened().iter().filter_map(|p| sizes.get(p)).sum();
-    // The files the job found unchanged (settled, equal to their entries) were neither read
-    // nor written: a file the second save changed (a decision's stamp) is the only one read.
-    assert!(cost.projected > cost.derived_read, "{cost:?}");
-    assert_eq!(cost.derived_read, cost.derived_written, "{cost:?}");
-    // Hashed: each rendered buffer once, each file read for the comparison once, and
-    // metadata.json's bytes; never a buffer twice.
-    let snapshot = handle.snapshot();
-    let rendered: u64 = snapshot
-        .fold()
-        .render_book(PSA)
-        .iter()
-        .map(|(_, b)| b.len() as u64)
-        .sum::<u64>()
-        + snapshot
-            .fold()
-            .render(&tc_journal::fold::DerivedFile::Conflicts)
-            .map_or(0, |b| b.len() as u64);
-    let metadata = fs.peek(&corpus.folder.join("metadata.json")).unwrap().len() as u64;
-    assert!(cost.bytes_hashed >= rendered, "{cost:?}");
-    assert!(
-        cost.bytes_hashed <= rendered + before_sizes + 3 * metadata,
-        "a buffer was hashed more than once: {} hashed, {rendered} rendered, {before_sizes} read, {cost:?}",
-        cost.bytes_hashed
+    assert_eq!(
+        counts[0], counts[1],
+        "ten times the project must not add operations"
     );
-    handle.close().unwrap();
 }
 
 fn collect_progress(handle: &ProjectHandle) -> Arc<Mutex<Vec<(tc_store::Progress, Instant)>>> {

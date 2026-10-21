@@ -1,5 +1,21 @@
 # Handoff: continuing the rebuild (kept current)
 
+## S2 recovery, 2026-10-20
+
+The active app owner is the Enjoy **tC4 Rebuild** conversation
+`d8a954f9b59742f2b46a6a53f82e5fd4`, working in `resume-build-lane`, observed at
+`732471fd40c80b5a28e7a5c9686621f9aa8bb15b` after its C2 checkpoint. Its conversation
+was still running; do not change that checkout or launch another app pipeline here.
+This conversation (`19f61dcb-b38a-49aa-9b95-1d8d5dca69fe`) owns S2 proof and safe handoff
+in the isolated `s2-proof-executor` worktree, based on S2 `85fa081`. The original
+`s2-verify` checkout stays untouched. At most these two unit pipelines are active.
+
+Process adoption is a cherry-pick of `2fe47e2691af7b61a45b05bc5903474412388f4f` onto the
+isolated S2 branch. S2's nightly model job is retained. Adoption checks and the next known
+missing proof are recorded in `.audit/plans/S2-PROOF-2026-10-20.md`; no historical report
+is a current passing receipt. S2 remains unverified and is not integrated into main or
+storage. The older snapshots below are historical context.
+
 Written for the next session that continues this work, on the owner's Linux PC. It is updated at
 each milestone. Check `.audit/STATUS.md`'s recorded ref against the actual builder worktree:
 local verified merges can be ahead of main and the generated file can be stale. Read, in order:

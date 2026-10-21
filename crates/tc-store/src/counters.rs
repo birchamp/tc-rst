@@ -245,6 +245,11 @@ impl Vfs for CountingVfs {
         self.inner.rename(from, to)
     }
 
+    fn rename_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.counters.renames.fetch_add(1, Ordering::Relaxed);
+        self.inner.rename_file_noreplace(from, to)
+    }
+
     fn rename_dir_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
         self.counters.renames.fetch_add(1, Ordering::Relaxed);
         self.inner.rename_dir_noreplace(from, to)

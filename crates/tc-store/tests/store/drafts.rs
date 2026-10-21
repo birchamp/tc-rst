@@ -402,3 +402,96 @@ fn a_dismissed_notice_of_a_held_file_keeps_its_copy() {
     assert_eq!(rig.fs.peek(&usfm), Some(edited), "the edited file stays");
     handle.close().unwrap();
 }
+
+fn copied_metadata_notice() -> (
+    Rig,
+    std::path::PathBuf,
+    tc_store::ProjectHandle,
+    tc_store::StoreNotice,
+    Vec<u8>,
+) {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
+    handle.close().unwrap();
+    // The project name edited in a text editor: `metadata.json` is written from the
+    // project, and the bytes found are kept in a copy.
+    let path = folder.join("metadata.json");
+    let text = String::from_utf8(rig.fs.peek(&path).unwrap()).unwrap();
+    let edited = text.replacen("Titus test translation", "Titus, renamed", 1);
+    rig.fs.put(&path, edited.as_bytes(), None);
+    rig.fs
+        .delete(&folder.join(".tc/materialized.json"))
+        .unwrap();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let notice = handle
+        .notices()
+        .into_iter()
+        .find(|n| n.copy.is_some())
+        .expect("an outside edit keeps a copy");
+    let copy = folder.join(notice.copy.clone().unwrap());
+    assert_eq!(rig.fs.peek(&copy), Some(edited.as_bytes().to_vec()));
+    (rig, folder, handle, notice, edited.into_bytes())
+}
+
+#[test]
+fn a_failed_dismissal_keeps_the_notice_and_its_copy_for_retry() {
+    let (rig, folder, handle, notice, _) = copied_metadata_notice();
+    let copy = folder.join(notice.copy.clone().unwrap());
+    rig.fs.set_busy(&copy, true);
+    assert!(handle.dismiss_notice(notice.id).wait().is_err());
+    assert!(rig.fs.peek(&copy).is_some());
+    assert!(
+        handle
+            .notices()
+            .iter()
+            .any(|n| n.id == notice.id && n.copy == notice.copy),
+        "a failed dismissal must keep its original notice and exact copy route"
+    );
+    rig.fs.set_busy(&copy, false);
+    handle.dismiss_notice(notice.id).wait().unwrap();
+    assert!(handle.notices().iter().all(|n| n.id != notice.id));
+    assert!(
+        rig.fs.peek(&copy).is_none(),
+        "the copy goes with the notice"
+    );
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_copy_stat_denial_cannot_turn_dismissal_into_success() {
+    let (rig, folder, handle, notice, original) = copied_metadata_notice();
+    let copy = folder.join(notice.copy.as_ref().unwrap());
+    rig.fs.set_unreadable(&copy, true);
+    assert!(
+        handle.dismiss_notice(notice.id).wait().is_err(),
+        "copy stat/read denial cannot be treated as absence"
+    );
+    assert!(handle.notices().iter().any(|n| n.id == notice.id));
+    assert_eq!(rig.fs.peek(&copy), Some(original));
+    rig.fs.set_unreadable(&copy, false);
+    handle.dismiss_notice(notice.id).wait().unwrap();
+    assert!(rig.fs.peek(&copy).is_none());
+    handle.close().unwrap();
+}
+
+#[test]
+fn dismissing_an_older_copy_never_deletes_its_unseen_replacement() {
+    let (rig, folder, handle, notice, original) = copied_metadata_notice();
+    let copy = folder.join(notice.copy.as_ref().unwrap());
+    let replacement =
+        b"a different person's retained bytes must not be dismissed with the old image";
+    rig.fs.put_unseen(&copy, replacement, None);
+    assert!(
+        handle.dismiss_notice(notice.id).wait().is_err(),
+        "dismissing an old image cannot authorize destroying unseen replacement bytes"
+    );
+    assert_eq!(rig.fs.peek(&copy).as_deref(), Some(replacement.as_slice()));
+    assert!(handle.notices().iter().any(|n| n.id == notice.id));
+    rig.fs.put_unseen(&copy, &original, None);
+    handle.dismiss_notice(notice.id).wait().unwrap();
+    assert!(rig.fs.peek(&copy).is_none());
+    handle.close().unwrap();
+}

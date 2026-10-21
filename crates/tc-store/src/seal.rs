@@ -12,11 +12,10 @@
 //! bytes (§2.6).
 
 use crate::atomic::{
-    DirSet, HeldRetry, SyncDir, atomic_create_dirs, atomic_remove, atomic_remove_if_free,
-    atomic_write, rename_held,
+    DirSet, SyncDir, atomic_create_dirs, atomic_remove, atomic_remove_if_free, atomic_write,
 };
 use crate::error::StoreError;
-use crate::layout::{PACKS, QUARANTINE, escaped};
+use crate::layout::{PACKS, QUARANTINE};
 use crate::load::{JournalFile, JournalKind, relocation};
 use crate::project::{PackInfo, Project};
 use crate::vfs::is_not_found;
@@ -26,9 +25,7 @@ use tc_journal::consolidate::{OwnPack, consolidate, consolidation_groups};
 use tc_journal::fold::Notice;
 use tc_journal::index::load_pack;
 use tc_journal::line::encode_line;
-use tc_journal::pack::{
-    EncodedPack, PackError, PackPath, PackRead, PackSpec, YearMonth, read_pack, seal,
-};
+use tc_journal::pack::{EncodedPack, PackPath, PackRead, PackSpec, YearMonth, read_pack, seal};
 use tc_journal::pending::{PendingStatus, read_pending};
 use tc_journal::{ChangeId, PackName, Verified};
 
@@ -114,7 +111,7 @@ enum Found {
     /// Its lines no longer verify (cut inside a line, or changed in one). The changes it lost
     /// are read as for a partial file, and K4 moves its bytes to `.tc/quarantine/`, as the open
     /// does with a damaged pending file (§4.4).
-    Damaged { reason: PackError, salvaged: u32 },
+    Damaged(Vec<u8>),
     /// Another program put a file of a newer format or of another project at its name. The
     /// fold's changes of it are sealed from memory; the file stays, never removed, and the fold
     /// takes nothing from it (the next open decides it, §4.2).
@@ -178,7 +175,10 @@ impl Project {
         // K3: the verified pack is stored as a blob, so it can be restored even before a
         // commit holds it. A blob that cannot be stored now is stored by the checkpoint.
         let blob = self.git.as_ref().and_then(|git| git.write_blob(&back).ok());
-        let number = self.source.add(&abs);
+        let number = self
+            .source
+            .add_target(&abs)
+            .map_err(|e| StoreError::io("open the verified pack", &abs, e))?;
         let loaded = load_pack(&rel, &back, self.id, number);
         if let Some(section) = loaded.section {
             self.index.sections.insert(rel.clone(), section);
@@ -249,10 +249,7 @@ impl Project {
         let refs: Vec<(&JournalFile, u32, &[u8])> =
             targets.iter().map(|(f, n, b)| (f, *n, *b)).collect();
         match relocation(self.id, (&from, bytes), &refs) {
-            Some(map) => {
-                self.source.moved(number, map);
-                true
-            }
+            Some(map) => self.source.moved(number, map),
             None => false,
         }
     }
@@ -308,7 +305,6 @@ impl Project {
                 // A file of a newer format the fold never read: nothing of it is lacking.
                 continue;
             }
-            let salvaged = u32::try_from(lines.len()).unwrap_or(u32::MAX);
             let mut ids: BTreeSet<ChangeId> = lines.iter().map(Verified::id).collect();
             let lost: Vec<ChangeId> = self
                 .folded_from(&rel)
@@ -344,7 +340,7 @@ impl Project {
                     continue;
                 }
                 (None, _) => Found::Gone,
-                (Some(_), PendingStatus::Damaged(reason)) => Found::Damaged { reason, salvaged },
+                (Some(bytes), PendingStatus::Damaged(_)) => Found::Damaged(bytes),
                 (
                     Some(_),
                     status @ (PendingStatus::Newer { .. } | PendingStatus::Foreign { .. }),
@@ -364,27 +360,6 @@ impl Project {
             } else {
                 SealPhase::Build
             };
-        }
-    }
-
-    /// K4 for a pending file whose lines no longer verify: its bytes move to `.tc/quarantine/`,
-    /// as the open moves a damaged pending file (§4.4). `false` when another program holds it
-    /// (the next open quarantines it) or removed it.
-    fn quarantine_if_free(&mut self, rel: &str, dirs: &mut DirSet) -> Result<bool, StoreError> {
-        let dir = self.folder.path(QUARANTINE);
-        atomic_create_dirs(&*self.vfs, &dir)?;
-        let from = self.folder.path(rel);
-        let to = dir.join(escaped(rel));
-        match rename_held(&*self.vfs, &from, &to, &HeldRetry::SAVE) {
-            Ok(()) => {
-                dirs.add_dir(&dir);
-                if let Some(parent) = from.parent() {
-                    dirs.add_dir(parent);
-                }
-                Ok(true)
-            }
-            Err(e) if self.vfs.is_held(&e) || is_not_found(&e) => Ok(false),
-            Err(e) => Err(StoreError::io("move to quarantine", &from, e)),
         }
     }
 
@@ -523,19 +498,9 @@ impl Project {
                             &self.folder.path(&rel),
                             SyncDir::Deferred(&mut run.dirs),
                         )?,
-                        Found::Damaged { reason, salvaged } => {
-                            let moved = self.quarantine_if_free(&rel, &mut run.dirs)?;
-                            if moved {
-                                self.notice(
-                                    Notice::QuarantinedPending {
-                                        file: rel.as_str().into(),
-                                        reason,
-                                        salvaged,
-                                    },
-                                    None,
-                                );
-                            }
-                            moved
+                        Found::Damaged(bytes) => {
+                            let copy = self.quarantine_pending(&rel, &bytes)?;
+                            copy.is_some() && !self.journal.left.contains(&rel)
                         }
                         Found::NotOurs(status) => {
                             if let Some(info) = self.journal.pending.get_mut(&rel) {

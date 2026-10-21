@@ -1200,6 +1200,35 @@ impl Vfs for FaultFs {
         Ok(())
     }
 
+    fn rename_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+        let mut model = self.model();
+        model.check_held(from)?;
+        model.check_held(to)?;
+        let (from_dir, from_name) = model.parent(from)?;
+        let ino = model.resolve(from)?;
+        if model.dir(ino).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "rename_file_noreplace requires a regular source file",
+            ));
+        }
+        let (to_dir, to_name) = model.parent(to)?;
+        if model
+            .dir(to_dir)
+            .is_some_and(|dir| dir.entries.contains_key(&to_name))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("{} exists", to.display()),
+            ));
+        }
+        model.step(OpKind::Rename, to)?;
+        model.unlink(from_dir, &from_name);
+        model.link(to_dir, to_name, ino);
+        model.faults.held.remove(from);
+        Ok(())
+    }
+
     fn rename_dir_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
         let mut model = self.model();
         let (from_dir, from_name) = model.parent(from)?;

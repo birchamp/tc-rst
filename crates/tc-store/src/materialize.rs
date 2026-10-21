@@ -16,8 +16,8 @@
 
 use crate::appdata::utc_stamp;
 use crate::atomic::{
-    DirSet, HeldRetry, SyncDir, WriteError, Written, atomic_create_dirs, atomic_remove,
-    atomic_write, atomic_write_checked,
+    DirSet, HeldRetry, Removed, SyncDir, WriteError, Written, atomic_create, atomic_create_dirs,
+    atomic_remove, atomic_remove_checked, atomic_write, atomic_write_checked,
 };
 use crate::classify::Next;
 use crate::error::StoreError;
@@ -28,7 +28,7 @@ use crate::vfs::{FileMeta, is_not_found};
 use crate::writer::Writer;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
-use tc_burrito::{IngredientEntry, IngredientPath};
+use tc_burrito::{IngredientEntry, IngredientPath, MetadataSource};
 use tc_journal::fold::{Blocked, DerivedFile, Notice, ProjectKind, Resolved};
 use tc_journal::record::CarriedValue;
 use tc_journal::{BookId, FORMAT_MAJOR, FORMAT_MINOR, Md5, Record, RecordKey, RepoPath};
@@ -81,6 +81,14 @@ struct Converged {
 /// What M1 saw of `metadata.json`: its size and time, and the md5 of its bytes.
 type MetadataSeen = (Option<FileMeta>, Option<String>);
 
+enum MetadataRead {
+    Missing,
+    Bytes {
+        stat: Option<FileMeta>,
+        bytes: Vec<u8>,
+    },
+}
+
 /// What one materialization did.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MaterializeReport {
@@ -98,10 +106,6 @@ pub struct MaterializeReport {
 /// Files a project lists in `metadata.json` that it writes once or derives apart from the
 /// fold's files: `project.json` and `format.json` (§3.5, §12).
 pub(crate) const FIXED: [&str; 2] = [layout::PROJECT_JSON, layout::FORMAT_JSON];
-
-fn md5_hex(bytes: &[u8]) -> String {
-    Md5::of(bytes).to_hex()
-}
 
 /// Whether a derived file's bytes are text whose NFC form `metadata.json` declares.
 fn is_text(file: &DerivedFile) -> bool {
@@ -154,25 +158,40 @@ impl Writer {
         let base = format!("{}-{}", utc_stamp(self.clock.now()), layout::escaped(rel));
         let dir = self.folder.path(EXTERNAL);
         atomic_create_dirs(&*self.vfs, &dir)?;
-        let mut name = base.clone();
-        for n in 2..1000 {
-            match self.vfs.read(&dir.join(&name)) {
-                Err(e) if is_not_found(&e) => break,
+        for n in 1..1000 {
+            let name = if n == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{n}")
+            };
+            let path = dir.join(&name);
+            match self.vfs.read(&path) {
+                Err(e) if is_not_found(&e) => {
+                    match atomic_create(&*self.vfs, &dir, &name, bytes, SyncDir::Now) {
+                        Ok(()) => return Ok(format!("{EXTERNAL}/{name}")),
+                        Err(WriteError::NotWritten(e))
+                            if e.kind() == Some(std::io::ErrorKind::AlreadyExists) =>
+                        {
+                            continue;
+                        }
+                        Err(e) => return Err(e.into_inner()),
+                    }
+                }
                 Ok(existing) if existing == bytes => {
-                    // A copy a process that stopped wrote may not be durable yet: its file and
-                    // its name are flushed before it stands for the bytes.
-                    let path = dir.join(&name);
+                    // Finish a stopped placement's directory-then-file flush protocol
+                    // before this copy can authorize replacing its source (Windows too).
                     self.vfs
-                        .sync_file(&path)
-                        .and_then(|()| self.vfs.sync_dir(&dir))
+                        .sync_dir(&dir)
+                        .and_then(|()| self.vfs.sync_file(&path))
                         .map_err(|e| StoreError::io("flush", &path, e))?;
                     return Ok(format!("{EXTERNAL}/{name}"));
                 }
-                _ => name = format!("{base}-{n}"),
+                Ok(_) | Err(_) => {}
             }
         }
-        atomic_write(&*self.vfs, &dir, &name, bytes, SyncDir::Now).map_err(|e| e.into_inner())?;
-        Ok(format!("{EXTERNAL}/{name}"))
+        Err(StoreError::Other(format!(
+            "could not preserve {rel}: all external copy names are occupied; earlier copies were kept"
+        )))
     }
     /// Ends the hold of `rel`: its file is gone (§6.2). The notice of the hold goes with it;
     /// the byte copy stays in `.tc/external/`.
@@ -269,11 +288,12 @@ impl Writer {
                 Ok(_) => match self.hash_file(rel) {
                     Err(_) => Ok(entry.as_ref().and_then(listed)),
                     Ok((md5, size)) => {
-                        if entry
-                            .as_ref()
-                            .is_none_or(|e| e.md5() == Some(md5.to_hex().as_str()))
+                        if let Some(entry) = &entry
+                            && entry.md5() == Some(md5.to_hex().as_str())
                         {
-                            self.take_listed(rel, md5, size, oid);
+                            // Listing old bytes after a refused placement cannot attach
+                            // the desired version's blob to those different bytes.
+                            self.take_listed(rel, md5, size, entry.oid.clone());
                         } else {
                             // Bytes the app did not place: the list says what is there, and
                             // the look at the carried files records or places it.
@@ -288,7 +308,7 @@ impl Writer {
             Disk::Missing => Ok(None),
             Disk::Unreadable => Ok(entry.as_ref().and_then(listed)),
             Disk::Bytes(bytes) => {
-                let md5 = Md5::of(&bytes);
+                let md5 = self.hash_md5(&bytes);
                 let size = bytes.len() as u64;
                 if entry
                     .as_ref()
@@ -335,7 +355,7 @@ impl Writer {
                     // held: the app's version is gone, so they are recorded with no base
                     // (§6.2).
                     self.decide_read(rel, Some(&bytes), Projection::NotAsked, true)?;
-                    Ok(Some((Md5::of(&bytes), bytes.len() as u64)))
+                    Ok(Some((self.hash_md5(&bytes), bytes.len() as u64)))
                 }
             },
         }
@@ -396,7 +416,7 @@ impl Writer {
             return Ok(None);
         };
         let entry = PackEntry {
-            md5: md5_hex(&bytes),
+            md5: self.hash(&bytes),
             size: bytes.len() as u64,
             fingerprint: format!("{:016x}", tc_journal::index::fingerprint(&bytes)),
             blob: info.blob.map(|b| b.to_hex()),
@@ -678,13 +698,32 @@ impl Writer {
         report: &mut MaterializeReport,
         processed: &mut BTreeSet<String>,
     ) -> Result<(), StoreError> {
+        processed.insert(METADATA.to_owned());
+        let metadata_stat = self.vfs.metadata(&self.folder.path(METADATA)).ok();
+        let metadata_read = match self.read_disk(METADATA) {
+            Disk::Bytes(bytes) => MetadataRead::Bytes {
+                stat: metadata_stat,
+                bytes,
+            },
+            Disk::Missing => MetadataRead::Missing,
+            Disk::Unreadable => {
+                // No ingredient changes until the group can safely replace their listing.
+                self.note(METADATA, Event::Read(ledger::Disk::Unreadable));
+                self.restore_group(group);
+                self.dirty.metadata = true;
+                self.reasons
+                    .insert(METADATA.to_owned(), Blocked::FileUnreadable);
+                report.blocked.push(METADATA.to_owned());
+                return Ok(());
+            }
+        };
         let wanted = self.wanted(group);
         let removes = self.removals(group, &wanted);
         let rendered = self.render(group.book, &wanted);
         // M1: compare and swap.
         let mut writes: Vec<(String, Rendered)> = Vec::new();
         // What each path looked like when M1 read it, which M4 checks again at the rename.
-        let mut seen: BTreeMap<String, Option<FileMeta>> = BTreeMap::new();
+        let mut seen: BTreeMap<String, Option<Md5>> = BTreeMap::new();
         // Paths whose bytes are the new ones: read (`converged`), or taken from a clean
         // placement without a read (`unread`). Only their entries change.
         let mut converged: BTreeMap<String, Converged> = BTreeMap::new();
@@ -712,7 +751,6 @@ impl Writer {
                 unread.push(r.file);
                 continue;
             }
-            let stat = self.vfs.metadata(&self.folder.path(&path)).ok();
             let disk = match self.read_disk(&path) {
                 Disk::Unreadable => {
                     // R19: the state stays, and the path waits.
@@ -730,9 +768,11 @@ impl Writer {
             let projection = Projection::Bytes {
                 md5: r.md5.to_hex(),
             };
-            match self.decide_read(&path, disk.as_deref(), projection, r.readable)? {
+            let (next, md5) =
+                self.decide_read_with_md5(&path, disk.as_deref(), projection, r.readable)?;
+            match next {
                 Next::Write => {
-                    seen.insert(path.clone(), stat);
+                    seen.insert(path.clone(), md5);
                     writes.push((path, r));
                 }
                 Next::Converged => {
@@ -759,7 +799,7 @@ impl Writer {
             }
         }
         let mut gone: Vec<String> = Vec::new();
-        let mut removing: Vec<String> = Vec::new();
+        let mut removing: Vec<(String, Md5)> = Vec::new();
         for path in removes {
             processed.insert(path.clone());
             if self.written_from_newer_fold(&path) {
@@ -776,8 +816,14 @@ impl Writer {
                 Disk::Missing => None,
                 Disk::Bytes(disk) => Some(disk),
             };
-            match self.decide_read(&path, disk.as_deref(), Projection::Absent, true)? {
-                Next::Remove => removing.push(path),
+            let (next, md5) =
+                self.decide_read_with_md5(&path, disk.as_deref(), Projection::Absent, true)?;
+            match next {
+                Next::Remove => {
+                    if let Some(md5) = md5 {
+                        removing.push((path, md5));
+                    }
+                }
                 Next::Recorded => report.recorded.push(path),
                 Next::Held => report.held.push(path),
                 Next::Blocked(reason) => {
@@ -788,10 +834,11 @@ impl Writer {
                 Next::Write | Next::Converged | Next::Done => {}
             }
         }
-        // Carried files are placed before the listing is built, so it names them (§11.4).
-        if group.carried {
-            self.place_carried(report)?;
-        }
+        let carried = if group.carried {
+            self.prepare_carried(report)?
+        } else {
+            Vec::new()
+        };
         // M2: metadata.json for the planned result.
         let planned: BTreeMap<String, (Md5, u64, Option<bool>)> = writes
             .iter()
@@ -800,61 +847,40 @@ impl Writer {
                 (p.clone(), (r.md5, r.bytes.len() as u64, nfc))
             })
             .collect();
-        // A Bible project with no book yet (a create before its first book) has no valid
-        // `metadata.json`; nothing is written until it has one (M2). Any other failure is a
-        // bug, reported, and nothing is written either.
-        let departing: Vec<String> = removing.iter().chain(&gone).cloned().collect();
-        let metadata = match self.build_metadata(&planned, &departing) {
-            Ok(metadata) => metadata,
-            Err(_) if self.kind == ProjectKind::Bible && self.fold.projected_books().is_empty() => {
-                // The paths stay dirty until a book is there.
-                self.restore_group(group);
-                self.dirty.metadata = true;
-                return Ok(());
-            }
-            // A file this job cannot read or write leaves no valid listing (the only book
-            // file held by another program, `.tc/` lost), and so does a book file the folder
-            // lacks that this group does not write (deleted while a value it shows cannot be
-            // read, R15): nothing is written, and the paths are tried again with the file,
-            // never taken for a failed write that makes the project read-only.
-            Err(_)
-                if !self.reasons.is_empty()
-                    || self.fold.projected_books().into_iter().any(|book| {
-                        let rel = DerivedFile::Usfm(book).path();
-                        !planned.contains_key(&rel)
-                            && self
-                                .manifest
-                                .paths
-                                .get(&rel)
-                                .and_then(Entry::listed)
-                                .is_none()
-                    }) =>
-            {
-                self.restore_group(group);
-                self.dirty.metadata = true;
-                return Ok(());
-            }
-            Err(e) => return Err(e),
+        let mut projected = planned.clone();
+        for write in &carried {
+            let p = &write.placement;
+            projected.insert(p.path.clone(), (p.md5, p.size, None));
+        }
+        let departing: Vec<String> = removing
+            .iter()
+            .map(|(path, _)| path)
+            .chain(&gone)
+            .cloned()
+            .collect();
+        let Some(metadata) = self.build_group_metadata(group, &projected, &departing)? else {
+            return Ok(());
         };
         let metadata_md5 = self.hash(&metadata);
-        // M1 for `metadata.json`: its bytes are read (unless clean by stat) and decided too.
-        // They are written over whenever they are not these, since the folder must list its
-        // files (I7); bytes the ledger keeps are copied and recorded first. A file that cannot
-        // be read while a write of it is unsettled waits: no second write begins before a
-        // read settles the first (§6.2), and the other files of the group are written.
-        let looked = self.look_at_metadata(&metadata_md5)?;
-        let metadata_waits = looked.is_none();
-        let metadata_seen = looked.unwrap_or((None, None));
-        let metadata_current = metadata_waits
-            || (self.manifest.paths.get(METADATA).and_then(Entry::md5)
-                == Some(metadata_md5.as_str())
-                && metadata_seen.1.as_deref() == Some(metadata_md5.as_str()));
-        if metadata_waits {
-            self.dirty.metadata = true;
-            self.reasons
-                .insert(METADATA.to_owned(), Blocked::FileUnreadable);
-            report.blocked.push(METADATA.to_owned());
-        }
+        let metadata_seen = self.look_at_metadata(&metadata_md5, metadata_read)?;
+        // The ledger sees the successful plan's actual projection before any ingredient
+        // changes. If preserving outside metadata fails, even carried bytes stay untouched.
+        let carried_planned = !carried.is_empty();
+        self.execute_carried(carried, report)?;
+        let (metadata, metadata_md5) = if carried_planned {
+            // A refused carried rename retains the bytes it found. Only derived writes
+            // remain prospective now; carried entries describe what is really there.
+            let Some(metadata) = self.build_group_metadata(group, &planned, &departing)? else {
+                return Ok(());
+            };
+            let md5 = self.hash(&metadata);
+            (metadata, md5)
+        } else {
+            (metadata, metadata_md5)
+        };
+        let metadata_current = self.manifest.paths.get(METADATA).and_then(Entry::md5)
+            == Some(metadata_md5.as_str())
+            && metadata_seen.1.as_deref() == Some(metadata_md5.as_str());
         if writes.is_empty() && removing.is_empty() && metadata_current {
             // Nothing to write: only entries (scope digests, settled marks) may change.
             return self.finish_entries(Vec::new(), converged, unread, None);
@@ -881,11 +907,9 @@ impl Writer {
                 }
             }
         }
-        if !metadata_waits {
-            self.write_metadata_heads(&metadata_md5, SyncDir::Deferred(&mut dirs))?;
-        }
+        self.write_metadata_heads(&metadata_md5, SyncDir::Deferred(&mut dirs))?;
         dirs.sync(&*self.vfs)?;
-        let metadata_named = (!metadata_waits).then_some(METADATA);
+        let metadata_named = Some(METADATA);
         for path in named.iter().map(|(p, _)| p.as_str()).chain(metadata_named) {
             if !matches!(self.state_of(path), State::Writing { .. }) {
                 self.unattempted.insert(path.to_owned());
@@ -899,14 +923,12 @@ impl Writer {
                 },
             );
         }
-        if !metadata_waits {
-            self.note(
-                METADATA,
-                Event::WriteBegun {
-                    new: metadata_md5.clone(),
-                },
-            );
-        }
+        self.note(
+            METADATA,
+            Event::WriteBegun {
+                new: metadata_md5.clone(),
+            },
+        );
         self.write_manifest()?;
         // M4: the files, each folder flushed once (M5).
         let mut dirs = DirSet::new();
@@ -921,7 +943,7 @@ impl Writer {
                 &dir,
                 name,
                 &r.bytes,
-                r.md5.to_hex(),
+                r.md5,
                 &mut dirs,
                 &path,
                 seen.get(&path).copied().flatten(),
@@ -987,12 +1009,87 @@ impl Writer {
             ));
             report.written.push(path);
         }
-        for path in &removing {
-            atomic_remove(
-                &*self.vfs,
-                &self.folder.path(path),
+        let mut removed = Vec::new();
+        for (path, expected) in &removing {
+            let abs = self.folder.path(path);
+            let vfs = self.vfs.clone();
+            let mut last_read = None;
+            let mut prior = None;
+            let mut unchanged = || {
+                let mut disk = self.read_disk(path);
+                let mut permitted =
+                    matches!(&disk, Disk::Bytes(bytes) if self.hash_md5(bytes) == *expected);
+                // Ordinary derived files are backed by the journal. A carried file's
+                // old blob is its History copy and must survive the unlink as well.
+                if permitted
+                    && self
+                        .manifest
+                        .paths
+                        .get(path)
+                        .is_some_and(|entry| entry.oid.is_some())
+                {
+                    let kept = self.keep_prior_carried(path, *expected)?;
+                    prior = Some(kept);
+                    permitted = match kept {
+                        crate::carried::PriorBytes::AlreadyKept
+                        | crate::carried::PriorBytes::Recovered => {
+                            disk = self.read_disk(path);
+                            matches!(&disk, Disk::Bytes(bytes) if self.hash_md5(bytes) == *expected)
+                        }
+                        crate::carried::PriorBytes::Changed
+                        | crate::carried::PriorBytes::Unavailable => false,
+                    };
+                }
+                last_read = Some(disk);
+                Ok(permitted)
+            };
+            let removal = atomic_remove_checked(
+                &*vfs,
+                &abs,
                 SyncDir::Deferred(&mut dirs),
-            )?;
+                &HeldRetry::BACKGROUND,
+                &mut unchanged,
+            );
+            if matches!(&removal, Ok(Removed::Refused))
+                && prior == Some(crate::carried::PriorBytes::Unavailable)
+            {
+                self.reasons.insert(path.clone(), Blocked::FileUnreadable);
+                report.blocked.push(path.clone());
+                self.restore_group(group);
+                continue;
+            }
+            match removal {
+                Ok(Removed::Removed) => {}
+                Ok(Removed::Refused) => match last_read {
+                    Some(Disk::Missing) => {}
+                    Some(Disk::Bytes(disk)) => {
+                        match self.decide_read(path, Some(&disk), Projection::Absent, true)? {
+                            Next::Recorded => report.recorded.push(path.clone()),
+                            Next::Held => report.held.push(path.clone()),
+                            Next::Blocked(reason) => {
+                                self.reasons.insert(path.clone(), reason);
+                                report.blocked.push(path.clone());
+                            }
+                            Next::Write | Next::Remove | Next::Converged | Next::Done => {
+                                self.restore_group(group);
+                            }
+                        }
+                        continue;
+                    }
+                    Some(Disk::Unreadable) | None => {
+                        self.note(path, Event::Read(ledger::Disk::Unreadable));
+                        self.reasons.insert(path.clone(), Blocked::FileUnreadable);
+                        report.blocked.push(path.clone());
+                        continue;
+                    }
+                },
+                Err(e) if e.io_error().is_some_and(|io| self.vfs.is_held(io)) => {
+                    self.reasons.insert(path.clone(), Blocked::FileBusy);
+                    report.blocked.push(path.clone());
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
             self.note(path, Event::Removed);
             self.heads_cache.remove(path);
             let heads = self.folder.path(&layout::heads_file(path));
@@ -1000,20 +1097,19 @@ impl Writer {
                 atomic_remove(&*self.vfs, &heads, SyncDir::Deferred(&mut dirs))?;
             }
             report.removed.push(path.clone());
+            removed.push(path.clone());
         }
         dirs.sync(&*self.vfs)?;
-        if metadata_waits {
-            return self.finish_entries(written, converged, unread, None);
-        }
         // M6: metadata.json from the files as they now are (a path skipped in M4 keeps its
         // old bytes). Bytes other than the ones named are named before their rename too.
-        let skipped = written.len() != planned.len();
+        let skipped = written.len() != planned.len() || removed.len() != removing.len();
         let (metadata, metadata_md5) = if skipped {
             let planned: BTreeMap<String, (Md5, u64, Option<bool>)> = written
                 .iter()
                 .map(|(p, _, m, s, n, _)| (p.clone(), (*m, *s, *n)))
                 .collect();
-            let metadata = match self.build_metadata(&planned, &departing) {
+            let departed: Vec<String> = removed.into_iter().chain(gone).collect();
+            let metadata = match self.build_metadata(&planned, &departed) {
                 Ok(metadata) => metadata,
                 // The files the group could not write leave no valid listing (a book file
                 // another program holds where none is): `metadata.json` stays as it is, and
@@ -1033,15 +1129,27 @@ impl Writer {
         } else {
             (metadata, metadata_md5)
         };
-        self.last_look_at_metadata(metadata_seen, &metadata_md5)?;
-        let metadata_written = match atomic_write(
-            &*self.vfs,
-            self.folder.root(),
+        let vfs = self.vfs.clone();
+        let root = self.folder.root().to_owned();
+        let mut last_look = || self.last_look_at_metadata(&metadata_seen, &metadata_md5);
+        let metadata_written = match atomic_write_checked(
+            &*vfs,
+            &root,
             METADATA,
             &metadata,
             SyncDir::Now,
+            &HeldRetry::SAVE,
+            &mut last_look,
         ) {
-            Ok(()) => true,
+            Ok(Written::Renamed) => true,
+            Ok(Written::Refused) => {
+                self.restore_group(group);
+                self.dirty.metadata = true;
+                self.reasons
+                    .insert(METADATA.to_owned(), Blocked::FileUnreadable);
+                report.blocked.push(METADATA.to_owned());
+                false
+            }
             Err(WriteError::NotWritten(e))
                 if e.io_error().is_some_and(|io| self.vfs.is_held(io)) =>
             {
@@ -1072,42 +1180,52 @@ impl Writer {
         self.finish_entries(written, converged, unread, metadata_entry)
     }
 
-    /// M1 for `metadata.json`, before the ledger names its new bytes `new`: what is there is
-    /// read and decided (§6.2). Bytes the ledger says to keep are copied and recorded (§11.1,
-    /// `metadata.json` written over at once). Returns the file's size and time and the md5 of
-    /// its bytes as read; `None` when the file waits (it cannot be read while a write of it
-    /// is unsettled).
-    fn look_at_metadata(&mut self, new: &str) -> Result<Option<MetadataSeen>, StoreError> {
-        let meta = self.vfs.metadata(&self.folder.path(METADATA)).ok();
-        // Clean by stat: the bytes are the ones placed. They are decided before they are
-        // written over, without a read unless the table keeps them: they may hold a save the
-        // journal lost (R4).
-        if self.clean_by_stat(METADATA) {
-            let placed = self
-                .manifest
-                .paths
-                .get(METADATA)
-                .and_then(Entry::md5)
-                .map(str::to_owned);
-            let Some(md5) = placed.clone() else {
-                return Ok(Some((meta, placed)));
-            };
-            if md5 == new {
-                return Ok(Some((meta, placed)));
+    /// A group waits when its files cannot provide a valid listing. A project before its
+    /// first book likewise waits, rather than treating its incomplete scope as a bug.
+    fn build_group_metadata(
+        &mut self,
+        group: &Group,
+        planned: &BTreeMap<String, (Md5, u64, Option<bool>)>,
+        departing: &[String],
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        match self.build_metadata(planned, departing) {
+            Ok(metadata) => Ok(Some(metadata)),
+            Err(_) if self.kind == ProjectKind::Bible && self.fold.projected_books().is_empty() => {
+                self.restore_group(group);
+                self.dirty.metadata = true;
+                Ok(None)
             }
-            let disk = ledger::Disk::Bytes { md5 };
-            let projection = Projection::Bytes {
-                md5: new.to_owned(),
-            };
-            let facts = self.facts_of(METADATA, &disk, projection, true);
-            let (_, actions) = ledger::next(&self.state_of(METADATA), &Event::Read(disk), &facts);
-            if actions == [Action::Write] {
-                return Ok(Some((meta, placed)));
+            Err(_)
+                if !self.reasons.is_empty()
+                    || self.fold.projected_books().into_iter().any(|book| {
+                        let rel = DerivedFile::Usfm(book).path();
+                        !planned.contains_key(&rel)
+                            && self
+                                .manifest
+                                .paths
+                                .get(&rel)
+                                .and_then(Entry::listed)
+                                .is_none()
+                    }) =>
+            {
+                self.restore_group(group);
+                self.dirty.metadata = true;
+                Ok(None)
             }
+            Err(e) => Err(e),
         }
-        let disk = match self.read_disk(METADATA) {
-            Disk::Bytes(disk) => disk,
-            Disk::Missing => {
+    }
+
+    /// Decide the bytes read before the group, using its actual projection (§6.2).
+    /// A stat cannot establish that replacement is safe: an editor may restore the mtime.
+    fn look_at_metadata(
+        &mut self,
+        new: &str,
+        read: MetadataRead,
+    ) -> Result<MetadataSeen, StoreError> {
+        let (meta, disk) = match read {
+            MetadataRead::Bytes { stat, bytes } => (stat, bytes),
+            MetadataRead::Missing => {
                 let facts = Facts {
                     projection: Projection::Bytes {
                         md5: new.to_owned(),
@@ -1118,19 +1236,11 @@ impl Writer {
                     newer_fold: false,
                 };
                 let _ = self.apply(METADATA, Event::Read(ledger::Disk::Missing), &facts);
-                return Ok(Some((None, None)));
-            }
-            Disk::Unreadable => {
-                // R19: the state stays; a write the ledger has not seen settle waits.
-                self.note(METADATA, Event::Read(ledger::Disk::Unreadable));
-                if matches!(self.state_of(METADATA), State::Writing { .. }) {
-                    return Ok(None);
-                }
-                return Ok(Some((meta, None)));
+                return Ok((None, None));
             }
         };
         self.counters.add(&self.counters.derived_read, 1);
-        let d = md5_hex(&disk);
+        let d = self.hash(&disk);
         let disk_md5 = ledger::Disk::Bytes { md5: d.clone() };
         let facts = self.facts_of(
             METADATA,
@@ -1158,29 +1268,31 @@ impl Writer {
                 | Action::Forget => {}
             }
         }
-        Ok(Some((meta, Some(d))))
+        Ok((meta, Some(d)))
     }
 
-    /// M6's last look at `metadata.json`: when it changed since M1 read it and holds bytes
-    /// other than the new ones, a program wrote it meanwhile: a copy, and the fields recorded.
-    fn last_look_at_metadata(&mut self, seen: MetadataSeen, new: &str) -> Result<(), StoreError> {
-        let (seen, read) = seen;
-        let now = self.vfs.metadata(&self.folder.path(METADATA)).ok();
-        let unchanged = match (&seen, &now) {
-            (Some(a), Some(b)) => a.len == b.len && a.mtime_ns == b.mtime_ns,
-            (None, None) => true,
-            _ => false,
-        };
-        if unchanged {
-            return Ok(());
+    /// M6 reads the bytes again even when their stat is unchanged. A file that became
+    /// unreadable after the group began is still not safe to replace.
+    fn last_look_at_metadata(
+        &mut self,
+        seen: &MetadataSeen,
+        new: &str,
+    ) -> Result<bool, StoreError> {
+        let (_, read) = seen;
+        match self.read_disk(METADATA) {
+            Disk::Bytes(disk) => {
+                let md5 = self.hash(&disk);
+                if md5 != new && read.as_deref() != Some(md5.as_str()) {
+                    self.keep_edited_metadata(&disk, Base::Unknown)?;
+                }
+                Ok(true)
+            }
+            Disk::Missing => Ok(true),
+            Disk::Unreadable => {
+                self.note(METADATA, Event::Read(ledger::Disk::Unreadable));
+                Ok(false)
+            }
         }
-        if let Disk::Bytes(disk) = self.read_disk(METADATA)
-            && md5_hex(&disk) != new
-            && read.as_deref() != Some(md5_hex(&disk).as_str())
-        {
-            self.keep_edited_metadata(&disk, Base::Unknown)?;
-        }
-        Ok(())
     }
     /// The heads of the placement of bytes `md5` at `rel`, written (or found equal) from the
     /// fold in use: for every record the file was built from, the heads its bytes stand for
@@ -1389,11 +1501,14 @@ impl Writer {
         }
         Ok(())
     }
-    /// The md5 of `bytes`, counted.
-    pub(crate) fn hash(&self, bytes: &[u8]) -> String {
+    /// The md5 of `bytes`, counted before its representation is chosen.
+    pub(crate) fn hash_md5(&self, bytes: &[u8]) -> Md5 {
         self.counters
             .add(&self.counters.bytes_hashed, bytes.len() as u64);
-        md5_hex(bytes)
+        Md5::of(bytes)
+    }
+    pub(crate) fn hash(&self, bytes: &[u8]) -> String {
+        self.hash_md5(bytes).to_hex()
     }
     /// Marks again what a group could not do.
     fn restore_group(&mut self, group: &Group) {
@@ -1418,10 +1533,12 @@ impl Writer {
         disk: &[u8],
         base: Base,
     ) -> Result<bool, StoreError> {
-        if !self.copied_outside.insert(md5_hex(disk)) {
+        let md5 = self.hash(disk);
+        if self.copied_outside.contains(&md5) {
             return Ok(false);
         }
         let copy = self.copy_external(METADATA, disk)?;
+        self.copied_outside.insert(md5);
         self.notice(
             Notice::MetadataEditedOutside {
                 copy: copy.as_str().into(),
@@ -1469,27 +1586,19 @@ impl Writer {
         dir: &std::path::Path,
         name: &str,
         bytes: &[u8],
-        new_md5: String,
+        new_md5: Md5,
         dirs: &mut DirSet,
         rel: &str,
-        seen: Option<FileMeta>,
+        seen: Option<Md5>,
         outside: &mut Option<Vec<u8>>,
     ) -> Result<Wrote, WriteError> {
         let abs = self.folder.path(rel);
         let mut look = || -> Result<bool, StoreError> {
             self.shared.hooks.wait(crate::hooks::Point::BeforeRename);
-            let now = self.vfs.metadata(&abs).ok();
-            let unchanged = match (&seen, &now) {
-                (None, None) => true,
-                (Some(a), Some(b)) => a.len == b.len && a.mtime_ns == b.mtime_ns,
-                _ => false,
-            };
-            if unchanged {
-                return Ok(true);
-            }
             match self.vfs.read(&abs) {
                 Ok(disk) => {
-                    if md5_hex(&disk) == new_md5 {
+                    let found = self.hash_md5(&disk);
+                    if found == new_md5 || seen == Some(found) {
                         Ok(true)
                     } else {
                         *outside = Some(disk);
@@ -1722,15 +1831,13 @@ impl Writer {
         digests: Vec<(RecordKey, tc_journal::outside::ShownDigest)>,
         readable: bool,
     ) -> Rendered {
-        self.counters
-            .add(&self.counters.bytes_hashed, bytes.len() as u64);
         if !digests.is_empty() {
             self.counters
                 .add(&self.counters.digest_bytes, bytes.len() as u64);
         }
         Rendered {
             file,
-            md5: Md5::of(&bytes),
+            md5: self.hash_md5(&bytes),
             bytes,
             digests,
             readable,
@@ -1753,6 +1860,28 @@ impl Writer {
         planned: &BTreeMap<String, (Md5, u64, Option<bool>)>,
         removed: &[String],
     ) -> Result<Vec<u8>, StoreError> {
+        let (entries, nfc) = self.metadata_entries(planned, removed)?;
+        self.assemble_metadata(&entries, nfc)
+    }
+
+    /// What `metadata.json` shows of the project now, to compare a file found with (§11.1
+    /// X2). Unchecked: while a book file is missing the folder lists no book, and the
+    /// comparison must still see every field the person may have changed.
+    pub(crate) fn shown_metadata(&mut self) -> Result<Vec<u8>, StoreError> {
+        let (entries, nfc) = self.metadata_entries(&BTreeMap::new(), &[])?;
+        Ok(tc_burrito::render_metadata_unchecked(
+            &self.metadata_source(&entries, nfc),
+            &entries,
+        ))
+    }
+
+    /// The ingredients [`Writer::build_metadata`] lists, and whether every text file listed
+    /// is in NFC.
+    fn metadata_entries(
+        &mut self,
+        planned: &BTreeMap<String, (Md5, u64, Option<bool>)>,
+        removed: &[String],
+    ) -> Result<(Vec<IngredientEntry>, bool), StoreError> {
         let source_probe = self.scope_probe();
         let book_ranges = |book: BookId| book_ranges(&source_probe, book);
         let removed: BTreeSet<&str> = removed.iter().map(String::as_str).collect();
@@ -1837,7 +1966,7 @@ impl Writer {
                         // can be.
                         None => match (self.read_disk(&path), &e.state) {
                             (Disk::Bytes(bytes), _) => (
-                                Md5::of(&bytes),
+                                self.hash_md5(&bytes),
                                 bytes.len() as u64,
                                 derived
                                     .as_ref()
@@ -1855,7 +1984,7 @@ impl Writer {
                     },
                     None => match self.read_disk(&path) {
                         Disk::Bytes(bytes) => (
-                            Md5::of(&bytes),
+                            self.hash_md5(&bytes),
                             bytes.len() as u64,
                             derived
                                 .as_ref()
@@ -1924,11 +2053,15 @@ impl Writer {
             {
                 continue;
             }
-            if let Some((md5, size)) = self.listing_of_file(&path, oid)? {
+            let bytes = match planned.get(&path) {
+                Some((md5, size, _)) => Some((*md5, *size)),
+                None => self.listing_of_file(&path, oid)?,
+            };
+            if let Some((md5, size)) = bytes {
                 push(&mut entries, &path, md5, size, None, None);
             }
         }
-        self.assemble_metadata(&entries, nfc)
+        Ok((entries, nfc))
     }
     /// `metadata.json` for the entries it lists: the project's details, books and pins from
     /// the fold, and `entries` as the ingredients. `nfc`: every text file listed is in NFC.
@@ -1937,6 +2070,16 @@ impl Writer {
         entries: &[IngredientEntry],
         nfc: bool,
     ) -> Result<Vec<u8>, StoreError> {
+        tc_burrito::build_metadata(&self.metadata_source(entries, nfc), entries).map_err(
+            |problems| {
+                StoreError::Other(format!(
+                    "metadata.json would be invalid, so nothing was written (a bug): {problems:?}"
+                ))
+            },
+        )
+    }
+
+    fn metadata_source(&self, entries: &[IngredientEntry], nfc: bool) -> MetadataSource {
         let mut source = self
             .fold
             .metadata_source_nfc((u64::from(FORMAT_MAJOR), u64::from(FORMAT_MINOR)), nfc);
@@ -1956,11 +2099,7 @@ impl Writer {
                 }
             }
         }
-        tc_burrito::build_metadata(&source, entries).map_err(|problems| {
-            StoreError::Other(format!(
-                "metadata.json would be invalid, so nothing was written (a bug): {problems:?}"
-            ))
-        })
+        source
     }
 }
 

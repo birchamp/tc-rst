@@ -12,7 +12,7 @@
 //! never writes older bytes over newer. A checkpoint's job runs on exactly the snapshot its
 //! packs stand for, and leaves alone the files a newer snapshot wrote.
 
-use crate::atomic::{SyncDir, atomic_remove};
+use crate::atomic::{HeldRetry, Removed, SyncDir, atomic_remove_checked};
 use crate::clock::Clock;
 use crate::counters::Counters;
 use crate::error::StoreError;
@@ -23,6 +23,7 @@ use crate::hooks::Point;
 use crate::layout::Folder;
 use crate::manifest::Manifest;
 use crate::materialize::Busy;
+use crate::notices::CopyIdentity;
 use crate::open::CheckResult;
 use crate::project::Dirty;
 use crate::reply::ReadOnlyReason;
@@ -244,7 +245,9 @@ pub(crate) struct Writer {
 impl Writer {
     /// A notice for the person, typed (R16).
     pub(crate) fn notice(&self, notice: Notice, copy: Option<String>) {
-        let notice = self.shared.add_notice(notice, copy);
+        let identity =
+            crate::notices::CopyIdentity::capture(&*self.vfs, &self.folder, copy.as_deref());
+        let notice = self.shared.add_notice(notice, copy, identity);
         self.shared.emit(StoreEvent::Notice(notice));
     }
 
@@ -419,10 +422,12 @@ impl Writer {
     }
 
     fn dismiss(&mut self, id: u64) -> Result<(), StoreError> {
-        let Some(notice) = self.shared.remove_notice(id) else {
+        let Some(retained) = self.shared.retained_notice(id) else {
             return Ok(());
         };
+        let notice = retained.visible;
         if self.read_only().is_some() {
+            self.shared.remove_notice(id);
             return Ok(());
         }
         // The copy of a hold that stands is the only other trace of the person's bytes, and
@@ -432,15 +437,51 @@ impl Writer {
             e.held()
                 .is_some_and(|h| Some(&h.copy) == notice.copy.as_ref())
         });
-        if held {
+        let shared_copy = self
+            .shared
+            .notices()
+            .iter()
+            .any(|other| other.id != id && other.copy.is_some() && other.copy == notice.copy);
+        if held || shared_copy {
+            self.shared.remove_notice(id);
             return Ok(());
         }
         if let Some(copy) = notice.copy {
             let path = self.folder.path(&copy);
-            if self.vfs.metadata(&path).is_ok() {
-                atomic_remove(&*self.vfs, &path, SyncDir::Now)?;
+            // Only the bytes the notice was raised for may go; a denied look is not absence,
+            // and a copy changed since is someone's other work. Either keeps the notice.
+            let mut missing = false;
+            let removed = atomic_remove_checked(
+                &*self.vfs,
+                &path,
+                SyncDir::Now,
+                &HeldRetry::SAVE,
+                &mut || match crate::notices::CopyDigest::read(&*self.vfs, &path) {
+                    Ok(actual) => match retained.identity {
+                        CopyIdentity::Verified(expected) if actual == expected => Ok(true),
+                        CopyIdentity::Verified(_) => Err(StoreError::Other(format!(
+                            "{copy} changed since its notice; the copy and the notice are kept"
+                        ))),
+                        CopyIdentity::NoCopy | CopyIdentity::Unavailable => {
+                            Err(StoreError::Other(format!(
+                                "{copy} could not be read when its notice was raised; the copy and the notice are kept"
+                            )))
+                        }
+                    },
+                    Err(e) if crate::vfs::is_not_found(&e) => {
+                        missing = true;
+                        Ok(false)
+                    }
+                    Err(e) => Err(StoreError::io("read the copy", &path, e)),
+                },
+            )?;
+            if removed == Removed::Refused && !missing {
+                return Err(StoreError::Other(format!(
+                    "{copy} was not removed; its notice is kept"
+                )));
             }
         }
+        self.shared.remove_notice(id);
         Ok(())
     }
 

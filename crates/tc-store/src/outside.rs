@@ -276,9 +276,7 @@ impl Writer {
     /// the file shows changed, and the defaults the builder fills in dropped.
     fn decode_metadata_edit(&mut self, bytes: &[u8]) -> Result<Decoded, String> {
         let found = tc_journal::fold::decode_metadata(bytes).map_err(|e| e.to_string())?;
-        let expected = self
-            .build_metadata(&std::collections::BTreeMap::new(), &[])
-            .map_err(|e| e.to_string())?;
+        let expected = self.shown_metadata().map_err(|e| e.to_string())?;
         let shown = tc_journal::fold::decode_metadata(&expected).map_err(|e| e.to_string())?;
         let records = |fields: Vec<(tc_journal::MetaField, tc_journal::Json)>| -> Vec<Record> {
             fields

@@ -37,6 +37,22 @@ const CHUNK: usize = 64 * 1024;
 /// Files over this size are listed as they are and never recorded or committed (§11.4).
 pub(crate) const TOO_LARGE: u64 = 256 * 1024 * 1024;
 
+/// A carried replacement whose old bytes and available blob have been checked. No
+/// ingredient changes until the group's metadata can be safely replaced.
+pub(crate) struct CarriedWrite {
+    pub placement: CarriedPlacement,
+    seen: Option<Md5>,
+}
+
+/// Whether the previous carried version has bytes independent of its ingredient.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PriorBytes {
+    AlreadyKept,
+    Recovered,
+    Changed,
+    Unavailable,
+}
+
 impl Writer {
     /// The md5 and size of the file at `rel`, read in chunks.
     pub(crate) fn hash_file(&self, rel: &str) -> io::Result<(Md5, u64)> {
@@ -271,6 +287,10 @@ impl Writer {
         self.manifest.paths.insert(rel.to_owned(), entry);
         self.manifest_changed = true;
         self.shared.remove_notices_of(rel);
+        self.busy.remove(rel);
+        if let Ok(path) = RepoPath::parse(rel) {
+            self.shared.remove_blocked_notice(&path);
+        }
         let seen = self.written_seq.entry(rel.to_owned()).or_insert(seq);
         *seen = (*seen).max(seq);
         if listed_differently {
@@ -383,6 +403,77 @@ impl Writer {
             .is_some_and(|(oid, _, _)| oid == expected))
     }
 
+    /// Before destroying a placed carried file, recover its recorded blob if the
+    /// repository lost it. The caller repeats its final comparison after a recovery read.
+    pub(crate) fn keep_prior_carried(
+        &self,
+        rel: &str,
+        expected: Md5,
+    ) -> Result<PriorBytes, StoreError> {
+        let Some(entry) = self.manifest.paths.get(rel) else {
+            return Ok(PriorBytes::Unavailable);
+        };
+        let Some(placement) = entry.placement() else {
+            return Ok(PriorBytes::Unavailable);
+        };
+        if placement.md5 != expected.to_hex() {
+            return Ok(PriorBytes::Changed);
+        }
+        let expected_size = placement.size;
+        let Some(oid) = entry.oid.as_deref().and_then(GitOid::parse) else {
+            // A malformed/missing carried identity cannot authorize destroying its bytes.
+            return Ok(PriorBytes::Unavailable);
+        };
+        let Some(git) = &self.git else {
+            return Ok(PriorBytes::Unavailable);
+        };
+        // A prune that collected before the recovery must not remove its fresh blob.
+        git.commit_begin();
+        // An ODB cache can keep an object after its file was lost. A new repository
+        // has an independent cache and checks for the physical backup instead.
+        let kept = (|| -> Result<PriorBytes, StoreError> {
+            let probe = git.another()?;
+            let recovered = !probe.has(oid);
+            if recovered && !self.store_file_as_blob(&probe, rel, oid)? {
+                return Ok(PriorBytes::Changed);
+            }
+            let mut digest = Md5Stream::new();
+            let mut size = 0u64;
+            let copied = probe.copy_blob_to_durable(oid, &mut |chunk| {
+                let amount = u64::try_from(chunk.len()).map_err(io::Error::other)?;
+                size = size.checked_add(amount).ok_or_else(|| {
+                    io::Error::other("the stored carried file exceeds its supported size")
+                })?;
+                if size > expected_size {
+                    return Err(io::Error::other(
+                        "the stored carried file has the wrong size",
+                    ));
+                }
+                self.counters.add(&self.counters.bytes_hashed, amount);
+                digest.update(chunk);
+                Ok(())
+            });
+            // Readability alone does not authorize destroying the working copy: the
+            // exact old blob and its containing names must have completed their flushes.
+            Ok(
+                if matches!(copied, Ok(true))
+                    && size == expected_size
+                    && digest.finish() == expected
+                {
+                    if recovered {
+                        PriorBytes::Recovered
+                    } else {
+                        PriorBytes::AlreadyKept
+                    }
+                } else {
+                    PriorBytes::Unavailable
+                },
+            )
+        })();
+        git.commit_end();
+        kept
+    }
+
     /// *Take in the file as an edit* for a held carried file (§6.2): its bytes become a new
     /// version of the file, recorded with no base, and the hold ends when the batch is durable.
     pub(crate) fn take_in_held_carried(
@@ -411,14 +502,15 @@ impl Writer {
         }
     }
 
-    /// Places the carried files the project holds (§11.4): each placement whose entry is not
+    /// Prepares the carried files the project holds (§11.4): each placement whose entry is not
     /// its blob, clean by stat, is looked at and, when the file is gone or holds bytes the app
-    /// placed before, written from the blob. Bytes the app did not place are the person's
-    /// and are recorded, not overwritten.
-    pub(crate) fn place_carried(
+    /// placed before, planned for replacement. Bytes the app did not place are the person's
+    /// and are recorded, not overwritten. Preparation never replaces an ingredient.
+    pub(crate) fn prepare_carried(
         &mut self,
         report: &mut MaterializeReport,
-    ) -> Result<(), StoreError> {
+    ) -> Result<Vec<CarriedWrite>, StoreError> {
+        let mut writes = Vec::new();
         for placement in self.fold.carried_files() {
             if !placement.path.starts_with("ingredients/")
                 || self.pending_record.contains_key(&placement.path)
@@ -435,35 +527,41 @@ impl Writer {
             if current && self.clean_by_stat(&placement.path) {
                 continue;
             }
-            self.place_one(&placement, entry, report)?;
+            if let Some(write) = self.prepare_one(placement, entry, report)? {
+                writes.push(write);
+            }
         }
-        Ok(())
+        Ok(writes)
     }
 
-    fn place_one(
+    fn prepare_one(
         &mut self,
-        p: &CarriedPlacement,
+        p: CarriedPlacement,
         entry: Option<Entry>,
         report: &mut MaterializeReport,
-    ) -> Result<(), StoreError> {
+    ) -> Result<Option<CarriedWrite>, StoreError> {
         let path = self.folder.path(&p.path);
         let seen = match self.vfs.metadata(&path) {
             Ok(meta) if meta.kind == EntryKind::File => {
                 let (md5, size) = match self.hash_file(&p.path) {
                     Ok(read) => read,
                     Err(_) => {
+                        self.note(
+                            &p.path,
+                            crate::ledger::Event::Read(crate::ledger::Disk::Unreadable),
+                        );
                         self.reasons
                             .insert(p.path.clone(), tc_journal::fold::Blocked::FileUnreadable);
                         report.blocked.push(p.path.clone());
-                        return Ok(());
+                        return Ok(None);
                     }
                 };
                 if md5 == p.md5 {
                     self.set_carried_entry(&p.path, md5, size, p.oid, self.seq);
-                    return Ok(());
+                    return Ok(None);
                 }
                 if entry.as_ref().is_some_and(|e| e.held().is_some()) {
-                    return Ok(());
+                    return Ok(None);
                 }
                 if !entry
                     .as_ref()
@@ -472,31 +570,65 @@ impl Writer {
                     // Bytes the app did not place: the person's (I8).
                     let mut found = FocusReport::default();
                     self.look_at_carried_file(&p.path, &mut found)?;
-                    return Ok(());
+                    return Ok(None);
                 }
-                Some(meta)
+                Some(md5)
             }
-            Ok(_) => return Ok(()),
+            Ok(_) => return Ok(None),
             Err(e) if is_not_found(&e) => {
                 self.notice_missing(&p.path, entry.is_some());
                 None
             }
-            Err(e) => return Err(StoreError::io("stat", &path, e)),
+            Err(_) => {
+                self.note(
+                    &p.path,
+                    crate::ledger::Event::Read(crate::ledger::Disk::Unreadable),
+                );
+                self.reasons
+                    .insert(p.path.clone(), tc_journal::fold::Blocked::FileUnreadable);
+                report.blocked.push(p.path.clone());
+                return Ok(None);
+            }
         };
         // The bytes come from the blob; a blob this computer lacks leaves the file as it is.
         let Some(git) = &self.git else {
-            self.notice_bytes_missing(p);
-            return Ok(());
+            self.notice_bytes_missing(&p);
+            return Ok(None);
         };
         if !git.has(p.oid) {
-            self.notice_bytes_missing(p);
-            return Ok(());
+            self.notice_bytes_missing(&p);
+            return Ok(None);
         }
+        Ok(Some(CarriedWrite { placement: p, seen }))
+    }
+
+    /// Executes only after the planned metadata passed validation and preservation. A
+    /// refused replacement keeps its old entry, so the final listing describes that file.
+    pub(crate) fn execute_carried(
+        &mut self,
+        writes: Vec<CarriedWrite>,
+        report: &mut MaterializeReport,
+    ) -> Result<(), StoreError> {
+        for write in writes {
+            self.execute_carried_one(write, report)?;
+        }
+        Ok(())
+    }
+
+    fn execute_carried_one(
+        &mut self,
+        write: CarriedWrite,
+        report: &mut MaterializeReport,
+    ) -> Result<(), StoreError> {
+        let CarriedWrite { placement: p, seen } = write;
+        let Some(git) = &self.git else {
+            self.notice_bytes_missing(&p);
+            return Ok(());
+        };
         let (dir, name) = self.folder.dir_and_name(&p.path);
         crate::atomic::atomic_create_dirs(&*self.vfs, &dir)?;
         let streamed: Cell<Option<Md5>> = Cell::new(None);
-        let vfs = self.vfs.clone();
-        let target = path.clone();
+        let prior: Cell<Option<PriorBytes>> = Cell::new(None);
         let wrote = atomic_write_streamed(
             &*self.vfs,
             &dir,
@@ -523,12 +655,27 @@ impl Writer {
                 if streamed.get() != Some(p.md5) {
                     return Ok(false);
                 }
-                let now = vfs.metadata(&target).ok();
-                Ok(match (&seen, &now) {
-                    (None, None) | (Some(_), None) => true,
-                    (Some(a), Some(b)) => a.len == b.len && a.mtime_ns == b.mtime_ns,
-                    // A program wrote the file meanwhile.
-                    (None, Some(_)) => false,
+                Ok(match self.hash_file(&p.path) {
+                    Ok((md5, _)) if md5 == p.md5 => true,
+                    Ok((md5, _)) if seen == Some(md5) => {
+                        let kept = self.keep_prior_carried(&p.path, md5)?;
+                        prior.set(Some(kept));
+                        match kept {
+                            PriorBytes::AlreadyKept | PriorBytes::Recovered => {
+                                // Proving the backup streamed its bytes; a later outside
+                                // save must still pass the comparison before rename.
+                                match self.hash_file(&p.path) {
+                                    Ok((now, _)) => now == md5 || now == p.md5,
+                                    Err(e) if is_not_found(&e) => true,
+                                    Err(_) => false,
+                                }
+                            }
+                            PriorBytes::Changed | PriorBytes::Unavailable => false,
+                        }
+                    }
+                    Ok(_) => false,
+                    Err(e) if is_not_found(&e) => true,
+                    Err(_) => false,
                 })
             },
         );
@@ -539,7 +686,24 @@ impl Writer {
                 report.written.push(p.path.clone());
             }
             Ok(Written::Refused) => {
-                // Changed after it was read, or the bytes were not the blob's: looked at again.
+                if prior.get() == Some(PriorBytes::Unavailable) {
+                    self.reasons
+                        .insert(p.path.clone(), tc_journal::fold::Blocked::FileUnreadable);
+                    report.blocked.push(p.path.clone());
+                }
+                // The final look disproved the stat fast path. A same-stat outside save
+                // must be listed from its actual bytes before this group writes metadata.
+                if let crate::ledger::State::Placed { placed } = self.state_of(&p.path)
+                    && let Some(stat) = placed.stat()
+                {
+                    self.note(
+                        &p.path,
+                        crate::ledger::Event::Stat {
+                            stat,
+                            settled: false,
+                        },
+                    );
+                }
                 self.dirty.carried = true;
             }
             Err(crate::atomic::WriteError::NotWritten(e))

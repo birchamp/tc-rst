@@ -72,3 +72,15 @@ mod burrito;
 
 #[path = "store/model.rs"]
 mod model;
+
+#[path = "store/placement_regressions.rs"]
+mod placement_regressions;
+
+#[path = "store/salvage_sources.rs"]
+mod salvage_sources;
+
+#[path = "store/last_look.rs"]
+mod last_look;
+
+#[path = "store/carried_last_look.rs"]
+mod carried_last_look;

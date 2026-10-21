@@ -19,10 +19,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use tc_journal::fold::{Blocked, DerivedFile, Notice};
 use tc_journal::{ChangeId, Md5, RepoPath};
 
-fn md5_hex(bytes: &[u8]) -> String {
-    Md5::of(bytes).to_hex()
-}
-
 /// What performing a read's decision left the caller to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Next {
@@ -232,15 +228,28 @@ impl Writer {
         projection: Projection,
         heads_readable: bool,
     ) -> Result<Next, StoreError> {
-        let disk = match bytes {
-            Some(bytes) => Disk::Bytes {
-                md5: self.hash(bytes),
-            },
+        self.decide_read_with_md5(rel, bytes, projection, heads_readable)
+            .map(|(next, _)| next)
+    }
+
+    /// The digest of the bytes M1 read is also its final rename's comparison token.
+    /// Return it with the decision so remembering that token does not hash the file again.
+    pub(crate) fn decide_read_with_md5(
+        &mut self,
+        rel: &str,
+        bytes: Option<&[u8]>,
+        projection: Projection,
+        heads_readable: bool,
+    ) -> Result<(Next, Option<Md5>), StoreError> {
+        let md5 = bytes.map(|bytes| self.hash_md5(bytes));
+        let disk = match md5 {
+            Some(md5) => Disk::Bytes { md5: md5.to_hex() },
             None => Disk::Missing,
         };
         let facts = self.facts_of(rel, &disk, projection, heads_readable);
         let actions = self.read_event(rel, disk, &facts)?;
-        self.perform(rel, bytes, actions)
+        let next = self.perform(rel, bytes, actions)?;
+        Ok((next, md5))
     }
 
     /// Hands a read to the ledger. A rename a stopped process made may be in the page cache
@@ -361,7 +370,7 @@ impl Writer {
         self.note(
             rel,
             Event::Kept {
-                md5: md5_hex(bytes),
+                md5: self.hash(bytes),
                 cause,
                 copy: copy.clone(),
                 stat,
@@ -372,6 +381,9 @@ impl Writer {
                 .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(bytes)));
         }
         self.write_manifest()?;
+        // `metadata.json` lists the held bytes, as they are in the folder (M6), so the folder
+        // stays a valid burrito: a hold the storage check (O14) finds needs that write too.
+        self.dirty.metadata = true;
         self.shared.remove_notices_of(rel);
         self.hold_notice(rel, cause, copy);
         Ok(())
@@ -411,10 +423,10 @@ impl Writer {
                 crate::materialize::Disk::Bytes(bytes)
                     if placed_projection
                         .as_deref()
-                        .is_some_and(|m| *m == md5_hex(&bytes)) =>
+                        .is_some_and(|m| *m == self.hash(&bytes)) =>
                 {
                     // Read, not projected: the bytes are the projection.
-                    let md5 = md5_hex(&bytes);
+                    let md5 = self.hash(&bytes);
                     self.counters.add(&self.counters.derived_read, 1);
                     let had = entry.clone();
                     let next =
@@ -461,12 +473,14 @@ impl Writer {
                     continue;
                 };
                 let projection = Projection::Bytes {
-                    md5: md5_hex(&new.bytes),
+                    md5: self.hash(&new.bytes),
                 };
                 let had = self.manifest.paths.get(&rel).cloned();
                 let next = self.decide_read(&rel, disk.as_deref(), projection, readable)?;
                 let bytes = disk.unwrap_or_default();
-                self.after_classified(&rel, &file, next, &bytes, Some(new), had);
+                // A partial projection must be read again; the cache carries complete bytes
+                // and cannot stand in for an unreadable saved version on a later attempt.
+                self.after_classified(&rel, &file, next, &bytes, readable.then_some(new), had);
             }
         }
         // metadata.json: converged when the bytes placed are clean by stat and list what it
@@ -507,7 +521,7 @@ impl Writer {
             }
             Next::Converged => {
                 let scope = self.fold.scope_digest(file).to_hex();
-                let md5 = md5_hex(disk);
+                let md5 = self.hash(disk);
                 let named = had.as_ref().is_some_and(|e| {
                     e.md5() == Some(md5.as_str()) && e.scope.as_deref() == Some(scope.as_str())
                 });
@@ -552,7 +566,7 @@ impl Writer {
         let Some(md5) = self.manifest.paths.get(METADATA).and_then(|e| e.md5()) else {
             return false;
         };
-        matches!(self.read_disk(METADATA), crate::materialize::Disk::Bytes(bytes) if md5_hex(&bytes) == md5)
+        matches!(self.read_disk(METADATA), crate::materialize::Disk::Bytes(bytes) if self.hash(&bytes) == md5)
     }
 
     /// Renders `files`, a book's files together, with the digests of a USFM file's records,
@@ -652,12 +666,19 @@ impl Writer {
                     let mut rendered = self.render_files(&BTreeSet::from([file.clone()]));
                     if let Some((new, readable)) = rendered.remove(&result.rel) {
                         let projection = Projection::Bytes {
-                            md5: md5_hex(&new.bytes),
+                            md5: self.hash(&new.bytes),
                         };
                         let had = Some(entry.clone());
                         let next =
                             self.decide_read(&result.rel, Some(&disk), projection, readable)?;
-                        self.after_classified(&result.rel, &file, next, &disk, Some(new), had);
+                        self.after_classified(
+                            &result.rel,
+                            &file,
+                            next,
+                            &disk,
+                            readable.then_some(new),
+                            had,
+                        );
                     }
                 }
                 None => {}
