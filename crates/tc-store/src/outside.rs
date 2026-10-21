@@ -40,6 +40,26 @@ pub(crate) enum Examined {
     Plan(Box<OutsidePlan>, u32),
 }
 
+/// Where bytes found outside the app stand once examined.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Taken {
+    /// Sent to the actor to be recorded: nothing writes the path until it answers (D7).
+    Recording,
+    /// Nothing to record, or nothing that can be: the bytes are accepted, and the file is
+    /// written again from the project.
+    Accepted,
+}
+
+/// What the writer made of the actor's answer to a plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Answered {
+    /// The bytes are the app's now: the file is written again from the project.
+    Accepted,
+    /// The disk refused the batch, or the ledger's acceptance of the bytes: the file keeps
+    /// them, and the writer's own retry looks at it again.
+    LookAgain,
+}
+
 /// A path found changed during the open's classification, to be recorded before the open
 /// ends (§6.1 O9).
 pub(crate) struct Found {
@@ -459,6 +479,9 @@ impl Writer {
             (None, Some(file)) => {
                 heads_records(&self.placed_heads(self.fold.file_heads(&file)), &[])
             }
+            (None, None) if rel == layout::METADATA => {
+                heads_records(&self.placed_heads(self.fold.metadata_heads()), &[])
+            }
             (None, None) => Vec::new(),
         };
         let dir = self.folder.path(layout::HEADS);
@@ -485,6 +508,9 @@ impl Writer {
                     .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(bytes)));
             }
             self.manifest_changed = true;
+            if rel == layout::METADATA {
+                self.unrecorded_metadata.remove(&md5.to_hex());
+            }
         }
         if let Some(file) = DerivedFile::from_path(rel) {
             self.dirty.add_file(file);
@@ -518,8 +544,21 @@ impl Writer {
             });
             return Ok(());
         }
-        let md5 = Md5::of(bytes);
         let (examined, copy) = self.examine(rel, bytes, &base)?;
+        self.take_examined(rel, bytes, examined, copy).map(|_| ())
+    }
+
+    /// What an examination of the bytes found at `rel` decided, carried out: a plan goes to
+    /// the actor and the path is pending until it answers (D7); bytes with nothing to record,
+    /// or that cannot be read, are accepted at once.
+    fn take_examined(
+        &mut self,
+        rel: &str,
+        bytes: &[u8],
+        examined: Examined,
+        copy: String,
+    ) -> Result<Taken, StoreError> {
+        let md5 = Md5::of(bytes);
         match examined {
             Examined::Plan(plan, derived) => {
                 self.shared
@@ -537,12 +576,12 @@ impl Writer {
                 if sent.is_err() {
                     self.pending_record.remove(rel);
                 }
-                Ok(())
+                Ok(Taken::Recording)
             }
-            Examined::Nothing => self.accept(rel, md5, bytes, None),
+            Examined::Nothing => self.accept(rel, md5, bytes, None).map(|()| Taken::Accepted),
             Examined::Undecodable { reason } => {
                 self.undecodable(rel, &copy, &reason);
-                self.accept(rel, md5, bytes, None)
+                self.accept(rel, md5, bytes, None).map(|()| Taken::Accepted)
             }
         }
     }
@@ -665,23 +704,18 @@ impl Writer {
         }
     }
 
-    /// X2 for `metadata.json`: the fields of an edit that are records are sent to the actor
-    /// to be recorded. The file is written over at once, so nothing is accepted for it.
-    pub(crate) fn record_metadata_edit(&mut self, bytes: &[u8], copy: String, base: ledger::Base) {
-        let md5 = Md5::of(bytes);
-        match self.examine_copied(layout::METADATA, bytes, &base) {
-            Examined::Plan(plan, derived) => {
-                let _ = self.actor.send(Msg::RecordOutside {
-                    rel: layout::METADATA.to_owned(),
-                    seen: md5,
-                    plan,
-                    derived,
-                    copy,
-                });
-            }
-            Examined::Nothing => {}
-            Examined::Undecodable { reason } => self.undecodable(layout::METADATA, &copy, &reason),
-        }
+    /// X2 for `metadata.json`, whose bytes are copied already: the fields of an edit that are
+    /// records are sent to the actor to be recorded, and the file is pending as a derived
+    /// file is, so a crash before the batch is durable leaves the bytes in the folder (§6.4
+    /// X1).
+    pub(crate) fn record_metadata_edit(
+        &mut self,
+        bytes: &[u8],
+        copy: String,
+        base: ledger::Base,
+    ) -> Result<Taken, StoreError> {
+        let examined = self.examine_copied(layout::METADATA, bytes, &base);
+        self.take_examined(layout::METADATA, bytes, examined, copy)
     }
 
     /// D7: the heads of the bytes of `rel` an outside edit was recorded from. The bytes in the
@@ -699,10 +733,15 @@ impl Writer {
         changed: &[(RecordKey, ChangeId)],
         shown: Vec<(RecordKey, tc_journal::outside::ShownDigest)>,
     ) -> Option<Vec<HeadsRecord>> {
-        let file = DerivedFile::from_path(rel)?;
-        let outside = OutsideFile::Derived(file.clone());
+        let (outside, heads) = if rel == layout::METADATA {
+            (OutsideFile::Metadata, self.fold.metadata_heads())
+        } else {
+            let file = DerivedFile::from_path(rel)?;
+            let heads = self.fold.file_heads(&file);
+            (OutsideFile::Derived(file), heads)
+        };
         let fold_heads: std::collections::BTreeMap<String, Vec<[u8; 32]>> = self
-            .placed_heads(self.fold.file_heads(&file))
+            .placed_heads(heads)
             .iter()
             .map(|(key, ids)| (key_text(key), ids.iter().map(|id| *id.as_bytes()).collect()))
             .collect();
@@ -767,8 +806,8 @@ impl Writer {
         Some(records.into_values().collect())
     }
 
-    /// The writer's handling of what the actor answered to a plan (D7). `bytes` are the ones
-    /// the plan was made of.
+    /// The writer's handling of what the actor answered to a plan (D7), and whether the bytes
+    /// are the app's now. `bytes` are the ones the plan was made of.
     pub(crate) fn recorded(
         &mut self,
         rel: String,
@@ -776,7 +815,7 @@ impl Writer {
         copy: String,
         outcome: Recorded,
         bytes: &[u8],
-    ) {
+    ) -> Answered {
         self.pending_record.remove(&rel);
         let carried = self.pending_carried.remove(&rel);
         let shown = self.shown_by_path.remove(&rel).unwrap_or_default();
@@ -805,8 +844,8 @@ impl Writer {
                                 batch,
                                 unknown_base,
                             },
-                            // The notice of `metadata.json` written over already keeps the
-                            // copy, and a copy goes with one notice only.
+                            // `MetadataEditedOutside`, raised when the bytes were found, keeps
+                            // the copy of `metadata.json`, and a copy goes with one notice only.
                             (rel != layout::METADATA && !copy.is_empty()).then_some(copy),
                         );
                     }
@@ -841,27 +880,26 @@ impl Writer {
             }
             Recorded::Refused(reason) => self.undecodable(&rel, &copy, &reason),
             Recorded::NotWritten => {
-                // The disk refused the batch: nothing is recorded and nothing is accepted;
-                // the copy is kept, and the path stays dirty, so the writer's own retry
-                // (200 ms to 3 s) reads it and examines it again.
+                // The disk refused the batch: nothing is recorded and nothing is accepted.
+                // Nothing wrote the pending path meanwhile, so the bytes are still in the
+                // folder and the copy is kept; the path stays dirty, and the writer's own
+                // retry (200 ms to 3 s) reads it and examines it again.
                 self.dirty.metadata = true;
                 self.dirty.carried |= carried.is_some();
                 if let Some(file) = DerivedFile::from_path(&rel) {
                     self.dirty.add_file(file);
                 }
-                return;
+                return Answered::LookAgain;
             }
-        }
-        if rel == layout::METADATA {
-            // The file was written over; its records are written again now.
-            self.dirty.metadata = true;
-            return;
         }
         if let Some((oid, size)) = carried {
             // A carried file's bytes are its blob; the entry names both (§11.4).
             self.accept_carried(&rel, seen, size, oid);
-            return;
+            return Answered::Accepted;
         }
-        let _ = self.accept(&rel, seen, bytes, edited);
+        match self.accept(&rel, seen, bytes, edited) {
+            Ok(()) => Answered::Accepted,
+            Err(_) => Answered::LookAgain,
+        }
     }
 }

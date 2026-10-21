@@ -531,6 +531,11 @@ impl Project {
                 if !view.folded || self.fold.raw(id).is_none() {
                     return None;
                 }
+                // A change the project wrote over since no longer stands for the bytes: the
+                // same bytes found after that are a new edit, a revert (§11.1 X3).
+                if !self.fold.heads(&view.key).contains(id) {
+                    return None;
+                }
                 Some((view.key, *id))
             })
             .collect();

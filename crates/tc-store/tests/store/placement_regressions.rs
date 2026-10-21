@@ -747,3 +747,305 @@ fn reusing_an_unflushed_metadata_copy_flushes_its_name_before_its_file() {
     assert_valid_burrito(&rig.fs, &folder);
     handle.close().unwrap();
 }
+
+/// An outside edit of `metadata.json` is pending until the batch that records it is durable
+/// (§11.1 D7): written over before then, a power cut would leave the folder no longer
+/// differing and nothing to record again (§6.4 X1). The person's name must be in the
+/// reopened project's history, or a notice on it must lead to the copy that keeps it.
+#[test]
+fn an_outside_metadata_name_survives_a_power_cut_before_its_batch_is_durable() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let outside_name = "name typed in another editor";
+    let edited = renamed_metadata(&rig, &folder, outside_name);
+    let path = folder.join(METADATA);
+    rig.fs.put_unseen(&path, &edited, None);
+    let hooks = rig.store.hooks().clone();
+    // The actor is busy: the edit's batch waits before it becomes durable.
+    hooks.hold(Point::BeforeDurablePending);
+    handle.focus().wait().unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while hooks.reached(Point::BeforeDurablePending) < 1 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "setup: the outside edit was never sent to be recorded"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let before_cut = rig.fs.peek(&path);
+    let after = rig.fs.crash(true);
+    hooks.release(Point::BeforeDurablePending);
+    handle.wait_idle();
+    handle.close().unwrap();
+
+    let rig2 = crate::common::rig(after);
+    let reopened = open(&rig2, &folder);
+    let snapshot = reopened.snapshot();
+    let fold = snapshot.fold();
+    let key = RecordKey::ProjectMeta(MetaField::Name);
+    let wanted = Record::ProjectMeta {
+        field: MetaField::Name,
+        value: Some(name_value(outside_name)),
+    };
+    let in_history = fold
+        .history(&key)
+        .iter()
+        .filter_map(|id| fold.body(id))
+        .any(|body| body.record == wanted);
+    let noticed_copies = copies_of(&reopened, METADATA);
+    let noticed_copy_keeps_it = noticed_copies
+        .iter()
+        .any(|copy| rig2.fs.peek(&folder.join(copy)).as_deref() == Some(edited.as_slice()));
+    let unnoticed_copies: Vec<String> = files(&rig2.fs, &folder)
+        .into_iter()
+        .filter(|(rel, bytes)| rel.starts_with(".tc/external/") && bytes == &edited)
+        .map(|(rel, _)| rel)
+        .collect();
+    let metadata_now = rig2.fs.peek(&path);
+    reopened.close().unwrap();
+    assert!(
+        in_history || noticed_copy_keeps_it,
+        "after the power cut the outside name {outside_name:?} is neither in History nor \
+         behind a notice; metadata.json holds the edit: {}; noticed metadata copies: \
+         {noticed_copies:?}; .tc/external files holding the edited bytes: {unnoticed_copies:?}",
+        metadata_now.as_deref() == Some(edited.as_slice())
+    );
+    assert!(
+        before_cut.as_deref() == Some(edited.as_slice()),
+        "metadata.json was written over before the batch that records its edit was durable"
+    );
+}
+
+/// Copying an outside version of `metadata.json` once does not settle those bytes for the
+/// session. A person who puts that version back after a later rename has made a new edit:
+/// it is found, copied, told and recorded again, never renamed over in silence (§5.10,
+/// §11.1 X3).
+#[test]
+fn metadata_json_put_back_to_an_earlier_outside_version_is_recorded_again() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let path = folder.join(METADATA);
+    let key = RecordKey::ProjectMeta(MetaField::Name);
+    let outside_name = "Beta";
+    let inside_name = "Gamma";
+    let edited = renamed_metadata(&rig, &folder, outside_name);
+    rig.fs.put_unseen(&path, &edited, None);
+    let first = handle.focus().wait().unwrap().found;
+    handle.wait_idle();
+    assert_eq!(
+        first,
+        vec![METADATA.to_owned()],
+        "the setup's first edit must be found"
+    );
+    assert_name_in_history(&handle, outside_name);
+    assert_metadata_copy(&rig, &handle, &folder, &edited);
+    set_name(&handle, inside_name);
+    handle.leave(Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let placed: serde_json::Value = serde_json::from_slice(&rig.fs.peek(&path).unwrap()).unwrap();
+    assert_eq!(
+        placed["identification"]["name"]["en"], inside_name,
+        "the setup must place the app's later name before the outside version comes back"
+    );
+    let copies_before = copies_of(&handle, METADATA).len();
+
+    // The editor saves its old buffer again: byte for byte the version copied above.
+    rig.fs.put_unseen(&path, &edited, None);
+    let found = handle.focus().wait().unwrap().found;
+    handle.leave(Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    // Any later save runs a group that rewrites the listing in `metadata.json`.
+    save_verse(&handle, 1, 1, "a verse saved after the put-back").unwrap();
+    handle.leave(Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let on_disk: serde_json::Value = serde_json::from_slice(&rig.fs.peek(&path).unwrap()).unwrap();
+    let snapshot = handle.snapshot();
+    let fold = snapshot.fold();
+    let heads: Vec<Record> = fold
+        .heads(&key)
+        .iter()
+        .filter_map(|id| fold.body(id))
+        .map(|body| body.record)
+        .collect();
+    let copies_after = copies_of(&handle, METADATA).len();
+    assert_eq!(
+        found,
+        vec![METADATA.to_owned()],
+        "the person's put-back of an earlier outside version was not found; after a later save \
+         metadata.json names {:?}, the name's heads are {heads:?}, metadata copies went \
+         {copies_before} -> {copies_after}",
+        on_disk["identification"]["name"]["en"]
+    );
+    let beta = Record::ProjectMeta {
+        field: MetaField::Name,
+        value: Some(name_value(outside_name)),
+    };
+    assert!(
+        heads.contains(&beta),
+        "the put-back name is neither shown nor offered in a conflict: heads {heads:?}"
+    );
+    assert!(
+        copies_after > copies_before,
+        "no new notice leads to a copy of the put-back bytes"
+    );
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+}
+
+/// When the batch that records an outside edit of `metadata.json` is refused, the file was not
+/// written over meanwhile (§11.1 D7), and the copy keeps the person's bytes once the file
+/// changes again. Neither dismissing its notice nor reopening the project may lose or hide
+/// them.
+#[test]
+fn a_refused_metadata_recording_keeps_the_edit_or_its_copy_after_dismissal() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let hooks = rig.store.hooks().clone();
+    let outside_name = "a name typed outside whose recording the full disk refuses";
+    let edited = renamed_metadata(&rig, &folder, outside_name);
+    let path = folder.join(METADATA);
+    rig.fs.put_unseen(&path, &edited, None);
+    hooks.hold(Point::BeforeDurablePending);
+    handle.focus().wait().unwrap();
+    hooks.wait_reached(Point::BeforeDurablePending, 1);
+    let while_recorded = rig.fs.peek(&path);
+    let copies = copies_of(&handle, METADATA);
+    assert_eq!(copies.len(), 1, "the setup needs one copy: {copies:?}");
+    let copy = copies[0].clone();
+    assert_eq!(rig.fs.peek(&folder.join(&copy)), Some(edited.clone()));
+    rig.fs.fail_writes(Some(ErrorKind::StorageFull));
+    hooks.release(Point::BeforeDurablePending);
+    // The actor answers the refused batch before this sync, and the writer handles the
+    // answer before its own.
+    handle.wait_idle();
+    let after_refusal = rig.fs.peek(&path);
+    rig.fs.fail_writes(None);
+    handle.wait_idle();
+    let recorded = |handle: &ProjectHandle| {
+        let snapshot = handle.snapshot();
+        let fold = snapshot.fold();
+        let key = RecordKey::ProjectMeta(MetaField::Name);
+        fold.history(&key)
+            .iter()
+            .filter_map(|id| fold.body(id))
+            .any(|body| {
+                body.record
+                    == Record::ProjectMeta {
+                        field: MetaField::Name,
+                        value: Some(name_value(outside_name)),
+                    }
+            })
+    };
+    let notices = handle.notices();
+    eprintln!(
+        "after the refused recording: name recorded = {}, metadata.json is the edit = {}, copy kept = {}, notices = {notices:#?}",
+        recorded(&handle),
+        rig.fs.peek(&path).as_deref() == Some(edited.as_slice()),
+        rig.fs.peek(&folder.join(&copy)).as_deref() == Some(edited.as_slice()),
+    );
+    let notice = notices
+        .iter()
+        .find(|n| matches!(n.notice, Notice::MetadataEditedOutside { .. }))
+        .expect("the setup raises MetadataEditedOutside")
+        .clone();
+    let dismissed = handle.dismiss_notice(notice.id).wait();
+    handle.wait_idle();
+    let copy_after = rig.fs.peek(&folder.join(&copy));
+    eprintln!(
+        "dismissal: {dismissed:?}; copy present after = {}",
+        copy_after.is_some()
+    );
+    assert!(
+        recorded(&handle) || copy_after.as_deref() == Some(edited.as_slice()),
+        "the outside name is in no History and its only copy {copy} was removed by the \
+         dismissal (dismissal result {dismissed:?}); notices: {:?}",
+        handle.notices()
+    );
+    assert!(
+        while_recorded.as_deref() == Some(edited.as_slice()),
+        "metadata.json was written over before the batch that records its edit was durable"
+    );
+    assert!(
+        after_refusal.as_deref() == Some(edited.as_slice()),
+        "metadata.json was written over after the disk refused the batch that records its edit"
+    );
+    handle.close().unwrap();
+    let reopened = open(&rig, &folder);
+    let routed = copies_of(&reopened, METADATA)
+        .iter()
+        .any(|c| rig.fs.peek(&folder.join(c)).as_deref() == Some(edited.as_slice()));
+    assert!(
+        recorded(&reopened) || routed,
+        "after reopening, the outside name is in no History and no notice leads to its copy; \
+         notices: {:?}",
+        reopened.notices()
+    );
+    reopened.close().unwrap();
+}
+
+/// The disk refuses the batch of an outside edit of `metadata.json`: the bytes stay in the
+/// folder, and the writer's own retry sends them again once the disk may take them, never at
+/// once, which would ask the full disk again and again. Once it takes them, they are recorded
+/// and the file is written again.
+#[test]
+fn a_refused_metadata_batch_is_sent_again_by_the_retry_not_at_once() {
+    use tc_store::fault::OpKind;
+
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let outside_name = "a name whose batch the full disk refuses for a while";
+    let edited = renamed_metadata(&rig, &folder, outside_name);
+    let path = folder.join(METADATA);
+    let pending = folder.join(".tc/pending");
+    rig.fs.put_unseen(&path, &edited, None);
+    let hooks = rig.store.hooks().clone();
+    hooks.hold(Point::BeforeDurablePending);
+    handle.focus().wait().unwrap();
+    hooks.wait_reached(Point::BeforeDurablePending, 1);
+    rig.fs.fail_writes(Some(ErrorKind::StorageFull));
+    hooks.release(Point::BeforeDurablePending);
+    let batches_tried = || {
+        rig.fs
+            .log()
+            .iter()
+            .filter(|op| op.kind == OpKind::Create && op.path.parent() == Some(pending.as_path()))
+            .count()
+    };
+    // No `wait_idle` here: a writer that sends the batch again at once is never idle. Both
+    // looks come well before the retry's first 3 s.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while batches_tried() == 0 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "setup: the batch was never tried"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let after_refusal = batches_tried();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let half_a_second_later = batches_tried();
+    let on_disk = rig.fs.peek(&path);
+    rig.fs.fail_writes(None);
+    assert_eq!(
+        half_a_second_later, after_refusal,
+        "the refused batch was sent again at once"
+    );
+    assert!(
+        on_disk.as_deref() == Some(edited.as_slice()),
+        "bytes not recorded were written over"
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while rig.fs.peek(&path) == Some(edited.clone()) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the retry never recorded the edit: {:?}",
+            handle.notices()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    handle.wait_idle();
+    assert_name_in_history(&handle, outside_name);
+    assert_metadata_copy(&rig, &handle, &folder, &edited);
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+}
