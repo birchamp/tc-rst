@@ -744,6 +744,11 @@ impl Actions {
             return;
         };
         let (place, check_id) = (view.place.clone(), view.check_id.clone());
+        let comment = self
+            .s()
+            .project
+            .get_untracked()
+            .and_then(|project| comment_key(list.tool, &project, &view));
         let request = Decide {
             at,
             request: js::random_request_id(),
@@ -761,6 +766,9 @@ impl Actions {
             let result = write_decision(this.runtime().api(), request).await;
             if let Ok(ack) = &result {
                 this.patch_rail(ack);
+                if let Some(key) = &comment {
+                    this.runtime().saves().redraft(key);
+                }
             }
             let c = &this.s().c;
             let shown = c.detail.with_untracked(|d| {

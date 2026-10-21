@@ -637,7 +637,15 @@ pub(crate) fn cleared_by(
             };
             one(field, shown)
         }
-        Command::SaveDecision { shown, .. } => one(DraftField::CheckComment, shown),
+        // A mark or a bookmark saves no comment: the comment typed before it is still unsaved.
+        Command::SaveDecision { shown, value, .. }
+            if value
+                .changes
+                .iter()
+                .any(|c| matches!(c, tc_journal::command::DecisionChange::Comment(_))) =>
+        {
+            one(DraftField::CheckComment, shown)
+        }
         Command::SaveAlignment { shown, .. } => one(DraftField::Alignment, shown),
         Command::ReviseComment { shown, .. } => match fold.projected(shown.key()) {
             Some(Record::Comment { value, .. }) => one(

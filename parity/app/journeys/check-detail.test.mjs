@@ -322,6 +322,46 @@ browserTest('a_check_comment_being_typed_is_drafted_on_the_server_until_it_is_sa
   }, { scenario: 'en-pins' });
 });
 
+// C4, A-10, the other order: a comment typed first, then a mark or a bookmark. The mark saves no
+// comment, so the comment's server draft stays, and it is drafted again over the mark's version,
+// so a Keep after a crash continues from the mark instead of standing beside it as a conflict.
+for (const button of ['mark-invalid', 'bookmark']) {
+  browserTest(`a_check_comment_typed_before_${button.replace('-', '_')}_stays_drafted_on_the_server`, async () => {
+    await withApp(async ({ page, env }) => {
+      await openTool(page, 'translationNotes');
+      const index = Number(await shownIndex(page));
+      const typed = 'Ask the team about the faith of the chosen people.';
+      await page.getByTestId('comment-toggle').click();
+      await page.getByTestId('comment-text').fill(typed);
+      const draftFile = path.join(env.projectsDir, BIBLE, '.tc', 'drafts.json');
+      const drafted = () => (fs.existsSync(draftFile) ? JSON.parse(fs.readFileSync(draftFile, 'utf8')) : [])
+        .find((d) => d.text === typed);
+      const before = await until('the comment being typed is drafted on the server', drafted, 5_000);
+      await page.getByTestId(button).click();
+      await until('the mark is stored', async () => {
+        const d = (await item(env, 'translationNotes', index)).decision.value;
+        return button === 'bookmark' ? d.bookmarked : d.status === 'invalid';
+      });
+      const after = await until('the draft names the mark\'s version', () => {
+        const d = drafted();
+        return d && d.shown[0] !== before.shown[0] ? d : null;
+      }, 5_000);
+      // Past the draft file's next write: the mark did not take the unsaved comment's draft.
+      await sleep(1_500);
+      assert.deepEqual(drafted()?.shown, after.shown, 'the draft stays');
+      assert.equal((await item(env, 'translationNotes', index)).decision.value.comment, null, 'a draft is not a save');
+      await page.getByTestId('comment-done').click();
+      const saved = await until('Done saves it', async () => {
+        const view = await item(env, 'translationNotes', index);
+        return view.decision.value.comment ? view : null;
+      });
+      assert.equal(saved.decision.value.comment, typed);
+      assert.equal(saved.decision.marker, null, 'no conflict with the person themselves');
+      await until('the saved comment leaves no draft', async () => !drafted());
+    }, { scenario: 'en-pins' });
+  });
+}
+
 /** Holds every `check/decide` reply back for `ms`, as a slow fsync does: the write is stored, the page hears late. */
 const slowDecides = (page, ms) => page.route('**/api/v1/check/decide', async (route) => {
   const response = await route.fetch();
