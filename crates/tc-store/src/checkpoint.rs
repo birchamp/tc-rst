@@ -820,7 +820,11 @@ impl Writer {
         placement: &tc_journal::fold::CarriedPlacement,
         head: Option<&TreeEntry>,
     ) -> Result<Option<Desired>, StoreError> {
-        if git.has(placement.oid) {
+        // libgit2 refuses a tree a new entry of which names a blob whose header does not
+        // read: a damaged blob is as missing as an absent one, and never refuses the commit
+        // (§9.4). An entry HEAD has already stays as it is, and nothing reads its blob.
+        let in_head = head.is_some_and(|h| h.oid == placement.oid && h.mode == MODE_BLOB);
+        if git.has(placement.oid) && (in_head || git.has_readable_blob(placement.oid)) {
             return Ok(Some(Desired {
                 oid: placement.oid,
                 mode: MODE_BLOB,

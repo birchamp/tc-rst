@@ -1028,9 +1028,11 @@ impl Writer {
                         .get(path)
                         .is_some_and(|entry| entry.oid.is_some())
                 {
-                    let kept = self.keep_prior_carried(path, *expected)?;
+                    let kept = self.keep_prior_carried(path, *expected, prior)?;
                     prior = Some(kept);
                     permitted = match kept {
+                        // The file was read just now, and an earlier try kept its bytes.
+                        crate::carried::PriorBytes::StillKept => true,
                         crate::carried::PriorBytes::AlreadyKept
                         | crate::carried::PriorBytes::Recovered => {
                             disk = self.read_disk(path);

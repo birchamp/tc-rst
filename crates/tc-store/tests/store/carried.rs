@@ -1210,6 +1210,168 @@ fn a_cached_carried_blob_is_recovered_after_its_pack_disappears() {
     assert_commits_valid(&rig.fs, &folder);
 }
 
+/// A restore over a carried file another program holds tries its rename again and again. The
+/// old version's backup is made durable once; each retry is not a whole new copy of the file
+/// into a pack (PERFORMANCE.md rule 1: a held retry costs what it touches).
+#[cfg(unix)]
+#[test]
+fn a_held_carried_replacement_backs_up_its_old_version_once() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let first: Vec<u8> = (0..1024 * 1024u32).map(|i| (i % 251) as u8).collect();
+    let second: Vec<u8> = (0..1024 * 1024u32).map(|i| (i % 241) as u8).collect();
+    arrive(&rig, &handle, &folder, SONG, &first);
+    leave(&handle);
+    let first_id = handle.snapshot().fold().heads(&song_key())[0];
+    arrive(&rig, &handle, &folder, SONG, &second);
+    leave(&handle);
+    handle.wait_idle();
+
+    // The old version is packed and has no loose file: what a repack leaves on every system,
+    // and what Windows always takes because libgit2's loose objects are read-only there.
+    let second_oid = git2::Oid::hash_object(git2::ObjectType::Blob, &second).unwrap();
+    let pack_dir = git_dir_of(&rig.fs, &folder).join("objects/pack");
+    let repo = repo_of(&rig.fs, &folder);
+    let mut builder = repo.packbuilder().unwrap();
+    builder.insert_object(second_oid, None).unwrap();
+    builder.write(&pack_dir, 0o644).unwrap();
+    drop(builder);
+    drop(repo);
+    let hex = second_oid.to_string();
+    std::fs::remove_file(
+        git_dir_of(&rig.fs, &folder)
+            .join("objects")
+            .join(&hex[..2])
+            .join(&hex[2..]),
+    )
+    .unwrap();
+    assert!(stored(&rig, &folder, &second), "the pack is the backup");
+
+    // A media player keeps the second take open without delete sharing.
+    let path = folder.join(SONG);
+    rig.fs.set_busy(&path, true);
+    let before = handle.counters();
+    handle
+        .submit(Command::Restore {
+            shown: handle.mint(&song_key(), None).unwrap(),
+            from: first_id,
+        })
+        .wait()
+        .unwrap();
+    let left = handle.leave(Leave::Mode).wait();
+    let first_job = handle.counters().since(&before);
+    // The writer's own busy retries: 200 ms, then rising toward every 3 s.
+    std::thread::sleep(std::time::Duration::from_millis(4000));
+    let cost = handle.counters().since(&before);
+    rig.fs.set_busy(&path, false);
+
+    assert!(
+        cost.git_objects_packed <= 1,
+        "the held restore packed the old version {} times ({} in the leave's own job, \
+         {} held retries, {} bytes hashed), leave: {:?}",
+        cost.git_objects_packed,
+        first_job.git_objects_packed,
+        cost.held_retries,
+        cost.bytes_hashed,
+        left.as_ref().map(|_| ()),
+    );
+    handle.wait_idle();
+    handle.close().unwrap();
+}
+
+/// The bytes one job of a held carried replacement or removal hashed, in whole files of
+/// `size`, and the job's held retries. The file stays held until the job is done.
+fn held_job(
+    rig: &Rig,
+    handle: &ProjectHandle,
+    folder: &Path,
+    command: Command,
+    size: u64,
+) -> (u64, u64) {
+    let path = folder.join(SONG);
+    rig.fs.set_busy(&path, true);
+    handle.submit(command).wait().unwrap();
+    let before = handle.counters();
+    handle.leave(Leave::Mode).wait().unwrap();
+    let job = handle.counters().since(&before);
+    rig.fs.set_busy(&path, false);
+    (job.bytes_hashed / size, job.held_retries)
+}
+
+/// Each try of a held carried replacement looks at the file's bytes again, and only the
+/// first reads the old version back from its backup: a retry after a sharing wait costs the
+/// file it looks at, not another backup (PERFORMANCE.md rule 1).
+#[test]
+fn a_held_carried_replacement_reads_its_old_version_back_once() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let size = 256 * 1024u32;
+    let first: Vec<u8> = (0..size).map(|i| (i % 251) as u8).collect();
+    let second: Vec<u8> = (0..size).map(|i| (i % 241) as u8).collect();
+    arrive(&rig, &handle, &folder, SONG, &first);
+    leave(&handle);
+    let first_id = handle.snapshot().fold().heads(&song_key())[0];
+    arrive(&rig, &handle, &folder, SONG, &second);
+    leave(&handle);
+    handle.wait_idle();
+
+    let restore = Command::Restore {
+        shown: handle.mint(&song_key(), None).unwrap(),
+        from: first_id,
+    };
+    let (files, retries) = held_job(&rig, &handle, &folder, restore, u64::from(size));
+    assert_eq!(retries, 3, "the job tried its rename four times");
+    // The plan reads the file, and so does the listing of the file as it is after the job
+    // (I7); the first try reads the file, the old version and the file again; each of the
+    // three later tries reads the file once.
+    assert!(
+        files <= 8,
+        "the held replacement hashed {files} whole files: every try backed up the old version"
+    );
+    leave(&handle);
+    handle.wait_idle();
+    assert_eq!(
+        rig.fs.peek(&folder.join(SONG)).as_deref(),
+        Some(first.as_slice())
+    );
+    assert!(stored(&rig, &folder, &second));
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// The same for a removal: the old version is read back from its backup once.
+#[test]
+fn a_held_carried_removal_reads_its_old_version_back_once() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let size = 256 * 1024u32;
+    let old: Vec<u8> = (0..size).map(|i| (i % 251) as u8).collect();
+    arrive(&rig, &handle, &folder, SONG, &old);
+    leave(&handle);
+    handle.wait_idle();
+
+    let remove = Command::RemoveCarriedFile {
+        shown: handle.mint(&song_key(), None).unwrap(),
+    };
+    let (files, retries) = held_job(&rig, &handle, &folder, remove, u64::from(size));
+    assert_eq!(retries, 3, "the job tried its removal four times");
+    // The plan reads the file, and so does the listing of the file as it is after the job
+    // (I7); the first try reads the file, the old version and the file again; each of the
+    // three later tries reads the file once.
+    assert!(
+        files <= 8,
+        "the held removal hashed {files} whole files: every try backed up the old version"
+    );
+    leave(&handle);
+    handle.wait_idle();
+    assert!(rig.fs.peek(&folder.join(SONG)).is_none());
+    assert!(stored(&rig, &folder, &old));
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
 mod backup_model {
     use super::*;
     use proptest::prelude::*;
@@ -1741,6 +1903,13 @@ mod backup_model {
 }
 
 fn corrupt_song_blob(rig: &Rig, folder: &Path, bytes: &[u8]) -> (PathBuf, Vec<u8>) {
+    let damaged = damage_blob(rig, folder, bytes);
+    assert_eq!(rig.fs.peek(&folder.join(SONG)).as_deref(), Some(bytes));
+    damaged
+}
+
+/// Damages the loose object of `bytes`; returns its path and its bytes before.
+fn damage_blob(rig: &Rig, folder: &Path, bytes: &[u8]) -> (PathBuf, Vec<u8>) {
     let oid = git2::Oid::hash_object(git2::ObjectType::Blob, bytes).unwrap();
     let hex = oid.to_string();
     let loose = git_dir_of(&rig.fs, folder)
@@ -1756,7 +1925,6 @@ fn corrupt_song_blob(rig: &Rig, folder: &Path, bytes: &[u8]) -> (PathBuf, Vec<u8
         "existence alone reports a backup"
     );
     assert!(repo_of(&rig.fs, folder).find_blob(oid).is_err());
-    assert_eq!(rig.fs.peek(&folder.join(SONG)).as_deref(), Some(bytes));
     (loose, encoded)
 }
 
@@ -1872,6 +2040,114 @@ fn a_carried_removal_waits_when_its_backup_blob_is_corrupt() {
             .content(),
         old
     );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// §11.4: a missing blob never stops a materialization, and neither does one whose name is
+/// present but whose bytes cannot be read. A Restore of such a version leaves the folder's
+/// file as it is, the job succeeds, and the project opens writable again.
+#[test]
+fn a_restored_version_whose_blob_is_damaged_waits_and_the_project_opens_writable() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let first = b"take A of the song, whose backup is later damaged";
+    let second = b"take B of the song, the one the folder holds";
+    arrive(&rig, &handle, &folder, SONG, first);
+    leave(&handle);
+    let first_heads = handle.snapshot().fold().heads(&song_key());
+    assert_eq!(first_heads.len(), 1);
+    let first_id = first_heads[0];
+    arrive(&rig, &handle, &folder, SONG, second);
+    leave(&handle);
+    // The damage model of `corrupt_song_blob`, on the version the folder no longer holds.
+    let oid = git2::Oid::hash_object(git2::ObjectType::Blob, first).unwrap();
+    let hex = oid.to_string();
+    let loose = git_dir_of(&rig.fs, &folder)
+        .join("objects")
+        .join(&hex[..2])
+        .join(&hex[2..]);
+    std::fs::remove_file(&loose).unwrap();
+    std::fs::write(&loose, b"this is not a zlib-encoded Git object").unwrap();
+    assert!(
+        stored(&rig, &folder, first),
+        "existence alone reports a backup"
+    );
+    assert!(repo_of(&rig.fs, &folder).find_blob(oid).is_err());
+
+    handle
+        .submit(Command::Restore {
+            shown: handle.mint(&song_key(), None).unwrap(),
+            from: first_id,
+        })
+        .wait()
+        .unwrap();
+    let left = handle.leave(Leave::Mode).wait();
+    assert!(
+        left.is_ok(),
+        "an unreadable blob stopped the materialization: {left:?}"
+    );
+    assert_eq!(
+        rig.fs.peek(&folder.join(SONG)).as_deref(),
+        Some(second.as_slice())
+    );
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        handle.facts().mode,
+        tc_store::Mode::Writable,
+        "the open stopped at the unreadable blob"
+    );
+    handle.close().unwrap();
+}
+
+/// §9.4: a placed version whose blob is there and cannot be read never refuses a commit. The
+/// commit keeps the version it had at that path, as the folder keeps its file.
+#[test]
+fn a_checkpoint_keeps_the_committed_version_while_the_placed_one_is_damaged() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let first = b"take A of the song, whose backup is later damaged";
+    let second = b"take B of the song, committed and in the folder";
+    arrive(&rig, &handle, &folder, SONG, first);
+    leave(&handle);
+    let first_id = handle.snapshot().fold().heads(&song_key())[0];
+    arrive(&rig, &handle, &folder, SONG, second);
+    leave(&handle);
+    let report = handle
+        .checkpoint(CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(report.commit.is_some(), "{report:?}");
+    damage_blob(&rig, &folder, first);
+
+    handle
+        .submit(Command::Restore {
+            shown: handle.mint(&song_key(), None).unwrap(),
+            from: first_id,
+        })
+        .wait()
+        .unwrap();
+    let report = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
+    assert!(
+        report.as_ref().is_ok_and(|r| r.commit.is_some()),
+        "the damaged version refused the commit: {report:?}"
+    );
+    let repo = repo_of(&rig.fs, &folder);
+    let head = commits_of(&repo)[0];
+    assert_eq!(
+        commit_files(&repo, head).get(SONG).map(Vec::as_slice),
+        Some(second.as_slice())
+    );
+    assert_eq!(
+        rig.fs.peek(&folder.join(SONG)).as_deref(),
+        Some(second.as_slice())
+    );
+    drop(repo);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
     assert_commits_valid(&rig.fs, &folder);

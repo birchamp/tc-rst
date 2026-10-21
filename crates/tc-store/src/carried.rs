@@ -49,8 +49,27 @@ pub(crate) struct CarriedWrite {
 pub(crate) enum PriorBytes {
     AlreadyKept,
     Recovered,
+    /// Kept by an earlier try of the same replacement or removal, and still there.
+    StillKept,
     Changed,
     Unavailable,
+}
+
+impl PriorBytes {
+    fn kept(self) -> bool {
+        matches!(self, Self::AlreadyKept | Self::Recovered | Self::StillKept)
+    }
+}
+
+/// What the placed version's blob gave the file being written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Streamed {
+    Nothing,
+    Bytes(Md5),
+    /// The object database no longer has the blob.
+    Missing,
+    /// The blob is there and its bytes cannot be read (a damaged object, a placeholder).
+    Unreadable,
 }
 
 impl Writer {
@@ -405,10 +424,12 @@ impl Writer {
 
     /// Before destroying a placed carried file, recover its recorded blob if the
     /// repository lost it. The caller repeats its final comparison after a recovery read.
+    /// `earlier`: what the previous try of the same replacement or removal found.
     pub(crate) fn keep_prior_carried(
         &self,
         rel: &str,
         expected: Md5,
+        earlier: Option<PriorBytes>,
     ) -> Result<PriorBytes, StoreError> {
         let Some(entry) = self.manifest.paths.get(rel) else {
             return Ok(PriorBytes::Unavailable);
@@ -433,7 +454,13 @@ impl Writer {
         // has an independent cache and checks for the physical backup instead.
         let kept = (|| -> Result<PriorBytes, StoreError> {
             let probe = git.another()?;
-            let recovered = !probe.has(oid);
+            let present = probe.has(oid);
+            // A try after a sharing wait reads and flushes no backup again (PERFORMANCE.md
+            // rule 1); one lost during the wait is kept again.
+            if present && earlier.is_some_and(PriorBytes::kept) {
+                return Ok(PriorBytes::StillKept);
+            }
+            let recovered = !present;
             if recovered && !self.store_file_as_blob(&probe, rel, oid)? {
                 return Ok(PriorBytes::Changed);
             }
@@ -627,7 +654,7 @@ impl Writer {
         };
         let (dir, name) = self.folder.dir_and_name(&p.path);
         crate::atomic::atomic_create_dirs(&*self.vfs, &dir)?;
-        let streamed: Cell<Option<Md5>> = Cell::new(None);
+        let streamed: Cell<Streamed> = Cell::new(Streamed::Nothing);
         let prior: Cell<Option<PriorBytes>> = Cell::new(None);
         let wrote = atomic_write_streamed(
             &*self.vfs,
@@ -635,16 +662,20 @@ impl Writer {
             name,
             &mut |out| {
                 let mut stream = Md5Stream::new();
-                let found = git
-                    .copy_blob_to(p.oid, &mut |chunk| {
-                        stream.update(chunk);
-                        out(chunk)
-                    })
-                    .map_err(StoreError::from)?;
-                if !found {
+                let mut sink_failed = false;
+                let copied = git.copy_blob_to(p.oid, &mut |chunk| {
+                    stream.update(chunk);
+                    out(chunk).inspect_err(|_| sink_failed = true)
+                });
+                streamed.set(match &copied {
+                    Ok(true) => Streamed::Bytes(stream.finish()),
+                    Ok(false) => Streamed::Missing,
+                    Err(_) if sink_failed => Streamed::Nothing,
+                    Err(_) => Streamed::Unreadable,
+                });
+                if !copied.map_err(StoreError::from)? {
                     return Err(StoreError::Other(format!("{} has no bytes here", p.path)));
                 }
-                streamed.set(Some(stream.finish()));
                 Ok(())
             },
             SyncDir::Now,
@@ -652,15 +683,17 @@ impl Writer {
             // The last look (I8): the bytes written are the blob's, and the file is as it
             // was when it was read (or still gone).
             &mut || {
-                if streamed.get() != Some(p.md5) {
+                if streamed.get() != Streamed::Bytes(p.md5) {
                     return Ok(false);
                 }
                 Ok(match self.hash_file(&p.path) {
                     Ok((md5, _)) if md5 == p.md5 => true,
                     Ok((md5, _)) if seen == Some(md5) => {
-                        let kept = self.keep_prior_carried(&p.path, md5)?;
+                        let kept = self.keep_prior_carried(&p.path, md5, prior.get())?;
                         prior.set(Some(kept));
                         match kept {
+                            // The file was read just now, and an earlier try kept its bytes.
+                            PriorBytes::StillKept => true,
                             PriorBytes::AlreadyKept | PriorBytes::Recovered => {
                                 // Proving the backup streamed its bytes; a later outside
                                 // save must still pass the comparison before rename.
@@ -712,6 +745,20 @@ impl Writer {
                 self.reasons
                     .insert(p.path.clone(), tc_journal::fold::Blocked::FileBusy);
                 report.blocked.push(p.path.clone());
+            }
+            // R19 for the version's bytes: the file stays as it is and is tried again, and
+            // the rest of the project is written (§11.4).
+            Err(crate::atomic::WriteError::NotWritten(_))
+                if streamed.get() == Streamed::Unreadable =>
+            {
+                self.reasons
+                    .insert(p.path.clone(), tc_journal::fold::Blocked::FileUnreadable);
+                report.blocked.push(p.path.clone());
+            }
+            Err(crate::atomic::WriteError::NotWritten(_))
+                if streamed.get() == Streamed::Missing =>
+            {
+                self.notice_bytes_missing(&p);
             }
             Err(e) => return Err(e.into_inner()),
         }
