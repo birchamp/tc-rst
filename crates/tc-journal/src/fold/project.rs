@@ -1018,6 +1018,54 @@ impl FoldState {
         self.decisions_in(tool, collection, keys, text)
     }
 
+    /// [`Self::check_texts`] of `chapters` of one book only: a target elsewhere has no text
+    /// here. What a Check screen re-assesses a decision it shows under another key with, when
+    /// a change names that chapter, without the rest of the book's text (PERF:80).
+    pub fn check_texts_at(&self, book: BookId, chapters: &[u16]) -> CheckTexts<'_> {
+        CheckTexts {
+            state: self,
+            book: Some((book, self.chapters_text(book, chapters))),
+        }
+    }
+
+    /// The projected text of `chapters` of a book, as [`Self::book_text`] projects each.
+    fn chapters_text(&self, book: BookId, chapters: &[u16]) -> BookText {
+        let rewound = rewound_batches(self, book);
+        BookText {
+            chapters: chapters
+                .iter()
+                .map(|&c| (c, self.chapter_text(book, c, &rewound)))
+                .collect(),
+            facts: Default::default(),
+        }
+    }
+
+    /// [`Self::decisions`] of the decisions `keys` names, each read against the text of the
+    /// chapters `chapters` of its book, by the same rule: what a Check screen re-assesses when a
+    /// change names a decision or the verse it was judged against, without the rest of the
+    /// book's text (PERF:79-80). A key of another tool or collection, a key with no decision,
+    /// and, for a book, a target outside `chapters` read as [`Self::decisions`] would not
+    /// show them: absent, or with no text.
+    pub fn decisions_at(
+        &self,
+        tool: ToolId,
+        collection: Collection,
+        keys: &[RecordKey],
+        chapters: &[u16],
+    ) -> Vec<ProjectedDecision> {
+        let text = match collection {
+            Collection::Book(book) => {
+                if !self.book(book).projects() {
+                    return Vec::new();
+                }
+                Some(self.chapters_text(book, chapters))
+            }
+            Collection::Stories => None,
+        };
+        let keys = keys.iter().filter_map(|key| self.key_idx(key)).collect();
+        self.decisions_in(tool, collection, keys, text)
+    }
+
     /// [`Self::decisions`] of one story's frames: what a story's Check session opens with. It
     /// reads that story's decisions only, never the other forty-nine's.
     pub fn story_decisions(&self, tool: ToolId, story: StoryNo) -> Vec<ProjectedDecision> {

@@ -14,12 +14,16 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 use tc_api::ApiError;
-use tc_api::buffer::{BufferKey, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave};
+use tc_api::buffer::{
+    BufferEntry, BufferKey, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave,
+};
 use tc_api::check::{
     CheckArticleRead, CheckItemView, CheckListRef, CheckSessionView, CheckUnit, Decide, DecideEdit,
     Item, Open, RailRow, RailRows, RailSince, Rows, RowsView, Tool,
 };
+use tc_api::editor::{Draft, DraftField};
 use tc_api::helps::ArticleView;
+use tc_api::ids::Scope;
 use tc_api::model::rail::{self, Filter, SortMode};
 use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, RecordPlace};
 use tc_api::query::QueryKey;
@@ -197,9 +201,29 @@ async fn write_decision(api: &Api, mut request: Decide) -> Result<Ack, CallError
 
 /// How a check comment is saved: a `check/decide` with the comment, over the newest decision
 /// token the page knows, else the one the field holds. Nothing here reads the item: the place
-/// the buffer entry names is the check.
-/// C4 adds the comment's draft on the server.
+/// the buffer entry names is the check. Its draft (`editor/draft`, A-10) names the same
+/// token, so a draft kept after a crash continues from the person's own marks instead of
+/// standing beside them as a conflict.
 struct CommentWriter;
+
+/// The newest decision token the page knows for the check a comment's place names.
+fn newest_token(key: &BufferKey, base: &[ShownToken]) -> Option<ShownToken> {
+    let (_, place, check_id) = check_item::parse_comment_place(key.field.place.as_str())?;
+    let base = base.first()?;
+    Some(WRITES.with(|w| w.token(&place, &check_id, base)))
+}
+
+fn comment_draft(key: &BufferKey, scope: Option<Scope>, entry: &BufferEntry) -> Option<Draft> {
+    Some(Draft {
+        at: scope?,
+        request: js::random_request_id(),
+        instance: entry.instance,
+        field: DraftField::CheckComment,
+        shown: vec![newest_token(key, &entry.base)?],
+        text: entry.text.clone(),
+        changed: entry.at,
+    })
+}
 
 impl FieldWriter for CommentWriter {
     fn save(
@@ -235,18 +259,41 @@ impl FieldWriter for CommentWriter {
         })
     }
 
-    fn draft(
+    fn draft_request(
         &self,
-        _: &Api,
-        _: &BufferKey,
-        _: &str,
-        _: &[ShownToken],
-    ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
-        None
+        key: &BufferKey,
+        scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<Draft> {
+        comment_draft(key, scope, entry)
     }
 
-    fn draft_call(&self, _: &BufferKey, _: &[ShownToken]) -> Option<DraftCall> {
-        None
+    fn draft_entry(
+        &self,
+        api: &Api,
+        key: &BufferKey,
+        scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
+        let api = api.clone();
+        let request = comment_draft(key, scope, entry)?;
+        Some(Box::pin(async move { api.call(&request).await }))
+    }
+
+    fn draft_call_entry(
+        &self,
+        key: &BufferKey,
+        scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<DraftCall> {
+        let mut body = serde_json::to_value(comment_draft(key, scope, entry)?).ok()?;
+        let body = body.as_object_mut()?;
+        body.remove("request");
+        body.remove("text");
+        Some(DraftCall {
+            path: "editor/draft".to_owned(),
+            body: serde_json::to_string(body).ok()?,
+        })
     }
 }
 
@@ -568,9 +615,7 @@ impl Actions {
         let CheckView::Tool(tool) = self.s().c.view.get_untracked() else {
             return None;
         };
-        let (at, list) = self.check_list(tool)?;
-        // Story detail has its own read and no Bible marking row until C4.
-        matches!(list.unit, CheckUnit::Book(_)).then_some((at, list))
+        self.check_list(tool)
     }
 
     /// The detail and everything that belongs to it goes: another tool, the picker, or no
@@ -699,6 +744,11 @@ impl Actions {
             return;
         };
         let (place, check_id) = (view.place.clone(), view.check_id.clone());
+        let comment = self
+            .s()
+            .project
+            .get_untracked()
+            .and_then(|project| comment_key(list.tool, &project, &view));
         let request = Decide {
             at,
             request: js::random_request_id(),
@@ -716,6 +766,9 @@ impl Actions {
             let result = write_decision(this.runtime().api(), request).await;
             if let Ok(ack) = &result {
                 this.patch_rail(ack);
+                if let Some(key) = &comment {
+                    this.runtime().saves().redraft(key);
+                }
             }
             let c = &this.s().c;
             let shown = c.detail.with_untracked(|d| {

@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use leptos::prelude::*;
-use tc_api::check::{CheckEmpty, CheckListRef, CheckUnit, RailRow, Tool};
+use tc_api::check::{CheckEmpty, CheckUnit, RailRow, Tool};
 use tc_api::model::rail::{self, Filter, GroupLabel, SortMode};
 use wasm_bindgen::JsCast;
 
@@ -710,7 +710,6 @@ enum Shown {
 pub fn check_session(
     s: &AppState,
     actions: &Actions,
-    at: tc_api::ids::Scope,
     unit: CheckUnit,
     tool: Tool,
 ) -> impl IntoView + use<> {
@@ -774,24 +773,8 @@ pub fn check_session(
                 }
             };
             // Row patches update the rail without remounting the detail or its comment field.
-            let detail = match unit {
-                CheckUnit::Book(book) => super::detail::check_detail(&s, &actions, book, tool),
-                CheckUnit::Story(_) => {
-                    let total = session.with_untracked(|session| match session {
-                        Some(Session::Open(rail)) => rail.rows.len(),
-                        _ => 0,
-                    });
-                    super::story::story_detail(
-                        &s,
-                        &actions,
-                        at.clone(),
-                        CheckListRef { tool, unit },
-                        total,
-                    )
-                }
-            };
-            let academy = matches!(unit, CheckUnit::Book(_))
-                .then(|| super::detail::academy_drawer(&s, &actions));
+            let detail = super::detail::check_detail(&s, &actions, unit, tool);
+            let academy = super::detail::academy_drawer(&s, &actions);
             view! {
                 <div data-testid="check-session" style=root.to_style()>
                     {rail}

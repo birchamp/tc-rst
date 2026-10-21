@@ -1128,6 +1128,17 @@ pub(crate) fn article_title(loaded: &LoadedBook, link: &ArticleLink) -> Option<S
     .map(|found| found.title.to_owned())
 }
 
+/// [`article_title`] in the helps of either resource kind.
+pub(crate) fn resources_article_title(
+    resources: &BookResourcesRef<'_>,
+    link: &ArticleLink,
+    parts: (HelpsPart, HelpsPart),
+) -> Option<String> {
+    find_article(resources.helps, link, parts)
+        .0
+        .map(|found| found.title.to_owned())
+}
+
 impl Handle<Article> for App {
     async fn handle(&self, req: Article) -> Result<ArticleView, ApiError> {
         let session = self.read(&req.at)?;

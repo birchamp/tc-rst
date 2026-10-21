@@ -606,8 +606,7 @@ pub struct CheckItemView {
     pub helps_dir: Option<Direction>,
     /// The check's article, and its title when the pinned resources carry it.
     pub article: CheckArticle,
-    pub original: OriginalView,
-    pub gateway: GatewayView,
+    pub sources: CheckSources,
     pub target: TargetWords,
     pub decision: Shown<DecisionView>,
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
@@ -624,6 +623,26 @@ pub struct CheckArticle {
     pub title: Option<String>,
     /// The folder of a tW article or the thematic category of a tN one, in the drawer's eyebrow.
     pub category: Category,
+}
+
+/// The source texts of the compare card (tC4's `SourcePanes`): a verse's original-language and
+/// gateway texts, or a story's gateway frame (a story has no original-language text, D74).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum CheckSources {
+    Verse {
+        original: OriginalView,
+        gateway: GatewayView,
+    },
+    Story {
+        pane: StoryPane,
+    },
 }
 
 /// The original-language row of the compare card (tC4's `OrigPane`).
@@ -707,19 +726,20 @@ pub enum GatewayText {
     },
 }
 
-/// The words of the draft verse the checker taps, and the ones the stored decision marks.
+/// The words of the draft verse or frame the checker taps, and the ones the stored decision
+/// marks.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct TargetWords {
-    /// The verse's words in order, as `tc_usfm::target_words` cuts them. Empty: not drafted.
+    /// The text's words in order, as `tc_usfm::target_words` cuts them. Empty: not drafted.
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub words: Vec<String>,
     /// Indices into `words` the stored selections mark.
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub selected: Vec<u32>,
-    /// The verse the words come from, as shown; none when the check names no verse text
-    /// (a chapter's front, a list of verses).
+    /// The record the words come from, as shown: the verse's, or the story frame's. None when
+    /// the check names no verse text (a chapter's front, a list of verses).
     pub verse: Option<ShownToken>,
 }
 
@@ -821,46 +841,6 @@ pub enum DecideEdit {
     Comment {
         text: String,
     },
-}
-
-// ---------------------------------------------------------------------------------------
-// A story's check (unit B7): `check/storyItem`
-// ---------------------------------------------------------------------------------------
-
-/// `check/storyItem`: one check of an open story session, as the item detail shows it.
-/// Reading it writes nothing. B5b's `check/item` carries decisions, the target's selectable
-/// words and the notices; until C4 writes a story's decisions this is the story card alone
-/// (the compare card's gateway row, tC4 `StoryPane`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct StoryItem {
-    pub at: Scope,
-    pub list: CheckListRef,
-    pub index: u32,
-}
-
-/// One check of a story.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
-pub struct StoryItemView {
-    pub index: u32,
-    pub place: CheckPlace,
-    /// The quote the check is about, in the gateway language: the item's title.
-    pub title: String,
-    /// The note's text as blocks (Translation Notes); empty for a words link.
-    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
-    pub note: Vec<crate::model::ArticleBlock>,
-    /// The direction of the gateway language the note is in (#650); none when the app knows no
-    /// gateway by the resolving set's language, and the note then takes the page's.
-    pub note_dir: Option<crate::shown::Direction>,
-    /// The article the check links to: the note's Translation Academy article, or the word's.
-    pub article: Option<crate::helps::ArticleLink>,
-    /// The gateway story's frame (the title for frame 0): tC4's `StoryPane`.
-    pub gateway: StoryPane,
-    /// The frame's text in the project; empty when it is not drafted.
-    pub target: String,
 }
 
 /// The compare card's gateway row of a story check.

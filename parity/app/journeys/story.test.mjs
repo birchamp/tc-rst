@@ -103,7 +103,8 @@ browserTest('j22_a_story_check_session_reads_its_quote_and_moves_with_previous_a
     assert.equal(await page.getByTestId('check-quote').textContent(), '“The Creation”', 'the title is the first check');
     assert.match(await page.getByTestId('check-item-counter').textContent(), /^Item 1 of \d+$/);
     assert.equal(await page.getByTestId('story-hl').count(), 2, 'the quote lights its two words in the gateway title');
-    assert.equal(await page.getByTestId('check-target').textContent(), 'La Creación', 'the translator\'s own title');
+    const words = await page.getByTestId('check-target').locator('[data-testid^="tw-"]').allTextContents();
+    assert.deepEqual(words, ['La', 'Creación'], 'the translator\'s own title, as words to tap');
     const requests = recordRequests(page);
     const mark = requests.mark();
     await page.getByTestId('check-next').click();
@@ -112,7 +113,7 @@ browserTest('j22_a_story_check_session_reads_its_quote_and_moves_with_previous_a
     await page.getByTestId('check-prev').click();
     await until('the first check again', async () => (await page.getByTestId('check-quote').textContent()) === '“The Creation”');
     const asked = paths(requests, mark);
-    assert.deepEqual(asked, ['/api/v1/check/storyItem'], 'moving through a story\'s checks only reads');
+    assert.deepEqual(asked, ['/api/v1/check/item'], 'moving through a story\'s checks only reads');
   }, SCENARIO);
 });
 

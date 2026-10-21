@@ -282,6 +282,12 @@ impl Actions {
             }
             let s = this.s();
             s.view_error.try_set(None);
+            // The open's overlay waits for the screen it landed on to read its book or story
+            // (`book_shown`). A tab pressed before that read, inside the overlay's first 300 ms,
+            // unmounts that screen, so nothing would ever take the overlay down, and its scrim
+            // and focus trap would hold the whole window. The screen moved to shows its own
+            // loading state instead.
+            s.u.opening.try_set(None);
             s.view.try_set(view);
         });
     }

@@ -1,9 +1,10 @@
-//! The item detail and the marks (unit B5b): `check/item`, `check/article` and `check/decide`.
+//! The item detail and the marks (units B5b and C4): `check/item`, `check/article` and
+//! `check/decide`, for a book's checks and a story's.
 //!
 //! - **An item** is read from the session's list entry (its check, its decision and state as of
 //!   the newest snapshot) and from what one check touches: the verse run its words come from
-//!   (a chapter's keys, never the book's text), the loaded book's panes, and its article. It
-//!   writes nothing.
+//!   (a chapter's keys, never the book's text) or the story frame, the loaded book's panes or
+//!   the gateway story's frame, and its article. It writes nothing.
 //! - **The draft words** are `tc_check::selection::target_words` of the target's shown text, the
 //!   words the aligner and the export use, so an index on the screen and an index in a stored
 //!   selection are the same word (FIX-text's follow-up).
@@ -14,9 +15,9 @@
 //!   read and the mark cannot send it to another check.
 
 use tc_api::check::{
-    CheckArticle, CheckArticleRead, CheckItemView, CheckNotice, CheckPlace, Decide, DecideEdit,
-    DecisionStatus, DecisionView, GatewayText, GatewayView, Item, OriginalView, RailRowPatch,
-    TargetWords, Testament, Tool,
+    CheckArticle, CheckArticleRead, CheckItemView, CheckNotice, CheckPlace, CheckSources,
+    CheckUnit, Decide, DecideEdit, DecisionStatus, DecisionView, GatewayText, GatewayView, Item,
+    OriginalView, RailRowPatch, Rung, StoryPane, TargetWords, Testament, Tool,
 };
 use tc_api::helps::{ArticleLink, ArticleView};
 use tc_api::ids::ViewSeq;
@@ -25,20 +26,21 @@ use tc_api::write::Ack;
 use tc_api::{ApiError, NotSaved};
 use tc_check::selection::{self, TargetText};
 use tc_check::status::{Edit, Triage, decision_edit};
-use tc_check::{CheckItem, CheckTarget, UserStatus};
+use tc_check::{CheckItem, CheckTarget, Collection, UserStatus};
 use tc_core::BookId;
 use tc_helps::Occurrence;
 use tc_journal::RecordKey;
 use tc_journal::record::{Record, VerseValue};
 
-use super::{ListEntry, book_of, count, installed};
+use super::{ListEntry, count, installed};
 use crate::app::App;
 use crate::backend::StoreCommand;
 use crate::counters::CountingSnapshot;
 use crate::dispatch::Handle;
 use crate::numbering::Numbering;
 use crate::understand::{
-    LoadedBook, LoadedText, article_title, article_view, blocks, literal_pane, rung_dir,
+    LoadedBook, LoadedText, article_title, article_view, blocks, literal_pane,
+    resources_article_title, resources_article_view, rung_dir,
 };
 use crate::wire;
 
@@ -129,6 +131,42 @@ fn text_at(read: &CountingSnapshot, key: &RecordKey, target: &CheckTarget) -> Op
         .then(|| TargetText::new(content))
 }
 
+/// The record a story check's frame text is in, with that text as the fold reads it (the
+/// frame's record, else the story's template of it).
+fn frame_text(read: &CountingSnapshot, target: &CheckTarget) -> Option<(RecordKey, TargetText)> {
+    let CheckTarget::Frame { story, frame } = target else {
+        return None;
+    };
+    let text = read.check_texts(Collection::Stories).text(target)?;
+    Some((
+        RecordKey::Frame(*story, *frame),
+        TargetText::new(text.content().to_owned()),
+    ))
+}
+
+/// The record whose text a check is judged against, and that text: a verse run's, or a story
+/// frame's.
+fn target_text(read: &CountingSnapshot, target: &CheckTarget) -> Option<(RecordKey, TargetText)> {
+    match target {
+        CheckTarget::Verse { .. } => verse_text(read, target),
+        CheckTarget::Frame { .. } => frame_text(read, target),
+    }
+}
+
+/// The text of record `key` as the check on `target` reads it, for the words a person tapped.
+fn judged_text(
+    read: &CountingSnapshot,
+    key: &RecordKey,
+    target: &CheckTarget,
+) -> Option<TargetText> {
+    match target {
+        CheckTarget::Verse { .. } => text_at(read, key, target),
+        CheckTarget::Frame { .. } => frame_text(read, target)
+            .filter(|(frame, _)| frame == key)
+            .map(|(_, text)| text),
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // check/item
 // ---------------------------------------------------------------------------------------
@@ -167,7 +205,7 @@ fn facts(entry: &ListEntry, read: &CountingSnapshot, index: u32) -> Result<Optio
         .copied()
         .flatten()
         .and_then(|d| entry.decisions.get(d));
-    let verse = verse_text(read, &item.key.target);
+    let verse = target_text(read, &item.key.target);
     let text = verse.as_ref().map(|(_, text)| text.shown());
     let words = text
         .map(|text| {
@@ -369,10 +407,62 @@ fn link_of(item: &CheckItem) -> ArticleLink {
     }
 }
 
+/// The gateway story's frame of a story check, with the quote's words lit (tC4's `StoryPane`).
+fn story_pane(loaded: &crate::story::LoadedObs, place: &CheckPlace, item: &CheckItem) -> StoryPane {
+    let CheckPlace::Frame { story, frame } = place else {
+        return StoryPane::Missing;
+    };
+    let frame = usize::from(*frame);
+    let tokens = loaded
+        .resources
+        .stories
+        .iter()
+        .find(|g| g.number == story.get())
+        .and_then(|g| match frame {
+            0 => Some(g.title.as_str()),
+            n => g.frames.get(n - 1).map(|f| f.text.as_str()),
+        })
+        .map(tc_helps::highlight::tokenize_plain)
+        .filter(|tokens| !tokens.is_empty());
+    match tokens {
+        Some(tokens) => {
+            let lit = tc_helps::highlight::highlight_plain(&tokens, &item.quote)
+                .into_iter()
+                .map(count)
+                .collect();
+            StoryPane::Text {
+                tokens: tokens.into_iter().map(|t| t.text).collect(),
+                lit,
+            }
+        }
+        None => StoryPane::Missing,
+    }
+}
+
+/// What a check's detail reads beside its list: the book's panes, or the gateway story.
+enum Beside {
+    Book(BookId, std::sync::Arc<LoadedBook>),
+    Story(std::sync::Arc<crate::story::LoadedObs>),
+}
+
+impl App {
+    async fn beside(
+        &self,
+        session: &std::sync::Arc<crate::session::ProjectSession>,
+        unit: CheckUnit,
+    ) -> Result<Beside, ApiError> {
+        Ok(match unit {
+            CheckUnit::Book(book) => {
+                Beside::Book(book, self.loaded_book_for_checks(session, book).await?)
+            }
+            CheckUnit::Story(_) => Beside::Story(self.loaded_obs(session).await?),
+        })
+    }
+}
+
 impl Handle<Item> for App {
     async fn handle(&self, req: Item) -> Result<CheckItemView, ApiError> {
         let session = self.read(&req.at)?;
-        let book = book_of(&req.list)?;
         let installed = installed(self)?;
         let facts = self
             .with_list(
@@ -380,7 +470,10 @@ impl Handle<Item> for App {
                 req.list.tool,
                 req.list.unit,
                 &installed,
-                |entry, read| facts(entry, read, req.index),
+                |entry, read| {
+                    facts(entry, read, req.index)
+                        .map(|f| f.map(|f| (f, entry.derived.citation.rung)))
+                },
             )
             .await?
             .map_err(|_| ApiError::ToolNotReady)?
@@ -390,28 +483,51 @@ impl Handle<Item> for App {
                     crate::reports::facts(serde_json::json!({ "reason": reason })),
                 )
             })?;
-        let Some(facts) = facts else {
+        let Some((facts, set)) = facts else {
             return Err(ApiError::BadRequest {
                 field: "index".to_owned(),
                 reason: format!("the list has no check {}", req.index),
             });
         };
-        let loaded = self.loaded_book_for_checks(&session, book).await?;
         let link = link_of(&facts.item);
-        let part = match req.list.tool {
-            Tool::TranslationNotes => tc_helps::HelpsPart::Notes,
-            Tool::TranslationWords => tc_helps::HelpsPart::WordLinks,
-        };
-        let rung = match loaded.resources.parts.get(&part) {
-            Some(tc_resources::PartStatus::Loaded { rung, .. }) => *rung,
-            _ => None,
+        let (sources, helps_dir, title) = match self.beside(&session, req.list.unit).await? {
+            Beside::Book(book, loaded) => {
+                let part = match req.list.tool {
+                    Tool::TranslationNotes => tc_helps::HelpsPart::Notes,
+                    Tool::TranslationWords => tc_helps::HelpsPart::WordLinks,
+                };
+                let rung = match loaded.resources.parts.get(&part) {
+                    Some(tc_resources::PartStatus::Loaded { rung, .. }) => *rung,
+                    _ => None,
+                };
+                (
+                    CheckSources::Verse {
+                        original: original(&loaded, book, &facts.place),
+                        gateway: gateway(&loaded, &facts.place, &facts.item),
+                    },
+                    rung_dir(loaded.pins(), rung),
+                    article_title(&loaded, &link),
+                )
+            }
+            Beside::Story(loaded) => (
+                CheckSources::Story {
+                    pane: story_pane(&loaded, &facts.place, &facts.item),
+                },
+                rung_dir(
+                    loaded.pins.as_ref(),
+                    Some(match set {
+                        Rung::Primary => tc_resources::Rung::Primary,
+                        Rung::Fallback => tc_resources::Rung::Fallback,
+                    }),
+                ),
+                resources_article_title(&loaded.resources_ref(), &link, STORY_PARTS),
+            ),
         };
         Ok(CheckItemView {
             index: req.index,
             view: facts.view,
             check_id: facts.item.key.check_id.as_str().to_owned(),
-            original: original(&loaded, book, &facts.place),
-            gateway: gateway(&loaded, &facts.place, &facts.item),
+            sources,
             place: facts.place,
             title: facts.title,
             note: facts
@@ -420,9 +536,9 @@ impl Handle<Item> for App {
                 .as_deref()
                 .map(note_blocks)
                 .unwrap_or_default(),
-            helps_dir: rung_dir(loaded.pins(), rung),
+            helps_dir,
             article: CheckArticle {
-                title: article_title(&loaded, &link),
+                title,
                 category: super::category(facts.item.category),
                 link,
             },
@@ -439,6 +555,12 @@ impl Handle<Item> for App {
     }
 }
 
+/// The helps parts a story's articles are found in.
+const STORY_PARTS: (tc_helps::HelpsPart, tc_helps::HelpsPart) = (
+    tc_helps::HelpsPart::ObsNotes,
+    tc_helps::HelpsPart::ObsWordLinks,
+);
+
 // ---------------------------------------------------------------------------------------
 // check/article
 // ---------------------------------------------------------------------------------------
@@ -446,7 +568,6 @@ impl Handle<Item> for App {
 impl Handle<CheckArticleRead> for App {
     async fn handle(&self, req: CheckArticleRead) -> Result<ArticleView, ApiError> {
         let session = self.read(&req.at)?;
-        let book = book_of(&req.list)?;
         let installed = installed(self)?;
         let link = self
             .with_list(
@@ -462,8 +583,12 @@ impl Handle<CheckArticleRead> for App {
                 field: "index".to_owned(),
                 reason: format!("the list has no check {}", req.index),
             })?;
-        let loaded = self.loaded_book_for_checks(&session, book).await?;
-        Ok(article_view(&loaded, &link))
+        Ok(match self.beside(&session, req.list.unit).await? {
+            Beside::Book(_, loaded) => article_view(&loaded, &link),
+            Beside::Story(loaded) => {
+                resources_article_view(&loaded.resources_ref(), &link, STORY_PARTS)
+            }
+        })
     }
 }
 
@@ -501,7 +626,7 @@ fn edit_of(
             if read.heads(verse.key()) != verse.heads() {
                 return Err(ApiError::NotSaved(NotSaved::LookAgain));
             }
-            let text = text_at(read, verse.key(), &item.key.target)
+            let text = judged_text(read, verse.key(), &item.key.target)
                 .ok_or_else(|| bad("the verse has no text to select words from"))?;
             let indices: Vec<usize> = words.iter().map(|&i| i as usize).collect();
             Edit::Triage(Triage::Valid(
@@ -525,7 +650,6 @@ impl Handle<Decide> for App {
             .reader(&req.at)
             .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
         let handle = session.handle().clone();
-        book_of(&req.list)?;
         let installed = installed(self)?;
         let shown = wire::token::edit_token(handle.as_ref(), &req.decision)?;
         let verse = req
@@ -585,6 +709,10 @@ impl Handle<Decide> for App {
                     .and_then(Result::ok)
                     .flatten()
                     .unwrap_or_default();
+                self.inner.counters.add(
+                    crate::counters::AppCounter::RowsSerialized,
+                    rows.len() as u64,
+                );
                 wire::write::ack_decision(&reply, &session.read(), &shown, &comment, me, rows)
                     .map_err(|e| {
                         self.internal(
@@ -601,6 +729,46 @@ impl Handle<Decide> for App {
                 ),
             }),
         }
+    }
+}
+
+impl App {
+    /// *Keep* of a check comment typed before the check had a decision: the store's keep has
+    /// no decision to put it on, and a first decision needs the check's context and category,
+    /// which only the list has. So it is the save Done makes, `check/decide`'s comment over
+    /// the draft's token, and a decision made meanwhile stands beside it as a conflict.
+    pub(crate) async fn first_comment(
+        &self,
+        session: &std::sync::Arc<crate::session::ProjectSession>,
+        shown: crate::backend::EditToken,
+        text: String,
+    ) -> Result<StoreCommand, ApiError> {
+        let RecordKey::Check(key) = shown.key().clone() else {
+            return Err(ApiError::NotSaved(NotSaved::BadToken));
+        };
+        let unit = match key.target {
+            CheckTarget::Verse { book, .. } => Some(CheckUnit::Book(book)),
+            CheckTarget::Frame { story, .. } => tc_api::ids::StoryNo::new(story.get())
+                .ok()
+                .map(CheckUnit::Story),
+        };
+        let (Some(tool), Some(unit)) = (crate::plans::api_tool(key.tool), unit) else {
+            return Err(ApiError::ToolNotReady);
+        };
+        let installed = installed(self)?;
+        let (item, resource) = self
+            .with_list(session, tool, unit, &installed, |entry, _| {
+                let item = entry.derived.items.iter().find(|item| item.key == key)?;
+                Some((item.clone(), entry.derived.resolution.clone()))
+            })
+            .await?
+            .map_err(|_| ApiError::ToolNotReady)?
+            .ok_or(ApiError::NotSaved(NotSaved::LookAgain))?;
+        Ok(StoreCommand::save_decision(
+            shown.clone(),
+            shown,
+            decision_edit(&item, Edit::Comment(text), &resource),
+        ))
     }
 }
 

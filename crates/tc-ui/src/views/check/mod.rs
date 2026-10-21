@@ -53,8 +53,8 @@ pub fn Check() -> impl IntoView {
     (move || match shown.get() {
         None => ().into_any(),
         Some((at, unit, CheckView::Picker)) => picker::picker(&s, &actions, at, unit).into_any(),
-        Some((at, unit, CheckView::Tool(tool))) => {
-            check_session(&s, &actions, at, unit, tool).into_any()
+        Some((_, unit, CheckView::Tool(tool))) => {
+            check_session(&s, &actions, unit, tool).into_any()
         }
         Some((_, CheckUnit::Book(book), CheckView::Align)) => {
             crate::views::align::align_workspace(&s, &actions, book).into_any()

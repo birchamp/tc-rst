@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tc_api::check::{
-    CardCount, CheckEmpty, CheckListRef, CheckPlace, CheckUnit, Open as CheckOpen, Picker,
-    RailRows, StoryItem, StoryPane, Tool, ToolState,
+    CardCount, CheckEmpty, CheckListRef, CheckPlace, CheckSources, CheckUnit, Item,
+    Open as CheckOpen, Picker, RailRows, StoryPane, Tool, ToolState,
 };
 use tc_api::helps::{ArticleLink, ArticleView, ReadySlot, Slot, Story as HelpsStory, StoryArticle};
 use tc_api::ids::{Scope, StoryNo};
@@ -643,24 +643,32 @@ async fn a_story_with_no_check_says_so() {
 async fn a_story_check_shows_the_gateway_frame_with_its_quote_lit_and_the_projects_text() {
     let (_dir, t) = start("en-pins").await;
     let at = open_obs(&t.app).await.session.at;
-    let item = |index| StoryItem {
+    let item = |index| Item {
         at: at.clone(),
         list: list(Tool::TranslationNotes, 1),
         index,
     };
-    // The title's check (frame 0): the gateway title lit whole, the project's title as text.
+    let pane = |view: &tc_api::check::CheckItemView| match &view.sources {
+        CheckSources::Story { pane } => pane.clone(),
+        other => panic!("{other:?}"),
+    };
+    // The title's check (frame 0): the gateway title lit whole, the project's title as words.
     let title = ok(&t.app, &item(0)).await;
     assert_eq!(title.place.to_string(), "OBS 1:0");
     assert_eq!(title.title, "The Creation");
-    assert_eq!(title.target, "La Creación");
+    assert_eq!(title.target.words, ["La", "Creación"]);
+    assert!(
+        title.target.verse.is_some(),
+        "the frame's token, for a mark"
+    );
     assert!(!title.note.is_empty(), "the note's blocks");
     assert_eq!(
-        title.note_dir,
+        title.helps_dir,
         Some(tc_api::shown::Direction::Ltr),
         "the English set's notes read left to right"
     );
-    let StoryPane::Text { tokens, lit } = &title.gateway else {
-        panic!("{:?}", title.gateway)
+    let StoryPane::Text { tokens, lit } = pane(&title) else {
+        panic!("{:?}", title.sources)
     };
     assert_eq!(tokens.concat(), "The Creation");
     let lit_text: Vec<&str> = lit.iter().map(|i| tokens[*i as usize].as_str()).collect();
@@ -668,8 +676,8 @@ async fn a_story_check_shows_the_gateway_frame_with_its_quote_lit_and_the_projec
     // A frame's check: only the quote's own words are lit.
     let frame = ok(&t.app, &item(1)).await;
     assert_eq!(frame.title, "the beginning");
-    let StoryPane::Text { tokens, lit } = &frame.gateway else {
-        panic!("{:?}", frame.gateway)
+    let StoryPane::Text { tokens, lit } = pane(&frame) else {
+        panic!("{:?}", frame.sources)
     };
     assert!(
         tokens
@@ -678,14 +686,14 @@ async fn a_story_check_shows_the_gateway_frame_with_its_quote_lit_and_the_projec
     );
     let lit_text: Vec<&str> = lit.iter().map(|i| tokens[*i as usize].as_str()).collect();
     assert_eq!(lit_text, ["the", "beginning"]);
-    assert!(frame.target.starts_with("Así fue como Dios hizo todo"));
+    assert_eq!(frame.target.words[..4], ["Así", "fue", "como", "Dios"]);
     // A check of an undrafted frame has no text of the project's to select from.
     let undrafted = ok(&t.app, &item(90)).await;
-    assert_eq!(undrafted.target, "");
+    assert!(undrafted.target.words.is_empty());
     // A word list's item links to its tW article.
     let word = ok(
         &t.app,
-        &StoryItem {
+        &Item {
             at: at.clone(),
             list: list(Tool::TranslationWords, 1),
             index: 0,
@@ -693,13 +701,13 @@ async fn a_story_check_shows_the_gateway_frame_with_its_quote_lit_and_the_projec
     )
     .await;
     assert_eq!(
-        word.article,
-        Some(ArticleLink::Words {
+        word.article.link,
+        ArticleLink::Words {
             category: Some("kt".into()),
             slug: "god".into()
-        })
+        }
     );
-    // An index the list lacks is refused, and a book's list is no story's.
+    // An index the list lacks is refused.
     assert!(matches!(
         t.app.request(&item(91)).await.unwrap(),
         tc_api::Reply::Err(tc_api::ApiError::BadRequest { .. })
@@ -729,7 +737,7 @@ async fn reading_a_story_writes_nothing() {
     .await;
     ok(
         &t.app,
-        &StoryItem {
+        &Item {
             at: at.clone(),
             list: list(Tool::TranslationNotes, 1),
             index: 0,

@@ -360,11 +360,9 @@
     },
     "en-obs-check-tn-session": {
       "layers": [
-        "pixels",
         "dom"
       ],
-      "why": "A story's check card (`check/storyItem`) leaves out what needs B5b's `check/item` and C4's decisions, so its DOM differs from tC4's in four places. The progress bars carry B5a's `aria-label` (tC4 #764, see check-picker). The card has no \"Learn more: Translation Academy\" button (B5b draws it for every check, over `check/item`). Your translation is one paragraph: tC4's words are buttons a person taps to say which words render the quote (B5b's `check/item`; the story's marks are saved by C4), and the line that asks for it is not drawn. The marking row (Mark valid, Invalid, To do) and the bookmark and comment buttons are not drawn: a story's decision is written by C4, so nothing is drawn that could not be saved. Because of those, the card ends higher and the pixels below the note differ. The rail, its counts, filters and sort, the quote, the note, the gateway story with the quote's words lit, and Previous and Next are tC4's, every computed style included.",
-      "until": "C4"
+      "why": "A story's check card is B5b's detail since C4 (C4 D3): Learn more, the words to tap with their hint, the marking row, the bookmark and the comment are tC4's, and the pixels are tC4's exactly. The DOM differs in two attributes, each a declared difference of the Bible sessions. The progress bars carry B5a's `aria-label` (tC4 #764, see check-picker). \"Your translation\" stops at 80ch (`max-width`), as tC4 9ad4d5c's `Check.jsx` draws it for every check (#762 / C40, TC4-DELTA-2026-10-19 §3.12.1, see en-check-tn-session); in the 760 px story column the line is narrower than that, so nothing moves. Every other element, every computed style included, is tC4's."
     },
     "add-book-pick": {
       "layers": [

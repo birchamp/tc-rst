@@ -366,6 +366,12 @@ impl Saves {
         self.run(commands);
     }
 
+    /// See [`SaveMachine::redraft`].
+    pub fn redraft(&self, key: &BufferKey) {
+        let commands = self.machine(|m| m.redraft(key, js::now_ms()));
+        self.run(commands);
+    }
+
     /// Cancel of a section card.
     pub fn discard(&self, key: &BufferKey) {
         self.untrack(key);

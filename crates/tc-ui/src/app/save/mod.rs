@@ -1283,6 +1283,19 @@ impl SaveMachine {
         })
     }
 
+    /// Another write of the field's record (a mark under a typed check comment) moved the
+    /// token its draft names: the unsaved text is drafted again at once, so a *Keep* after a
+    /// crash continues from that write instead of standing beside it as a conflict.
+    pub fn redraft(&mut self, key: &BufferKey, now: Ms) -> Vec<Command> {
+        let mut out = Vec::new();
+        if let Some(field) = self.fields.get_mut(key) {
+            field.draft_due = Some(now);
+            field.draft_text = None;
+            pump_draft(key, field, now, &mut out);
+        }
+        out
+    }
+
     /// The worst state of all fields: an error, a save in flight, unsaved or held text, or
     /// saved. A field kept over a restart counts while its text differs from the stored text.
     pub fn worst(&self) -> Worst {

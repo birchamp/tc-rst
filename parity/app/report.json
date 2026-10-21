@@ -134,7 +134,7 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B5a",
+      "by": "C4",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "692ff5ca2aa65e5924045a7e8f9bb64ee1b534d3a99a2e8c29a3e53bcc177ebc",
@@ -146,7 +146,7 @@
       },
       "dom": {
         "tc4Sha256": "87f8929b4d1c3ea2dcabb9fa8997e66eb0ff338393bce03844b95fbaa0119e49",
-        "rustSha256": "4b7fb91ae3922bf885660c5e44567c5a1e69f83ab274a65d0f8848e1b574993a",
+        "rustSha256": "cf2bc10f135ac369372dff4c480dd4a72cb4088b0dd44d6ca981e22c118fd049",
         "scope": null,
         "same": false,
         "declared": [],
@@ -167,7 +167,7 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B5b",
+      "by": "C4",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "07ad4e490db11161a113349fba1d84b62518c3a451286bb51b31b22f1f02a191",
@@ -179,7 +179,7 @@
       },
       "dom": {
         "tc4Sha256": "5bca731316468791d28941e6aa84ef2287c2824d7af61dc2555a51dc4f5f86ec",
-        "rustSha256": "08d5396f7e694963300052a20a717d4ee03574953217b1fe0eb3602b14e7d6bb",
+        "rustSha256": "bcd13ef42f0c776f004eca084f879375913d3736598811105aec0364d1e09d89",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1351,7 +1351,7 @@
       "scenario": "en-pins",
       "locale": "en",
       "status": "differs",
-      "by": "B5a",
+      "by": "C4",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "9395146f7af942dd33e3c7b0329cf6e220bd55fea8a44289fe3c2c2dd42e6439",
@@ -1363,7 +1363,7 @@
       },
       "dom": {
         "tc4Sha256": "e63dee6ef5db074ad19fc1259180bfbf30ee88fa2fbfe09a86bbbda473d38563",
-        "rustSha256": "1b674eedc97e10406548c64de94f360238dd2bcde1babedbcb5893166a0aacf1",
+        "rustSha256": "7aef7ff053274f4b8fe5a750d7954bae9564b88a1791f3bae72ebc70b79d9e2f",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1385,7 +1385,7 @@
       "scenario": "en-pins",
       "locale": "en",
       "status": "differs",
-      "by": "B5b",
+      "by": "C4",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "278a4f03c5814c009d70db396de28cecaa7040a9faf161ad4a00879e8713fa3e",
@@ -1397,7 +1397,7 @@
       },
       "dom": {
         "tc4Sha256": "42722932a2449308f770f2601b28c0619ede8136cd072b4fbc70e05f6cb59ed7",
-        "rustSha256": "6664bf8c4f5441d6d8541ce690bea9f91372d822a2590adb2fcf8ef69a33db5b",
+        "rustSha256": "418f46836e3d485ae2206148f9eb3355111852ea29f77aec84e3569c44391404",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1457,7 +1457,7 @@
       "scenario": "en-pins",
       "locale": "en",
       "status": "differs",
-      "by": "B5b",
+      "by": "C4",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "e55099cf15f3f2dbc441e511aa4ffec480c0556040aed9a45e86009abd3ce5d8",
@@ -1469,7 +1469,7 @@
       },
       "dom": {
         "tc4Sha256": "5f4b3bfdca2e9687025a74e8582134971aeea09a376513f0c96285d5f7a500ce",
-        "rustSha256": "d632c983178ec90f0facfea72d82a104f302e6076f4b7465c1191fae32693a66",
+        "rustSha256": "d6560579697d0039dd1a717957a043ce90c2d6ce0aa5cfedd79be197713980f4",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1621,28 +1621,25 @@
       "scenario": "en-pins",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "C4",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "493e46a7b85805ed7e9e53c4572d98a26d6a0e21eac2b40466df606ab31b1908",
-        "rustSha256": "11f1d3403d0f0a360737bb49ea6147beafddac48c7419443fb87fa1519b02f56",
-        "mismatched": 102959,
-        "outsideMasks": 102959,
+        "rustSha256": "493e46a7b85805ed7e9e53c4572d98a26d6a0e21eac2b40466df606ab31b1908",
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/en-obs-check-tn-session.png"
+        "diff": null
       },
       "dom": {
         "tc4Sha256": "f273aad7f66d88cd953a16040cb275be9c4115964eee2da901d4a20ac335fdd6",
-        "rustSha256": "5f558c8ad28e6f6c953c12d59aa07bf3f37531f1f55d4428eb44d186ac8338be",
+        "rustSha256": "a419d0851bf0ed14a2859c5518b27f1cae7aab88f66a7f51195fd2afaa3dbf81",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 91 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; …",
-          "line 646: tC4           <button data-i=\"text\" data-testid=\"open-academy\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background-position-… | rust           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; …",
-          "line 647: tC4             \"Learn more: Translation Academy →\" | rust             <div data-testid=\"story-pane\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-style: ; border-bot…",
-          "line 648: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust               <span  style=\"color: var(--fg-muted); display: block; font-family: var(--font-ui); font-size: var(--fs-label); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-overline); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; te…",
-          "line 649: tC4             <div data-testid=\"story-pane\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-style: ; border-bot… | rust                 \"Gateway · story text\""
+          "line 661: tC4               <p aria-label=\"Your translation, word by word\" data-drafted=\"1\" data-testid=\"check-target\" data-words=\"target\" role=\"group\" style=\"color: var(--text-scripture); direction: ltr; font-family: var(--font-scripture); font-size: var(--fs-title-lg); line-height: 1.9; margin-bottom: 0px; marg… | rust               <p aria-label=\"Your translation, word by word\" data-drafted=\"1\" data-testid=\"check-target\" data-words=\"target\" role=\"group\" style=\"color: var(--text-scripture); direction: ltr; font-family: var(--font-scripture); font-size: var(--fs-title-lg); line-height: 1.9; margin-bottom: 0px; marg…"
         ]
       },
       "meaning": {

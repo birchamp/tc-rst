@@ -1002,9 +1002,13 @@ async fn pump(
     mut events: mpsc::UnboundedReceiver<StoreEvent>,
 ) {
     let mut previous = session.read();
+    session.checks().begin(previous.seq());
     while let Some(event) = events.recv().await {
         let event = match event {
             StoreEvent::Committed { seq, delta, cause } => {
+                // Logged before the UI hears of it, so the rows it asks for re-assess only
+                // what changed.
+                session.checks().note(seq, &delta);
                 let newest = session.read();
                 let me = session.handle.facts().device;
                 let labels = std::cell::OnceCell::new();

@@ -817,6 +817,36 @@ fn check_comment_saves_on_done_and_on_the_gate() {
     assert_eq!(page.sent_texts().len(), 3);
 }
 
+/// C4: a mark under a typed check comment moves the token its draft names, so the unsaved
+/// comment is drafted again at once, though its text is the one already drafted; a saved
+/// comment is not drafted again.
+#[test]
+fn a_mark_under_an_unsaved_check_comment_drafts_it_again() {
+    let mut page = Page::new();
+    let k = key_of(FieldKind::CheckComment, "tn TIT 1:1 abcd");
+    page.open_with(
+        &k,
+        FieldScope::Project(Some(scope(1))),
+        pair("", 1, Some(1)),
+    );
+    page.focus(&k);
+    page.type_text(&k, "ask Pablo");
+    page.advance(5000.0);
+    assert_eq!(page.drafts(), ["ask Pablo"]);
+    let commands = page.m.redraft(&k, page.now);
+    page.run(commands);
+    assert_eq!(page.drafts(), ["ask Pablo", "ask Pablo"], "drafted again");
+    page.save(&k);
+    page.deliver_ok();
+    let commands = page.m.redraft(&k, page.now);
+    page.run(commands);
+    assert_eq!(
+        page.drafts().len(),
+        2,
+        "a saved comment is not drafted again"
+    );
+}
+
 #[test]
 fn the_gate_never_saves_a_section_buffer_and_is_not_blocked_by_it() {
     let mut page = Page::new();

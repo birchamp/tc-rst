@@ -435,8 +435,8 @@ mod tests {
     use super::*;
     use std::future::Future;
     use tc_api::check::{
-        Category, CheckArticle, DecisionView, GatewayView, NoteCategory, OriginalView, TargetWords,
-        Testament,
+        Category, CheckArticle, CheckSources, DecisionView, GatewayView, NoteCategory,
+        OriginalView, TargetWords, Testament,
     };
     use tc_api::helps::ArticleLink;
     use tc_api::shown::Shown;
@@ -636,10 +636,12 @@ mod tests {
                 title: None,
                 category: Category::Note(NoteCategory::Grammar),
             },
-            original: OriginalView::Unavailable {
-                testament: Testament::Nt,
+            sources: CheckSources::Verse {
+                original: OriginalView::Unavailable {
+                    testament: Testament::Nt,
+                },
+                gateway: GatewayView::NoPane,
             },
-            gateway: GatewayView::NoPane,
             target: TargetWords {
                 words: words.iter().map(|w| (*w).to_owned()).collect(),
                 selected: selected.to_vec(),

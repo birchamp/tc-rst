@@ -53,28 +53,33 @@
           "value": "grammar"
         }
       },
-      "original": {
-        "type": "ready",
+      "sources": {
+        "type": "verse",
         "value": {
-          "testament": "nt",
-          "verse": "Παῦλος, δοῦλος Θεοῦ"
-        }
-      },
-      "gateway": {
-        "type": "pane",
-        "value": {
-          "pane": "ult",
-          "text": {
-            "type": "verse",
+          "original": {
+            "type": "ready",
             "value": {
-              "tokens": [
-                "Paul",
-                ", ",
-                "a"
-              ],
-              "lit": [
-                0
-              ]
+              "testament": "nt",
+              "verse": "Παῦλος, δοῦλος Θεοῦ"
+            }
+          },
+          "gateway": {
+            "type": "pane",
+            "value": {
+              "pane": "ult",
+              "text": {
+                "type": "verse",
+                "value": {
+                  "tokens": [
+                    "Paul",
+                    ", ",
+                    "a"
+                  ],
+                  "lit": [
+                    0
+                  ]
+                }
+              }
             }
           }
         }

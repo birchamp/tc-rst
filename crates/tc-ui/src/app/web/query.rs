@@ -375,18 +375,6 @@ impl CachedQuery for tc_api::helps::StoryArticle {
     }
 }
 
-/// One check of a story, kept by the open session (B7): the story's text and its checks.
-impl CachedQuery for tc_api::check::StoryItem {
-    fn read_of(&self) -> crate::app::cache::ReadOf {
-        let mut keys = resource_keys();
-        keys.push(tc_api::query::QueryKey::CheckList(self.list));
-        if let tc_api::check::CheckUnit::Story(story) = self.list.unit {
-            keys.push(tc_api::query::QueryKey::Story(story));
-        }
-        project_read(&self.at, keys)
-    }
-}
-
 /// A tool's rail (B5a) is read once per session and then patched by row (AD17): these reads are
 /// made by the Check screen's actions, never kept in the cache.
 impl CachedQuery for tc_api::check::Open {

@@ -194,8 +194,9 @@ impl Parts {
             RecordKey::Versification => return Err(Everything),
             // A profile names a person in the review and in every "changed by" line.
             RecordKey::DeviceProfile(_) => self.conflicts = true,
-            RecordKey::Frame(story, _) => self.story_text(*story)?,
-            RecordKey::StoryBase(story) | RecordKey::StoryRef(story) => {
+            // A frame with no record of its own shows the story's template text of it.
+            RecordKey::Frame(story, _) | RecordKey::StoryBase(story) => self.story_text(*story)?,
+            RecordKey::StoryRef(story) => {
                 self.stories.insert(story.get());
             }
             // No screen of this version shows carried files or a newer minor's kinds, and a

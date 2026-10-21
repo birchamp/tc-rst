@@ -359,8 +359,9 @@ pub struct DiscardDraft {
     pub changed: WallMs,
 }
 
-/// Unsaved editor fields. New user comments carry no token; every other field carries
-/// the displayed record, or every displayed verse for a section.
+/// Unsaved editor fields. New user comments carry no token; a check comment carries its
+/// decision's token (C4); every other field carries the displayed record, or every displayed
+/// verse for a section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(
@@ -382,6 +383,7 @@ pub enum DraftField {
         #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
         book: BookId,
     },
+    CheckComment,
 }
 
 /// The anchor of an Understand comment. A frame numbered zero is the story title.
