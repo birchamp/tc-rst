@@ -618,7 +618,7 @@ fn open_inner(
         manifest_changed: false,
         stamp_ns,
         busy: BTreeMap::new(),
-        copied_outside: BTreeSet::new(),
+        unrecorded_metadata: BTreeMap::new(),
         fold: project.fold.clone(),
         seq: 0,
         written_seq: BTreeMap::new(),

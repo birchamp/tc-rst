@@ -1160,7 +1160,7 @@ None of these files is project data that another device needs. Each is written w
 | `quarantine/…` | damaged pending files, byte copies; change lines too long for any pack (§5.11 K1) | kept until the person dismisses the notice (only while its bytes are still the ones the notice was raised for: see `external/` below) |
 | `quarantine.json` | blob ids of damaged or unreadable incoming files already reported | each damaged file is reported once, not at every sync |
 | `intake.json` | `{source, started}` | present only while an exchange-file import writes (§10.2 R7); at open it means the import did not finish |
-| `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/`; a second copy of the same path in the same second is `…-2`, `…-3`: no copy replaces another | kept until the person dismisses the notice, and while the file they were taken of is held (§6.2). A notice keeps the SHA-256 and size of its copy as it was when the notice was raised; dismissing it removes the copy only while every byte still matches, checked again before each removal attempt. A copy that cannot be read, or holds other bytes (another program saved over the name), stays with its notice and the dismissal fails; a copy already gone ends the notice |
+| `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/`; a second copy of the same path in the same second is `…-2`, `…-3`: no copy replaces another | kept until the person dismisses the notice, while the file they were taken of is held (§6.2), and, for a copy of `metadata.json`, while the recording of that version has not ended (§5.10): dismissing the notice then hides it for the session and keeps the copy. A notice keeps the SHA-256 and size of its copy as it was when the notice was raised; dismissing it removes the copy only while every byte still matches, checked again before each removal attempt. A copy that cannot be read, or holds other bytes (another program saved over the name), stays with its notice and the dismissal fails; a copy already gone ends the notice |
 | `sync.json` | `{remoteUrl, branch, confirmed: {commit, at}}` | last confirmed Door43 state; rebuilds `.git` config after git damage (§6.4 G4) |
 | `drafts.json` | `[{field, shown: [token text], text, at}]` | unsaved editor text, written at most every second while text is unsaved, by a writer beside the actor (§5.14) |
 | `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the file's header and the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary), so the facts O7's rules read of the file (its header, status and change ids) come from the section as from a read; stamped with the cache version (`INDEX_VERSION`), the format minor, the build's probe stamp (below) and the project | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing or damaged cache, one of another version, minor, stamp or project, or a file it holds no section for, only means that file is read |
@@ -2020,8 +2020,9 @@ M6  Rebuild metadata.json from the files as they now are (a path skipped in M4 k
     bytes), check it again; bytes other than the ones M3 named are named first (their heads,
     `WriteBegun`, the manifest). Look at `metadata.json` once more: when it changed since M1
     read it and holds bytes other than the ones M1 read or the new ones, a program wrote it
-    meanwhile, and they are copied and recorded (§11.1). Then atomic_write(<root>,
-    "metadata.json", …, SyncDir::Now), and `Renamed`.
+    meanwhile: they are copied and recorded (§11.1), the file is not renamed over, and the
+    job after their recording writes it. Otherwise atomic_write(<root>, "metadata.json", …,
+    SyncDir::Now), and `Renamed`.
 M7  atomic_write(.tc, "materialized.json", manifest). Each path M4 wrote is `Placed` with the
     size and mtime of the file renamed into place, the scope digest it was projected from, and
     unsettled; every other placement keeps its own settled mark, so an unsettled placement is
@@ -2051,17 +2052,30 @@ program wrote the projection, the heads moved with the same bytes) gets the fold
 for them.
 
 The burrito is valid before M4 and after M6; in between, `metadata.json` lags by milliseconds. A
-crash there is repaired at open (§6.4, rows M1 to M6).
+crash there is repaired at open (§6.4, rows M1 to M6). When M6 finds bytes a program wrote in
+`metadata.json` meanwhile, the listing lags until the actor has recorded them and the job after
+its answer writes the file (§11.1 D7); a crash in that time leaves them in the folder, recorded at
+the next open, whose first job writes the listing.
 
 A project with no book yet (a create before its first book is added, §6.4 N1) has no valid
 `metadata.json` (`currentScope` needs a book): M2 fails, nothing is written, and the paths stay
 dirty until a book is there. `metadata.json` itself is rewritten whenever its bytes are not the
 ones the group builds, since it must list the files as they are; bytes there the ledger keeps (R4
 to R14: project details edited in a text editor, a revert, any bytes when the manifest is gone or
-does not parse) are first copied to `.tc/external/` with a `MetadataEditedOutside` notice, once
-for each version of the bytes, so nothing a person wrote is lost (I8). Bytes in `metadata.json` that the app did not write are also examined and
-recorded (§11.1), as the fields of the file that are records, and the file is written over; the
-copy is what keeps the person's bytes if the recording fails. In M1 a path whose bytes the ledger
+does not parse) are first copied to `.tc/external/` with a `MetadataEditedOutside` notice, so
+nothing a person wrote is lost (I8). Bytes in `metadata.json` that the app did not write are also
+examined and recorded (§11.1), as the fields of the file that are records, and `metadata.json` is
+then pending as any recorded path is (§11.1 D7): every group ends in it, so no group runs until
+the actor answers, and a crash before the batch is durable leaves the bytes in the folder, found
+and recorded again by the next open (§6.4 X1). The answer accepts the bytes, and the job it
+starts writes the file over them; bytes with nothing to record, or that cannot be read, are
+accepted at once, and the copy keeps them. A batch the disk refused leaves the bytes in the folder
+for the writer's own retry (200 ms to 3 s, never at once, so a full disk is not asked again and
+again), which sends the same version again with its one copy and notice: the session remembers
+each version whose recording has not ended, and dismissing the notice of one keeps its copy, the
+only trace of that version once the file changes again (§3.6). A version accepted and written over
+is forgotten, so the same bytes found later (a revert to them, an editor saving its old buffer
+again) are a new edit, examined and recorded (§11.1 X3, X4). In M1 a path whose bytes the ledger
 does not call the app's is, by §6.2, either **held** (clean by stat: copied, left as it is,
 dropped from D and X, with a `StorageDamage` notice) or **recorded**: copied, examined and sent
 to the actor (§11.1), the path skipped by this job, `metadata.json` listing the
@@ -2716,8 +2730,10 @@ a book file that shows them is kept as someone's work by R4 (a copy, a recorded 
 a conflict), and the saves come back with the file at the next open.
 
 `metadata.json` follows the same table with one difference: it must list the files as they are
-(I7), so after a Record or a Hold it is written over at once; the copy and the recorded fields
-keep the person's bytes (§11.1, `MetadataEditedOutside`). Bytes about to be written over are
+(I7), so it is never held, and a Hold records its bytes with no base. After a Record the path is
+pending as a derived path is: no group writes it until the batch is durable, and the bytes are
+then accepted (`Recorded`) and written over (§5.10, §11.1 D7); the copy and the recorded fields
+keep the person's bytes (`MetadataEditedOutside`). Bytes about to be written over are
 decided even when clean by stat: the table is asked about the md5 the ledger placed, and the
 file is read only when the table keeps them. A `metadata.json` that cannot be read while a
 write of it is unsettled waits, as any path whose first write no read has settled (L125). When a file the job cannot read or write leaves no valid listing (the only book file
@@ -2813,7 +2829,7 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | U2 | USB export | renamed, before the verify (E5 reads from the device, not the cache) | a complete zip, not yet verified | the person never saw "Saved"; the next export overwrites it | before |
 | I1 | USB import | reading or validating the zip | nothing written | nothing | before |
 | I2 | USB import | some packs written, salvage batch or checkpoint not | some new packs; `.tc/intake.json` present | folded; notice "The import of Juan's file (3 Oct) did not finish. Import it again."; importing again takes the rest and adds nothing twice | after for what arrived; nothing half-applied |
-| X1 | outside-edit record | byte copy written, batch not | disk still differs | recorded again (the copy is kept twice) | after |
+| X1 | outside-edit record | byte copy written, batch not | disk still differs: no group writes a path, `metadata.json` included, before the batch that records it is durable | recorded again (the copy is kept twice) | after |
 | X2 | outside-edit record | batch written, file not rewritten | disk differs, a batch with `reconciles {path, seenMd5}` exists | not recorded twice; rewrite | after |
 | A1 | upgrade | inside the resource store temp directory | temp directory | deleted at app start | before; pins unchanged |
 | A2 | upgrade | resources installed, batch not written | new resources unused | nothing | before; the person runs the upgrade again |
@@ -4079,8 +4095,10 @@ X3  For each key k in the union of the decoded keys and the heads file's keys:
 X4  One batch, cause External { source: LocalFile { path, seen_md5 }, unknown_base }, this
     device; the pending header
     carries reconciles {path, seenMd5}. A record that a pending batch reconciling the same
-    path and md5 already changed is not recorded again (crash rows X1, X2); a record it did not
-    change is (the fold may have lost since a change the bytes show, §6.2), in a batch of its own.
+    path and md5 already changed is not recorded again while that change is still a head of the
+    record (crash rows X1, X2); a record it did not change is (the fold may have lost since a
+    change the bytes show, §6.2), and so is a record whose change the project has written over
+    since (the same bytes found after that are a revert, X3), in a batch of its own.
 X5  Fold. A known-base change whose parents are no longer the heads (the app or a teammate
     changed k after the file was written) is a sibling of the newer head: a conflict. An
     unknown-base change is a conflict with the current head unless the values are equal.
@@ -4115,7 +4133,8 @@ examined again at the next look, and a batch that reconciles them already record
 so they are accepted once the heads can be written. The same acceptance follows
 a plan that records nothing (a rewrite of line ends only, or a file whose records all equal
 what the project shows) and a file that could not be decoded; if the disk refused the batch,
-nothing is accepted and the file is looked at again with the next job. A decoded record that
+nothing is accepted, the file is not written over, and the writer's own retry looks at it again
+(never at once, which would ask a full disk again and again). A decoded record that
 the file can only show, never remove (an alignment, a decision, a comment) and that the file
 lost stays in the project, is counted in an `OutsideRemovalKept` notice and is written again
 with the file.
@@ -4126,8 +4145,9 @@ The `localFile` source of an `External` cause names the file as an ingredient pa
 looked at are those that differ from the document the app would write now and those the project
 holds a record for, so a record the file keeps is never read as one it lost; the defaults the
 builder fills in are not records. Its edit is recorded against `metadata.json`'s heads file
-(written after the file, §3.6) and the file is written over; the copy is the only notice that
-keeps the person's bytes, and a copy goes with one notice only.
+(written after the file, §3.6), and the file is pending like any other: written over once the
+batch is durable, never before (§5.10). Its copy goes with the `MetadataEditedOutside` notice
+only, raised when the bytes are found, once for each version whose recording has not ended.
 
 ### 11.2 A file edited on Door43 (web editor, gatewayEdit, tcCreate, git users)
 
@@ -4792,6 +4812,9 @@ and the on-disk end state, not only what the fold returns.
 | L133 | A temporary stat denial on a carried ingredient fails the whole materialization instead of waiting for access | both stat and content denial take R19 and keep the path dirty until retry | `a_temporarily_unreadable_carried_file_defers_and_retries_its_replacement` and the independent carried model |
 | L134 | A Git tree object passes a blob API and can stand for unreadable carried History | reject every non-blob kind before delivering any data, including packed fallback reads | `blob_apis_reject_non_blob_objects_before_delivering_any_bytes` |
 | L135 | A readable old Git object is not durable: a recreated fanout name or Windows rename can disappear after the working copy is replaced | complete explicit file and ancestor-directory flushes before authorizing destruction; packed or alternate-backed bytes get a bounded one-object backup pack with exact files flushed | durable loose/packed blob tests and `a_backup_flush_covers_a_recreated_fanout_and_propagates_every_failure` |
+| L136 | An outside edit of `metadata.json` written over before the batch that records it is durable (the actor busy with a seal step, a large book, an intake), then a power cut: the file shows the app's bytes, nothing records the edit at the next open, and its copy has no notice | `metadata.json` is pending while its bytes are recorded: no group runs until the actor answers, so a crash leaves the bytes in the folder (§5.10, §6.4 X1) | `an_outside_metadata_name_survives_a_power_cut_before_its_batch_is_durable` |
+| L137 | A version of `metadata.json` copied once this session comes back after the app wrote another name (an editor saves its old buffer, a cloud client restores it): it is taken for one seen already, and the next group writes over it with nothing recorded; a batch that reconciled those bytes earlier would also skip the record | the session remembers only versions whose recording has not ended, and a reconciling batch stands for the bytes only while its change is still a head (§5.10, §11.1 X4) | `metadata_json_put_back_to_an_earlier_outside_version_is_recorded_again` |
+| L138 | The disk refuses the batch of an outside edit of `metadata.json` (full, a scanner holding the pending file, the project turned read-only): the file was written over already, so the retry finds the app's bytes; dismissing the notice deletes the copy, the only trace, and the next open shows nothing | the file stays pending until the batch is durable and is looked at again by the writer's retry; the copy of a version whose recording has not ended survives dismissal (§3.6, §5.10) | `a_refused_metadata_recording_keeps_the_edit_or_its_copy_after_dismissal`, `a_refused_metadata_batch_is_sent_again_by_the_retry_not_at_once` |
 
 ---
 
@@ -5115,6 +5138,10 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the planner's rule 7 and the `reconciles` header (record again what the project shows) | `crash_outside_edit_recording` |
 | the digest prefilter (compare every record of the file) | `reconciling_an_outside_edit_costs_what_it_changed`, `a_watcher_event_for_three_changed_verses_costs_what_they_changed`, `outside_edit_reconcile_conserves` |
 | the writer's own retry of an outside edit the disk refused | `a_disk_that_refuses_the_batch_of_an_outside_edit_is_tried_again_by_the_writer` |
+| `metadata.json` pending while its outside edit is recorded (write it over in the same group) | `an_outside_metadata_name_survives_a_power_cut_before_its_batch_is_durable` |
+| the end of a `metadata.json` version's recording when its bytes are accepted (remember the version for the session), or X4's still-a-head condition (skip every record a reconciling batch changed) | `metadata_json_put_back_to_an_earlier_outside_version_is_recorded_again` |
+| the copy of a `metadata.json` version whose recording has not ended, kept when its notice is dismissed | `a_refused_metadata_recording_keeps_the_edit_or_its_copy_after_dismissal` |
+| the wait for the writer's own retry after an answer that accepted nothing (retry at once) | `a_refused_metadata_batch_is_sent_again_by_the_retry_not_at_once` |
 | the raw commit object (libgit2's signature, which refuses an empty email) | `the_author_is_translationcore_user_with_no_email` |
 | `refs/tc/carried` (reach only what a branch reaches) | `carried_superseded_version_survives_repack` |
 | `refs/tc/carried` written before the open's repack (write it at checkpoints only) | `carried_versions_recorded_before_a_crash_survive_the_repack_at_the_next_open` |

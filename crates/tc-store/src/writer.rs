@@ -25,6 +25,7 @@ use crate::manifest::Manifest;
 use crate::materialize::Busy;
 use crate::notices::CopyIdentity;
 use crate::open::CheckResult;
+use crate::outside::Answered;
 use crate::project::Dirty;
 use crate::reply::ReadOnlyReason;
 use crate::vfs::Vfs;
@@ -169,9 +170,11 @@ pub(crate) struct Writer {
     pub stamp_ns: i64,
     /// Derived paths another program refused the app (§5.10), by path.
     pub busy: BTreeMap<String, Busy>,
-    /// The md5 of each outside version of `metadata.json` already copied to `.tc/external/`
-    /// this session, so a blocked write that is tried again copies it once.
-    pub copied_outside: BTreeSet<String>,
+    /// Each outside version of `metadata.json` copied to `.tc/external/` whose recording has not
+    /// ended, by md5, with its copy: a retry after the disk refused its batch sends it again
+    /// with the same copy and notice. Its bytes are accepted when the recording ends, and a
+    /// version that comes back after that is a new edit (§11.1 X3).
+    pub unrecorded_metadata: BTreeMap<String, String>,
     /// The fold the job runs on, and its sequence number.
     pub fold: FoldState,
     pub seq: u64,
@@ -442,7 +445,13 @@ impl Writer {
             .notices()
             .iter()
             .any(|other| other.id != id && other.copy.is_some() && other.copy == notice.copy);
-        if held || shared_copy {
+        // So is the copy of a version of `metadata.json` whose recording has not ended, once
+        // the file changes again.
+        let unrecorded = self
+            .unrecorded_metadata
+            .values()
+            .any(|copy| Some(copy) == notice.copy.as_ref());
+        if held || shared_copy || unrecorded {
             self.shared.remove_notice(id);
             return Ok(());
         }
@@ -548,9 +557,12 @@ impl Writer {
                     .get(&rel)
                     .map(|(_, bytes)| bytes.clone())
                     .unwrap_or_default();
-                self.recorded(rel, seen, copy, outcome, &bytes);
-                // The batch is durable: the file is written again from the project now.
-                self.retry();
+                // The batch is durable: the file is written again from the project now. Bytes
+                // not accepted wait for the writer's own retry, which would otherwise send them
+                // again at once for as long as the disk refuses.
+                if self.recorded(rel, seen, copy, outcome, &bytes) == Answered::Accepted {
+                    self.retry();
+                }
             }
             Job::Repack => self.maybe_repack(),
             Job::Sync { reply } => reply.resolve(()),
@@ -734,7 +746,7 @@ mod tests {
             manifest_changed: false,
             stamp_ns: 0,
             busy: BTreeMap::new(),
-            copied_outside: BTreeSet::new(),
+            unrecorded_metadata: BTreeMap::new(),
             fold,
             seq: 1,
             written_seq: BTreeMap::new(),

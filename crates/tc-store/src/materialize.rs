@@ -24,6 +24,7 @@ use crate::error::StoreError;
 use crate::layout::{self, EXTERNAL, HEADS, MANIFEST, METADATA, TC};
 use crate::ledger::{self, Action, Base, Event, Facts, Held, HeldCause, Projection, Stat, State};
 use crate::manifest::{Entry, HeadsFile, PackEntry, heads_records};
+use crate::outside::Taken;
 use crate::vfs::{FileMeta, is_not_found};
 use crate::writer::Writer;
 use std::collections::{BTreeMap, BTreeSet};
@@ -431,7 +432,9 @@ impl Writer {
     /// pack is missing or a journal file unreadable (§4.4).
     pub(crate) fn materialize(&mut self) -> Result<MaterializeReport, StoreError> {
         let mut report = MaterializeReport::default();
-        if self.dirty.is_empty() {
+        // Every group ends in `metadata.json`: while bytes found there wait for the actor, the
+        // marks wait too, for a job after its answer (§11.1 D7).
+        if self.dirty.is_empty() || self.pending_record.contains_key(METADATA) {
             return Ok(report);
         }
         let unreadable = self.fold.unreadable_records().len();
@@ -699,6 +702,12 @@ impl Writer {
         processed: &mut BTreeSet<String>,
     ) -> Result<(), StoreError> {
         processed.insert(METADATA.to_owned());
+        if self.pending_record.contains_key(METADATA) {
+            // Every group ends in `metadata.json`, and bytes found there wait for the actor.
+            self.restore_group(group);
+            self.dirty.metadata = true;
+            return Ok(());
+        }
         let metadata_stat = self.vfs.metadata(&self.folder.path(METADATA)).ok();
         let metadata_read = match self.read_disk(METADATA) {
             Disk::Bytes(bytes) => MetadataRead::Bytes {
@@ -862,7 +871,13 @@ impl Writer {
             return Ok(());
         };
         let metadata_md5 = self.hash(&metadata);
-        let metadata_seen = self.look_at_metadata(&metadata_md5, metadata_read)?;
+        let Some(metadata_seen) = self.look_at_metadata(&metadata_md5, metadata_read)? else {
+            // Nothing is written while bytes found there are recorded (§11.1 D7).
+            self.restore_group(group);
+            self.dirty.metadata = true;
+            report.recorded.push(METADATA.to_owned());
+            return Ok(());
+        };
         // The ledger sees the successful plan's actual projection before any ingredient
         // changes. If preserving outside metadata fails, even carried bytes stay untouched.
         let carried_planned = !carried.is_empty();
@@ -1145,9 +1160,14 @@ impl Writer {
             Ok(Written::Refused) => {
                 self.restore_group(group);
                 self.dirty.metadata = true;
-                self.reasons
-                    .insert(METADATA.to_owned(), Blocked::FileUnreadable);
-                report.blocked.push(METADATA.to_owned());
+                if self.pending_record.contains_key(METADATA) {
+                    // The actor's answer brings the next job; this is no blocked write.
+                    report.recorded.push(METADATA.to_owned());
+                } else {
+                    self.reasons
+                        .insert(METADATA.to_owned(), Blocked::FileUnreadable);
+                    report.blocked.push(METADATA.to_owned());
+                }
                 false
             }
             Err(WriteError::NotWritten(e))
@@ -1218,11 +1238,12 @@ impl Writer {
 
     /// Decide the bytes read before the group, using its actual projection (§6.2).
     /// A stat cannot establish that replacement is safe: an editor may restore the mtime.
+    /// `None` when the bytes there are being recorded: the group writes nothing.
     fn look_at_metadata(
         &mut self,
         new: &str,
         read: MetadataRead,
-    ) -> Result<MetadataSeen, StoreError> {
+    ) -> Result<Option<MetadataSeen>, StoreError> {
         let (meta, disk) = match read {
             MetadataRead::Bytes { stat, bytes } => (stat, bytes),
             MetadataRead::Missing => {
@@ -1236,7 +1257,7 @@ impl Writer {
                     newer_fold: false,
                 };
                 let _ = self.apply(METADATA, Event::Read(ledger::Disk::Missing), &facts);
-                return Ok((None, None));
+                return Ok(Some((None, None)));
             }
         };
         self.counters.add(&self.counters.derived_read, 1);
@@ -1250,13 +1271,14 @@ impl Writer {
             },
             true,
         );
+        let mut taken = Taken::Accepted;
         for action in self.read_event(METADATA, disk_md5, &facts)? {
             match action {
                 Action::Record(base) => {
-                    self.keep_edited_metadata(&disk, base)?;
+                    taken = self.keep_edited_metadata(&disk, base)?;
                 }
                 Action::Hold(_) => {
-                    self.keep_edited_metadata(&disk, Base::Unknown)?;
+                    taken = self.keep_edited_metadata(&disk, Base::Unknown)?;
                 }
                 Action::Refresh => {
                     self.perform(METADATA, Some(&disk), vec![Action::Refresh])?;
@@ -1268,7 +1290,7 @@ impl Writer {
                 | Action::Forget => {}
             }
         }
-        Ok((meta, Some(d)))
+        Ok((taken == Taken::Accepted).then_some((meta, Some(d))))
     }
 
     /// M6 reads the bytes again even when their stat is unchanged. A file that became
@@ -1283,7 +1305,11 @@ impl Writer {
             Disk::Bytes(disk) => {
                 let md5 = self.hash(&disk);
                 if md5 != new && read.as_deref() != Some(md5.as_str()) {
+                    // A program wrote the file since the group read it. Its bytes are kept and
+                    // recorded, and the job after their recording writes the file: the ledger
+                    // then names them, not the write this group began.
                     self.keep_edited_metadata(&disk, Base::Unknown)?;
+                    return Ok(false);
                 }
                 Ok(true)
             }
@@ -1524,30 +1550,32 @@ impl Writer {
         self.dirty.carried |= group.carried;
     }
     /// Bytes of `metadata.json` the ledger keeps: a copy, a notice, and the fields that are
-    /// records sent to be recorded against `base` (§11.1 X2); the file is written over right
-    /// after, and again from the records once the batch is durable. A retry of a blocked write
-    /// finds the same outside bytes: one copy of them. `false` when these bytes were seen
-    /// already.
+    /// records sent to be recorded against `base` (§11.1 X2). While the actor records them the
+    /// path is pending and no group writes it; once they are accepted the file is written
+    /// again from the project. A version found again before its recording ended (the disk
+    /// refused the batch) keeps its one copy and notice.
     pub(crate) fn keep_edited_metadata(
         &mut self,
         disk: &[u8],
         base: Base,
-    ) -> Result<bool, StoreError> {
+    ) -> Result<Taken, StoreError> {
         let md5 = self.hash(disk);
-        if self.copied_outside.contains(&md5) {
-            return Ok(false);
-        }
-        let copy = self.copy_external(METADATA, disk)?;
-        self.copied_outside.insert(md5);
-        self.notice(
-            Notice::MetadataEditedOutside {
-                copy: copy.as_str().into(),
-            },
-            Some(copy.clone()),
-        );
-        self.record_metadata_edit(disk, copy, base);
+        let copy = match self.unrecorded_metadata.get(&md5) {
+            Some(copy) => copy.clone(),
+            None => {
+                let copy = self.copy_external(METADATA, disk)?;
+                self.unrecorded_metadata.insert(md5, copy.clone());
+                self.notice(
+                    Notice::MetadataEditedOutside {
+                        copy: copy.as_str().into(),
+                    },
+                    Some(copy.clone()),
+                );
+                copy
+            }
+        };
         self.dirty.metadata = true;
-        Ok(true)
+        self.record_metadata_edit(disk, copy, base)
     }
     /// The digest `metadata.json`'s entry keeps: its records' and its ingredient table's.
     pub(crate) fn metadata_scope(&self) -> String {

@@ -202,17 +202,15 @@ impl Writer {
                 let actions = self.read_event(rel, md5, &facts)?;
                 for action in actions {
                     match action {
-                        // `metadata.json` is written over at once after a copy; a fixed file
-                        // is never recorded, only restored after a copy (§3.5).
+                        // `metadata.json` is never held: it must list the files as they are; a
+                        // fixed file is never recorded, only restored after a copy (§3.5).
                         ledger::Action::Record(base) if kind == Kind::Metadata => {
-                            if self.keep_edited_metadata(&disk, base)? {
-                                report.found.push(rel.to_owned());
-                            }
+                            self.keep_edited_metadata(&disk, base)?;
+                            report.found.push(rel.to_owned());
                         }
                         ledger::Action::Hold(_) if kind == Kind::Metadata => {
-                            if self.keep_edited_metadata(&disk, ledger::Base::Unknown)? {
-                                report.found.push(rel.to_owned());
-                            }
+                            self.keep_edited_metadata(&disk, ledger::Base::Unknown)?;
+                            report.found.push(rel.to_owned());
                         }
                         ledger::Action::Record(_) | ledger::Action::Hold(_) => {
                             self.restore_fixed(rel, &disk)?;
