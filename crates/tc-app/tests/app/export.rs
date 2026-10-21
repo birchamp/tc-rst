@@ -274,3 +274,107 @@ async fn a_bible_project_has_no_stories_to_print() {
     let reply = t.app.request(&export::Stories { at }).await.unwrap();
     assert!(matches!(reply, tc_api::Reply::Err(_)), "{reply:?}");
 }
+
+/// tC4 #782: Genesis 1:1 of the en_ult aligns "the heavens" inside another alignment, two levels
+/// down. A book added from that file prints the whole verse, as Translate shows it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_preview_prints_the_words_inside_nested_alignments() {
+    use tc_api::create::{AddUsfmBooks, Bible, Details, UsfmFile, UsfmOutcome};
+    use tc_api::ids::UploadId;
+    use tc_api::session::{Open, OpenUnit};
+    use tc_api::shown::Direction;
+    use tc_app::StoreChoice;
+
+    use super::common::{Parts, TestApp, post, rid};
+
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("app-data/uploads")).unwrap();
+    let world = crate::store_world::store_world();
+    let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
+        deps.store = StoreChoice::Given(world.store());
+    })
+    .await;
+    let project = post(
+        &t.app,
+        &Bible {
+            request: rid(1),
+            details: Details {
+                name: "English Bible".to_owned(),
+                language_name: "English".to_owned(),
+                code: "en".to_owned(),
+                door43_code: None,
+                direction: Direction::Ltr,
+                font: String::new(),
+            },
+            versification: "eng".to_owned(),
+        },
+    )
+    .await
+    .unwrap()
+    .project;
+    let upload = UploadId::parse(&format!("{:032x}", 1)).unwrap();
+    std::fs::copy(
+        repo_root().join("fixtures/tc4/test-fixtures/en_ult/GEN-1.usfm"),
+        dir.path().join("app-data/uploads").join(upload.as_str()),
+    )
+    .unwrap();
+    let added = post(
+        &t.app,
+        &AddUsfmBooks {
+            request: rid(2),
+            project: project.clone(),
+            files: vec![UsfmFile {
+                upload,
+                name: "01-GEN.usfm".to_owned(),
+            }],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        added.rows[0].outcome,
+        UsfmOutcome::Added {
+            book: BookId::Genesis
+        }
+    );
+    let job = ok(
+        &t.app,
+        &Open {
+            request: rid(3),
+            project,
+            unit: Some(OpenUnit::Book(BookId::Genesis)),
+        },
+    )
+    .await;
+    let mut watch = t.app.jobs().watch(job).unwrap();
+    let state = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        watch
+            .wait_for(tc_app::jobs::JobRegistry::is_ended)
+            .await
+            .unwrap()
+            .clone()
+    })
+    .await
+    .unwrap();
+    let at = match state {
+        tc_api::jobs::JobState::Done(tc_api::jobs::JobOutcome::Opened(opened)) => opened.session.at,
+        other => panic!("{other:?}"),
+    };
+    let print = book(&t.app, &at, BookId::Genesis).await;
+    let Some(PrintItem::Chapter(one)) = print.items.first() else {
+        panic!("{print:?}")
+    };
+    let first = one.verses.first().unwrap();
+    assert_eq!(first.label.as_str(), "1");
+    let words = first
+        .text
+        .as_deref()
+        .unwrap()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_eq!(
+        words,
+        "In the beginning God created the heavens and the earth."
+    );
+}
