@@ -35,6 +35,7 @@ pub mod language;
 pub mod load;
 pub mod offer;
 pub mod open_door43;
+pub mod print;
 pub mod recovery;
 pub mod save;
 pub mod section;

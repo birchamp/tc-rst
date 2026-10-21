@@ -103,6 +103,11 @@ pub(crate) fn open_external(url: &str) {
     }
 }
 
+/// Whether the shell can print a PDF: without it there is no PDF export (`tC4:src/data/export/pdf.ts:120`).
+pub(crate) fn has_print_pdf() -> bool {
+    method("printPdf").is_some()
+}
+
 /// Whether the shell can send a Feedback report.
 pub(crate) fn has_feedback_send() -> bool {
     method("feedbackSend").is_some()

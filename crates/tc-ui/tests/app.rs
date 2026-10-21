@@ -18,6 +18,7 @@ mod app {
     mod internet;
     mod language;
     mod offer;
+    mod print;
     mod recovery;
     mod save;
     pub mod save_kit;
