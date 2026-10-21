@@ -513,7 +513,9 @@ fn main_view(s: &AppState) -> AnyView {
         Screen::Draft => view! { <crate::views::translate::Translate /> }.into_any(),
         Screen::StoryUnderstand => view! { <StoryUnderstand /> }.into_any(),
         Screen::StoryDraft => view! { <StoryDraft /> }.into_any(),
-        // B8 Community Checking.
-        Screen::CommunityChecking | Screen::Nothing => ().into_any(),
+        Screen::CommunityChecking => {
+            view! { <crate::views::community_checking::CommunityChecking /> }.into_any()
+        }
+        Screen::Nothing => ().into_any(),
     }
 }

@@ -29,6 +29,7 @@ mod app {
     mod drafted;
     mod drafts;
     mod events;
+    mod export;
     mod feedback;
     mod field_store;
     mod flows;

@@ -23,6 +23,7 @@ mod op_counts {
     mod check;
     mod comments;
     pub mod corpus;
+    mod export;
     pub mod harness;
     mod home;
     mod lint;

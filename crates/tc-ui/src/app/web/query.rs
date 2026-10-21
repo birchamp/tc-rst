@@ -343,6 +343,26 @@ impl CachedQuery for tc_api::story::Open {
     }
 }
 
+/// The preview of a book (B8): any change in the book.
+impl CachedQuery for tc_api::export::Book {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, vec![tc_api::query::QueryKey::Book(self.book)])
+    }
+}
+
+/// The preview of the stories (B8): any change of a story, and the pins its pictures follow.
+impl CachedQuery for tc_api::export::Stories {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        let mut keys = resource_keys();
+        keys.extend(
+            (1..=tc_api::ids::StoryNo::COUNT)
+                .filter_map(|n| tc_api::ids::StoryNo::new(n).ok())
+                .map(tc_api::query::QueryKey::Story),
+        );
+        project_read(&self.at, keys)
+    }
+}
+
 impl CachedQuery for tc_api::helps::Story {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         project_read(&self.at, resource_keys())

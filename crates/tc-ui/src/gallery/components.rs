@@ -818,7 +818,7 @@ fn filter_chip(p: Props) -> AnyView {
         mark: p.str("mark"),
         tone: p.keyword("tone").unwrap_or_default(),
         on_click: handler(&p, "onClick"),
-        style: p.css("style"),
+        style: p.css("style").into(),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
     })

@@ -107,6 +107,9 @@ const PHASE_0: &[&str] = &[
     "resources/fixFetch",
     "resources/fixSideload",
     "resources/fixRepin",
+    // B8: what the Community Checking preview prints.
+    "export/book",
+    "export/stories",
     "test/quiet",
     "test/echo",
     "test/crash",
