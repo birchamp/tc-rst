@@ -514,7 +514,7 @@ Follow-ups the fix units left (2026-10-19):
   the review is open, and a failed open keeps it (#724).
 - **C1a:** creation pins at first open (#766).
 - **C2:** a save replaces `words` only (#786); Resume banner after a span save (#576).
-- **C4:** re-read the draft on return (#532).
+- **C4:** re-read the draft on return (#532). *Done by C4: the story half (journey `check_returns_draft_a_frame_drafted_in_translate_shows_on_the_return`) and the late draft with no navigation (`a_check_shown_before_its_verse_has_text_shows_the_text_when_it_arrives`); B5b did the Bible half.*
 - **C5:** compare stored source words with resources in NFC (#768).
 - **C6 (done):** one-batch add from USFM, refuse only what a record cannot hold (#767); split
   aligned files (#553); singular keys (#577); the USFM method step (#484); dialog polish
