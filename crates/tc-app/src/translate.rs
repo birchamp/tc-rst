@@ -325,6 +325,14 @@ impl App {
         text: &str,
         at: WallMs,
     ) {
+        if let RecordKey::Frame(story, _) | RecordKey::StoryRef(story) = shown.key() {
+            let frame = match shown.key() {
+                RecordKey::Frame(_, frame) => frame.0,
+                _ => 0,
+            };
+            self.record_story_edit(session, *story, frame, text, at);
+            return;
+        }
         let (book, chapter, verse) = match shown.key() {
             RecordKey::Verse(book, chapter, verse) => {
                 (*book, chapter.get(), verse.get().to_string())
@@ -378,10 +386,10 @@ impl Handle<Draft> for App {
             .reader(&req.at)
             .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
         let handle = session.handle().clone();
-        let (field, shown) = draft_target(handle.as_ref(), req.field, &req.shown)?;
-        let first = shown[0].clone();
+        let (field, shown) = draft_target(handle.as_ref(), &session.read(), req.field, &req.shown)?;
+        let first = shown.first().cloned();
         let command = StoreCommand::draft(
-            field,
+            field.clone(),
             shown,
             req.text.clone(),
             tc_journal::WallTime(req.changed.0),
@@ -397,14 +405,24 @@ impl Handle<Draft> for App {
                     crate::reports::facts(json!({"reason": error.0})),
                 ),
             })?;
-        self.record_translate_edit(&session, &first, &req.text, req.changed);
+        match &field {
+            tc_journal::command::DraftField::UserComment { target } => {
+                self.record_comment_edit(&session, target, &req.text, req.changed)
+            }
+            _ => {
+                if let Some(first) = first {
+                    self.record_translate_edit(&session, &first, &req.text, req.changed);
+                }
+            }
+        }
         Ok(())
     }
 }
 
-/// Every current editor draft names a nonempty, validated set of displayed parents.
+/// Every draft validates its displayed parents; a new user comment has none.
 fn draft_target(
     handle: &dyn ProjectHandle,
+    read: &CountingSnapshot,
     kind: DraftField,
     over: &[tc_api::ShownToken],
 ) -> Result<(tc_journal::command::DraftField, Vec<EditToken>), ApiError> {
@@ -412,10 +430,41 @@ fn draft_target(
         .iter()
         .map(|token| wire::token::edit_token(handle, token))
         .collect::<Result<Vec<_>, _>>()?;
+    if let DraftField::UserComment { target } = kind {
+        let target = crate::comments::target(target)?;
+        if shown.len() > 1
+            || shown
+                .first()
+                .is_some_and(|token| !crate::comments::matches_target(read, token, &target))
+        {
+            return Err(ApiError::NotSaved(NotSaved::BadToken));
+        }
+        return Ok((
+            tc_journal::command::DraftField::UserComment { target },
+            shown,
+        ));
+    }
     let first = shown
         .first()
         .ok_or(ApiError::NotSaved(NotSaved::BadToken))?;
     let field = match kind {
+        DraftField::Frame | DraftField::StoryRef => {
+            if shown.len() != 1
+                || !matches!(
+                    (kind, first.key()),
+                    (DraftField::Frame, RecordKey::Frame(..))
+                        | (DraftField::StoryRef, RecordKey::StoryRef(_))
+                )
+            {
+                return Err(ApiError::NotSaved(NotSaved::BadToken));
+            }
+            if matches!(kind, DraftField::Frame) {
+                tc_journal::command::DraftField::Frame
+            } else {
+                tc_journal::command::DraftField::StoryRef
+            }
+        }
+        DraftField::UserComment { .. } => return Err(ApiError::NotSaved(NotSaved::BadToken)),
         DraftField::Words | DraftField::Layout => {
             if shown.len() != 1 || !matches!(first.key(), RecordKey::Verse(..)) {
                 return Err(ApiError::NotSaved(NotSaved::BadToken));
@@ -469,7 +518,7 @@ impl Handle<DiscardDraft> for App {
         if let tc_api::event::SessionMode::ReadOnly(reason) = handle.facts().mode {
             return Err(ApiError::NotSaved(NotSaved::ReadOnly(reason)));
         }
-        let (field, shown) = draft_target(handle.as_ref(), req.field, &req.shown)?;
+        let (field, shown) = draft_target(handle.as_ref(), &session.read(), req.field, &req.shown)?;
         let discarded = tokio::task::spawn_blocking(move || {
             handle.discard_current_draft(
                 field,

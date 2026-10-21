@@ -105,6 +105,60 @@ fn text_ack(
     })
 }
 
+/// A frame, reference or user-comment save, including the minted identity of a new
+/// comment. Read the acknowledged batch rather than a later projected revision.
+pub fn record_ack(
+    reply: &StoreReply,
+    read: &CountingSnapshot,
+    shown: Option<&EditToken>,
+    sent: &str,
+    me: DeviceId,
+) -> Result<Ack, WireError> {
+    let key = shown
+        .map(EditToken::key)
+        .or_else(|| {
+            reply.tokens.iter().find_map(|(key, _)| {
+                matches!(key, tc_journal::RecordKey::Comment(_)).then_some(key)
+            })
+        })
+        .ok_or_else(|| WireError::Record("a saved comment has no record token".into()))?;
+    let record = record_ref(key).ok_or_else(|| WireError::Record(format!("{key:?}")))?;
+    let (stored, disk_warning) = stored(&reply.stored);
+    let tokens = if matches!(reply.stored, Stored::Unchanged) {
+        vec![token_update(
+            key,
+            shown.ok_or_else(|| WireError::Record("a new comment was unchanged".into()))?,
+        )?]
+    } else {
+        reply
+            .tokens
+            .iter()
+            .map(|(key, token)| token_update(key, token))
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    let text = reply
+        .changes
+        .iter()
+        .filter_map(|id| read.body(id))
+        .filter(|body| body.record.key() == *key)
+        .find_map(|body| match body.record {
+            Record::Frame { value, .. } => Some(value),
+            Record::StoryRef { value, .. } => Some(value.unwrap_or_default()),
+            Record::Comment { value, .. } => Some(value.text),
+            _ => None,
+        })
+        .unwrap_or_else(|| sent.nfc().collect());
+    Ok(Ack {
+        view: view(reply.seq),
+        stored,
+        tokens,
+        new_conflicts: new_conflicts(reply, read, &record, me)?,
+        saved: vec![SavedValue { record, text }],
+        rows: Vec::new(),
+        disk_warning,
+    })
+}
+
 /// The `Ack` of a decision save the store answered. `shown` is the decision token the request
 /// carried; `comment` is the comment the request asked to store, which the `Ack` hands back as
 /// what the check comment's field saved (the stored one, read from the batch's change of the

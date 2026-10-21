@@ -5,13 +5,41 @@
 //! Frame 0 is the story's title. A frame is drafted exactly when its paragraph is not empty
 //! (#289): the one rule the rail's marker and the target cell share.
 
-use tc_api::ids::StoryNo;
+use tc_api::buffer::{BufferKey, FieldKey, FieldKind, FieldPlace};
+use tc_api::ids::{ProjectId, ProjectRef, StoryNo};
 use tc_api::story::{
     FrameComment, ImageNote, PackReport, PackVia, SourceNotice, StoryRow, StoryView,
 };
 
 use crate::app::shell::js_space;
 use crate::i18n::{keys, t};
+
+/// The store's story-frame place, also used by recovered drafts (frame 0 is the title).
+pub fn parse_frame_place(place: &str) -> Option<(StoryNo, u16)> {
+    let (story, frame) = place.split_once('-')?;
+    Some((StoryNo::new(story.parse().ok()?).ok()?, frame.parse().ok()?))
+}
+
+pub fn unit_key(
+    project: &ProjectRef,
+    id: &ProjectId,
+    story: StoryNo,
+    frame: Option<u16>,
+) -> Option<BufferKey> {
+    let (kind, place) = match frame {
+        Some(0) => (FieldKind::StoryTitle, format!("{:02}-00", story.get())),
+        Some(frame) => (FieldKind::Frame, format!("{:02}-{frame:02}", story.get())),
+        None => (FieldKind::StoryRef, format!("{:02}", story.get())),
+    };
+    Some(BufferKey {
+        project: project.clone(),
+        id: id.clone(),
+        field: FieldKey {
+            kind,
+            place: FieldPlace::parse(&place).ok()?,
+        },
+    })
+}
 
 /// tC4's `isFrameDrafted`: the paragraph is not empty once JavaScript's `trim` has run.
 pub fn is_frame_drafted(text: &str) -> bool {

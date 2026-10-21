@@ -151,6 +151,9 @@ macro_rules! unscoped {
 }
 
 scoped!(
+    crate::editor::AddComment,
+    crate::story::SaveFrame,
+    crate::story::SaveRef,
     crate::editor::SaveVerse,
     crate::editor::SaveLayout,
     crate::editor::SaveSection,

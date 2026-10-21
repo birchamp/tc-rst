@@ -1,5 +1,5 @@
 //! Open Bible Stories (unit B7): the story rail, one story with its gateway story and its
-//! pictures, a story's helps and the pictures' route. Nothing here writes the project: a story
+//! pictures, a story's helps, and C3's displayed-token saves. A story
 //! is the file the fold derives, read once per open (`story_open_touches_one_story`), and the
 //! gateway story, the helps and the picture packs are read from the resources installed here.
 //!
@@ -9,7 +9,8 @@
 
 use std::sync::Arc;
 
-use tc_api::ApiError;
+use crate::backend::StoreCommand;
+use crate::wire;
 use tc_api::helps::{
     ArticleView, NoteCard, PassageView, QuestionCard, Slot, Story as HelpsStory, StoryArticle,
     WordCard,
@@ -20,6 +21,7 @@ use tc_api::story::{
     FrameComment, FrameView, GatewayStory, ImageNote, List, Open, PackReport, PackVia,
     SourceNotice, StoryList, StoryRow, StoryView,
 };
+use tc_api::{ApiError, NotSaved};
 use tc_helps::obs::ObsStory;
 use tc_helps::{HelpRef, HelpsPart};
 use tc_journal::fold::DerivedFile;
@@ -314,29 +316,29 @@ impl Handle<List> for App {
 
 /// The user comments on `story`'s frames, oldest first. A comment on a check is not a story
 /// note. Costs the story's own comments.
-fn comments_of(read: &crate::counters::CountingSnapshot, story: StoryNo) -> Vec<FrameComment> {
-    let Ok(story) = journal_story(story) else {
-        return Vec::new();
-    };
-    let mut out: Vec<FrameComment> = read
-        .story_comments_of(story)
-        .into_iter()
-        .filter_map(|key| {
-            let Some(Record::Comment { value, .. }) = read.projected(&key) else {
-                return None;
-            };
-            let CommentTarget::Frame { frame, .. } = value.target else {
-                return None;
-            };
-            Some(FrameComment {
-                frame: frame.0,
-                text: value.text,
-                at: WallMs(read.written_at(&key).map_or(0, |at| at.0)),
-            })
-        })
-        .collect();
+fn comments_of(
+    app: &App,
+    read: &crate::counters::CountingSnapshot,
+    story: StoryNo,
+) -> Result<Vec<FrameComment>, ApiError> {
+    let story = journal_story(story)?;
+    let mut out = Vec::new();
+    for key in read.story_comments_of(story) {
+        let Some(Record::Comment { value, .. }) = read.projected(&key) else {
+            continue;
+        };
+        let CommentTarget::Frame { frame, .. } = value.target else {
+            continue;
+        };
+        out.push(FrameComment {
+            token: app.shown_token(read, &key)?,
+            frame: frame.0,
+            text: value.text,
+            at: WallMs(read.written_at(&key).map_or(0, |at| at.0)),
+        });
+    }
     out.sort_by_key(|c| c.at);
-    out
+    Ok(out)
 }
 
 /// Why the gateway story is not shown, and the story when it is (tC4's `ObsSourceState`).
@@ -426,12 +428,31 @@ impl Handle<Open> for App {
             .frames
             .iter()
             .zip(&shown.images)
-            .map(|(frame, image)| FrameView {
-                text: frame.text.clone(),
-                image: image.uri().map(str::to_owned),
+            .enumerate()
+            .map(|(index, (frame, image))| {
+                Ok(FrameView {
+                    token: self.shown_token(
+                        &read,
+                        &RecordKey::Frame(
+                            journal_story(req.story)?,
+                            tc_journal::FrameNo(
+                                u16::try_from(index + 1).map_err(|_| not_a_story_project())?,
+                            ),
+                        ),
+                    )?,
+                    text: frame.text.clone(),
+                    image: image.uri().map(str::to_owned),
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>, ApiError>>()?;
         Ok(StoryView {
+            view: wire::scope::view(read.seq()),
+            title_token: self.shown_token(
+                &read,
+                &RecordKey::Frame(journal_story(req.story)?, tc_journal::FrameNo(0)),
+            )?,
+            reference_token: self
+                .shown_token(&read, &RecordKey::StoryRef(journal_story(req.story)?))?,
             story: req.story,
             title: story.title.clone(),
             reference: story.reference.clone().unwrap_or_default(),
@@ -443,7 +464,7 @@ impl Handle<Open> for App {
                 wanted: u32::try_from(note.wanted).unwrap_or(u32::MAX),
                 packs: note.packs.into_iter().map(pack_report).collect(),
             }),
-            comments: comments_of(&read, req.story),
+            comments: comments_of(self, &read, req.story)?,
         })
     }
 }
@@ -620,6 +641,142 @@ impl App {
         })
         .await
         .ok()?
+    }
+}
+
+impl App {
+    pub(crate) fn record_story_edit(
+        &self,
+        session: &ProjectSession,
+        story: tc_journal::StoryNo,
+        frame: u16,
+        text: &str,
+        at: WallMs,
+    ) {
+        let Ok(story) = StoryNo::new(story.get()) else {
+            return;
+        };
+        let folder = session.scope().project.clone();
+        self.inner.prefs.record_last_used(folder.clone(), at);
+        self.inner.prefs.record_last_edit(
+            session.id().clone(),
+            crate::prefs::LastEdit {
+                project: folder,
+                unit: crate::prefs::EditUnit::Story { story, frame },
+                mode: tc_api::prefs::PlaceMode::Draft,
+                tool: None,
+                snippet: text
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .chars()
+                    .take(160)
+                    .collect(),
+                at,
+            },
+        );
+    }
+
+    async fn save_story_text(
+        &self,
+        at: tc_api::ids::Scope,
+        request: tc_api::ids::RequestId,
+        token: tc_api::ShownToken,
+        text: String,
+        reference: bool,
+    ) -> Result<tc_api::write::Ack, ApiError> {
+        let session = self
+            .inner
+            .sessions
+            .reader(&at)
+            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let handle = session.handle();
+        let shown = wire::token::edit_token(handle.as_ref(), &token)?;
+        if !matches!(
+            (reference, shown.key()),
+            (true, RecordKey::StoryRef(_)) | (false, RecordKey::Frame(..))
+        ) {
+            return Err(ApiError::NotSaved(NotSaved::BadToken));
+        }
+        if let tc_api::event::SessionMode::ReadOnly(reason) = handle.facts().mode {
+            return Err(ApiError::NotSaved(NotSaved::ReadOnly(reason)));
+        }
+        let line = match shown.key() {
+            RecordKey::StoryRef(_) => tc_api::story::StoryLine::Reference,
+            RecordKey::Frame(_, tc_journal::FrameNo(0)) => tc_api::story::StoryLine::Title,
+            _ => tc_api::story::StoryLine::Frame,
+        };
+        let text = tc_api::story::stored_text(line, &text);
+        let problem = match line {
+            tc_api::story::StoryLine::Reference => tc_obs::story::reference_text_problem(&text),
+            tc_api::story::StoryLine::Title => tc_obs::story::title_text_problem(&text),
+            tc_api::story::StoryLine::Frame => tc_obs::story::frame_text_problem(&text),
+        };
+        if let Some(problem) = problem {
+            return Err(ApiError::NotSaved(NotSaved::Refused(
+                tc_api::write::SaveRefusal::InvalidText {
+                    reason: story_text_problem(problem, reference).to_owned(),
+                },
+            )));
+        }
+        let reply = handle
+            .submit(StoreCommand::save_frame(shown.clone(), text.clone()).requested_by(request))
+            .await
+            .map_err(|error| match wire::error::command_error(error) {
+                Ok(api) => api,
+                Err(error) => self.internal(
+                    "the store refused a story save",
+                    crate::reports::facts(serde_json::json!({"reason": error.0})),
+                ),
+            })?;
+        self.record_translate_edit(&session, &shown, &text, self.inner.clock.now());
+        wire::write::record_ack(
+            &reply,
+            &session.read(),
+            Some(&shown),
+            &text,
+            handle.facts().device,
+        )
+        .map_err(|error| {
+            self.internal(
+                "a story save reply could not be written",
+                crate::reports::facts(serde_json::json!({"reason": error.to_string()})),
+            )
+        })
+    }
+}
+
+/// Content validation is typed; storage's diagnostic strings are for reports, while the
+/// editor gives the person a concrete correction without referring to a file format.
+fn story_text_problem(problem: tc_obs::TextProblem, reference: bool) -> &'static str {
+    use tc_obs::TextProblem;
+    match problem {
+        TextProblem::Empty => "The reference needs text.",
+        TextProblem::NotOneLine if reference => "Write the reference on one line.",
+        TextProblem::NotOneLine => "Write the title on one line.",
+        TextProblem::OuterWhitespace if reference => {
+            "Remove spaces before and after the reference."
+        }
+        TextProblem::OuterWhitespace => "Remove spaces before and after the title.",
+        TextProblem::CarriageReturn | TextProblem::BlankLine => {
+            "Write the frame as one paragraph, without blank lines."
+        }
+        TextProblem::ImageLine => "Remove the image line from the frame text.",
+        TextProblem::ReferenceLine => "Remove the reference line from the frame text.",
+        TextProblem::TitleLine => "Remove the story title line from the frame text.",
+    }
+}
+
+impl Handle<tc_api::story::SaveFrame> for App {
+    async fn handle(&self, req: tc_api::story::SaveFrame) -> Result<tc_api::write::Ack, ApiError> {
+        self.save_story_text(req.at, req.request, req.shown, req.text, false)
+            .await
+    }
+}
+impl Handle<tc_api::story::SaveRef> for App {
+    async fn handle(&self, req: tc_api::story::SaveRef) -> Result<tc_api::write::Ack, ApiError> {
+        self.save_story_text(req.at, req.request, req.shown, req.text, true)
+            .await
     }
 }
 

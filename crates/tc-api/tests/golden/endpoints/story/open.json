@@ -12,15 +12,20 @@
   "reply": {
     "type": "ok",
     "value": {
+      "view": 42,
+      "titleToken": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+      "referenceToken": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
       "story": 1,
       "title": "La Creación",
       "reference": "Una historia de la Biblia: Génesis 1-2",
       "frames": [
         {
+          "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
           "text": "Así fue como Dios hizo todo.",
           "image": "/media/obs/uW~obs_images_360~7146d5b504f6b63b9e11f7dc0b18c594d0ae179d/360px/obs-en-01-01.jpg"
         },
         {
+          "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
           "text": "",
           "image": null
         }
@@ -61,6 +66,7 @@
       },
       "comments": [
         {
+          "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
           "frame": 0,
           "text": "Check the title with the team.",
           "at": 1790000000000

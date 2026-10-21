@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 use tc_api::editor::{
-    Book as BookRead, BookView, CommentView, PaneChapter, PaneText, SourceFrame, Sources,
+    Book as BookRead, BookView, CommentTarget, PaneChapter, PaneText, SourceFrame, Sources,
     SourcesView,
 };
 use tc_api::helps::{Passage, PassageView, Slot};
@@ -24,6 +24,7 @@ use super::helps_panel::{HelpsPanel, HelpsToggleButton};
 use super::panel_icons::rail_icon;
 use super::source_verse::source_verse;
 use crate::app::load::Load;
+use crate::app::save::{Pair, View};
 use crate::app::understand::{
     HelpFocus, Unit, UnitMode, UnitNotice, frame_units, literal_pane, paragraphs, shown_comment,
     units,
@@ -98,12 +99,13 @@ fn understand_book(s: &AppState, actions: &Actions, open: Open) -> AnyView {
         });
     }
     let book = Memo::new(move |_| book_read.with(|b| b.value().cloned()));
+    let ready = Memo::new(move |_| book.with(Option::is_some));
     let failed = Memo::new(move |_| book_read.with(|b| b.error().map(ToString::to_string)));
     let s = s.clone();
     let actions = actions.clone();
-    (move || match (book.get(), failed.get()) {
-        (Some(view), _) => screen(&s, &actions, &open, view).into_any(),
-        (None, Some(error)) => {
+    (move || match (ready.get(), failed.get()) {
+        (true, _) => screen(&s, &actions, &open, book).into_any(),
+        (false, Some(error)) => {
             let style = crate::css! {
                 "flex": 1,
                 "display": "flex",
@@ -114,25 +116,33 @@ fn understand_book(s: &AppState, actions: &Actions, open: Open) -> AnyView {
             };
             view! { <div style=style.to_style()>{move || t(keys::draft::LOAD_ERROR, &[])}" "{error.clone()}</div> }.into_any()
         }
-        (None, None) => no_book().into_any(),
+        (false, None) => no_book().into_any(),
     })
     .into_any()
 }
 
 /// The screen over the open book's read.
-fn screen(s: &AppState, actions: &Actions, open: &Open, view: Arc<BookView>) -> AnyView {
+fn screen(
+    s: &AppState,
+    actions: &Actions,
+    open: &Open,
+    book: Memo<Option<Arc<BookView>>>,
+) -> AnyView {
     let root = crate::css! { "flex": 1, "display": "flex", "min-height": 0 };
     let rail = {
-        let (s2, actions, view) = (s.clone(), actions.clone(), view.clone());
+        let (s2, actions) = (s.clone(), actions.clone());
         let on = s.u.rail.clone();
-        move || on.get().then(|| book_rail(&s2, &actions, &view))
+        move || {
+            on.get()
+                .then(|| book.get().map(|view| book_rail(&s2, &actions, &view)))
+        }
     };
     let chapter = s.u.chapter.clone();
     let rest = {
-        let (s, actions, open, view) = (s.clone(), actions.clone(), open.clone(), view.clone());
+        let (s, actions, open) = (s.clone(), actions.clone(), open.clone());
         move || {
             let c = chapter.get();
-            chapter_view(&s, &actions, &open, &view, c)
+            chapter_view(&s, &actions, &open, book, c)
         }
     };
     view! {
@@ -149,7 +159,7 @@ fn chapter_view(
     s: &AppState,
     actions: &Actions,
     open: &Open,
-    book: &BookView,
+    book: Memo<Option<Arc<BookView>>>,
     chapter: u16,
 ) -> AnyView {
     let Some(runtime) = use_runtime() else {
@@ -319,9 +329,8 @@ fn chapter_view(
             }
         })
     };
-    let comments = Arc::new(book.comments.clone());
     let unit_views = {
-        let (s, actions) = (s.clone(), actions.clone());
+        let (s, actions, at) = (s.clone(), actions.clone(), open.at.clone());
         move || {
             let pane = chosen.get().unwrap_or_default();
             chapter_text.with(|text| {
@@ -340,7 +349,9 @@ fn chapter_view(
                                     focus,
                                     focused_key,
                                     active_key,
-                                    &comments,
+                                    book,
+                                    &at,
+                                    book_id,
                                     helps,
                                 )
                             })
@@ -580,7 +591,9 @@ fn understand_unit(
     focus: Memo<Option<HelpFocus>>,
     focused_key: Memo<Option<String>>,
     active_key: RwSignal<Option<String>>,
-    comments: &[CommentView],
+    book: Memo<Option<Arc<BookView>>>,
+    at: &Scope,
+    book_id: BookId,
     helps: Signal<Load<Arc<PassageView>>>,
 ) -> AnyView {
     if let Some(notice) = &unit.notice {
@@ -605,7 +618,18 @@ fn understand_unit(
         }
         .into_any();
     }
-    let shown = shown_comment(comments, chapter, unit);
+    let shown = {
+        let unit = unit.clone();
+        Memo::new(move |_| {
+            book.with(|book| {
+                shown_comment(
+                    book.as_ref().map_or(&[], |book| book.comments.as_slice()),
+                    chapter,
+                    &unit,
+                )
+            })
+        })
+    };
     let key = unit.key.clone();
     let focused = Memo::new({
         let key = key.clone();
@@ -719,9 +743,11 @@ fn understand_unit(
     };
     let test_id = format!("understand-unit-{}", unit.key);
     let label = unit.label.clone();
-    let dot = shown
-        .any
-        .then(|| view! { <StatusDot status=Status::Valid size=7.0 /> });
+    let dot = move || {
+        shown
+            .with(|shown| shown.any)
+            .then(|| view! { <StatusDot status=Status::Valid size=7.0 /> })
+    };
     let _ = actions;
     view! {
         <div
@@ -739,32 +765,25 @@ fn understand_unit(
                 {dot}
             </div>
             {paras}
-            {comment_box(s, &shown)}
+            {comment_box(s, shown, at.clone(), book_id, chapter, book)}
         </div>
     }
     .into_any()
 }
 
-/// The user-comment box, as tC4's `ComprehensionBox` shows it, read-only until C3 writes it.
-fn comment_box(s: &AppState, shown: &crate::app::understand::ShownComment) -> AnyView {
+/// The selected target may change with a source tab's grouping; an update on the same
+/// target refreshes the field in place, so a reply never blurs newer typing.
+fn comment_box(
+    s: &AppState,
+    shown: Memo<crate::app::understand::ShownComment>,
+    at: Scope,
+    book_id: BookId,
+    chapter: u16,
+    book: Memo<Option<Arc<BookView>>>,
+) -> AnyView {
     let dir = match s.project.with_untracked(|p| p.as_ref().map(|p| p.dir)) {
         Some(TextDir::Rtl) => "rtl",
         _ => "ltr",
-    };
-    let style = crate::css! {
-        "width": "100%",
-        "box-sizing": "border-box",
-        "margin-top": 4,
-        "border": "var(--stroke) solid var(--border-input)",
-        "border-radius": "var(--radius-md)",
-        "padding": "11px 13px",
-        "outline": "none",
-        "resize": "vertical",
-        "font-family": "var(--font-scripture)",
-        "font-size": "var(--fs-verse)",
-        "line-height": "var(--lh-verse)",
-        "color": "var(--text-scripture)",
-        "background": "var(--surface-app)",
     };
     let placeholder = t(
         match s.u.unit_mode.get_untracked() {
@@ -773,31 +792,44 @@ fn comment_box(s: &AppState, shown: &crate::app::understand::ShownComment) -> An
         },
         &[],
     );
-    let hidden = (shown.hidden > 0).then(|| {
-        let style = crate::css! {
-            "font-size": "var(--fs-caption)",
-            "letter-spacing": "var(--track-12)",
-            "color": "var(--text-tertiary)",
-            "margin": "6px 0 0",
-        };
-        let n = shown.hidden.to_string();
-        view! {
-            <p data-testid="understand-notes-in-section" style=style.to_style()>
-                {t(keys::understand::NOTES_IN_SECTION, &[("n", &n)])}
-            </p>
-        }
+    let hidden = move || {
+        shown.with(|shown| {
+            (shown.hidden > 0).then(|| {
+                let style = crate::css! {
+                    "font-size": "var(--fs-caption)",
+                    "letter-spacing": "var(--track-12)",
+                    "color": "var(--text-tertiary)",
+                    "margin": "6px 0 0",
+                };
+                let n = shown.hidden.to_string();
+                view! {
+                    <p data-testid="understand-notes-in-section" style=style.to_style()>
+                        {t(keys::understand::NOTES_IN_SECTION, &[("n", &n)])}
+                    </p>
+                }
+            })
+        })
+    };
+    let target = Memo::new(move |_| {
+        shown.with(|shown| {
+            crate::app::understand::leading_num(&shown.target)
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| shown.target.clone())
+        })
     });
-    let text = shown.text.clone();
     view! {
-        <textarea
-            data-i="field"
-            rows="3"
-            dir=dir
-            readonly=true
-            prop:value=text
-            style=style.to_style()
-            placeholder=placeholder
-        ></textarea>
+        <For each=move || vec![target.get()] key=|target| target.clone() children=move |target: String| {
+            let Some(verse) = crate::app::understand::leading_num(&target).and_then(|n| u16::try_from(n).ok()) else { return ().into_any(); };
+            let current = {
+                let at = at.clone();
+                Memo::new(move |_| {
+                    let selected = shown.get();
+                    if crate::app::understand::leading_num(&selected.target) != Some(u32::from(verse)) { return None; }
+                    Some(Pair { value: selected.text, token: selected.token?, view: Some(View::of(Some(&at), book.with(|book| book.as_ref().map(|book| book.view))?)) })
+                })
+            };
+            view! { <super::comment_box::CommentBox at=at.clone() target=CommentTarget::Verse { book: book_id, chapter, verse } current=current dir=dir placeholder=placeholder.clone() /> }.into_any()
+        } />
         {hidden}
     }
     .into_any()

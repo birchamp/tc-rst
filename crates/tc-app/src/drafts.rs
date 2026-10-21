@@ -171,14 +171,17 @@ fn parse_tokens(
         .collect()
 }
 
-/// A field's base as the machine judges it. A section's save and a new comment's need the
-/// units that build their editors (B4b with R6, C3 with R15), so until then their texts have no
-/// *Keep*: "Copy text".
+/// A new comment's verified base is empty: its durable offer supplies the typed target.
+/// Unknown old buffer metadata stays available as Copy text.
 fn base_of(
     handle: &dyn ProjectHandle,
     kind: DraftKind,
     shown: Vec<ShownToken>,
+    new_comment: bool,
 ) -> Base<Vec<ShownToken>> {
+    if kind == DraftKind::Comment && shown.is_empty() && new_comment {
+        return Base::Verified(shown);
+    }
     let keepable = match kind {
         DraftKind::Section => false,
         DraftKind::Comment => !shown.is_empty(),
@@ -202,12 +205,36 @@ struct FieldRecord<'a> {
     read: &'a CountingSnapshot,
     kind: DraftKind,
     key: Option<RecordKey>,
+    comment_target: Option<&'a tc_journal::record::CommentTarget>,
 }
 
 impl machine::Record<Vec<ShownToken>> for FieldRecord<'_> {
     fn heads(&self) -> Vec<String> {
         let Some(key) = &self.key else {
-            return Vec::new();
+            // A first Add may have committed before its Ack reached the mirror. Equality
+            // proves that this text is stored; it does not prove which comment the request
+            // minted. Never use this target search as the base of a different text.
+            let Some(target) = self.comment_target else {
+                return Vec::new();
+            };
+            let keys = match target {
+                tc_journal::record::CommentTarget::Verse { book, .. } => {
+                    self.read.comments_of(*book)
+                }
+                tc_journal::record::CommentTarget::Frame { story, .. } => {
+                    self.read.story_comments_of(*story)
+                }
+                tc_journal::record::CommentTarget::Check(_) => return Vec::new(),
+            };
+            return keys
+                .iter()
+                .flat_map(|key| self.read.heads(key))
+                .filter_map(|head| self.read.body(&head))
+                .filter_map(|body| match body.record {
+                    Record::Comment { value, .. } if value.target == *target => Some(value.text),
+                    _ => None,
+                })
+                .collect();
         };
         self.read
             .heads(key)
@@ -298,6 +325,7 @@ struct Field {
     kind: DraftKind,
     place: FieldPlace,
     key: Option<RecordKey>,
+    comment_target: Option<tc_journal::record::CommentTarget>,
     candidates: Vec<Candidate<Vec<ShownToken>>>,
 }
 
@@ -331,10 +359,28 @@ pub fn offer(session: &ProjectSession, buffered: &[String], mirror: bool) -> Off
         let record = parse_tokens(handle.as_ref(), &entry.base)
             .and_then(|tokens| tokens.first().map(|(token, _)| token.key().clone()));
         let place = key.field.place.clone();
+        let comment_target = if kind == DraftKind::Comment && entry.base.is_empty() {
+            entry
+                .draft
+                .as_ref()
+                .filter(|call| call.path == "editor/draft")
+                .and_then(|call| serde_json::from_str::<serde_json::Value>(&call.body).ok())
+                .and_then(|body| body.get("field").cloned())
+                .and_then(|field| serde_json::from_value::<tc_api::editor::DraftField>(field).ok())
+                .and_then(|field| match field {
+                    tc_api::editor::DraftField::UserComment { target } => {
+                        crate::comments::target(target).ok()
+                    }
+                    _ => None,
+                })
+                .filter(|target| place_of(&comment_place(target)) == place.as_str())
+        } else {
+            None
+        };
         let candidate = Candidate {
             text: entry.text.clone(),
             at: entry.at.0,
-            base: base_of(handle.as_ref(), kind, entry.base),
+            base: base_of(handle.as_ref(), kind, entry.base, comment_target.is_some()),
             sent: entry.sent.map(|sent| sent.text),
             run: Some(entry.instance),
             home: Home::Buffer(BufferSlot {
@@ -350,6 +396,7 @@ pub fn offer(session: &ProjectSession, buffered: &[String], mirror: bool) -> Off
                 kind,
                 place,
                 key: record,
+                comment_target,
                 candidates: Vec::new(),
             })
             .candidates
@@ -357,17 +404,18 @@ pub fn offer(session: &ProjectSession, buffered: &[String], mirror: bool) -> Off
     }
     let mut offers: Vec<(i64, DraftOffer)> = Vec::new();
     let mut settle = Vec::new();
-    for (_, field) in fields {
+    for (_, mut field) in fields {
         let record = FieldRecord {
             handle: handle.as_ref(),
             read: &read,
             kind: field.kind,
             key: field.key.clone(),
+            comment_target: field.comment_target.as_ref(),
         };
         let (mut state, actions) = machine::next(
             FieldDraft::default(),
             Event::Offer {
-                candidates: field.candidates,
+                candidates: std::mem::take(&mut field.candidates),
                 record: &record,
                 mirror,
             },
@@ -382,7 +430,7 @@ pub fn offer(session: &ProjectSession, buffered: &[String], mirror: bool) -> Off
                     then,
                     older,
                 } => {
-                    let taken = absorb(handle.as_ref(), &read, field.kind, &over, &text, keep, at);
+                    let taken = absorb(handle.as_ref(), &read, &field, &over, &text, keep, at);
                     if let Some(id) = taken
                         && let Some(offer) = state.offers.iter_mut().find(|o| o.text == text)
                     {
@@ -436,16 +484,20 @@ fn stored_field(
     let kind = kind_of_draft(&draft.field);
     let first = draft.keys().next().cloned();
     let place = field_place(&match (&first, &draft.field) {
+        (_, DraftField::UserComment { target }) => place_of(&comment_place(target)),
         (Some(key), _) => place_of(key),
-        (None, DraftField::UserComment { target }) => place_of(&comment_place(target)),
         (None, _) => String::new(),
     });
     // A token tc-api cannot carry is still offered, as text.
     let shown = draft.wire_tokens().unwrap_or_default();
+    let comment_target = match &draft.field {
+        DraftField::UserComment { target } => Some(target.clone()),
+        _ => None,
+    };
     let candidate = Candidate {
         text: draft.text.clone(),
         at: draft.at.0,
-        base: base_of(handle, kind, shown),
+        base: base_of(handle, kind, shown, comment_target.is_some()),
         sent: None,
         run: draft.run,
         home: Home::Stored(StoredDraftId(draft.id)),
@@ -457,6 +509,7 @@ fn stored_field(
                 kind,
                 place,
                 key: first,
+                comment_target,
                 candidates: Vec::new(),
             },
             candidate,
@@ -469,7 +522,7 @@ fn stored_field(
 fn absorb(
     handle: &dyn ProjectHandle,
     read: &CountingSnapshot,
-    kind: DraftKind,
+    field: &Field,
     over: &[ShownToken],
     text: &str,
     keep: Keep,
@@ -479,7 +532,7 @@ fn absorb(
         .into_iter()
         .map(|(token, _)| token)
         .collect();
-    let field = draft_field(kind, &tokens, read).ok()?;
+    let field = draft_field(field.kind, &tokens, read, field.comment_target.as_ref()).ok()?;
     handle
         .offer_draft(
             field,
@@ -507,6 +560,7 @@ fn draft_field(
     kind: DraftKind,
     shown: &[DraftToken],
     read: &CountingSnapshot,
+    comment_target: Option<&tc_journal::record::CommentTarget>,
 ) -> Result<DraftField, ApiError> {
     let unkept = |why: &str| ApiError::BadRequest {
         field: "kind".to_owned(),
@@ -520,9 +574,15 @@ fn draft_field(
         DraftKind::CheckComment => DraftField::CheckComment,
         DraftKind::Alignment => DraftField::Alignment,
         DraftKind::Comment => {
+            if shown.is_empty() {
+                return comment_target
+                    .cloned()
+                    .map(|target| DraftField::UserComment { target })
+                    .ok_or_else(|| unkept("a new comment needs its offered target"));
+            }
             let key = shown
                 .first()
-                .ok_or_else(|| unkept("a new comment has no Keep yet (C3)"))?
+                .ok_or_else(|| unkept("a comment needs its displayed record"))?
                 .key();
             match read.projected(key) {
                 Some(Record::Comment { value, .. }) => DraftField::UserComment {
@@ -577,7 +637,7 @@ impl Handle<KeepDraft> for App {
             match action {
                 Action::Keep { text, over, .. } => {
                     kept = Some(
-                        self.keep(&session, req.kind, req.request, &over, text)
+                        self.keep(&session, req.kind, req.request, &over, text, &req.discard)
                             .await?,
                     );
                 }
@@ -602,6 +662,7 @@ impl App {
         request: tc_api::RequestId,
         over: &[ShownToken],
         text: String,
+        stored_ids: &[StoredDraftId],
     ) -> Result<KeptDraft, ApiError> {
         let handle = session.handle().clone();
         let shown = over
@@ -609,14 +670,41 @@ impl App {
             .map(|token| DraftToken::parse(handle.as_ref(), token).map(|(token, _)| token))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| ApiError::NotSaved(NotSaved::BadToken))?;
+        // A new comment has no record identity until it is committed. Its durable offer
+        // supplies the typed target, never an arbitrary request-side place string.
+        let target = if kind == DraftKind::Comment && shown.is_empty() {
+            handle.offered_drafts().into_iter().find_map(|draft| {
+                if !stored_ids.contains(&StoredDraftId(draft.id))
+                    || draft.text != text
+                    || draft.keys().next().is_some()
+                {
+                    return None;
+                }
+                match draft.field {
+                    DraftField::UserComment { target } => Some(target),
+                    _ => None,
+                }
+            })
+        } else {
+            None
+        };
         let record = shown
             .first()
-            .and_then(|token| wire::scope::record_ref(token.key()))
-            .ok_or_else(|| ApiError::BadRequest {
-                field: "shown".to_owned(),
-                reason: "Keep names the record of its text".to_owned(),
-            })?;
-        let field = draft_field(kind, &shown, &session.read())?;
+            .and_then(|token| wire::scope::record_ref(token.key()));
+        let field = draft_field(kind, &shown, &session.read(), target.as_ref())?;
+        // A story draft holds the text as typed; it is kept in the form a save stores.
+        let line = match (kind, shown.first().map(DraftToken::key)) {
+            (DraftKind::StoryRef, _) => Some(tc_api::story::StoryLine::Reference),
+            (DraftKind::Frame, Some(RecordKey::Frame(_, tc_journal::FrameNo(0)))) => {
+                Some(tc_api::story::StoryLine::Title)
+            }
+            (DraftKind::Frame, _) => Some(tc_api::story::StoryLine::Frame),
+            _ => None,
+        };
+        let text = match line {
+            Some(line) => tc_api::story::stored_text(line, &text),
+            None => text,
+        };
         let me = handle.facts().device;
         let command = StoreCommand::keep_draft(field, shown, text).requested_by(request);
         let reply =
@@ -631,6 +719,17 @@ impl App {
             })?;
         let read = session.read();
         let (stored, _) = wire::error::stored(&reply.stored);
+        let record = record
+            .or_else(|| {
+                reply
+                    .tokens
+                    .iter()
+                    .find_map(|(key, _)| wire::scope::record_ref(key))
+            })
+            .ok_or_else(|| ApiError::BadRequest {
+                field: "shown".into(),
+                reason: "the kept text has no record".into(),
+            })?;
         let new_conflicts =
             wire::write::new_conflicts(&reply, &read, &record, me).map_err(|e| {
                 self.internal(

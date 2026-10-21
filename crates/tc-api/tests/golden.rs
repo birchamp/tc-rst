@@ -46,7 +46,7 @@ use tc_api::create::{
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
-    Book, BookView, ChapterText, Chapters, ChaptersView, CommentView,
+    AddComment, Book, BookView, ChapterText, Chapters, ChaptersView, CommentView,
     DiscardDraft as EditorDiscardDraft, Draft as EditorDraft, DraftField as EditorDraftField,
     FrameRow, PaneChapter, PaneText, PaneVerse, RailBook, RowSource, SaveLayout, SaveSection,
     SaveVerse, SourceFrame, SourcePane, Sources, SourcesView, VerseRow,
@@ -1138,6 +1138,42 @@ impl Example for SaveLayout {
     }
 }
 
+impl Example for AddComment {
+    fn example() -> Self {
+        Self {
+            at: scope(),
+            request: request(23),
+            target: tc_api::editor::CommentTarget::Verse {
+                book: BookId::Titus,
+                chapter: 1,
+                verse: 4,
+            },
+            shown: None,
+            text: "Discuss this verse with the team.".into(),
+        }
+    }
+}
+impl Example for story::SaveFrame {
+    fn example() -> Self {
+        Self {
+            at: scope(),
+            request: request(24),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            text: "Así fue como Dios hizo todo.".into(),
+        }
+    }
+}
+impl Example for story::SaveRef {
+    fn example() -> Self {
+        Self {
+            at: scope(),
+            request: request(25),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            text: "Una historia de la Biblia: Génesis 1-2".into(),
+        }
+    }
+}
+
 impl Example for EditorDraft {
     fn example() -> Self {
         EditorDraft {
@@ -1636,6 +1672,7 @@ impl Example for Book {
 impl Example for BookView {
     fn example() -> Self {
         BookView {
+            view: ViewSeq::new(42),
             book: BookId::Titus,
             chapters: vec![1, 2, 3],
             rail: vec![
@@ -1649,6 +1686,7 @@ impl Example for BookView {
                 },
             ],
             comments: vec![CommentView {
+                token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
                 chapter: 1,
                 verse: 4,
                 text: "Pablo escribe a Tito.".into(),
@@ -2336,11 +2374,15 @@ impl Example for story::Open {
 impl Example for story::StoryView {
     fn example() -> Self {
         story::StoryView {
+            view: ViewSeq::new(42),
+            title_token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            reference_token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
             story: StoryNo::new(1).unwrap(),
             title: "La Creación".into(),
             reference: "Una historia de la Biblia: Génesis 1-2".into(),
             frames: vec![
                 story::FrameView {
+                    token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
                     text: "Así fue como Dios hizo todo.".into(),
                     image: Some(
                         "/media/obs/uW~obs_images_360~7146d5b504f6b63b9e11f7dc0b18c594d0ae179d/360px/obs-en-01-01.jpg"
@@ -2348,6 +2390,7 @@ impl Example for story::StoryView {
                     ),
                 },
                 story::FrameView {
+                    token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
                     text: String::new(),
                     image: None,
                 },
@@ -2381,6 +2424,7 @@ impl Example for story::StoryView {
                 ],
             }),
             comments: vec![story::FrameComment {
+                token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
                 frame: 0,
                 text: "Check the title with the team.".into(),
                 at: WallMs(1_790_000_000_000),
@@ -2719,6 +2763,9 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "session/keepDraft",
             "session/otherComputerClosed",
             "editor/saveSection",
+            "editor/addComment",
+            "story/saveFrame",
+            "story/saveRef",
             "editor/saveVerse",
             "editor/saveLayout",
             "editor/draft",
@@ -2879,6 +2926,9 @@ fn api_errors() -> Vec<ApiError> {
 fn not_saved() -> Vec<NotSaved> {
     vec![
         NotSaved::Refused(SaveRefusal::IncoherentView),
+        NotSaved::Refused(SaveRefusal::InvalidText {
+            reason: "a comment needs text".into(),
+        }),
         NotSaved::Disk("The disk is full.".into()),
         NotSaved::ReadOnly(ReadOnlyReason::SecondWriter),
         NotSaved::LookAgain,

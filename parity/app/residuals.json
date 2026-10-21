@@ -100,27 +100,6 @@
       "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
       "until": null
     },
-    "en-understand-questions": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
-    },
-    "en-understand-tit1": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
-    },
-    "en-understand-tw-article": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
-    },
     "feedback": {
       "layers": [
         "pixels",
@@ -315,13 +294,6 @@
       "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the counts, the names, the notes, the links, the 5 missing versions by tC4's rule) is tC4's field by field. The two teammates' versions of Titus 1:1 are written into the project by the scripted sync and folded, so the card's chip \"1 conflict · Review\" and the Titus tile's \"1 conflict\" come from the fold's own conflict, as tC4's do. The shared OBS card reads \"Sync with Door43\" where tC4's reads \"Upload changes\" (the masked element q2-obs-card, ruling Q2). The pixels differ by ruling Q2: the shared OBS card's longer label \"Sync with Door43\" (masked, q2-obs-card) leaves less room beside the title, which wraps onto a second line, and \"On Door43\" wraps too, so that card is one line (31 px) taller and everything under it sits 31 px lower. The Bible card and the rest of the page are tC4's drawn at that offset.",
       "until": null
     },
-    "understand-tit1": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
-    },
     "check-picker": {
       "layers": [
         "pixels",
@@ -369,20 +341,6 @@
       ],
       "why": "Urdu in Devanagari script (ur-deva) reads left to right and is named उर्दू (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), where tC4 4.0's registry names it اردو in Arabic script, right to left: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style and Understand behind the dialog included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it (a mask's rectangle must lie in the window).",
       "until": null
-    },
-    "obs-understand": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: a story's comment is written by C3 (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
-    },
-    "en-obs-understand": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: a story's comment is written by C3 (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
     },
     "obs-translate": {
       "layers": [

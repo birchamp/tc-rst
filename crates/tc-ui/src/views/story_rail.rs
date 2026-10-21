@@ -35,6 +35,15 @@ pub fn story_rail(
         _ => "ltr",
     };
     let frame = s.u.story_frame.clone();
+    let editing = s.editing.clone();
+    let off = Signal::derive(move || editing.with(|editing| editing.is_open()));
+    let cursor = Signal::derive(move || {
+        if off.get() {
+            crate::css! { "cursor": "default" }
+        } else {
+            crate::css::Css::new()
+        }
+    });
     let rows = list
         .stories
         .iter()
@@ -48,7 +57,11 @@ pub fn story_rail(
             };
             let select = {
                 let actions = actions.clone();
-                Callback::new(move |_: web_sys::Event| actions.open_story(number))
+                Callback::new(move |_: web_sys::Event| {
+                    if !off.get_untracked() {
+                        actions.open_story(number);
+                    }
+                })
             };
             let mut attrs =
                 Attrs::from([("data-testid", format!("story-{}", number.get()).as_str())]);
@@ -64,6 +77,8 @@ pub fn story_rail(
                     percent=percent
                     meta=Some(meta)
                     attrs=attrs
+                    disabled=off
+                    style=cursor
                     on_click=select
                 />
             };
@@ -72,7 +87,7 @@ pub fn story_rail(
                     open.as_ref().map(|story| {
                         let buttons = frame_markers(story)
                             .into_iter()
-                            .map(|marker| frame_button(marker, frame.clone(), on_frame))
+                            .map(|marker| frame_button(marker, frame.clone(), on_frame, off))
                             .collect_view();
                         rail_numbers(
                             Attrs::from([("data-testid", "story-frame-markers")]),
@@ -100,6 +115,7 @@ fn frame_button(
     marker: FrameMarker,
     focus: leptos::prelude::ArcRwSignal<Option<u16>>,
     on_frame: Callback<u16>,
+    off: Signal<bool>,
 ) -> impl IntoView + use<> {
     let FrameMarker { frame: n, drafted } = marker;
     let tip = t(
@@ -118,8 +134,12 @@ fn frame_button(
     rail_number_button(
         Signal::derive(move || focus.get() == Some(n)),
         Signal::from(drafted),
-        Signal::from(false),
-        Callback::new(move |()| on_frame.run(n)),
+        off,
+        Callback::new(move |()| {
+            if !off.get_untracked() {
+                on_frame.run(n);
+            }
+        }),
         attrs,
         n.to_string(),
     )

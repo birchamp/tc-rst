@@ -9,6 +9,7 @@ pub mod account_menu;
 pub mod align;
 pub mod book_rail;
 pub mod check;
+pub mod comment_box;
 pub mod conflict_markers;
 pub mod draft_chrome;
 pub mod help_panel;

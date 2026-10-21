@@ -27,8 +27,9 @@ fn book_records(project: &tc_app::backend::memory::MemoryProject) -> u64 {
         .map(|c| fold.chapter_keys(PSALMS, c).verses.len())
         .sum();
     let comments = fold.comments_of(PSALMS).len();
-    // A comment is read for its value and for when it was written.
-    u64::try_from(verses + 2 * comments).unwrap()
+    // A comment is read for its value, for when it was written, and for the token its box
+    // revises it with (C3).
+    u64::try_from(verses + 3 * comments).unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

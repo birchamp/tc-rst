@@ -29,7 +29,7 @@ pub mod classify;
 pub mod indicator;
 pub mod rules;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use tc_api::API_VERSION;
 use tc_api::app::OpenSession;
@@ -281,15 +281,33 @@ impl Field {
         instance: ServerInstance,
         pair: Pair,
     ) -> Self {
+        Self::over(
+            kind_rules,
+            scope,
+            instance,
+            pair.value,
+            vec![pair.token],
+            pair.view,
+        )
+    }
+
+    fn over(
+        kind_rules: FieldRules,
+        scope: FieldScope,
+        instance: ServerInstance,
+        value: String,
+        base: Vec<ShownToken>,
+        view: Option<View>,
+    ) -> Self {
         Self {
             rules: kind_rules,
             scope,
             instance,
             unanswered: None,
-            current: pair.value.clone(),
-            persisted: Some(pair.value),
-            base: vec![pair.token],
-            pair_view: pair.view,
+            current: value.clone(),
+            persisted: Some(value),
+            base,
+            pair_view: view,
             own_view: None,
             own: Vec::new(),
             refused: None,
@@ -410,6 +428,10 @@ pub struct SaveMachine {
     instance: ServerInstance,
     ids: Box<dyn FnMut() -> RequestId>,
     fields: BTreeMap<BufferKey, Field>,
+    /// A blur can be acknowledged before the read cache learns a newly minted comment.
+    /// Keep its proved pair outside active fields so timers, gates and indicators never
+    /// scan comments visited earlier in this open. The outer map has one entry per open.
+    comment_pairs: HashMap<Option<Scope>, HashMap<BufferKey, Pair>>,
     sessions: Vec<OpenSession>,
     gating: bool,
 }
@@ -430,6 +452,7 @@ impl SaveMachine {
             instance,
             ids,
             fields: BTreeMap::new(),
+            comment_pairs: HashMap::new(),
             sessions: Vec::new(),
             gating: false,
         }
@@ -452,6 +475,40 @@ impl SaveMachine {
         self.open_over(key, scope, pair, Vec::new(), now)
     }
 
+    /// A new user comment has no record yet. Its first Ack supplies the token that later
+    /// edits revise; remounting an unread/new box must retain that learned identity.
+    pub fn open_comment(&mut self, key: BufferKey, scope: FieldScope) -> String {
+        self.reopen_comment(&key, &scope);
+        let field = self.fields.entry(key).or_insert_with(|| {
+            Field::over(
+                rules(FieldKind::Comment),
+                scope.clone(),
+                self.instance,
+                String::new(),
+                Vec::new(),
+                None,
+            )
+        });
+        field.scope = scope;
+        field.editor = Some(Editor { focused: false });
+        field.current.clone()
+    }
+
+    /// A saved comment cannot be retracted by clearing its box. Prefer the save already
+    /// on its way over an older render's text, so a clear cannot revert that save.
+    pub fn revert_comment(&mut self, key: &BufferKey, now: Ms) -> (String, Vec<Command>) {
+        let value = self
+            .fields
+            .get(key)
+            .map(|field| match &field.state {
+                FieldSave::Saving { sent } => sent.text.clone(),
+                _ => field.persisted.clone().unwrap_or_default(),
+            })
+            .unwrap_or_default();
+        let commands = self.typed(key, &value, Source::Program, now);
+        (value, commands)
+    }
+
     /// As [`open`](Self::open) for a field that displays several records, a section card: its
     /// saves and drafts are based on the tokens of all of them, `pair.token` first and `rest`
     /// after, in the order the card shows the verses. A field the machine already holds keeps
@@ -465,6 +522,7 @@ impl SaveMachine {
         now: Ms,
     ) -> (String, Vec<Command>) {
         let mut out = Vec::new();
+        self.reopen_comment(&key, &scope);
         if let Some(field) = self.fields.get_mut(&key) {
             field.editor = Some(Editor { focused: false });
             field.scope = scope;
@@ -484,6 +542,32 @@ impl SaveMachine {
         (shown, out)
     }
 
+    fn reopen_comment(&mut self, key: &BufferKey, scope: &FieldScope) {
+        if key.field.kind != FieldKind::Comment || self.fields.contains_key(key) {
+            return;
+        }
+        let at = match scope {
+            FieldScope::App => None,
+            FieldScope::Project(Some(at)) => Some(at.clone()),
+            FieldScope::Project(None) => return,
+        };
+        if let Some(pair) = self
+            .comment_pairs
+            .get_mut(&at)
+            .and_then(|pairs| pairs.remove(key))
+        {
+            self.fields.insert(
+                key.clone(),
+                Field::new(
+                    rules(FieldKind::Comment),
+                    scope.clone(),
+                    self.instance,
+                    pair,
+                ),
+            );
+        }
+    }
+
     /// After a reload in the same server run (AD22): the entry becomes a field with no editor.
     /// A save that was in flight is sent again with its own id and body; other unsaved text
     /// waits for its rule. The glue restores only entries of this run whose project is open.
@@ -498,21 +582,18 @@ impl SaveMachine {
         if self.fields.contains_key(&key) || entry.instance != self.instance {
             return out;
         }
-        let Some(token) = entry.base.first().cloned() else {
+        if entry.base.is_empty() && key.field.kind != FieldKind::Comment {
             return out;
-        };
+        }
         let kind_rules = rules(key.field.kind);
-        let mut field = Field::new(
+        let mut field = Field::over(
             kind_rules,
             scope,
             self.instance,
-            Pair {
-                value: entry.text.clone(),
-                token,
-                view: None,
-            },
+            entry.text.clone(),
+            entry.base.clone(),
+            None,
         );
-        field.base = entry.base.clone();
         field.persisted = None;
         field.pair_view = None;
         field.touched = true;
@@ -696,6 +777,29 @@ impl SaveMachine {
         field.editor = None;
         field.notice = None;
         if field.is_clean_state() || field.is_kept_over_restart() {
+            if key.field.kind == FieldKind::Comment
+                && field.is_clean_state()
+                && let Some(token) = field.base.first().cloned()
+            {
+                let at = match &field.scope {
+                    FieldScope::App => Some(None),
+                    FieldScope::Project(Some(at)) => Some(Some(at.clone())),
+                    FieldScope::Project(None) => None,
+                };
+                if let Some(at) = at {
+                    self.comment_pairs.entry(at).or_default().insert(
+                        key.clone(),
+                        Pair {
+                            value: field
+                                .persisted
+                                .clone()
+                                .unwrap_or_else(|| field.current.clone()),
+                            token,
+                            view: field.pair_view,
+                        },
+                    );
+                }
+            }
             self.fields.remove(key);
             return out;
         }
@@ -970,6 +1074,10 @@ impl SaveMachine {
     /// newer than anything it holds.
     pub fn sessions(&mut self, open: &[OpenSession], now: Ms) -> Vec<Command> {
         let mut out = Vec::new();
+        self.comment_pairs.retain(|at, _| {
+            at.as_ref()
+                .is_none_or(|at| open.iter().any(|session| session.at == *at))
+        });
         self.sessions = open.to_vec();
         let ctx = Ctx {
             sessions: &self.sessions,
@@ -1018,6 +1126,7 @@ impl SaveMachine {
             return;
         }
         self.instance = instance;
+        self.comment_pairs.clear();
         self.fields.retain(|_, field| field.editor.is_some());
         for field in self.fields.values_mut() {
             if let FieldSave::Saving { sent } = &field.state {
@@ -1197,6 +1306,13 @@ impl SaveMachine {
             .filter(|(_, field)| matches!(field.state, FieldSave::Failed(_)))
             .map(|(key, _)| key.field.kind)
             .collect()
+    }
+
+    pub fn invalid_text_reason(&self) -> Option<String> {
+        self.fields.values().find_map(|field| match &field.state {
+            FieldSave::Failed(error) => error.invalid_text_reason().map(str::to_owned),
+            _ => None,
+        })
     }
 
     /// The disk warnings of fields saved with one.

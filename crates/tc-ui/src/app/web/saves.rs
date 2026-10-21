@@ -243,6 +243,37 @@ impl Saves {
         self.open_over(key, scope, pair, Vec::new())
     }
 
+    /// A new comment has no token until its first save answers.
+    pub fn open_comment(
+        &self,
+        key: &BufferKey,
+        scope: FieldScope,
+        pair: Option<Pair>,
+    ) -> ArcRwSignal<String> {
+        if let Some(pair) = pair {
+            return self.open(key, scope, pair);
+        }
+        let text = self.machine(|m| m.open_comment(key.clone(), scope));
+        let shown = ArcRwSignal::new(text);
+        self.0.shown.borrow_mut().insert(key.clone(), shown.clone());
+        self.after();
+        shown
+    }
+
+    /// Clearing cannot retract a saved comment. The machine chooses the latest version,
+    /// including a save in flight, rather than the value an earlier render showed.
+    pub fn revert_comment(&self, key: &BufferKey) -> String {
+        let (text, commands) = self.machine(|m| m.revert_comment(key, js::now_ms()));
+        self.run(commands);
+        if matches!(
+            self.state(key),
+            Some(FieldSave::Clean | FieldSave::SavedWithWarning(_))
+        ) {
+            self.clean_acked_drafts(key);
+        }
+        text
+    }
+
     /// As [`open`](Self::open) for a field that displays several records, a section card: the
     /// tokens of the others follow `pair.token` in its base.
     pub fn open_over(
@@ -373,6 +404,10 @@ impl Saves {
 
     pub fn indicator(&self) -> ArcRwSignal<Indicator> {
         self.0.indicator.clone()
+    }
+
+    pub fn invalid_text_reason(&self) -> Option<String> {
+        self.machine(|m| m.invalid_text_reason())
     }
 
     /// Changes after every run of the machine: a view that reads a field's `notice` tracks it.

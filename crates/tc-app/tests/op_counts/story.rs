@@ -182,3 +182,105 @@ async fn a_story_project_has_no_book() {
         .unwrap();
     assert!(matches!(reply, tc_api::Reply::Err(_)), "{reply:?}");
 }
+
+/// The existing light/heavy OBS pair on the real store as valid story Burritos.
+fn story_disk(project: &MemoryProject) -> FaultFs {
+    let fs = FaultFs::new();
+    let backend = crate::store_world::backend_over(
+        &fs,
+        // A separate importing installation gives the measured writer the same initial
+        // sequence width in both projects; record-count digits must not mask a scan.
+        "/obs-import-app",
+        tc_store::FakePlatform::default(),
+        std::sync::Arc::default(),
+    );
+    let records = project
+        .fold
+        .record_keys()
+        .into_iter()
+        .filter_map(|key| project.fold.projected(&key))
+        .collect();
+    let path = backend
+        .store()
+        .create(&tc_store::NewProject {
+            name: super::corpus::FOLDER.to_owned(),
+            kind: tc_journal::fold::ProjectKind::Stories,
+            records,
+            books: Vec::new(),
+        })
+        .unwrap();
+    crate::store_world::assert_valid_burrito(&fs, &path);
+    fs
+}
+
+async fn a_story_save_costs_its_record(reference: bool) {
+    let mut costs = Vec::new();
+    let (light, heavy) = (sample_stories(), heavy_stories());
+    for project in [&light, &heavy] {
+        let disk = story_disk(project);
+        let s = scale(Backing::Store, project, &disk).await;
+        opened(&s).await;
+        let key = if reference {
+            tc_journal::RecordKey::StoryRef(journal_story(1))
+        } else {
+            tc_journal::RecordKey::Frame(journal_story(1), FrameNo(1))
+        };
+        let shown = tc_app::wire::token::shown(
+            &s.app
+                .read(&s.scope())
+                .unwrap()
+                .read()
+                .mint(&key, None)
+                .unwrap(),
+        )
+        .unwrap();
+        costs.push(
+            cost(&s, async |s| {
+                let ack = if reference {
+                    crate::common::post(
+                        &s.app,
+                        &story::SaveRef {
+                            at: s.scope(),
+                            request: crate::common::rid(90),
+                            shown,
+                            text: "Genesis 1:1-4".to_owned(),
+                        },
+                    )
+                    .await
+                    .unwrap()
+                } else {
+                    crate::common::post(
+                        &s.app,
+                        &story::SaveFrame {
+                            at: s.scope(),
+                            request: crate::common::rid(90),
+                            shown,
+                            text: "The text of this frame was edited.".to_owned(),
+                        },
+                    )
+                    .await
+                    .unwrap()
+                };
+                assert_eq!(ack.stored, tc_api::write::Stored::Written);
+            })
+            .await,
+        );
+    }
+    let grew = growth(&costs[0], &costs[1]);
+    assert!(
+        grew.is_empty(),
+        "saving one story record grows with other stories: {grew:?}"
+    );
+    assert!(costs[0].store.commands > 0, "{:?}", costs[0]);
+    assert!(costs[0].fold.keys_updated > 0, "{:?}", costs[0]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn saving_a_frame_touches_one_frame_on_the_store() {
+    a_story_save_costs_its_record(false).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn saving_a_reference_touches_one_record_on_the_store() {
+    a_story_save_costs_its_record(true).await;
+}
