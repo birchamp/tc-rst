@@ -311,7 +311,13 @@ fn a_settled_carried_edit_during_a_sharing_wait_is_relisted_before_metadata_chan
     );
     attempt.unwrap();
     handle.wait_idle();
+    // Asked before the focus below: a stale settled listing also hides the edit from it, and
+    // that later loss must not stand in for the listing written with the refusal.
     let problems_after_restore = rig.store.hooks().burrito_problems();
+    assert!(
+        problems_after_restore.is_empty(),
+        "the refused carried replacement left a stale settled listing: {problems_after_restore:#?}"
+    );
 
     handle.focus().wait().unwrap();
     handle.leave(Leave::Mode).wait().unwrap();
@@ -322,10 +328,6 @@ fn a_settled_carried_edit_during_a_sharing_wait_is_relisted_before_metadata_chan
     assert!(history.contains(&first_id));
     assert!(history.contains(&second_id));
     assert!(history.contains(&restored_id));
-    assert!(
-        problems_after_restore.is_empty(),
-        "the refused carried replacement left a stale settled listing: {problems_after_restore:#?}"
-    );
     assert_valid_burrito(&rig.fs, &folder);
     handle.close().unwrap();
 

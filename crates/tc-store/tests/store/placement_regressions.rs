@@ -1,17 +1,28 @@
 //! Placement preserves outside versions before replacing or removing their files.
 
 use crate::common::*;
-use std::io::ErrorKind;
-use std::path::Path;
-use tc_journal::command::Command;
+use std::collections::BTreeSet;
+use std::io::{self, ErrorKind};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tc_journal::command::{Command, SeedSource};
 use tc_journal::fold::{ConflictKind, Notice};
 use tc_journal::keys::SettingKey;
-use tc_journal::record::CarriedValue;
-use tc_journal::{Json, JsonMap, Md5, MetaField, Record, RecordKey, RepoPath};
-use tc_store::{Leave, OpenOptions, Point, ProjectHandle, Vfs};
+use tc_journal::record::{CarriedValue, Scope, VerseValue};
+use tc_journal::{
+    BookId, ChapterNo, Json, JsonMap, Md5, MetaField, Record, RecordKey, RepoPath, VerseNo,
+};
+use tc_store::fault::FaultFs;
+use tc_store::vfs::{
+    DirEntry, FileMeta, LockHandle, ReadHandle, WatchGuard, WatchSink, WriteHandle,
+};
+use tc_store::{Leave, OpenOptions, Point, ProjectHandle, Store, Vfs};
 
 const METADATA: &str = "metadata.json";
 const SONG: &str = "ingredients/audio/song.mp3";
+const BOOK: &str = "ingredients/TIT.usfm";
 
 fn open(rig: &Rig, folder: &Path) -> ProjectHandle {
     let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
@@ -746,4 +757,281 @@ fn reusing_an_unflushed_metadata_copy_flushes_its_name_before_its_file() {
     assert_metadata_copy(&rig, &handle, &folder, &second_edit);
     assert_valid_burrito(&rig.fs, &folder);
     handle.close().unwrap();
+}
+
+/// Another program at a moment the store cannot foresee: it saves over a file while the
+/// store waits out that file's hold, or the disk stops reading a journal file the open read.
+#[derive(Debug)]
+struct Interposed {
+    fs: FaultFs,
+    /// Bytes another program saves over a path, releasing its hold, at the next wait.
+    save_on_wait: Mutex<Option<(PathBuf, Vec<u8>)>>,
+    saved: AtomicBool,
+    /// A handle of this file stops reading once it has read the file whole, until the disk
+    /// reads it again (`unreadable` cleared).
+    read_once: Mutex<Option<PathBuf>>,
+    unreadable: Arc<AtomicBool>,
+}
+
+/// A failing sector, or a cloud placeholder whose local bytes were evicted, after the open
+/// read the file.
+struct ReadOnce {
+    inner: Box<dyn ReadHandle>,
+    read: AtomicU64,
+    unreadable: Arc<AtomicBool>,
+}
+
+impl ReadHandle for ReadOnce {
+    fn len(&self) -> u64 {
+        self.inner.len()
+    }
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
+        if self.unreadable.load(Ordering::SeqCst)
+            && self.read.load(Ordering::SeqCst) >= self.inner.len()
+        {
+            return Err(io::Error::other("the disk can no longer read this file"));
+        }
+        self.inner.read_at(buf, offset)?;
+        self.read.fetch_add(buf.len() as u64, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+impl Vfs for Interposed {
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        self.fs.read(path)
+    }
+    fn open(&self, path: &Path) -> io::Result<Box<dyn ReadHandle>> {
+        let inner = self.fs.open(path)?;
+        if self.read_once.lock().unwrap().as_deref() != Some(path) {
+            return Ok(inner);
+        }
+        Ok(Box::new(ReadOnce {
+            inner,
+            read: AtomicU64::new(0),
+            unreadable: self.unreadable.clone(),
+        }))
+    }
+    fn metadata(&self, path: &Path) -> io::Result<FileMeta> {
+        self.fs.metadata(path)
+    }
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<DirEntry>> {
+        self.fs.read_dir(path)
+    }
+    fn create_new(&self, path: &Path) -> io::Result<Box<dyn WriteHandle>> {
+        self.fs.create_new(path)
+    }
+    fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.fs.rename(from, to)
+    }
+    fn rename_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.fs.rename_file_noreplace(from, to)
+    }
+    fn rename_dir_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.fs.rename_dir_noreplace(from, to)
+    }
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
+        self.fs.remove_file(path)
+    }
+    fn remove_dir_all(&self, path: &Path) -> io::Result<()> {
+        self.fs.remove_dir_all(path)
+    }
+    fn create_dir(&self, path: &Path) -> io::Result<()> {
+        self.fs.create_dir(path)
+    }
+    fn sync_dir(&self, path: &Path) -> io::Result<()> {
+        self.fs.sync_dir(path)
+    }
+    fn sync_file(&self, path: &Path) -> io::Result<()> {
+        self.fs.sync_file(path)
+    }
+    fn lock(&self, path: &Path) -> io::Result<Option<Box<dyn LockHandle>>> {
+        self.fs.lock(path)
+    }
+    fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
+        self.fs.canonicalize(path)
+    }
+    fn secure_dir_chain(&self, path: &Path, made: &[PathBuf]) -> io::Result<()> {
+        self.fs.secure_dir_chain(path, made)
+    }
+    fn is_held(&self, error: &io::Error) -> bool {
+        self.fs.is_held(error)
+    }
+    fn wait_held(&self, delay: Duration) {
+        self.fs.wait_held(delay);
+        if let Some((path, bytes)) = self.save_on_wait.lock().unwrap().take() {
+            self.fs.put_unseen(&path, &bytes, None);
+            self.fs.set_busy(&path, false);
+            self.saved.store(true, Ordering::SeqCst);
+        }
+    }
+    fn outside_dir(&self, path: &Path) -> io::Result<PathBuf> {
+        self.fs.outside_dir(path)
+    }
+    fn watch(
+        &self,
+        root: &Path,
+        recursive: bool,
+        sink: WatchSink,
+    ) -> io::Result<Option<WatchGuard>> {
+        self.fs.watch(root, recursive, sink)
+    }
+}
+
+fn interposed_rig(fs: FaultFs) -> (Rig, Arc<Interposed>) {
+    let interposed = Arc::new(Interposed {
+        fs: fs.clone(),
+        save_on_wait: Mutex::new(None),
+        saved: AtomicBool::new(false),
+        read_once: Mutex::new(None),
+        unreadable: Arc::new(AtomicBool::new(true)),
+    });
+    let (mut settings, _) = config(&fs, APP, "host-1");
+    settings.vfs = interposed.clone();
+    let store = Store::start(settings).unwrap();
+    store.wait_cleanup();
+    watch_burrito(&store, &fs);
+    (Rig { fs, store }, interposed)
+}
+
+fn shows(bytes: &[u8], words: &str) -> bool {
+    String::from_utf8_lossy(bytes).contains(words)
+}
+
+/// A removed book's file is a plain derived file: its last look before the unlink is the
+/// only comparison between M1's read and the removal, so a save another program makes while
+/// the store waits out a hold on the file must stop the unlink and be kept.
+#[test]
+fn a_book_file_saved_during_the_sharing_wait_of_its_removal_is_kept() {
+    const PHM: BookId = BookId::Philemon;
+    let (rig, interposed) = interposed_rig(FaultFs::new());
+    let folder = create_titus(&rig, "Titus");
+    let handle = open(&rig, &folder);
+    handle
+        .submit(Command::AddBook {
+            book: PHM,
+            scope: Scope::Whole,
+            seed: SeedSource {
+                usfm: "\\id PHM\n\\c 1\n\\p\n\\v 1 One.\n\\v 2 Two.\n".into(),
+            },
+        })
+        .wait()
+        .unwrap();
+    handle.leave(Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let path = folder.join("ingredients/PHM.usfm");
+    let placed = rig.fs.peek(&path).expect("the added book is placed");
+    let edited = String::from_utf8(placed.clone())
+        .unwrap()
+        .replacen(
+            "\\v 1 ___",
+            "\\v 1 Words a colleague saved in another editor.",
+            1,
+        )
+        .into_bytes();
+    assert_ne!(edited, placed);
+
+    handle
+        .submit(Command::RemoveBook {
+            book: PHM,
+            presence_shown: handle.mint(&RecordKey::BookPresence(PHM), None).unwrap(),
+        })
+        .wait()
+        .unwrap();
+    *interposed.save_on_wait.lock().unwrap() = Some((path.clone(), edited.clone()));
+    rig.fs.set_busy(&path, true);
+    let attempt = handle.leave(Leave::Mode).wait();
+    // Clear the hold even if a regression never reached the planned removal.
+    rig.fs.set_busy(&path, false);
+    assert!(
+        interposed.saved.load(Ordering::SeqCst),
+        "the save must come between the removal's first attempt and its retry"
+    );
+    attempt.unwrap();
+    handle.wait_idle();
+    let kept = rig.fs.peek(&path).as_deref() == Some(edited.as_slice())
+        || files(&rig.fs, &folder)
+            .iter()
+            .any(|(rel, bytes)| rel.starts_with(".tc/external/") && *bytes == edited);
+    assert!(
+        kept,
+        "the unlink removed bytes saved after its comparison; notices: {:?}",
+        handle.notices()
+    );
+    let snapshot = handle.snapshot();
+    let fold = snapshot.fold();
+    let first = RecordKey::Verse(PHM, ChapterNo::new(1).unwrap(), VerseNo::new(1).unwrap());
+    assert!(
+        fold.history(&first).iter().any(|id| matches!(
+            fold.body(id).map(|body| body.record),
+            Some(Record::Verse {
+                value: VerseValue::Text { words, .. },
+                ..
+            }) if words == "Words a colleague saved in another editor."
+        )),
+        "the colleague's save is absent from History; notices: {:?}",
+        handle.notices()
+    );
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// O9 projects the book file while the value of a save it shows can no longer be read. That
+/// rendering is not what the project holds, so the open's job renders again, finds the value
+/// still unreadable, and leaves the book file, the last readable copy of the save, as it is.
+#[test]
+fn a_rendering_that_could_not_read_a_save_never_replaces_its_last_readable_copy() {
+    let saved = "words the book file alone can still show";
+    let later = "a later save the book file does not show yet";
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let earlier: BTreeSet<String> = pending_files(&rig.fs, &folder).into_iter().collect();
+    save_verse(&handle, 1, 1, saved).unwrap();
+    let journal: Vec<String> = pending_files(&rig.fs, &folder)
+        .into_iter()
+        .filter(|rel| !earlier.contains(rel))
+        .collect();
+    assert_eq!(journal.len(), 1, "{journal:?}");
+    handle.leave(Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let book = folder.join(BOOK);
+    let placed = rig.fs.peek(&book).unwrap();
+    assert!(shows(&placed, saved));
+    // The process dies after the later save reached the journal, before the book file.
+    save_verse(&handle, 1, 2, later).unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+
+    let (rig, interposed) = interposed_rig(fs);
+    *interposed.read_once.lock().unwrap() = Some(folder.join(&journal[0]));
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 2).as_deref(),
+        Some(later),
+        "the open must have read the journal"
+    );
+    assert_ne!(
+        words(&handle, 1, 1).as_deref(),
+        Some(saved),
+        "the save's value must be unreadable after the open read its file"
+    );
+    let after_open = rig.fs.peek(&book).unwrap();
+    assert!(
+        shows(&after_open, saved),
+        "a rendering that could not read the save replaced its last readable copy; notices: {:?}",
+        handle.notices()
+    );
+    assert_eq!(after_open, placed);
+    assert_valid_burrito(&rig.fs, &folder);
+
+    // The disk reads the file again: the next job writes both saves.
+    interposed.unreadable.store(false, Ordering::SeqCst);
+    handle.leave(Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some(saved));
+    let written = rig.fs.peek(&book).unwrap();
+    assert!(shows(&written, saved) && shows(&written, later));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
 }

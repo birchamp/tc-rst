@@ -2572,6 +2572,45 @@ fn a_revert_to_an_earlier_write_of_two_stopped_ones() -> Vec<Step> {
     ]
 }
 
+/// The same for `metadata.json`, where the ledger does name a second write. A book file's write
+/// begins only after a read placed the bytes of the first, but a group writes `metadata.json`
+/// after recording a revert to the bytes a stopped write replaced (R9), which settles nothing:
+/// the second write then no longer names the first one's bytes, and a revert to them is kept.
+fn a_revert_to_the_earlier_of_two_stopped_writes_of_metadata_json() -> Vec<Step> {
+    let meta = Holdable::File(File::Meta);
+    vec![
+        act(Act::Name),
+        act(Act::Leave),
+        act(Act::Name),
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Leave),
+        Step::Advance,
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+        // Held through the open, whose own job would otherwise settle the write for good.
+        Step::Lock {
+            what: meta,
+            on: true,
+        },
+        Step::Open,
+        act(Act::Name),
+        Step::KillAfterRename { file: File::Meta },
+        Step::Lock {
+            what: meta,
+            on: false,
+        },
+        Step::Advance,
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+    ]
+}
+
 /// `metadata.json` written by a group killed after its rename, and put back by another program
 /// while the app is closed: the revert is the person's, and is kept.
 fn a_revert_of_metadata_json_after_a_kill_past_its_rename() -> Vec<Step> {
@@ -3109,6 +3148,10 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             a_revert_to_an_earlier_write_of_two_stopped_ones(),
         ),
         (
+            "a_revert_to_the_earlier_of_two_stopped_writes_of_metadata_json",
+            a_revert_to_the_earlier_of_two_stopped_writes_of_metadata_json(),
+        ),
+        (
             "a_revert_of_metadata_json_after_a_kill_past_its_rename",
             a_revert_of_metadata_json_after_a_kill_past_its_rename(),
         ),
@@ -3251,6 +3294,7 @@ fn a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent() {
 #[test]
 fn a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept() {
     assert_kept(&a_revert_to_an_earlier_write_of_two_stopped_ones());
+    assert_kept(&a_revert_to_the_earlier_of_two_stopped_writes_of_metadata_json());
 }
 
 #[test]
