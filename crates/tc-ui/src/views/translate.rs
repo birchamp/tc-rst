@@ -377,8 +377,10 @@ fn chapter_view(
         let actions = actions.clone();
         Callback::new(move |_| actions.toggle_rail())
     };
-    // B11 opens the conflict review from these; until then they show where conflicts are.
-    let review = Callback::new(|()| {});
+    let review = {
+        let actions = actions.clone();
+        Callback::new(move |()| actions.open_review(tc_api::conflicts::ReviewTab::Text, None))
+    };
     let button = move || conflicts_button(conflicts.get(), off, review);
     let tabs = source_tabs(actions, book_id, panes, chosen);
     let head = target_head(s, actions, cross_frame, mode, off);
@@ -1037,10 +1039,16 @@ fn target_verse(
     };
     match &v.words.marker {
         Some(marker) => {
+            let review = {
+                let (actions, conflict) = (actions.clone(), marker.conflict.clone());
+                Callback::new(move |()| {
+                    actions.open_review(tc_api::conflicts::ReviewTab::Text, Some(conflict.clone()));
+                })
+            };
             let place = format!("{chapter}:{key}");
             let reference = format!("{} {place}", book.english_name());
             view! {
-                {conflict_verse(place, reference, marker.versions, number, verse.into_any(), off, Callback::new(|()| {}))}
+                {conflict_verse(place, reference, marker.versions, number, verse.into_any(), off, review)}
                 " "
             }
             .into_any()

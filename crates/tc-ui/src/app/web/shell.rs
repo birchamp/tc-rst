@@ -509,8 +509,24 @@ fn main_view(s: &AppState) -> AnyView {
     match screen {
         Screen::Home => view! { <Home /> }.into_any(),
         Screen::Understand => view! { <Understand /> }.into_any(),
-        Screen::Check => view! { <Check /> }.into_any(),
-        Screen::Draft => view! { <crate::views::translate::Translate /> }.into_any(),
+        Screen::Check => view! {
+            <Check />
+            <crate::views::review::ReviewOverOther />
+        }
+        .into_any(),
+        // tC4 #679: the conflict review shows in Translate, in place of its columns.
+        Screen::Draft => {
+            let review = s.review.clone();
+            let open = Memo::new(move |_| review.with(Option::is_some));
+            (move || {
+                if open.get() {
+                    view! { <crate::views::review::ConflictReview /> }.into_any()
+                } else {
+                    view! { <crate::views::translate::Translate /> }.into_any()
+                }
+            })
+            .into_any()
+        }
         Screen::StoryUnderstand => view! { <StoryUnderstand /> }.into_any(),
         Screen::StoryDraft => view! { <StoryDraft /> }.into_any(),
         // B8 Community Checking.

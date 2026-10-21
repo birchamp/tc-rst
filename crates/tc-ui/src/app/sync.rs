@@ -152,6 +152,16 @@ impl SyncToast {
             .is_some_and(|v| v.verse_conflicts > 0 || v.alignments > 0)
     }
 
+    /// The review tab Review opens at: the verses, else the alignments, so the review never
+    /// opens on an empty tab (tC4 opens nothing without a verse conflict).
+    pub fn review_tab(&self) -> tc_api::conflicts::ReviewTab {
+        use tc_api::conflicts::ReviewTab;
+        match self.synced() {
+            Some(v) if v.verse_conflicts == 0 && v.alignments > 0 => ReviewTab::Alignments,
+            _ => ReviewTab::Text,
+        }
+    }
+
     /// Download: a pinned version is not on this computer (D88 point 6).
     pub fn download(&self) -> bool {
         self.synced().is_some_and(|v| v.missing_pins > 0)

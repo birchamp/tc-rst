@@ -19,6 +19,7 @@ mod app {
     mod language;
     mod offer;
     mod recovery;
+    mod review;
     mod save;
     pub mod save_kit;
     mod save_props;

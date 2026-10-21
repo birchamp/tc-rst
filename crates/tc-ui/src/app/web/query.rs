@@ -409,3 +409,34 @@ impl CachedQuery for tc_api::check::CheckArticleRead {
         project_read(&self.at, resource_keys())
     }
 }
+
+/// The conflict review (B11): a tab lists the project's conflicts, so it follows the conflict
+/// list; a version's text is the record's value, so an edit of a conflicted record, which
+/// changes the counts or adds a conflict, is in the same aspect.
+impl CachedQuery for tc_api::conflicts::List {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            vec![tc_api::query::QueryKey::Aspect(
+                tc_api::event::Aspect::Conflicts,
+            )],
+        )
+    }
+
+    fn view(ok: &Self::Ok) -> Option<tc_api::ids::ViewSeq> {
+        Some(ok.view)
+    }
+}
+
+/// A record's History: every change of the record, and a resolution of its conflict.
+impl CachedQuery for tc_api::conflicts::History {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            vec![
+                tc_api::query::QueryKey::Record(self.record.clone()),
+                tc_api::query::QueryKey::Aspect(tc_api::event::Aspect::Conflicts),
+            ],
+        )
+    }
+}

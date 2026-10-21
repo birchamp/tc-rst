@@ -163,6 +163,8 @@ enum After {
     Nothing,
     /// Get source texts shows over the project.
     Sources,
+    /// The conflict review shows in Translate at its tab (B11).
+    Review(tc_api::conflicts::ReviewTab),
     /// The change of checking language is asked over the project.
     Gateway(Box<GatewayPackage>),
 }
@@ -211,6 +213,80 @@ impl Actions {
         self.open(project, None, None, After::Gateway(Box::new(package)));
     }
 
+    /// A card's conflict chip and the sync toast's Review (B11): the project opens in
+    /// Translate at `book`, then the review.
+    pub(super) fn open_for_review(
+        &self,
+        project: ProjectRef,
+        book: Option<BookId>,
+        tab: tc_api::conflicts::ReviewTab,
+    ) {
+        self.open(
+            project,
+            book.map(OpenUnit::Book),
+            Some(Landing {
+                mode: PlaceMode::Draft,
+                chapter: 1,
+                tool: None,
+            }),
+            After::Review(tab),
+        );
+    }
+
+    /// The review is open over the project: the sync toast that asked for it closes (#724),
+    /// and Translate goes to the book of the tab's first conflict (tC4
+    /// `openProjectConflicts`), so Back and the ULT verse are that verse's.
+    fn reviewing(&self, tab: tc_api::conflicts::ReviewTab) {
+        self.open_review(tab, None);
+        let s = self.s();
+        let Some(at) = s
+            .project
+            .with_untracked(|p| p.as_ref().map(|p| p.at.clone()))
+        else {
+            return;
+        };
+        if s.review.with_untracked(Option::is_none) {
+            return;
+        }
+        if s.sync_result
+            .with_untracked(|t| t.as_ref().map(|t| t.project.clone()))
+            .is_some_and(|p| p == at.project)
+        {
+            s.sync_result.try_set(None);
+        }
+        let this = self.clone();
+        spawn_local(async move {
+            let list = tc_api::conflicts::List {
+                at: at.clone(),
+                tab,
+            };
+            let Ok(view) = this.runtime().api().call(&list).await else {
+                return;
+            };
+            let tc_api::conflicts::ReviewEntries::Conflicts(entries) = &view.entries else {
+                return;
+            };
+            let Some(book) = entries
+                .first()
+                .and_then(|e| crate::app::review::place_book(&e.place))
+            else {
+                return;
+            };
+            let s = this.s();
+            let same = s
+                .project
+                .with_untracked(|p| p.as_ref().is_some_and(|p| p.at == at));
+            if same
+                && s.review.with_untracked(Option::is_some)
+                && s.u.book.get_untracked() != Some(book)
+            {
+                s.u.clear_focus();
+                s.u.chapter.try_set(1);
+                s.u.book.try_set(Some(book));
+            }
+        });
+    }
+
     fn open(
         &self,
         project: ProjectRef,
@@ -255,6 +331,7 @@ impl Actions {
                         After::Nothing => {}
                         After::Sources => this.open_sources(),
                         After::Gateway(package) => this.ask_gateway_change(*package),
+                        After::Review(tab) => this.reviewing(tab),
                     }
                 }
                 Some(Err(error)) => {
@@ -360,6 +437,7 @@ impl Actions {
             flavor,
         }));
         let view = place.map_or(View::Read, |p| view_of(p.mode));
+        s.review.try_set(None);
         // A resume into Check opens its tool at once: no picker shows meanwhile (#518, #513).
         self.reset_check();
         if let Some(place) = place

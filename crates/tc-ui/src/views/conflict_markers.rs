@@ -113,20 +113,14 @@ pub fn conflict_verse(
         }
         css.to_style()
     };
-    let n = versions.to_string();
-    let aria = t(
-        keys::conflicts::MARKER_LABEL,
-        &[("ref", &reference), ("n", &n)],
+    let marker = marker_button(
+        format!("conflict-marker-{place}"),
+        &reference,
+        versions,
+        off,
+        on_review,
+        style,
     );
-    let label = t(keys::conflicts::MARKER, &[("n", &n)]);
-    let marker = leptos::html::button()
-        .attr("type", "button")
-        .attr("data-testid", format!("conflict-marker-{place}"))
-        .attr("aria-label", aria)
-        .attr("disabled", move || off.get())
-        .attr("style", style)
-        .on(leptos::ev::click, move |_| on_review.run(()))
-        .child((fork_icon(13), label));
     view! {
         <span data-testid=format!("conflict-verse-{place}") style=tint.to_style()>
             <span style="white-space: nowrap;">{number}{marker}</span>
@@ -134,4 +128,62 @@ pub fn conflict_verse(
         </span>
     }
     .into_any()
+}
+
+fn marker_button(
+    test_id: String,
+    reference: &str,
+    versions: u8,
+    off: Signal<bool>,
+    on_review: Callback<()>,
+    style: impl Fn() -> String + Send + Sync + 'static,
+) -> AnyView {
+    let n = versions.to_string();
+    let aria = t(
+        keys::conflicts::MARKER_LABEL,
+        &[("ref", &reference), ("n", &n)],
+    );
+    let label = t(keys::conflicts::MARKER, &[("n", &n)]);
+    leptos::html::button()
+        .attr("type", "button")
+        .attr("data-testid", test_id)
+        .attr("aria-label", aria)
+        .attr("disabled", move || off.get())
+        .attr("style", style)
+        .on(leptos::ev::click, move |_| on_review.run(()))
+        .child((fork_icon(13), label))
+        .into_any()
+}
+
+/// "2 versions · Review" beside an aligner's verse or a check's decision that has two
+/// versions (#791, a rebuild-only marker): tC4's verse marker on the Check screen.
+pub fn versions_marker(
+    test_id: &'static str,
+    reference: &str,
+    versions: u8,
+    on_review: Callback<()>,
+) -> AnyView {
+    let style = || {
+        let mut css = warn();
+        css.extend(&crate::css! {
+            "display": "inline-flex",
+            "align-items": "center",
+            "gap": 6,
+            "height": 26,
+            "padding": "0 10px",
+            "border-radius": "var(--radius-pill)",
+            "background": "var(--tc-warn-surface)",
+            "font-size": "var(--fs-meta)",
+            "line-height": 1,
+        });
+        css.to_style()
+    };
+    marker_button(
+        test_id.to_owned(),
+        reference,
+        versions,
+        Signal::from(false),
+        on_review,
+        style,
+    )
 }
