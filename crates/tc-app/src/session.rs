@@ -739,6 +739,11 @@ impl SessionRegistry {
                 at: session.scope.clone(),
                 event: SessionEvent::Checkpoint(outcome),
             });
+            // Home is already showing: its card was read before this checkpoint wrote the
+            // files its counts come from (a kept verse's conflict among them, J18).
+            registry.inner.bus.publish(Event::HomeCard {
+                project: session.scope.project.clone(),
+            });
             {
                 let mut slots = lock(&registry.inner.slots);
                 if let Some(slot) = slots

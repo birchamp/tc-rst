@@ -9,12 +9,14 @@ use tc_api::conflicts::{
     ReviewTab, ReviewView, Version, VersionCause, VersionValue,
 };
 use tc_api::editor::Chapters;
+use tc_api::event::Event;
 use tc_api::home::Card;
 use tc_api::ids::{ChangeRef, Scope};
 use tc_api::session::Close;
 use tc_api::shown::{Known, PersonLabel, Who};
 use tc_api::write::Stored;
 use tc_app::App;
+use tc_app::events::Next;
 use tc_core::BookId;
 
 use super::common::{folder, post, rid};
@@ -209,6 +211,22 @@ async fn keep_this_version_resolves_with_review_tokens_and_a_second_send_gets_th
         .collect();
     assert_eq!(kept.len(), 1, "one resolution, however often Keep was sent");
 
+    // Home reads a card at its visit and again only when told (`HomeCard`), as the UI does:
+    // the read at the visit may come before the leave's checkpoint writes the conflicts file.
+    let card = |app: &App| {
+        let app = app.clone();
+        async move {
+            post(
+                &app,
+                &Card {
+                    project: folder("sample_burrito"),
+                },
+            )
+            .await
+            .unwrap()
+        }
+    };
+    let mut events = app.events().subscribe(app.events().head());
     post(
         app,
         &Close {
@@ -218,25 +236,31 @@ async fn keep_this_version_resolves_with_review_tokens_and_a_second_send_gets_th
     )
     .await
     .unwrap();
-    let mut card = None;
-    for _ in 0..1000 {
-        let read: tc_api::home::HomeCard = post(
-            app,
-            &Card {
-                project: folder("sample_burrito"),
-            },
-        )
-        .await
-        .unwrap();
-        if read.conflicts == Known::Known(0) {
-            card = Some(read);
-            break;
+    let mut read = card(app).await;
+    let told = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while read.conflicts != Known::Known(0) {
+            loop {
+                match events.next().await {
+                    Next::Frame(frame)
+                        if frame.event
+                            == (Event::HomeCard {
+                                project: folder("sample_burrito"),
+                            }) =>
+                    {
+                        break;
+                    }
+                    Next::Frame(_) => {}
+                    other => panic!("{other:?}"),
+                }
+            }
+            read = card(app).await;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
+    })
+    .await;
     assert!(
-        card.is_some(),
-        "Home counts no conflict once the verse is kept"
+        told.is_ok(),
+        "Home is told to read the card again and counts no conflict once the verse is kept: {:?}",
+        read.conflicts
     );
 }
 
