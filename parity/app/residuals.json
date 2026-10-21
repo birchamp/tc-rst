@@ -629,6 +629,12 @@
       ],
       "why": "The review with three versions: Titus 1:1 saved on this computer before the sync, then two teammates' versions; Mine is light blue and each teammate's cream (#679). Every pixel and every line of the DOM, computed styles included, is tC4's but for two things. The dates of the versions: each date is when its version was made, so tC4's are its capture's time and the rebuild's are its own run's (the scripted teammates' versions carry the environment's fixed time, 1 October 2026), and the card's `data-ts` is tC4's §8.2 ts there and the rebuild's change id here. The History button under the versions (#78, read only until C7a's Restore): a rebuild-only control (Q-9) that lists every version of the verse with how it came to be. The sync that brings the teammates' versions is scripted (`test/script`, the environment's teammatesChangeOneVerse) until X; the teammates edit Door43's copy of the project, so a version this computer has not synced stays a version of its own.",
       "until": null
+    },
+    "cc-obs-wrapped": {
+      "layers": [
+        "dom"
+      ],
+      "why": "After the click on “Pictures wrapped”, React updates each layout chip's style in place, one changed property at a time: it sets the chip's new `border` shorthand, whose value holds a `var()`, and does not set the unchanged `borderWidth: 1` again after it, so tC4's DOM reads the four `border-*-width` longhands as pending (empty). The rebuild writes each chip's whole style again, so they read `1px`, as both DOMs do before the click (`cc-obs` is the same). `--stroke` is 1px, so every pixel is the same (0 differ). Unit B8."
     }
   }
 }

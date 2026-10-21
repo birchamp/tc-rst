@@ -56,6 +56,7 @@ use tc_api::event::{
     Aspect, ChangeCause, ChangeParts, ChangeScope, ChapterRef, CheckpointOutcome, Event,
     EventFrame, RecordChange, SessionEvent, SessionMode, StartupProgress, StartupState,
 };
+use tc_api::export;
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::helps::{
     Article, ArticleLink, ArticleView, LitVerse, NoteCard, PaneFocus, Passage, PassageView,
@@ -2878,6 +2879,88 @@ impl Example for Script {
                     restored: 0,
                 },
             },
+        }
+    }
+}
+
+impl Example for export::Book {
+    fn example() -> Self {
+        export::Book {
+            at: scope(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for export::BookPrint {
+    fn example() -> Self {
+        let verse = |label: &str, text: Option<&str>| export::PrintVerse {
+            label: RefPart::parse(label).unwrap(),
+            text: text.map(str::to_owned),
+        };
+        export::BookPrint {
+            items: vec![
+                export::PrintItem::Chapter(export::PrintChapter {
+                    chapter: 1,
+                    verses: vec![
+                        verse("1", Some("Pablo, siervo de Dios")),
+                        verse("2-3", None),
+                    ],
+                }),
+                export::PrintItem::Gap(export::Run { from: 2, to: 2 }),
+                export::PrintItem::Chapter(export::PrintChapter {
+                    chapter: 3,
+                    verses: vec![verse("1", Some("Recuérdales"))],
+                }),
+            ],
+            undrafted: true,
+        }
+    }
+}
+
+impl Example for export::Stories {
+    fn example() -> Self {
+        export::Stories { at: scope() }
+    }
+}
+
+impl Example for export::StoriesPrint {
+    fn example() -> Self {
+        let story = |n: u8| StoryNo::new(n).unwrap();
+        export::StoriesPrint {
+            items: vec![
+                export::PrintStoryItem::Story(export::PrintStory {
+                    story: story(1),
+                    title: "La Creación".into(),
+                    frames: vec![
+                        export::PrintFrame::Drafted(export::DraftedFrame {
+                            frame: 1,
+                            text: "Así fue como Dios hizo todo.".into(),
+                            picture: Some(
+                                "/media/obs/git.door43.org~uW~obs_images_360~7146d5b504f6b63b9e11f7dc0b18c594d0ae179d/360px/obs-en-01-01.jpg"
+                                    .into(),
+                            ),
+                        }),
+                        export::PrintFrame::Gap(export::Run { from: 2, to: 16 }),
+                    ],
+                    reference: Some("Una historia bíblica de: Génesis 1-2".into()),
+                }),
+                export::PrintStoryItem::Gap(export::StoryRun {
+                    from: story(2),
+                    to: story(3),
+                }),
+                export::PrintStoryItem::Story(export::PrintStory {
+                    story: story(4),
+                    title: String::new(),
+                    frames: vec![export::PrintFrame::Drafted(export::DraftedFrame {
+                        frame: 1,
+                        text: "Dios dijo".into(),
+                        picture: None,
+                    })],
+                    reference: None,
+                }),
+            ],
+            undrafted: true,
         }
     }
 }

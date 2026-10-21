@@ -1162,6 +1162,29 @@
       "domSha256": "1c7567d82e2beeedcdac73493de1ed78607cd052cee68baa8b516e6af4aa5be0"
     },
     {
+      "name": "en-community-checking",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B8",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-community-checking.png",
+      "sha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
+      "dom": "dom/en-community-checking.json",
+      "domSha256": "869ceff1d8968c4065e8d98dc66141225ea11944f88c5d1652d1ee3aab0dbe0e"
+    },
+    {
       "name": "en-obs-understand",
       "kind": "screen",
       "scenario": "en-pins",
@@ -1706,6 +1729,50 @@
       "sha256": "3d2bda1598562b1445ec0a1853000fda5a276636a17a0c34ecc81a4a27060251",
       "dom": "dom/conflict-review-mine.json",
       "domSha256": "fc3f367f0dbf8d6854b92861a08214189eedecf9fbe1a593dfec02c29a8ea92e"
+    },
+    {
+      "name": "cc-obs",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B8",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/cc-obs.png",
+      "sha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
+      "dom": "dom/cc-obs.json",
+      "domSha256": "c153aaee7f221cd5a4533e01a820e99152aa89485944d87ccdf40b4b0b0c5d26"
+    },
+    {
+      "name": "cc-obs-wrapped",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B8",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/cc-obs-wrapped.png",
+      "sha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
+      "dom": "dom/cc-obs-wrapped.json",
+      "domSha256": "582a1debea99f706ad4ee8d074c61d83c1c24028207356ce02c0f8f923e2705b"
     },
     {
       "name": "open-progress-journal",

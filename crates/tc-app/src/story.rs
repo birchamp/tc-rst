@@ -41,7 +41,7 @@ use crate::understand::{
 };
 
 /// The fifty stories' numbers.
-fn story_numbers() -> impl Iterator<Item = u8> {
+pub(crate) fn story_numbers() -> impl Iterator<Item = u8> {
     1..=StoryNo::COUNT
 }
 
@@ -183,6 +183,24 @@ impl LoadedObs {
         }
     }
 
+    /// Each frame's picture address, as the story screens show it: from the pinned picture
+    /// packs, else the default pack, in frame order.
+    pub(crate) fn frame_pictures(&self, story: &ObsStory) -> Vec<Option<String>> {
+        let packs = &self.packs;
+        presentation::present_story(
+            story.clone(),
+            SourceInput::<()>::PinsUnknown,
+            &packs.image_pins,
+            packs.pinned.clone(),
+            packs.default.clone(),
+            &[],
+        )
+        .images
+        .iter()
+        .map(|image| image.uri().map(str::to_owned))
+        .collect()
+    }
+
     /// The project's `obs` pin: the first rung that pins it.
     fn source_pin(&self) -> Option<&ResourcePin> {
         let pins = self.pins.as_ref()?;
@@ -255,12 +273,12 @@ impl App {
     }
 }
 
-fn journal_story(story: StoryNo) -> Result<tc_journal::StoryNo, ApiError> {
+pub(crate) fn journal_story(story: StoryNo) -> Result<tc_journal::StoryNo, ApiError> {
     tc_journal::StoryNo::new(story.get()).ok_or_else(not_a_story_project)
 }
 
 /// A story of the project as its file, parsed: tC4's `readStory`. Costs one derived file.
-fn read_story(
+pub(crate) fn read_story(
     read: &crate::counters::CountingSnapshot,
     story: StoryNo,
 ) -> Result<ObsStory, ApiError> {

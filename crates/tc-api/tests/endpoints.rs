@@ -111,6 +111,9 @@ const PHASE_0: &[&str] = &[
     "conflicts/list",
     "conflicts/history",
     "conflicts/resolve",
+    // B8: what the Community Checking preview prints.
+    "export/book",
+    "export/stories",
     "test/quiet",
     "test/echo",
     "test/crash",

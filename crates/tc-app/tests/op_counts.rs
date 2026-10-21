@@ -24,6 +24,7 @@ mod op_counts {
     mod comments;
     mod conflicts;
     pub mod corpus;
+    mod export;
     pub mod harness;
     mod home;
     mod lint;

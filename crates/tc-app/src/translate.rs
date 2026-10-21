@@ -31,12 +31,12 @@ use crate::wire;
 const LAST_VERSE_KIND: u8 = 3;
 
 /// One verse of a chapter as the store holds it.
-struct Text {
+pub(crate) struct Text {
     key: RecordKey,
-    verse: u16,
-    last: u16,
-    words: String,
-    layout: String,
+    pub(crate) verse: u16,
+    pub(crate) last: u16,
+    pub(crate) words: String,
+    pub(crate) layout: String,
     /// The records of the verses a span covers, in order.
     covered: Vec<RecordKey>,
 }
@@ -55,7 +55,7 @@ fn marks(body: &str) -> (Vec<u8>, Vec<u8>) {
     (levels(lead), levels(tail))
 }
 
-fn texts(read: &CountingSnapshot, book: tc_core::BookId, chapter: u16) -> Vec<Text> {
+pub(crate) fn texts(read: &CountingSnapshot, book: tc_core::BookId, chapter: u16) -> Vec<Text> {
     let mut texts: Vec<Text> = Vec::new();
     // The verses a span covers, with the verse that covers them.
     let mut covered: Vec<(u16, u16, RecordKey)> = Vec::new();

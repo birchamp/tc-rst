@@ -4,9 +4,11 @@
 //! [`draft`] is the draft machine of C1b. [`ArticleBlock`] is a block of help text as the helps
 //! panes draw it: tc-helps renders it on the server (`tc_helps::blocks`, a port of tC4's
 //! `renderArticleBlocks`), and the UI cuts a long note's preview with [`take_spans`], tC4's
-//! `takeSpans`. A differential test in tc-app holds this copy to tc-helps' own.
+//! `takeSpans`. A differential test in tc-app holds this copy to tc-helps' own. [`print`] is the
+//! Community Checking preview's pages, tc-export's print parts on pages the UI measures (B8).
 
 pub mod draft;
+pub mod print;
 pub mod section;
 pub mod selection;
 

@@ -28,10 +28,10 @@
   },
   "totals": {
     "rows": 130,
-    "same": 31,
+    "same": 33,
     "declared": 0,
-    "differs": 78,
-    "unported": 21,
+    "differs": 79,
+    "unported": 18,
     "failed": 0
   },
   "rows": [
@@ -1528,11 +1528,29 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B8",
-        "dom": "B8",
-        "meaning": "B8"
+      "status": "same",
+      "by": "B8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
+        "rustSha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "141e41e06def03a80fbab1ad4f720700a57846192ef8736c093aa8a00841ac5d",
+        "rustSha256": "869ceff1d8968c4065e8d98dc66141225ea11944f88c5d1652d1ee3aab0dbe0e",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
       }
     },
     {
@@ -2199,10 +2217,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B8",
-        "dom": "B8"
+      "status": "same",
+      "by": "B8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
+        "rustSha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "37081e4b2346559c3464e3ff390105063d5bcfa69a72f992797775c296941f32",
+        "rustSha256": "c153aaee7f221cd5a4533e01a820e99152aa89485944d87ccdf40b4b0b0c5d26",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2210,10 +2242,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B8",
-        "dom": "B8"
+      "status": "differs",
+      "by": "B8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
+        "rustSha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "890550050f4e3be2838f4edf7d8ee0b4379e0a99b6e7015e10890a4572161a79",
+        "rustSha256": "582a1debea99f706ad4ee8d074c61d83c1c24028207356ce02c0f8f923e2705b",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 78: tC4                 <button aria-pressed=\"false\" data-i=\"choice\" data-tone=\"accent\" type=\"button\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backgrou… | rust                 <button aria-pressed=\"false\" data-i=\"choice\" data-tone=\"accent\" type=\"button\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backgrou…",
+          "line 81: tC4                 <button aria-pressed=\"true\" data-i=\"choice\" data-selected=\"true\" data-tone=\"accent\" type=\"button\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-po… | rust                 <button aria-pressed=\"true\" data-i=\"choice\" data-selected=\"true\" data-tone=\"accent\" type=\"button\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-po…"
+        ]
       }
     },
     {
