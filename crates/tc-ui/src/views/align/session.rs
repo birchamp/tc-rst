@@ -949,7 +949,12 @@ fn mark_valid_bar(s: &AppState, actions: &Actions, view: &AlignerView) -> impl I
 }
 
 /// The header: the reference, and "Item n of total" (tC4's `AlignHeader`).
-fn header(s: &AppState, view: &AlignerView, book: BookId) -> impl IntoView + use<> {
+fn header(
+    s: &AppState,
+    actions: &Actions,
+    view: &AlignerView,
+    book: BookId,
+) -> impl IntoView + use<> {
     let items = s.a.rail.with_untracked(|rail| match rail {
         Rail::Ready(rows) => Some(rows.items.clone()),
         Rail::Loading | Rail::Failed(_) => None,
@@ -994,9 +999,25 @@ fn header(s: &AppState, view: &AlignerView, book: BookId) -> impl IntoView + use
             ],
         )
     });
+    let marker = view.marker.clone().map(|marker| {
+        let actions = actions.clone();
+        let conflict = marker.conflict.clone();
+        crate::views::conflict_markers::versions_marker(
+            "align-conflict-marker",
+            &label,
+            marker.versions,
+            Callback::new(move |()| {
+                actions.open_review(
+                    tc_api::conflicts::ReviewTab::Alignments,
+                    Some(conflict.clone()),
+                );
+            }),
+        )
+    });
     view! {
         <div style=row.to_style()>
             <span style=small.to_style()>{label.clone()}</span>
+            {marker}
             <div style="flex: 1;"></div>
             {item_of.map(|text| view! { <span data-testid="align-item-counter" style=counter.to_style()>{text}</span> })}
         </div>
@@ -1104,7 +1125,7 @@ fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> An
         .collect();
     let session = view! {
         <div data-testid="align-session">
-            {header(s, &view, book)}
+            {header(s, actions, &view, book)}
             {how_toggle(s)}
             {stale}
             <div style=panel.to_style()>

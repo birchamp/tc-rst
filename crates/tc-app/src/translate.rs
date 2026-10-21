@@ -98,7 +98,7 @@ pub(crate) fn texts(read: &CountingSnapshot, book: tc_core::BookId, chapter: u16
 }
 
 /// The conflict a verse is in, with how many versions it has.
-fn marker(read: &CountingSnapshot, key: &RecordKey) -> Option<ConflictMarker> {
+pub(crate) fn marker(read: &CountingSnapshot, key: &RecordKey) -> Option<ConflictMarker> {
     let state = read.key_state(key)?;
     let Resolved::Conflict(id) = state.state else {
         return None;

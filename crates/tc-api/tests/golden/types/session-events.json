@@ -49,10 +49,13 @@
               "record": "{\"book\":\"TIT\",\"chapter\":1,\"kind\":\"verse\",\"verse\":4}",
               "by": {
                 "who": {
-                  "type": "teammate",
-                  "value": 2
+                  "type": "username",
+                  "value": "equipo"
                 },
-                "computer": "LAPTOP-7"
+                "computer": {
+                  "type": "other",
+                  "value": 2
+                }
               }
             }
           ],

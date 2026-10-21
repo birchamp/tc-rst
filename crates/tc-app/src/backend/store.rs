@@ -48,8 +48,8 @@ use super::{
     BoxFuture, CheckpointReason, CommandError, CopyFailure, DraftToken, EditToken, Listing,
     OfferedDraft, OpenFailure, Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore,
     Published, ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError,
-    StoreEvent, StoreReply, Stored, SummaryFiles, SummaryStamp, SummaryWatch, UnusableFolder,
-    UnusableReason,
+    StoreEvent, StoreNotice, StoreReply, Stored, SummaryFiles, SummaryStamp, SummaryWatch,
+    UnusableFolder, UnusableReason,
 };
 use crate::clock::Clock;
 use crate::jobs::ProgressSink;
@@ -1416,6 +1416,13 @@ impl ProjectHandle for StoreHandle {
             Some(handle) => handle.counters(),
             None => self.closed.get().map(|c| c.counters).unwrap_or_default(),
         }
+    }
+
+    fn notices(&self) -> Vec<StoreNotice> {
+        self.inner()
+            .as_ref()
+            .map(|handle| handle.notices())
+            .unwrap_or_default()
     }
 
     fn offered_drafts(&self) -> Vec<OfferedDraft> {

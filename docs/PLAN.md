@@ -209,6 +209,20 @@ And this (unit C3):
   title or reference line. tC4 4.0 puts the saved reference back into an emptied box without
   a word, and shows only "Save failed — retry" for the others, whose retry can never succeed.
 
+And this (unit B11):
+
+- The conflict review lists, besides tC4's verses whose text two people changed, everything
+  else a project can hold in two versions (alignments, checks and comments, settings, sources
+  and books), the records that lost their place and the notices, each in a tab of its own,
+  read only until unit C7b. The tabs show only while one of them holds something, so a
+  project with verse conflicts alone shows tC4's review. tC4 4.0 keeps the newest version of
+  those records and only counts them on the sync result, so the person cannot see what was
+  set aside.
+- An aligned verse and a check decision that hold two versions show "2 versions · Review" on
+  the Align and Check screens (#791); tC4 4.0 shows nothing there.
+- A version dated more than a day after this computer's clock says the clock it was made on
+  may be wrong, and the review has a History of the verse (#78). tC4 4.0 has neither.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

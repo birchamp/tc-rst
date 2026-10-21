@@ -584,11 +584,44 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
             "white-space": "nowrap",
         };
         let fill = crate::css! { "flex": 1 };
+        let reference = format!(
+            "{unit} {}",
+            t(keys::check::REF, &[("c", &chapter), ("v", &verse)])
+        );
+        // A decision with two versions (a teammate's check arrived) is marked, and its review
+        // opens over the screen.
+        let marker = {
+            let (detail, actions) = (detail.clone(), actions.clone());
+            let marker = Memo::new(move |_| {
+                detail.with(|d| match d {
+                    Some(Detail::Ready(view)) => view.decision.marker.clone(),
+                    _ => None,
+                })
+            });
+            move || {
+                marker.get().map(|marker| {
+                    let actions = actions.clone();
+                    let conflict = marker.conflict.clone();
+                    crate::views::conflict_markers::versions_marker(
+                        "check-conflict-marker",
+                        &reference,
+                        marker.versions,
+                        Callback::new(move |()| {
+                            actions.open_review(
+                                tc_api::conflicts::ReviewTab::Checks,
+                                Some(conflict.clone()),
+                            );
+                        }),
+                    )
+                })
+            }
+        };
         view! {
             <div style=row.to_style()>
                 <span style=place.to_style()>
                     {unit}" "{t(keys::check::REF, &[("c", &chapter), ("v", &verse)])}
                 </span>
+                {marker}
                 <div style=fill.to_style()></div>
                 <span data-testid="check-item-counter" style=counter.to_style()>
                     {move || t(keys::check::ITEM_OF, &[("n", &(index.get() + 1).to_string()), ("total", &total.get().to_string())])}

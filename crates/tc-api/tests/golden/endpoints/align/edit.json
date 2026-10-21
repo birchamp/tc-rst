@@ -144,7 +144,8 @@
       },
       "save": {
         "type": "unsaved"
-      }
+      },
+      "marker": null
     }
   },
   "error": {

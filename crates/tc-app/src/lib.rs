@@ -17,6 +17,7 @@ mod check;
 pub mod clock;
 mod comments;
 pub mod config;
+mod conflicts;
 pub mod counters;
 pub mod create;
 pub mod dispatch;

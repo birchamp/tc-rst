@@ -274,6 +274,8 @@ pub struct AlignerView {
     /// The open verse's row on the rail, so the rail follows each edit without asking again.
     pub status: RailStatus,
     pub save: AlignSave,
+    /// Present while the verse's alignment has two versions: "2 versions · Review" (#791).
+    pub marker: Option<crate::shown::ConflictMarker>,
 }
 
 /// `align/index`: every verse of the book as the rail lists it, in order.

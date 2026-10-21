@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "aba2adaf7c275c6a",
+      "ui": "8a97c92765d47ed3",
       "commit": "dev",
       "api": 1
     }
@@ -30,8 +30,8 @@
     "rows": 130,
     "same": 33,
     "declared": 0,
-    "differs": 76,
-    "unported": 21,
+    "differs": 79,
+    "unported": 18,
     "failed": 0
   },
   "rows": [
@@ -2121,10 +2121,30 @@
       "kind": "case",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B11",
-        "dom": "B11"
+      "status": "differs",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "pixels": {
+        "tc4Sha256": "4090f3c11bbb70bb1da30c8e218deef7b7833129ec66ad9bc4017695ccd208d8",
+        "rustSha256": "0af3170dceffe7f4761c13910d1e45788326f2401f55f97e3a617c45c5d4b396",
+        "mismatched": 1817,
+        "outsideMasks": 1817,
+        "masks": [],
+        "diff": "diffs/conflict-review.png"
+      },
+      "dom": {
+        "tc4Sha256": "e00e36967ea6c51dd3c39eeb3d7441d301170feeb3e6ed4ea2b5e7fe9ebb6058",
+        "rustSha256": "e1c397d64277d0fd09dbbbb3e551569481a06b8f61dffec431232ebdde6db96f",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:59.763Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 92: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
+          "line 95: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:58.763Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 103: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:01 AM\"",
+          "line 106: tC4       <div  style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-top-color: ; border-top-style: ; border-top-width: ; box-s… | rust           <button data-i=\"text\" data-testid=\"conflict-history\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; align-self: flex-start; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: i…"
+        ]
       }
     },
     {
@@ -2132,10 +2152,30 @@
       "kind": "case",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B11",
-        "dom": "B11"
+      "status": "differs",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "pixels": {
+        "tc4Sha256": "cd7d90f37f7380113b84a00f5ab0670813341b9f9ed0f25610484e5c38b3ed40",
+        "rustSha256": "249ff1e8faed5b7d690d3c01ddbcc6f046846e03030fe68252261099d304dcb4",
+        "mismatched": 1817,
+        "outsideMasks": 1817,
+        "masks": [],
+        "diff": "diffs/conflict-review-selected.png"
+      },
+      "dom": {
+        "tc4Sha256": "e427e20c7d67eb5bc41f6e2e9029225be95e34db0061437973216981ef9f3d1b",
+        "rustSha256": "055f8025d09d49e5f0ab7c82c2f074cb0670450d7bb3dcd17859a73de5ad265e",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"true\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:59.763Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background-… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"true\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-cl…",
+          "line 94: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
+          "line 97: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:58.763Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 105: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:01 AM\"",
+          "line 108: tC4       <div  style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-top-color: ; border-top-style: ; border-top-width: ; box-s… | rust           <button data-i=\"text\" data-testid=\"conflict-history\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; align-self: flex-start; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: i…"
+        ]
       }
     },
     {
@@ -2143,10 +2183,30 @@
       "kind": "case",
       "scenario": "shared",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "B11",
-        "dom": "B11"
+      "status": "differs",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "pixels": {
+        "tc4Sha256": "3e9c18c848b1b2064acc593631ff8952832eb718fe58cd7e99226c440f2f82b4",
+        "rustSha256": "3d2bda1598562b1445ec0a1853000fda5a276636a17a0c34ecc81a4a27060251",
+        "mismatched": 2054,
+        "outsideMasks": 2054,
+        "masks": [],
+        "diff": "diffs/conflict-review-mine.png"
+      },
+      "dom": {
+        "tc4Sha256": "0642a9bc4f9a274c698b81754ab739c7dc5750a2b4bae05786cd53f35347e4e6",
+        "rustSha256": "fc3f367f0dbf8d6854b92861a08214189eedecf9fbe1a593dfec02c29a8ea92e",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 84: tC4             <button aria-label=\"Mine, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"mine\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:29.535Z|0000|a4bbd43216f529e5\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background-color: ; … | rust             <button aria-label=\"Mine, Oct 21, 2026 · 05:27 AM\" aria-pressed=\"false\" data-owner=\"mine\" data-testid=\"conflict-version\" data-ts=\"bda2505ed83df634b4b90c6a16a45df41ab696d89eab3e3a4247264bdcc246ab\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; ba…",
+          "line 92: tC4                     \"Oct 19, 2026 · 02:52 AM\" | rust                     \"Oct 21, 2026 · 05:27 AM\"",
+          "line 95: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:27.905Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 103: tC4                     \"Oct 19, 2026 · 02:52 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
+          "line 106: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:26.905Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…"
+        ]
       }
     },
     {

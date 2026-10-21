@@ -28,6 +28,7 @@ pub mod align;
 pub mod app;
 pub mod buffer;
 pub mod check;
+pub mod conflicts;
 pub mod create;
 pub mod door43;
 pub mod editor;
@@ -166,6 +167,11 @@ macro_rules! endpoint_table {
             command "align/suggest": $crate::align::Suggest => $crate::align::AlignerView;
             command "align/flush": $crate::align::Flush => $crate::align::AlignSave;
             command "align/close": $crate::align::Close => $crate::align::AlignSave;
+
+            query "conflicts/list": $crate::conflicts::List => $crate::conflicts::ReviewView;
+            query "conflicts/history": $crate::conflicts::History
+                => $crate::conflicts::HistoryView;
+            command "conflicts/resolve": $crate::conflicts::Resolve => $crate::write::Ack;
 
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;

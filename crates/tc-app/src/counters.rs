@@ -205,6 +205,27 @@ impl CountingSnapshot {
         self.snapshot.fold().body(change)
     }
 
+    /// Every folded version of a record, oldest first: its History (STORAGE §8.3). Costs the
+    /// record's own versions.
+    pub fn history(&self, key: &RecordKey) -> Vec<ChangeId> {
+        let ids = self.snapshot.fold().history(key);
+        self.count(AppCounter::RecordsRead, ids.len().max(1));
+        ids
+    }
+
+    /// The change a record's projection shows, when it shows one change.
+    pub fn projected_change(&self, key: &RecordKey) -> Option<ChangeId> {
+        self.count(AppCounter::RecordsRead, 1);
+        self.snapshot.fold().projected_change(key)
+    }
+
+    /// The journal's anomalies: changes it keeps apart, incomplete batches.
+    pub fn anomalies(&self) -> Vec<tc_journal::fold::Anomaly> {
+        let all: Vec<_> = self.snapshot.fold().anomalies().cloned().collect();
+        self.count(AppCounter::KeysProbed, all.len());
+        all
+    }
+
     /// One conflict, by its id.
     pub fn conflict(&self, id: &ConflictId) -> Option<Conflict> {
         self.count(AppCounter::RecordsRead, 1);

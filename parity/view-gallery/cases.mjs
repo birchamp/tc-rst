@@ -15,6 +15,7 @@ import path from 'node:path';
 import { applyPatch } from './lib.mjs';
 import { REPO } from './node-lib.mjs';
 import { stateNamed } from './states.mjs';
+import { runSteps } from './steps.mjs';
 
 /** tC4's repo path of the Bible sample. */
 const BIBLE = '_local_/_local_/sample_burrito';
@@ -364,12 +365,20 @@ const ALIGN_UNAVAILABLE = ['undrafted', 'unpinned', 'missing', 'versification-un
 
 export const CASES = [
   // ---- S4: the verse conflict review --------------------------------------------------------
+  // The Rust app: each state's own route, which goes through the driver alone (the sync is
+  // the environment's scripted one, B10), then the case's steps (B11).
   { name: 'conflict-review', group: 'S4', state: 'review',
+    rust: (app, env) => stateNamed('review').route(app, env),
     why: 'The review of Titus 1:1 after two teammates changed it from one version on Door43, no version selected.' },
   { name: 'conflict-review-selected', group: 'S4', state: 'review',
     steps: [{ do: 'click', target: '[data-testid="conflict-version"]' }],
+    rust: async (app, env) => {
+      await stateNamed('review').route(app, env);
+      await runSteps(app.page, [{ do: 'click', target: '[data-testid="conflict-version"]' }]);
+    },
     why: 'The same review with the first version selected (view-local in ConflictReview.jsx).' },
   { name: 'conflict-review-mine', group: 'S4', state: 'review-mine',
+    rust: (app, env) => stateNamed('review-mine').route(app, env),
     why: 'The review with three versions: two teammates\' and one I saved before the sync.' },
 
   // ---- S12: OBS Community Checking --------------------------------------------------------

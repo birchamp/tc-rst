@@ -1094,6 +1094,13 @@ pub trait ProjectStore: Send + Sync + 'static {
         Err(StoreError::Other("this store has no teammates".to_owned()))
     }
 
+    /// A scripted sync ended: Door43 has `folder`'s project as `fold` holds it, so the next
+    /// teammates edit from it (B11). A store with no teammates keeps nothing.
+    #[cfg(feature = "test-hooks")]
+    fn synced(&self, folder: &ProjectRef, fold: FoldState) {
+        let _ = (folder, fold);
+    }
+
     /// tc-store's hold points, which `test/hold` arms beside the app's own (C1a); `None` for a
     /// store that has none.
     #[cfg(feature = "test-hooks")]
@@ -1128,6 +1135,12 @@ pub trait ProjectHandle: Send + Sync {
     /// The store's operation counters (R14): files opened and created, flushes, renames,
     /// commands and their queue waits. What a count test reads.
     fn counters(&self) -> StoreCounters;
+
+    /// The notices listed now (STORAGE §2.6): what the files and this computer showed that
+    /// the fold does not list. A backend with no files has none.
+    fn notices(&self) -> Vec<StoreNotice> {
+        Vec::new()
+    }
 
     /// Drafts from an earlier session that differ from what their records hold (O12).
     fn offered_drafts(&self) -> Vec<OfferedDraft>;

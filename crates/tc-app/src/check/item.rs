@@ -235,8 +235,10 @@ fn facts(entry: &ListEntry, read: &CountingSnapshot, index: u32) -> Result<Optio
     // A decision shown on this check but stored under another key is edited where it is
     // stored, so it is never copied over or left behind.
     let decision_key = shown.map_or_else(|| item.key.clone(), |d| d.key.clone());
+    let decision_record = RecordKey::Check(decision_key);
+    let marker = crate::translate::marker(read, &decision_record);
     let decision_token = read
-        .mint(&RecordKey::Check(decision_key), None)
+        .mint(&decision_record, None)
         .map_err(|e| e.to_string())
         .and_then(|t| wire::token::shown(&t).map_err(|e| e.to_string()))?;
     let decision = Shown {
@@ -250,7 +252,7 @@ fn facts(entry: &ListEntry, read: &CountingSnapshot, index: u32) -> Result<Optio
             invalidated: state.invalidation().is_some(),
         },
         token: decision_token,
-        marker: None,
+        marker,
     };
     Ok(Some(Facts {
         view: super::view_of(read),

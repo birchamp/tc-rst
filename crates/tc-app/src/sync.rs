@@ -206,6 +206,10 @@ impl App {
             .map_err(|e| failed("the synced project did not open", format!("{e:?}")))?;
         let view = {
             let session = lease.session();
+            self.inner
+                .sessions
+                .store()
+                .synced(&folder, session.handle().snapshot().fold().clone());
             let me = session.handle().facts().device;
             let resources = &self.inner.resources;
             synced_view(&session.read(), me, &received, restored, &|pin| {

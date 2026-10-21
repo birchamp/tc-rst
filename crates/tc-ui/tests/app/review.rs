@@ -1,0 +1,420 @@
+//! The conflict review (unit B11): the port of tC4's `test/conflictReview.test.tsx` as the
+//! decisions its view draws (which conflict shows, the selection, the tabs, the footer's
+//! words), the review's half of `test/actorLabel.test.ts` (a version is labelled as the sync
+//! result labels its teammate, #680), and the double-submit rule: a second press of one choice
+//! sends the first press's request, whose first reply the server gives again (A-27).
+
+use tc_api::check::Tool;
+use tc_api::conflicts::{
+    ConflictEntry, ConflictKind, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount, Version,
+    VersionValue,
+};
+use tc_api::ids::{ChangeRef, ConflictRef, ProjectRef, RecordRef, RequestId, WallMs};
+use tc_api::jobs::SyncResultView;
+use tc_api::shown::{Computer, PersonLabel, Who};
+use tc_core::BookId;
+use tc_ui::app::review::{
+    BackTo, Owner, ReviewState, back_label, consequence, group_others, kept_name, made_by,
+    notice_text, place_book, place_label, tabs_shown,
+};
+use tc_ui::app::sync::{SyncEnd, SyncToast, person_label};
+
+fn conflict(c: char) -> ConflictRef {
+    ConflictRef::parse(&c.to_string().repeat(64)).unwrap()
+}
+
+fn change(c: char) -> ChangeRef {
+    ChangeRef::parse(&c.to_string().repeat(64)).unwrap()
+}
+
+fn person(who: Who) -> MadeBy {
+    MadeBy::Person(PersonLabel {
+        who,
+        computer: None,
+    })
+}
+
+fn version(c: char, by: MadeBy) -> Version {
+    Version {
+        change: change(c),
+        by,
+        at: WallMs(1_790_812_860_000),
+        clock_ahead: false,
+        shown: false,
+        value: VersionValue::Text("Pablo".into()),
+    }
+}
+
+/// A verse conflict at Titus 1:`verse`, in `group`, with `versions`.
+fn entry(id: char, verse: u16, group: u32, versions: Vec<Version>) -> ConflictEntry {
+    ConflictEntry {
+        conflict: conflict(id),
+        kind: ConflictKind::VerseText,
+        record: RecordRef::parse(&format!(
+            r#"{{"book":"TIT","chapter":1,"kind":"verse","verse":{verse}}}"#
+        ))
+        .unwrap(),
+        place: ReviewPlace::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse,
+        },
+        group,
+        versions,
+        review: Vec::new(),
+        incomplete_history: false,
+        unreadable: 0,
+    }
+}
+
+fn three() -> Vec<ConflictEntry> {
+    let two = || {
+        vec![
+            version('b', person(Who::Teammate(2))),
+            version('a', person(Who::Mine)),
+        ]
+    };
+    vec![
+        entry('1', 1, 0, two()),
+        entry('2', 2, 1, two()),
+        entry('4', 4, 1, two()),
+    ]
+}
+
+/// #680: a version's owner has the one label the sync result gives the same person, and a
+/// change no person typed here names where it came from.
+#[test]
+fn a_version_is_labelled_as_the_sync_result_labels_its_person() {
+    for who in [
+        Who::Mine,
+        Who::Username("door43-c".into()),
+        Who::DisplayName("María".into()),
+        Who::Teammate(2),
+    ] {
+        let label = PersonLabel {
+            who: who.clone(),
+            computer: None,
+        };
+        assert_eq!(made_by(&person(who)), person_label(&label));
+    }
+    assert_eq!(made_by(&person(Who::Mine)), "Mine");
+    assert_eq!(made_by(&person(Who::Teammate(2))), "Teammate 2");
+    let sources = [MadeBy::Door43, MadeBy::ExchangeFile, MadeBy::Import].map(|by| made_by(&by));
+    assert!(sources.iter().all(|s| !s.is_empty()));
+    assert_eq!(
+        sources.len(),
+        sources
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        "each source has its own words"
+    );
+}
+
+/// tC4 "colors follow the owner": "Mine" is light blue on every conflict and every teammate's
+/// version cream, whatever its place in the list.
+#[test]
+fn colours_follow_the_owner_not_the_position() {
+    let mine_first = [person(Who::Mine), person(Who::Teammate(1))];
+    let mine_last = [person(Who::Username("juan".into())), person(Who::Mine)];
+    for order in [mine_first, mine_last] {
+        for by in &order {
+            let owner = Owner::of(by);
+            let expected = if matches!(by, MadeBy::Person(l) if l.who == Who::Mine) {
+                (Owner::Mine, "var(--uw-inspire-200)", "mine")
+            } else {
+                (Owner::Teammate, "var(--uw-cream)", "teammate")
+            };
+            assert_eq!((owner, owner.fill(), owner.attr()), expected);
+        }
+    }
+    assert_eq!(Owner::of(&MadeBy::Door43), Owner::Teammate);
+}
+
+/// STORAGE §8.5: when versions from two computers carry one person's label, each names its
+/// computer, and only this computer's is drawn and named as Mine: one person's other
+/// computer comes under its username, a team account's computers by their numbers.
+#[test]
+fn versions_from_two_computers_name_their_computer() {
+    let by = |who: Who, computer: Computer| {
+        MadeBy::Person(PersonLabel {
+            who,
+            computer: Some(computer),
+        })
+    };
+    let here = by(Who::Mine, Computer::This);
+    let there = by(Who::Username("ana".into()), Computer::Other(1));
+    let team = by(Who::Username("equipo".into()), Computer::Other(2));
+    assert_eq!(made_by(&here), "Mine · this computer");
+    assert_eq!(made_by(&there), "ana · computer 1");
+    assert_eq!(made_by(&team), "equipo · computer 2");
+    assert_eq!(
+        [&here, &there, &team].map(Owner::of),
+        [Owner::Mine, Owner::Teammate, Owner::Teammate]
+    );
+    assert_eq!(kept_name(&version('a', here)), "Your version");
+    assert!(kept_name(&version('b', there)).contains("ana · computer 1"));
+}
+
+/// tC4 "navigation n of m": the review shows the conflict asked for, else the first; Previous
+/// and Next show another with nothing selected.
+#[test]
+fn the_review_shows_the_conflict_asked_for_and_steps_clear_the_selection() {
+    let entries = three();
+    assert_eq!(
+        ReviewState::at(ReviewTab::Text, None).shown(&entries),
+        Some(0)
+    );
+    let mut state = ReviewState::at(ReviewTab::Text, Some(conflict('2')));
+    assert_eq!(state.shown(&entries), Some(1));
+    assert_eq!(state.shown(&[]), None, "no conflict: nothing shows");
+    state.selected = Some(change('a'));
+    state.history = Some(entries[1].record.clone());
+    state.show(conflict('2'), 1);
+    assert_eq!(
+        state.selected,
+        Some(change('a')),
+        "the same conflict keeps its selection"
+    );
+    state.show(conflict('4'), 2);
+    assert_eq!(state.shown(&entries), Some(2));
+    assert_eq!((state.selected, state.history), (None, None));
+}
+
+/// tC4 "after it the conflict leaves the list": once kept, the conflict now at its place
+/// shows, so m goes down by one; after the last one, the one before it.
+#[test]
+fn after_a_keep_the_conflict_now_at_its_place_shows() {
+    let entries = three();
+    let mut state = ReviewState::at(ReviewTab::Text, Some(conflict('2')));
+    state.position = 1;
+    let after: Vec<ConflictEntry> = entries
+        .iter()
+        .filter(|e| e.conflict != conflict('2'))
+        .cloned()
+        .collect();
+    assert_eq!(state.shown(&after), Some(1));
+    assert_eq!(after[1].conflict, conflict('4'));
+    let mut last = ReviewState::at(ReviewTab::Text, Some(conflict('4')));
+    last.position = 2;
+    assert_eq!(last.shown(&entries[..2]), Some(1));
+}
+
+/// A-27: a second press of Keep for the same version of the same conflict sends the first
+/// press's request, so the server answers it with its first reply and writes nothing more;
+/// another choice is a new request.
+#[test]
+fn a_second_press_of_one_choice_sends_the_first_request() {
+    let mut state = ReviewState::at(ReviewTab::Text, None);
+    let mut minted = 0u8;
+    let mut mint = || {
+        minted += 1;
+        RequestId::from_bytes([minted; 16])
+    };
+    let first = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    let again = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    assert_eq!(first, again);
+    let other = state.request_for(&conflict('1'), &change('b'), &mut mint);
+    assert_ne!(other, first);
+    let elsewhere = state.request_for(&conflict('2'), &change('b'), &mut mint);
+    assert_ne!(elsewhere, other);
+    assert_eq!(minted, 3);
+}
+
+/// Once the server has answered a keep (a refusal such as "another version was kept"), the
+/// next press is a new request: the same one would get the refusal again. Until it answers,
+/// a press after a lost reply sends the same request.
+#[test]
+fn a_press_after_an_answer_is_a_new_request() {
+    let mut state = ReviewState::at(ReviewTab::Text, None);
+    let mut minted = 0u8;
+    let mut mint = || {
+        minted += 1;
+        RequestId::from_bytes([minted; 16])
+    };
+    let first = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    assert_eq!(
+        state.request_for(&conflict('1'), &change('a'), &mut mint),
+        first,
+        "a lost reply: the same request"
+    );
+    state.answered();
+    let next = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    assert_ne!(next, first, "answered: a new request");
+}
+
+fn counts(text: u32, alignments: u32, notices: u32) -> Vec<TabCount> {
+    ReviewTab::ALL
+        .into_iter()
+        .map(|tab| TabCount {
+            tab,
+            count: match tab {
+                ReviewTab::Text => text,
+                ReviewTab::Alignments => alignments,
+                ReviewTab::Notices => notices,
+                _ => 0,
+            },
+        })
+        .collect()
+}
+
+/// tC4's review has one tab: with only verse conflicts no tab strip shows. Once another kind
+/// holds something, the strip shows Text, the tabs that hold something, and the one shown.
+#[test]
+fn the_tab_strip_shows_only_when_another_kind_holds_something() {
+    assert!(tabs_shown(&counts(3, 0, 0), ReviewTab::Text).is_empty());
+    let tabs = |shown| -> Vec<ReviewTab> {
+        tabs_shown(&counts(1, 2, 1), shown)
+            .into_iter()
+            .map(|t| t.tab)
+            .collect()
+    };
+    assert_eq!(
+        tabs(ReviewTab::Text),
+        vec![ReviewTab::Text, ReviewTab::Alignments, ReviewTab::Notices]
+    );
+    assert_eq!(
+        tabs(ReviewTab::Detached),
+        vec![
+            ReviewTab::Text,
+            ReviewTab::Alignments,
+            ReviewTab::Detached,
+            ReviewTab::Notices
+        ]
+    );
+    let mut state = ReviewState::at(ReviewTab::Text, Some(conflict('1')));
+    state.selected = Some(change('a'));
+    state.choose_tab(ReviewTab::Alignments);
+    assert_eq!(state, ReviewState::at(ReviewTab::Alignments, None));
+}
+
+/// tC4's `KeepBar`: what Keep this version does, with the kept version's name between its
+/// two halves.
+#[test]
+fn the_footer_says_what_the_kept_version_replaces() {
+    let (before, after) = consequence(2);
+    assert_eq!(
+        format!("{before}<v>{after}"),
+        "<v> replaces the other version. It stays in the project history."
+    );
+    let (before, after) = consequence(4);
+    assert_eq!(
+        format!("{before}<v>{after}"),
+        "<v> replaces the other 3 versions. They stay in the project history."
+    );
+    assert_eq!(kept_name(&version('a', person(Who::Mine))), "Your version");
+    assert_eq!(
+        kept_name(&version('b', person(Who::Teammate(2)))),
+        "Teammate 2’s version"
+    );
+}
+
+#[test]
+fn places_and_back_are_named_in_words() {
+    assert_eq!(place_label(&three()[0].place), "Titus 1:1");
+    let check = ReviewPlace::Check {
+        tool: Some(Tool::TranslationWords),
+        place: "TIT 1:4".parse().unwrap(),
+    };
+    assert!(place_label(&check).starts_with("Titus 1:4 · "));
+    assert_eq!(
+        back_label(BackTo::Translate(Some(BookId::Titus), 2)),
+        "Back to Titus 2"
+    );
+    assert_eq!(back_label(BackTo::Translate(None, 1)), "Back to Translate");
+    assert_eq!(back_label(BackTo::Check), "Back to Check");
+}
+
+/// The review of a project opened from Home opens Translate at the book of its first
+/// conflict (tC4 `openProjectConflicts`), a check's included; a story or the whole project
+/// names no book, so Translate stays where the open put it.
+#[test]
+fn translate_opens_at_the_book_of_the_first_conflict() {
+    assert_eq!(place_book(&three()[0].place), Some(BookId::Titus));
+    let check = ReviewPlace::Check {
+        tool: Some(Tool::TranslationNotes),
+        place: "JON 2:1".parse().unwrap(),
+    };
+    assert_eq!(place_book(&check), Some(BookId::Jonah));
+    let frame = ReviewPlace::Story {
+        story: tc_api::ids::StoryNo::new(3).unwrap(),
+        frame: Some(2),
+    };
+    assert_eq!(place_book(&frame), None);
+    assert_eq!(place_book(&ReviewPlace::Project), None);
+}
+
+/// One set of changes that made two conflicts says so on each (STORAGE §8.1).
+#[test]
+fn conflicts_made_together_name_each_other() {
+    let entries = three();
+    assert_eq!(group_others(&entries, &entries[0]), 0);
+    assert_eq!(group_others(&entries, &entries[1]), 1);
+    assert_eq!(group_others(&entries, &entries[2]), 1);
+}
+
+/// The sync toast's Review opens on the verses, or on the alignments when only a verse with
+/// two alignments waits (#791), never on an empty tab.
+#[test]
+fn the_toasts_review_opens_where_something_waits() {
+    let toast = |verse_conflicts, alignments| SyncToast {
+        project: ProjectRef::parse("equipo").unwrap(),
+        end: SyncEnd::Synced(SyncResultView {
+            received: 2,
+            from: Vec::new(),
+            kept_newest: 0,
+            verse_conflicts,
+            alignments,
+            restored: 0,
+            missing_pins: 0,
+        }),
+    };
+    assert_eq!(toast(1, 0).review_tab(), ReviewTab::Text);
+    assert_eq!(toast(1, 1).review_tab(), ReviewTab::Text);
+    assert_eq!(toast(0, 1).review_tab(), ReviewTab::Alignments);
+}
+
+/// Every notice has its own sentence with its values in it, and never a placeholder left.
+#[test]
+fn every_notice_has_its_own_sentence() {
+    let file = || "ingredients/TIT.usfm".to_owned();
+    let all = vec![
+        NoticeView::DamagedChanges { recovered: 212 },
+        NoticeView::NewerApp,
+        NoticeView::ClockAhead { by: None, days: 3 },
+        NoticeView::OutsideEditRecorded {
+            file: file(),
+            changes: 4,
+        },
+        NoticeView::OutsideEditHeld { file: file() },
+        NoticeView::OutsideEditUnreadable { file: file() },
+        NoticeView::DetailsEditedOutside,
+        NoticeView::WriteBlocked { file: file() },
+        NoticeView::FileRepaired { file: file() },
+        NoticeView::FileMissing { file: file() },
+        NoticeView::FileUnreadable { file: file() },
+        NoticeView::StorageDamage { file: file() },
+        NoticeView::FileMoved {
+            file: "ingredients/tit.USFM".into(),
+            to: file(),
+        },
+        NoticeView::FolderCopied,
+        NoticeView::SecondWriter,
+        NoticeView::SavedWithDiskError,
+        NoticeView::ImportUnfinished,
+        NoticeView::IncompleteChanges { have: 3, of: 5 },
+        NoticeView::KeptApart { changes: 2 },
+    ];
+    let texts: Vec<String> = all.iter().map(notice_text).collect();
+    for (notice, text) in all.iter().zip(&texts) {
+        assert!(
+            !text.is_empty() && !text.contains('{'),
+            "{notice:?}: {text}"
+        );
+    }
+    assert!(texts[0].contains("212"));
+    assert!(texts[2].contains("another computer") && texts[2].contains('3'));
+    assert!(texts[3].contains("ingredients/TIT.usfm"));
+    let unique: std::collections::BTreeSet<&String> = texts.iter().collect();
+    assert_eq!(unique.len(), texts.len());
+}

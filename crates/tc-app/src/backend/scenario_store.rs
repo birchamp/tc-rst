@@ -192,6 +192,10 @@ pub struct ScenarioStore {
     /// writes again.
     touched: Mutex<BTreeSet<ProjectRef>>,
     teammates: Mutex<BTreeMap<ProjectRef, Teammates>>,
+    /// Door43's copy of each project: as the scenario wrote it, then as each scripted sync
+    /// left it. Teammates edit from it, as they edit what they pulled, so a change this
+    /// computer has not synced yet becomes a version of its own beside theirs.
+    door43: Mutex<BTreeMap<ProjectRef, FoldState>>,
 }
 
 impl std::fmt::Debug for ScenarioStore {
@@ -230,6 +234,7 @@ impl ScenarioStore {
             refused: Vec::new(),
         };
         let mut written = Vec::new();
+        let mut door43 = BTreeMap::new();
         for project in state.projects()? {
             let seeded = project
                 .tc4()
@@ -238,7 +243,7 @@ impl ScenarioStore {
                 Ok(seed) => {
                     let one =
                         WrittenProject::of(project.folder.clone(), &seed, project.remote.clone())?;
-                    write_project(&backend, &one)?;
+                    door43.insert(one.folder.clone(), write_project(&backend, &one)?);
                     written.push(one);
                     report.loaded.push((project.folder, seed.report));
                 }
@@ -251,6 +256,7 @@ impl ScenarioStore {
                 written,
                 touched: Mutex::default(),
                 teammates: Mutex::default(),
+                door43: Mutex::new(door43),
             },
             report,
         ))
@@ -261,7 +267,7 @@ impl ScenarioStore {
     }
 
     /// Teammates' edits of `key` (AD36, B10): one change per text, each by its own teammate,
-    /// all from the record's current heads, each sealed into a pack by the teammate's own
+    /// all from the record's heads in Door43's copy, each sealed into a pack by the teammate's own
     /// device and written into the project while no session holds it. A project a session
     /// holds is refused and nothing is written: S1's only intake while a project is open is a
     /// second writer, which would turn it read-only.
@@ -287,10 +293,11 @@ impl ScenarioStore {
             folder: folder.to_string(),
             problem: e.to_string(),
         })?;
+        let base = lock(&self.door43).get(folder).cloned().unwrap_or(fold);
         let mut teammates = lock(&self.teammates);
         let mut next = teammates.get(folder).cloned().unwrap_or_default();
         let changes = next
-            .edit_verse(&fold, key, texts)
+            .edit_verse(&base, key, texts)
             .map_err(|e| ScenarioError::Teammates(e.to_string()))?;
         let vfs = self.backend.vfs();
         lock(&self.touched).insert(folder.clone());
@@ -317,7 +324,11 @@ impl ScenarioStore {
 }
 
 /// Writes one project into the projects folder: staged, placed, opened once and validated.
-fn write_project(backend: &StoreBackend, project: &WrittenProject) -> Result<(), ScenarioError> {
+/// Answers the fold the open left, which Door43's copy starts as.
+fn write_project(
+    backend: &StoreBackend,
+    project: &WrittenProject,
+) -> Result<FoldState, ScenarioError> {
     let store = backend.store();
     let vfs = backend.vfs();
     let folder = project.folder.to_string();
@@ -358,6 +369,7 @@ fn write_project(backend: &StoreBackend, project: &WrittenProject) -> Result<(),
         .checkpoint(tc_store::CheckpointReason::AfterImport)
         .wait();
     handle.wait_idle();
+    let fold = handle.snapshot().fold().clone();
     let closed = handle.close();
     checkpoint.map_err(|e| failed(e.to_string()))?;
     closed.map_err(|e| failed(e.to_string()))?;
@@ -378,7 +390,7 @@ fn write_project(backend: &StoreBackend, project: &WrittenProject) -> Result<(),
             problems: problems.iter().map(|p| format!("{p:?}")).collect(),
         });
     }
-    Ok(())
+    Ok(fold)
 }
 
 impl ProjectStore for ScenarioStore {
@@ -446,6 +458,11 @@ impl ProjectStore for ScenarioStore {
             .map_err(|e| StoreError::Other(e.to_string()))
     }
 
+    #[cfg(feature = "test-hooks")]
+    fn synced(&self, folder: &ProjectRef, fold: FoldState) {
+        lock(&self.door43).insert(folder.clone(), fold);
+    }
+
     /// Every written project opened or given teammates since it was written is written
     /// again, and every other entry of the projects folder (a project a journey created) is
     /// removed. The registry has closed every session, and each close waited for the store's
@@ -485,7 +502,8 @@ impl ProjectStore for ScenarioStore {
                 vfs.remove_dir_all(&path)
                     .map_err(|e| other(format!("{}: {e}", path.display())))?;
             }
-            write_project(&self.backend, project).map_err(|e| other(e.to_string()))?;
+            let fold = write_project(&self.backend, project).map_err(|e| other(e.to_string()))?;
+            lock(&self.door43).insert(project.folder.clone(), fold);
         }
         lock(&self.touched).clear();
         lock(&self.teammates).clear();

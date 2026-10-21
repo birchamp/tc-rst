@@ -106,6 +106,10 @@ const PHASE_0: &[&str] = &[
     "resources/fixFetch",
     "resources/fixSideload",
     "resources/fixRepin",
+    // B11: the conflict review, a record's History, and keeping one version.
+    "conflicts/list",
+    "conflicts/history",
+    "conflicts/resolve",
     // B8: what the Community Checking preview prints.
     "export/book",
     "export/stories",

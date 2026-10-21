@@ -121,7 +121,7 @@ fn category(category: tc_check::Category) -> Category {
 }
 
 /// A check's place on the wire: the text tc-check prints for its target.
-fn place(target: &CheckTarget) -> Result<CheckPlace, String> {
+pub(crate) fn place(target: &CheckTarget) -> Result<CheckPlace, String> {
     target
         .to_string()
         .parse()

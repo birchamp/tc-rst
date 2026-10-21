@@ -1,0 +1,223 @@
+{
+  "notices": [
+    {
+      "type": "damagedChanges",
+      "value": {
+        "recovered": 212
+      }
+    },
+    {
+      "type": "newerApp"
+    },
+    {
+      "type": "clockAhead",
+      "value": {
+        "by": {
+          "who": {
+            "type": "username",
+            "value": "juan"
+          },
+          "computer": null
+        },
+        "days": 3
+      }
+    },
+    {
+      "type": "outsideEditRecorded",
+      "value": {
+        "file": "ingredients/TIT.usfm",
+        "changes": 4
+      }
+    },
+    {
+      "type": "outsideEditHeld",
+      "value": {
+        "file": "ingredients/TIT.usfm"
+      }
+    },
+    {
+      "type": "outsideEditUnreadable",
+      "value": {
+        "file": "ingredients/TIT.usfm"
+      }
+    },
+    {
+      "type": "detailsEditedOutside"
+    },
+    {
+      "type": "writeBlocked",
+      "value": {
+        "file": "ingredients/TIT.usfm"
+      }
+    },
+    {
+      "type": "fileRepaired",
+      "value": {
+        "file": "ingredients/TIT.usfm"
+      }
+    },
+    {
+      "type": "fileMissing",
+      "value": {
+        "file": "ingredients/TIT.usfm"
+      }
+    },
+    {
+      "type": "fileUnreadable",
+      "value": {
+        "file": "ingredients/TIT.usfm"
+      }
+    },
+    {
+      "type": "storageDamage",
+      "value": {
+        "file": "ingredients/TIT.usfm"
+      }
+    },
+    {
+      "type": "fileMoved",
+      "value": {
+        "file": "ingredients/tit.USFM",
+        "to": "ingredients/TIT.usfm"
+      }
+    },
+    {
+      "type": "folderCopied"
+    },
+    {
+      "type": "secondWriter"
+    },
+    {
+      "type": "savedWithDiskError"
+    },
+    {
+      "type": "importUnfinished"
+    },
+    {
+      "type": "incompleteChanges",
+      "value": {
+        "have": 3,
+        "of": 5
+      }
+    },
+    {
+      "type": "keptApart",
+      "value": {
+        "changes": 2
+      }
+    }
+  ],
+  "places": [
+    {
+      "type": "verse",
+      "value": {
+        "book": "TIT",
+        "chapter": 1,
+        "verse": 4
+      }
+    },
+    {
+      "type": "chapterFront",
+      "value": {
+        "book": "TIT",
+        "chapter": 2
+      }
+    },
+    {
+      "type": "book",
+      "value": {
+        "book": "JON"
+      }
+    },
+    {
+      "type": "check",
+      "value": {
+        "tool": "translationNotes",
+        "place": "TIT 1:4"
+      }
+    },
+    {
+      "type": "story",
+      "value": {
+        "story": 3,
+        "frame": 4
+      }
+    },
+    {
+      "type": "project"
+    }
+  ],
+  "values": [
+    {
+      "type": "text",
+      "value": "Pablo, siervo de Dios"
+    },
+    {
+      "type": "joined",
+      "value": {
+        "by": 4
+      }
+    },
+    {
+      "type": "absent"
+    },
+    {
+      "type": "notShown"
+    }
+  ],
+  "makers": [
+    {
+      "type": "person",
+      "value": {
+        "who": {
+          "type": "mine"
+        },
+        "computer": null
+      }
+    },
+    {
+      "type": "door43"
+    },
+    {
+      "type": "exchangeFile"
+    },
+    {
+      "type": "import"
+    }
+  ],
+  "entries": [
+    {
+      "type": "conflicts",
+      "value": []
+    },
+    {
+      "type": "detached",
+      "value": [
+        {
+          "record": "{\"kind\":\"check\"}",
+          "what": "decision",
+          "place": {
+            "type": "check",
+            "value": {
+              "tool": "translationNotes",
+              "place": "TIT 1:4"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "notices",
+      "value": [
+        {
+          "notice": {
+            "type": "writeBlocked",
+            "value": {
+              "file": "ingredients/TIT.usfm"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

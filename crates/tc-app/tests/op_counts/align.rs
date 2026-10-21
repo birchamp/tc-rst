@@ -6,7 +6,7 @@ use std::time::Duration;
 use tc_align::Alignment;
 use tc_api::Reply;
 use tc_api::align::{AlignEdit, AlignerView, BankClick, Edit, Open, OpenVerse, Opened};
-use tc_api::event::Event;
+use tc_api::event::{ChangeScope, Event, SessionEvent};
 use tc_api::ids::{JobId, RequestId};
 use tc_api::jobs::{JobKind, JobState};
 use tc_api::prefs::SetAlignSuggestions;
@@ -14,6 +14,7 @@ use tc_api::test::{Hold, HoldPoint, Release};
 use tc_app::App;
 use tc_app::events::Next;
 use tc_app::jobs::JobRegistry;
+use tc_app::wire::scope::record_ref;
 use tc_journal::{ChapterNo, Record, RecordKey, VerseNo};
 
 use super::corpus::{PSALMS, corpora, store_corpora};
@@ -195,6 +196,38 @@ async fn align_save_costs_one_verse() {
     assert!(stored.store.commands > 0, "{stored:?}");
 }
 
+fn first_alignment() -> RecordKey {
+    RecordKey::Alignment(
+        PSALMS,
+        ChapterNo::new(first_verse().chapter).unwrap(),
+        VerseNo::new(1).unwrap(),
+    )
+}
+
+/// Waits for the session's frame that names `key` among the changed records.
+async fn changed(frames: &mut tc_app::events::Subscription, key: &RecordKey) {
+    let record = record_ref(key).unwrap();
+    loop {
+        match frames.next().await {
+            Next::Frame(frame) => {
+                if let Event::Session {
+                    event:
+                        SessionEvent::Changed {
+                            scope: ChangeScope::Parts(parts),
+                            ..
+                        },
+                    ..
+                } = frame.event
+                    && parts.records.iter().any(|r| r.record == record)
+                {
+                    return;
+                }
+            }
+            other => panic!("the session's event stream ended: {other:?}"),
+        }
+    }
+}
+
 /// Cancelling also frees Train's wait, so a failed assertion cannot strand a blocking job.
 struct CancelTrainingOnDrop {
     jobs: JobRegistry,
@@ -294,6 +327,7 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
                     .script(&s.folder, tc_app::backend::memory::Scripted::Written)
                     .unwrap();
             }
+            let mut frames = s.app.events().subscribe(s.app.events().head());
             let measured = tokio::time::timeout(
                 Duration::from_secs(5),
                 cost(&s, async |s| {
@@ -326,6 +360,11 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
                     )
                     .await;
                     assert_eq!(saved, tc_api::align::AlignSave::Saved);
+                    if backing == Backing::Store {
+                        // The session tells the screens who wrote the saved record, a read of
+                        // its own; the store being idle does not mean that frame has gone.
+                        changed(&mut frames, &first_alignment()).await;
+                    }
                 }),
             )
             .await
@@ -338,13 +377,12 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             if backing == Backing::Store {
                 // MemoryBackend's scripted Written reply does not change its fold. Check
                 // durable projection only where the store actually applied this save.
-                let key = RecordKey::Alignment(
-                    PSALMS,
-                    ChapterNo::new(first_verse().chapter).unwrap(),
-                    VerseNo::new(1).unwrap(),
-                );
-                let Some(Record::Alignment { value, .. }) =
-                    s.app.read(&s.scope()).unwrap().read().projected(&key)
+                let Some(Record::Alignment { value, .. }) = s
+                    .app
+                    .read(&s.scope())
+                    .unwrap()
+                    .read()
+                    .projected(&first_alignment())
                 else {
                     panic!("the saved verse lost its alignment");
                 };

@@ -182,6 +182,7 @@ scoped!(
     crate::align::Suggest,
     crate::align::Flush,
     crate::align::Close,
+    crate::conflicts::Resolve,
 );
 unscoped!(
     crate::app::Quit,

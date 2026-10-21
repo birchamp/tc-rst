@@ -20,6 +20,7 @@ mod app {
     mod offer;
     mod print;
     mod recovery;
+    mod review;
     mod save;
     pub mod save_kit;
     mod save_props;

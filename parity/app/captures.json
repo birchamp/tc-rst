@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "aba2adaf7c275c6a",
+    "ui": "8a97c92765d47ed3",
     "commit": "dev",
     "api": 1
   },
@@ -1663,6 +1663,72 @@
       "sha256": "4a6907173cab2edbdbff4b6e689618385ff11000557fe80bc3461467b4c84c5e",
       "dom": "dom/sync-ok-restored.json",
       "domSha256": "5313c93c2263cdade4dd8e7d4655a32118470e64c0c2a891dedbc5a889821405"
+    },
+    {
+      "name": "conflict-review",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/conflict-review.png",
+      "sha256": "0af3170dceffe7f4761c13910d1e45788326f2401f55f97e3a617c45c5d4b396",
+      "dom": "dom/conflict-review.json",
+      "domSha256": "e1c397d64277d0fd09dbbbb3e551569481a06b8f61dffec431232ebdde6db96f"
+    },
+    {
+      "name": "conflict-review-selected",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/conflict-review-selected.png",
+      "sha256": "249ff1e8faed5b7d690d3c01ddbcc6f046846e03030fe68252261099d304dcb4",
+      "dom": "dom/conflict-review-selected.json",
+      "domSha256": "055f8025d09d49e5f0ab7c82c2f074cb0670450d7bb3dcd17859a73de5ad265e"
+    },
+    {
+      "name": "conflict-review-mine",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/conflict-review-mine.png",
+      "sha256": "3d2bda1598562b1445ec0a1853000fda5a276636a17a0c34ecc81a4a27060251",
+      "dom": "dom/conflict-review-mine.json",
+      "domSha256": "fc3f367f0dbf8d6854b92861a08214189eedecf9fbe1a593dfec02c29a8ea92e"
     },
     {
       "name": "cc-obs",

@@ -19,6 +19,7 @@ mod panic;
 #[cfg(feature = "test-hooks")]
 mod probe;
 mod query;
+mod review;
 mod saves;
 mod shell;
 mod sources;
