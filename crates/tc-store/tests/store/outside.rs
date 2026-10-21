@@ -2013,3 +2013,58 @@ fn two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// A placement whose record named two heads, one of which a journal loss took (the bounded
+/// model reached this, 2026-10-21): the file edited back to the value of the head the fold
+/// kept is no unchanged record. The edit replaced what the placement showed, so it is
+/// recorded without a base and conflicts with the project's text, which stays shown; the file
+/// is not silently written over with the project's text (§11.1 X3, L42).
+#[test]
+fn an_edit_back_to_a_kept_head_after_a_lost_one_is_recorded() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    leave(&handle);
+    let key = verse(1, 1);
+    let snapshot = handle.snapshot();
+    let saved = snapshot.fold().heads(&key)[0];
+    let seed = snapshot
+        .fold()
+        .history(&key)
+        .into_iter()
+        .find(|id| *id != saved)
+        .unwrap();
+    drop(snapshot);
+    handle.close().unwrap();
+    let placed = rig.fs.peek(&usfm_path(&folder)).unwrap();
+    let heads_path = folder.join(".tc/heads/ingredients%2FTIT.usfm.bin");
+    let mut file =
+        tc_store::manifest::HeadsFile::parse(&rig.fs.peek(&heads_path).unwrap()).unwrap();
+    let md5 = tc_journal::Md5::of(&placed).to_hex();
+    let record = file
+        .placements
+        .iter_mut()
+        .find(|p| p.md5 == md5)
+        .unwrap()
+        .records
+        .iter_mut()
+        .find(|r| r.heads.contains(saved.as_bytes()))
+        .unwrap();
+    // The seed, which the fold still holds, and a head no journal file holds any more.
+    record.heads = vec![*seed.as_bytes(), [7; 32]];
+    rig.fs.put(&heads_path, &file.to_bytes(), None);
+    let edited = set_verse(&placed, 1, 1, "___");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        recorded(&handle),
+        vec![(1, true)],
+        "the edit back to the seed's text is recorded: {:?}",
+        handle.notices()
+    );
+    assert_eq!(verse_conflicts(&handle), vec![key]);
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("Paul, a servant"));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}

@@ -2115,8 +2115,12 @@ K1  L = every verified change line of every pending file, deduplicated by id, so
     bytes (`QuarantinedPending`), as the open moves a damaged pending file; one of a newer
     format or of another project stays where it is, never removed, and the fold takes nothing
     more from it (the next open reads it by §4.2). The fold's values of any of them are not
-    moved to the pack's offsets: they stay where the fold reads them. A pending file the fold
-    holds changes of that K1 cannot take (a program holds it open and the read fails, or a
+    moved to the pack's offsets: they stay where the fold reads them. A pending file K1 cannot
+    read (a program holds it open) is never removed; the changes the fold took from it that no
+    pack holds yet are sealed from the fold's own bytes when it can give every one of them (a
+    save of this session), so a damage to the file the seal cannot see takes nothing this
+    session holds, and the next read decides the file. A pending file the fold holds changes
+    of that K1 cannot take (it cannot be read and the fold cannot give its changes, or a
     change it lost is in neither the file nor the fold's bytes) is left where it is, never
     removed, and listed in the seal's report as unsealed; the person is told once
     (`FileUnreadable`, which goes when a later seal takes the file). The changes it lost for
@@ -2667,7 +2671,7 @@ A read that found bytes `d`, the first row that applies:
 | R8 | ours | holds, projection differs | `Placed` | Write |
 | R9 | `Writing{old}`, `d = old` | | same | Record, no base: a revert of a rename that went through (a cloud client or a backup tool restoring a version, with its old mtime or not), or a rename that never happened; neither the bytes nor their stat can tell |
 | R10 | `Placed{p}`, `d ≠ p`, `p` settled and same stat | | same | Hold, damage (below) |
-| R11 | `Placed{p}`, `d ≠ p` | | same | Record, base = the ledger's heads of `p` |
+| R11 | `Placed{p}`, `d ≠ p` | | same | Record, base = the ledger's heads of `p`, cut as in R4; a record whose heads lost one and that `d` shows otherwise than `p` did (its digest differs) was edited there, and the kept heads cannot stand for what the edit replaced, so it is compared with the fold's heads: an edit back to a kept head's value is a revert, recorded without parents |
 | R12 | `Writing`, `d` neither | | same | Record, no base: which version the person started from is unknown |
 | R13 | `Held{h}`, `d ≠ h` | | same | Record, no base: saved again while held |
 | R14 | `Unknown` | | same | Record, base = for each record the heads among the changes the packs of HEAD's tree hold when HEAD was made by this app (a change another pack or only a pending file holds is newer than the file the person started from, so the edit conflicts with it and replaces nothing; a file HEAD does not have: every record new); no usable HEAD: no base |
@@ -4792,6 +4796,8 @@ and the on-disk end state, not only what the fold returns.
 | L133 | A temporary stat denial on a carried ingredient fails the whole materialization instead of waiting for access | both stat and content denial take R19 and keep the path dirty until retry | `a_temporarily_unreadable_carried_file_defers_and_retries_its_replacement` and the independent carried model |
 | L134 | A Git tree object passes a blob API and can stand for unreadable carried History | reject every non-blob kind before delivering any data, including packed fallback reads | `blob_apis_reject_non_blob_objects_before_delivering_any_bytes` |
 | L135 | A readable old Git object is not durable: a recreated fanout name or Windows rename can disappear after the working copy is replaced | complete explicit file and ancestor-directory flushes before authorizing destruction; packed or alternate-backed bytes get a bounded one-object backup pack with exact files flushed | durable loose/packed blob tests and `a_backup_flush_covers_a_recreated_fanout_and_propagates_every_failure` |
+| L136 | A save of this session whose pending file the seal cannot read (a scanner holds it) is left unsealed; if the file is cut meanwhile, the next open quarantines it and the save is gone | K1 seals from the fold's own bytes the changes it holds of a file it cannot read, and keeps the file | `a_save_whose_pending_file_the_seal_cannot_read_is_sealed_from_memory`, model history `a_pending_file_cut_twice_around_a_revert_and_a_held_open` |
+| L137 | A placement's record named a head a journal loss took and a head the fold kept: the file edited back to the kept head's value compares equal to it, records nothing, and is written over with the project's newer text | a record that lost a head and that the file shows otherwise than the placement did is compared with the fold's heads, so the edit is a revert recorded without parents (R11) | `an_edit_back_to_a_kept_head_after_a_lost_one_is_recorded`, model history `reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage` |
 
 ---
 
@@ -5069,7 +5075,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the stored size of a carried file waiting to be recorded (the size of the bytes kept in memory, none) | `a_carried_file_waiting_to_be_recorded_is_listed_as_it_is` |
 | the listing of a carried file the fold no longer places (list the fold's placements only) | `a_removed_carried_file_is_listed_until_its_job_removes_it` |
 | the entry of `metadata.json` naming the bytes M6 wrote (the md5 M2 checked) | `the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote` |
-| the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit` |
+| the commit after a seal that left a file unsealed (commit the snapshot) | `a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit` |
+| K1 sealing from the fold's bytes the saves of a pending file it cannot read (leave the file unsealed, so a later cut takes the saves) | `a_save_whose_pending_file_the_seal_cannot_read_is_sealed_from_memory`, `a_pending_file_cut_twice_around_a_revert_and_a_held_open_is_kept` |
 | K1 taking the lines a file that no longer verifies lost from the fold's bytes (leave such a file unsealed, which the next open drops) | `a_pending_file_cut_inside_a_line_is_sealed_from_memory`, `a_pending_file_changed_inside_a_line_is_sealed_from_memory_and_kept_in_quarantine`, `a_pending_file_replaced_by_one_of_a_newer_format_is_sealed_from_memory_and_kept` |
 | K1's comparison with the ids the fold took from a pending file (drop a removed file, seal what a cut file holds) | `a_pending_file_deleted_outside_is_sealed_from_memory`, `a_pending_file_cut_short_at_a_line_is_sealed_from_memory`, `a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle` |
 | the app's own bytes that show changes no journal file holds recorded, not rewritten (O9, M1, M6) | `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded`, `a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap`, `metadata_json_holding_a_project_detail_whose_pending_file_was_deleted_is_recorded` |

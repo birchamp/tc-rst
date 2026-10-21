@@ -338,6 +338,8 @@ pub struct Run {
     app_wrote: BTreeMap<&'static str, Vec<u8>>,
     /// What the run last saw at each path.
     last_seen: BTreeMap<&'static str, Option<Vec<u8>>>,
+    /// Every version the run saw the app write at each path.
+    app_versions: BTreeMap<&'static str, Vec<Vec<u8>>>,
     /// Paths the app keeps no placement of since another program deleted them or the
     /// manifest was lost, until the run sees the app write them again.
     unplaced: std::collections::BTreeSet<&'static str>,
@@ -418,6 +420,7 @@ impl Run {
             versions: BTreeMap::new(),
             app_wrote: BTreeMap::new(),
             last_seen: BTreeMap::new(),
+            app_versions: BTreeMap::new(),
             unplaced: std::collections::BTreeSet::new(),
             power_cut: false,
             locked: BTreeMap::new(),
@@ -510,6 +513,22 @@ impl Run {
         }
         self.rig = None;
         self.rig = Some(Self::rig_on(fs));
+        // A power cut can take the app's last write back to an earlier one of its own: that
+        // earlier write is what the app placed last, whatever another program also put.
+        for rel in [USFM, META] {
+            let now = self.fs().peek(&self.path(rel));
+            if let Some(bytes) = &now
+                && power_cut
+                && self.app_wrote.get(rel) != Some(bytes)
+                && self
+                    .app_versions
+                    .get(rel)
+                    .is_some_and(|seen| seen.contains(bytes))
+            {
+                self.app_wrote.insert(rel, bytes.clone());
+                self.last_seen.insert(rel, now);
+            }
+        }
         // What only the dead session held is gone, unless a file in the folder still shows it.
         let kept: Vec<bool> = self.saves.iter().map(|s| self.on_disk(&s.text)).collect();
         for (save, kept) in self.saves.iter_mut().zip(kept) {
@@ -647,6 +666,10 @@ impl Run {
                 if put.rel == USFM && put.bytes == *book {
                     put.retired = true;
                 }
+            }
+            // The folder showing the projection is converged (R2): the app places those bytes.
+            if fs.peek(&self.path(USFM)).as_ref() == Some(book) {
+                self.app_wrote.insert(USFM, book.clone());
             }
         }
         self.observe_live_metadata(&fs);
@@ -1433,9 +1456,25 @@ impl Run {
             .collect();
         let shown: Vec<bool> = self.saves.iter().map(|s| self.in_files(&s.text)).collect();
         let open = self.handle.is_some();
+        let held_after: Vec<bool> = self
+            .saves
+            .iter()
+            .map(|s| open && self.in_history(s))
+            .collect();
         let session = self.session;
         for (i, save) in self.saves.iter_mut().enumerate() {
             save.shown &= shown[i];
+            if save.fate == Fate::InMemory && !readable && save.session != session && !held_after[i]
+            {
+                // A change in place took the bytes the session read at its open: it holds
+                // the save no more, and only a file still showing it keeps it.
+                save.fate = if after[i] {
+                    Fate::Kept
+                } else {
+                    Fate::Destroyed
+                };
+                continue;
+            }
             if save.fate != Fate::Kept {
                 continue;
             }
@@ -1805,6 +1844,15 @@ impl Run {
             }) {
                 continue;
             }
+            // `metadata.json` lists the book file's bytes (M6): while another program holds
+            // the book file, the app decides metadata.json later and leaves it as it is.
+            if self.locked.contains_key(USFM)
+                && fs
+                    .peek(&self.path(META))
+                    .is_some_and(|b| contains(&b, &save.text))
+            {
+                continue;
+            }
             if save.fate == Fate::InMemory && !settled {
                 continue;
             }
@@ -1838,12 +1886,18 @@ impl Run {
                         || self.shown_by_the_project(put))
             })
             .collect();
+        let mut accepted = Vec::new();
         for (put, credited) in self.puts.iter_mut().zip(credited) {
             if put.retired {
                 continue;
             }
             if credited {
                 put.retired = true;
+                // Taken in where they lie, the bytes are what the app placed there now (§11.1
+                // D7): found again, they are its own.
+                if fs.peek(&self.folder.join(put.rel)).as_deref() == Some(put.bytes.as_slice()) {
+                    accepted.push((put.rel, put.bytes.clone()));
+                }
                 continue;
             }
             let on_disk =
@@ -1860,12 +1914,26 @@ impl Run {
                 put.what
             ));
         }
+        for (rel, bytes) in accepted {
+            self.app_wrote.insert(rel, bytes);
+        }
         if lost.is_empty() {
             return Ok(());
         }
         // What the app knew, for the reader of a failure.
+        let snapshot = self.handle().snapshot();
+        let shown: Vec<String> = (1u16..=5)
+            .map(|v| match snapshot.fold().projected(&verse_key(v)) {
+                Some(Record::Verse {
+                    value: VerseValue::Text { words, .. },
+                    ..
+                }) => format!("1:{v} {words}"),
+                other => format!("1:{v} {other:?}"),
+            })
+            .collect();
+        drop(snapshot);
         lost.push(format!(
-            "ledger: {USFM} {:?}; {META} {:?}\nexternal: {:?}\nnotices: {:?}",
+            "projection: {shown:?}\nledger: {USFM} {:?}; {META} {:?}\nexternal: {:?}\nnotices: {:?}",
             self.ledger(USFM),
             self.ledger(META),
             fs.files_under(&self.path(".tc/external"))
@@ -1900,6 +1968,10 @@ impl Run {
                     && !self.puts.iter().any(|p| p.rel == rel && p.bytes == *bytes)
                 {
                     self.app_wrote.insert(rel, bytes.clone());
+                    self.app_versions
+                        .entry(rel)
+                        .or_default()
+                        .push(bytes.clone());
                     self.unplaced.remove(rel);
                 }
                 self.last_seen.insert(rel, now);
@@ -3188,6 +3260,26 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             "a_save_cut_from_its_pending_file_after_a_lost_manifest",
             a_save_cut_from_its_pending_file_after_a_lost_manifest(),
         ),
+        (
+            "a_pending_file_cut_twice_around_a_revert_and_a_held_open",
+            a_pending_file_cut_twice_around_a_revert_and_a_held_open(),
+        ),
+        (
+            "a_saved_name_after_two_cuts_a_lost_manifest_and_an_unreadable_book",
+            a_saved_name_after_two_cuts_a_lost_manifest_and_an_unreadable_book(),
+        ),
+        (
+            "an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files",
+            an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files(),
+        ),
+        (
+            "reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage",
+            reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage(),
+        ),
+        (
+            "reverts_of_both_files_around_a_cut_and_kills",
+            reverts_of_both_files_around_a_cut_and_kills(),
+        ),
     ]
 }
 
@@ -4086,4 +4178,264 @@ fn a_save_cut_from_its_pending_file_after_a_lost_manifest() -> Vec<Step> {
 #[test]
 fn a_save_cut_from_its_pending_file_after_a_lost_manifest_is_kept() {
     assert_kept(&a_save_cut_from_its_pending_file_after_a_lost_manifest());
+}
+
+/// Found by the long model on 2026-10-21 (seed 20261021002).
+fn a_pending_file_cut_twice_around_a_revert_and_a_held_open() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        crash(),
+        Step::RevertKeepTime {
+            file: File::Meta,
+            back: 0,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        lock(pending_held(0, false), true),
+        Step::Open,
+        act(Act::Close),
+        lock(pending_held(0, false), false),
+    ]
+}
+
+#[test]
+fn a_pending_file_cut_twice_around_a_revert_and_a_held_open_is_kept() {
+    assert_kept(&a_pending_file_cut_twice_around_a_revert_and_a_held_open());
+}
+
+/// Found by the long model on 2026-10-21 (seed 20261021003).
+fn a_saved_name_after_two_cuts_a_lost_manifest_and_an_unreadable_book() -> Vec<Step> {
+    vec![
+        killed(Act::Name, 5),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        crash(),
+        Step::LoseTc { heads: false },
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        killed(Act::Save(1), 0),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+    ]
+}
+
+#[test]
+fn a_saved_name_after_two_cuts_a_lost_manifest_and_an_unreadable_book_is_kept() {
+    assert_kept(&a_saved_name_after_two_cuts_a_lost_manifest_and_an_unreadable_book());
+}
+
+/// Found by the long model on 2026-10-21 (seed 20261021004).
+fn an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files() -> Vec<Step> {
+    vec![
+        Step::Open,
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        crash(),
+        Step::Open,
+        act(Act::Save(1)),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Usfm,
+            on: false,
+        },
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Checkpoint),
+        lock(Holdable::File(File::Usfm), false),
+        killed(Act::Leave, 4),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(4)),
+        act(Act::Leave),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Usfm), false),
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 180,
+            at: 0,
+        },
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 3,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Edit {
+            verse: 4,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files_is_kept() {
+    assert_kept(&an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files());
+}
+
+/// Found by the long model on 2026-10-21 (seed 20261021002, after the seal fix).
+fn reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(4)),
+        Step::Advance,
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 0,
+        },
+        killed(Act::Section(2), 15),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 54,
+            keep: 0,
+            at_line: false,
+        },
+        kill_with(Act::Leave, 3, true, false),
+        crash(),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 124,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Section(2)),
+        Step::Advance,
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+        kill_with(Act::Section(1), 18, true, false),
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 102,
+            at: 55976,
+        },
+        crash(),
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 2,
+        },
+        act(Act::Leave),
+        Step::Advance,
+        crash(),
+        Step::Open,
+        Step::Damage { file: File::Usfm },
+        crash(),
+        Step::Open,
+        Step::Advance,
+        Step::Touch { file: File::Usfm },
+        Step::Focus,
+        Step::Choose { take_in: true },
+    ]
+}
+
+#[test]
+fn reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage_are_kept() {
+    assert_kept(&reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage());
+}
+
+/// Found by the long model on 2026-10-21 (seed 20261021003).
+fn reverts_of_both_files_around_a_cut_and_kills() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+        Step::EditName { told: false },
+        killed(Act::Leave, 33),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 30,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        killed(Act::Save(1), 5),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn reverts_of_both_files_around_a_cut_and_kills_are_kept() {
+    assert_kept(&reverts_of_both_files_around_a_cut_and_kills());
 }

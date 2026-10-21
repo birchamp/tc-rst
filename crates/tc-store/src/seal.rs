@@ -118,6 +118,11 @@ enum Found {
     NotOurs(PendingStatus),
     /// Another program removed it.
     Gone,
+    /// It cannot be read now (a scanner holds it, or it is not on this computer). The changes
+    /// the fold took from it are sealed from the fold's own bytes, so a damage to it that the
+    /// seal cannot see loses nothing this session holds; the file stays, never removed, and
+    /// the next read decides it.
+    Unreadable,
 }
 
 /// A pack written and read back.
@@ -280,7 +285,7 @@ impl Project {
                 break;
             };
             if self.journal.unreadable.contains(&rel) {
-                self.leave_unsealed(run, &rel, "it cannot be read");
+                self.seal_unreadable(run, rel, "it cannot be read");
                 continue;
             }
             let abs = self.folder.path(&rel);
@@ -293,7 +298,8 @@ impl Project {
                 }
                 Err(e) if is_not_found(&e) => (None, Vec::new(), PendingStatus::Valid),
                 Err(e) => {
-                    self.leave_unsealed(run, &rel, &StoreError::io("read", &abs, e).to_string());
+                    let reason = StoreError::io("read", &abs, e).to_string();
+                    self.seal_unreadable(run, rel, &reason);
                     continue;
                 }
             };
@@ -381,6 +387,39 @@ impl Project {
                 (ChangeId::of(&raw) == *id).then(|| parse_change(*id, raw))
             })
             .collect()
+    }
+
+    /// K1 cannot read `rel`: the changes the fold took from it that no pack holds yet are
+    /// sealed from the fold's own bytes when it can give every one of them; else the file is
+    /// left unsealed.
+    fn seal_unreadable(&mut self, run: &mut SealRun, rel: String, reason: &str) {
+        let unpacked: Vec<ChangeId> = self
+            .folded_from(&rel)
+            .into_iter()
+            .filter(|id| {
+                self.fold
+                    .change(id)
+                    .is_none_or(|view| view.packs.is_empty())
+            })
+            .collect();
+        if unpacked.is_empty() {
+            // A file of a newer format was never folded; one whose every change a pack
+            // holds lacks nothing a commit could show.
+            if self.folded_from(&rel).is_empty() {
+                self.leave_unsealed(run, &rel, reason);
+            }
+            return;
+        }
+        let Some(lines) = self.lines_in_memory(&unpacked) else {
+            self.leave_unsealed(run, &rel, reason);
+            return;
+        };
+        run.lines.extend(lines);
+        run.files.push(ReadFile {
+            rel,
+            found: Found::Unreadable,
+            ids: unpacked.into_iter().collect(),
+        });
     }
 
     /// K1 could not take `rel`. When the fold holds its changes (it was read, valid, at the
@@ -481,7 +520,7 @@ impl Project {
                     let Some(ReadFile { rel, found, ids }) = run.files.pop() else {
                         break;
                     };
-                    if !ids.is_subset(&run.held) {
+                    if !ids.is_subset(&run.held) || matches!(found, Found::Unreadable) {
                         continue;
                     }
                     if let Found::Whole(bytes) = &found {
@@ -513,6 +552,7 @@ impl Project {
                             continue;
                         }
                         Found::Gone => false,
+                        Found::Unreadable => continue,
                     };
                     self.journal.pending.remove(&rel);
                     if self.index.sections.remove(&rel).is_some() {

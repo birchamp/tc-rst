@@ -531,48 +531,20 @@ fn pending_files(rig: &Rig, folder: &Path) -> Vec<std::path::PathBuf> {
 }
 
 /// §5.11 K1, §5.13 C3: a pending file the seal cannot read (a program holds it open) holds a
-/// save the snapshot shows and no pack holds, so the checkpoint makes no commit: a tree that
-/// shows the save would reach teammates with packs that lack it (§11.2 D1 would take it for
-/// a Door43 edit). The person is told; the next checkpoint seals the file and commits.
+/// save of this session, which the fold holds in memory: the seal packs it from there, so
+/// the commit shows nothing a pack lacks, and the file stays until it can be read. Damage to
+/// the file meanwhile (another program cut it) can no longer take the save with it.
 #[test]
-fn a_commit_waits_for_a_pending_file_the_seal_could_not_read() {
+fn a_save_whose_pending_file_the_seal_cannot_read_is_sealed_from_memory() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     save_verse(&handle, 1, 3, "my true child").unwrap();
     assert!(checkpoint(&handle).commit.is_some());
     let repo = repo_of(&rig.fs, &folder);
-    let commits = commits_of(&repo).len();
     save_verse(&handle, 1, 1, "saved while an antivirus holds the file").unwrap();
     let pending = pending_files(&rig, &folder);
     assert_eq!(pending.len(), 1, "{pending:?}");
     rig.fs.set_unreadable(&pending[0], true);
-    let report = checkpoint(&handle);
-    assert_eq!(report.commit, None);
-    assert_eq!(report.skipped, Some(CheckpointSkip::SealFailed));
-    assert_eq!(commits_of(&repo).len(), commits, "no commit was made");
-    let told: Vec<String> = notices(&handle)
-        .into_iter()
-        .filter_map(|n| match n {
-            Notice::FileUnreadable { path, .. } => Some(path.to_string()),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(told.len(), 1, "told once: {told:?}");
-    assert!(pending[0].ends_with(&told[0]), "{told:?} {pending:?}");
-    // Asking again does not tell again.
-    assert_eq!(
-        checkpoint(&handle).skipped,
-        Some(CheckpointSkip::SealFailed)
-    );
-    assert_eq!(
-        notices(&handle)
-            .iter()
-            .filter(|n| matches!(n, Notice::FileUnreadable { .. }))
-            .count(),
-        1
-    );
-    // The program lets go: the next checkpoint seals the file and commits what its packs hold.
-    rig.fs.set_unreadable(&pending[0], false);
     let report = checkpoint(&handle);
     let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
     assert!(
@@ -589,11 +561,26 @@ fn a_commit_waits_for_a_pending_file_the_seal_could_not_read() {
         ),
         Vec::<String>::new()
     );
-    assert!(
-        notices(&handle)
-            .iter()
-            .all(|n| !matches!(n, Notice::FileUnreadable { .. })),
-        "the notice goes when the file is sealed"
+    assert_eq!(
+        pending_files(&rig, &folder),
+        pending,
+        "a file the seal cannot read is never removed"
+    );
+    // The program cuts the file it held: the save survives in the pack.
+    let bytes = rig.fs.peek(&pending[0]).unwrap();
+    rig.fs.set_unreadable(&pending[0], false);
+    rig.fs.cut_in_place(&pending[0], bytes.len() / 2);
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved while an antivirus holds the file")
+    );
+    let report = checkpoint(&handle);
+    assert_ne!(
+        report.skipped,
+        Some(CheckpointSkip::SealFailed),
+        "{report:?}"
     );
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);

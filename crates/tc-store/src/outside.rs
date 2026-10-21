@@ -52,7 +52,12 @@ impl Writer {
     /// The base of an outside edit the ledger chose (§6.2): the heads of a placement, each
     /// record's heads cut to the changes the fold holds applied; what HEAD's packs hold; or
     /// none. Unknown when the ledger keeps no heads of the placement.
-    fn read_base(&mut self, rel: &str, base: &ledger::Base) -> PlanBase {
+    fn read_base(
+        &mut self,
+        rel: &str,
+        base: &ledger::Base,
+        found: &[(RecordKey, tc_journal::outside::ShownDigest)],
+    ) -> PlanBase {
         let md5 = match base {
             ledger::Base::Placed(md5) => md5,
             // `.tc/` is gone (a folder copied away): what the last commit of this app holds
@@ -85,8 +90,20 @@ impl Writer {
             // A head the fold does not hold applied and readable (a journal file lost it, its
             // batch lost a member): the bytes may show it, so the record is compared with what
             // the fold shows, not skipped by a digest of a version the project cannot show
-            // (§6.2).
-            let shown = (heads.len() == named).then_some(record.shown).flatten();
+            // (§6.2). Bytes that show the record otherwise than the placement did were edited
+            // there, and a head the fold kept cannot stand for what the edit replaced: that
+            // record is compared with the fold's heads, so an edit back to the kept head's
+            // value is still recorded (a revert, without parents, §11.1 X3).
+            let lost = heads.len() != named;
+            let edited = lost
+                && record.shown.is_some_and(|shown| {
+                    found
+                        .iter()
+                        .find(|(k, _)| *k == key)
+                        .is_none_or(|(_, digest)| *digest != shown)
+                });
+            let heads = if edited { self.fold.heads(&key) } else { heads };
+            let shown = (!lost).then_some(record.shown).flatten();
             records.push(BaseRecord { key, heads, shown });
         }
         PlanBase::Heads(records)
@@ -350,7 +367,7 @@ impl Writer {
         };
         let force_unknown = *base == ledger::Base::Unknown;
         let chosen = base.clone();
-        let base = self.read_base(rel, base);
+        let base = self.read_base(rel, base, &decoded.digests);
         self.counters.add(&self.counters.outside_decodes, 1);
         let mut plan = self.fold.plan_outside_edit(
             &outside,
