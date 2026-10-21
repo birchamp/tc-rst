@@ -732,6 +732,46 @@ impl Handle<Decide> for App {
     }
 }
 
+impl App {
+    /// *Keep* of a check comment typed before the check had a decision: the store's keep has
+    /// no decision to put it on, and a first decision needs the check's context and category,
+    /// which only the list has. So it is the save Done makes, `check/decide`'s comment over
+    /// the draft's token, and a decision made meanwhile stands beside it as a conflict.
+    pub(crate) async fn first_comment(
+        &self,
+        session: &std::sync::Arc<crate::session::ProjectSession>,
+        shown: crate::backend::EditToken,
+        text: String,
+    ) -> Result<StoreCommand, ApiError> {
+        let RecordKey::Check(key) = shown.key().clone() else {
+            return Err(ApiError::NotSaved(NotSaved::BadToken));
+        };
+        let unit = match key.target {
+            CheckTarget::Verse { book, .. } => Some(CheckUnit::Book(book)),
+            CheckTarget::Frame { story, .. } => tc_api::ids::StoryNo::new(story.get())
+                .ok()
+                .map(CheckUnit::Story),
+        };
+        let (Some(tool), Some(unit)) = (crate::plans::api_tool(key.tool), unit) else {
+            return Err(ApiError::ToolNotReady);
+        };
+        let installed = installed(self)?;
+        let (item, resource) = self
+            .with_list(session, tool, unit, &installed, |entry, _| {
+                let item = entry.derived.items.iter().find(|item| item.key == key)?;
+                Some((item.clone(), entry.derived.resolution.clone()))
+            })
+            .await?
+            .map_err(|_| ApiError::ToolNotReady)?
+            .ok_or(ApiError::NotSaved(NotSaved::LookAgain))?;
+        Ok(StoreCommand::save_decision(
+            shown.clone(),
+            shown,
+            decision_edit(&item, Edit::Comment(text), &resource),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -15,6 +15,7 @@
 //!   for the copy or a writable open.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use serde_json::json;
 use tc_api::buffer::{BufferLine, FieldKind, FieldPlace};
@@ -657,7 +658,7 @@ impl Handle<KeepDraft> for App {
 impl App {
     async fn keep(
         &self,
-        session: &ProjectSession,
+        session: &Arc<ProjectSession>,
         kind: DraftKind,
         request: tc_api::RequestId,
         over: &[ShownToken],
@@ -706,7 +707,17 @@ impl App {
             None => text,
         };
         let me = handle.facts().device;
-        let command = StoreCommand::keep_draft(field, shown, text).requested_by(request);
+        let first_comment = match (kind, over) {
+            (DraftKind::CheckComment, [token]) => wire::token::edit_token(handle.as_ref(), token)
+                .ok()
+                .filter(|token| token.heads().is_empty()),
+            _ => None,
+        };
+        let command = match first_comment {
+            Some(token) => self.first_comment(session, token, text).await?,
+            None => StoreCommand::keep_draft(field, shown, text),
+        }
+        .requested_by(request);
         let reply =
             handle.submit(command).await.map_err(|error| {
                 match wire::error::command_error(error) {

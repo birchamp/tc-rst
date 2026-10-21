@@ -680,6 +680,58 @@ async fn a_check_comment_typed_before_a_bookmark_outlives_it_and_is_kept_beside_
     assert!(offers(&t, &at, 43).await.offers.is_empty(), "answered once");
 }
 
+/// A comment typed on a check not marked yet, and the app ended before it was saved: *Keep*
+/// stores it as the check's first decision, as Done would have, with no conflict, once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_check_comment_typed_on_an_undecided_check_is_kept_as_its_first_decision() {
+    let (dir, t, fs) = on_the_store().await;
+    let at = open_on_store(&t).await;
+    let open = session(&t.app, &at, Tool::TranslationNotes).await;
+    let first = the_first(rows(&open), "for the faith of the chosen people of God");
+    let view = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    assert_eq!(view.decision.value.status, None);
+    post(
+        &t.app,
+        &comment_draft(&t, &at, &view.decision.token, "ask Pablo about faith"),
+    )
+    .await
+    .unwrap();
+    drop(t);
+
+    let t = relaunch(&dir, &fs).await;
+    let at = open_on_store(&t).await;
+    let offered = offers(&t, &at, 41).await;
+    let offer = offered
+        .offers
+        .iter()
+        .find(|o| o.kind == DraftKind::CheckComment)
+        .unwrap_or_else(|| panic!("the comment is offered: {offered:?}"));
+    let kept = post(
+        &t.app,
+        &KeepDraft {
+            at: at.clone(),
+            request: rid(42),
+            kind: offer.kind,
+            shown: offer.shown.clone(),
+            text: offer.text.clone(),
+            discard: offer.settles.stored.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(kept.new_conflicts.is_empty(), "{kept:?}");
+    let now = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    assert_eq!(
+        now.decision.value.comment.as_deref(),
+        Some("ask Pablo about faith")
+    );
+    assert_eq!(now.decision.value.status, None, "a comment is not a mark");
+    assert_eq!(now.decision.marker, None);
+    let after = session(&t.app, &at, Tool::TranslationNotes).await;
+    assert_eq!(after.progress.decided, open.progress.decided);
+    assert!(offers(&t, &at, 43).await.offers.is_empty(), "answered once");
+}
+
 /// A comment whose save landed leaves no draft behind: the next open after the app ended
 /// offers nothing, so a saved comment is never asked about again.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
