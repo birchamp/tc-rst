@@ -1970,7 +1970,8 @@ around B3), so a save is durable within 25 ms p95 whatever the writer is doing.
 ```
 M0  D = dirty derived and carried paths, with their new bytes computed in memory (carried bytes
     come from the git object database, §11.4; a carried head whose blob is missing keeps the
-    file on disk as it is and reports CarriedBytesMissing); X = derived or carried paths to
+    file on disk as it is and reports CarriedBytesMissing, and one whose blob is there but
+    cannot be read keeps it too and waits, R19); X = derived or carried paths to
     remove (a removed book, a carried file a settled `Removed` record names whose manifest entry
     names its blob, §5.16). Nothing in X is removed while an expected pack is missing or
     unreadable (§4.4). A held path (§6.2) is in neither: it is left as it is until the person
@@ -3688,7 +3689,7 @@ immutable files, add one pending batch, commit".
 |---|---|
 | `.gitignore`, `.gitattributes` | the fixed constants of §3.1 (an edit of them on Door43 is reset, with a notice) |
 | derived files | the fold's projection (not the disk, so a file held open by another program does not leak stale bytes into a commit) |
-| carried files and their conflict copies | blob ids from the `CarriedFile` projection; a head whose blob is not in the object database is stored again from the working tree when the file there has the head's md5 and size; else it keeps the first parent's blob at that path (unchanged, so no reader sees a change), or is left out when the first parent has none, with `CarriedBytesMissing`; the commit is never refused for it |
+| carried files and their conflict copies | blob ids from the `CarriedFile` projection; a head whose blob is not in the object database (or is there and its header does not read: libgit2 takes no such object into a tree, so it is checked for each entry the tree changes) is stored again from the working tree when the file there has the head's md5 and size; else it keeps the first parent's blob at that path (unchanged, so no reader sees a change), or is left out when the first parent has none, with `CarriedBytesMissing`; the commit is never refused for it |
 | `ingredients/tc/project.json` | the local file |
 | packs | the expected pack set (§4.4), minus redundant packs: every pack of the working tree and every non-redundant pack of HEAD's tree, valid, damaged and newer packs alike, except that a pack failing P2–P4 is replaced by a valid blob of the same path when one exists. A local loss can therefore never reach Door43 by fast-forward |
 | newer-format derived paths | the working-tree file, verbatim (or the blob, for a path kept out of the working tree, §3.3) |
@@ -4229,14 +4230,24 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
   not its blob and clean by stat: the file is gone, or holds the bytes the app placed before.
   It is written from the blob in chunks by `atomic_write_streamed`, whose last look before the
   rename checks the bytes written against the record's md5 and the file against what was read
-  (I8), before every attempt including sharing retries. Preparation produces a typed carried
-  write plan without replacing ingredients; the group's projected metadata is validated and
-  any outside metadata is preserved before that plan executes. Refused writes retain their
-  actual bytes in the final ingredient listing. Bytes the app did not place are the person's:
-  they are recorded, not overwritten. A
-  blob missing here leaves the file as it is and lists `CarriedBytesMissing`. A file the
-  project no longer places at that path (the copy of a version that was kept apart, moved or
-  removed) is removed after the same compare-and-swap. Each carried path remembers the
+  (I8), before every attempt including sharing retries. Bytes the app placed are written over
+  or removed only once their version is durable in the object database and was read back
+  whole through a handle of its own (L132, L135): a loose blob's file and folders are flushed;
+  a blob only in a pack or an alternate gets a one-object pack, and a one-object pack of it
+  already there (an earlier backup) is flushed and kept, never written again, since its name
+  would be the same and Windows refuses to replace a pack libgit2 has open. That is done once
+  for each replacement or removal: a try after a sharing wait reads the file again and looks
+  only that the backup is still there, and makes it again if it was lost. Preparation
+  produces a typed carried write plan without replacing ingredients; the group's projected
+  metadata is validated and any outside metadata is preserved before that plan executes.
+  Refused writes retain their actual bytes in the final ingredient listing. Bytes the app did
+  not place are the person's: they are recorded, not overwritten. A blob missing here leaves
+  the file as it is and lists `CarriedBytesMissing`. A blob that is here and cannot be read
+  (a damaged object, a cloud placeholder) leaves the file as it is too: the path waits and is
+  tried again (R19, `FileUnreadable`), the rest of the project is written, and a commit keeps
+  the version it had at the path (§9.4). A file the project no longer places at that path
+  (the copy of a version that was kept apart, moved or removed) is removed after the same
+  compare-and-swap. Each carried path remembers the
   sequence number of the fold it was last placed, found equal or recorded from (a recorded
   version stands for the newest snapshot, which holds its batch). A checkpoint's job, which
   runs on the older snapshot its packs stand for (§5.13 C2), leaves such a path as it is:
@@ -4796,8 +4807,11 @@ and the on-disk end state, not only what the fold returns.
 | L133 | A temporary stat denial on a carried ingredient fails the whole materialization instead of waiting for access | both stat and content denial take R19 and keep the path dirty until retry | `a_temporarily_unreadable_carried_file_defers_and_retries_its_replacement` and the independent carried model |
 | L134 | A Git tree object passes a blob API and can stand for unreadable carried History | reject every non-blob kind before delivering any data, including packed fallback reads | `blob_apis_reject_non_blob_objects_before_delivering_any_bytes` |
 | L135 | A readable old Git object is not durable: a recreated fanout name or Windows rename can disappear after the working copy is replaced | complete explicit file and ancestor-directory flushes before authorizing destruction; packed or alternate-backed bytes get a bounded one-object backup pack with exact files flushed | durable loose/packed blob tests and `a_backup_flush_covers_a_recreated_fanout_and_propagates_every_failure` |
-| L136 | A save of this session whose pending file the seal cannot read (a scanner holds it) is left unsealed; if the file is cut meanwhile, the next open quarantines it and the save is gone | K1 seals from the fold's own bytes the changes it holds of a file it cannot read, and keeps the file | `a_save_whose_pending_file_the_seal_cannot_read_is_sealed_from_memory`, model history `a_pending_file_cut_twice_around_a_revert_and_a_held_open` |
-| L137 | A placement's record named a head a journal loss took and a head the fold kept: the file edited back to the kept head's value compares equal to it, records nothing, and is written over with the project's newer text | a record that lost a head and that the file shows otherwise than the placement did is compared with the fold's heads, so the edit is a revert recorded without parents (R11) | `an_edit_back_to_a_kept_head_after_a_lost_one_is_recorded`, model history `reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage` |
+| L136 | A second backup of the same old carried version (a Restore back and forth, a try after a sharing wait, the next session) wrote its one-object pack again under the same name, over the pack libgit2 had open: Windows refuses that, so the replacement or removal was refused for ever as unreadable | a one-object pack that holds the blob already is flushed and kept, never written again (§11.4) | `a_blob_backed_up_twice_keeps_its_open_backup_pack`, `a_second_durable_read_of_a_backed_up_blob_succeeds_without_repacking` (`git.rs`) |
+| L137 | A placed carried version whose blob is there but cannot be read (a damaged object): the job failed, the project turned read-only at every open, and a checkpoint could not build its tree | the path waits (R19, `FileUnreadable`) and the rest is written; a tree takes in only a blob whose header reads, else keeps the version it had (§9.4, §11.4) | `a_restored_version_whose_blob_is_damaged_waits_and_the_project_opens_writable`, `a_checkpoint_keeps_the_committed_version_while_the_placed_one_is_damaged` |
+| L138 | Every try of a held carried replacement or removal backed the old version up again: read whole into memory twice, packed again and flushed, four times a job and a job every 3 s while the file was held | the backup is made once for each replacement or removal; a later try reads the file and looks that the backup is still there; a packed blob is handed on from libgit2's buffer without a copy (§11.4) | `a_held_carried_replacement_backs_up_its_old_version_once`, `a_held_carried_replacement_reads_its_old_version_back_once`, `a_held_carried_removal_reads_its_old_version_back_once` |
+| L139 | A save of this session whose pending file the seal cannot read (a scanner holds it) is left unsealed; if the file is cut meanwhile, the next open quarantines it and the save is gone | K1 seals from the fold's own bytes the changes it holds of a file it cannot read, and keeps the file | `a_save_whose_pending_file_the_seal_cannot_read_is_sealed_from_memory`, model history `a_pending_file_cut_twice_around_a_revert_and_a_held_open` |
+| L140 | A placement's record named a head a journal loss took and a head the fold kept: the file edited back to the kept head's value compares equal to it, records nothing, and is written over with the project's newer text | a record that lost a head and that the file shows otherwise than the placement did is compared with the fold's heads, so the edit is a revert recorded without parents (R11) | `an_edit_back_to_a_kept_head_after_a_lost_one_is_recorded`, model history `reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage` |
 
 ---
 

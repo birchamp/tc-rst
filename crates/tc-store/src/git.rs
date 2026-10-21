@@ -15,7 +15,7 @@
 
 use crate::counters::{Counters, CountingVfs};
 use crate::hooks::{Failure, Hooks, Point};
-use crate::vfs::{StdFs, Vfs};
+use crate::vfs::{EntryKind, StdFs, Vfs};
 use git2::build::TreeUpdateBuilder;
 use git2::{
     ConfigLevel, ErrorCode, FileMode, ObjectType, Oid, Repository, RepositoryInitOptions,
@@ -197,6 +197,58 @@ fn sync_blob_backup(
         fs.sync_file(file).map_err(|e| sync_error(file, e))?;
     }
     Ok(())
+}
+
+/// The length of a version 2 index of a pack of one object with a SHA-1 name: the header,
+/// the fan-out table, the name with its CRC and offset, and the two checksums.
+const ONE_OBJECT_INDEX: u64 = 8 + 256 * 4 + 20 + 4 + 4 + 20 + 20;
+
+/// The pack and index of each pack in `pack_dir` that holds `id` and nothing else: the backup
+/// an earlier replacement or removal made of it. Only indexes of one object are read, never
+/// the history's; an index this code cannot read is no backup.
+fn one_object_packs(fs: &dyn Vfs, pack_dir: &Path, id: Oid) -> Vec<[PathBuf; 2]> {
+    let (Ok(wanted), Ok(entries)) = (<[u8; 20]>::try_from(id.as_bytes()), fs.read_dir(pack_dir))
+    else {
+        return Vec::new();
+    };
+    let is_file = |path: &Path, len: Option<u64>| {
+        fs.metadata(path)
+            .is_ok_and(|m| m.kind == EntryKind::File && len.is_none_or(|len| m.len == len))
+    };
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let name = entry.name.to_str()?;
+            let stem = name.strip_prefix("pack-")?.strip_suffix(".idx")?;
+            let index = pack_dir.join(name);
+            let pack = pack_dir.join(format!("pack-{stem}.pack"));
+            let only_wanted = is_file(&index, Some(ONE_OBJECT_INDEX))
+                && fs.read(&index).is_ok_and(|bytes| {
+                    crate::repack::index_oids(&bytes)
+                        .is_some_and(|names| names.eq(std::iter::once(wanted)))
+                });
+            (only_wanted && is_file(&pack, None)).then_some([pack, index])
+        })
+        .collect()
+}
+
+/// A blob read whole, as libgit2 reads an object in a pack; `None` when the database lacks
+/// it. The bytes stay in libgit2's buffer, so a carried file is never copied whole again.
+fn whole_blob<'o>(
+    odb: &'o git2::Odb<'_>,
+    id: Oid,
+) -> Result<Option<git2::OdbObject<'o>>, GitError> {
+    match odb.read(id) {
+        Ok(object) if object.kind() == ObjectType::Blob => Ok(Some(object)),
+        Ok(object) => Err(GitError::NotBlob {
+            kind: object.kind(),
+        }),
+        Err(e) if e.code() == ErrorCode::NotFound => Ok(None),
+        Err(source) => Err(GitError::Git {
+            what: "read a file's bytes",
+            source,
+        }),
+    }
 }
 
 fn open_repo(outside: &Path) -> Result<Repository, git2::Error> {
@@ -560,20 +612,21 @@ impl Git {
         }
     }
 
+    /// Whether the object database holds `oid` as a blob whose header reads, as libgit2
+    /// asks of every object a tree takes in. [`Git::has`] says a damaged object is there.
+    pub fn has_readable_blob(&self, oid: GitOid) -> bool {
+        match (to_oid(oid), self.repo.odb()) {
+            (Ok(id), Ok(odb)) => odb
+                .read_header(id)
+                .is_ok_and(|(_, kind)| kind == ObjectType::Blob),
+            _ => false,
+        }
+    }
+
     /// The bytes of a blob; `None` when the object database lacks it.
     pub fn read_blob(&self, oid: GitOid) -> Result<Option<Vec<u8>>, GitError> {
         let odb = at("open its objects", self.repo.odb())?;
-        match odb.read(to_oid(oid)?) {
-            Ok(object) if object.kind() == ObjectType::Blob => Ok(Some(object.data().to_vec())),
-            Ok(object) => Err(GitError::NotBlob {
-                kind: object.kind(),
-            }),
-            Err(e) if e.code() == ErrorCode::NotFound => Ok(None),
-            Err(source) => Err(GitError::Git {
-                what: "read a file's bytes",
-                source,
-            }),
-        }
+        Ok(whole_blob(&odb, to_oid(oid)?)?.map(|object| object.data().to_vec()))
     }
 
     /// Streams a blob to `out` in chunks; `false` when the object database lacks it. A loose
@@ -601,9 +654,9 @@ impl Git {
             Ok((_, _, kind)) => Err(GitError::NotBlob { kind }),
             // A packed object has no stream and libgit2 says "not found" for it too: read it
             // whole, which says whether it is there.
-            Err(_) => match self.read_blob(oid)? {
-                Some(bytes) => {
-                    for chunk in bytes.chunks(64 * 1024) {
+            Err(_) => match whole_blob(&odb, id)? {
+                Some(object) => {
+                    for chunk in object.data().chunks(64 * 1024) {
                         out(chunk).map_err(|e| GitError::Other(e.to_string()))?;
                     }
                     Ok(true)
@@ -616,7 +669,9 @@ impl Git {
     /// Reads one blob and makes its physical backup durable before returning `true`.
     /// A fresh handle avoids an ODB cache standing for a file that has disappeared.
     /// Loose objects are flushed directly. A packed or alternate-backed blob is copied
-    /// into one new one-object pack, so locating its backup never scans project history.
+    /// into one new one-object pack, so locating its backup never scans project history;
+    /// a one-object pack of it that is already there (an earlier backup) is flushed and
+    /// kept, never written again.
     pub fn copy_blob_to_durable(
         &self,
         oid: GitOid,
@@ -657,13 +712,22 @@ impl Git {
                 Err(_) => {}
             }
         }
-        let Some(bytes) = self.read_blob(oid)? else {
+        let Some(object) = whole_blob(&odb, id)? else {
             return Ok(false);
         };
-        for chunk in bytes.chunks(64 * 1024) {
+        for chunk in object.data().chunks(64 * 1024) {
             out(chunk).map_err(|e| GitError::Other(e.to_string()))?;
         }
+        // Freed before a pack builder reads the blob whole once more.
+        drop(object);
         let pack_dir = objects.join("pack");
+        // Written again, an earlier backup would get the same name, and Windows refuses to
+        // replace a pack libgit2 has open: the replacement or removal would wait for ever.
+        for files in one_object_packs(&fs, &pack_dir, id) {
+            if sync_blob_backup(&fs, &files, &pack_dir, &objects, common).is_ok() {
+                return Ok(true);
+            }
+        }
         crate::atomic::atomic_create_dirs(&fs, &pack_dir)
             .map_err(|e| GitError::Other(e.to_string()))?;
         let mut builder = at("start a file backup pack", self.repo.packbuilder())?;
@@ -1426,6 +1490,158 @@ mod tests {
             b"the recording being replaced"
         );
         assert!(!own.exists(to_oid(unrelated).unwrap()));
+    }
+
+    /// A second backup of the same old version must leave the first backup pack alone:
+    /// libgit2 holds it mapped and open, and Windows refuses to replace such a file.
+    #[test]
+    fn a_blob_backed_up_twice_keeps_its_open_backup_pack() {
+        let (_dir, git) = fresh();
+        let wanted = git.write_blob(b"the recording being replaced").unwrap();
+        let unrelated = git
+            .write_blob(b"unrelated history must not be packed again")
+            .unwrap();
+        let pack_dir = git.git_dir().join("objects/pack");
+        let mut builder = git.repo().packbuilder().unwrap();
+        builder
+            .insert_object(to_oid(wanted).unwrap(), None)
+            .unwrap();
+        builder
+            .insert_object(to_oid(unrelated).unwrap(), None)
+            .unwrap();
+        builder.write(&pack_dir, 0o644).unwrap();
+        let repacked = builder.name().unwrap().unwrap().to_string();
+        drop(builder);
+        // The repack happened earlier than the backups, as it does in use; libgit2 searches
+        // newer packs first and its pack times have one-second resolution.
+        std::fs::File::options()
+            .write(true)
+            .open(pack_dir.join(format!("pack-{repacked}.pack")))
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(86_400))
+            .unwrap();
+        let hex = wanted.to_hex();
+        std::fs::remove_file(
+            git.git_dir()
+                .join("objects")
+                .join(&hex[..2])
+                .join(&hex[2..]),
+        )
+        .unwrap();
+        let idx_names = || {
+            std::fs::read_dir(&pack_dir)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                .filter(|name| name.ends_with(".idx"))
+                .collect::<BTreeSet<_>>()
+        };
+        let before_names = idx_names();
+
+        let first = git.another().unwrap();
+        let result = first.copy_blob_to_durable(wanted, &mut |_| Ok(()));
+        assert!(matches!(result, Ok(true)), "first backup: {result:?}");
+        let added = idx_names()
+            .difference(&before_names)
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(added.len(), 1, "the first backup writes one pack index");
+        let backup_idx = pack_dir.join(&added[0]);
+        #[cfg(unix)]
+        let inode = {
+            use std::os::unix::fs::MetadataExt;
+            std::fs::metadata(&backup_idx).unwrap().ino()
+        };
+
+        let probe = git.another().unwrap();
+        assert!(probe.has(wanted));
+        #[cfg(target_os = "linux")]
+        {
+            let maps = std::fs::read_to_string("/proc/self/maps").unwrap();
+            let mapped = maps
+                .lines()
+                .filter(|line| line.contains(added[0].as_str()))
+                .collect::<Vec<_>>();
+            eprintln!(
+                "before the second backup, mappings of {}: {mapped:#?}",
+                added[0]
+            );
+            assert!(
+                mapped.iter().any(|line| !line.ends_with("(deleted)")),
+                "setup: the probe's lookup maps the first backup's index"
+            );
+        }
+
+        let result = probe.copy_blob_to_durable(wanted, &mut |_| Ok(()));
+        assert!(
+            matches!(result, Ok(true)),
+            "the second backup of the same blob fails: {result:?}"
+        );
+        #[cfg(target_os = "linux")]
+        {
+            let maps = std::fs::read_to_string("/proc/self/maps").unwrap();
+            let mapped = maps
+                .lines()
+                .filter(|line| line.contains(added[0].as_str()))
+                .collect::<Vec<_>>();
+            eprintln!(
+                "after the second backup, mappings of {}: {mapped:#?}",
+                added[0]
+            );
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(
+                std::fs::metadata(&backup_idx).unwrap().ino(),
+                inode,
+                "the second backup replaced {} while libgit2 had it mapped; \
+                 Windows refuses that replacement",
+                added[0]
+            );
+        }
+    }
+
+    #[test]
+    fn a_second_durable_read_of_a_backed_up_blob_succeeds_without_repacking() {
+        let (_dir, git) = fresh();
+        let bytes = b"the take a restore writes over, read on every final look";
+        let oid = git.write_blob(bytes).unwrap();
+        let pack_dir = git.git_dir().join("objects/pack");
+        let mut builder = git.repo().packbuilder().unwrap();
+        builder.insert_object(to_oid(oid).unwrap(), None).unwrap();
+        builder.write(&pack_dir, 0o644).unwrap();
+        drop(builder);
+        let hex = oid.to_hex();
+        std::fs::remove_file(
+            git.git_dir()
+                .join("objects")
+                .join(&hex[..2])
+                .join(&hex[2..]),
+        )
+        .unwrap();
+        let read_durably = || {
+            let mut read = Vec::new();
+            let copied = git
+                .another()
+                .unwrap()
+                .copy_blob_to_durable(oid, &mut |chunk| {
+                    read.extend_from_slice(chunk);
+                    Ok(())
+                });
+            (copied, read)
+        };
+        let (first, read) = read_durably();
+        assert!(matches!(first, Ok(true)), "first backup: {first:?}");
+        assert_eq!(read, bytes);
+        let before = git.counters.read();
+        let (second, read) = read_durably();
+        assert!(matches!(second, Ok(true)), "second backup: {second:?}");
+        assert_eq!(read, bytes);
+        assert_eq!(
+            git.counters.read().since(&before).git_objects_packed,
+            0,
+            "a blob whose durable backup pack exists is packed again on every final look"
+        );
     }
 
     #[test]
