@@ -30,7 +30,7 @@ use tc_check::{CheckItem, CheckTarget, Collection, UserStatus};
 use tc_core::BookId;
 use tc_helps::Occurrence;
 use tc_journal::RecordKey;
-use tc_journal::record::{Record, VerseValue};
+use tc_journal::record::{CheckValue, Record, VerseValue};
 
 use super::{ListEntry, count, installed};
 use crate::app::App;
@@ -735,8 +735,10 @@ impl Handle<Decide> for App {
 impl App {
     /// *Keep* of a check comment typed before the check had a decision: the store's keep has
     /// no decision to put it on, and a first decision needs the check's context and category,
-    /// which only the list has. So it is the save Done makes, `check/decide`'s comment over
-    /// the draft's token, and a decision made meanwhile stands beside it as a conflict.
+    /// which only the list has. So it is the save Done makes, `check/decide`'s comment. A
+    /// decision made meanwhile with no comment (the person's own mark, before the page drafted
+    /// the comment again over it) takes the comment, since the draft's base had none either;
+    /// only one that holds another comment stands beside it as a conflict.
     pub(crate) async fn first_comment(
         &self,
         session: &std::sync::Arc<crate::session::ProjectSession>,
@@ -764,6 +766,25 @@ impl App {
             .await?
             .map_err(|_| ApiError::ToolNotReady)?
             .ok_or(ApiError::NotSaved(NotSaved::LookAgain))?;
+        let read = session.read();
+        let shown = match read.projected(shown.key()) {
+            Some(Record::Check {
+                value: CheckValue::Decision(now),
+                ..
+            }) if now
+                .comment
+                .as_deref()
+                .is_none_or(|comment| comment.is_empty() || comment == text) =>
+            {
+                read.mint(shown.key(), None).map_err(|error| {
+                    self.internal(
+                        "a check's token could not be made",
+                        crate::reports::facts(serde_json::json!({"reason": error.to_string()})),
+                    )
+                })?
+            }
+            _ => shown,
+        };
         Ok(StoreCommand::save_decision(
             shown.clone(),
             shown,
