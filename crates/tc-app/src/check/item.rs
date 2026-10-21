@@ -585,6 +585,10 @@ impl Handle<Decide> for App {
                     .and_then(Result::ok)
                     .flatten()
                     .unwrap_or_default();
+                self.inner.counters.add(
+                    crate::counters::AppCounter::RowsSerialized,
+                    rows.len() as u64,
+                );
                 wire::write::ack_decision(&reply, &session.read(), &shown, &comment, me, rows)
                     .map_err(|e| {
                         self.internal(

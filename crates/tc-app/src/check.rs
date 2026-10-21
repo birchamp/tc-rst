@@ -13,7 +13,12 @@
 //! - **The rows** carry each check's state from the fold's decisions placed on the list
 //!   (`tc_check::session::open`). Each row keeps the view of the snapshot that last changed it,
 //!   so a UI that holds the rail at a view gets only the rows changed since (AD17, A-12). A
-//!   snapshot that moved recomputes the states and derives nothing.
+//!   snapshot that moved re-assesses only the checks its changes reach (C4, PERF:79-80): the
+//!   session's event pump logs the keys of each change, and while every decision of the list
+//!   sits on its own check, a decision re-assesses its check and a verse the decided checks of
+//!   its chapter (a bridge can move the text of the verses after it). Anything else (a
+//!   decision that would be placed on another check, a pin, a gap in the log) recomputes
+//!   every row, as the open does, and derives nothing.
 //! - **Titles** are the gateway words that render each quote in the literal source pane, read at
 //!   the place the resource gives the check (its own numbering), else the original quote (tC4
 //!   `gatewayTitleFor`).
@@ -23,9 +28,10 @@
 mod item;
 
 use std::cell::OnceCell;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use tc_api::ApiError;
 use tc_api::check::{
@@ -41,10 +47,10 @@ use tc_check::derive::{
     word_links_for_stories,
 };
 use tc_check::fix::{self, Machine, Preflight, PreflightState};
-use tc_check::{CheckItem, CheckState, CheckTarget, Collection, Ladder, Pin, ToolId};
+use tc_check::{CheckItem, CheckKey, CheckState, CheckTarget, Collection, Ladder, Pin, ToolId};
 use tc_core::BookId;
 use tc_helps::{HelpsPart, Occurrence};
-use tc_journal::fold::ProjectedDecision;
+use tc_journal::fold::{Delta, ProjectedDecision};
 use tc_journal::record::{BookPresence, ResourceRef, Scope as BookScope};
 use tc_journal::{Record, RecordKey};
 use tc_resources::{Missing, PartStatus, ProjectPins};
@@ -153,6 +159,37 @@ struct Derived {
     /// The resource the list derives from, which assesses a decision shown on another key.
     resolution: ResourceRef,
     empty: Option<CheckEmpty>,
+    /// Each check by the key its decision is stored under; `None` when two checks share one,
+    /// and a change of a decision cannot name its check.
+    by_key: Option<ByKey>,
+    /// The checks of each chapter of a book, or of each frame of a story: a change of the
+    /// text there moves their assessments.
+    by_part: ByPart,
+}
+
+type ByKey = HashMap<CheckKey, usize>;
+type ByPart = BTreeMap<u16, Vec<usize>>;
+
+/// The chapter of a verse's check, or the frame of a story's: where its text is.
+fn part_of(target: &CheckTarget) -> Option<u16> {
+    match target {
+        CheckTarget::Verse { chapter, .. } => chapter.number(),
+        CheckTarget::Frame { frame, .. } => Some(frame.0),
+    }
+}
+
+/// The two indexes a re-assessment looks a change up in.
+fn indexes(items: &[CheckItem]) -> (Option<ByKey>, ByPart) {
+    let mut by_key = HashMap::with_capacity(items.len());
+    let mut unique = true;
+    let mut by_part = ByPart::new();
+    for (i, item) in items.iter().enumerate() {
+        unique &= by_key.insert(item.key.clone(), i).is_none();
+        if let Some(part) = part_of(&item.key.target) {
+            by_part.entry(part).or_default().push(i);
+        }
+    }
+    (unique.then_some(by_key), by_part)
 }
 
 /// One list in a session's cache, with its rows as of `seq`.
@@ -173,6 +210,24 @@ struct ListEntry {
     states: Vec<CheckState>,
     decisions: Vec<ProjectedDecision>,
     shown: Vec<Option<usize>>,
+    /// Where a change can be re-assessed alone; `None` when the list cannot tell (two checks
+    /// share a key), and every change recomputes the rows.
+    placing: Option<Placing>,
+}
+
+/// What the placement of a list's decisions depends on, for a re-assessment (`reassess`).
+/// `tc_check::carry` places a decision by its key, its quote and its group id, never by its
+/// text or its judgement; so a change of a decision that keeps those three, or of a verse,
+/// moves no decision, and only the states of the checks it reaches change.
+struct Placing {
+    /// Each decision's index in `ListEntry::decisions`, by its key.
+    at: HashMap<CheckKey, usize>,
+    /// The checks each decision is shown on.
+    shown_on: HashMap<usize, Vec<usize>>,
+    /// The decisions not placed on the check of their own key and quote: off the list, or
+    /// moved by the carry's second pass. A first decision on a check one of them could reach
+    /// (by its id or its place) can move it, so it recomputes the rows.
+    waiting: Vec<usize>,
 }
 
 impl ListEntry {
@@ -194,6 +249,136 @@ impl ListEntry {
 #[derive(Default)]
 pub(crate) struct CheckCache {
     lists: tokio::sync::Mutex<HashMap<CheckListRef, ListEntry>>,
+    log: std::sync::Mutex<ChangeLog>,
+    logged: tokio::sync::Notify,
+}
+
+/// The keys of the changes after a snapshot, as the session's event pump receives them: what a
+/// list held at that snapshot re-assesses.
+#[derive(Default)]
+struct ChangeLog {
+    /// The log holds every change after this snapshot; `None` before the pump starts.
+    from: Option<u64>,
+    /// The newest snapshot whose change the log holds.
+    upto: u64,
+    /// Each change's snapshot and what of it a check list reads; `None` for a change that can
+    /// move any check (a rebuilt fold, a pin).
+    steps: VecDeque<(u64, Option<Changes>)>,
+    keys: usize,
+}
+
+/// What a run of changes touched that a check list reads: the keys, and the chapters whose
+/// text the fold projected again. A chapter can move without a verse key of its own (a
+/// restore race lists the verses typed after it), so the chapters are kept beside the keys.
+#[derive(Default)]
+struct Changes {
+    keys: Vec<RecordKey>,
+    chapters: Vec<(BookId, u16)>,
+}
+
+impl Changes {
+    fn len(&self) -> usize {
+        self.keys.len() + self.chapters.len()
+    }
+}
+
+/// How many keys the log keeps: a list older than that is recomputed whole, as at its open.
+const LOG_KEYS: usize = 100_000;
+/// How long a re-assessment waits for the pump to log a snapshot the request has already
+/// read. The pump logs before it tells the UI, so only a write's own reply waits, briefly.
+const LOG_WAIT: Duration = Duration::from_secs(2);
+
+/// A key whose change can move a check's state or the list's placement.
+fn read_by_checks(key: &RecordKey) -> bool {
+    matches!(
+        key,
+        RecordKey::Check(_)
+            | RecordKey::Verse(..)
+            | RecordKey::ChapterFront(..)
+            | RecordKey::BookPresence(_)
+            | RecordKey::Frame(..)
+            | RecordKey::StoryBase(_)
+            | RecordKey::Pins(_)
+            | RecordKey::ResourcesExtra(_)
+    )
+}
+
+impl CheckCache {
+    /// The pump starts at snapshot `seq`: every change after it reaches [`Self::note`].
+    pub(crate) fn begin(&self, seq: u64) {
+        let mut log = self.log.lock().unwrap_or_else(|e| e.into_inner());
+        *log = ChangeLog {
+            from: Some(seq),
+            upto: seq,
+            ..ChangeLog::default()
+        };
+        drop(log);
+        self.logged.notify_waiters();
+    }
+
+    /// The change folded into snapshot `seq`.
+    pub(crate) fn note(&self, seq: u64, delta: &Delta) {
+        let mut log = self.log.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(from) = log.from else {
+            return;
+        };
+        if seq <= from {
+            return;
+        }
+        let step = (!delta.everything && !delta.pins).then(|| Changes {
+            keys: delta
+                .keys
+                .iter()
+                .filter(|key| read_by_checks(key))
+                .cloned()
+                .collect(),
+            chapters: delta.chapters.clone(),
+        });
+        log.keys += step.as_ref().map_or(1, Changes::len);
+        log.steps.push_back((seq, step));
+        log.upto = log.upto.max(seq);
+        while log.keys > LOG_KEYS {
+            let Some((dropped, step)) = log.steps.pop_front() else {
+                break;
+            };
+            log.keys = log
+                .keys
+                .saturating_sub(step.as_ref().map_or(1, Changes::len));
+            log.from = Some(dropped);
+        }
+        drop(log);
+        self.logged.notify_waiters();
+    }
+
+    /// What the changes after snapshot `after` up to snapshot `upto` touched; `None` when the
+    /// log cannot say (it starts later, the pump has not logged `upto` in time, or a change can
+    /// move any check).
+    async fn changes(&self, after: u64, upto: u64) -> Option<Changes> {
+        let deadline = tokio::time::Instant::now() + LOG_WAIT;
+        loop {
+            let notified = self.logged.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            {
+                let log = self.log.lock().unwrap_or_else(|e| e.into_inner());
+                if log.from? > after {
+                    return None;
+                }
+                if log.upto >= upto {
+                    let mut all = Changes::default();
+                    for (seq, step) in &log.steps {
+                        if *seq > after && *seq <= upto {
+                            let step = step.as_ref()?;
+                            all.keys.extend(step.keys.iter().cloned());
+                            all.chapters.extend(step.chapters.iter().copied());
+                        }
+                    }
+                    return Some(all);
+                }
+            }
+            tokio::time::timeout_at(deadline, notified).await.ok()?;
+        }
+    }
 }
 
 /// Numbers the check sessions of the whole server run, so an id is never reused.
@@ -437,6 +622,8 @@ fn empty_derived(
         citation: citation.clone(),
         resolution: resolution.resource.clone(),
         empty: Some(empty),
+        by_key: Some(HashMap::new()),
+        by_part: BTreeMap::new(),
     }
 }
 
@@ -472,7 +659,10 @@ fn assemble(
         .collect();
     let terms: Vec<String> = slugs.into_iter().map(str::to_owned).collect();
     let titles = items.iter().map(title_of).collect();
+    let (by_key, by_part) = indexes(&items);
     Ok(Derived {
+        by_key,
+        by_part,
         items,
         order,
         terms,
@@ -507,6 +697,32 @@ struct Assessed {
     states: Vec<CheckState>,
     decisions: Vec<ProjectedDecision>,
     shown: Vec<Option<usize>>,
+    placing: Option<Placing>,
+}
+
+/// What `tc_check::carry` places a decision by, besides its key: its quote and its group id.
+fn placed_by(decision: &ProjectedDecision) -> (String, String) {
+    let stored = tc_check::carry::StoredDecision::of(decision.key.clone(), decision.record.clone());
+    (stored.quote, stored.group_id)
+}
+
+/// The place a carry's second pass matches a decision or a check by (`carry::place_of`).
+fn place_key(target: &CheckTarget, quote: &str, occurrence: u32) -> (CheckTarget, String, u32) {
+    (target.clone(), quote.to_owned(), occurrence)
+}
+
+/// The row of check `i` as `state` shows it.
+fn row_of(derived: &Derived, i: usize, state: &CheckState) -> RailRow {
+    RailRow {
+        index: count(i),
+        check_id: derived.items[i].key.check_id.as_str().to_owned(),
+        place: derived.places[i].clone(),
+        title: derived.titles[i].clone(),
+        flags: flags(state),
+        term: derived.term_of[i],
+        category: Some(category(derived.items[i].category)),
+        marker: None,
+    }
 }
 
 /// Each check's row as the snapshot `read` shows its decisions.
@@ -517,6 +733,11 @@ fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, unit: CheckUnit)
             states: Vec::new(),
             decisions: Vec::new(),
             shown: Vec::new(),
+            placing: Some(Placing {
+                at: HashMap::new(),
+                shown_on: HashMap::new(),
+                waiting: Vec::new(),
+            }),
         };
     }
     let collection = core_unit(unit);
@@ -553,26 +774,259 @@ fn rows(read: &CountingSnapshot, derived: &Derived, tool: Tool, unit: CheckUnit)
         .states
         .iter()
         .enumerate()
-        .map(|(i, state)| RailRow {
-            index: count(i),
-            check_id: derived.items[i].key.check_id.as_str().to_owned(),
-            place: derived.places[i].clone(),
-            title: derived.titles[i].clone(),
-            flags: flags(state),
-            term: derived.term_of[i],
-            category: Some(category(derived.items[i].category)),
-            marker: None,
-        })
+        .map(|(i, state)| row_of(derived, i, state))
         .collect();
     let shown = (0..session.states.len())
         .map(|i| session.shown(i))
         .collect();
+    let placing = derived.by_key.as_ref().map(|_| {
+        let mut shown_on: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut identity = vec![false; decisions.len()];
+        for (i, on) in session.placed.iter().enumerate() {
+            if let Some(&d) = on.last() {
+                shown_on.entry(d).or_default().push(i);
+            }
+            for &d in on {
+                identity[d] |= decisions[d].key == derived.items[i].key
+                    && placed_by(&decisions[d]).0 == derived.items[i].quote.as_str();
+            }
+        }
+        Placing {
+            at: decisions
+                .iter()
+                .enumerate()
+                .map(|(d, decision)| (decision.key.clone(), d))
+                .collect(),
+            shown_on,
+            waiting: (0..decisions.len()).filter(|&d| !identity[d]).collect(),
+        }
+    });
     Assessed {
         rows,
         states: session.states,
         decisions,
         shown,
+        placing,
     }
+}
+
+/// Re-assesses the checks the changed `keys` reach (C4, PERF:79-80), when no change can move a
+/// decision (`Placing`): the checks a changed decision is shown on, a first decision's own
+/// check, and the decided checks of a chapter whose verse or front changed (of a frame, or of
+/// every frame for a story's base text). Each state is computed as the open computes it: a
+/// decision on its own key with the fold's assessment over those chapters' text
+/// (`decisions_at`), one shown under another key against the check's text there. `false` when a
+/// change could move a decision, and the entry is as it was.
+fn reassess(
+    app: &App,
+    read: &CountingSnapshot,
+    entry: &mut ListEntry,
+    list: CheckListRef,
+    changes: &Changes,
+) -> bool {
+    let derived = entry.derived.clone();
+    let (Some(by_key), Some(placing)) = (derived.by_key.as_ref(), entry.placing.as_ref()) else {
+        return false;
+    };
+    let tool = tool_id(list.tool);
+    let collection = core_unit(list.unit);
+    let mut decisions: BTreeSet<CheckKey> = BTreeSet::new();
+    let mut parts: BTreeSet<u16> = BTreeSet::new();
+    let mut every = false;
+    if let CheckUnit::Book(open) = list.unit {
+        parts.extend(
+            changes
+                .chapters
+                .iter()
+                .filter(|(book, _)| *book == open)
+                .map(|&(_, chapter)| chapter),
+        );
+    }
+    for key in &changes.keys {
+        match (key, list.unit) {
+            (RecordKey::Check(check), _) => {
+                if check.tool == tool && check.target.collection() == collection {
+                    decisions.insert(check.clone());
+                }
+            }
+            (
+                RecordKey::Verse(book, chapter, _) | RecordKey::ChapterFront(book, chapter),
+                CheckUnit::Book(open),
+            ) if *book == open => {
+                parts.insert(chapter.get());
+            }
+            (RecordKey::BookPresence(book), CheckUnit::Book(open)) if *book == open => {
+                return false;
+            }
+            (RecordKey::Frame(story, frame), CheckUnit::Story(open))
+                if story.get() == open.get() =>
+            {
+                parts.insert(frame.0);
+            }
+            (RecordKey::StoryBase(story), CheckUnit::Story(open)) if story.get() == open.get() => {
+                every = true;
+            }
+            (RecordKey::Pins(_) | RecordKey::ResourcesExtra(_), _) => return false,
+            _ => {}
+        }
+    }
+    // The checks to assess again: each with the decision it shows, by key.
+    let decided = |i: usize| entry.shown.get(i).copied().flatten();
+    let mut checks: BTreeMap<usize, CheckKey> = BTreeMap::new();
+    let show = |i: usize, d: usize, checks: &mut BTreeMap<usize, CheckKey>| {
+        if let Some(decision) = entry.decisions.get(d) {
+            checks.insert(i, decision.key.clone());
+        }
+    };
+    if every {
+        for i in 0..derived.items.len() {
+            if let Some(d) = decided(i) {
+                show(i, d, &mut checks);
+            }
+        }
+    }
+    for part in &parts {
+        for &i in derived.by_part.get(part).into_iter().flatten() {
+            if let Some(d) = decided(i) {
+                show(i, d, &mut checks);
+            }
+        }
+    }
+    // A first decision lands on its own check, which must have shown none.
+    let mut first: Vec<(usize, CheckKey)> = Vec::new();
+    for key in &decisions {
+        match placing.at.get(key) {
+            Some(&d) => {
+                for &i in placing.shown_on.get(&d).into_iter().flatten() {
+                    checks.insert(i, key.clone());
+                }
+            }
+            None => match by_key.get(key) {
+                Some(&i) if decided(i).is_none() => first.push((i, key.clone())),
+                // Off the list, or onto a check another decision shows: the carry places it.
+                _ => return false,
+            },
+        }
+    }
+    if checks.is_empty() && first.is_empty() {
+        return true;
+    }
+    let chapters: Vec<u16> = match list.unit {
+        CheckUnit::Book(_) => checks
+            .keys()
+            .chain(first.iter().map(|(i, _)| i))
+            .filter_map(|&i| part_of(&derived.items[i].key.target))
+            .collect::<BTreeSet<u16>>()
+            .into_iter()
+            .collect(),
+        CheckUnit::Story(_) => Vec::new(),
+    };
+    let wanted: Vec<RecordKey> = checks
+        .values()
+        .chain(decisions.iter())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(|key| RecordKey::Check(key.clone()))
+        .collect();
+    let now = read.decisions_at(tool, collection, &wanted, &chapters);
+    let found: HashMap<&CheckKey, &ProjectedDecision> = now.iter().map(|d| (&d.key, d)).collect();
+    // Every decision the change names keeps what it is placed by, and each first decision is
+    // on its own check and quote, out of reach of the decisions the carry moved.
+    for key in &decisions {
+        let Some(new) = found.get(key) else {
+            return false;
+        };
+        match placing.at.get(key) {
+            Some(&d) => {
+                if entry.decisions.get(d).map(placed_by) != Some(placed_by(new)) {
+                    return false;
+                }
+            }
+            None => {
+                let Some(&i) = by_key.get(key) else {
+                    return false;
+                };
+                let item = &derived.items[i];
+                if placed_by(new).0 != item.quote.as_str() {
+                    return false;
+                }
+                let reaches = placing.waiting.iter().any(|&w| {
+                    entry.decisions.get(w).is_none_or(|d| {
+                        let (quote, _) = placed_by(d);
+                        d.key.check_id == item.key.check_id
+                            || place_key(&d.key.target, &quote, d.key.occurrence)
+                                == place_key(
+                                    &item.key.target,
+                                    item.quote.as_str(),
+                                    item.key.occurrence,
+                                )
+                    })
+                });
+                if reaches {
+                    return false;
+                }
+            }
+        }
+    }
+    // Read only for a decision shown under another key than its own.
+    let texts = OnceCell::new();
+    let text_of = |target: &CheckTarget| {
+        texts
+            .get_or_init(|| match list.unit {
+                CheckUnit::Book(book) => read.check_texts_at(book, &chapters),
+                CheckUnit::Story(_) => read.check_texts(Collection::Stories),
+            })
+            .text(target)
+    };
+    app.inner.counters.add(
+        AppCounter::ChecksAssessed,
+        (checks.len() + first.len()) as u64,
+    );
+    let Some(placing) = entry.placing.as_mut() else {
+        return false;
+    };
+    // The decisions the change names, and those of the checks re-assessed, as they are now.
+    for new in &now {
+        if let Some(&d) = placing.at.get(&new.key)
+            && let Some(slot) = entry.decisions.get_mut(d)
+        {
+            *slot = new.clone();
+        }
+    }
+    for (i, key) in first {
+        if let Some(new) = found.get(&key) {
+            entry.decisions.push((*new).clone());
+            let d = entry.decisions.len() - 1;
+            placing.at.insert(key, d);
+            placing.shown_on.insert(d, vec![i]);
+            entry.shown[i] = Some(d);
+            checks.insert(i, derived.items[i].key.clone());
+        }
+    }
+    let view = view_of(read);
+    for &i in checks.keys() {
+        let Some(decision) = entry.shown[i].and_then(|d| entry.decisions.get(d)) else {
+            continue;
+        };
+        let item = &derived.items[i];
+        let state = if decision.key == item.key {
+            CheckState::assessed(&decision.record, decision.assessment)
+        } else {
+            let text = text_of(&item.key.target);
+            CheckState::of(
+                Some(&decision.record),
+                Some(&derived.resolution),
+                text.as_deref(),
+            )
+        };
+        let row = row_of(&derived, i, &state);
+        entry.states[i] = state;
+        if entry.rows[i] != row {
+            entry.rows[i] = row;
+            entry.stamps[i] = view;
+        }
+    }
+    true
 }
 
 /// A tool that is ready, with what its list is derived under.
@@ -669,6 +1123,9 @@ impl App {
                 .counters
                 .add(AppCounter::ItemsDerived, derived.items.len() as u64);
             let assessed = rows(&read, &derived, tool, unit);
+            self.inner
+                .counters
+                .add(AppCounter::ChecksAssessed, assessed.rows.len() as u64);
             let view = view_of(&read);
             lists.insert(
                 list,
@@ -683,6 +1140,7 @@ impl App {
                     states: assessed.states,
                     decisions: assessed.decisions,
                     shown: assessed.shown,
+                    placing: assessed.placing,
                 },
             );
         }
@@ -693,17 +1151,27 @@ impl App {
             ));
         };
         if entry.seq != read.seq() {
-            let now = rows(&read, &entry.derived, tool, unit);
-            let view = view_of(&read);
-            for ((old, new), stamp) in entry.rows.iter_mut().zip(now.rows).zip(&mut entry.stamps) {
-                if *old != new {
-                    *old = new;
-                    *stamp = view;
+            let changed = session.checks().changes(entry.seq, read.seq()).await;
+            let done = changed.is_some_and(|changes| reassess(self, &read, entry, list, &changes));
+            if !done {
+                let now = rows(&read, &entry.derived, tool, unit);
+                self.inner
+                    .counters
+                    .add(AppCounter::ChecksAssessed, now.rows.len() as u64);
+                let view = view_of(&read);
+                for ((old, new), stamp) in
+                    entry.rows.iter_mut().zip(now.rows).zip(&mut entry.stamps)
+                {
+                    if *old != new {
+                        *old = new;
+                        *stamp = view;
+                    }
                 }
+                entry.states = now.states;
+                entry.decisions = now.decisions;
+                entry.shown = now.shown;
+                entry.placing = now.placing;
             }
-            entry.states = now.states;
-            entry.decisions = now.decisions;
-            entry.shown = now.shown;
             entry.seq = read.seq();
         }
         Ok(Ok(answer(entry, &read)))

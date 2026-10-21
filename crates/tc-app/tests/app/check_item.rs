@@ -10,7 +10,7 @@ use proptest::prelude::*;
 use tc_api::check::{
     CheckArticleRead, CheckItemView, CheckListRef, CheckSessionView, CheckUnit, Decide, DecideEdit,
     DecisionStatus, GatewayText, GatewayView, Item, Open, OriginalView, RailRow, RailRows,
-    Testament, Tool,
+    RailSince, Rows, RowsView, Testament, Tool,
 };
 use tc_api::editor::{Draft, DraftField, SaveVerse};
 use tc_api::helps::ArticleView;
@@ -665,6 +665,293 @@ async fn a_check_comment_draft_over_another_record_is_refused() {
         matches!(reply, Reply::Err(ApiError::NotSaved(NotSaved::BadToken))),
         "{reply:?}"
     );
+}
+
+// ---- re-assessment after changes (C4) --------------------------------------------------------
+
+/// The rail a page holds: the first open's rows, patched with each `check/rows { since }`.
+struct HeldRail {
+    tool: Tool,
+    rows: Vec<RailRow>,
+    since: RailSince,
+}
+
+impl HeldRail {
+    async fn open(app: &App, at: &Scope, tool: Tool) -> HeldRail {
+        let view = session(app, at, tool).await;
+        HeldRail {
+            tool,
+            rows: rows(&view).to_vec(),
+            since: RailSince {
+                session: view.session,
+                view: view.view,
+            },
+        }
+    }
+
+    /// What the page asks after a `Changed` that names the list.
+    async fn refresh(&mut self, app: &App, at: &Scope) {
+        match ok(
+            app,
+            &Rows {
+                at: at.clone(),
+                list: list(self.tool),
+                since: self.since,
+            },
+        )
+        .await
+        {
+            RowsView::Changed { view, rows, .. } => {
+                assert!(tc_api::model::rail::patch(&mut self.rows, &rows));
+                self.since.view = view;
+            }
+            RowsView::Reopen => panic!("the list was not derived again"),
+        }
+    }
+
+    fn by_index(&self) -> std::collections::BTreeMap<u32, RailRow> {
+        self.rows.iter().map(|r| (r.index, r.clone())).collect()
+    }
+}
+
+/// The rails of both tools as a fresh open of the project derives and assesses them.
+async fn fresh_rails(t: &TestApp, at: &Scope) -> (Scope, Vec<HeldRail>) {
+    t.app.sessions().leave_screen(at).unwrap();
+    t.app.sessions().settled(&folder(SAMPLE)).await;
+    let at = open_on_store(t).await;
+    let mut rails = Vec::new();
+    for tool in [Tool::TranslationNotes, Tool::TranslationWords] {
+        rails.push(HeldRail::open(&t.app, &at, tool).await);
+    }
+    (at, rails)
+}
+
+/// A verse saved with other words, as Translate saves it.
+async fn save_verse(t: &TestApp, at: &Scope, request: u8, verse: &tc_api::ShownToken, words: &str) {
+    post(
+        &t.app,
+        &SaveVerse {
+            at: at.clone(),
+            request: rid(request),
+            shown: verse.clone(),
+            words: words.to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+/// PERF:79-80, AD17: a mark re-assesses its own check and a verse edit the decided checks of
+/// its chapter, and the rails the page holds, patched row by row, equal the rails a fresh open
+/// derives and assesses: no row is left stale and none changes that should not.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn marks_and_verse_edits_reassess_what_they_reach_and_the_rails_equal_a_fresh_open() {
+    let (_dir, t, _fs) = on_the_store().await;
+    let at = open_on_store(&t).await;
+    let mut notes = HeldRail::open(&t.app, &at, Tool::TranslationNotes).await;
+    let mut words = HeldRail::open(&t.app, &at, Tool::TranslationWords).await;
+    let first = the_first(&notes.rows, "for the faith of the chosen people of God");
+    let view = item(&t.app, &at, Tool::TranslationNotes, first).await;
+
+    let before = t.app.counters();
+    post(
+        &t.app,
+        &decide(
+            &at,
+            20,
+            &view,
+            DecideEdit::Valid {
+                words: vec![11, 12],
+            },
+        ),
+    )
+    .await
+    .unwrap();
+    notes.refresh(&t.app, &at).await;
+    let spent = t.app.counters().since(&before);
+    assert_eq!(spent.checks_assessed, 1, "the mark's own check: {spent:?}");
+    assert_eq!(spent.items_derived, 0);
+    assert_eq!(spent.rows_serialized, 2, "the Ack's row and the refresh's");
+
+    // More marks in the chapter: a comment, a bookmark, Invalid and To do on others.
+    let undecided: Vec<u32> = notes
+        .rows
+        .iter()
+        .filter(|r| !r.flags.decided && r.index != first)
+        .map(|r| r.index)
+        .take(3)
+        .collect();
+    let edits = [
+        DecideEdit::Invalid,
+        DecideEdit::Todo,
+        DecideEdit::Comment {
+            text: "ask Pablo".into(),
+        },
+    ];
+    for (n, (index, edit)) in undecided.iter().zip(edits).enumerate() {
+        let view = item(&t.app, &at, Tool::TranslationNotes, *index).await;
+        post(&t.app, &decide(&at, 21 + n as u8, &view, edit))
+            .await
+            .unwrap();
+        notes.refresh(&t.app, &at).await;
+    }
+    let marked = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    post(
+        &t.app,
+        &decide(&at, 25, &marked, DecideEdit::Bookmark { on: true }),
+    )
+    .await
+    .unwrap();
+
+    // The verse the first mark selected words in loses them: its decided checks are
+    // re-assessed, and the mark shows invalidated.
+    let verse = marked.target.verse.clone().expect("the verse is drafted");
+    let before = t.app.counters();
+    save_verse(&t, &at, 26, &verse, "Pablo, siervo de Dios.").await;
+    notes.refresh(&t.app, &at).await;
+    words.refresh(&t.app, &at).await;
+    let spent = t.app.counters().since(&before);
+    assert_eq!(spent.items_derived, 0);
+    assert!(
+        spent.checks_assessed > 0 && spent.checks_assessed < 100,
+        "the decided checks of chapter 1 of both tools: {spent:?}"
+    );
+    let invalidated = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    assert!(invalidated.decision.value.invalidated);
+
+    let (_, fresh) = fresh_rails(&t, &at).await;
+    assert_eq!(notes.by_index(), fresh[0].by_index());
+    assert_eq!(words.by_index(), fresh[1].by_index());
+}
+
+/// One act of a generated checking session.
+#[derive(Debug, Clone)]
+enum Act {
+    /// A mark, a comment or a bookmark on the check at `pick` of a tool's rail.
+    Mark { notes: bool, pick: usize, edit: u8 },
+    /// The verse of the check at `pick` saved with other words, keeping or dropping the words
+    /// the decisions there selected.
+    Verse {
+        notes: bool,
+        pick: usize,
+        keep: bool,
+    },
+    /// The page asks for the rows changed since its view.
+    Refresh,
+}
+
+fn act() -> impl Strategy<Value = Act> {
+    prop_oneof![
+        (any::<bool>(), 0usize..400, 0u8..6).prop_map(|(notes, pick, edit)| Act::Mark {
+            notes,
+            pick,
+            edit
+        }),
+        (any::<bool>(), 0usize..400, any::<bool>()).prop_map(|(notes, pick, keep)| Act::Verse {
+            notes,
+            pick,
+            keep
+        }),
+        Just(Act::Refresh),
+    ]
+}
+
+async fn play(acts: Vec<Act>) {
+    let (_dir, t, _fs) = on_the_store().await;
+    let at = open_on_store(&t).await;
+    let mut rails = vec![
+        HeldRail::open(&t.app, &at, Tool::TranslationNotes).await,
+        HeldRail::open(&t.app, &at, Tool::TranslationWords).await,
+    ];
+    for (n, act) in acts.into_iter().enumerate() {
+        let request = 60 + n as u8;
+        match act {
+            Act::Mark { notes, pick, edit } => {
+                let rail = &rails[usize::from(!notes)];
+                let index = rail.rows[pick % rail.rows.len()].index;
+                let view = ok(
+                    &t.app,
+                    &Item {
+                        at: at.clone(),
+                        list: list(rail.tool),
+                        index,
+                    },
+                )
+                .await;
+                let edit = match edit {
+                    0 => DecideEdit::Valid {
+                        words: (!view.target.words.is_empty())
+                            .then_some(0)
+                            .into_iter()
+                            .collect(),
+                    },
+                    1 => DecideEdit::Invalid,
+                    2 => DecideEdit::Todo,
+                    3 => DecideEdit::Comment {
+                        text: format!("note {n}"),
+                    },
+                    4 => DecideEdit::Bookmark {
+                        on: !view.decision.value.bookmarked,
+                    },
+                    _ => DecideEdit::Valid { words: vec![] },
+                };
+                let mut mark = decide(&at, request, &view, edit);
+                mark.list = list(rail.tool);
+                post(&t.app, &mark).await.unwrap();
+            }
+            Act::Verse { notes, pick, keep } => {
+                let rail = &rails[usize::from(!notes)];
+                let index = rail.rows[pick % rail.rows.len()].index;
+                let view = ok(
+                    &t.app,
+                    &Item {
+                        at: at.clone(),
+                        list: list(rail.tool),
+                        index,
+                    },
+                )
+                .await;
+                let Some(verse) = view.target.verse.clone() else {
+                    continue;
+                };
+                let words = if keep {
+                    format!("{} y más", view.target.words.join(" "))
+                } else {
+                    "Otras palabras del todo.".to_owned()
+                };
+                save_verse(&t, &at, request, &verse, &words).await;
+            }
+            Act::Refresh => {
+                for rail in &mut rails {
+                    rail.refresh(&t.app, &at).await;
+                }
+            }
+        }
+    }
+    for rail in &mut rails {
+        rail.refresh(&t.app, &at).await;
+    }
+    let (_, fresh) = fresh_rails(&t, &at).await;
+    for (held, fresh) in rails.iter().zip(&fresh) {
+        assert_eq!(held.by_index(), fresh.by_index(), "{:?}", held.tool);
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(16))]
+
+    /// AD17 with C4's re-assessment: whatever marks, comments, bookmarks and verse edits come in
+    /// whatever order, with the page asking for the changed rows at any point, the rails it holds
+    /// equal the rails a fresh open derives and assesses.
+    #[test]
+    fn held_rails_equal_a_fresh_open_after_any_session(acts in proptest::collection::vec(act(), 1..10)) {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(play(acts));
+    }
 }
 
 // ---- marks, on scripted outcomes ----------------------------------------------------------
