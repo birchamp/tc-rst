@@ -1473,12 +1473,16 @@ impl Run {
     /// Whether a file in the folder holds `text`: a verified line of a journal file (a pack
     /// HEAD holds is restored by the app, so a cut one still counts), or
     /// another file's bytes. Quarantined files, the fold cache and temporary files of derived
-    /// files do not count.
+    /// files do not count, nor do copies in `.tc/external/`: no open reads them, and one the
+    /// person was told about is credited as a notified copy instead.
     fn on_disk(&self, text: &str) -> bool {
         let fs = self.fs();
         let project = project_of(&fs, &self.folder);
         for (rel, bytes) in files(&fs, &self.folder) {
-            if rel.starts_with(".tc/quarantine/") || rel == ".tc/index.bin" {
+            if rel.starts_with(".tc/quarantine/")
+                || rel.starts_with(".tc/external/")
+                || rel == ".tc/index.bin"
+            {
                 continue;
             }
             if rel.starts_with(".tc/pending/") {
@@ -3176,6 +3180,14 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             "reverts_of_both_files_after_an_unreadable_book_file",
             reverts_of_both_files_after_an_unreadable_book_file(),
         ),
+        (
+            "a_save_cut_from_its_pending_file_while_its_book_file_is_deleted",
+            a_save_cut_from_its_pending_file_while_its_book_file_is_deleted(),
+        ),
+        (
+            "a_save_cut_from_its_pending_file_after_a_lost_manifest",
+            a_save_cut_from_its_pending_file_after_a_lost_manifest(),
+        ),
     ]
 }
 
@@ -3996,4 +4008,82 @@ fn reverts_of_both_files_after_an_unreadable_book_file() -> Vec<Step> {
 #[test]
 fn reverts_of_both_files_after_an_unreadable_book_file_are_kept() {
     assert_kept(&reverts_of_both_files_after_an_unreadable_book_file());
+}
+
+/// Found by the bounded model on 2026-10-21 (mutation run's clean round): a save whose
+/// pending file is cut inside its first line while the book file showing it is deleted.
+fn a_save_cut_from_its_pending_file_while_its_book_file_is_deleted() -> Vec<Step> {
+    vec![
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(2)),
+        lock(Holdable::File(File::Usfm), false),
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(4)),
+        act(Act::Leave),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Usfm), false),
+        killed(Act::Save(1), 21),
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 0,
+        },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+    ]
+}
+
+#[test]
+fn a_save_cut_from_its_pending_file_while_its_book_file_is_deleted_is_kept() {
+    assert_kept(&a_save_cut_from_its_pending_file_while_its_book_file_is_deleted());
+}
+
+/// Found by the long model on 2026-10-21 (seed 20261021001): the same cut and deletion after
+/// a lost manifest.
+fn a_save_cut_from_its_pending_file_after_a_lost_manifest() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        lock(pending_held(0, false), true),
+        act(Act::Checkpoint),
+        act(Act::Save(2)),
+        lock(pending_held(0, false), false),
+        act(Act::Save(3)),
+        crash(),
+        Step::LoseTc { heads: false },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Usfm), false),
+    ]
+}
+
+#[test]
+fn a_save_cut_from_its_pending_file_after_a_lost_manifest_is_kept() {
+    assert_kept(&a_save_cut_from_its_pending_file_after_a_lost_manifest());
 }
