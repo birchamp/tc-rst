@@ -1129,6 +1129,12 @@ pub trait ProjectHandle: Send + Sync {
     /// commands and their queue waits. What a count test reads.
     fn counters(&self) -> StoreCounters;
 
+    /// The notices listed now (STORAGE §2.6): what the files and this computer showed that
+    /// the fold does not list. A backend with no files has none.
+    fn notices(&self) -> Vec<StoreNotice> {
+        Vec::new()
+    }
+
     /// Drafts from an earlier session that differ from what their records hold (O12).
     fn offered_drafts(&self) -> Vec<OfferedDraft>;
 

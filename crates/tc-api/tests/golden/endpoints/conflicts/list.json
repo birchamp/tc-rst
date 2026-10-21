@@ -1,0 +1,119 @@
+{
+  "path": "conflicts/list",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "tab": "text"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "view": 12,
+      "tabs": [
+        {
+          "tab": "text",
+          "count": 2
+        },
+        {
+          "tab": "alignments",
+          "count": 0
+        },
+        {
+          "tab": "checks",
+          "count": 0
+        },
+        {
+          "tab": "settings",
+          "count": 0
+        },
+        {
+          "tab": "detached",
+          "count": 0
+        },
+        {
+          "tab": "notices",
+          "count": 1
+        }
+      ],
+      "entries": {
+        "type": "conflicts",
+        "value": [
+          {
+            "conflict": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "kind": "verseText",
+            "record": "{\"book\":\"TIT\",\"chapter\":1,\"kind\":\"verse\",\"verse\":1}",
+            "place": {
+              "type": "verse",
+              "value": {
+                "book": "TIT",
+                "chapter": 1,
+                "verse": 1
+              }
+            },
+            "group": 0,
+            "versions": [
+              {
+                "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "by": {
+                  "type": "person",
+                  "value": {
+                    "who": {
+                      "type": "teammate",
+                      "value": 2
+                    },
+                    "computer": null
+                  }
+                },
+                "at": 1790812920000,
+                "clockAhead": false,
+                "shown": true,
+                "value": {
+                  "type": "text",
+                  "value": "Pablo, versión del compañero 2."
+                }
+              },
+              {
+                "change": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "by": {
+                  "type": "person",
+                  "value": {
+                    "who": {
+                      "type": "teammate",
+                      "value": 1
+                    },
+                    "computer": null
+                  }
+                },
+                "at": 1790812860000,
+                "clockAhead": false,
+                "shown": false,
+                "value": {
+                  "type": "text",
+                  "value": "Pablo, versión del compañero 1."
+                }
+              }
+            ],
+            "review": [
+              "rt1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+            ],
+            "incompleteHistory": false,
+            "unreadable": 0
+          }
+        ]
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

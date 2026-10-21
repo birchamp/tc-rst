@@ -107,6 +107,10 @@ const PHASE_0: &[&str] = &[
     "resources/fixFetch",
     "resources/fixSideload",
     "resources/fixRepin",
+    // B11: the conflict review, a record's History, and keeping one version.
+    "conflicts/list",
+    "conflicts/history",
+    "conflicts/resolve",
     "test/quiet",
     "test/echo",
     "test/crash",

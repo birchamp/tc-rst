@@ -272,6 +272,7 @@ pub(super) async fn prepare(
         },
         original: original.display_text(source_at.chapter, source_at.verses),
         gateway,
+        marker: crate::translate::marker(&read, &alignment_key),
         basis,
         source,
     };

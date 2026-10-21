@@ -138,7 +138,8 @@
         },
         "save": {
           "type": "unsaved"
-        }
+        },
+        "marker": null
       }
     }
   },

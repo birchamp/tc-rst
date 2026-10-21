@@ -67,9 +67,9 @@ use tc_api::home::{
     StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
 };
 use tc_api::ids::{
-    AlignerId, CheckSessionId, ConflictRef, Epoch, JobId, LocaleId, ProjectId, ProjectRef,
-    RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId, ViewSeq,
-    WallMs,
+    AlignerId, ChangeRef, CheckSessionId, ConflictRef, Epoch, JobId, LocaleId, ProjectId,
+    ProjectRef, RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId,
+    ViewSeq, WallMs,
 };
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
@@ -110,8 +110,14 @@ use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
 };
-use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ShownToken};
+use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ReviewToken, ShownToken};
 use tc_core::BookId;
+
+use tc_api::conflicts::{
+    ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion, HistoryView,
+    List as ConflictList, MadeBy, NoticeEntry, NoticeView, Resolve, ReviewEntries, ReviewPlace,
+    ReviewTab, ReviewView, TabCount, Version, VersionCause, VersionValue,
+};
 
 /// An example value for a golden file.
 trait Example {
@@ -2123,6 +2129,7 @@ impl Example for AlignerView {
                 total: 4,
             },
             save: AlignSave::Unsaved,
+            marker: None,
         }
     }
 }
@@ -2626,6 +2633,235 @@ impl Example for Decide {
     }
 }
 
+fn review_token(body: &str) -> ReviewToken {
+    ReviewToken::from_body(body).unwrap()
+}
+
+fn titus_1_1() -> RecordRef {
+    record(r#"{"book":"TIT","chapter":1,"kind":"verse","verse":1}"#)
+}
+
+fn version(change: char, who: Who, at: i64, shown: bool, text: &str) -> Version {
+    Version {
+        change: ChangeRef::parse(&change.to_string().repeat(64)).unwrap(),
+        by: MadeBy::Person(PersonLabel {
+            who,
+            computer: None,
+        }),
+        at: WallMs(at),
+        clock_ahead: false,
+        shown,
+        value: VersionValue::Text(text.into()),
+    }
+}
+
+impl Example for ConflictList {
+    fn example() -> Self {
+        ConflictList {
+            at: scope(),
+            tab: ReviewTab::Text,
+        }
+    }
+}
+
+impl Example for ReviewView {
+    /// Titus 1:1 after two teammates changed it from one version (the gallery's S4).
+    fn example() -> Self {
+        let counts = [2, 0, 0, 0, 0, 1];
+        ReviewView {
+            view: ViewSeq::new(12),
+            tabs: ReviewTab::ALL
+                .into_iter()
+                .zip(counts)
+                .map(|(tab, count)| TabCount { tab, count })
+                .collect(),
+            entries: ReviewEntries::Conflicts(vec![ConflictEntry {
+                conflict: ConflictRef::parse(&"c".repeat(64)).unwrap(),
+                kind: ConflictKind::VerseText,
+                record: titus_1_1(),
+                place: ReviewPlace::Verse {
+                    book: BookId::Titus,
+                    chapter: 1,
+                    verse: 1,
+                },
+                group: 0,
+                versions: vec![
+                    version(
+                        'b',
+                        Who::Teammate(2),
+                        1_790_812_920_000,
+                        true,
+                        "Pablo, versión del compañero 2.",
+                    ),
+                    version(
+                        'a',
+                        Who::Teammate(1),
+                        1_790_812_860_000,
+                        false,
+                        "Pablo, versión del compañero 1.",
+                    ),
+                ],
+                review: vec![review_token(
+                    "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                )],
+                incomplete_history: false,
+                unreadable: 0,
+            }]),
+        }
+    }
+}
+
+impl Example for History {
+    fn example() -> Self {
+        History {
+            at: scope(),
+            record: titus_1_1(),
+        }
+    }
+}
+
+impl Example for HistoryView {
+    fn example() -> Self {
+        HistoryView {
+            versions: vec![
+                HistoryVersion {
+                    version: version(
+                        'b',
+                        Who::Mine,
+                        1_790_812_920_000,
+                        true,
+                        "Pablo, siervo de Dios.",
+                    ),
+                    cause: VersionCause::Kept,
+                },
+                HistoryVersion {
+                    version: Version {
+                        by: MadeBy::Import,
+                        ..version('a', Who::Mine, 1_790_000_000_000, false, "Pablo, siervo")
+                    },
+                    cause: VersionCause::Imported,
+                },
+            ],
+        }
+    }
+}
+
+impl Example for Resolve {
+    fn example() -> Self {
+        Resolve {
+            at: scope(),
+            request: request(24),
+            conflict: ConflictRef::parse(&"c".repeat(64)).unwrap(),
+            review: vec![review_token(
+                "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+            )],
+            keep: ChangeRef::parse(&"a".repeat(64)).unwrap(),
+        }
+    }
+}
+
+/// Every notice the Notices tab words.
+fn review_notices() -> Vec<NoticeView> {
+    let file = || "ingredients/TIT.usfm".to_owned();
+    vec![
+        NoticeView::DamagedChanges { recovered: 212 },
+        NoticeView::NewerApp,
+        NoticeView::ClockAhead {
+            by: Some(PersonLabel {
+                who: Who::Username("juan".into()),
+                computer: None,
+            }),
+            days: 3,
+        },
+        NoticeView::OutsideEditRecorded {
+            file: file(),
+            changes: 4,
+        },
+        NoticeView::OutsideEditHeld { file: file() },
+        NoticeView::OutsideEditUnreadable { file: file() },
+        NoticeView::DetailsEditedOutside,
+        NoticeView::WriteBlocked { file: file() },
+        NoticeView::FileRepaired { file: file() },
+        NoticeView::FileMissing { file: file() },
+        NoticeView::FileUnreadable { file: file() },
+        NoticeView::StorageDamage { file: file() },
+        NoticeView::FileMoved {
+            file: "ingredients/tit.USFM".into(),
+            to: file(),
+        },
+        NoticeView::FolderCopied,
+        NoticeView::SecondWriter,
+        NoticeView::SavedWithDiskError,
+        NoticeView::ImportUnfinished,
+        NoticeView::IncompleteChanges { have: 3, of: 5 },
+        NoticeView::KeptApart { changes: 2 },
+    ]
+}
+
+/// Every place a review entry names.
+fn review_places() -> Vec<ReviewPlace> {
+    vec![
+        ReviewPlace::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 4,
+        },
+        ReviewPlace::ChapterFront {
+            book: BookId::Titus,
+            chapter: 2,
+        },
+        ReviewPlace::Book {
+            book: BookId::Jonah,
+        },
+        ReviewPlace::Check {
+            tool: Some(Tool::TranslationNotes),
+            place: verse_place(BookId::Titus, "1", "4"),
+        },
+        ReviewPlace::Story {
+            story: StoryNo::new(3).unwrap(),
+            frame: Some(4),
+        },
+        ReviewPlace::Project,
+    ]
+}
+
+fn review_values() -> Vec<VersionValue> {
+    vec![
+        VersionValue::Text("Pablo, siervo de Dios".into()),
+        VersionValue::Joined { by: 4 },
+        VersionValue::Absent,
+        VersionValue::NotShown,
+    ]
+}
+
+fn review_makers() -> Vec<MadeBy> {
+    vec![
+        MadeBy::Person(PersonLabel {
+            who: Who::Mine,
+            computer: None,
+        }),
+        MadeBy::Door43,
+        MadeBy::ExchangeFile,
+        MadeBy::Import,
+    ]
+}
+
+fn review_entries() -> Vec<ReviewEntries> {
+    vec![
+        ReviewEntries::Conflicts(Vec::new()),
+        ReviewEntries::Detached(vec![DetachedEntry {
+            record: record(r#"{"kind":"check"}"#),
+            what: DetachedKind::Decision,
+            place: review_places()[3].clone(),
+        }]),
+        ReviewEntries::Notices(vec![NoticeEntry {
+            notice: NoticeView::WriteBlocked {
+                file: "ingredients/TIT.usfm".into(),
+            },
+        }]),
+    ]
+}
+
 impl Example for Script {
     fn example() -> Self {
         Script {
@@ -2784,6 +3020,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "align/keepReflow",
             "align/open",
             "check/decide",
+            "conflicts/resolve",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
@@ -3211,6 +3448,16 @@ fn shared_types_have_golden_json() {
             wire_samples(&suggest_statuses()),
         ),
         ("types/check-places.json", plain_samples(&check_places())),
+        (
+            "types/review.json",
+            json!({
+                "notices": wire_samples(&review_notices()),
+                "places": wire_samples(&review_places()),
+                "values": wire_samples(&review_values()),
+                "makers": wire_samples(&review_makers()),
+                "entries": wire_samples(&review_entries()),
+            }),
+        ),
         ("types/check-units.json", wire_samples(&check_units())),
         (
             "types/check-lists.json",
@@ -3266,6 +3513,7 @@ fn no_golden_file_is_left_without_its_endpoint_or_type() {
         "check-units",
         "check-lists",
         "buffer",
+        "review",
     ] {
         expected.insert(golden_dir().join(format!("types/{file}.json")));
     }

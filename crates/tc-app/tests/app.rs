@@ -24,6 +24,7 @@ mod app {
     mod check;
     mod check_item;
     pub mod common;
+    mod conflicts;
     mod create;
     mod dispatch;
     mod drafted;
@@ -56,7 +57,7 @@ mod app {
     mod store;
     pub mod store_scenario;
     mod story;
-    mod sync;
+    pub mod sync;
     mod translate;
     pub mod understand;
     mod upgrades;
