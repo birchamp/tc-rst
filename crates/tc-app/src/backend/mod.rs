@@ -1094,6 +1094,13 @@ pub trait ProjectStore: Send + Sync + 'static {
         Err(StoreError::Other("this store has no teammates".to_owned()))
     }
 
+    /// A scripted sync ended: Door43 has `folder`'s project as `fold` holds it, so the next
+    /// teammates edit from it (B11). A store with no teammates keeps nothing.
+    #[cfg(feature = "test-hooks")]
+    fn synced(&self, folder: &ProjectRef, fold: FoldState) {
+        let _ = (folder, fold);
+    }
+
     /// tc-store's hold points, which `test/hold` arms beside the app's own (C1a); `None` for a
     /// store that has none.
     #[cfg(feature = "test-hooks")]

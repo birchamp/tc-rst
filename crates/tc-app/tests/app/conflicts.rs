@@ -8,7 +8,7 @@ use tc_api::conflicts::{
     ConflictKind, History, HistoryVersion, List, MadeBy, Resolve, ReviewEntries, ReviewPlace,
     ReviewTab, ReviewView, Version, VersionCause, VersionValue,
 };
-use tc_api::editor::Chapters;
+use tc_api::editor::{Chapters, SaveVerse};
 use tc_api::event::Event;
 use tc_api::home::Card;
 use tc_api::ids::{ChangeRef, Scope};
@@ -17,9 +17,10 @@ use tc_api::shown::{Known, PersonLabel, Who};
 use tc_api::write::Stored;
 use tc_app::App;
 use tc_app::events::Next;
+use tc_app::wire::token::shown;
 use tc_core::BookId;
 
-use super::common::{folder, post, rid};
+use super::common::{folder, open_progress, post, rid, tit};
 use super::sync::{TWO_TEAMMATES, internet_on, script, shared, sign_in, synced, teammate};
 use super::understand::opened;
 use crate::store_world::START_MS;
@@ -338,4 +339,66 @@ async fn verse_history_lists_every_version_with_person_and_time() {
     let mut unique = changes.clone();
     unique.dedup();
     assert_eq!(unique.len(), changes.len(), "each version once");
+}
+
+/// A verse saved on this computer before a sync stands as a version of its own beside the two
+/// teammates' (S4's `conflict-review-mine`): the scripted teammates edit Door43's copy, which
+/// does not hold the save yet, as tC4's environment's teammates edit what they pulled.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_verse_saved_here_before_the_sync_is_a_version_of_its_own() {
+    const MINE: &str = "Pablo, mi versión del versículo.";
+    let w = shared().await;
+    w.t.clock.set(START_MS);
+    let app = &w.t.app;
+    let at = app
+        .sessions()
+        .open_screen(&folder("sample_burrito"), open_progress())
+        .await
+        .unwrap()
+        .at;
+    let minted = app
+        .sessions()
+        .reader(&at)
+        .unwrap()
+        .read()
+        .mint(&tit(1, 1), None)
+        .unwrap();
+    let ack = post(
+        app,
+        &SaveVerse {
+            at: at.clone(),
+            request: rid(70),
+            shown: shown(&minted).unwrap(),
+            words: MINE.to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    post(
+        app,
+        &Close {
+            at,
+            request: rid(71),
+        },
+    )
+    .await
+    .unwrap();
+    internet_on(app).await;
+    sign_in(app).await;
+    script(app, 1, TWO_TEAMMATES()).await;
+    synced(app, 2).await;
+    let at = opened(app).await.session.at;
+    let ReviewEntries::Conflicts(entries) = tab(app, &at, ReviewTab::Text).await.entries else {
+        panic!()
+    };
+    assert_eq!(entries.len(), 1);
+    let versions = texts(&entries[0].versions);
+    let mine: Vec<&str> = versions
+        .iter()
+        .filter(|(by, _, _)| by.who == Who::Mine)
+        .map(|(_, text, _)| text.as_str())
+        .collect();
+    assert_eq!(versions.len(), 3, "{versions:?}");
+    assert_eq!(mine, vec![MINE]);
 }
