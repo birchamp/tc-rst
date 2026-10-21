@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "0f9ff1fa441d73a8",
+    "ui": "1c2580fe1c720f38",
     "commit": "dev",
     "api": 1
   },
@@ -1162,6 +1162,29 @@
       "domSha256": "1c7567d82e2beeedcdac73493de1ed78607cd052cee68baa8b516e6af4aa5be0"
     },
     {
+      "name": "en-community-checking",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "by": "B8",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/en-community-checking.png",
+      "sha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
+      "dom": "dom/en-community-checking.json",
+      "domSha256": "63c9798db9c81d2504011b49dc728f3144e5d933ee1d5dff8b78b227460776a4"
+    },
+    {
       "name": "en-obs-understand",
       "kind": "screen",
       "scenario": "en-pins",
@@ -1640,6 +1663,50 @@
       "sha256": "4a6907173cab2edbdbff4b6e689618385ff11000557fe80bc3461467b4c84c5e",
       "dom": "dom/sync-ok-restored.json",
       "domSha256": "5313c93c2263cdade4dd8e7d4655a32118470e64c0c2a891dedbc5a889821405"
+    },
+    {
+      "name": "cc-obs",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B8",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/cc-obs.png",
+      "sha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
+      "dom": "dom/cc-obs.json",
+      "domSha256": "111f930458cbcf65e92471b1e1c77ea4943751cfb29ba65f9ea2624308bbbf51"
+    },
+    {
+      "name": "cc-obs-wrapped",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B8",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/cc-obs-wrapped.png",
+      "sha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
+      "dom": "dom/cc-obs-wrapped.json",
+      "domSha256": "e9495ee4a16ee3c95709882a34b141f3ffbeebbfaff3994349c4e890c62e24ed"
     },
     {
       "name": "open-progress-journal",
