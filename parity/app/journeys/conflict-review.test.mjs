@@ -1,10 +1,10 @@
 // J18 keep one version of a verse in conflict (B11, tC4 #679, #680, #724): the UI steps of tC4's
 // JOURNEYS.md J18 over a scripted sync in which two teammates changed Titus 1:1 from one
 // version (the environment's `teammatesChangeOneVerse`, as B10's toast screens use it). The
-// review opens from the sync toast, from Home's chip, from Translate's button and from a
-// verse's marker; it shows each version with its owner and date, newest first; a click selects
-// one; Keep this version writes one resolution, which a second click never repeats (A-27); and
-// leaving writes nothing.
+// review opens from the sync toast (which a refused open leaves in place), from Home's chip,
+// from Translate's button and from a verse's marker; it shows each version with its owner and
+// date, newest first; a click selects one; Keep this version writes one resolution, which a
+// second click never repeats (A-27); and leaving writes nothing.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
 //     node --test parity/app/journeys/conflict-review.test.mjs
@@ -56,10 +56,17 @@ function resolutions(page) {
   return sent;
 }
 
-browserTest('J18 (#679, #724). The toast\'s Review opens the review and closes the toast; each version shows its teammate and date, newest first; Keep this version writes one resolution however often it is pressed, and the verse, Translate and Home show it', async () => {
+browserTest('J18 (#679, #724). A refused open keeps the sync toast and its Review; the next Review opens the review and closes the toast; each version shows its teammate and date, newest first; Keep this version writes one resolution however often it is pressed, and the verse, Translate and Home show it', async () => {
   await withApp(async ({ page, env }) => {
     await page.getByTestId(`share-${FOLDER}`).waitFor();
     await teammatesSynced(page, env);
+    // A failed open keeps the toast and its links (#724): the open refused once, as the open
+    // refuses a project file another program left unreadable (the gallery's home-open-error).
+    const refusal = JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'view-gallery', 'replies', 'home-open-error.json'), 'utf8')).replies[0].reply;
+    await page.route('**/api/v1/session/open', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(refusal) }), { times: 1 });
+    await toast(page).getByTestId('sync-review').click();
+    await page.getByTestId('home-open-error').waitFor();
+    assert.equal(await review(page).count(), 0);
     await toast(page).getByTestId('sync-review').click();
     await review(page).waitFor();
     await toast(page).waitFor({ state: 'detached' });
