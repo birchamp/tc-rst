@@ -193,6 +193,7 @@ fn comment(chapter: u16, verse: u16, text: &str, at: i64) -> CommentView {
         verse,
         text: text.into(),
         at: WallMs(at),
+        token: super::save_kit::tok(at.unsigned_abs()),
     }
 }
 
@@ -233,6 +234,11 @@ fn the_box_shows_the_head_comment_or_the_only_one_and_counts_the_rest() {
         unit,
     );
     assert_eq!((newest.text.as_str(), newest.hidden), ("new", 0));
+    assert_eq!(
+        newest.token,
+        Some(super::save_kit::tok(9)),
+        "the editable token belongs to exactly the text the box selected"
+    );
 }
 
 /// tC4 #118 and #121: in another numbering each project verse is a unit labelled with the

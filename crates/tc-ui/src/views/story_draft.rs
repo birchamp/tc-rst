@@ -6,25 +6,31 @@
 //! the unit in focus, with its Comments tab.
 //!
 //! The units are the story file's, in file order: the title (unit 0), every numbered frame, then
-//! the reference line. C3 saves them (`story/saveFrame`, `story/saveRef`, with the editing
-//! lock); until then a unit shows its text and a click only brings it into focus, so no card
-//! opens with nowhere to save what is typed (a declared difference until C3).
+//! the reference line. C3 saves them through the typed save machine (`story/saveFrame`,
+//! `story/saveRef`). An explicit Save or blur keeps the card and editing lock until its
+//! durable Ack; a refusal retains the text for correction or Retry.
 
 use std::sync::Arc;
 
-use leptos::prelude::*;
+use leptos::{html, prelude::*};
+use send_wrapper::SendWrapper;
+use tc_api::buffer::BufferKey;
 use tc_api::helps::{PassageView, Story as HelpsStory};
 use tc_api::ids::{Scope, StoryNo};
 use tc_api::shown::Direction as TextDir;
-use tc_api::story::{List, Open, StoryList, StoryView};
+use tc_api::story::{List, Open, StoryLine, StoryList, StoryView};
+use wasm_bindgen::JsCast;
 
+use super::draft_chrome::{FooterPress, editing_card};
 use super::helps_panel::{HelpsPanel, HelpsToggleButton, StoryPanel};
 use super::panel_icons::rail_icon;
 use super::story_rail::story_rail;
 use crate::app::load::Load;
+use crate::app::save::{FieldSave, FieldScope, Pair, Source, View};
+use crate::app::shell::Editing;
 use crate::app::story::{
     StoryUnit, draft_units, image_note, is_frame_drafted, offers_download, source_notice,
-    story_label,
+    story_label, unit_key,
 };
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::attrs::Attrs;
@@ -102,13 +108,15 @@ fn screen(s: &AppState, actions: &Actions, shown: Shown) -> AnyView {
         story: shown.story,
     });
     let (s, actions) = (s.clone(), actions.clone());
+    let view = Memo::new(move |_| story.with(|loaded| loaded.value().cloned()));
+    let ready = Memo::new(move |_| view.with(Option::is_some));
+    let failed = Memo::new(move |_| story.with(|loaded| loaded.error().map(ToString::to_string)));
     (move || {
-        story.with(|loaded| match loaded {
-            Load::Loading => {
+        match (ready.get(), failed.get()) {
+            (false, None) => {
                 status_line("story-draft-loading", t(keys::story_draft::LOADING, &[])).into_any()
             }
-            Load::Failed(error) => {
-                let message = error.to_string();
+            (false, Some(message)) => {
                 view! {
                     <main data-testid="story-draft-error" style=crate::css! { "flex": 1, "padding": 40 }.to_style()>
                         <Callout tone=CalloutTone::Warn>{message}</Callout>
@@ -116,10 +124,10 @@ fn screen(s: &AppState, actions: &Actions, shown: Shown) -> AnyView {
                 }
                 .into_any()
             }
-            Load::Ready(view) | Load::Refreshing(view) => {
-                loaded_screen(&s, &actions, &shown, view.clone(), list, helps).into_any()
+            (true, _) => {
+                loaded_screen(&s, &actions, &shown, view, list, helps).into_any()
             }
-        })
+        }
     })
     .into_any()
 }
@@ -128,7 +136,7 @@ fn loaded_screen(
     s: &AppState,
     actions: &Actions,
     shown: &Shown,
-    view: Arc<StoryView>,
+    view: Memo<Option<Arc<StoryView>>>,
     list: Signal<Load<Arc<StoryList>>>,
     helps: Signal<Load<Arc<PassageView>>>,
 ) -> AnyView {
@@ -143,7 +151,7 @@ fn loaded_screen(
     };
     let root = crate::css! { "flex": 1, "display": "flex", "min-height": 0 };
     let rail = {
-        let (s, actions, view, story) = (s.clone(), actions.clone(), view.clone(), shown.story);
+        let (s, actions, story) = (s.clone(), actions.clone(), shown.story);
         let on = s.u.rail.clone();
         move || {
             on.get().then(|| {
@@ -156,7 +164,7 @@ fn loaded_screen(
                                 scroll_to(&format!("story-frame-{n}"));
                             })
                         };
-                        story_rail(&s, &actions, rows, story, Some(view.clone()), on_frame)
+                        story_rail(&s, &actions, rows, story, view.get(), on_frame)
                     })
                 })
             })
@@ -207,20 +215,24 @@ fn loaded_screen(
         let project = s.project.get_untracked();
         project.map(|p| format!("{} · {}", p.name, p.language_tag))
     };
-    let units = draft_units(&view)
-        .into_iter()
-        .map(|unit| unit_row(actions, &frame, unit, dir))
-        .collect_view();
-    let comments = Memo::new({
-        let view = view.clone();
-        move |_| Arc::new(view.comments.clone())
+    let units = {
+        let (s, actions, frame, shown) = (s.clone(), actions.clone(), frame.clone(), shown.clone());
+        view! { <For each=move || view.with(|view| view.as_ref().map(|view| draft_units(view)).unwrap_or_default()) key=|unit| unit.key.clone() children=move |unit| {
+            unit_row(&s, &actions, &frame, unit, dir, &shown, view)
+        } /> }
+    };
+    let comments = Memo::new(move |_| {
+        Arc::new(view.with(|view| {
+            view.as_ref()
+                .map(|view| view.comments.clone())
+                .unwrap_or_default()
+        }))
     });
     let panel = StoryPanel {
         focus_frame,
         comments: Some(comments),
     };
-    view! {
-        <div style=root.to_style() data-testid="story-draft">
+    let content = view! {
             {rail}
             <main style=main.to_style()>
                 <div style=bar.to_style()>
@@ -236,9 +248,9 @@ fn loaded_screen(
                     <HelpsToggleButton />
                 </div>
                 <div style=scroll.to_style()>
-                    {notices(actions, &view)}
+                    {let actions = actions.clone(); move || view.get().map(|view| notices(&actions, &view))}
                     <div style=grid.to_style()>
-                        {source_header(view.source_version.clone())}
+                        {move || source_header(view.with(|view| view.as_ref().and_then(|view| view.source_version.clone())))}
                         <div style=sticky.to_style()>
                             <Overline tone=OverlineTone::Accent>{project_line}</Overline>
                             <div style="flex: 1;"></div>
@@ -254,9 +266,23 @@ fn loaded_screen(
                 pane=String::new()
                 story=panel
             />
-        </div>
-    }
-    .into_any()
+    };
+    let editing = s.editing.clone();
+    html::div()
+        .attr("style", root.to_style())
+        .attr("data-testid", "story-draft")
+        .on(
+            leptos::ev::capture(leptos::ev::pointerdown),
+            move |event: web_sys::PointerEvent| {
+                if editing.with_untracked(Editing::is_open)
+                    && super::translate::press_on_off_button(&event)
+                {
+                    event.prevent_default();
+                }
+            },
+        )
+        .child(content)
+        .into_any()
 }
 
 /// Brings a unit into view, as a rail frame button brings its unit.
@@ -353,11 +379,24 @@ fn notices(actions: &Actions, view: &StoryView) -> AnyView {
 
 /// One unit: the source cell and the target cell, a click bringing it into focus.
 fn unit_row(
+    s: &AppState,
     actions: &Actions,
     focus: &ArcRwSignal<Option<u16>>,
     unit: StoryUnit,
     dir: &'static str,
+    shown: &Shown,
+    view: Memo<Option<Arc<StoryView>>>,
 ) -> AnyView {
+    let live_unit = {
+        let unit = unit.clone();
+        Memo::new(move |_| {
+            view.with(|view| {
+                view.as_ref()
+                    .and_then(|view| draft_units(view).into_iter().find(|u| u.key == unit.key))
+            })
+            .unwrap_or_else(|| unit.clone())
+        })
+    };
     let focused = {
         let (focus, frame) = (focus.clone(), unit.frame);
         Memo::new(move |_| frame.is_some() && focus.get() == frame)
@@ -383,8 +422,8 @@ fn unit_row(
             style=row.to_style()
             on:click=on_click
         >
-            {source_cell(&unit, dir)}
-            {target_cell(&unit, dir)}
+            {move || source_cell(&live_unit.get(), dir)}
+            {target_cell(s, actions, shown, live_unit, dir, view)}
         </div>
     }
     .into_any()
@@ -435,13 +474,70 @@ fn source_cell(unit: &StoryUnit, dir: &'static str) -> AnyView {
 
 /// The target cell: the drafted text, or the dashed pill of an undrafted unit. Drafted is the
 /// rail marker's predicate, so the cell and the marker never disagree.
-fn target_cell(unit: &StoryUnit, dir: &'static str) -> AnyView {
+fn target_cell(
+    s: &AppState,
+    actions: &Actions,
+    open: &Shown,
+    unit: Memo<StoryUnit>,
+    dir: &'static str,
+    view: Memo<Option<Arc<StoryView>>>,
+) -> AnyView {
+    let Some(project) = s.project.get_untracked() else {
+        return ().into_any();
+    };
+    let frame = unit.with_untracked(|unit| unit.frame);
+    let Some(key) = unit_key(&open.at.project, &project.id, open.story, frame) else {
+        return ().into_any();
+    };
+    let editing = {
+        let (editing, key) = (s.editing.clone(), key.clone());
+        Memo::new(move |_| {
+            editing.with(|editing| matches!(editing, Editing::Frame(open) if *open == key))
+        })
+    };
+    let current = {
+        let at = open.at.clone();
+        Memo::new(move |_| {
+            view.with(|view| {
+                let view = view.as_ref()?;
+                let (value, token) = match frame {
+                    Some(0) => (&view.title, &view.title_token),
+                    Some(n) => {
+                        let frame = view.frames.get(usize::from(n).checked_sub(1)?)?;
+                        (&frame.text, &frame.token)
+                    }
+                    None => (&view.reference, &view.reference_token),
+                };
+                Some(Pair {
+                    value: value.clone(),
+                    token: token.clone(),
+                    view: Some(View::of(Some(&at), view.view)),
+                })
+            })
+        })
+    };
     let style = cell().merge(&crate::css! { "position": "relative" });
     let gap = crate::css! { "min-height": 14, "margin-bottom": 6 };
-    let body = if is_frame_drafted(&unit.draft) {
-        let mut p = read();
-        p.extend(&crate::css! { "color": "var(--text-scripture)", "cursor": "text" });
-        view! {
+    let body = {
+        let (actions, key, at) = (actions.clone(), key.clone(), open.at.clone());
+        move || {
+            if editing.get() {
+                let line = match frame {
+                    Some(0) => StoryLine::Title,
+                    Some(_) => StoryLine::Frame,
+                    None => StoryLine::Reference,
+                };
+                return view! { <UnitEditor key=key.clone() current=current at=at.clone() dir=dir actions=actions.clone() label=unit.with_untracked(|unit| unit.label.clone()) line=line /> }.into_any();
+            }
+            let edit = {
+                let (actions, key) = (actions.clone(), key.clone());
+                move || actions.start_story_unit(key.clone())
+            };
+            let unit = unit.get();
+            if is_frame_drafted(&unit.draft) {
+                let mut p = read();
+                p.extend(&crate::css! { "color": "var(--text-scripture)", "cursor": "text" });
+                view! {
             <p
                 dir=dir
                 title=t(keys::story_draft::EDIT_UNIT, &[])
@@ -449,31 +545,37 @@ fn target_cell(unit: &StoryUnit, dir: &'static str) -> AnyView {
                 tabindex="0"
                 data-testid="story-unit-text"
                 style=p.to_style()
+                on:click={let edit = edit.clone(); move |_| edit()}
+                on:keydown=move |event: web_sys::KeyboardEvent| {
+                    if event.key() == "Enter" || event.key() == " " { event.prevent_default(); edit(); }
+                }
             >
                 {unit.draft.clone()}
             </p>
         }
         .into_any()
-    } else {
-        let pill = crate::css! {
-            "border": "var(--stroke-selected) dashed var(--border-strong)",
-            "background": "transparent",
-            "border-radius": "var(--radius-sm)",
-            "padding": "2px 10px",
-            "cursor": "pointer",
-            "font-family": "var(--font-ui)",
-            "font-size": "var(--fs-caption-lg)",
-            "letter-spacing": "var(--track-12-5)",
-            "font-weight": "var(--fw-bold)",
-            "color": "var(--text-tertiary)",
-            "vertical-align": "middle",
-        };
-        view! {
-            <button type="button" data-i="choice" data-tone="accent" style=pill.to_style()>
+            } else {
+                let pill = crate::css! {
+                    "border": "var(--stroke-selected) dashed var(--border-strong)",
+                    "background": "transparent",
+                    "border-radius": "var(--radius-sm)",
+                    "padding": "2px 10px",
+                    "cursor": "pointer",
+                    "font-family": "var(--font-ui)",
+                    "font-size": "var(--fs-caption-lg)",
+                    "letter-spacing": "var(--track-12-5)",
+                    "font-weight": "var(--fw-bold)",
+                    "color": "var(--text-tertiary)",
+                    "vertical-align": "middle",
+                };
+                view! {
+            <button type="button" data-i="choice" data-tone="accent" style=pill.to_style() on:click=move |_| edit()>
                 {unit.pill.clone()}
             </button>
         }
         .into_any()
+            }
+        }
     };
     view! {
         <div style=style.to_style()>
@@ -482,4 +584,170 @@ fn target_cell(unit: &StoryUnit, dir: &'static str) -> AnyView {
         </div>
     }
     .into_any()
+}
+
+/// One OBS unit uses the same blur/idle field as a verse, including a recovered entry
+/// without a mounted editor. Its card keeps the editing lock until Save, Cancel or blur.
+/// Save and blur first put the text in the form it is stored in, as tC4's `blurStoryUnit`
+/// does, so the stored text is what the card shows when it closes.
+#[component]
+fn UnitEditor(
+    key: BufferKey,
+    current: Memo<Option<Pair>>,
+    at: Scope,
+    dir: &'static str,
+    actions: Actions,
+    label: String,
+    line: StoryLine,
+) -> impl IntoView {
+    let multiline = line == StoryLine::Frame;
+    let (Some(runtime), Some(pair)) = (use_runtime(), current.get_untracked()) else {
+        return ().into_any();
+    };
+    let before = pair.value.clone();
+    let saves = runtime.saves().clone();
+    let shown = saves.open(&key, FieldScope::Project(Some(at)), pair);
+    let finishing = RwSignal::new(false);
+    let state = {
+        let (saves, key, changes) = (
+            SendWrapper::new(saves.clone()),
+            key.clone(),
+            saves.changes(),
+        );
+        Memo::new(move |_| {
+            changes.track();
+            saves.state(&key)
+        })
+    };
+    let saving = Memo::new(move |_| {
+        finishing.get() && matches!(state.get(), Some(FieldSave::Saving { .. }))
+    });
+    {
+        let actions = actions.clone();
+        Effect::new(move |_| {
+            if finishing.get()
+                && matches!(
+                    state.get(),
+                    Some(FieldSave::Clean | FieldSave::SavedWithWarning(_))
+                )
+            {
+                actions.close_story_unit();
+            }
+        });
+    }
+    {
+        let (saves, key) = (SendWrapper::new(saves.clone()), key.clone());
+        Effect::new(move |_| {
+            if let Some(pair) = current.get() {
+                saves.refresh(&key, pair, None);
+            }
+        });
+    }
+    {
+        let (saves, key) = (SendWrapper::new(saves.clone()), key.clone());
+        on_cleanup(move || saves.close(&key));
+    }
+    let area = NodeRef::<html::Textarea>::new();
+    let input = NodeRef::<html::Input>::new();
+    let tidy = {
+        let (saves, key, shown) = (SendWrapper::new(saves.clone()), key.clone(), shown.clone());
+        move |typed: String| {
+            let stored = tc_api::story::stored_text(line, &typed);
+            if stored != typed {
+                shown.set(stored.clone());
+                saves.typed(&key, &stored, Source::Program);
+            }
+        }
+    };
+    super::each_frame(1, move || {
+        if let Some(area) = area.get_untracked() {
+            let _ = area.focus();
+        }
+        if let Some(input) = input.get_untracked() {
+            let _ = input.focus();
+        }
+        false
+    });
+    let on_input = {
+        let (saves, key) = (SendWrapper::new(saves.clone()), key.clone());
+        move |event: leptos::ev::Event| {
+            saves.typed(&key, &event_target_value(&event), Source::Input)
+        }
+    };
+    let on_focus = {
+        let (saves, key) = (SendWrapper::new(saves.clone()), key.clone());
+        move |event: leptos::ev::FocusEvent| {
+            if let Some(element) = event
+                .target()
+                .and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok())
+            {
+                saves.focus(&key, &element);
+            }
+        }
+    };
+    let on_composition = {
+        let (saves, key) = (SendWrapper::new(saves.clone()), key.clone());
+        move |_: leptos::ev::CompositionEvent| saves.composition(&key)
+    };
+    let on_blur = {
+        let (saves, key, tidy) = (SendWrapper::new(saves.clone()), key.clone(), tidy.clone());
+        // A card that closes takes its focused field away and blurs it after the editor is
+        // gone, so the text comes from the event, never from the editor's own node.
+        move |event: leptos::ev::FocusEvent| {
+            tidy(event_target_value(&event));
+            saves.blur(&key);
+            finishing.set(true);
+        }
+    };
+    let save = {
+        let (saves, key) = (SendWrapper::new(saves.clone()), key.clone());
+        move |_| {
+            let typed = area
+                .get_untracked()
+                .map(|area| area.value())
+                .or_else(|| input.get_untracked().map(|input| input.value()));
+            if let Some(typed) = typed {
+                tidy(typed);
+            }
+            saves.save(&key);
+            finishing.set(true);
+        }
+    };
+    let cancel = {
+        let (saves, key) = (SendWrapper::new(saves), key.clone());
+        move |_| {
+            saves.typed(&key, &before, Source::Program);
+            saves.blur(&key);
+            finishing.set(true);
+        }
+    };
+    let field = read().merge(&crate::css! {
+        "width": "100%", "box-sizing": "border-box", "border": 0, "outline": "none",
+        "resize": "vertical", "color": "var(--text-scripture)", "background": "transparent",
+    });
+    let field = if multiline {
+        view! { <textarea node_ref=area aria-label=label.clone() dir=dir prop:value=move || shown.get() disabled=move || saving.get()
+            placeholder=t(keys::story_draft::PLACEHOLDER, &[]) rows="4" style=field.to_style()
+            on:input=on_input on:focus=on_focus on:blur=on_blur on:compositionstart=on_composition
+        ></textarea> }.into_any()
+    } else {
+        view! { <input node_ref=input aria-label=label.clone() dir=dir prop:value=move || shown.get() disabled=move || saving.get()
+            placeholder=t(keys::story_draft::PLACEHOLDER, &[]) style=field.to_style()
+            on:input=on_input on:focus=on_focus on:blur=on_blur on:compositionstart=on_composition
+        /> }.into_any()
+    };
+    let header = view! { <Overline tone=OverlineTone::Accent>{t(keys::draft::DRAFTING, &[])}" "{label}</Overline> }.into_any();
+    let footer = view! {
+        <Button size=Size::Sm disabled=Signal::derive(move || saving.get()) on_click=Callback::new(save)>{t(keys::story_draft::SAVE, &[])}</Button>
+        <Button variant=ButtonVariant::Ghost style=crate::css! { "color": "var(--text-tertiary)", "font-size": "var(--fs-caption)", "letter-spacing": "var(--track-12)" }
+            disabled=Signal::derive(move || saving.get())
+            on_click=Callback::new(cancel)>{t(keys::draft::CANCEL_VERSE, &[])}</Button>
+    }.into_any();
+    editing_card(
+        header,
+        field,
+        footer,
+        FooterPress::KeepsFocus,
+        Attrs::from([("data-testid", "story-unit-editor")]),
+    )
 }

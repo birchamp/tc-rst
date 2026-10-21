@@ -570,6 +570,7 @@ impl Handle<Book> for App {
                 continue;
             };
             comments.push(CommentView {
+                token: self.shown_token(&read, &key)?,
                 chapter: chapter.get(),
                 verse: verse.get(),
                 text: value.text,
@@ -595,6 +596,7 @@ impl Handle<Book> for App {
             })
             .collect();
         Ok(BookView {
+            view: crate::wire::scope::view(read.seq()),
             book: req.book,
             chapters,
             rail,

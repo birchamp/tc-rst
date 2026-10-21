@@ -4,6 +4,14 @@
     "value": "incoherentView"
   },
   {
+    "type": "refused",
+    "value": {
+      "invalidText": {
+        "reason": "a comment needs text"
+      }
+    }
+  },
+  {
     "type": "disk",
     "value": "The disk is full."
   },

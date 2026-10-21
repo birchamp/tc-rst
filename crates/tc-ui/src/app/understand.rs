@@ -6,6 +6,7 @@ use tc_api::editor::{CommentView, FrameRow, PaneChapter, PaneVerse, RowSource};
 use tc_api::helps::{PaneFocus, Slot};
 use tc_api::jobs::{OpenPhase, Phase, Progress};
 use tc_api::model::{ArticleBlock, ArticleSpan, js_len, take_spans};
+use tc_api::token::ShownToken;
 use tc_core::BookId;
 
 use crate::i18n::{Key, keys, t};
@@ -424,10 +425,11 @@ pub struct ShownComment {
     pub any: bool,
     /// Comments on other verses of the unit that the box does not show.
     pub hidden: usize,
+    pub token: Option<ShownToken>,
 }
 
 /// The newest comment of each verse of `chapter`, as (verse, text), in verse order.
-fn newest_by_verse(comments: &[CommentView], chapter: u16) -> Vec<(u16, &str)> {
+fn newest_by_verse(comments: &[CommentView], chapter: u16) -> Vec<(u16, &CommentView)> {
     let mut out: Vec<(u16, &CommentView)> = Vec::new();
     for comment in comments.iter().filter(|c| c.chapter == chapter) {
         match out.iter_mut().find(|(v, _)| *v == comment.verse) {
@@ -437,7 +439,7 @@ fn newest_by_verse(comments: &[CommentView], chapter: u16) -> Vec<(u16, &str)> {
         }
     }
     out.sort_by_key(|(v, _)| *v);
-    out.into_iter().map(|(v, c)| (v, c.text.as_str())).collect()
+    out
 }
 
 /// The comment a unit's box shows: the one at its head verse, else its only one, else none
@@ -445,7 +447,7 @@ fn newest_by_verse(comments: &[CommentView], chapter: u16) -> Vec<(u16, &str)> {
 pub fn shown_comment(comments: &[CommentView], chapter: u16, unit: &Unit) -> ShownComment {
     let lo = unit.verses.first().and_then(|k| leading_num(k));
     let hi = unit.verses.last().and_then(|k| trailing_num(k));
-    let entries: Vec<(u16, &str)> = match (lo, hi) {
+    let entries: Vec<(u16, &CommentView)> = match (lo, hi) {
         (Some(lo), Some(hi)) => newest_by_verse(comments, chapter)
             .into_iter()
             .filter(|(v, _)| (lo..=hi).contains(&u32::from(*v)))
@@ -459,10 +461,11 @@ pub fn shown_comment(comments: &[CommentView], chapter: u16, unit: &Unit) -> Sho
         None
     });
     ShownComment {
-        text: shown.map_or_else(String::new, |(_, text)| (*text).to_owned()),
+        text: shown.map_or_else(String::new, |(_, comment)| comment.text.clone()),
         target: shown.map_or_else(|| unit.head.clone(), |(v, _)| v.to_string()),
         any: !entries.is_empty(),
         hidden: entries.len() - usize::from(shown.is_some()),
+        token: shown.map(|(_, comment)| comment.token.clone()),
     }
 }
 

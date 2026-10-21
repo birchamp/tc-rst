@@ -572,6 +572,14 @@ fn command_error_maps_every_store_refusal() {
         ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook))
     );
     assert_eq!(
+        mapped(CommandError::Refused(RuleRefusal::Text(
+            "a story reference cannot be empty".into()
+        ))),
+        ApiError::NotSaved(NotSaved::Refused(SaveRefusal::InvalidText {
+            reason: "a story reference cannot be empty".into()
+        }))
+    );
+    assert_eq!(
         mapped(CommandError::Refused(RuleRefusal::WrongTokenKind)),
         ApiError::NotSaved(NotSaved::BadToken)
     );

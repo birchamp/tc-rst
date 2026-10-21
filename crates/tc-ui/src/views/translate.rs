@@ -208,7 +208,7 @@ fn screen(
 
 /// Whether a press falls on an off button: the one it reached, or one that takes no pointer
 /// event inside the element it reached.
-fn press_on_off_button(e: &web_sys::PointerEvent) -> bool {
+pub(super) fn press_on_off_button(e: &web_sys::PointerEvent) -> bool {
     let Some(target) = e
         .target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())

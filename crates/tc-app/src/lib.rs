@@ -15,6 +15,7 @@ pub mod backend;
 pub mod bundle;
 mod check;
 pub mod clock;
+mod comments;
 pub mod config;
 pub mod counters;
 pub mod create;

@@ -101,10 +101,12 @@ pub enum NotSaved {
 }
 
 /// A save a command's rules refuse. Each screen's unit adds the rules its commands have.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub enum SaveRefusal {
+    /// The field's text breaks its content rules; the editor keeps the text and shows why.
+    InvalidText { reason: String },
     /// The displayed values of a passage do not fit together: an editor bug, reported
     /// (STORAGE §5.2).
     IncoherentView,

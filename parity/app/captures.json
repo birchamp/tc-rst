@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "1c2580fe1c720f38",
+    "ui": "aba2adaf7c275c6a",
     "commit": "dev",
     "api": 1
   },
@@ -59,7 +59,7 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B3",
+      "by": "C3",
       "backend": "store",
       "layers": [
         "pixels",
@@ -75,7 +75,7 @@
       "png": "screens/understand-tit1.png",
       "sha256": "4b0909eb72838734562c4b54c3fd259bc738f6c19a3ec4541bd68ea89974ac5e",
       "dom": "dom/understand-tit1.json",
-      "domSha256": "45ddd9c75960664afb9618c1010afbcc1f6544b4f98bc1da873520bae7a4c313"
+      "domSha256": "1ee839c7de9312082fdf836d4f1a85faa51016f1e32c2860acdd99a73fe976b6"
     },
     {
       "name": "translate-tit1",
@@ -739,7 +739,7 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "C3",
       "backend": "store",
       "layers": [
         "pixels",
@@ -755,14 +755,14 @@
       "png": "screens/obs-understand.png",
       "sha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee",
       "dom": "dom/obs-understand.json",
-      "domSha256": "179792097bf9ca631d1ec379682b43eeed5b4f57e35e50bfcc438e82ca67781b"
+      "domSha256": "5c29e89c5113ce1befa1ee6e8e465e754d06b4cf21db1c6aebc0c5a4d2313596"
     },
     {
       "name": "obs-translate",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "C3",
       "backend": "store",
       "layers": [
         "pixels",
@@ -778,7 +778,7 @@
       "png": "screens/obs-translate.png",
       "sha256": "c3c00c0de4ee21e8054db619df6b15cee04a972b5e10594af4378230fe6c7d06",
       "dom": "dom/obs-translate.json",
-      "domSha256": "5551badcb0d1b726d42d23076d74b0cf9994f21546b1e255822e48799a13f8c9"
+      "domSha256": "1b89cab055a3a77f92217be582d63aba26fb136d2b8cd09d2b1d6d6eb4b6c537"
     },
     {
       "name": "obs-check-picker",
@@ -913,7 +913,7 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "by": "B3",
+      "by": "C3",
       "backend": "store",
       "layers": [
         "pixels",
@@ -929,14 +929,14 @@
       "png": "screens/en-understand-tit1.png",
       "sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
       "dom": "dom/en-understand-tit1.json",
-      "domSha256": "63bdf176158aa4098705b9d2ac946f8e76999a2a5184015578cd6ac1d22eaa84"
+      "domSha256": "9bb872debc627407f4899b8b1bbc594e5a0eadc676274c56bb0618904fbf44c1"
     },
     {
       "name": "en-understand-tw-article",
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "by": "B3",
+      "by": "C3",
       "backend": "store",
       "layers": [
         "pixels",
@@ -952,14 +952,14 @@
       "png": "screens/en-understand-tw-article.png",
       "sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
       "dom": "dom/en-understand-tw-article.json",
-      "domSha256": "ffdef63557d37fc36b68529084c39cf2aebb7de647cb38cf241f0a631281b50c"
+      "domSha256": "8d85625afb03725d4a1ea2f4a846e4b4da6bcb67471c04c7f8d16129178f2109"
     },
     {
       "name": "en-understand-questions",
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "by": "B3",
+      "by": "C3",
       "backend": "store",
       "layers": [
         "pixels",
@@ -975,7 +975,7 @@
       "png": "screens/en-understand-questions.png",
       "sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
       "dom": "dom/en-understand-questions.json",
-      "domSha256": "ca0f05c4a5da535d854da4848d6ac93bcf3a1387585ca744bf2401766a26d04d"
+      "domSha256": "e6fb8ab6105ceba735b9e4e99ebf7d58ae9cb38cf64183cc6d08757d6840325b"
     },
     {
       "name": "en-translate-tit1",
@@ -1182,14 +1182,14 @@
       "png": "screens/en-community-checking.png",
       "sha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
       "dom": "dom/en-community-checking.json",
-      "domSha256": "63c9798db9c81d2504011b49dc728f3144e5d933ee1d5dff8b78b227460776a4"
+      "domSha256": "869ceff1d8968c4065e8d98dc66141225ea11944f88c5d1652d1ee3aab0dbe0e"
     },
     {
       "name": "en-obs-understand",
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "by": "B7",
+      "by": "C3",
       "backend": "store",
       "layers": [
         "pixels",
@@ -1205,14 +1205,14 @@
       "png": "screens/en-obs-understand.png",
       "sha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346",
       "dom": "dom/en-obs-understand.json",
-      "domSha256": "b4c67ce3b6e9d910303ebf9c2f512baf635491fcaacd976e17c236c49549662f"
+      "domSha256": "af8a6c264443ea7d20f24299751f0c9b4012a91ae943c96c3dd5e947d869c067"
     },
     {
       "name": "en-obs-translate",
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "by": "B7",
+      "by": "C3",
       "backend": "store",
       "layers": [
         "pixels",
@@ -1228,7 +1228,7 @@
       "png": "screens/en-obs-translate.png",
       "sha256": "a3d3512ef295e0fc1ac908efcf463e13b6b7e88377bfa80e918e6e7e23a99570",
       "dom": "dom/en-obs-translate.json",
-      "domSha256": "ea6ef414542e1ef799c8b6349406109ec6581a7f5adfe8e897bd04e89888fd55"
+      "domSha256": "f1145a2978bbee0a9b75d71089d6fed7914d65931169d0078b7e56ab7557b8c5"
     },
     {
       "name": "en-obs-check-tn-session",
@@ -1684,7 +1684,7 @@
       "png": "screens/cc-obs.png",
       "sha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
       "dom": "dom/cc-obs.json",
-      "domSha256": "111f930458cbcf65e92471b1e1c77ea4943751cfb29ba65f9ea2624308bbbf51"
+      "domSha256": "c153aaee7f221cd5a4533e01a820e99152aa89485944d87ccdf40b4b0b0c5d26"
     },
     {
       "name": "cc-obs-wrapped",
@@ -1706,7 +1706,7 @@
       "png": "screens/cc-obs-wrapped.png",
       "sha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
       "dom": "dom/cc-obs-wrapped.json",
-      "domSha256": "e9495ee4a16ee3c95709882a34b141f3ffbeebbfaff3994349c4e890c62e24ed"
+      "domSha256": "582a1debea99f706ad4ee8d074c61d83c1c24028207356ce02c0f8f923e2705b"
     },
     {
       "name": "open-progress-journal",

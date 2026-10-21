@@ -50,6 +50,9 @@ const PHASE_0: &[&str] = &[
     // B4a: Translate's text.
     "editor/chapters",
     // C2: production Translate saves and drafts.
+    "editor/addComment",
+    "story/saveFrame",
+    "story/saveRef",
     "editor/saveVerse",
     "editor/saveLayout",
     "editor/saveSection",

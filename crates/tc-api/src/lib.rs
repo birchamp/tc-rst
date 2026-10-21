@@ -135,6 +135,7 @@ macro_rules! endpoint_table {
             query "editor/book": $crate::editor::Book => $crate::editor::BookView;
             query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;
             query "editor/chapters": $crate::editor::Chapters => $crate::editor::ChaptersView;
+            command "editor/addComment": $crate::editor::AddComment => $crate::write::Ack;
             command "editor/saveVerse": $crate::editor::SaveVerse => $crate::write::Ack;
             command "editor/saveLayout": $crate::editor::SaveLayout => $crate::write::Ack;
             command "editor/saveSection": $crate::editor::SaveSection => $crate::write::Ack;
@@ -147,6 +148,8 @@ macro_rules! endpoint_table {
             query "helps/storyArticle": $crate::helps::StoryArticle => $crate::helps::ArticleView;
 
             query "story/list": $crate::story::List => $crate::story::StoryList;
+            command "story/saveFrame": $crate::story::SaveFrame => $crate::write::Ack;
+            command "story/saveRef": $crate::story::SaveRef => $crate::write::Ack;
             query "story/open": $crate::story::Open => $crate::story::StoryView;
 
             query "check/picker": $crate::check::Picker => $crate::check::PickerView;

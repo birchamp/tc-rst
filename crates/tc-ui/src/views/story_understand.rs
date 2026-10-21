@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use leptos::prelude::*;
+use tc_api::editor::CommentTarget;
 use tc_api::helps::{PassageView, Story as HelpsStory};
 use tc_api::ids::{Scope, StoryNo};
 use tc_api::shown::Direction as TextDir;
@@ -17,6 +18,7 @@ use super::helps_panel::{HelpsPanel, HelpsToggleButton, StoryPanel};
 use super::panel_icons::rail_icon;
 use super::story_rail::story_rail;
 use crate::app::load::Load;
+use crate::app::save::{Pair, View};
 use crate::app::story::{StoryUnit, frame_comment, story_label, understand_units};
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::ds::{Callout, CalloutTone, IconButton, Overline, OverlineTone, Status, StatusDot};
@@ -89,12 +91,13 @@ fn screen(s: &AppState, actions: &Actions, shown: Shown) -> AnyView {
         });
     }
     let (s, actions) = (s.clone(), actions.clone());
+    let view = Memo::new(move |_| story.with(|loaded| loaded.value().cloned()));
+    let ready = Memo::new(move |_| view.with(Option::is_some));
+    let failed = Memo::new(move |_| story.with(|loaded| loaded.error().map(ToString::to_string)));
     (move || {
-        story.with(|loaded| match loaded {
-            Load::Loading => status_line("story-understand-loading", t(keys::story_draft::LOADING, &[]))
-                .into_any(),
-            Load::Failed(error) => {
-                let message = error.to_string();
+        match (ready.get(), failed.get()) {
+            (false, None) => status_line("story-understand-loading", t(keys::story_draft::LOADING, &[])).into_any(),
+            (false, Some(message)) => {
                 view! {
                     <main data-testid="story-understand-error" style=crate::css! { "flex": 1, "padding": 40 }.to_style()>
                         <Callout tone=CalloutTone::Warn>{message}</Callout>
@@ -102,10 +105,10 @@ fn screen(s: &AppState, actions: &Actions, shown: Shown) -> AnyView {
                 }
                 .into_any()
             }
-            Load::Ready(view) | Load::Refreshing(view) => {
-                loaded_screen(&s, &actions, &shown, view.clone(), list, helps).into_any()
+            (true, _) => {
+                loaded_screen(&s, &actions, &shown, view, list, helps).into_any()
             }
-        })
+        }
     })
     .into_any()
 }
@@ -114,7 +117,7 @@ fn loaded_screen(
     s: &AppState,
     actions: &Actions,
     shown: &Shown,
-    view: Arc<StoryView>,
+    view: Memo<Option<Arc<StoryView>>>,
     list: Signal<Load<Arc<StoryList>>>,
     helps: Signal<Load<Arc<PassageView>>>,
 ) -> AnyView {
@@ -125,7 +128,7 @@ fn loaded_screen(
     };
     let root = crate::css! { "flex": 1, "display": "flex", "min-height": 0 };
     let rail = {
-        let (s, actions, view, story) = (s.clone(), actions.clone(), view.clone(), shown.story);
+        let (s, actions, story) = (s.clone(), actions.clone(), shown.story);
         let on = s.u.rail.clone();
         move || {
             on.get().then(|| {
@@ -138,7 +141,7 @@ fn loaded_screen(
                                 scroll_to(&format!("story-understand-unit-{n}"));
                             })
                         };
-                        story_rail(&s, &actions, rows, story, Some(view.clone()), on_frame)
+                        story_rail(&s, &actions, rows, story, view.get(), on_frame)
                     })
                 })
             })
@@ -166,20 +169,16 @@ fn loaded_screen(
         Some(TextDir::Rtl) => "rtl",
         _ => "ltr",
     };
-    let units = understand_units(&view);
-    let view_for_units = view.clone();
     let unit_views = {
-        let (actions, frame) = (actions.clone(), frame.clone());
-        units
-            .into_iter()
-            .map(|unit| {
-                let comment = unit
-                    .frame
-                    .and_then(|f| frame_comment(&view_for_units.comments, f))
-                    .map(|c| c.text.clone());
-                story_unit(&actions, &frame, unit, dir, comment)
-            })
-            .collect_view()
+        let (actions, frame, at, story) = (
+            actions.clone(),
+            frame.clone(),
+            shown.at.clone(),
+            shown.story,
+        );
+        view! { <For each=move || view.with(|view| view.as_ref().map(|view| understand_units(view)).unwrap_or_default()) key=|unit| unit.key.clone() children=move |unit| {
+            story_unit(&actions, &frame, unit, dir, view, at.clone(), story)
+        } /> }
     };
     let panel = StoryPanel {
         focus_frame,
@@ -263,7 +262,9 @@ fn story_unit(
     focus: &ArcRwSignal<Option<u16>>,
     unit: StoryUnit,
     dir: &'static str,
-    comment: Option<String>,
+    view: Memo<Option<Arc<StoryView>>>,
+    at: Scope,
+    story: StoryNo,
 ) -> AnyView {
     let n = unit.frame.unwrap_or_default();
     let focused = {
@@ -317,21 +318,36 @@ fn story_unit(
             on_focus();
         }
     };
-    let image = unit.image.clone().map(|uri| {
-        let style = crate::css! {
-            "float": "inline-start",
-            "width": "30%",
-            "min-width": 160,
-            "max-height": 210,
-            "object-fit": "cover",
-            "margin-inline-end": 22,
-            "margin-bottom": 10,
-            "border-radius": "var(--radius-md)",
-            "background": "var(--surface-sunken)",
-        };
-        let alt = t(keys::story_draft::IMAGE_ALT, &[("n", &n.to_string())]);
-        view! { <img src=uri alt=alt style=style.to_style() /> }
-    });
+    let live_unit = {
+        let unit = unit.clone();
+        Memo::new(move |_| {
+            view.with(|view| {
+                view.as_ref().and_then(|view| {
+                    understand_units(view)
+                        .into_iter()
+                        .find(|u| u.key == unit.key)
+                })
+            })
+            .unwrap_or_else(|| unit.clone())
+        })
+    };
+    let image = move || {
+        live_unit.with(|unit| unit.image.clone()).map(|uri| {
+            let style = crate::css! {
+                "float": "inline-start",
+                "width": "30%",
+                "min-width": 160,
+                "max-height": 210,
+                "object-fit": "cover",
+                "margin-inline-end": 22,
+                "margin-bottom": 10,
+                "border-radius": "var(--radius-md)",
+                "background": "var(--surface-sunken)",
+            };
+            let alt = t(keys::story_draft::IMAGE_ALT, &[("n", &n.to_string())]);
+            view! { <img src=uri alt=alt style=style.to_style() /> }
+        })
+    };
     let text = crate::css! {
         "font-family": READ_TEXT,
         "font-size": "var(--fs-verse-lg)",
@@ -341,14 +357,33 @@ fn story_unit(
         "color": "var(--text-secondary)",
         "margin-bottom": 0,
     };
-    let gateway = unit
-        .gateway
-        .clone()
-        .filter(|text| !text.is_empty())
-        .unwrap_or_else(|| t(keys::story_draft::SOURCE_MISSING, &[]));
-    let dot = comment
-        .is_some()
-        .then(|| view! { <StatusDot status=Status::Valid size=7.0 /> });
+    let gateway = move || {
+        live_unit
+            .with(|unit| unit.gateway.clone())
+            .filter(|text| !text.is_empty())
+            .unwrap_or_else(|| t(keys::story_draft::SOURCE_MISSING, &[]))
+    };
+    let dot = move || {
+        view.with(|view| {
+            view.as_ref()
+                .is_some_and(|view| frame_comment(&view.comments, n).is_some())
+        })
+        .then(|| view! { <StatusDot status=Status::Valid size=7.0 /> })
+    };
+    let current = {
+        let at = at.clone();
+        Memo::new(move |_| {
+            view.with(|view| {
+                let view = view.as_ref()?;
+                let comment = frame_comment(&view.comments, n)?;
+                Some(Pair {
+                    value: comment.text.clone(),
+                    token: comment.token.clone(),
+                    view: Some(View::of(Some(&at), view.view)),
+                })
+            })
+        })
+    };
     let test_id = format!("story-understand-unit-{n}");
     let label = unit.label.clone();
     view! {
@@ -374,40 +409,9 @@ fn story_unit(
                 <p dir=dir data-testid="story-understand-gateway" style=text.to_style()>{gateway}</p>
             </div>
             <div data-testid="story-understand-comment" style="clear: both;">
-                {comment_box(dir, comment)}
+                <super::comment_box::CommentBox at=at target=CommentTarget::Frame { story, frame: n } current=current dir=dir placeholder=t(keys::understand::COMMENTS_PLACEHOLDER_FRAME, &[]) />
             </div>
         </div>
-    }
-    .into_any()
-}
-
-/// The user-comment box of a frame: its newest comment, read-only until C3 writes it.
-fn comment_box(dir: &'static str, comment: Option<String>) -> AnyView {
-    let style = crate::css! {
-        "width": "100%",
-        "box-sizing": "border-box",
-        "margin-top": 4,
-        "border": "var(--stroke) solid var(--border-input)",
-        "border-radius": "var(--radius-md)",
-        "padding": "11px 13px",
-        "outline": "none",
-        "resize": "vertical",
-        "font-family": "var(--font-scripture)",
-        "font-size": "var(--fs-verse)",
-        "line-height": "var(--lh-verse)",
-        "color": "var(--text-scripture)",
-        "background": "var(--surface-app)",
-    };
-    view! {
-        <textarea
-            data-i="field"
-            rows="3"
-            dir=dir
-            readonly=true
-            prop:value=comment.unwrap_or_default()
-            style=style.to_style()
-            placeholder=t(keys::understand::COMMENTS_PLACEHOLDER_FRAME, &[])
-        ></textarea>
     }
     .into_any()
 }

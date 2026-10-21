@@ -21,16 +21,16 @@
       }
     },
     "build": {
-      "ui": "1c2580fe1c720f38",
+      "ui": "aba2adaf7c275c6a",
       "commit": "dev",
       "api": 1
     }
   },
   "totals": {
     "rows": 130,
-    "same": 27,
+    "same": 33,
     "declared": 0,
-    "differs": 82,
+    "differs": 76,
     "unported": 21,
     "failed": 0
   },
@@ -70,8 +70,8 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "differs",
-      "by": "B3",
+      "status": "same",
+      "by": "C3",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "4b0909eb72838734562c4b54c3fd259bc738f6c19a3ec4541bd68ea89974ac5e",
@@ -83,17 +83,11 @@
       },
       "dom": {
         "tc4Sha256": "fa61fa956cbdeb41197a29f0f0a631084b6ec52a98c5ba2a54a8a4c343cf22ee",
-        "rustSha256": "45ddd9c75960664afb9618c1010afbcc1f6544b4f98bc1da873520bae7a4c313",
+        "rustSha256": "1ee839c7de9312082fdf836d4f1a85faa51016f1e32c2860acdd99a73fe976b6",
         "scope": null,
-        "same": false,
+        "same": true,
         "declared": [],
-        "firstDiffs": [
-          "line 122: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 136: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 149: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 162: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 175: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…"
-        ]
+        "firstDiffs": []
       },
       "meaning": {
         "same": true,
@@ -978,8 +972,8 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "differs",
-      "by": "B7",
+      "status": "same",
+      "by": "C3",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee",
@@ -991,17 +985,11 @@
       },
       "dom": {
         "tc4Sha256": "7c41a81c882c24b395fe013375d7e648d974db0a07cc68ab24e22628d3c1b642",
-        "rustSha256": "179792097bf9ca631d1ec379682b43eeed5b4f57e35e50bfcc438e82ca67781b",
+        "rustSha256": "5c29e89c5113ce1befa1ee6e8e465e754d06b4cf21db1c6aebc0c5a4d2313596",
         "scope": null,
-        "same": false,
+        "same": true,
         "declared": [],
-        "firstDiffs": [
-          "line 559: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…",
-          "line 571: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…",
-          "line 583: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…",
-          "line 595: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…",
-          "line 607: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…"
-        ]
+        "firstDiffs": []
       },
       "meaning": {
         "same": true,
@@ -1015,7 +1003,7 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "C3",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "6784d065c0768d6f0c65d827d74f7dca2f6e06ad02a2c92bad23d63223daf5b2",
@@ -1027,7 +1015,7 @@
       },
       "dom": {
         "tc4Sha256": "6ec6f45963a5bc0d19c0de3ee2d8baf0347aaa48e3be593c709e1a115a4d58c4",
-        "rustSha256": "5551badcb0d1b726d42d23076d74b0cf9994f21546b1e255822e48799a13f8c9",
+        "rustSha256": "1b89cab055a3a77f92217be582d63aba26fb136d2b8cd09d2b1d6d6eb4b6c537",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1180,8 +1168,8 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "differs",
-      "by": "B3",
+      "status": "same",
+      "by": "C3",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
@@ -1193,17 +1181,11 @@
       },
       "dom": {
         "tc4Sha256": "318827605f6f48208421dd272fb87561ec9e34ea8ae7e637ee0e2fcdaf7225a8",
-        "rustSha256": "63bdf176158aa4098705b9d2ac946f8e76999a2a5184015578cd6ac1d22eaa84",
+        "rustSha256": "9bb872debc627407f4899b8b1bbc594e5a0eadc676274c56bb0618904fbf44c1",
         "scope": null,
-        "same": false,
+        "same": true,
         "declared": [],
-        "firstDiffs": [
-          "line 122: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 136: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 149: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 162: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 175: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…"
-        ]
+        "firstDiffs": []
       },
       "meaning": {
         "same": true,
@@ -1216,8 +1198,8 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "differs",
-      "by": "B3",
+      "status": "same",
+      "by": "C3",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
@@ -1229,17 +1211,11 @@
       },
       "dom": {
         "tc4Sha256": "25e035f09f11dae2548cc040e5d5c2f07df0d39b8f54024c9e15d1662bcc900e",
-        "rustSha256": "ffdef63557d37fc36b68529084c39cf2aebb7de647cb38cf241f0a631281b50c",
+        "rustSha256": "8d85625afb03725d4a1ea2f4a846e4b4da6bcb67471c04c7f8d16129178f2109",
         "scope": null,
-        "same": false,
+        "same": true,
         "declared": [],
-        "firstDiffs": [
-          "line 122: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 136: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 149: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 162: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 175: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…"
-        ]
+        "firstDiffs": []
       },
       "meaning": {
         "same": true,
@@ -1252,8 +1228,8 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "differs",
-      "by": "B3",
+      "status": "same",
+      "by": "C3",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
@@ -1265,17 +1241,11 @@
       },
       "dom": {
         "tc4Sha256": "e864d513658ebc23c4a97a67a7fedaca20110f8bd17ef5d390b081ce978ce569",
-        "rustSha256": "ca0f05c4a5da535d854da4848d6ac93bcf3a1387585ca744bf2401766a26d04d",
+        "rustSha256": "e6fb8ab6105ceba735b9e4e99ebf7d58ae9cb38cf64183cc6d08757d6840325b",
         "scope": null,
-        "same": false,
+        "same": true,
         "declared": [],
-        "firstDiffs": [
-          "line 122: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 136: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 149: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 162: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…",
-          "line 175: tC4               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; bac… | rust               <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What is this section saying? Who is speaking, to whom, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-posit…"
-        ]
+        "firstDiffs": []
       },
       "meaning": {
         "same": true,
@@ -1571,7 +1541,7 @@
       },
       "dom": {
         "tc4Sha256": "141e41e06def03a80fbab1ad4f720700a57846192ef8736c093aa8a00841ac5d",
-        "rustSha256": "63c9798db9c81d2504011b49dc728f3144e5d933ee1d5dff8b78b227460776a4",
+        "rustSha256": "869ceff1d8968c4065e8d98dc66141225ea11944f88c5d1652d1ee3aab0dbe0e",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1588,8 +1558,8 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "differs",
-      "by": "B7",
+      "status": "same",
+      "by": "C3",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346",
@@ -1601,17 +1571,11 @@
       },
       "dom": {
         "tc4Sha256": "baa40c8df8cb08d84f0004fa1e03d48a5d4ed34c3c595ede8c20659de3b7e5fa",
-        "rustSha256": "b4c67ce3b6e9d910303ebf9c2f512baf635491fcaacd976e17c236c49549662f",
+        "rustSha256": "af8a6c264443ea7d20f24299751f0c9b4012a91ae943c96c3dd5e947d869c067",
         "scope": null,
-        "same": false,
+        "same": true,
         "declared": [],
-        "firstDiffs": [
-          "line 559: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…",
-          "line 571: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…",
-          "line 583: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…",
-          "line 595: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…",
-          "line 607: tC4                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backg… | rust                 <textarea data-i=\"field\" dir=\"ltr\" placeholder=\"What does this frame say, and what will be hard to render?\" readonly=\"\" rows=\"3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-positio…"
-        ]
+        "firstDiffs": []
       },
       "meaning": {
         "same": true,
@@ -1625,7 +1589,7 @@
       "scenario": "en-pins",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "C3",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "c26e72b482a96237b495cd889ce89b992b635706c16104ebd74dad2f79445fff",
@@ -1637,7 +1601,7 @@
       },
       "dom": {
         "tc4Sha256": "d5e57147b904caf2c5373f9ea7245f64c3d0117e1b3edfb7c262685334432a64",
-        "rustSha256": "ea6ef414542e1ef799c8b6349406109ec6581a7f5adfe8e897bd04e89888fd55",
+        "rustSha256": "f1145a2978bbee0a9b75d71089d6fed7914d65931169d0078b7e56ab7557b8c5",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2206,7 +2170,7 @@
       },
       "dom": {
         "tc4Sha256": "37081e4b2346559c3464e3ff390105063d5bcfa69a72f992797775c296941f32",
-        "rustSha256": "111f930458cbcf65e92471b1e1c77ea4943751cfb29ba65f9ea2624308bbbf51",
+        "rustSha256": "c153aaee7f221cd5a4533e01a820e99152aa89485944d87ccdf40b4b0b0c5d26",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2231,7 +2195,7 @@
       },
       "dom": {
         "tc4Sha256": "890550050f4e3be2838f4edf7d8ee0b4379e0a99b6e7015e10890a4572161a79",
-        "rustSha256": "e9495ee4a16ee3c95709882a34b141f3ffbeebbfaff3994349c4e890c62e24ed",
+        "rustSha256": "582a1debea99f706ad4ee8d074c61d83c1c24028207356ce02c0f8f923e2705b",
         "scope": null,
         "same": false,
         "declared": [],

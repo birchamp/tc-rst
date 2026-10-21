@@ -200,6 +200,15 @@ And this (unit C2):
   recovery offer after a crash. tC4 4.0 closes the local card immediately and has no equivalent
   durable draft removal.
 
+And this (unit C3):
+
+- A story text the story file cannot hold, once tC4's own clean-up has run (blank frame lines,
+  carriage returns and a title's or reference's outer spaces go, as in tC4), is not saved, and
+  the save indicator says why beside Retry while the card keeps the text: an emptied reference
+  line ("The reference needs text."), or a frame line that would read back as the picture,
+  title or reference line. tC4 4.0 puts the saved reference back into an emptied box without
+  a word, and shows only "Save failed — retry" for the others, whose retry can never succeed.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

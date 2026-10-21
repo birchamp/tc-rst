@@ -54,7 +54,16 @@ struct Rig {
 
 impl Rig {
     async fn new() -> Rig {
+        Self::with_stories(false).await
+    }
+
+    async fn with_stories(stories: bool) -> Rig {
         let world = store_world();
+        let project = if stories {
+            crate::store_world::add_obs(&world)
+        } else {
+            world.bible.clone()
+        };
         let dir = tempfile::tempdir().unwrap();
         let t = start(&dir, world.store()).await;
         Rig {
@@ -62,7 +71,7 @@ impl Rig {
             hooks: world.hooks.clone(),
             t,
             dir,
-            bible: world.bible.clone(),
+            bible: project,
         }
     }
 
@@ -1226,4 +1235,547 @@ async fn resume_follows_confirmed_saves_and_the_drafts_original_keystroke_time()
     let bytes = rig.t.files.get(&AppDataPath::app_prefs()).unwrap();
     let prefs: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(prefs["lastEdit"]["at"], serde_json::json!(changed.0));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_new_comment_draft_is_offered_after_a_crash_and_keep_adds_it_once() {
+    use tc_api::editor::{AddComment, CommentTarget};
+    let mut rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let target = CommentTarget::Verse {
+        book: BookId::Titus,
+        chapter: 1,
+        verse: 12,
+    };
+    let before = session
+        .handle()
+        .snapshot()
+        .fold()
+        .comments_of(BookId::Titus)
+        .len();
+    post(
+        &rig.t.app,
+        &Draft {
+            at: session.scope().clone(),
+            request: fresh(),
+            instance: rig.t.app.instance(),
+            field: EditorDraftField::UserComment { target },
+            shown: Vec::new(),
+            text: "a new note only kept as a draft".to_owned(),
+            changed: WallMs(START_MS + 5),
+        },
+    )
+    .await
+    .unwrap();
+    session.handle().wait_idle();
+    assert_eq!(
+        session
+            .handle()
+            .snapshot()
+            .fold()
+            .comments_of(BookId::Titus)
+            .len(),
+        before
+    );
+    drop(session);
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let teammate = post(
+        &rig.t.app,
+        &AddComment {
+            at: session.scope().clone(),
+            request: fresh(),
+            target,
+            shown: None,
+            text: "a teammate's note in the same unit".to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    let teammate_key = session
+        .handle()
+        .parse_edit(&teammate.tokens[0].token)
+        .unwrap()
+        .key()
+        .clone();
+    let offers = rig.offer(&session, &[]).await;
+    let offer = offers
+        .offers
+        .iter()
+        .find(|offer| offer.text == "a new note only kept as a draft")
+        .unwrap();
+    assert_eq!(offer.kind, DraftKind::Comment);
+    assert_eq!(
+        offer.keep,
+        Keep::Save,
+        "a new comment keeps its target without a comment token"
+    );
+    let kept = rig.keep(&session, 124, offer).await.unwrap();
+    assert!(kept.new_conflicts.is_empty());
+    assert_eq!(
+        session
+            .handle()
+            .snapshot()
+            .fold()
+            .comments_of(BookId::Titus)
+            .len(),
+        before + 2
+    );
+    assert!(
+        matches!(session.handle().snapshot().fold().projected(&teammate_key), Some(Record::Comment { value, .. }) if value.text == "a teammate's note in the same unit")
+    );
+    assert!(
+        rig.offer(&session, &[]).await.offers.is_empty(),
+        "Keep cannot offer the same text again"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn obs_title_frame_and_reference_drafts_survive_without_the_browser_buffer() {
+    let mut rig = Rig::with_stories(true).await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let story = tc_journal::StoryNo::new(1).unwrap();
+    let cases = [
+        (
+            RecordKey::Frame(story, tc_journal::FrameNo(0)),
+            EditorDraftField::Frame,
+            "a newer story title",
+            DraftKind::Frame,
+        ),
+        (
+            RecordKey::Frame(story, tc_journal::FrameNo(1)),
+            EditorDraftField::Frame,
+            "newer words of the first frame",
+            DraftKind::Frame,
+        ),
+        (
+            RecordKey::StoryRef(story),
+            EditorDraftField::StoryRef,
+            "Genesis 1:1-4",
+            DraftKind::StoryRef,
+        ),
+    ];
+    for (key, field, text, _) in &cases {
+        post(
+            &rig.t.app,
+            &Draft {
+                at: session.scope().clone(),
+                request: fresh(),
+                instance: rig.t.app.instance(),
+                field: *field,
+                shown: vec![rig.token(&session, key)],
+                text: (*text).to_owned(),
+                changed: WallMs(START_MS + 5),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    session.handle().wait_idle();
+    drop(session);
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let offers = rig.offer(&session, &[]).await;
+    for (n, (key, _, text, kind)) in cases.iter().enumerate() {
+        let offer = offers
+            .offers
+            .iter()
+            .find(|offer| offer.text == *text)
+            .unwrap();
+        assert_eq!(offer.kind, *kind);
+        assert_eq!(offer.keep, Keep::Save);
+        let kept = rig.keep(&session, 125 + n as u8, offer).await.unwrap();
+        assert!(kept.new_conflicts.is_empty());
+        let stored = match session.handle().snapshot().fold().projected(key).unwrap() {
+            Record::Frame { value, .. } => value,
+            Record::StoryRef { value, .. } => value.unwrap(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(stored, *text);
+    }
+    assert!(rig.offer(&session, &[]).await.offers.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_tokenless_comment_in_the_shell_mirror_keeps_its_verse_or_frame_target() {
+    use tc_api::buffer::DraftCall;
+    use tc_api::editor::CommentTarget;
+    for stories in [false, true] {
+        let mut rig = Rig::with_stories(stories).await;
+        let session = rig.open(&rig.bible.clone()).await;
+        let (target, place) = if stories {
+            (
+                CommentTarget::Frame {
+                    story: tc_api::ids::StoryNo::new(1).unwrap(),
+                    frame: 1,
+                },
+                "01-01",
+            )
+        } else {
+            (
+                CommentTarget::Verse {
+                    book: BookId::Titus,
+                    chapter: 1,
+                    verse: 12,
+                },
+                "TIT 1:12",
+            )
+        };
+        let buffer_key = BufferKey {
+            project: session.scope().project.clone(),
+            id: session.id().clone(),
+            field: FieldKey {
+                kind: FieldKind::Comment,
+                place: FieldPlace::parse(place).unwrap(),
+            },
+        };
+        let typed = BufferEntry {
+            api: 1, instance: rig.t.app.instance(), base: Vec::new(),
+            text: "a comment that only the mirror kept".to_owned(), sent: None, at: WallMs(START_MS + 5),
+            draft: Some(DraftCall {
+                path: "editor/draft".to_owned(),
+                body: serde_json::json!({
+                    "at": session.scope(), "instance": rig.t.app.instance(),
+                    "field": EditorDraftField::UserComment { target }, "shown": [], "changed": START_MS + 5,
+                }).to_string(),
+            }),
+        };
+        let mirrored = vec![line(&buffer_key, &typed)];
+        drop(session);
+        rig.relaunch().await;
+        let session = rig.open(&rig.bible.clone()).await;
+        let offers = rig.offer_with(&session, &mirrored, true).await;
+        let offer = offers
+            .offers
+            .iter()
+            .find(|offer| offer.text == typed.text)
+            .unwrap();
+        assert_eq!(offer.keep, Keep::Save);
+        assert_eq!(offer.kind, DraftKind::Comment);
+        let kept = rig.keep(&session, 129, offer).await.unwrap();
+        assert!(kept.new_conflicts.is_empty());
+        let keys = if stories {
+            session
+                .handle()
+                .snapshot()
+                .fold()
+                .story_comments_of(tc_journal::StoryNo::new(1).unwrap())
+        } else {
+            session
+                .handle()
+                .snapshot()
+                .fold()
+                .comments_of(BookId::Titus)
+        };
+        let matching: Vec<_> = keys
+            .into_iter()
+            .filter_map(
+                |key| match session.handle().snapshot().fold().projected(&key) {
+                    Some(Record::Comment { value, .. }) if value.text == typed.text => {
+                        Some(value.target)
+                    }
+                    _ => None,
+                },
+            )
+            .collect();
+        assert_eq!(matching.len(), 1, "the exact target receives one comment");
+        if stories {
+            assert!(
+                matches!(matching[0], tc_journal::record::CommentTarget::Frame { story, frame } if story.get() == 1 && frame.0 == 1)
+            );
+        } else {
+            assert!(
+                matches!(matching[0], tc_journal::record::CommentTarget::Verse { book: BookId::Titus, chapter, verse } if chapter.get() == 1 && verse.get() == 12)
+            );
+        }
+        assert!(
+            rig.offer_with(&session, &mirrored, true)
+                .await
+                .offers
+                .is_empty()
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_tokenless_comment_add_crashed_before_ack_settles_saved_text_and_keeps_newer_typing() {
+    use tc_api::buffer::DraftCall;
+    use tc_api::editor::{AddComment, CommentTarget};
+    for newer in [false, true] {
+        let mut rig = Rig::new().await;
+        let session = rig.open(&rig.bible.clone()).await;
+        let before = session
+            .handle()
+            .snapshot()
+            .fold()
+            .comments_of(BookId::Titus);
+        let target = CommentTarget::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 12,
+        };
+        let sent_text = "the new note was saved before its Ack";
+        let current = if newer {
+            "newer typing after that note was sent"
+        } else {
+            sent_text
+        };
+        let req = AddComment {
+            at: session.scope().clone(),
+            request: fresh(),
+            target,
+            shown: None,
+            text: sent_text.to_owned(),
+        };
+        let key = BufferKey {
+            project: session.scope().project.clone(),
+            id: session.id().clone(),
+            field: FieldKey {
+                kind: FieldKind::Comment,
+                place: FieldPlace::parse("TIT 1:12").unwrap(),
+            },
+        };
+        let typed = BufferEntry {
+            api: 1, instance: rig.t.app.instance(), base: Vec::new(), text: current.to_owned(),
+            sent: Some(SentSave { request: req.request, text: sent_text.to_owned(), scope: Some(req.at.clone()) }),
+            at: WallMs(START_MS + 5),
+            draft: Some(DraftCall {
+                path: "editor/draft".to_owned(),
+                body: serde_json::json!({
+                    "at": req.at, "instance": rig.t.app.instance(),
+                    "field": EditorDraftField::UserComment { target }, "shown": [], "changed": START_MS + 5,
+                }).to_string(),
+            }),
+        };
+        post(
+            &rig.t.app,
+            &Crash {
+                request: fresh(),
+                at: CrashPoint::BeforeReply,
+                path: Some(AddComment::PATH.to_owned()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            rig.t
+                .app
+                .call(AddComment::PATH, &serde_json::to_vec(&req).unwrap())
+                .await,
+            Answer::Ended
+        );
+        let own: Vec<_> = session
+            .handle()
+            .snapshot()
+            .fold()
+            .comments_of(BookId::Titus)
+            .into_iter()
+            .filter(|key| !before.contains(key))
+            .collect();
+        assert_eq!(
+            own.len(),
+            1,
+            "the test knows which comment actually committed"
+        );
+        let own_heads = session.handle().snapshot().fold().heads(&own[0]);
+        let mirrored = vec![line(&key, &typed)];
+        drop(session);
+        rig.relaunch().await;
+        let session = rig.open(&rig.bible.clone()).await;
+        // Equal text and target still do not prove another comment's identity. A recovery
+        // must never choose the newest matching note as the base of a revision.
+        let independent = post(
+            &rig.t.app,
+            &AddComment {
+                at: session.scope().clone(),
+                request: fresh(),
+                target,
+                shown: None,
+                text: sent_text.to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+        let other_key = session
+            .handle()
+            .parse_edit(&independent.tokens[0].token)
+            .unwrap()
+            .key()
+            .clone();
+        let other_heads = session.handle().snapshot().fold().heads(&other_key);
+        let count = session
+            .handle()
+            .snapshot()
+            .fold()
+            .comments_of(BookId::Titus)
+            .len();
+        let offers = rig.offer_with(&session, &mirrored, true).await;
+        if newer {
+            let offer = offers
+                .offers
+                .iter()
+                .find(|offer| offer.text == current)
+                .unwrap();
+            assert!(
+                offer.shown.is_empty(),
+                "a tokenless entry cannot guess a committed comment id"
+            );
+            assert_eq!(offer.keep, Keep::Save);
+            rig.keep(&session, 131, offer).await.unwrap();
+            assert_eq!(
+                session
+                    .handle()
+                    .snapshot()
+                    .fold()
+                    .comments_of(BookId::Titus)
+                    .len(),
+                count + 1
+            );
+        } else {
+            assert!(
+                offers.offers.is_empty(),
+                "already stored text is settled without a duplicate note"
+            );
+            assert!(offers.settle.iter().any(|slot| slot.key == key));
+            assert_eq!(
+                session
+                    .handle()
+                    .snapshot()
+                    .fold()
+                    .comments_of(BookId::Titus)
+                    .len(),
+                count
+            );
+        }
+        assert_eq!(session.handle().snapshot().fold().heads(&own[0]), own_heads);
+        assert_eq!(
+            session.handle().snapshot().fold().heads(&other_key),
+            other_heads
+        );
+        assert!(
+            rig.offer_with(&session, &mirrored, true)
+                .await
+                .offers
+                .is_empty()
+        );
+    }
+}
+
+/// tC4 puts a story text in its stored form before each write (`normalizeStoryUnit`): a blank
+/// line typed in a frame, carriage returns and the outer white space of a title or reference
+/// are saved away, never refused, by a save and by Keep of a draft typed that way. The Ack
+/// names the stored text, so the field that sent it settles on it. An emptied reference stays
+/// refused and the saved one stays.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn story_texts_are_saved_and_kept_in_the_form_tc4_stores() {
+    use tc_api::story::{SaveFrame, SaveRef};
+    let mut rig = Rig::with_stories(true).await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let story = tc_journal::StoryNo::new(1).unwrap();
+    let (title, frame, reference) = (
+        RecordKey::Frame(story, tc_journal::FrameNo(0)),
+        RecordKey::Frame(story, tc_journal::FrameNo(1)),
+        RecordKey::StoryRef(story),
+    );
+    let stored = |session: &ProjectSession, key: &RecordKey| match session
+        .handle()
+        .snapshot()
+        .fold()
+        .projected(key)
+        .unwrap()
+    {
+        Record::Frame { value, .. } => value,
+        Record::StoryRef { value, .. } => value.unwrap_or_default(),
+        other => panic!("{other:?}"),
+    };
+    let ack = post(
+        &rig.t.app,
+        &SaveFrame {
+            at: session.scope().clone(),
+            request: fresh(),
+            shown: rig.token(&session, &frame),
+            text: "Una línea.\r\n\n  \nOtra línea.\n".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.saved[0].text, "Una línea.\nOtra línea.");
+    post(
+        &rig.t.app,
+        &SaveFrame {
+            at: session.scope().clone(),
+            request: fresh(),
+            shown: rig.token(&session, &title),
+            text: "  La creación \u{a0}".into(),
+        },
+    )
+    .await
+    .unwrap();
+    post(
+        &rig.t.app,
+        &SaveRef {
+            at: session.scope().clone(),
+            request: fresh(),
+            shown: rig.token(&session, &reference),
+            text: " Génesis 1–2\n".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(stored(&session, &frame), "Una línea.\nOtra línea.");
+    assert_eq!(stored(&session, &title), "La creación");
+    assert_eq!(stored(&session, &reference), "Génesis 1–2");
+    let empty = post(
+        &rig.t.app,
+        &SaveRef {
+            at: session.scope().clone(),
+            request: fresh(),
+            shown: rig.token(&session, &reference),
+            text: " \n ".into(),
+        },
+    )
+    .await;
+    assert!(
+        matches!(
+            empty,
+            Err(ApiError::NotSaved(NotSaved::Refused(
+                tc_api::write::SaveRefusal::InvalidText { .. }
+            )))
+        ),
+        "{empty:?}"
+    );
+    assert_eq!(stored(&session, &reference), "Génesis 1–2");
+
+    post(
+        &rig.t.app,
+        &Draft {
+            at: session.scope().clone(),
+            request: fresh(),
+            instance: rig.t.app.instance(),
+            field: EditorDraftField::Frame,
+            shown: vec![rig.token(&session, &frame)],
+            text: "Typed before the crash,\n\nwith a blank line.\n".into(),
+            changed: WallMs(START_MS + 5),
+        },
+    )
+    .await
+    .unwrap();
+    session.handle().wait_idle();
+    drop(session);
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let offers = rig.offer(&session, &[]).await;
+    let [offer] = offers.offers.as_slice() else {
+        panic!("{offers:?}");
+    };
+    assert_eq!(
+        offer.text,
+        "Typed before the crash,\n\nwith a blank line.\n"
+    );
+    rig.keep(&session, 141, offer).await.unwrap();
+    assert_eq!(
+        stored(&session, &frame),
+        "Typed before the crash,\nwith a blank line."
+    );
+    assert!(rig.offer(&session, &[]).await.offers.is_empty());
 }

@@ -22,6 +22,18 @@ pub enum SaveError {
     BadAck(&'static str),
 }
 
+impl SaveError {
+    /// A field validation refusal is actionable beside the existing Not saved/Retry label.
+    pub fn invalid_text_reason(&self) -> Option<&str> {
+        match self {
+            Self::NotSaved(NotSaved::Refused(tc_api::write::SaveRefusal::InvalidText {
+                reason,
+            })) => Some(reason),
+            _ => None,
+        }
+    }
+}
+
 /// What the save machine does with an answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Answered {

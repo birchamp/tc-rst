@@ -368,9 +368,18 @@ fn SaveIndicator() -> impl IntoView {
         open.get().then(|| {
             let actions = actions.clone();
             let indicator = runtime.saves().indicator();
+            let reason = {
+                let saves = send_wrapper::SendWrapper::new(runtime.saves().clone());
+                let changes = saves.changes();
+                Signal::derive(move || {
+                    changes.track();
+                    saves.invalid_text_reason()
+                })
+            };
             view! {
                 <SaveIndicatorView
                     indicator=Signal::derive(move || indicator.get())
+                    reason=reason
                     on_retry=Callback::new(move |which| actions.retry(which))
                 />
             }
@@ -383,7 +392,11 @@ fn SaveIndicator() -> impl IntoView {
 /// a Retry for the failure tC4's `retryFor` names. `data-state` is the fields' worst state,
 /// never the checkpoint's.
 #[component]
-pub fn SaveIndicatorView(indicator: Signal<Indicator>, on_retry: Callback<Retry>) -> impl IntoView {
+pub fn SaveIndicatorView(
+    indicator: Signal<Indicator>,
+    on_retry: Callback<Retry>,
+    #[prop(optional, into)] reason: Signal<Option<String>>,
+) -> impl IntoView {
     let style = move || {
         let error = indicator.with(Indicator::is_error);
         crate::css! {
@@ -437,6 +450,7 @@ pub fn SaveIndicatorView(indicator: Signal<Indicator>, on_retry: Callback<Retry>
         >
             <StatusDot status=status size=8.0 />
             {move || t(indicator.with(Indicator::label_key), &[])}
+            {move || reason.get().map(|text| view! { <span role="alert" data-testid="save-refusal-text">{text}</span> })}
             {button}
         </div>
     }

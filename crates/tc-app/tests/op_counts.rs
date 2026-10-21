@@ -21,6 +21,7 @@ mod store_world;
 mod op_counts {
     mod align;
     mod check;
+    mod comments;
     pub mod corpus;
     mod export;
     pub mod harness;

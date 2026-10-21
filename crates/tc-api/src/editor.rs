@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
-use crate::ids::{RecordRef, RefPart, RequestId, Scope, ServerInstance, ViewSeq, WallMs};
+use crate::ids::{RecordRef, RefPart, RequestId, Scope, ServerInstance, StoryNo, ViewSeq, WallMs};
 use crate::model::section::ParaFormat;
 use crate::shown::{Direction, Known, Shown};
 use crate::token::ShownToken;
@@ -24,6 +24,7 @@ pub struct Book {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct BookView {
+    pub view: ViewSeq,
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
     pub book: BookId,
     /// The chapters the book holds, in order.
@@ -51,6 +52,7 @@ pub struct RailBook {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct CommentView {
+    pub token: ShownToken,
     pub chapter: u16,
     pub verse: u16,
     pub text: String,
@@ -357,7 +359,8 @@ pub struct DiscardDraft {
     pub changed: WallMs,
 }
 
-/// The Translate fields C2 can draft. A section carries every displayed verse token.
+/// Unsaved editor fields. New user comments carry no token; every other field carries
+/// the displayed record, or every displayed verse for a section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(
@@ -368,10 +371,51 @@ pub struct DiscardDraft {
     deny_unknown_fields
 )]
 pub enum DraftField {
+    Frame,
+    StoryRef,
+    UserComment {
+        target: CommentTarget,
+    },
     Words,
     Layout,
     Section {
         #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
         book: BookId,
     },
+}
+
+/// The anchor of an Understand comment. A frame numbered zero is the story title.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum CommentTarget {
+    Verse {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+        book: BookId,
+        chapter: u16,
+        verse: u16,
+    },
+    Frame {
+        story: StoryNo,
+        frame: u16,
+    },
+}
+
+/// `editor/addComment`: blur commits the box once. A displayed token revises that same
+/// comment, keeping its earlier text in History; no token adds a new comment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddComment {
+    pub at: Scope,
+    pub request: RequestId,
+    pub target: CommentTarget,
+    pub shown: Option<ShownToken>,
+    pub text: String,
 }
