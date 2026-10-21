@@ -4,7 +4,8 @@
 // review opens from the sync toast (which a refused open leaves in place), from Home's chip,
 // from Translate's button and from a verse's marker; it shows each version with its owner and
 // date, newest first; a click selects one; Keep this version writes one resolution, which a
-// second click never repeats (A-27); and leaving writes nothing.
+// second click never repeats (A-27); Previous and Next step between two verses in conflict;
+// and leaving writes nothing.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
 //     node --test parity/app/journeys/conflict-review.test.mjs
@@ -12,7 +13,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { FAKE_USER } from '../../tc4-baseline/mock-server/fake-door43.mjs';
-import { REPO } from '../env-rust.mjs';
+import { REPO, newRequestId } from '../env-rust.mjs';
 import { BIBLE } from '../screens.mjs';
 import { browserTest, catalog, until, withApp } from './kit.mjs';
 
@@ -161,5 +162,50 @@ browserTest('J18 (#679). Home\'s chip opens the review in Translate; Back leaves
     const at = await scope(env);
     const list = await env.call('conflicts/list', { at, tab: 'text' });
     assert.equal(list.entries.value.length, 1, 'the conflict is still open');
+  }, opts);
+});
+
+browserTest('J18 step 6. With two verses in conflict, Previous and Next step between them, each shown with nothing selected; once one is kept, the other shows and the count goes down', async () => {
+  await withApp(async ({ page, env }) => {
+    await page.getByTestId(`share-${FOLDER}`).waitFor();
+    await teammatesSynced(page, env);
+    await toast(page).getByTestId('sync-dismiss').click();
+    // A second sync brings the teammates' two versions of Titus 1:2.
+    const later = ['Con la esperanza, versión del compañero 1.', 'Con la esperanza, versión del compañero 2.'];
+    await env.call('test/script', {
+      request: newRequestId(),
+      next: { type: 'sync', value: { project: env.projectId(BIBLE), outcome: { type: 'synced', value: { teammates: { book: 'TIT', chapter: 1, verse: 2, texts: later }, restored: 0 } } } },
+    });
+    await page.getByTestId(`share-${FOLDER}`).click();
+    await toast(page).getByTestId('sync-review').click();
+    await review(page).waitFor();
+    const position = page.getByTestId('conflict-position');
+    const at = async () => [await page.getByTestId('conflict-ref').textContent(), await position.getAttribute('data-n'), await position.getAttribute('data-m')];
+    const pressed = async () => (await shown(page)).map((v) => v.pressed);
+    await versions(page).nth(1).waitFor();
+    assert.deepEqual(await at(), ['Titus 1:1', '1', '2']);
+    assert.equal(await page.getByTestId('conflict-previous').isDisabled(), true);
+    await versions(page).first().click();
+    await page.getByTestId('conflict-next').click();
+    await until('Next shows Titus 1:2', async () => (await page.getByTestId('conflict-ref').textContent()) === 'Titus 1:2');
+    assert.deepEqual(await at(), ['Titus 1:2', '2', '2']);
+    assert.deepEqual((await shown(page)).map((v) => v.text), [later[1], later[0]]);
+    assert.deepEqual(await pressed(), ['false', 'false'], 'a step clears the choice');
+    assert.equal(await page.getByTestId('conflict-next').isDisabled(), true);
+    await page.getByTestId('conflict-previous').click();
+    await until('Previous shows Titus 1:1', async () => (await page.getByTestId('conflict-ref').textContent()) === 'Titus 1:1');
+    assert.deepEqual(await pressed(), ['false', 'false']);
+    assert.deepEqual((await shown(page)).map((v) => v.text), [TWO, ONE]);
+    // Keep Teammate 1's Titus 1:2: Titus 1:1 is the one left, now 1 of 1.
+    await page.getByTestId('conflict-next').click();
+    await until('Next shows Titus 1:2 again', async () => (await page.getByTestId('conflict-ref').textContent()) === 'Titus 1:2');
+    const sent = resolutions(page);
+    await versions(page).nth(1).click();
+    await page.getByTestId('conflict-keep').click();
+    await until('the other conflict shows', async () => (await position.getAttribute('data-m')) === '1', 30_000);
+    assert.deepEqual(await at(), ['Titus 1:1', '1', '1']);
+    assert.equal(sent.length, 1);
+    const list = await env.call('conflicts/list', { at: await scope(env), tab: 'text' });
+    assert.equal(list.entries.value.length, 1, 'Titus 1:1 is still in conflict');
   }, opts);
 });
