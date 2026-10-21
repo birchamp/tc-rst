@@ -6,7 +6,7 @@
 //! fold's counts by kind, the entries from one counted walk of the conflict list that decodes
 //! nothing beyond the tab's own conflicts, whose candidates the fold holds decoded.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde_json::json;
 use tc_api::conflicts::{
@@ -15,6 +15,7 @@ use tc_api::conflicts::{
     ReviewView, TabCount, Version, VersionCause, VersionValue,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, StoryNo, WallMs};
+use tc_api::shown::{Computer, PersonLabel, Who};
 use tc_api::write::Ack;
 use tc_api::{ApiError, NotSaved};
 use tc_journal::command::Choice;
@@ -333,28 +334,92 @@ fn detached_kind(key: &RecordKey) -> DetachedKind {
     }
 }
 
+/// Tells apart the computers of versions that carry one person's label (STORAGE §8.5): one
+/// person's two computers, or a team's computers signed in to one Door43 account. This
+/// computer's versions say so, and another computer is numbered among the person's other
+/// computers. Another computer signed in as this computer's person is named by its username,
+/// as tC4 names it, so the versions of two computers are never both "Mine".
+fn by_computer(
+    versions: &mut [(DeviceId, Version)],
+    me: DeviceId,
+    labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
+    username: impl Fn(DeviceId) -> Option<String>,
+) {
+    let mut computers: HashMap<&PersonLabel, BTreeSet<DeviceId>> = HashMap::new();
+    for (device, version) in versions.iter() {
+        if let MadeBy::Person(label) = &version.by {
+            computers.entry(label).or_default().insert(*device);
+        }
+    }
+    let mut told: BTreeMap<DeviceId, PersonLabel> = BTreeMap::new();
+    for (label, devices) in computers.into_iter().filter(|(_, d)| d.len() > 1) {
+        for device in devices {
+            let told_apart = if device == me {
+                PersonLabel {
+                    who: label.who.clone(),
+                    computer: Some(Computer::This),
+                }
+            } else {
+                let person = labels.get(&device);
+                let n = labels
+                    .iter()
+                    .filter(|(d, l)| **d != me && Some(*l) == person)
+                    .position(|(d, _)| *d == device)
+                    .map_or(u16::MAX, |i| u16::try_from(i + 1).unwrap_or(u16::MAX));
+                let who = match &label.who {
+                    Who::Mine => username(device).map_or(Who::Mine, Who::Username),
+                    who => who.clone(),
+                };
+                PersonLabel {
+                    who,
+                    computer: Some(Computer::Other(n)),
+                }
+            };
+            told.insert(device, told_apart);
+        }
+    }
+    for (device, version) in versions.iter_mut() {
+        if let Some(label) = told.get(device) {
+            version.by = MadeBy::Person(label.clone());
+        }
+    }
+}
+
 /// The versions of a conflict, newest first: each candidate by who made it, the version
 /// the screens show marked.
 fn versions(
     conflict: &Conflict,
     labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
+    me: DeviceId,
     now: WallMs,
 ) -> Vec<Version> {
     let mut candidates: Vec<_> = conflict.candidates.iter().collect();
     candidates.sort_by_key(|c| std::cmp::Reverse((c.at, c.head)));
-    candidates
-        .into_iter()
+    let mut versions: Vec<(DeviceId, Version)> = candidates
+        .iter()
         .filter_map(|c| {
-            Some(Version {
-                change: ChangeRef::parse(&c.head.to_hex()).ok()?,
-                by: made_by(&c.device, labels),
-                at: WallMs(c.at.0),
-                clock_ahead: clock_ahead(c.at, now),
-                shown: c.head == conflict.provisional || c.also.contains(&conflict.provisional),
-                value: value_of(&c.value),
-            })
+            Some((
+                c.device,
+                Version {
+                    change: ChangeRef::parse(&c.head.to_hex()).ok()?,
+                    by: made_by(&c.device, labels),
+                    at: WallMs(c.at.0),
+                    clock_ahead: clock_ahead(c.at, now),
+                    shown: c.head == conflict.provisional || c.also.contains(&conflict.provisional),
+                    value: value_of(&c.value),
+                },
+            ))
         })
-        .collect()
+        .collect();
+    // A candidate's author is its profile's username, else its display name; a computer
+    // labelled "Mine" that is not this one shares this computer's username, so it has one.
+    by_computer(&mut versions, me, labels, |device| {
+        candidates
+            .iter()
+            .find(|c| c.device == device)
+            .and_then(|c| c.author.as_deref().map(str::to_owned))
+    });
+    versions.into_iter().map(|(_, v)| v).collect()
 }
 
 impl App {
@@ -363,6 +428,7 @@ impl App {
         read: &CountingSnapshot,
         tab: ReviewTab,
         labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
+        me: DeviceId,
     ) -> Result<Vec<ConflictEntry>, ApiError> {
         let now = self.inner.clock.now();
         let mine: Vec<&Conflict> = read
@@ -403,7 +469,7 @@ impl App {
                 record,
                 place: place_of(&conflict.key),
                 group,
-                versions: versions(conflict, labels, now),
+                versions: versions(conflict, labels, me, now),
                 review,
                 incomplete_history: conflict.incomplete_history,
                 unreadable: count(conflict.unreadable.len()),
@@ -418,7 +484,8 @@ impl Handle<List> for App {
         let session = self.read(&req.at)?;
         let read = session.read();
         let handle = session.handle();
-        let labels = read.person_labels(handle.facts().device);
+        let me = handle.facts().device;
+        let labels = read.person_labels(me);
         let mut counts: BTreeMap<ReviewTab, u32> = BTreeMap::new();
         for kind in &KINDS {
             let n: u32 = read
@@ -448,7 +515,7 @@ impl Handle<List> for App {
                     .collect(),
             ),
             ReviewTab::Notices => ReviewEntries::Notices(notices),
-            tab => ReviewEntries::Conflicts(self.conflict_entries(&read, tab, &labels)?),
+            tab => ReviewEntries::Conflicts(self.conflict_entries(&read, tab, &labels, me)?),
         };
         Ok(ReviewView {
             view: wire::scope::view(read.seq()),
@@ -469,26 +536,38 @@ impl Handle<History> for App {
         let session = self.read(&req.at)?;
         let read = session.read();
         let key = wire::scope::record_key(&req.record)?;
-        let labels = read.person_labels(session.handle().facts().device);
+        let me = session.handle().facts().device;
+        let labels = read.person_labels(me);
         let now = self.inner.clock.now();
         let shown = read.projected_change(&key);
-        let mut versions: Vec<HistoryVersion> = read
+        let (mut versions, causes): (Vec<(DeviceId, Version)>, Vec<VersionCause>) = read
             .history(&key)
             .into_iter()
             .filter_map(|id| {
                 let body = read.body(&id)?;
-                Some(HistoryVersion {
-                    version: Version {
-                        change: ChangeRef::parse(&id.to_hex()).ok()?,
-                        by: made_by(&body.device, &labels),
-                        at: WallMs(body.at.0),
-                        clock_ahead: clock_ahead(body.at, now),
-                        shown: shown == Some(id),
-                        value: value_of(&body.record),
-                    },
-                    cause: cause_of(&body.cause),
-                })
+                let version = Version {
+                    change: ChangeRef::parse(&id.to_hex()).ok()?,
+                    by: made_by(&body.device, &labels),
+                    at: WallMs(body.at.0),
+                    clock_ahead: clock_ahead(body.at, now),
+                    shown: shown == Some(id),
+                    value: value_of(&body.record),
+                };
+                Some(((body.device, version), cause_of(&body.cause)))
             })
+            .unzip();
+        by_computer(&mut versions, me, &labels, |device| {
+            match read.projected(&RecordKey::DeviceProfile(device)) {
+                Some(Record::DeviceProfile { value, .. }) => {
+                    value.door43_username.map(|name| name.as_str().to_owned())
+                }
+                _ => None,
+            }
+        });
+        let mut versions: Vec<HistoryVersion> = versions
+            .into_iter()
+            .zip(causes)
+            .map(|((_, version), cause)| HistoryVersion { version, cause })
             .collect();
         versions.reverse();
         Ok(HistoryView { versions })

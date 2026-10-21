@@ -449,3 +449,150 @@ async fn versions_that_differ_only_in_a_footnote_look_different() {
         ]
     );
 }
+
+/// One change of `device`, numbered `seq` in its sequence, in a batch of its own.
+fn change_of(
+    device: tc_journal::DeviceId,
+    seq: u64,
+    record: tc_journal::Record,
+    parents: Vec<tc_journal::ChangeId>,
+) -> tc_journal::Change {
+    let mut batch = [0u8; 16];
+    batch[..15].copy_from_slice(device.as_bytes().get(..15).unwrap());
+    batch[15] = u8::try_from(seq).unwrap();
+    tc_journal::Change::new(tc_journal::ChangeBody {
+        v: 0,
+        record,
+        parents,
+        device,
+        seq: tc_journal::DeviceSeq(seq),
+        at: tc_journal::WallTime(START_MS + i64::try_from(seq).unwrap() * 60_000),
+        batch: tc_journal::BatchRef::new(tc_journal::BatchId::from_bytes(batch), 1).unwrap(),
+        cause: tc_journal::Cause::Edit,
+    })
+    .unwrap()
+}
+
+/// `device` signed in to Door43 as `username`.
+fn signed_in(device: tc_journal::DeviceId, seq: u64, username: &str) -> tc_journal::Change {
+    let value = tc_journal::record::DeviceProfileValue {
+        display_name: None,
+        door43_username: Some(tc_journal::record::Door43Username::parse(username).unwrap()),
+        legacy: None,
+    };
+    change_of(
+        device,
+        seq,
+        tc_journal::Record::DeviceProfile { device, value },
+        Vec::new(),
+    )
+}
+
+/// STORAGE §8.5: versions from two computers that carry one person's label are told apart by
+/// computer, in the review and in History. This computer and another signed in as the same
+/// Door43 user ("ana", one person's two computers) are "Mine" on this computer and "ana" on
+/// the other, never both "Mine", so only this computer's version is drawn as Mine; two
+/// computers of one team account ("equipo") are numbered.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn versions_of_two_computers_under_one_username_are_told_apart_by_computer() {
+    use tc_api::shown::Computer;
+    use tc_app::backend::memory::{MEMORY_DEVICE, MemoryBackend, teammates};
+    use tc_journal::record::VerseValue;
+
+    let state = super::scenario::scenario("sample");
+    let (backend, _) = MemoryBackend::from_scenario(state).unwrap();
+    let backend = std::sync::Arc::new(backend);
+    let dir = tempfile::tempdir().unwrap();
+    tc_app::backend::scenario::install_resources_into(
+        &dir.path().join("app-data"),
+        &state.resources().unwrap(),
+    )
+    .unwrap();
+    let store = backend.clone();
+    let t =
+        super::common::TestApp::start_with(dir.path(), &super::common::Parts::new(), |_, deps| {
+            deps.store = tc_app::StoreChoice::Given(store);
+        })
+        .await;
+    let app = &t.app;
+    let project = folder("sample_burrito");
+    let me = tc_journal::DeviceId::local(MEMORY_DEVICE);
+    let fold = backend.fold(&project).unwrap();
+    let mut changes = backend
+        .teammates_edit_verse(
+            &project,
+            &tit(1, 1),
+            &["Pablo, uno.", "Pablo, dos.", "Pablo, tres."],
+        )
+        .unwrap();
+    let mut mine = fold.projected(&tit(1, 1)).unwrap();
+    let tc_journal::Record::Verse {
+        value: VerseValue::Text { words, .. },
+        ..
+    } = &mut mine
+    else {
+        panic!("{mine:?}")
+    };
+    *words = "Pablo, en esta computadora.".to_owned();
+    changes.push(change_of(me, 20, mine, fold.heads(&tit(1, 1))));
+    changes.extend([
+        signed_in(me, 21, "ana"),
+        signed_in(teammates::device(1), 2, "ana"),
+        signed_in(teammates::device(2), 2, "equipo"),
+        signed_in(teammates::device(3), 2, "equipo"),
+    ]);
+    backend.teammate_edits(&project, changes).unwrap();
+    assert_eq!(
+        backend.fold(&project).unwrap().anomalies().count(),
+        0,
+        "no notice beside the conflict"
+    );
+
+    let at = super::understand::opened(app).await.session.at;
+    let ReviewEntries::Conflicts(entries) = tab(app, &at, ReviewTab::Text).await.entries else {
+        panic!()
+    };
+    let [entry] = entries.as_slice() else {
+        panic!("{entries:?}")
+    };
+    let label = |who: Who, computer: Computer| PersonLabel {
+        who,
+        computer: Some(computer),
+    };
+    let ana = || Who::Username("ana".into());
+    let equipo = || Who::Username("equipo".into());
+    let expected = vec![
+        (
+            label(Who::Mine, Computer::This),
+            "Pablo, en esta computadora.",
+        ),
+        (label(equipo(), Computer::Other(2)), "Pablo, tres."),
+        (label(equipo(), Computer::Other(1)), "Pablo, dos."),
+        (label(ana(), Computer::Other(1)), "Pablo, uno."),
+    ];
+    let listed: Vec<(PersonLabel, &str)> = entry
+        .versions
+        .iter()
+        .map(|v| {
+            let (MadeBy::Person(by), VersionValue::Text(text)) = (&v.by, &v.value) else {
+                panic!("{v:?}")
+            };
+            (by.clone(), text.as_str())
+        })
+        .collect();
+    assert_eq!(listed, expected);
+
+    let history = history(app, &at, &entry.record).await;
+    let newest: Vec<(MadeBy, VersionValue)> = history
+        .iter()
+        .take(4)
+        .map(|v| (v.version.by.clone(), v.version.value.clone()))
+        .collect();
+    assert_eq!(
+        newest,
+        expected
+            .into_iter()
+            .map(|(by, text)| (MadeBy::Person(by), VersionValue::Text(text.to_owned())))
+            .collect::<Vec<_>>()
+    );
+}

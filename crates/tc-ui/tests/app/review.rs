@@ -11,7 +11,7 @@ use tc_api::conflicts::{
 };
 use tc_api::ids::{ChangeRef, ConflictRef, ProjectRef, RecordRef, RequestId, WallMs};
 use tc_api::jobs::SyncResultView;
-use tc_api::shown::{PersonLabel, Who};
+use tc_api::shown::{Computer, PersonLabel, Who};
 use tc_core::BookId;
 use tc_ui::app::review::{
     BackTo, Owner, ReviewState, back_label, consequence, group_others, kept_name, made_by,
@@ -129,6 +129,31 @@ fn colours_follow_the_owner_not_the_position() {
         }
     }
     assert_eq!(Owner::of(&MadeBy::Door43), Owner::Teammate);
+}
+
+/// STORAGE §8.5: when versions from two computers carry one person's label, each names its
+/// computer, and only this computer's is drawn and named as Mine: one person's other
+/// computer comes under its username, a team account's computers by their numbers.
+#[test]
+fn versions_from_two_computers_name_their_computer() {
+    let by = |who: Who, computer: Computer| {
+        MadeBy::Person(PersonLabel {
+            who,
+            computer: Some(computer),
+        })
+    };
+    let here = by(Who::Mine, Computer::This);
+    let there = by(Who::Username("ana".into()), Computer::Other(1));
+    let team = by(Who::Username("equipo".into()), Computer::Other(2));
+    assert_eq!(made_by(&here), "Mine · this computer");
+    assert_eq!(made_by(&there), "ana · computer 1");
+    assert_eq!(made_by(&team), "equipo · computer 2");
+    assert_eq!(
+        [&here, &there, &team].map(Owner::of),
+        [Owner::Mine, Owner::Teammate, Owner::Teammate]
+    );
+    assert_eq!(kept_name(&version('a', here)), "Your version");
+    assert!(kept_name(&version('b', there)).contains("ana · computer 1"));
 }
 
 /// tC4 "navigation n of m": the review shows the conflict asked for, else the first; Previous

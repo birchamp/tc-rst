@@ -99,7 +99,7 @@ use tc_api::session::{
 use tc_api::settings::{
     CurrentGateway, GatewayCard, Save, SettingsView, ShownValues, ViewFromHome,
 };
-use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
+use tc_api::shown::{Computer, ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::story;
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
@@ -3382,8 +3382,8 @@ fn session_events() -> Vec<SessionEvent> {
                 records: vec![RecordChange {
                     record: verse,
                     by: Some(PersonLabel {
-                        who: Who::Teammate(2),
-                        computer: Some("LAPTOP-7".into()),
+                        who: Who::Username("equipo".into()),
+                        computer: Some(Computer::Other(2)),
                     }),
                 }],
                 aspects: vec![Aspect::Conflicts],

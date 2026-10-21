@@ -66,6 +66,8 @@
   "review.cause.restored": "Restored",
   "review.cause.startedOver": "Started over",
   "review.clockAhead": "Dated after today: the clock of the computer it was made on may be wrong.",
+  "review.computer.other": "{person} · computer {n}",
+  "review.computer.this": "{person} · this computer",
   "review.detached.about": "These were made for a place that is no longer in the project. They are kept.",
   "review.detached.alignment": "An alignment whose verse is no longer in the book",
   "review.detached.comment": "A comment whose place is no longer in the project",

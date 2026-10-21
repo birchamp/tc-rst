@@ -112,6 +112,7 @@ fn every_shared_type_round_trips() {
             ConflictMarker,
             PersonLabel,
             Who,
+            Computer,
             Known<u32>,
             Direction,
             tc_api::editor::DraftField,
