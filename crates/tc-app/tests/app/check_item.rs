@@ -8,9 +8,9 @@ use std::sync::Arc;
 
 use proptest::prelude::*;
 use tc_api::check::{
-    CheckArticleRead, CheckItemView, CheckListRef, CheckSessionView, CheckUnit, Decide, DecideEdit,
-    DecisionStatus, GatewayText, GatewayView, Item, Open, OriginalView, RailRow, RailRows,
-    RailSince, Rows, RowsView, Testament, Tool,
+    CheckArticleRead, CheckItemView, CheckListRef, CheckSessionView, CheckSources, CheckUnit,
+    Decide, DecideEdit, DecisionStatus, GatewayText, GatewayView, Item, Open, OriginalView,
+    RailRow, RailRows, RailSince, Rows, RowsView, Testament, Tool,
 };
 use tc_api::editor::{Draft, DraftField, SaveVerse};
 use tc_api::helps::ArticleView;
@@ -94,7 +94,10 @@ async fn a_note_shows_its_panes_its_article_and_the_draft_words() {
     let note: String = view.note.iter().map(|b| b.text()).collect();
     assert!(note.contains("abstract nouns"), "{note}");
     assert_eq!(view.article.title.as_deref(), Some("Abstract Nouns"));
-    match &view.original {
+    let CheckSources::Verse { original, gateway } = &view.sources else {
+        panic!("{:?}", view.sources);
+    };
+    match original {
         OriginalView::Ready {
             testament: Testament::Nt,
             verse: Some(verse),
@@ -104,9 +107,9 @@ async fn a_note_shows_its_panes_its_article_and_the_draft_words() {
     let GatewayView::Pane {
         pane,
         text: GatewayText::Verse { tokens, lit },
-    } = &view.gateway
+    } = gateway
     else {
-        panic!("{:?}", view.gateway);
+        panic!("{gateway:?}");
     };
     assert_eq!(pane, "ult");
     let lit_words: String = lit.iter().map(|&i| tokens[i as usize].as_str()).collect();

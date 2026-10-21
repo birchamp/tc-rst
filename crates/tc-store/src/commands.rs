@@ -767,6 +767,33 @@ fn target_text(check: &CheckKey, verse: &RecordKey, value: Option<&Record>) -> O
     (inside && tc_usfm::codec::is_drafted(marker.term(), &content)).then_some(content)
 }
 
+/// The text a story's decision is judged against: the frame the detail showed. A frame no
+/// record holds shows the story's template text of it, as the fold reads a frame; a frame
+/// record written since was not what the person judged, so the mark is looked at again.
+fn frame_text(
+    ctx: &Ctx<'_>,
+    check: &CheckKey,
+    shown: &ShownToken,
+    value: Option<&Record>,
+) -> R<Option<String>> {
+    let CheckTarget::Frame { story, frame } = &check.target else {
+        return Ok(None);
+    };
+    if *shown.key() != RecordKey::Frame(*story, *frame) {
+        return Ok(None);
+    }
+    match value {
+        Some(Record::Frame { value, .. }) => Ok(Some(value.clone())),
+        Some(_) => Ok(None),
+        None if ctx.fold.key_state(shown.key()).is_some() => Err(CommandError::LookAgain),
+        None => Ok(ctx
+            .fold
+            .check_texts(tc_journal::pins::Collection::Stories)
+            .text(&check.target)
+            .map(|text| text.content().to_owned())),
+    }
+}
+
 fn save_decision(
     ctx: &Ctx<'_>,
     shown: &ShownToken,
@@ -791,7 +818,10 @@ fn save_decision(
         None => None,
     };
     let verse_value = ctx.displayed(&verse_shown)?;
-    let text = target_text(&check, verse_shown.key(), verse_value.as_ref());
+    let text = match &check.target {
+        CheckTarget::Verse { .. } => target_text(&check, verse_shown.key(), verse_value.as_ref()),
+        CheckTarget::Frame { .. } => frame_text(ctx, &check, &verse_shown, verse_value.as_ref())?,
+    };
     let next = edit
         .apply(displayed.as_ref(), text.as_deref())
         .map_err(|e| refused(Refusal::Text(e.to_string())))?;

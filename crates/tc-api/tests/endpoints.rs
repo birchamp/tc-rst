@@ -72,7 +72,6 @@ const PHASE_0: &[&str] = &[
     "story/open",
     "helps/story",
     "helps/storyArticle",
-    "check/storyItem",
     "resources/fixState",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",

@@ -812,7 +812,8 @@ pub mod teammates {
 
         /// One change per text, each by its own teammate (Teammate 1, 2, … in that order),
         /// all with the record's current heads in `fold` as parents: what "two teammates
-        /// change Titus 1:1 from the same version" writes. Each is a batch of one whose id is
+        /// change Titus 1:1 from the same version" writes. A story frame's record takes the
+        /// text as a verse's words do. Each is a batch of one whose id is
         /// derived from its device and number, and each continues its teammate's sequence.
         /// Nothing is counted when an edit cannot be made.
         pub fn edit_verse(
@@ -822,7 +823,16 @@ pub mod teammates {
             texts: &[&str],
         ) -> Result<Vec<Change>, MemoryError> {
             let not_text = || MemoryError::NotATextVerse(format!("{key:?}"));
-            let record = fold.projected(key).ok_or_else(not_text)?;
+            // A frame the story's template still holds has no record yet: the edit makes one.
+            let record = match (fold.projected(key), key) {
+                (Some(record), _) => record,
+                (None, RecordKey::Frame(story, frame)) => Record::Frame {
+                    story: *story,
+                    frame: *frame,
+                    value: String::new(),
+                },
+                (None, _) => return Err(not_text()),
+            };
             let parents = fold.heads(key);
             let mut last = self.last.clone();
             let changes = texts
@@ -830,14 +840,14 @@ pub mod teammates {
                 .zip(1u8..)
                 .map(|(text, n)| {
                     let mut record = record.clone();
-                    let Record::Verse {
-                        value: VerseValue::Text { words, .. },
-                        ..
-                    } = &mut record
-                    else {
-                        return Err(not_text());
-                    };
-                    *words = (*text).to_owned();
+                    match &mut record {
+                        Record::Verse {
+                            value: VerseValue::Text { words, .. },
+                            ..
+                        } => *words = (*text).to_owned(),
+                        Record::Frame { value, .. } => *value = (*text).to_owned(),
+                        _ => return Err(not_text()),
+                    }
                     let seq = last.get(&n).map_or(1, |seq| seq + 1);
                     last.insert(n, seq);
                     let device = device(n);

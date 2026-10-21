@@ -23,6 +23,7 @@ mod app {
     mod app_start;
     mod check;
     mod check_item;
+    mod check_story;
     pub mod common;
     mod create;
     mod dispatch;

@@ -162,7 +162,6 @@ macro_rules! endpoint_table {
             command "align/suggest": $crate::align::Suggest => $crate::align::AlignerView;
             command "align/flush": $crate::align::Flush => $crate::align::AlignSave;
             command "align/close": $crate::align::Close => $crate::align::AlignSave;
-            query "check/storyItem": $crate::check::StoryItem => $crate::check::StoryItemView;
 
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;

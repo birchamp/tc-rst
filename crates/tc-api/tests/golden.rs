@@ -34,11 +34,11 @@ use tc_api::buffer::{
 use tc_api::check::{
     AlignProgress, CardCount, Category, CheckArticle, CheckArticleRead, CheckCollection,
     CheckEmpty, CheckItemView, CheckListRef, CheckNotice, CheckPlace, CheckProgress,
-    CheckSessionView, CheckUnit, Decide, DecideEdit, DecisionStatus, DecisionView, Dot,
-    DroppedNote, GatewayText, GatewayView, Item, NextCheck, NoteCategory, Open as CheckOpen,
+    CheckSessionView, CheckSources, CheckUnit, Decide, DecideEdit, DecisionStatus, DecisionView,
+    Dot, DroppedNote, GatewayText, GatewayView, Item, NextCheck, NoteCategory, Open as CheckOpen,
     OriginalView, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows,
-    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, StoryItem, StoryItemView,
-    StoryPane, TargetWords, Testament as CheckTestament, Tool, ToolCard, ToolState,
+    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, TargetWords,
+    Testament as CheckTestament, Tool, ToolCard, ToolState,
 };
 use tc_api::create::{
     AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
@@ -2389,46 +2389,6 @@ impl Example for story::StoryView {
     }
 }
 
-impl Example for StoryItem {
-    fn example() -> Self {
-        StoryItem {
-            at: scope(),
-            list: CheckListRef {
-                tool: Tool::TranslationNotes,
-                unit: CheckUnit::Story(StoryNo::new(1).unwrap()),
-            },
-            index: 0,
-        }
-    }
-}
-
-impl Example for StoryItemView {
-    fn example() -> Self {
-        StoryItemView {
-            index: 0,
-            place: frame_place(1, 0),
-            title: "The Creation".into(),
-            note: vec![ArticleBlock::new(
-                BlockKind::P,
-                0,
-                spans(
-                    " can also be translated as: “About how God made the world”.",
-                    "This title",
-                ),
-            )],
-            note_dir: Some(Direction::Ltr),
-            article: Some(ArticleLink::Academy {
-                slug: "translate-titles".into(),
-            }),
-            gateway: StoryPane::Text {
-                tokens: vec!["The".into(), " ".into(), "Creation".into()],
-                lit: vec![0, 2],
-            },
-            target: "La Creación".into(),
-        }
-    }
-}
-
 impl Example for CheckOpen {
     fn example() -> Self {
         CheckOpen {
@@ -2535,15 +2495,17 @@ impl Example for CheckItemView {
                 title: Some("Abstract Nouns".into()),
                 category: Category::Note(NoteCategory::Grammar),
             },
-            original: OriginalView::Ready {
-                testament: CheckTestament::Nt,
-                verse: Some("Παῦλος, δοῦλος Θεοῦ".into()),
-            },
-            gateway: GatewayView::Pane {
-                pane: "ult".into(),
-                text: GatewayText::Verse {
-                    tokens: vec!["Paul".into(), ", ".into(), "a".into()],
-                    lit: vec![0],
+            sources: CheckSources::Verse {
+                original: OriginalView::Ready {
+                    testament: CheckTestament::Nt,
+                    verse: Some("Παῦλος, δοῦλος Θεοῦ".into()),
+                },
+                gateway: GatewayView::Pane {
+                    pane: "ult".into(),
+                    text: GatewayText::Verse {
+                        tokens: vec!["Paul".into(), ", ".into(), "a".into()],
+                        lit: vec![0],
+                    },
                 },
             },
             target: TargetWords {

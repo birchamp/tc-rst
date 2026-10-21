@@ -1,9 +1,10 @@
 //! The detail column of a tool's session (tC4 `CheckDetail`, `CompareCard`, `OrigPane`,
-//! `UltPane`, `TargetWords`, `CheckMarks`, `CheckSessionNotices`, `AcademyDrawer`; unit B5b): the
-//! check's place and counter, its quote, "What to check", the Academy link, the compare card
-//! (tC4 9ad4d5c's, #762: the source texts as cards in a wrapping row and "Your translation" a
-//! card of its own), the marking row with Previous and Next (#726), the bookmark and the check
-//! comment.
+//! `UltPane`, `StoryPane`, `TargetWords`, `CheckMarks`, `CheckSessionNotices`, `AcademyDrawer`;
+//! units B5b and C4): the check's place and counter, its quote, "What to check", the Academy
+//! link, the compare card, the marking row with Previous and Next (#726), the bookmark and the
+//! check comment. A book's compare card is tC4 9ad4d5c's (#762: the source texts as cards in a
+//! wrapping row and "Your translation" a card of its own); a story's is the stacked card of the
+//! gateway frame and the person's own text, in tC4's 760 px column, as B7 drew it.
 //!
 //! The detail is built once for a check and then follows its reads in place, so the focus on a
 //! word, a button or the comment box survives the read that a mark makes. The words are the one
@@ -13,12 +14,11 @@
 use leptos::html;
 use leptos::prelude::*;
 use tc_api::check::{
-    CheckNotice, DecideEdit, DecisionStatus, GatewayText, GatewayView, OriginalView, Testament,
-    Tool,
+    CheckNotice, CheckSources, CheckUnit, DecideEdit, DecisionStatus, GatewayText, GatewayView,
+    OriginalView, Testament, Tool,
 };
 use tc_api::helps::ArticleView;
 use tc_api::shown::Direction as TextDir;
-use tc_core::BookId;
 use wasm_bindgen::JsCast;
 
 use super::rail::category_name;
@@ -58,7 +58,7 @@ enum Shown {
 }
 
 /// The detail column of the open tool.
-pub fn check_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> AnyView {
+pub fn check_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> AnyView {
     let detail = s.c.detail.clone();
     let shown = Memo::new(move |_| {
         detail.with(|d| match d {
@@ -79,7 +79,7 @@ pub fn check_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -
             };
             view! { <p data-testid="check-error" style=p.to_style()>{error}</p> }.into_any()
         }
-        Shown::Check(_) => item_detail(&s, &actions, book, tool),
+        Shown::Check(_) => item_detail(&s, &actions, unit, tool),
     })
     .into_any()
 }
@@ -519,7 +519,7 @@ fn target_words(s: &AppState, words: Vec<String>, direction: TextDir) -> AnyView
 }
 
 /// The check's detail, once a check is shown.
-fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> AnyView {
+fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> AnyView {
     let c = s.c.clone();
     let detail = c.detail.clone();
     let session = c.session.clone();
@@ -557,7 +557,11 @@ fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> Any
         }
     });
     let (chapter, verse) = place_parts(&view.place);
-    let unit = book.english_name().to_owned();
+    let story = matches!(unit, CheckUnit::Story(_));
+    let unit = match unit {
+        CheckUnit::Book(book) => book.english_name().to_owned(),
+        CheckUnit::Story(story) => crate::app::story::story_label(story),
+    };
     let helps_dir = view.helps_dir;
     let direction = s
         .project
@@ -605,24 +609,37 @@ fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> Any
         view! { <h1 data-testid="check-quote" style=style.to_style()>"“"{view.title.clone()}"”"</h1> }
     };
     let note = (!view.note.is_empty()).then(|| {
-        let boxed = crate::css! {
-            "font-size": "var(--fs-title-sm)",
-            "max-width": "calc(80ch + 36px)",
-            "margin-bottom": 8,
-            "border-radius": "var(--radius-lg)",
-            "padding": "16px 18px",
-            "background": "var(--surface-warm)",
-            "border": "var(--stroke) solid var(--tc-warn-border)",
+        let boxed = if story {
+            crate::css! {
+                "max-width": "62ch",
+                "margin-bottom": 8,
+                "border-radius": "var(--radius-lg)",
+                "padding": "16px 18px",
+                "background": "var(--surface-warm)",
+                "border": "var(--stroke) solid var(--tc-warn-border)",
+            }
+        } else {
+            crate::css! {
+                "font-size": "var(--fs-title-sm)",
+                "max-width": "calc(80ch + 36px)",
+                "margin-bottom": 8,
+                "border-radius": "var(--radius-lg)",
+                "padding": "16px 18px",
+                "background": "var(--surface-warm)",
+                "border": "var(--stroke) solid var(--tc-warn-border)",
+            }
         };
-        let text = crate::css! {
+        let mut text = crate::css! {
             "font-size": "var(--fs-title-sm)",
             "letter-spacing": "var(--track-16)",
             "line-height": "var(--lh-body)",
             "font-weight": "var(--fw-medium)",
             "color": "var(--uw-ink)",
             "margin": "7px 0 0",
-            "max-width": "80ch",
         };
+        if !story {
+            text.set("max-width", "80ch");
+        }
         let overline = crate::css! { "color": "var(--tc-warn-text-2)" };
         view! {
             <div data-testid="check-note" style=boxed.to_style()>
@@ -709,13 +726,14 @@ fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> Any
         let detail = detail.clone();
         move || {
             detail.with(|d| match d {
-                Some(Detail::Ready(view)) => Some(
-                    view! {
-                        {original_pane(&view.original)}
-                        {gateway_pane(&view.gateway)}
+                Some(Detail::Ready(view)) => Some(match &view.sources {
+                    CheckSources::Verse { original, gateway } => view! {
+                        {original_pane(original)}
+                        {gateway_pane(gateway)}
                     }
                     .into_any(),
-                ),
+                    CheckSources::Story { pane } => super::story::story_pane(pane),
+                }),
                 _ => None,
             })
         }
@@ -741,9 +759,14 @@ fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> Any
                     "margin": "8px 0 0",
                     "max-width": "80ch",
                 };
+                let line = if story {
+                    keys::check::NOT_DRAFTED_FRAME
+                } else {
+                    keys::check::NOT_DRAFTED
+                };
                 return view! {
                     <p data-testid="check-target" data-drafted="0" style=style.to_style()>
-                        {t(keys::check::NOT_DRAFTED, &[])}
+                        {t(line, &[])}
                     </p>
                 }
                 .into_any();
@@ -761,7 +784,26 @@ fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> Any
             .into_any()
         }
     };
-    let compare = {
+    let compare = if story {
+        let card = crate::css! {
+            "background": "var(--surface-card)",
+            "border": "var(--stroke) solid var(--border)",
+            "border-radius": "var(--radius-xl)",
+            "overflow": "hidden",
+            "box-shadow": "var(--shadow-card)",
+        };
+        let yours = crate::css! { "padding": "16px 20px" };
+        view! {
+            <div style=card.to_style()>
+                {sources}
+                <div style=yours.to_style()>
+                    <Overline tone=OverlineTone::Accent>{t(keys::check::YOUR_TRANSLATION, &[])}</Overline>
+                    {translation}
+                </div>
+            </div>
+        }
+        .into_any()
+    } else {
         let column = crate::css! { "display": "flex", "flex-direction": "column", "gap": 24 };
         let row = crate::css! {
             "display": "flex",
@@ -787,6 +829,7 @@ fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> Any
                 </div>
             </div>
         }
+        .into_any()
     };
 
     // ---- the marking row (#726)
@@ -848,7 +891,11 @@ fn item_detail(s: &AppState, actions: &Actions, book: BookId, tool: Tool) -> Any
     // ---- the bookmark and the comment
     let marks = check_marks(s, actions, tool);
 
-    let page = crate::css! { "padding": "28px 32px 60px" };
+    let page = if story {
+        crate::css! { "max-width": 760, "margin": "0 auto", "padding": "28px 32px 60px" }
+    } else {
+        crate::css! { "padding": "28px 32px 60px" }
+    };
     view! {
         <div style=page.to_style()>
             {header}

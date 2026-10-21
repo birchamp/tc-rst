@@ -38,8 +38,7 @@ use tc_api::check::{
     AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
     CheckSessionView, CheckUnit, Dot, DroppedNote, NextCheck, NoteCategory, Open, Picker,
     PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows, RailSince,
-    ResourceCitation, RowFlags, Rows, RowsView, Rung, StoryItem, StoryItemView, StoryPane, Tool,
-    ToolCard, ToolState, WordCategory,
+    ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard, ToolState, WordCategory,
 };
 use tc_api::ids::{CheckSessionId, StoryNo, ViewSeq};
 use tc_check::derive::{
@@ -1230,17 +1229,6 @@ fn session_view(
     }
 }
 
-/// Bible detail endpoints serve book lists; B7's story card uses `check/storyItem`.
-fn book_of(list: &CheckListRef) -> Result<BookId, ApiError> {
-    match list.unit {
-        CheckUnit::Book(book) => Ok(book),
-        CheckUnit::Story(_) => Err(ApiError::BadRequest {
-            field: "list".to_owned(),
-            reason: "a story's detail is read through check/storyItem".to_owned(),
-        }),
-    }
-}
-
 // ---------------------------------------------------------------------------------------
 // check/picker
 // ---------------------------------------------------------------------------------------
@@ -1359,119 +1347,5 @@ impl Handle<Rows> for App {
             .await?;
         // A tool that stopped being ready is opened again, which shows why.
         Ok(answer.unwrap_or(RowsView::Reopen))
-    }
-}
-
-// ---------------------------------------------------------------------------------------
-// check/storyItem
-// ---------------------------------------------------------------------------------------
-
-/// The article a story check links to: a note's Translation Academy article, a word link's
-/// Translation Words article.
-fn story_article(item: &CheckItem) -> Option<tc_api::helps::ArticleLink> {
-    if item.group_id.is_empty() {
-        return None;
-    }
-    Some(match item.category {
-        tc_check::Category::Note(_) => tc_api::helps::ArticleLink::Academy {
-            slug: item.group_id.clone(),
-        },
-        tc_check::Category::Word(word) => tc_api::helps::ArticleLink::Words {
-            category: Some(word.folder().to_owned()),
-            slug: item.group_id.clone(),
-        },
-    })
-}
-
-impl Handle<StoryItem> for App {
-    async fn handle(&self, req: StoryItem) -> Result<StoryItemView, ApiError> {
-        let CheckUnit::Story(story) = req.list.unit else {
-            return Err(ApiError::BadRequest {
-                field: "list".to_owned(),
-                reason: "a story's check is of a story".to_owned(),
-            });
-        };
-        let session = self.read(&req.at)?;
-        let installed = installed(self)?;
-        let index = usize::try_from(req.index).unwrap_or(usize::MAX);
-        let (item, title, place, set) = self
-            .with_list(
-                &session,
-                req.list.tool,
-                req.list.unit,
-                &installed,
-                |entry, _| {
-                    Some((
-                        entry.derived.items.get(index)?.clone(),
-                        entry.derived.titles.get(index)?.clone(),
-                        entry.derived.places.get(index)?.clone(),
-                        entry.derived.citation.rung,
-                    ))
-                },
-            )
-            .await?
-            .map_err(|_| ApiError::ToolNotReady)?
-            .ok_or_else(|| ApiError::BadRequest {
-                field: "index".to_owned(),
-                reason: format!("the list has no check {}", req.index),
-            })?;
-        let CheckPlace::Frame { frame, .. } = &place else {
-            return Err(ApiError::BadRequest {
-                field: "list".to_owned(),
-                reason: "a story's check is on a frame".to_owned(),
-            });
-        };
-        let frame = usize::from(*frame);
-        let loaded = self.loaded_obs(&session).await?;
-        let gateway = loaded
-            .resources
-            .stories
-            .iter()
-            .find(|g| g.number == story.get())
-            .and_then(|g| match frame {
-                0 => Some(g.title.as_str()),
-                n => g.frames.get(n - 1).map(|f| f.text.as_str()),
-            })
-            .map(tc_helps::highlight::tokenize_plain)
-            .filter(|tokens| !tokens.is_empty());
-        let gateway = match gateway {
-            Some(tokens) => {
-                let lit = tc_helps::highlight::highlight_plain(&tokens, &item.quote)
-                    .into_iter()
-                    .map(count)
-                    .collect();
-                StoryPane::Text {
-                    tokens: tokens.into_iter().map(|t| t.text).collect(),
-                    lit,
-                }
-            }
-            None => StoryPane::Missing,
-        };
-        let read = session.read();
-        let target = read
-            .check_texts(Collection::Stories)
-            .text(&item.key.target)
-            .map(|text| text.content().to_owned())
-            .unwrap_or_default();
-        Ok(StoryItemView {
-            index: req.index,
-            place,
-            title,
-            note: item
-                .note
-                .as_deref()
-                .map(|note| crate::understand::blocks(&note.replace("\\n", "\n")))
-                .unwrap_or_default(),
-            note_dir: crate::understand::rung_dir(
-                loaded.pins.as_ref(),
-                Some(match set {
-                    Rung::Primary => tc_resources::Rung::Primary,
-                    Rung::Fallback => tc_resources::Rung::Fallback,
-                }),
-            ),
-            article: story_article(&item),
-            gateway,
-            target,
-        })
     }
 }

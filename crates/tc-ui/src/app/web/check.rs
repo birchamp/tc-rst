@@ -615,9 +615,7 @@ impl Actions {
         let CheckView::Tool(tool) = self.s().c.view.get_untracked() else {
             return None;
         };
-        let (at, list) = self.check_list(tool)?;
-        // Story detail has its own read and no Bible marking row until C4.
-        matches!(list.unit, CheckUnit::Book(_)).then_some((at, list))
+        self.check_list(tool)
     }
 
     /// The detail and everything that belongs to it goes: another tool, the picker, or no
