@@ -14,6 +14,7 @@ use tc_api::home::Card;
 use tc_api::ids::{ChangeRef, Scope};
 use tc_api::session::Close;
 use tc_api::shown::{Known, PersonLabel, Who};
+use tc_api::test::{ScriptedSync, TeammatesEdit};
 use tc_api::write::Stored;
 use tc_app::App;
 use tc_app::events::Next;
@@ -31,12 +32,17 @@ const TWO: &str = "Pablo, versión del compañero 2.";
 /// The shared project after two teammates changed Titus 1:1 from one version, open at Titus,
 /// with this computer's clock at the store's.
 async fn two_versions() -> (super::sync::World, Scope) {
+    synced_with(TWO_TEAMMATES()).await
+}
+
+/// The shared project after a sync that `outcome` scripts, open at Titus.
+async fn synced_with(outcome: ScriptedSync) -> (super::sync::World, Scope) {
     let w = shared().await;
     w.t.clock.set(START_MS);
     let app = &w.t.app;
     internet_on(app).await;
     sign_in(app).await;
-    script(app, 1, TWO_TEAMMATES()).await;
+    script(app, 1, outcome).await;
     let synced = synced(app, 2).await;
     assert_eq!(synced.from, vec![teammate(1), teammate(2)]);
     let at = opened(app).await.session.at;
@@ -401,4 +407,45 @@ async fn a_verse_saved_here_before_the_sync_is_a_version_of_its_own() {
         .collect();
     assert_eq!(versions.len(), 3, "{versions:?}");
     assert_eq!(mine, vec![MINE]);
+}
+
+/// Two teammates' versions of Titus 1:1 that differ only in a footnote look different in the
+/// review and in History, each with its whole content as Translate's editor holds it, as
+/// tC4's review shows `version.text.trim()`: otherwise Keep replaces the other footnote unseen.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn versions_that_differ_only_in_a_footnote_look_different() {
+    const FIRST: &str = "Pablo, siervo. \\f + \\ft nota del compañero\\f*";
+    const SECOND: &str = "Pablo, siervo. \\f + \\ft otra nota\\f*";
+    let (w, at) = synced_with(ScriptedSync::Synced {
+        teammates: Some(TeammatesEdit {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 1,
+            texts: vec![FIRST.into(), SECOND.into()],
+        }),
+        restored: 0,
+    })
+    .await;
+    let app = &w.t.app;
+    let ReviewEntries::Conflicts(entries) = tab(app, &at, ReviewTab::Text).await.entries else {
+        panic!()
+    };
+    let shown: Vec<String> = texts(&entries[0].versions)
+        .into_iter()
+        .map(|(_, text, _)| text)
+        .collect();
+    assert_eq!(shown, vec![SECOND.to_owned(), FIRST.to_owned()]);
+    let history: Vec<VersionValue> = history(app, &at, &entries[0].record)
+        .await
+        .into_iter()
+        .take(2)
+        .map(|v| v.version.value)
+        .collect();
+    assert_eq!(
+        history,
+        vec![
+            VersionValue::Text(SECOND.to_owned()),
+            VersionValue::Text(FIRST.to_owned())
+        ]
+    );
 }

@@ -163,11 +163,15 @@ fn place_of(key: &RecordKey) -> ReviewPlace {
     }
 }
 
-/// What the review shows of a value: text where the screens show text.
+/// What the review shows of a value: text where the screens show text. A verse shows all
+/// its content, as tC4's review shows `version.text.trim()`: versions that differ only in a
+/// footnote, a heading or a poetry line must look different before one replaces the other.
 fn value_of(record: &Record) -> VersionValue {
     match record {
         Record::Verse { value, .. } => match value {
-            VerseValue::Text { words, .. } => VersionValue::Text(tc_usfm::display_text(words)),
+            VerseValue::Text { words, layout, .. } => {
+                VersionValue::Text(format!("{words}{layout}").trim().to_owned())
+            }
             VerseValue::Covered { by } => VersionValue::Joined { by: by.get() },
             VerseValue::Absent { .. } => VersionValue::Absent,
         },
