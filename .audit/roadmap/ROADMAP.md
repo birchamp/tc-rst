@@ -66,8 +66,8 @@ finished unit took 2.8 h, `ASSESSMENT.md`).
 | INT-1 | Back up the unpushed branches off this PC | integration | owner H1 | under 1 h |
 | INT-2 | Make CI green and trustworthy | checks | | 0.5 d |
 | INT-3 | One gate list for CI and every local runner; merge only with a passing gate | checks | INT-2 | 0.5-1 d |
-| INT-4 | Land `resume-build-lane` on main | integration | INT-2, INT-3, the resume lane at a stage boundary; its step 4 asks the owner before the push (`rulings/<date>-int-4-main.md`) | 0.5 d plus gate time |
-| S2 | Finish S2 and merge it | storage | INT-4 | 1-2 d |
+| INT-4 | Land `resume-build-lane` on main | integration | INT-2, INT-3; its step 4 asks the owner before the push (`rulings/<date>-int-4-main.md`) | 0.5 d plus gate time |
+| S2 | Finish S2 and merge it. Steps 1-4 run on 3b075d7 now; the merge (step 5 on) waits for the resume lane to land | none | 1-2 d |
 | INT-5 | Converge the trackers onto this roadmap | integration | INT-4 | 0.5 d |
 | INT-6 | Rescue stray work and free the disk | integration | INT-4, owner OK for deletions | 0.5 d |
 | INT-7 | Prepare the Track B hand-off: freeze the shell contract | integration | INT-4 | 1 d |
@@ -170,24 +170,23 @@ to it. Moving I's core to its own owner, or to Track B′ (`TRACK-B.md` §8), ta
 The app lane is as long (M3's heading): the five to seven weeks hold only with a second app-lane
 owner, or with I on Track B′ and the storage owner free for X and V.
 
-## The two sessions running today
+## The two sessions that were running on 2026-10-21
 
-Two sessions were working when this plan was written. Nobody else touches their worktrees. The
-board's "Worktrees in use" block is the current list; this table is the 2026-10-21 picture. Last
-sign of life: `resume-build-lane` f9067bc 2026-10-21 12:16, `s2-proof-executor` 3b075d7
-2026-10-21 12:24. Whether a session is gone is decided by the rule in `TRACKING.md` ("pick up
-an item someone else started").
+Two sessions were working when this plan was written. On 2026-10-22 12:53 the owner confirmed
+both have ended. Their branches stand at `resume-build-lane` 43496296 (f9067bc plus a WIP
+commit of B11's two loose minors rows, made at takeover) and `s2-proof-executor` 3b075d7 (clean).
+C7a and S2 are released to `todo`; INT-4 step 1 takes over `resume-build-lane`, and S2 step 0
+takes over `s2-proof-executor` on a `track-S2` worktree. The original worktrees stay untouched
+as evidence until INT-6 removes them. The table below is the 2026-10-21 picture.
 
 | Session | Branch and worktree | Doing | Its next boundary |
 |---|---|---|---|
 | "tC4 Rebuild" (Enjoy, `d8a954f9…`) | `resume-build-lane`, `.worktrees/resume-build-lane` | B11's records, then C7a, then C7b | after B11's records and one full gate |
 | S2 owner (Enjoy, `19f61dcb…`) | `s2-proof-executor`, `.worktrees/s2-proof-executor` | S2's full validation at 3b075d7 | after validation and re-review |
 
-At its next boundary each session: commits its loose state; reads this folder; claims its cards
-(C7a for the first, S2 for the second) on its own branch; and continues by the card. INT-4 and
-S2's merge step say how their work reaches main.
+INT-4 and S2's merge step say how their work reaches main.
 
-## The push rule until the owner answers H1
+## The push rule
 
 The rule is written once, in `README.md` "Rules that never bend". In short: main may be pushed
 after its full gates pass (INT-4 asks the owner first); every other branch on the owner's PC
@@ -219,8 +218,8 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 
 | ID | Question | Recommendation | Needed by (a card, or one step of it) |
 |---|---|---|---|
-| H1 | May unpushed branches go to the private GitHub repository (as a backup, and so CI runs on them)? | Yes: push each integration branch under its own name; main only after gates | INT-1, INT-4 |
-| H2 | Who is the second developer, and do they work in JavaScript or in Rust? Track B (shell and release) is built and tested on GitHub's Windows and macOS runners; a Mac helps only for G4 step 1 and debugging | JavaScript: Track B. Rust: Track B′ (import core). Nobody by the end of M1: the app lane takes G1, G3 and G4 (M4) | Track B start |
+| H1 | May unpushed branches go to the private GitHub repository (as a backup, and so CI runs on them)? | Answered yes: `rulings/2026-10-22-H1.md` | INT-1, INT-4 |
+| H2 | Who is the second developer, and do they work in JavaScript or in Rust? Track B (shell and release) is built and tested on GitHub's Windows and macOS runners; a Mac helps only for G4 step 1 and debugging | Answered: Elias, working through agents, in either language; he takes Track B (Package B): `rulings/2026-10-22-H2.md` | Track B start |
 | H3 | Which platforms ship? tC4 4.0 ships Windows, macOS (Apple silicon) and Linux | The same three as tC4 | G3 |
 | H4 | Signing: use unfoldingWord's Windows signing (as tC4 does), and leave macOS unsigned for now as tC4 rc.2 does? The Azure signing credential is bound to tC4's repository; someone with access must add one for this repository | Yes to both; the owner names who adds the credential | G3 |
 | H5 | Sign off the conflict-choice screens (Q-9), sent as one packet | Approve the packet C7b step 2 sends | C7b |
@@ -228,13 +227,13 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 | H7 | Move the look-and-behaviour reference to tC4 `v4.0.0-rc.2` now, or wait for `v4.0.0`? It brings poem lines shown as tabs (#810) | Move to rc.2 now, keep showing markers for poem lines, and move again at v4.0.0. If wait: REF1 is parked, REF1 leaves G2's depends, G2 captures against the d310bf3 baseline, and DONE step 5 opens the move card when v4.0.0 exists; if it still does not at DONE, the release names d310bf3 as its reference | REF1 |
 | H8 | ~~Storage scope cuts~~ | Answered: `rulings/2026-10-21-outside-edits.md` and `rulings/2026-10-21-carried-files.md` (applied through `docs/STORAGE-DELTA-2026-10-21.md`) | S2, S3, X, I, F1, D1, C7b, E2, V |
 | H9 | Freeze project format 1.0 | Freeze when T, X and I have landed and V's sample projects pass. If not frozen: no public release. A build may go to named testers only, with "preview" in About and the capsule set named 1.0-draft; a preview project is kept readable by 1.0 through V's older-reader job, or the tester is told it will be imported. DONE waits | V (step 8) |
-| H10 | Who translates the 155 interface strings the rebuild added, in nine languages? | Name a translator or service; until then the release build refuses untranslated strings. If nobody is named by the time G2 starts: the owner may accept English for the 155 rebuild keys as a declared difference; the refusals test then reads an allowlist `crates/tc-ui/assets/i18n-rebuild/ACCEPTED-ENGLISH.json` that names the ruling file and date, so the release can ship, and the allowlist is emptied when translations land | G2 (step 4, before the Arabic captures), G3 (the `publish` job and its "Receive the translations" step), DONE |
+| H10 | Who translates the 155 interface strings the rebuild added, in nine languages? | Answered: the owner arranges the translations; the release workflow builds no tagged installer while a rebuild key is untranslated; no English allowlist: `rulings/2026-10-22-H10.md` | G2 (step 4, before the Arabic captures), G3 (the `publish` job and its "Receive the translations" step), DONE |
 | H11 | Fetch the `keyring` crate for "Stay signed in", or let the shell keep the token? | Fetch `keyring` | E1a |
 | H12 | In Check, does a Psalm verse whose words sit on poetry lines count as drafted? Home already says yes; Check says no | Yes, everywhere | FIX-R |
 | H13 | A project imported with no versification file: guess the scheme from its contents and say so, or use English as tC4 does? | Guess, and say which scheme was chosen | I |
 | H14 | Opening a Door43 project under a new name: change only the card, or the project's own name too (#837)? | Only the card, as tC4 does today | E1b |
 | H15 | The help-desk key for "Report a problem" (tC4 sends it through SendGrid) | Use the same service; the owner provides the key to the release pipeline | G1 |
-| H16 | The app's identity, which a translator sees and the tC4 team needs (`docs/TC4-REQUEST-MOVED-NOTICE.md`): its name, version number and version scheme, download page and application id; and where projects live. The help pages the rebuild ships say projects are in `~/pankosmia/tc4-projects`, while the rebuild keeps them in `~/translationCore4/projects`; and should the first launch offer to bring in tC4 4.0 projects it finds in the old folder? | Decide the name and page with the tC4 team; semver with 5.0.0 as the first release; correct the help pages to the real folder; at first launch, list tC4 4.0 projects found in the old folder and offer Import for each (the tC4 folder is never written). If the tC4 team has not shipped the moved notice by F1's merge, stragglers keep seeing `sync.verify-failed`; F1's "Move the team" screen then tells the person to tell teammates by hand, and `docs/RELEASE.md` says so | F1 (its first-launch step), REF1 (its help-pages step), G3 |
+| H16 | The app's identity, which a translator sees and the tC4 team needs (`docs/TC4-REQUEST-MOVED-NOTICE.md`): its name, version number and version scheme, download page and application id; and where projects live. Facts from the owner (2026-10-22): tC4 went out as a soft beta, translationCore 4.0.0-rc2, build 2418892; the Rust build will be the first public release; the owner is weighing 4.1 against 5.0.0. The help pages the rebuild ships say projects are in `~/pankosmia/tc4-projects`, while the rebuild keeps them in `~/translationCore4/projects`; and should the first launch offer to bring in tC4 4.0 projects it finds in the old folder? | Decide the name and page with the tC4 team; semver with 5.0.0 as the first release; correct the help pages to the real folder; at first launch, list tC4 4.0 projects found in the old folder and offer Import for each (the tC4 folder is never written). If the tC4 team has not shipped the moved notice by F1's merge, stragglers keep seeing `sync.verify-failed`; F1's "Move the team" screen then tells the person to tell teammates by hand, and `docs/RELEASE.md` says so | F1 (its first-launch step), REF1 (its help-pages step), G3 |
 | H17 | Are the speed budgets part of done? Six budget rows already miss on the fast build machine, and none is measured on the reference laptop yet | Yes: every row measured on the reference laptop in a release build, met or with a remedy the owner chose. If no: the rows are still measured and recorded in `docs/evidence/`, DONE does not wait for them, and the budget sentence in AGENTS.md is changed in the ruling's commit | P, G2, DONE |
 | H18 | Edits made with Door43's own tools (gatewayEdit, tcCreate, the web editor) on a team's project repository: merged into the project (today's design, STORAGE §11.2), or unsupported like a folder push from another tool (kept in Door43's history, a notice, not merged)? | Answered: `rulings/2026-10-22-H18.md` | X, I, S2, V |
 | H19 | Carried files before translationCore uses them (delta Q3): keep S2's working code now, without its git backups, so OBS front matter and other extra files travel and conflict visibly; or park it until the feature is built | Answered: `rulings/2026-10-22-H19.md` | S2, S3, C7b, E2, X, V |

@@ -15,7 +15,7 @@ no_loss: false
 size: under 1 h (basis: three git push commands and a check)
 merged: none
 updated: 2026-10-22
-next: Wait for the owner's answer to H1, then do step 1.
+next: H1 is answered yes (`rulings/2026-10-22-H1.md`): do step 1, then 2, 3, 4, 6.
 blocked_by: none
 ---
 
@@ -240,3 +240,4 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
+- 2026-10-22 | roadmap session (Cursor) | ruling | none | H1 answered yes; the two sessions holding resume-build-lane and s2-proof-executor have ended, so nothing writes to those branches during the push | .audit/roadmap/rulings/2026-10-22-H1.md

@@ -69,8 +69,9 @@ These come from `AGENTS.md` and the owner's rulings. A card never overrides them
   the root drive or under /tmp (the root drive filled on 2026-10-21; `/tmp` has a quota).
 - The push rule, in one place. Main (`claude/focused-ride-5uzj7p`, `GLOSSARY.md`) may be pushed
   after its full gates pass: the standing authorization of 2026-10-18. INT-4 asks the owner first
-  because the resume lane's own instruction says so. Every other branch on the owner's PC stays
-  there until H1 is answered. Track B's `ext/*` branches live in the developer's clone and are
+  because the resume lane's own instruction says so. Every other branch on the owner's PC may
+  be pushed under its own name (H1, answered yes on 2026-10-22; INT-1 does the first pushes).
+  Track B's `ext/*` branches live in the developer's clone and are
   pushed whenever they commit. Never push a branch that holds a token, a password or a
   machine-local path to a secret; never record one anywhere. `ROADMAP.md`, `.audit/HANDOFF.md`
   and INT-4 point here.

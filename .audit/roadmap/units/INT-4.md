@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d plus about 1.5 h of gates (basis: the full test run took about 899 s of binaries plus builds)
 merged: none
 updated: 2026-10-22
-next: Wait for the resume lane session to reach its stage boundary, then do step 1.
+next: The resume lane session has ended (owner, 2026-10-22); step 1's takeover path: BOUNDARY is 43496296 plus the B5b rows.
 blocked_by: none
 ---
 
@@ -107,10 +107,13 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
     git show "$BOUNDARY:.audit/minors.tsv" | grep -qxF -- "$row" || echo "MISSING: ${row:0:80}"
   done
   ```
-- If `resume-build-lane` gets no commit for 24 hours and has no `Claim C7a`, ask the owner in
-  one sentence whether the "tC4 Rebuild" session still runs. Only if it has ended: take over
-  (`TRACKING.md` "pick up", log line `takeover` naming `d8a954f9`), commit the B11 and B5b rows
-  in `.worktrees/resume-build-lane`, and use that commit as BOUNDARY.
+- The session has ended: the owner confirmed it on 2026-10-22 12:53, and the roadmap session
+  committed the two B11 rows as WIP (`43496296` on `resume-build-lane`). So take the takeover
+  path without asking: log `takeover` naming `d8a954f9`; in `.worktrees/resume-build-lane`
+  append the five rows of `.audit/b5b-minors-pending.tsv` to `.audit/minors.tsv`, delete the
+  pending file, commit with the subject `Claim C7a boundary: fold B5b minors` (no C7a claim is
+  made: C7a is released to todo and starts from main after this card), and use that commit as
+  BOUNDARY. The grep for ` Claim C7a` then finds it.
 - Files: `.audit/roadmap/units/INT-4.md`.
 - Done when: BOUNDARY is a sha; "pending file still there" is not printed; the `^B11` count is
   at least 2 (0 at f9067bc); no `MISSING:` line. Set `BOUNDARY=<sha>` again in every new shell.
@@ -257,3 +260,4 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
+- 2026-10-22 | roadmap session (Cursor) | note | 43496296 | the owner confirmed the resume lane session has ended; B11's loose rows are WIP 43496296; step 1 takes the takeover path | .audit/roadmap/units/C7a.md

@@ -210,7 +210,7 @@ A translator never sees CI. It protects them: since 2026-10-19 main's CI has not
 
 ### Step 6: Merge into main and see CI green
 
-- Do: the branch stays on this PC (push rule: only main, until H1).
+- Do: the branch may be pushed under its own name (H1 answered yes, `rulings/2026-10-22-H1.md`); main moves only through INT-4.
   1. `git -C /home/bot/tc-rst worktree add --detach /home/bot/tc-rst/.worktrees/int-2-merge claude/focused-ride-5uzj7p`.
   2. There: `git merge --no-ff --no-commit track-INT-2`; in the card set `state: done`,
      `merged: <git rev-parse --short track-INT-2>`, `updated`, `next: none`, a log line
