@@ -524,6 +524,12 @@ impl Run {
                     .app_versions
                     .get(rel)
                     .is_some_and(|seen| seen.contains(bytes))
+                // Bytes another program put there and the app has not looked at are that
+                // program's, whatever the app once wrote.
+                && !self
+                    .puts
+                    .iter()
+                    .any(|p| p.rel == rel && !p.retired && p.bytes == *bytes)
             {
                 self.app_wrote.insert(rel, bytes.clone());
                 self.last_seen.insert(rel, now);
@@ -3079,6 +3085,10 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             "the_apps_placed_bytes_put_back_over_an_unread_older_version",
             the_apps_placed_bytes_put_back_over_an_unread_older_version(),
         ),
+        (
+            "a_put_of_an_earlier_write_before_a_power_cut",
+            a_put_of_an_earlier_write_before_a_power_cut(),
+        ),
     ]
 }
 
@@ -4106,4 +4116,87 @@ fn the_apps_placed_bytes_put_back_over_an_unread_older_version() -> Vec<Step> {
 #[test]
 fn the_apps_placed_bytes_put_back_over_an_unread_older_version_are_no_loss() {
     assert_kept(&the_apps_placed_bytes_put_back_over_an_unread_older_version());
+}
+
+/// Found by the long model on 2026-10-22 (seed 20261021004, after the fix above), an oracle
+/// bug: another program puts back an earlier write of the app, a power cut follows, and the
+/// oracle took those bytes for the power cut's rollback of the app's own write.
+fn a_put_of_an_earlier_write_before_a_power_cut() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Usfm), false),
+        act(Act::Save(1)),
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        kill_with(Act::Checkpoint, 0, true, false),
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 1,
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::Touch { file: File::Usfm },
+    ]
+}
+
+#[test]
+fn a_put_of_an_earlier_write_before_a_power_cut_is_no_loss() {
+    assert_kept(&a_put_of_an_earlier_write_before_a_power_cut());
+}
+
+fn kill_with(act: Act, at: u16, power_cut: bool, torn: bool) -> Step {
+    Step::Act {
+        act,
+        kill: Some(Kill {
+            at,
+            power_cut,
+            torn,
+        }),
+    }
+}
+
+/// Found by the long model on 2026-10-22 (seed 20261021001; shortened): another program
+/// changes a byte of a pack, a checkpoint commits that damaged pack (no good blob exists),
+/// and then cuts the pack in the folder. The verified lines of every copy are salvaged into
+/// a pending batch (§4.4 "All copies damaged"), so a save only HEAD's damaged copy still
+/// holds stays in History.
+fn a_save_only_a_damaged_committed_pack_holds() -> Vec<Step> {
+    vec![
+        killed(Act::Name, 17),
+        act(Act::Save(1)),
+        act(Act::Checkpoint),
+        act(Act::Save(3)),
+        Step::Flip {
+            journal: Journal::Pack,
+            which: 103,
+            at: 6578,
+        },
+        act(Act::Checkpoint),
+        act(Act::Save(1)),
+        act(Act::Checkpoint),
+        Step::Cut {
+            journal: Journal::Pack,
+            which: 105,
+            keep: 0,
+            at_line: false,
+        },
+    ]
+}
+
+#[test]
+fn a_save_only_a_damaged_committed_pack_holds_is_salvaged() {
+    assert_kept(&a_save_only_a_damaged_committed_pack_holds());
 }

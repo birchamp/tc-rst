@@ -12,14 +12,15 @@
 use crate::atomic::{SyncDir, atomic_create_dirs, atomic_write};
 use crate::error::StoreError;
 use crate::git::Git;
-use crate::layout::QUARANTINE;
-use crate::project::{PackInfo, Project};
+use crate::layout::{PENDING, QUARANTINE};
+use crate::project::{PackInfo, PendingInfo, Project};
 use crate::vfs::is_not_found;
 use std::collections::{BTreeMap, BTreeSet};
 use tc_journal::fold::{Notice, PackLoss};
-use tc_journal::index::{Facts, fingerprint, load_pack};
+use tc_journal::index::{Facts, fingerprint, load_pack, load_pending};
 use tc_journal::pack::{PackPath, PackStatus, read_pack};
-use tc_journal::{GitOid, PackName, RepoPath};
+use tc_journal::pending::{PendingHeader, PendingStatus, Purpose, encode_pending};
+use tc_journal::{ChangeId, GitOid, PackId, PackName, RepoPath, Verified};
 
 /// The folder packs live in, in HEAD's tree.
 const PACKS_PREFIX: &str = "ingredients/tc/changes";
@@ -143,12 +144,16 @@ impl Project {
                     head_packs.as_ref().and_then(|p| p.get(&rel)).copied()
                 }
             };
-            let restored = match blob {
-                Some(blob) => git.read_blob(blob)?.filter(|bytes| {
-                    PackPath::parse(&rel).is_some() && read_pack(&rel, bytes, self.id).is_valid()
-                }),
+            let found = match blob {
+                Some(blob) => git.read_blob(blob)?,
                 None => None,
             };
+            let restored = found.clone().filter(|bytes| {
+                PackPath::parse(&rel).is_some() && read_pack(&rel, bytes, self.id).is_valid()
+            });
+            if restored.is_none() {
+                self.salvage_all_copies(&rel, found.as_deref())?;
+            }
             match restored {
                 Some(bytes) => {
                     self.write_back(&rel, &bytes, was)?;
@@ -169,6 +174,79 @@ impl Project {
                 None => {}
             }
         }
+        Ok(())
+    }
+
+    /// No valid blob holds `rel` (§4.4 "All copies damaged"): the verified lines of every
+    /// copy that no valid pack or pending file holds yet go into a `salvage` pending batch,
+    /// which the next seal packs. Salvage at each open alone keeps a line only while the
+    /// copy holding it lasts, and a later cut of that copy would take it.
+    fn salvage_all_copies(&mut self, rel: &str, blob: Option<&[u8]>) -> Result<(), StoreError> {
+        let working = self.vfs.read(&self.folder.path(rel)).ok();
+        let valid: BTreeSet<PackId> = self
+            .journal
+            .packs
+            .values()
+            .filter(|p| p.valid)
+            .map(|p| p.id)
+            .collect();
+        let mut held: BTreeSet<ChangeId> = self
+            .journal
+            .pending
+            .values()
+            .filter(|p| p.status == PendingStatus::Valid)
+            .flat_map(|p| p.ids.iter().copied())
+            .collect();
+        let mut lines: Vec<Verified> = Vec::new();
+        for bytes in [working.as_deref(), blob].into_iter().flatten() {
+            for line in read_pack(rel, bytes, self.id).entries {
+                let id = line.id();
+                let packed = self
+                    .fold
+                    .change(&id)
+                    .is_some_and(|view| view.packs.iter().any(|p| valid.contains(p)));
+                if !packed && held.insert(id) {
+                    lines.push(line);
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Ok(());
+        }
+        let header = PendingHeader {
+            device: self.device,
+            project: self.id,
+            purpose: Purpose::Salvage,
+            reconciles: None,
+        };
+        let encoded =
+            encode_pending(&header, &lines).map_err(|e| StoreError::Other(e.to_string()))?;
+        let dir = self.folder.path(PENDING);
+        let name =
+            crate::recovery::preserve_bytes(&*self.vfs, &dir, &encoded.name, &encoded.bytes, None)?;
+        let new_rel = format!("{PENDING}/{name}");
+        let new_abs = self.folder.path(&new_rel);
+        let number = self.source.add(&new_abs);
+        let loaded = load_pending(&new_rel, &encoded.bytes, self.id, number);
+        self.journal.pending.insert(
+            new_rel,
+            PendingInfo {
+                ids: lines.iter().map(Verified::id).collect(),
+                reconciles: None,
+                number: Some(number),
+                status: PendingStatus::Valid,
+            },
+        );
+        let delta = self.fold.add(loaded.inputs);
+        let conflicted = crate::project::conflicts_touched(&self.fold, &delta);
+        self.dirty.mark(self.kind, &delta, conflicted);
+        self.dirty.metadata = true;
+        let seq = self.publish();
+        self.shared.emit(crate::handle::StoreEvent::Committed {
+            seq,
+            delta,
+            changes: Vec::new(),
+        });
         Ok(())
     }
 
