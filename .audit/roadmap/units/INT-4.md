@@ -261,3 +261,4 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
 - 2026-10-22 | roadmap session (Cursor) | note | 43496296 | the owner confirmed the resume lane session has ended; B11's loose rows are WIP 43496296; step 1 takes the takeover path | .audit/roadmap/units/C7a.md
+- 2026-10-22 | roadmap session (Cursor) | note | ff648f95 | INT-1 ran its yes path (three branches pushed; log on branch track-INT-1, pushed too); step 2's merge takes track-INT-1 along (its only change is its own card: set INT-1 state done, merged ff648f95, log line merge) | .audit/roadmap/units/INT-1.md
