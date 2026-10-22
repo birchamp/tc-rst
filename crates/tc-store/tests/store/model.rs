@@ -1813,18 +1813,16 @@ impl Run {
                         || self.shown_by_the_project(put))
             })
             .collect();
-        let mut accepted = Vec::new();
         for (put, credited) in self.puts.iter_mut().zip(credited) {
             if put.retired {
                 continue;
             }
             if credited {
+                // The put's values are in the project. Whether the app now counts its bytes as
+                // its own placement is the app's read to make, not this check's: the run's
+                // own copy of what the app wrote (`app_wrote`) changes only when the app is
+                // seen to write, or the folder to show the projection.
                 put.retired = true;
-                // Taken in where they lie, the bytes are what the app placed there now (§11.1
-                // D7): found again, they are its own.
-                if fs.peek(&self.folder.join(put.rel)).as_deref() == Some(put.bytes.as_slice()) {
-                    accepted.push((put.rel, put.bytes.clone()));
-                }
                 continue;
             }
             let on_disk =
@@ -1840,9 +1838,6 @@ impl Run {
                 "the {}: not in the folder or complete projection, no notified full copy in .tc/external",
                 put.what
             ));
-        }
-        for (rel, bytes) in accepted {
-            self.app_wrote.insert(rel, bytes);
         }
         if lost.is_empty() {
             return Ok(());
@@ -3076,6 +3071,14 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             "reverts_of_both_files_around_a_cut_and_kills",
             reverts_of_both_files_around_a_cut_and_kills(),
         ),
+        (
+            "a_book_revert_after_a_kill_past_its_rename_and_a_lost_pending_file",
+            a_book_revert_after_a_kill_past_its_rename_and_a_lost_pending_file(),
+        ),
+        (
+            "the_apps_placed_bytes_put_back_over_an_unread_older_version",
+            the_apps_placed_bytes_put_back_over_an_unread_older_version(),
+        ),
     ]
 }
 
@@ -4018,4 +4021,89 @@ fn reverts_of_both_files_around_a_cut_and_kills() -> Vec<Step> {
 #[test]
 fn reverts_of_both_files_around_a_cut_and_kills_are_kept() {
     assert_kept(&reverts_of_both_files_around_a_cut_and_kills());
+}
+
+/// Found by the bounded model on 2026-10-22 (S2 step 1, on a clean tree): the open adopts a
+/// book file equal to the projection that the ledger last named otherwise, and
+/// `metadata.json` must list it as it is (I7).
+fn a_book_revert_after_a_kill_past_its_rename_and_a_lost_pending_file() -> Vec<Step> {
+    vec![
+        Step::Open,
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        crash(),
+        Step::Open,
+        act(Act::Name),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Usfm,
+            on: false,
+        },
+        killed(Act::Leave, 5),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 7,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn a_book_revert_after_a_kill_past_its_rename_and_a_lost_pending_file_leaves_a_valid_burrito() {
+    assert_kept(&a_book_revert_after_a_kill_past_its_rename_and_a_lost_pending_file());
+}
+
+/// Found by the long model on 2026-10-22 (seed 20261021004), an oracle bug: another program
+/// puts back an older version of the book file the project already shows, and then the
+/// app's own placed bytes over it before the app reads either. The app's own bytes are what
+/// it last placed, not bytes the project merely shows.
+fn the_apps_placed_bytes_put_back_over_an_unread_older_version() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Usfm), false),
+        killed(Act::Name, 0),
+        Step::RevertKeepTime {
+            file: File::Usfm,
+            back: 2,
+        },
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Name),
+        lock(Holdable::File(File::Usfm), false),
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Checkpoint),
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+        killed(Act::Section(1), 5),
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn the_apps_placed_bytes_put_back_over_an_unread_older_version_are_no_loss() {
+    assert_kept(&the_apps_placed_bytes_put_back_over_an_unread_older_version());
 }

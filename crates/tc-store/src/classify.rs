@@ -531,6 +531,10 @@ impl Writer {
                     entry.scope = Some(scope);
                     self.manifest_changed = true;
                 }
+                if had.as_ref().and_then(Entry::md5) != Some(md5.as_str()) {
+                    // `metadata.json` lists each ingredient's checksum (I7).
+                    self.dirty.metadata = true;
+                }
                 if !named {
                     // Bytes the ledger did not name with these heads (another program wrote
                     // the projection, a write stopped after its rename, the heads moved with
