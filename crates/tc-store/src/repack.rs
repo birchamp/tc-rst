@@ -602,6 +602,10 @@ fn remove_loose(path: &Path) -> bool {
 
 /// libgit2 writes loose objects read-only, which Windows refuses to remove.
 #[cfg(windows)]
+#[expect(
+    clippy::permissions_set_readonly_false,
+    reason = "Windows only: clears the read-only attribute; no Unix mode bits are involved"
+)]
 fn retry_writable(path: &Path) -> bool {
     let Ok(meta) = std::fs::metadata(path) else {
         return false;
