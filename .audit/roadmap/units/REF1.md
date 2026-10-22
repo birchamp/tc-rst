@@ -134,7 +134,8 @@ pages, and the newest interface words in all ten languages.
      (:129-131) names `~/pankosmia/tc4-projects` and this app keeps projects in
      `~/translationCore4/projects` (`crates/tc-app/src/config.rs:17-19`); `gs-install.html`
      (:129) points at translationCore4's releases and `start-tc4.sh`. Replace the folder table
-     and the install paragraph with this app's (the download page from the H16 ruling, or a
+     and the install paragraph with this app's (the download page from `rulings/2026-10-22-H16.md`
+     part 3 once it is answered, or a
      placeholder the ruling fills in later), as an overlay the vendor script re-applies so the
      pinned vendored copies stay byte for byte. Write `help_pages_name_the_real_projects_folder`
      in `crates/tc-ui/tests/help_pages.rs`: the served pages hold `translationCore4/projects`
