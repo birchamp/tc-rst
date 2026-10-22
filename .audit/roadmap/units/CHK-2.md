@@ -14,7 +14,7 @@ proves: [P5]
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after S2 merges, then do step 1.
 blocked_by: none
 ---
@@ -218,6 +218,8 @@ Run `scripts/gates.sh` (INT-3 made it; S2 waits for INT-4, which needs INT-3) on
 
 Plus: every browser journey once locally with the four variables set (G5 step 1's commands), and
 G5's `app-e2e` job green if G5 has merged.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

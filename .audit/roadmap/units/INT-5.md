@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -242,6 +242,8 @@ could build it a second time, or skip a step that keeps text safe.
 `scripts/gates.sh` (INT-3), which from step 5 on includes the `board` step, and
 `scripts/gates.sh --check-receipt` on the exact commit main moves to.
 
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
+
 ## Stop and ask when
 
 - A history file is still being updated by a running session after step 2 (its new commits
@@ -260,3 +262,4 @@ could build it a second time, or skip a step that keeps text safe.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
+- 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | note | none | Done early, on main, so a new session finds the roadmap (review T1, T7): step 2 for `.audit/STATUS.md` and `.audit/PROGRESS.md` (the three `.audit/plans/*` files are on `resume-build-lane` only; mark them when INT-4 lands them); step 3 items 1, 4, 5 and 6 and the worktree rows of HANDOFF.md (item 2 stays); step 4; the `board.py` and `board_test.py` rows of `.audit/tools/README.md` (step 6's row change). Steps 1, 5, 6's watcher work and 7 stay | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md

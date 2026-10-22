@@ -14,9 +14,10 @@ proves: [P2, P3, P7]
 no_loss: true
 size: 4.5-6.5 sessions plus the owner's wait (basis: B11 and C8; carried choices shrink to two, about -0.5 session, docs/STORAGE-DELTA-2026-10-21.md §6)
 merged: none
-updated: 2026-10-21
-next: Claim this card after C7a and S2 merge; steps 1-2 need no ruling; step 3 waits for H5; step 6's carried files also wait for H19 and H22.
+updated: 2026-10-22
+next: Claim this card after C7a and S2 merge; steps 1-2 need no ruling; step 3 waits for H5. H19 and H22 are ruled (rulings/2026-10-22-H19.md, -H22.md).
 blocked_by: none
+later: ["H5 from step 3"]
 ---
 
 # C7b: Conflict choices: every other kind
@@ -32,8 +33,8 @@ match what was signed off.
 
 A carried file conflict has two choices only, by the owner's ruling of 2026-10-21 (CF 3): *Keep
 this one*, on each version, and *Keep both*, which saves the second version under its own free
-name. *Keep the other* is gone. Carried files and path cases wait for H19 (keep S2's carried code
-now, or park it); the second file's name waits for H22 (delta Q4).
+name. *Keep the other* is gone. Carried files stay (`rulings/2026-10-22-H19.md`, option A) and the
+second file's name is `jon_01-Juan.wav` (`rulings/2026-10-22-H22.md` part 2).
 
 Not here: the grouped row of one import reuses `OutsideEditLarge`'s three choices on the Text tab
 (C7a). The notices of kept copies of outside-edited files, with *Import*, *Dismiss* and *Bring it
@@ -56,8 +57,8 @@ pin without showing what it changes, and no rename loses a file.
   `Command::ResolvePins` and `Choice::KeepBothCarried` exist only on the S2 branch today.
   `git grep -n 'ResolvePins {\|KeepBothCarried' HEAD -- crates/tc-journal/src/command.rs` prints
   both.
-- For step 6's carried files and path cases: `ls .audit/roadmap/rulings/*-H19.md` prints one file.
-  For *Keep both*'s file name: `ls .audit/roadmap/rulings/*-H22.md` prints one file.
+- `ls .audit/roadmap/rulings/2026-10-22-H19.md .audit/roadmap/rulings/2026-10-22-H22.md` prints
+  both: carried files stay and *Keep both* is named `jon_01-Juan.wav`.
 - For steps 3 to 8: `ls .audit/roadmap/rulings/*-H5.md` prints one file.
 
 ## Funnel card
@@ -65,8 +66,7 @@ pin without showing what it changes, and no rename loses a file.
 - **Invariants**:
   - INV-EVERY-KIND-HAS-A-CHOICE: `choices(kind)` (C7a, `crates/tc-ui/src/app/review.rs`) and
     `choose` (C7a, `crates/tc-app/src/conflicts.rs`) match every `ConflictKind` and every
-    `KeepChoice` with no wildcard; after this card only `Unknown` answers `Later`. If H19 parks
-    carried files, `CarriedFile` and `PathCase` keep `Later` too, and the log says so.
+    `KeepChoice` with no wildcard; after this card only `Unknown` answers `Later`.
   - INV-NO-SILENT-PIN-MOVE: a pins choice moves a pin only through a plan the person saw, with its
     counts ("With v92: 1,204 checks valid, 37 to check again", STORAGE §8.3); a plan that changed
     since is refused, and nothing moves.
@@ -84,8 +84,8 @@ pin without showing what it changes, and no rename loses a file.
     path; `rename_carried` does not.)
   - A *Keep both* name with a space, such as the ruling's example `jon_01 (Juan).wav`: the path
     grammar forbids it (S2:1024). The name is `<stem>-<person>.<ext>` (`jon_01-Juan.wav`), the
-    person part cleaned as an export file name is, with `-2`, `-3` when taken (delta §2.7), unless
-    H22 rules otherwise.
+    person part cleaned as an export file name is, with `-2`, `-3` when taken (delta §2.7;
+    `rulings/2026-10-22-H22.md` part 2).
   - A *Keep the other* button, or a third carried choice: CF 3 gives two.
   - A Detached entry or a notice with no token or id, so Dismiss cannot name what it dismisses
     (`DetachedEntry` and `NoticeEntry` in `crates/tc-api/src/conflicts.rs` carry none today).
@@ -96,7 +96,8 @@ pin without showing what it changes, and no rename loses a file.
     `ApplyToMovedCheck`, `PerUnit { .. }`, `KeepBothComments`, `Pins { plan }`,
     `RestoreBook { mode }`, `Rename { file, to: FreePath }`, `KeepBothFiles { other, to: FreePath }`. `FreePath` (to create) is a path only
     `free_path(snapshot, wanted)` makes, and it never names a path the project holds. For *Keep
-    both*, `wanted` is `<stem>-<person>.<ext>` (delta §2.7; H22 may change it).
+    both*, `wanted` is `<stem>-<Door43 user>.<ext>`, for example `jon_01-Juan.wav` (delta §2.7;
+    `rulings/2026-10-22-H22.md` part 2: no spaces in project paths).
     `DetachedEntry.shown: ShownToken` and `NoticeEntry.id` (to create).
   - One entry point: C7a's `choose` gains one arm per variant, mapping to
     `tc_journal::command::Choice` (`Candidate`, `Values`, `ApplyToMovedCheck`, `RenameCarried`,
@@ -129,23 +130,26 @@ pin without showing what it changes, and no rename loses a file.
     unchanged; the property must fail.
   - `keep_this_one_removes_only_the_other_version` and
     `keep_both_saves_the_second_version_under_a_free_name` (to create), same file; kind: unit.
-    Proof: drop the `-<person>` part from `wanted`; the second test must fail. These wait for H19.
+    Proof: drop the `-<person>` part from `wanted`; the second test must fail. Carried files
+    stay (`rulings/2026-10-22-H19.md`, option A), so these tests are built here.
   - `dismiss_needs_the_shown_token` (to create), same file; kind: unit.
   - `one_resolution_per_kind_through_the_ui` (to create) in
     `parity/app/journeys/conflict-kinds.test.mjs` (to create), one `browserTest` per group (a) to
     (d); kind: journey; runs in: G5's job once G5 lands (they skip in CI until then).
   - `rebuild_only_screens_equal_their_signed_off_capture` (to create) in
     `crates/tc-ui/tests/screen_record.rs`; kind: parity gate; runs in: CI `rust` job.
+  - J26's check-decision step (to create) in `parity/app/journeys/team-sync.test.mjs`: A resolves
+    the conflict between two check decisions, B and C sync and see the kept decision (PLAN P2
+    J26); kind: journey; runs in: G5's job. Step 7b says which of C7b and E1a writes it.
 - **Prose**: `docs/PLAN.md` declared differences for each new screen; `docs/TC4-ISSUES.md` rows #25
   and #791.
 - **Human**: H5 (ROADMAP.md): sign off the rebuild-only screens as one packet. Options: approve as
   drawn (the choices are wired as shown); ask for changes (the card redraws, then asks again);
   approve some (only those groups are wired). Recommendation: approve the packet. Ruling file:
   `.audit/roadmap/rulings/<date>-H5.md`.
-- **Human, asked in ROADMAP.md, not by this card**: H19 (delta Q3): keep S2's carried code now
-  without its git backups, or park carried files until translationCore uses them; recommendation:
-  keep it now. H22 (delta Q4): the second file's name under *Keep both*; recommendation:
-  `jon_01-Juan.wav`.
+- **Human, ruled 2026-10-22**: H19 (delta Q3): S2's carried code stays, without its git backups
+  (`rulings/2026-10-22-H19.md`, option A). H22 (delta Q4): the second file's name under *Keep
+  both* is `<stem>-<Door43 user>.<ext>`, `jon_01-Juan.wav` (`rulings/2026-10-22-H22.md` part 2).
 
 ## Steps
 
@@ -158,8 +162,7 @@ pin without showing what it changes, and no rename loses a file.
   reachable from `tc_api::test::ScriptedSync::Synced` (to create: a field). These kinds reach a
   translator only by sync or USB; this stands in for X. Write `every_kind_is_listed_on_its_tab` and
   `align_and_check_show_the_two_versions_marker`. A carried file conflict is two versions that
-  replaced the same version (CF 3). If the H19 ruling file does not exist yet, script the carried
-  file and path case anyway (S2's code makes them) and note in the log that they wait for H19.
+  replaced the same version (CF 3); S2's code makes them (`rulings/2026-10-22-H19.md`).
 - Files: as named; `crates/tc-api/src/test.rs`; `crates/tc-api/tests/golden/endpoints/test/*`;
   `crates/tc-app/tests/app/conflicts.rs`.
 - Done when: `cargo test -p tc-app --test app app::conflicts::` passes; each proof mutation of the
@@ -178,8 +181,8 @@ pin without showing what it changes, and no rename loses a file.
   built earlier that have no tC4 design: History and Restore, the bulk keep (C7a), the draft offer,
   the read-only banner, the first-launch failure and the boot error. E2's USB screens do not exist
   yet: list them as "follows E2" in the packet. Draw the carried file card with *Keep this one* on
-  each version and *Keep both* naming `jon_01-Juan.wav`; mark it and the path case card "waits for
-  H19 and H22" in the packet. Draw no *Keep the other*. Write `docs/evidence/q9-<date>.md`: one line per
+  each version and *Keep both* naming `jon_01-Juan.wav` (`rulings/2026-10-22-H19.md` keeps carried
+  files; `rulings/2026-10-22-H22.md` part 2 names the file). Draw no *Keep the other*. Write `docs/evidence/q9-<date>.md`: one line per
   screen, what the translator sees, and what each button does. End that file with a section
   `## Question for the owner`: the H5 question in short plain sentences, with the options and the
   recommendation from the funnel card. Tell the owner the file's path in your session's last message.
@@ -239,21 +242,20 @@ pin without showing what it changes, and no rename loses a file.
   `IncompleteChanges` (`conflicts/releaseBatch`, to create) and dismiss for every notice but a
   kept copy's (D1's) through `session/dismissNotice` (whichever of D1 and C7b lands first creates
   it; the other reuses it). Wire the Received sheet's view for E2.
-- Do, carried files and path cases: STOP until the ruling file exists (H19). If H19 parks carried
-  files, wire nothing here, keep `Later` for `CarriedFile` and `PathCase`, and log it. Otherwise:
-  CarriedFile: *Keep this one* on each version through `Candidate` (the other version's file is
-  removed, and the change names every head); *Keep both* through `KeepChoice::KeepBothFiles` and
-  `Choice::KeepBothCarried { keep, other, to }`, with `to` from `free_path`. PathCase: *Rename*
-  (with `FreePath`) and *Remove*. *Keep both*'s name: STOP until the ruling file exists (H22);
-  until then leave the *Keep both* button out and log it.
+- Do, carried files and path cases (ruled: `rulings/2026-10-22-H19.md` option A keeps S2's
+  carried-file code, so these are wired here): CarriedFile: *Keep this one* on each version
+  through `Candidate` (the other version's file is removed, and the change names every head);
+  *Keep both* through `KeepChoice::KeepBothFiles` and `Choice::KeepBothCarried { keep, other, to }`,
+  with `to` from `free_path`. PathCase: *Rename* (with `FreePath`) and *Remove*. *Keep both*'s
+  name is `<stem>-<Door43 user>.<ext>`, for example `jon_01-Juan.wav` (`rulings/2026-10-22-H22.md`
+  part 2; project paths cannot hold spaces).
 - Files: as step 3; `crates/tc-api/src/lib.rs` and `crates/tc-api/tests/endpoints.rs` (`PHASE_0`)
   for the new rows.
 - Done when: as step 3, plus `dismiss_needs_the_shown_token` passes and
-  `cargo test -p tc-server --test routes` passes. After H19 (and H22 for *Keep both*):
-  `a_rename_keeps_both_files`, `free_path_never_names_a_held_path`,
-  `keep_this_one_removes_only_the_other_version` and
+  `cargo test -p tc-server --test routes` passes; `a_rename_keeps_both_files`,
+  `free_path_never_names_a_held_path`, `keep_this_one_removes_only_the_other_version` and
   `keep_both_saves_the_second_version_under_a_free_name` pass.
-- Record: log line `step 6`, naming any part that waits for H19 or H22; update `next`.
+- Record: log line `step 6`; update `next`.
 
 ### Step 7: Hold the screens to the signed-off packet
 
@@ -265,6 +267,20 @@ pin without showing what it changes, and no rename loses a file.
 - Done when: `cargo test -p tc-ui --test screen_record` passes, and fails when one signed-off DOM
   file is edited by one attribute (temporary edit, reverted).
 - Record: log line `step 7`; update `next`.
+
+### Step 7b: Give J26's check-decision step an owner
+
+- Do: Run `python3 -I .audit/tools/board.py` and read E1a's state. If E1a is `done`: add the
+  check-decision conflict step to `parity/app/journeys/team-sync.test.mjs` (A resolves the
+  conflict between two check decisions, B and C sync and see the kept decision; PLAN P2 J26) and
+  delete the minor E1a step 6 filed for it from `.audit/minors.tsv`'s open list (append a row that
+  says it is closed; the file is append-only). If E1a is not `done`: append a `note` line to
+  E1a's log that C7b has landed and E1a step 6 must include the step, and say so in this card's
+  log. One of the two cards always writes the step.
+- Files: `parity/app/journeys/team-sync.test.mjs`, `.audit/minors.tsv` or `units/E1a.md`.
+- Done when: either `grep -n "check decision" parity/app/journeys/team-sync.test.mjs` prints the
+  new step and the journey passes three runs, or E1a's log holds the `note`.
+- Record: log line `step 7b`.
 
 ### Step 8: Run the journeys and write down the differences
 
@@ -296,20 +312,18 @@ Until INT-3 lands, run every command in AGENTS.md "Tests" plus the Windows step 
 Plus:
 
 - The H5 ruling file exists and every wired screen is in it.
-- The H19 ruling file exists. If it keeps carried files, step 6's carried part is wired with two
-  choices only; *Keep both* is wired only if the H22 ruling file exists. If it parks them, the log
-  says so and `CarriedFile` and `PathCase` answer `Later`.
+- Step 6's carried part is wired with two choices only, *Keep this one* and *Keep both*
+  (`jon_01-Juan.wav`), as `rulings/2026-10-22-H19.md` and `-H22.md` part 2 say.
 - Step 8's journeys green three runs in a row with no skips.
 - `cargo test -p tc-ui --test screen_record` passes.
 - `cargo test -p tc-app --test op_counts op_counts::conflicts::` passes.
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 
 - Step 2 is done: stop until the H5 ruling file exists. Do not wire a screen the owner has not
   signed off.
 - The owner asks for a change to a screen: redraw it, add it to a new packet, and ask again.
-- Step 6 reaches carried files or path cases and `rulings/*-H19.md` does not exist: stop that
-  part. *Keep both* and no `rulings/*-H22.md`: leave the button out. Do the rest of the card.
 - A screen would offer a third carried choice, or *Keep the other*: CF 3 gives two. Stop.
 - A choice would move a pin, remove a file or overwrite a version the screen did not show. That
   breaks a rule; stop and write it in the log.
@@ -324,8 +338,9 @@ Plus:
 - `docs/STORAGE.md` §8.3 and §8.5 on the S2 branch (each kind's choices and words)
 - `docs/STORAGE-DELTA-2026-10-21.md` §2.7 (carried choices and the *Keep both* name), §2.15
   (notices), §6 (C7b row), §7 Q3 and Q4
-- `.audit/roadmap/rulings/2026-10-21-carried-files.md` (CF 3) and
-  `.audit/roadmap/rulings/2026-10-21-outside-edits.md`
+- `.audit/roadmap/rulings/2026-10-21-carried-files.md` (CF 3),
+  `.audit/roadmap/rulings/2026-10-21-outside-edits.md`, `rulings/2026-10-22-H19.md` (carried
+  files stay) and `rulings/2026-10-22-H22.md` part 2 (`jon_01-Juan.wav`)
 - `docs/APP-DESIGN.md:3397` (C7b's row) and the Q-8, Q-9 rows (:3561, :3562)
 - `crates/tc-journal/src/command.rs` (`MoveCheck`, `Restore`, `ReleaseBatch`, `Dismiss`,
   `Choice::RenameCarried`; `ResolvePins` on the S2 branch)
@@ -336,3 +351,5 @@ Plus:
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/app-remaining.md
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
+- 2026-10-22 | roadmap review (completeness review 2026-10-22) | ruling | none | Step 6 and the funnel card follow H19 (carried files stay) and H22 part 2 (*Keep both* is `jon_01-Juan.wav`); the STOP lines are gone | rulings/2026-10-22-H19.md, rulings/2026-10-22-H22.md
+- 2026-10-22 | roadmap review (completeness review 2026-10-22) | note | none | Step 7b gives PLAN P2 J26's check-decision step an owner whichever of C7b and E1a lands last; `later` names H5 from step 3 | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md

@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5 d plus about 1.5 h of gates (basis: the full test run took about 899 s of binaries plus builds)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Wait for the resume lane session to reach its stage boundary, then do step 1.
 blocked_by: none
 ---
@@ -81,7 +81,8 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
     `parity-baseline` job skipped 142 browser tests, which the skip rule fails; `gates.ps1`
     prints a `---- <gate>` block for each failed gate.
 - **Prose**: none.
-- **Human**: the owner says yes before main moves and is pushed (step 4), because the lane's
+- **Human**: the owner says yes before main moves and is pushed (step 4; the push rule is
+  `README.md` "Rules that never bend"), because the lane's
   own instruction says "Do not push without the owner" (`.audit/plans/HANDOFF-resume-lane.md`
   line 7).
 
@@ -123,10 +124,12 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
   git merge --no-edit claude/focused-ride-5uzj7p     # picks up main if it moved since step 1
   git merge-tree --write-tree --name-only HEAD "$BOUNDARY"; echo "exit $?"
   ```
-  `exit 0`: no conflicts. `exit 1` lists the conflicted files. The only one expected is
+  `exit 0`: no conflicts. `exit 1` lists the conflicted files. Expected:
   `.github/workflows/ci.yml` (the lane added 8 lines; INT-2 and INT-3 rewrote the file): keep
   INT-3's `scripts/gates.sh --step` form and every job of both sides, so
-  `node --test .audit/tools/*.test.mjs` (INT-3's drift tests) passes. Then:
+  `node --test .audit/tools/*.test.mjs` (INT-3's drift tests) passes. Also possible:
+  `.audit/roadmap/units/C7a.md` and `S2.md`, if the lane merged main and claimed its card: take
+  the lane's copy of `C7a.md` and main's copy of every other card. Then:
   ```bash
   git merge --no-ff --no-commit "$BOUNDARY"
   git commit -m "Merge resume-build-lane: B4b, B5b, B7, B8, B11, C2, C3, C4, C5" \
@@ -134,7 +137,7 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
     --trailer "Unit: INT-4" --trailer "Unit: B4b" --trailer "Unit: B5b" --trailer "Unit: B7" \
     --trailer "Unit: B8" --trailer "Unit: B11" --trailer "Unit: C2" --trailer "Unit: C3" \
     --trailer "Unit: C4" --trailer "Unit: C5" \
-    --trailer "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+    --trailer "<the attribution line your session was given>"
   git log -1 --format='%(trailers:key=Unit,valueonly)'
   ```
   If you resolved a conflict by hand, run one verification pass over those files
@@ -227,12 +230,17 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
 - the alignment budget and the Windows VM `gates.ps1` (step 3);
 - `scripts/gates.sh --check-receipt` on the exact commit main moves to (step 5);
 - GitHub CI green on main's new tip.
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 
 - The lane shows no boundary for 24 hours and you cannot tell whether its session runs.
-- The merge conflicts in a file other than `.github/workflows/ci.yml`: log `block` with the
-  file list.
+- The merge conflicts in a file other than `.github/workflows/ci.yml`, `C7a.md` or `S2.md`: log
+  `block` with the file list.
+- `~/win11-vm.sh start` fails twice: under H1 (or the standing authorization for main), push the
+  exact sha as a branch and run CHK-5's `nightly-windows` job on it by `workflow_dispatch`
+  (INT-2 step 4 adds the job early for this reason); a green run on that sha counts as the VM
+  gate; log the run id. If the job does not exist yet, log `block` naming it.
 - A gate fails twice in a row and you cannot tell why.
 - A fix would touch files the lane's C7a card has claimed.
 - Before main moves and is pushed (step 4).

@@ -14,7 +14,7 @@ proves: []
 no_loss: true
 size: 1 d (basis: two contract files, two small tests, an APP-DESIGN edit)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -39,7 +39,7 @@ or not at all. The vectors make both sides prove the same rules.
 ## Before you start
 
 - `python3 -I .audit/tools/board.py` shows INT-4 as `done`, and
-  `git -C /home/bot/tc-rst merge-base --is-ancestor f9067bc claude/focused-ride-5uzj7p && echo in`
+  `git -C "$(git rev-parse --show-toplevel)" merge-base --is-ancestor f9067bc claude/focused-ride-5uzj7p && echo in`
   prints `in`.
 - `grep -n 'pub fn current_lines' crates/tc-ui/src/app/buffer.rs` prints
   `pub fn current_lines(lines: &[String]) -> Vec<String> {` (line 396 at f9067bc). The module
@@ -97,7 +97,7 @@ or not at all. The vectors make both sides prove the same rules.
 ### Step 1: Write the buffer vectors and their test
 
 - Do: claim the card (`TRACKING.md`) in a worktree of its own:
-  `git -C /home/bot/tc-rst worktree add -b track-INT-7 .worktrees/track-INT-7 claude/focused-ride-5uzj7p`.
+  `git -C "$(git rev-parse --show-toplevel)" worktree add -b track-INT-7 .worktrees/track-INT-7 claude/focused-ride-5uzj7p`.
   Create `fixtures/shell/buffer-vectors.json` (to create):
   ```json
   {
@@ -279,6 +279,8 @@ or not at all. The vectors make both sides prove the same rules.
 `scripts/gates.sh` (INT-3; it holds the tc-ui wasm clippy steps) and
 `scripts/gates.sh --check-receipt` on the exact commit main moves to, plus: the failures of
 step 1's mutations and step 2's name edits are quoted in the log.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

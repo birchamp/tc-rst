@@ -14,7 +14,7 @@ proves: [P7]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -93,9 +93,10 @@ of flags.
   - Left to checks, and why a type cannot carry it: whether a capture is current is a fact about
     files and git, checked by a test.
 - **Checks**:
-  - Workspace lints `clippy::unreachable`, `clippy::allow_attributes_without_reason`,
-    `clippy::struct_excessive_bools`, `clippy::fn_params_excessive_bools`; kind: lint; runs in:
-    the clippy gate steps.
+  - Workspace lints `clippy::unreachable`, `clippy::allow_attributes_without_reason`
+    (INV-EVERY-ALLOW-HAS-A-REASON), `clippy::struct_excessive_bools`,
+    `clippy::fn_params_excessive_bools` (INV-NO-BAGS-OF-BOOLEANS); kind: lint; runs in:
+    the clippy gate steps. The invariant names sit as comments on the lint lines (step 2).
   - `every_crate_clippy_toml_keeps_the_root_keys` in `crates/tc-arch/tests/clippy_config.rs`
     (to create); kind: architecture; runs in: CI job `test`.
   - `captures_match_the_current_ui_source` in `crates/tc-ui/tests/screen_record.rs` (to create);
@@ -130,7 +131,11 @@ of flags.
 - Do: add to `[workspace.lints.clippy]` `unreachable = "warn"`,
   `allow_attributes_without_reason = "warn"`, `struct_excessive_bools = "warn"`,
   `fn_params_excessive_bools = "warn"`; add `max-struct-bools = 3` and `max-fn-params-bools = 3`
-  to `clippy.toml` and to every `crates/*/clippy.toml`. Run
+  to `clippy.toml` and to every `crates/*/clippy.toml`. Each lint line in `Cargo.toml` and each
+  `max-*-bools` line carries a comment naming the invariant it enforces, so `board.py --invariants`
+  and a reader can find it: `# INV-NO-BAGS-OF-BOOLEANS` above the two `*_excessive_bools` lines
+  and the two `max-*-bools` keys; `# INV-EVERY-ALLOW-HAS-A-REASON` above
+  `allow_attributes_without_reason`. Run
   `cargo clippy --locked --workspace --all-targets -- -D warnings 2>&1 | tee target/chk6-lints.log`.
   In `src`: each site gets `#[expect(<lint>, reason = "<the invariant or why>")]`; an existing
   `#[allow(x)]` becomes `#[expect(x, reason = ...)]`. In tests: the file-level
@@ -236,6 +241,8 @@ Run `scripts/gates.sh` (INT-3 made it; INT-4 needs INT-3) on the exact tree you 
 
 Plus: the gate step `ignored`; the recapture of step 5 on this PC; every journey once locally
 (`units/G5.md` step 1), since step 1 changes what the test build compiles.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

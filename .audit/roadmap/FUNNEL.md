@@ -86,7 +86,7 @@ code, commit it, and keep it current. A reviewer reads it first. Copy this templ
 |---|---|---|
 | Typed state machine (State, Event, pure `next()`, executor, model test) | Logic decides about a translator's work, or a lifecycle has more than two states | `tc-store/src/ledger.rs` (S2 branch); `tc-api/src/model/draft.rs` `next` |
 | Newtype for an identifier | Any id or number with rules (non-zero, a format) | `BookId`, `ActorId`, `OpId`; DOM-2 moves `ChapterNo`, `VerseNo`, `StoryNo`, `FrameNo` into `tc-core` |
-| Enum instead of booleans | Two or more flags that describe one state | AD `FieldSave`; UI-3 turns `busy`/`sent`/`outcome` into one enum |
+| Enum instead of booleans | Two or more flags that describe one state | AD `FieldSave`; UI-3 turns `busy`/`sent`/`outcome` into one enum. C7a's `KeepPhase` (`crates/tc-ui/src/app/review.rs`) is the first instance of a network-reply state that UI-3 generalises into `NetEnd<T>` |
 | One entry point per job | Every write, every network call, every job follow, every leave | `ProjectHandle::submit`; `tc-store` `atomic_write`; UI-1 `follow`; UI-3 `leave` and `run_net` |
 | Capability token | Only some code may do something (write a project, use the network, edit a read-only project) | `WriteCap` (UI-3 makes editors require it) |
 | Exhaustive match, no wildcard | Classifying errors, refusals, outcomes | `tc-ui/src/app/save/classify.rs` ("no wildcard") |
@@ -108,7 +108,10 @@ code, commit it, and keep it current. A reviewer reads it first. Copy this templ
 - **Names the invariant.** The test's name is the invariant. Its failure message starts with
   `INV-<NAME>:` or the test name, then says what broke and where:
   `INV-ATOMIC-WRITES: crates/tc-app/src/x.rs:12 writes a project file with std::fs::write; use
-  tc_store::atomic_write`.
+  tc_store::atomic_write`. A clippy lint cannot carry a custom message, so it names its invariant
+  in the comment above it in `Cargo.toml` (`# INV-NO-BAGS-OF-BOOLEANS`) and a `disallowed-*`
+  entry names it in `reason`; `board.py`'s messages start with `INV-TRACKER-TRUE:`. One name per
+  rule: the registry is `python3 -I .audit/tools/board.py --invariants`.
 - **Runs in CI.** A check that runs only on someone's machine is a note, not a check. A
   local-only check needs a card that moves it into CI.
 
@@ -135,9 +138,11 @@ code, commit it, and keep it current. A reviewer reads it first. Copy this templ
 | CI green on main, toolchain pinned, `--locked` | INV-CI-IS-THE-GATE | INT-2 |
 | One gate list read by CI and every local runner; a drift test | INV-LOCAL-PASS-MEANS-CI-PASS | INT-3 |
 | A merge needs a passing gate for the exact tree | INV-NO-UNGATED-MERGE | INT-3 |
-| Browser journeys in CI; a skipped test fails the job | INV-JOURNEYS-RUN (P1) | G5 |
+| Browser journeys in CI; a skipped test fails the job | INV-A-SKIP-IS-A-FAILURE (the name G5's job prints), INV-JOURNEYS-RUN (P1) | G5 |
 | Crate edges, I/O in pure crates, network only in `tc-door43`/`tc-resources`, shared dependency versions | INV-ARCHITECTURE | CHK-1 |
-| No `std::fs` mutation in storage crates outside the atomic helpers | INV-ATOMIC-WRITES | CHK-1 |
+| No `std::fs` mutation in storage crates outside the atomic helpers | INV-ATOMIC-WRITES | CHK-1 (DOM-3 makes it compile-time) |
+| Low-level parser and codec types stay in their crate: no crate outside `tc-usfm` names `tc_usfm::{Document, Node, Marker, Milestone, Span}`; `tc_journal::pack` is read only by `tc-store` (and test scaffolding on the allow list); `tc_door43::http` has no caller outside `tc-door43` | INV-ONE-PARSER-OWNER | CHK-1 |
+| Every `tc-server` route is behind the guard (origin, token, method) | INV-LOCAL-SERVER-IS-CLOSED | CHK-1 |
 | Every project a test writes is a valid Burrito | INV-VALID-BURRITO (P5) | CHK-2 |
 | Every test a document names exists | INV-CLAIMED-TESTS-EXIST | CHK-3 |
 | Every live tC4 journey maps to a journey test | INV-P1-COVERED | CHK-3 |
@@ -146,6 +151,7 @@ code, commit it, and keep it current. A reviewer reads it first. Copy this templ
 | `clippy::unreachable`, `allow_attributes_without_reason`, `struct_excessive_bools` (with today's allowlist) | INV-NO-BAGS-OF-BOOLEANS, INV-PROVEN-PANICS | CHK-6 |
 | P7 captures match the current UI source | INV-CAPTURES-FRESH (P7) | CHK-6 |
 | The board's cards are consistent with git | INV-TRACKER-TRUE | INT-5 (`board.py --check`) |
+| Funnel card filled before building: `Types`, `One entry point`, `Removed`, `Left to checks` and `Proof` hold text once a card is `building` | INV-FUNNEL-FIRST | INT-5 (`board.py --check`) |
 
 ## 6. The Prose layer
 
@@ -192,7 +198,7 @@ patterns, and the mechanical checks before the next large feature lands.
 
 | Layer | Items | Share of M1 effort (target) |
 |---|---|---|
-| Code | UI-1, UI-2, UI-3, DOM-1, DOM-2, S3, FIX-R's structural fixes | about 60% |
+| Code | UI-1, UI-2, UI-3, DOM-1, DOM-2, DOM-3, S3, FIX-R's structural fixes | about 60% |
 | Checks | INT-2, INT-3, CHK-1 to CHK-6, G5 | about 35% |
 | Prose | `AGENTS.md` lines CHK-1 and INT-3 add; declared differences | about 4% |
-| Human | The owner decisions H1 to H15, asked once, with recommendations | about 1% |
+| Human | The owner decisions H1 to H22 and later rows of `ROADMAP.md` "What needs the owner", asked once, with recommendations | about 1% |

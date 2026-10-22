@@ -8,13 +8,14 @@ state: todo
 owner: none
 branch: none
 worktree: none
-depends: [INT-4]
+depends: [INT-4, UI-1]
 needs_owner: []
+later: ["H6 from step 3"]
 proves: [P6]
 no_loss: false
 size: 3-5 sessions (estimate; basis B9a for the download job and B3 for helps panes)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges; step 1 prepares the H6 packet; later steps wait for the ruling.
 blocked_by: none
 ---
@@ -254,6 +255,8 @@ The full gate list: `scripts/gates.sh` once INT-3 lands. Until then, each must p
 
 Plus: `parity/app/journeys/aquifer.test.mjs` run locally (step 5) with its summary in the log;
 no test touches the network (the fakes listen on loopback only).
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

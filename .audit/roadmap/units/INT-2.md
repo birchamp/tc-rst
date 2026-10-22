@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5 d (basis: one cfg guard, a toolchain file and CI edits)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card, then do step 1.
 blocked_by: none
 ---
@@ -51,6 +51,12 @@ A translator never sees CI. It protects them: since 2026-10-19 main's CI has not
   succeeds. If not, stop and tell the orchestrator.
 - `df -h /home` shows at least 80G free (estimate; basis: one merged worktree's `target`,
   app-b2, holds 61G, process-integration.md). It showed 213G free on 2026-10-21.
+- `df -h /` shows at least 40G free and `grep -c TMPDIR ~/.tc-env` prints at least 1 (a
+  `TMPDIR` under `$HOME`): the root drive was 97% full on 2026-10-21 and `/tmp` writes failed
+  with a quota error; on 2026-10-22 `/` had 567G free, so the pressure has eased but the `/tmp`
+  quota stands. If either fails, do INT-6 steps 3 and 4 (the deletion list and the owner's yes)
+  first, or add the `TMPDIR` line yourself (it is a one-line change in a file outside git). INT-6
+  is not split into two cards, because the disk recovered.
 
 ## Funnel card
 
@@ -167,12 +173,23 @@ A translator never sees CI. It protects them: since 2026-10-19 main's CI has not
     `--features gallery`, `app`, `test-hooks`; tc-api), each `cargo clippy --locked -p ...`.
   - `test`, `timeout-minutes: 75` (estimate: the old job took 26 min; the test binaries now
     sum to about 899 s locally): `cargo test --locked --workspace`.
+  - `nightly-windows` (moved here from CHK-5 step 2 so a fallback for the Windows VM exists
+    before INT-4 merges): `runs-on: windows-latest`, `timeout-minutes: 120`,
+    `if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'`,
+    `defaults: run: shell: bash`; steps: `git config --global core.longpaths true`,
+    `actions/checkout@v4`, `rustup toolchain install && rustc --version`,
+    `Swatinem/rust-cache@v2`, then `cargo test --locked --workspace` (INT-3 later replaces the
+    line with `scripts/gates.sh --step test`). Add `on: schedule: - cron: '0 6 * * *'` and
+    `workflow_dispatch:` to the workflow's `on` block; the four push jobs keep
+    `if: github.event_name != 'schedule'`.
 - Files: `.github/workflows/ci.yml`.
-- Done when: `grep -cE '^\s*(- run: )?cargo ' .github/workflows/ci.yml` prints 11;
+- Done when: `grep -cE '^\s*(- run: )?cargo ' .github/workflows/ci.yml` prints 12;
   `grep -E '^\s*(- run: )?cargo ' .github/workflows/ci.yml | grep -v 'cargo fmt' | grep -vc -- '--locked'`
-  prints 0; `grep -c 'timeout-minutes' .github/workflows/ci.yml` prints 4;
+  prints 0; `grep -c 'timeout-minutes' .github/workflows/ci.yml` prints 5;
   `python3 -I -c "import yaml; print(sorted(yaml.safe_load(open('.github/workflows/ci.yml'))['jobs']))"`
-  prints `['lint-linux', 'lint-wasm', 'lint-windows', 'parity-baseline', 'test']`.
+  prints `['lint-linux', 'lint-wasm', 'lint-windows', 'nightly-windows', 'parity-baseline', 'test']`;
+  `gh workflow run ci.yml --ref <your branch>` then `gh run list --workflow ci.yml --limit 1`
+  shows the `nightly-windows` job ran (green or with a Windows-only failure you log for step 5).
 - Record: a log line `step 4`; `next: step 5`.
 
 ### Step 5: Run the gates here and on the Windows VM
@@ -247,6 +264,8 @@ then with `--features gallery`, `--features app`, `--features test-hooks`;
 (this PC lacks MinGW and NASM; until the owner installs them, the VM's `gates.ps1` clippy and
 CI's `lint-windows` stand in); the `node --test` line of `parity-baseline`. Plus: the VM's
 `clippy  exit 0` (step 5), and all five CI jobs green after the merge (step 6).
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

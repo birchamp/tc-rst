@@ -17,7 +17,8 @@
 3. **Conflicts stay.** Two versions that replaced the same version are a conflict. Both files stay
    on disk until someone chooses, in the conflict review: **Keep this one** (the other is then
    removed) or **Keep both** (the second is saved under its own name, for example
-   `jon_01 (Juan).wav`).
+   `jon_01-Juan.wav`; the first draft of this ruling wrote `jon_01 (Juan).wav`, which the path
+   grammar forbids: see H22 part 2 and the storage delta §2.7).
 4. **When:** "when we implement them with tC". Carried files are built when translationCore adds
    the feature that uses them; until then the format reserves the record.
 

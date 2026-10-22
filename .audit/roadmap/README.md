@@ -1,7 +1,8 @@
 # Roadmap: start here
 
 This folder holds the plan that takes the tC4 rebuild from where it stood on 2026-10-21 to
-done. It is written so that any agent, including a less capable model, can pick up the next
+done. Until INT-4 pushes main, it exists only on the owner's PC; a Track B developer receives it
+as a patch or after that push. It is written so that any agent, including a less capable model, can pick up the next
 piece of work and finish it without this conversation. A person can use it the same way.
 
 Done means `docs/PLAN.md`'s P1 to P10, each shown by a check in CI that can fail, and a release
@@ -23,7 +24,9 @@ The older files still hold detail you will need: `AGENTS.md` (the rules), `docs/
 done means), `docs/APP-DESIGN.md` (the app layer), `docs/STORAGE.md` (storage, on the S2
 branch), `docs/TC4-ISSUES.md` (tC4's issues per unit) and `.audit/HANDOFF.md` (the machine, the
 Windows VM and the reference laptop). `.audit/STATUS.md` and `.audit/PROGRESS.md` are the old
-trackers. They are history now; `board.py` replaces them (see `TRACKING.md`).
+trackers. They are history now; `board.py` replaces them (see `TRACKING.md`). Owner rulings
+before 2026-10-21 are the `ruling` lines of `.audit/rebuild.tsv`; later ones are files in
+`rulings/`.
 
 ## How to pick your next task
 
@@ -59,10 +62,18 @@ These come from `AGENTS.md` and the owner's rulings. A card never overrides them
   never touch the network.
 - Before a commit: `cargo fmt --all`, then the full gate list (`INT-3` makes it one script).
   A red CI on main stops every merge until it is green again.
-- Never touch another session's worktree. Never send a message to an agent that a workflow is
-  still running; pass notes through the next step instead.
-- Push only what the owner allows (see the push rule in `ROADMAP.md`). Never record a token or
-  password anywhere.
+- Never touch a worktree the board lists under "Worktrees in use", nor, until INT-6 is done, one
+  INT-6 names. Never send a message to an agent that a workflow is still running; pass notes
+  through the next step instead.
+- Build only in your own worktree's `target` on /home (`TRACKING.md` "claim an item"); never on
+  the root drive or under /tmp (the root drive filled on 2026-10-21; `/tmp` has a quota).
+- The push rule, in one place. Main (`claude/focused-ride-5uzj7p`, `GLOSSARY.md`) may be pushed
+  after its full gates pass: the standing authorization of 2026-10-18. INT-4 asks the owner first
+  because the resume lane's own instruction says so. Every other branch on the owner's PC stays
+  there until H1 is answered. Track B's `ext/*` branches live in the developer's clone and are
+  pushed whenever they commit. Never push a branch that holds a token, a password or a
+  machine-local path to a secret; never record one anywhere. `ROADMAP.md`, `.audit/HANDOFF.md`
+  and INT-4 point here.
 - Default models for every agent.
 
 ## When to stop and ask

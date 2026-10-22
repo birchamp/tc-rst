@@ -14,7 +14,7 @@ proves: []
 no_loss: true
 size: 2 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after UI-1 merges, then do step 1.
 blocked_by: none
 ---
@@ -42,6 +42,8 @@ controls must be off instead of failing after the click.
 - `grep -rn "\.gate()" crates/tc-ui/src/app/web/`: nine product sites (on resume-build-lane
   app_ctx.rs:283, :305; upgrades.rs:135, :268; understand.rs:303, :497, :516, :551;
   fix.rs:185), the test-hooks probe page (mod.rs:643, probe.rs:249) and `saves.rs` itself.
+- `grep -n "KeepPhase" crates/tc-ui/src/app/review.rs` prints C7a's enum (`Idle`,
+  `InFlight(SentKeep)`, …); step 2b generalises it.
 - `grep -rn "ApiError::NeedsInternet\|ApiError::NeedsSignIn" crates/tc-ui/src/app/web/`: 17
   lines (app_ctx.rs 10, sources.rs 3, upgrades.rs 3, fix.rs 1).
 - `grep -rn "ApiError::BadRequest {" crates/tc-ui/src/app/web/`: transport errors relabelled
@@ -156,6 +158,11 @@ controls must be off instead of failing after the click.
      fix.rs:123, upgrades.rs:175). Delete `api_error` (sources.rs:43-50) and the three other
      `BadRequest` relabels; a transport failure shows the screen's existing "could not reach
      the app" text, or the transport error's own words where the screen has none today.
+  2b. `review.rs`: C7a's `KeepPhase::InFlight/ReplyLost/Answered` (the first network-reply
+     state in the UI, `units/C7a.md` step 1) holds a `NetEnd<KeepOutcome>` instead of its own
+     outcome shape; keep C7a's rule that a lost reply resends the same request (A-27);
+     `grep -n "CallError::Transport" crates/tc-ui/src/app/review.rs` prints nothing afterwards.
+     C7a's log has a `note` that UI-3 absorbs `KeepPhase`, so this is expected, not a rewrite.
   3. Add `only_run_net_handles_net_refusals` to `lint.rs`: the strings
      `ApiError::NeedsInternet` and `ApiError::NeedsSignIn` appear under
      `crates/tc-ui/src/app/web/` only in `net_refusal`'s file. Message starts with

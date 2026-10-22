@@ -1,6 +1,6 @@
 ---
 id: CHK-5
-title: Nightly, Windows and no-network jobs; the mutation executor in the repository
+title: Nightly, Windows and no-network jobs; the mutation executor runs nightly
 track: A
 lane: checks
 milestone: M1
@@ -14,12 +14,12 @@ proves: [P3, P4]
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after S2 merges, then do step 1.
 blocked_by: none
 ---
 
-# CHK-5: Nightly, Windows and no-network jobs; the mutation executor in the repository
+# CHK-5: Nightly, Windows and no-network jobs; the mutation executor runs nightly
 
 ## Goal
 
@@ -47,7 +47,8 @@ results nobody keeps.
   (S2 step 4). If it does not, S2 step 4 was not done: copy the files S2 step 4 lists from
   `/home/bot/tc-rst/.worktrees/s2-proof-executor/.enjoy-lane/mutation-executor/` (read only; if
   that worktree is gone, use the copy INT-6's log names), make the two path edits S2 step 4
-  gives, and meet its "Done when" here.
+  gives, meet its "Done when" here, and log a `note` on S2's card that CHK-5 brought the
+  executor in (S2 step 4 then has nothing left to do).
 - `python3 -I tools/mutants/execute.py --owner . --base "$(git rev-parse HEAD)" --cases all --list | python3 -I -c 'import json,sys; print(len(json.load(sys.stdin)))'`
   prints the recipe count (44 at S2's 3b075d7).
 - `grep -n 'TC_PROPERTY_CASES' crates/tc-journal/tests/properties.rs` shows the long-sweep
@@ -120,11 +121,10 @@ results nobody keeps.
   `schedule` or `workflow_dispatch`, INT-2's first steps) for: `nightly-mutants`
   (`timeout-minutes: 300`, `scripts/gates.sh --step mutants`), `nightly-seeds` (180,
   `--step random-seeds`), `nightly-properties` (120, `--step journal-long`, and `--step
-  roundtrip-long` if it exists). Add `nightly-windows`: `runs-on: windows-latest`,
-  `timeout-minutes: 120`, `defaults: run: shell: bash`; steps: `git config --global
-  core.longpaths true` (as `.audit/tools/winvm/setup.ps1` does), `actions/checkout@v4`,
-  `rustup toolchain install && rustc --version`, `Swatinem/rust-cache@v2`, then
-  `scripts/gates.sh --step test`. Each existing push job keeps `if: github.event_name != 'schedule'`.
+  roundtrip-long` if it exists). `nightly-windows` already exists (INT-2 step 4 added it so the
+  Windows VM has a fallback before INT-4); change its last step to `scripts/gates.sh --step
+  test` if INT-3 has not, and keep its `workflow_dispatch` trigger. Each existing push job keeps
+  `if: github.event_name != 'schedule'`.
   A GitHub runner has far fewer CPUs than this PC (2 to 4 against 20): if step 1's local
   `mutants` run took over 60 min, split the recipes into `mutants-a` and `mutants-b` (`--cases`
   with half the recipe ids each, in the form `execute.py --help` gives) and run them in two jobs.
@@ -202,6 +202,8 @@ Run `scripts/gates.sh` (INT-3 made it) on the exact tree you merge. It must prin
 
 Plus: `scripts/gates.sh --step journal-long` and one `--step mutants` run in the heavy-test slot;
 the Windows VM run of step 2.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

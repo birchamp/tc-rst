@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after S2 merges, then do step 1.
 blocked_by: none
 ---
@@ -144,7 +144,10 @@ do, because both use the same proxy finder (the FIX-proxy work).
   3. Change `HttpSpec.redirects` to `RedirectRule` and move `Door43Client`'s policy
      (`crates/tc-door43/src/client.rs:190-205`) onto it. Make `Http::with_finder` return
      `Result<Self, HttpError>` (today `reqwest::Error`) and `Http::client()` `pub(crate)`, so
-     no reqwest type is public.
+     no reqwest type is public. Make `pub mod http` (`crates/tc-door43/src/lib.rs:49`)
+     `pub(crate) mod http` once `Http` is the entry point (no caller outside the crate uses the
+     module today; CHK-1's INV-ONE-PARSER-OWNER table lists it with no allowed reader, and the
+     Code-layer form needs no allow line).
 - Files: `crates/tc-door43/src/http.rs`, `crates/tc-door43/src/client.rs`,
   `crates/tc-door43/src/lib.rs`, `crates/tc-door43/tests/http_get.rs`.
 - Done when: `cargo test -p tc-door43` passes, and the three new tests failed before 1.2
@@ -263,6 +266,8 @@ missing, run every command of `AGENTS.md` "Tests" and the Windows step:
 
 Plus: `cargo test -p tc-door43 -p tc-resources` with the network blocked, if CHK-5's
 no-network job exists (it proves no test reaches past the fakes).
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

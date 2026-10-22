@@ -10,11 +10,12 @@ branch: none
 worktree: none
 depends: [INT-4]
 needs_owner: []
+later: ["H12 from step 4"]
 proves: [P1, P8]
 no_loss: true
 size: 2-3 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -258,7 +259,11 @@ Run each from the repository root on your branch:
      #795 `an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen`
      (`crates/tc-app/tests/app/align_store.rs`);
      #612 a letter-spacing assertion for Hindi on Home and the top bar
-     (`parity/app/journeys/app-language.test.mjs`; reuse the scan at about 264-276).
+     (`parity/app/journeys/app-language.test.mjs`; reuse the scan at about 264-276);
+     #831 `resume_card_names_the_verse_of_its_text_and_never_shows_the_stub`
+     (`crates/tc-app/tests/app/home.rs`; C2 is built, so no other card writes it);
+     #833.5 `source_texts_lists_the_installed_version` (`crates/tc-app/tests/app/sources.rs`;
+     B9a is built, so no other card writes it).
   2. Move rows you do not build here, each with a `note` line in the receiving card's log if it
      is unclaimed: #613 `hindi_label_renders_in_the_bundled_face_offline` to G1 (no Devanagari
      face is vendored: `grep -ic deva crates/tc-ui/vendored-from-tc4.txt` prints 0; do not

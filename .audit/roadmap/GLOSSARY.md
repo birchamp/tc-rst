@@ -73,15 +73,19 @@ named.
 | Unit | A planned piece of work from APP-DESIGN §10 or the STORAGE list (A1, C7a, S2, X…) |
 | Work item, card | A unit or a new item of this roadmap, with its card in `units/` |
 | Lane | A set of work items with one owner at a time (integration, storage, app, checks, domain, shell) |
-| Track | A: the main line on the owner's PC. B: the second developer's package |
+| Track | A: the main line on the owner's PC. B: the second developer's package (B′: the import-core package; `evidence/2026-10-21/split-seams.md` calls it A′, the same package) |
+| main | The branch `claude/focused-ride-5uzj7p`, origin's default branch. No branch is literally named `main`; every document calls that branch main |
+| Worktree | A second checkout of this repository: `.worktrees/track-<ID>` (new, `TRACKING.md`) or `.claude/worktrees/*` (old; INT-6 cleans them). Never touch one the board lists under "Worktrees in use" |
+| Orchestrator | The owner of the integration lane's current card. When no integration card is active: decide yourself, log the decision as a `note`, and tell the owner only if a translator would notice (`TRACKING.md` "Heavy runs") |
 | Gate | The full list of checks a tree must pass before it merges (INT-3) |
 | No-loss item (◆) | Touches a translator's saved work: three verification lenses and a model test |
+| Verification lenses | The three independent reviews a no-loss item gets before it merges, each by a reviewer who did not write the code: **loss**, can any text, alignment, decision or comment be lost or shown wrong under crashes, reloads, a full disk and refused saves; **races and protocol**, what happens with duplicate, reordered, retried and interrupted requests, two tabs, and a sync in the middle of a save; **the browser and parity**, drive the unit in Chromium through Playwright, compare what tC4 does at the same moments (its source at the reference commit), and check that every difference is declared in `docs/APP-DESIGN.md` with its reason. Each lens writes a `verify` log line (FUNNEL §8). The wording is `.audit/workflows/app-layer.js` `LENSES`, in plain words |
 | REACH | The rule that only scenarios a translator can reach count |
 | The fix rule | Fix every blocker, and majors that harm a translator's data or what they see; the rest are minors |
 | Minor | A finding logged in `.audit/minors.tsv`, not fixed now |
 | Ruling | An owner's answer, one file in `rulings/` |
 | Funnel card | The section of a card that walks the work through Code, Checks, Prose and Human (`FUNNEL.md`) |
-| Invariant (INV-…) | A rule that must always hold, named so tests and failures can cite it |
+| Invariant (INV-…) | A rule that must always hold, named so tests and failures can cite it. The registry of names is `python3 -I .audit/tools/board.py --invariants` (every `INV-` name with the cards that use it); two names for one rule is a `--check` warning |
 | Op-count test | A test that counts operations an action does, at Psalms scale and ten times larger |
 | Model test | A property test that drives a state machine and a simple model side by side with crashes and restarts |
 | Mutation recipe | A deliberate bug put into the code to prove a test catches it |

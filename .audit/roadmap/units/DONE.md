@@ -8,13 +8,13 @@ state: todo
 owner: none
 branch: none
 worktree: none
-depends: [G2, V, G3, G4, FIX-R, CHK-1, CHK-2, CHK-3, CHK-4, CHK-5, CHK-6, S3, X, I]
+depends: [AQ1, C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-4, CHK-5, CHK-6, D1, D2, DOM-1, DOM-2, DOM-3, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G2, G3, G4, G5, I, INT-1, INT-2, INT-3, INT-4, INT-5, INT-6, INT-7, P, REF1, S2, S3, SWEEP, T, UI-1, UI-2, UI-3, V, X]
 needs_owner: []
 proves: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10]
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card when its dependencies merge.
 blocked_by: none
 ---
@@ -86,7 +86,8 @@ carry-over, old projects) is held by a check, and the installer has been tried o
 - Do: run the board and its check on main. Read the latest run of every workflow on main.
 - Files: none.
 - Done when: the last line of `python3 -I .audit/tools/board.py --check` says `0 errors`; every card but DONE is
-  `done`; `gh run list --branch claude/focused-ride-5uzj7p --limit 20 --json workflowName,conclusion,headSha`
+  `done`, or `parked` with `next: not doing: <reason>` and the owner's decision in its log
+  (`TRACKING.md` "States"); `gh run list --branch claude/focused-ride-5uzj7p --limit 20 --json workflowName,conclusion,headSha`
   shows `success` for `ci` (its push jobs, and its scheduled jobs from CHK-5 and P on their last
   run), `app-e2e` and `shell` on main's tip
   (`git rev-parse HEAD`).
@@ -98,7 +99,10 @@ carry-over, old projects) is held by a check, and the installer has been tried o
   run on main's tip. Write the table into `docs/evidence/done-<date>.md` (to create): P item, job,
   tests, run id.
 - Files: `docs/evidence/done-<date>.md`.
-- Done when: the table has ten rows, each with at least one test and a green run id on main's tip;
+- Done when: the table has ten rows, each with at least one test and a green run id on main's tip,
+  plus one extra row `security` naming G1's `window_preferences_isolate_the_renderer` and
+  `navigation_outside_the_app_origin_is_refused` and CHK-1's `every_route_is_behind_guard`
+  (INV-RENDERER-IS-ISOLATED, INV-LOCAL-SERVER-IS-CLOSED), with their green run;
   `grep -c '(pending:' docs/P-LEDGER.md` prints `0`; `node --test .audit/tools/claims.test.mjs`
   passes.
 - Record: a log line `step 2`. Update `updated` and `next` (`TRACKING.md`).
@@ -120,9 +124,10 @@ carry-over, old projects) is held by a check, and the installer has been tried o
 ### Step 4: Check the owner's reviews are recorded
 
 - Do: confirm these ruling files exist in `.audit/roadmap/rulings/`: the P7 residual review
-  (`<date>-p7-review.md`, G2 step 6); H9, format 1.0 frozen (V); H10, the translations done, and
-  `cargo test --release -p tc-api --test refusals` passing on main; H3, the platforms; H4, the
-  signing; H17, whether every speed budget is part of done (`ROADMAP.md` lists it against DONE).
+  (`<date>-p7-review.md`, G2 step 6); H9, format 1.0 frozen (V); H10, the translations received
+  and merged by G3's "Receive the translations" step (or the owner's allowlist ruling,
+  `ROADMAP.md` H10), and `cargo test --release -p tc-api --test refusals` passing on main; H3,
+  the platforms; H4, the signing; H17, whether every speed budget is part of done (`ROADMAP.md` lists it against DONE).
   For each one missing, ask the owner in short plain sentences, with the options and a
   recommendation from `ROADMAP.md` "What needs the owner".
 - Files: `.audit/roadmap/rulings/` (only the agent that receives an answer writes the file).
@@ -146,7 +151,9 @@ carry-over, old projects) is held by a check, and the installer has been tried o
   Ask the owner before pushing a release tag; push it only on a clear yes.
 - Files: none.
 - Done when: every build and smoke job of each H3 platform and `translations` are green, and
-  `BUILD-MANIFEST.json`'s commit equals main's tip.
+  `BUILD-MANIFEST.json`'s commit equals main's tip; G2's evidence file holds the five
+  `first_launch_under_60_s` runs against this release candidate's own Windows installer (its run
+  id), not an earlier build.
 - Record: a log line `step 6` with the run id. Update `updated` and `next` (`TRACKING.md`).
 
 ### Step 7: Make the documents describe what shipped
@@ -178,6 +185,7 @@ The full gate list (`scripts/gates.sh`, created by INT-3; it holds every command
 - `python3 -I .audit/tools/board.py --check` prints `0 errors`.
 - `cargo test --release -p tc-api --test refusals` passes.
 - The release run of step 6 is green on each H3 platform.
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

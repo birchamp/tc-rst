@@ -14,7 +14,7 @@ proves: [P3, P10]
 no_loss: true
 size: 0.5-1 d (basis: 3ecdcae did two T items in one commit, +395 lines)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after S2 merges, then do step 1.
 blocked_by: none
 ---
@@ -25,7 +25,7 @@ blocked_by: none
 
 Most of T landed through other units (#582 and #767 in 3ecdcae, #789's reflow, #386). Left: the
 alignment files and Align's rail judge "needs review" by one rule; an empty OBS frame's edit and
-the `relationships` mirror write tC4's bytes; #747, #161, #179, #794 and #820 get their tests;
+the `relationships` mirror write tC4's bytes; #747, #161, #179, #794, #812 and #820 get their tests;
 and a link a Translate save cannot follow comes back in the save's reply (Q30 (a)).
 
 ## Why it matters to a translator
@@ -151,7 +151,7 @@ Lines in `crates/tc-store` tests and in `scan.rs`, `open.rs` are from `s2-proof-
   and `cargo test -p tc-store` pass (a changed fixture is regenerated in the same commit).
 - Record: log line `step 3`; `next: do step 4`.
 
-### Step 4: Add the missing tests (#747, #161, #179, #794, #820)
+### Step 4: Add the missing tests (#747, #161, #179, #794, #812, #820)
 
 - Do: write each, run it, apply its mutation, see it fail, restore.
   - #747: extend `a_file_that_cannot_be_an_ingredient_is_moved_out_and_kept`
@@ -169,6 +169,12 @@ Lines in `crates/tc-store` tests and in `scan.rs`, `open.rs` are from `s2-proof-
     `crates/tc-journal/tests/loss.rs`): a teammate's verse edit with an unknown parent gives two
     heads, the standing text shows, the conflict says incomplete history. Mutation:
     `continues_missing` (`crates/tc-journal/src/fold/attach.rs`) returns `false`.
+  - #812: `every_bundled_ult_and_ust_verse_body_holds_every_target_word` (to create,
+    `crates/tc-usfm/tests/corpus.rs`): over every book of `bundle/en` ULT and UST, each verse's
+    editable body holds every word of its `target_words`, so a mid-verse `\p`, `\ts\*`, `\b`,
+    `\q3` or `\s` line never cuts the verse off; plus 1SA 2:2, 1SA 4:1, REV 7:12 and MAT 27:9
+    saved whole through `tc-store` and read back equal. Mutation: make `split_verse`
+    (`crates/tc-usfm/src/codec.rs:130-141`) stop at the first layout line.
   - #794: `a_verse_edit_of_an_inline_aligned_verse_writes_no_alignment` (to create,
     `tests/store/reflow.rs`): a verse holding `\zaln-s` markup and an alignment record; a verse
     save writes no Alignment change. Mutation: remove the `NoReflow::AlignedInText` return
@@ -232,6 +238,8 @@ Until INT-3 lands, every command below; after INT-3, `scripts/gates.sh` (to crea
 
 Plus `cargo test -p tc-align --release --test suggestion_budget -- --ignored --nocapture` (the
 `alignment-budget` job; step 1 changes `TargetVerse::new`).
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

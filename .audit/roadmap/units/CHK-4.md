@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 2-3 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -83,8 +83,13 @@ test teaches people to rerun until green, and a slow suite makes people skip it.
   - Gate step `test-budget` (to create): `.audit/tools/test-budget.mjs` reads the `test` step's log
     and fails on a binary over 300 s; its tests `.audit/tools/test-budget.test.mjs` (to create;
     the gate step `node` runs them); kind: lint over a run.
+  - `the_gates_fix_the_proptest_seed` in `.audit/tools/test-budget.test.mjs` (to create, step 1):
+    reads `scripts/gates.sh` and `.audit/tools/winvm/gates.ps1` and fails unless each sets
+    `PROPTEST_RNG_SEED` before any `cargo test` line (INV-DETERMINISTIC's seed half); kind:
+    lint over a file; runs in: the gate step `node`.
   - Proof it can fail: a planted log line `finished in 301.00s` fails the budget test; a reverted
-    ticker fix fails the progress test (step 5).
+    ticker fix fails the progress test (step 5); deleting the `export PROPTEST_RNG_SEED` line
+    fails the seed test (step 1).
 - **Prose**: a comment above the seed in `scripts/gates.sh`: why it is fixed and how the nightly
   varies it (CHK-5).
 - **Human**: none.
@@ -95,7 +100,10 @@ test teaches people to rerun until green, and a slow suite makes people skip it.
 
 - Do: in `scripts/gates.sh`, after the blessing refusal, add
   `export PROPTEST_RNG_SEED="${PROPTEST_RNG_SEED:-20261021}"` with the comment of the Prose line;
-  in `.audit/tools/winvm/gates.ps1` add `$env:PROPTEST_RNG_SEED = '20261021'`. For each census
+  in `.audit/tools/winvm/gates.ps1` add `$env:PROPTEST_RNG_SEED = '20261021'`. Write
+  `the_gates_fix_the_proptest_seed` in `.audit/tools/test-budget.test.mjs` (create the file now;
+  step 4's budget tests join it): it reads both gate scripts and fails unless `PROPTEST_RNG_SEED`
+  is set before the first `cargo test`; prove it fails by deleting the line once. For each census
   assert (tc-journal and tc-usfm here; tc-store's in step 5) add a temporary
   `eprintln!("census {counts:?}");` just before the assert (the counts are printed today only
   when it fails), run its test with 20 seeds
@@ -212,6 +220,8 @@ Run `scripts/gates.sh` (INT-3 made it; INT-4 needs INT-3) on the exact tree you 
 
 Plus: the gate step `test-budget` passes; the whole `test` step passes twice in a row with the
 fixed seed.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

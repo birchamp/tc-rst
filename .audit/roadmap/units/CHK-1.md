@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5-1 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -68,13 +68,27 @@ from writing a project file directly or calling the network around the switch.
   - INV-ATOMIC-WRITES: outside the files listed with a reason in
     `crates/tc-arch/allow/fs_writes.txt`, no source file calls a filesystem mutator; inside
     `tc-store` and `tc-journal`, clippy refuses `std::fs` mutators except at sites that carry
-    `#[expect(clippy::disallowed_methods, reason = "...")]`.
+    `#[expect(clippy::disallowed_methods, reason = "...")]`. DOM-3 later makes this compile-time
+    (a `ProjectWriter` token); this card's scan is the stopgap and stays as the catch-all.
+  - INV-ONE-PARSER-OWNER: low-level parser and codec types stay in their owning crate. No crate
+    outside `tc-usfm` names `tc_usfm::{Document, Node, Marker, Milestone, Span}` (today
+    `crates/tc-align/src/words.rs:16` and `suggest/mod.rs:118,160-161` do, until DOM-2 step 8
+    removes them); `tc_journal::pack` is read only by `tc-store` and the listed test scaffolding;
+    `tc_door43::http` has no caller outside `tc-door43` (DOM-1 makes the module `pub(crate)`).
+    The owned internals and their allowed readers are one file, `crates/tc-arch/allow/imports.txt`.
+  - INV-LOCAL-SERVER-IS-CLOSED: every route `tc-server` serves sits behind `security::guard`
+    (loopback only, the token, the origin check, no CORS; `crates/tc-server/src/lib.rs:337-358`
+    and `tests/security.rs` prove the behaviour today); a route added after the layers, or a
+    second `Router` without the guard, fails an architecture test.
 - **Wrong states**:
   - A new UI file reads storage directly (an edge `tc-ui -> tc-store`).
   - A pure crate opens a file or reads the clock, so its tests depend on the machine.
   - A new writer in `tc-app` or `tc-store` writes a project file with `std::fs::write`, skipping
     the temp file, fsync and rename, so a power cut can leave a half-written verse.
   - A crate reaches the network without the internet switch.
+  - A new crate walks `tc_usfm::Node` itself and splits a verse differently from `tc-usfm`'s
+    walk functions (tC4 #812 is this bug in another form).
+  - A new `tc-server` route is added below the `.layer(...)` calls, so the guard never sees it.
 - **Code**:
   - Types: none in product code. In `crates/tc-arch/src/lib.rs` (to create), pure functions over
     text: `edges(metadata_json) -> Vec<(String, String)>`, `scan_io(path, text) -> Vec<Finding>`,
@@ -83,9 +97,26 @@ from writing a project file directly or calling the network around the switch.
     checked; `ARCHITECTURE.md` names them.
   - Removed: the inline `futures-util` version in `crates/tc-door43-fake/Cargo.toml`.
   - Left to checks, and why a type cannot carry it: crate edges and source text are not types.
-    The structural fix is typed capabilities (a `ProjectWriter` only `tc-store` can build, a `Net`
-    handle only `tc-door43` can build); it is out of scope here and goes to `.audit/minors.tsv`
-    as a follow-up (step 6).
+    The structural fix for the write and network rules is typed capabilities (a `ProjectWriter`
+    only `tc-store` can build, a `Net` handle only `tc-door43` can build): that is card DOM-3
+    (M1, after S3's core and DOM-1), not a minor; this card's scans are the stopgap and the
+    catch-all for files DOM-3 leaves on the list (the app lock, the S3 store files). For
+    INV-ONE-PARSER-OWNER the Code-layer half is DOM-2 step 8 (the five raw types move into
+    `pub mod raw`, so the only import path is `tc_usfm::raw::…`); `tc-usfm`'s own integration
+    tests need the types public, so visibility cannot carry it, and the import scan here does.
+  - Owned internals (the rows of `crates/tc-arch/allow/imports.txt`; one line per rule:
+    `<path or glob><TAB><owner crate><TAB><allowed readers, with a reason or an "until" card>`):
+
+    | Internal | Owner | Allowed outside the owner | Invariant in the message |
+    |---|---|---|---|
+    | `tc_usfm::{Document, Node, Marker, Milestone, Span}` (`tc_usfm::raw::*` after DOM-2) | tc-usfm | `tc-align` until DOM-2 step 8 | INV-ONE-PARSER-OWNER |
+    | `tc_journal::pack` | tc-store | `tc-corpus` (a test corpus crate); `crates/tc-app/src/backend/seed.rs` and `backend/scenario_store.rs` (both `#[cfg(feature = "fixture-backend")]`) until F1 step 5 deletes `seed.rs` and INT-7/CHK-6 put `scenario_store` behind `test-hooks` | INV-ONE-PARSER-OWNER |
+    | `tc_door43::http` | tc-door43 | none (DOM-1 makes it `pub(crate)`; no allow line needed) | INV-ONE-NETWORK-GATE |
+    | `reqwest::` and `git2::` network calls | tc-door43 | `tc-resources` until DOM-1 moves its calls | INV-ONE-NETWORK-GATE |
+
+    `tc_store::vfs` and `tc_store::atomic` are not internals: they are tc-store's designed public
+    seam (`crates/tc-store/src/lib.rs:3-6, :48`), used by `prefs.rs`, `backend/store.rs` and
+    `scenario_store.rs`; DOM-3 gives them a token instead.
 - **Checks** (all to create; kind: architecture or lint; runs in: the CI job that runs
   `cargo test --workspace`, and the clippy gates):
   - `crate_edges_follow_the_architecture_table`, `network_libraries_only_in_door43_and_resources`,
@@ -94,10 +125,22 @@ from writing a project file directly or calling the network around the switch.
     `shared_dependency_versions_come_from_the_workspace` in `crates/tc-arch/tests/architecture.rs`.
   - `pure_crates_do_no_io` and `only_listed_files_write_files` in
     `crates/tc-arch/tests/io_boundaries.rs`.
+  - `low_level_types_stay_in_their_owning_crate` in `crates/tc-arch/tests/io_boundaries.rs`:
+    reads `crates/tc-arch/allow/imports.txt`, scans `use` lines and paths in `crates/*/src`
+    (including `use tc_usfm::{Node, …}` groups without `Document`), message
+    `INV-ONE-PARSER-OWNER: crates/tc-align/src/words.rs:16 imports tc_usfm::Document; call
+    tc-usfm's walk functions instead`; a stale allow line (nothing left to allow) fails too.
+  - `every_route_is_behind_guard` in `crates/tc-server/tests/security.rs` (or `tc-arch` if it
+    is a source scan): every `.route(` in `crates/tc-server/src/lib.rs` comes before the
+    `.layer(from_fn_with_state(…, security::guard))` call and there is exactly one `Router::new()`
+    in the crate; plus a request to every registered path without the token answers 401
+    (INV-LOCAL-SERVER-IS-CLOSED).
   - `the_io_scan_finds_a_planted_std_fs_call`, `the_io_scan_skips_a_cfg_test_module`,
     `the_write_scan_finds_a_planted_rename` in `crates/tc-arch/src/lib.rs` `#[cfg(test)]`.
   - Clippy `disallowed-methods` in `crates/tc-store/clippy.toml` and `crates/tc-journal/clippy.toml`.
-  - Proof it can fail: steps 1, 3 and 5 each plant a violation and record the failing output.
+  - Proof it can fail: steps 1, 3 and 5 each plant a violation and record the failing output;
+    step 3 also plants `use tc_usfm::Node;` in `crates/tc-check/src/lib.rs` and a `.route(` after
+    the guard layer, and records both messages.
 - **Prose**: `docs/ARCHITECTURE.md` "Dependency rules" names `crates/tc-arch` as the check.
 - **Human**: none.
 
@@ -166,13 +209,20 @@ from writing a project file directly or calling the network around the switch.
   `crates/tc-store/src` after S2 (estimate from the S2 snapshot). Read each site before you list
   it: a site that writes inside a project folder outside `tc-store` breaks AGENTS.md; record it as
   a finding and stop (see "Stop and ask when"). A listed file with no write call left also
-  fails ("stale entry"). Add the three unit tests of the funnel card to `src/lib.rs`.
+  fails ("stale entry"). Add the three unit tests of the funnel card to `src/lib.rs`. Then
+  `low_level_types_stay_in_their_owning_crate` over `crates/tc-arch/allow/imports.txt` (the
+  rows of the funnel card's "Owned internals" table), and `every_route_is_behind_guard` for
+  `tc-server`.
 - Files: `crates/tc-arch/tests/io_boundaries.rs`, `crates/tc-arch/allow/fs_writes.txt`,
-  `crates/tc-arch/src/lib.rs`.
+  `crates/tc-arch/allow/imports.txt`, `crates/tc-arch/src/lib.rs`,
+  `crates/tc-server/tests/security.rs`.
 - Done when: `cargo test -p tc-arch` passes. Add `let _ = std::fs::read("x");` to a function in
   `crates/tc-check/src/lib.rs`: `pure_crates_do_no_io` fails with
-  `INV-PURE-CRATES-DO-NO-IO: crates/tc-check/src/lib.rs:<line> uses std::fs`. Revert it.
-- Record: a log line `step 3` with the failure message and the number of allowlisted files.
+  `INV-PURE-CRATES-DO-NO-IO: crates/tc-check/src/lib.rs:<line> uses std::fs`. Revert it. Add
+  `use tc_usfm::Node;` there: `low_level_types_stay_in_their_owning_crate` fails with
+  `INV-ONE-PARSER-OWNER: …`. Revert. Move one `.route(` below the guard layer:
+  `every_route_is_behind_guard` fails. Revert.
+- Record: a log line `step 3` with the failure messages and the number of allowlisted files.
 
 ### Step 4: Run the whole gate list once
 
@@ -213,11 +263,11 @@ from writing a project file directly or calling the network around the switch.
   yet)"; replace line 89 with: only `tc-store` writes project files; only `tc-door43` and
   `tc-resources` open network connections, and only behind `tc-door43`'s internet switch
   (`tc-resources` until DOM-1 moves its calls into `tc-door43`); add "`crates/tc-arch` tests
-  these rules." Append to `.audit/minors.tsv`: `CHK-1<TAB>Typed capabilities (a ProjectWriter only
-  tc-store can build, a Net handle only tc-door43 can build) would make INV-ATOMIC-WRITES and the
-  network rule compile-time; tc-arch's scans are the stopgap<TAB>.audit/roadmap/evidence/2026-10-21/checks-inventory.md
-  (funnel note after rank 20)`.
-- Files: `docs/ARCHITECTURE.md`, `.audit/minors.tsv`.
+  these rules." Add one sentence: "Typed capabilities (a `ProjectWriter` only `tc-store` can
+  build, a `Net` only `tc-door43` can build) make the write and network rules compile-time: see
+  card DOM-3; `tc-arch`'s scans are the stopgap and the catch-all." No minor is appended: DOM-3
+  is the card for it (2026-10-22 review).
+- Files: `docs/ARCHITECTURE.md`.
 - Done when: `grep -c 'tc-corpus\|tc-arch' docs/ARCHITECTURE.md` prints at least 2 and
   `grep -n 'tc-resources' docs/ARCHITECTURE.md` shows the new network rule.
 - Record: a log line `step 6`. When step 5 is done too, set `state: verifying` and `next`;
@@ -238,6 +288,8 @@ Run `scripts/gates.sh` (INT-3 made it; INT-4, which this card waits for, needs I
    (needs `gcc-mingw-w64-x86-64` and `nasm`, as `.github/workflows/ci.yml` installs them)
 
 Plus: `cargo test -p tc-arch` passes, and each planted violation of steps 1, 3 and 5 is in the log.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

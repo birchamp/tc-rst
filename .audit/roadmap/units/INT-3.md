@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5-1 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-2 merges, then do step 1.
 blocked_by: none
 ---
@@ -287,6 +287,7 @@ exactly these, so on the merge commit it is this card's gate. Plus:
 
 - `scripts/gates.sh --check-receipt` exits 0 in the merge worktree.
 - `node --test .audit/tools/*.test.mjs` passes, and both step-2 mutations were seen failing.
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

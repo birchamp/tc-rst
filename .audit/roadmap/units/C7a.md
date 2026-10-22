@@ -14,7 +14,7 @@ proves: [P1, P2, P3]
 no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: The resume lane starts this after B11's records; step 1 first.
 blocked_by: none
 ---
@@ -41,6 +41,11 @@ Run these in the worktree; each must print what is said.
 - `git merge-base --is-ancestor f07fd9e HEAD && echo yes` prints `yes` (B11 is merged).
 - `grep -c '^B11' .audit/minors.tsv` prints `2`. If `0`, finish B11's records first
   (`.audit/plans/HANDOFF-resume-lane.md`).
+- Merge main (7285d9d or later) into `resume-build-lane` so `.audit/roadmap/` is on the branch;
+  then claim this card in a commit whose subject starts `Claim C7a` (INT-4 step 1 looks for it).
+  If `git log -1 --format=%ci resume-build-lane` and the worktree's status show no change for
+  24 hours, the session that held this card may be gone: `TRACKING.md` "pick up an item someone
+  else started" says how to decide and take over (ask the owner first).
 - `grep -n 'pub keep: ChangeRef' crates/tc-api/src/conflicts.rs` prints line 382.
 - `grep -n 'fn entry_keeps' crates/tc-ui/src/views/review.rs` prints line 301.
 - `grep -n 'Choice::Candidate { head: keep }' crates/tc-app/src/conflicts.rs` prints line 599.
@@ -237,6 +242,8 @@ Plus:
 - `cargo test -p tc-ui --test screen_record` and
   `cargo test -p tc-app --test op_counts op_counts::conflicts::` pass.
 
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
+
 ## Stop and ask when
 
 - A choice would write a record of a conflict without that record's token: that breaks
@@ -258,3 +265,4 @@ Plus:
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/app-remaining.md
 - 2026-10-21 | roadmap | note | f9067bc | next in the resume lane session's own plan (.audit/plans/HANDOFF-resume-lane.md); it adopts this card at its next boundary | .worktrees/resume-build-lane/.audit/plans/HANDOFF-resume-lane.md
+- 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | note | none | `KeepPhase` (step 1) is the first `NetEnd<T>` in the UI; UI-3 step 2b generalises it, so a verifier of this card does not ask for the generalisation here. Last sign of life of the lane: f9067bc 2026-10-21 12:16; the gone rule is TRACKING.md "pick up" | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md

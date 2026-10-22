@@ -10,11 +10,12 @@ branch: none
 worktree: none
 depends: [S2]
 needs_owner: []
+later: ["S3 from step 3"]
 proves: []
 no_loss: true
 size: 2-3 d (basis: the original 23 commits in about 5 h, on a store that has since changed by +16,598/-1,873 lines)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after S2 merges, then do step 1.
 blocked_by: none
 ---
@@ -189,9 +190,14 @@ the checkpoint (460 to 591 ms median against 500 ms, STORAGE §14).
   (ROADMAP.md). Send the laptop session the task with SendMessage to the session named
   "Part 3 complete" (it only measures). Never pass an owner approval through it. A send is not
   confirmed read: watch origin for its `windows-perfreport` branch. Add its table to the evidence
-  doc and redo the verdicts.
+  doc and redo the verdicts. If no `windows-perfreport` branch appears within 3 days, ask the
+  owner to run the one command in `.audit/tasks/windows-track.md` on the laptop by hand and paste
+  the table; a pasted table is evidence when the log quotes it with the commit and the machine
+  line. (If H17 is answered "no", the rows are still measured and recorded here; DONE does not
+  wait for them, `ROADMAP.md` H17.)
 - Files: `.audit/tasks/windows-track.md`, `docs/evidence/storage-scale-<date>.md`.
-- Done when: the evidence doc has the laptop table, and the log names the laptop branch's commit.
+- Done when: the evidence doc has the laptop table, and the log names the laptop branch's commit
+  (or quotes the pasted table with its commit and machine line).
 - Record: log line `step 6`; `next: do step 7`.
 
 ### Step 7: Put the checkpoint question to the owner
@@ -220,6 +226,8 @@ Until INT-3 lands, every command below; after INT-3, `scripts/gates.sh` (to crea
 
 Plus: `perfreport ci <DIR> --tolerance 3` as the `perf` job runs it; the `alignment-budget` job's
 command; for steps 3 and 4, the store's model, crash and long-seed runs and storebench.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

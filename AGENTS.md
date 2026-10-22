@@ -1,8 +1,9 @@
 # Working in this repository
 
 This repository is a Rust rebuild of translationCore 4 (tC4), a desktop app for Bible
-translation. Read `docs/PLAN.md` first. Read `docs/STORAGE.md` before you touch anything
-that writes project data.
+translation. Read `docs/PLAN.md` first. Plan and live state: `.audit/roadmap/README.md`; record
+your work as `.audit/roadmap/TRACKING.md` says. Read `docs/STORAGE.md` before you touch
+anything that writes project data.
 
 ## The rules that protect translators' work
 

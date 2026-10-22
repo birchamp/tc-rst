@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5 d, then about 1 h a week
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -163,9 +163,9 @@ rebuild tracks none of the 16 new or changed issues except #792.
      #820 (T: the "Dios Dios" to "Dios Pablo" vector and the `follow` proptest);
      `e2e/sync-refusal.spec.ts` (E1a port list); D108 per-verse rows from #806 (E1a note);
      D105 export skip wording from #809, #811, #814 (D2); #830, #832, #836 (FIX-R);
-     #825 (T and FIX-R); #831 (C2's Resume card, test
+     #825 (T and FIX-R); #831 (FIX-R step 5, since C2 is built: test
      `resume_card_names_the_verse_of_its_text_and_never_shows_the_stub`); #833 (.1 FIX-R,
-     .2 G1 and D2, .3 F1, .4 G1, .5 B9a); #835 (F1); #837 (E1b, owner H14);
+     .2 G1 and D2, .3 F1, .4 G1, .5 FIX-R step 5, since B9a is built); #835 (F1); #837 (E1b, owner H14);
      #810 (REF1, owner H7); #818, #823, #827, #828, #829, #834 (not applicable).
   3. Add the range line at the top: `Swept: tC4 main <40-hex>, release/4.0 <40-hex>, issues
      updated to <date>.` Update "Latest tC4 state" and recount the Counts table.
@@ -191,7 +191,12 @@ rebuild tracks none of the 16 new or changed issues except #792.
 - Do:
   1. Merge as `TRACKING.md` says. Set `state: done` and `merged`. REF1 becomes ready then.
   2. Every week after, on the same weekday: fetch the sweep clone, read the range line, run
-     steps 3 and 4 from it, and merge. If nothing moved, change no document.
+     steps 3 and 4 from it, and merge. If nothing moved, change no document. Also check whether
+     tC4's `main` holds the moved-notice support the rebuild asked for
+     (`docs/TC4-REQUEST-MOVED-NOTICE.md`): `git -C <sweep clone> grep -n "tc-moved\|moved.json" main`;
+     the first week it prints, note it on F1's and X's cards (their straggler steps change), and
+     on `ROADMAP.md` H16. The integration lane owns this weekly sweep; the board warns
+     `SWEEP: last weekly line is older than 8 days` until the line is appended.
   3. Each week append one log line to this card, even on a done card:
      `- <date> | <who> | note | <commit or none> | weekly sweep: main <sha>, release/4.0 <sha>,
      <n> rows added | docs/TC4-DELTA-<date>.md or "no change"`, and set `updated`.
@@ -217,6 +222,8 @@ The full gate list: `scripts/gates.sh` once INT-3 lands. Until then, each must p
 
 Plus: `node --test parity/tc4-baseline/baseline.test.mjs` (PLAN's declared differences feed
 it), and CHK-3's TC4-ISSUES test if CHK-3 has landed.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

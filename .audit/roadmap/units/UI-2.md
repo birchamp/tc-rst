@@ -14,7 +14,7 @@ proves: [P2, P9]
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after UI-1 merges, then do step 1.
 blocked_by: none
 ---
@@ -233,6 +233,8 @@ TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc
 ```
 
 It must print `# fail 0` and `# skipped 0`.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

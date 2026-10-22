@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: under 1 h (basis: three git push commands and a check)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Wait for the owner's answer to H1, then do step 1.
 blocked_by: none
 ---
@@ -221,6 +221,7 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 
 - `python3 -I .audit/tools/board.py --check` prints no error for INT-1.
 - This item changes no file outside its own card.
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

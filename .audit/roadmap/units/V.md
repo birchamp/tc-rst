@@ -10,11 +10,12 @@ branch: none
 worktree: none
 depends: [X, I, T, S3]
 needs_owner: []
+later: ["H9 from step 8"]
 proves: [P10]
 no_loss: true
 size: 1.5-3 d (estimate; nothing comparable has been built)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after X, I, T and S3 merge, then do step 1.
 blocked_by: none
 ---
@@ -155,12 +156,16 @@ every piece of work, and an older app never calls their project damaged (tC4 RIS
      manifest's `held` state and two `kept` entries, delta §2.3); `mixed-minor`
      (`bible-titus` plus the changes of `fixtures/journal/newer-minor.ndjson`). No capsule
      holds `refs/tc/carried` or a `held` with `cause: damage`.
-  4. STOP until the ruling file exists (H19) for the `carried` capsule (a project with an audio
-     file, and a *Keep both* pair named by H22's Q4 answer). If H19 keeps S2's carried code,
-     build it through the store's public API. If H19 parks carried files, write no `carried`
-     capsule; the `CarriedFile` record stays pinned through `v0-every-kind.ndjson`.
-  5. STOP until the ruling file exists (H20) for the no-base part of `updated-book` (a file
-     chosen from anywhere). Write the known-base part now.
+  4. `carried` (`rulings/2026-10-22-H19.md` keeps S2's carried code without its git backups):
+     a project with an audio file whose record names the version it replaced and its Door43
+     user, and a *Keep both* pair named `<stem>-<Door43 user>.<ext>`
+     (`rulings/2026-10-22-H22.md` part 2, for example `jon_01-Juan.wav`). Build it through the
+     store's public API. The capsule holds no `refs/tc/carried`.
+  5. `updated-book`, both parts: the known-base part, and the no-base part (a file chosen from
+     anywhere) under `rulings/2026-10-22-H20.md`: one verse empty in the project and drafted in
+     the file (imported, no conflict), one drafted in the project and empty in the file (left,
+     no conflict), and two that differ with text on both sides (one grouped row marked
+     `unknown_base`). Wait for I step 7b's merge before writing the no-base part.
 - Files: `crates/tc-corpus/examples/capsule.rs`, `crates/tc-corpus/tests/capsules.rs`,
   `crates/tc-corpus/Cargo.toml`.
 - Done when: `cargo run -p tc-corpus --example capsule -- write 1.0-draft fixtures/capsules`
@@ -203,10 +208,11 @@ every piece of work, and an older app never calls their project damaged (tC4 RIS
      remove it from the format (delta §2.15: "V decides"), refresh
      `fixtures/journal/v0-every-kind.ndjson` with `TC_JOURNAL_BLESS=1` (nothing is `FROZEN` yet)
      and write the draft capsules again.
-  3. STOP until the ruling file exists (H18), and for `ExchangeFile` also (H22). If H18 says
-     unsupported and H22 does not keep §11.3's walk, remove `ExternalSource::Door43`,
-     `ExchangeFile`, device kinds 4 and 5, and then `Cause::External` entirely, as in item 2. If
-     merged, keep them; the pins of step 4 cover them.
+  3. `rulings/2026-10-22-H18.md` says Door43 tool edits are unsupported (B), and
+     `rulings/2026-10-22-H22.md` part 3 treats a hand-edited book inside an exchange file the
+     same way, so §11.3's walk is not built. Remove `ExternalSource::Door43`, `ExchangeFile`,
+     device kinds 4 and 5, and then `Cause::External` entirely, as in item 2. No capsule holds
+     a `Door43Edit` cause.
   4. Write `format_1_0_holds_the_settled_items` in `capsules.rs`: an `Import(Markdown)` change and
      an import change with `unknown_base` encode and read back; a no-parents import change is
      never provisional over a teammate's newer verse. Write
@@ -285,9 +291,9 @@ every piece of work, and an older app never calls their project damaged (tC4 RIS
 
 ### Step 8: Ask the owner to freeze format 1.0, and freeze on yes
 
-- Do: STOP until the ruling files exist (H18, H19, H20, H22): each decides what goes into 1.0
-  (steps 1 and 3). Finish the capsules and step 3 items they unblock, then merge steps 1 to 7
-  into main. Then ask H9 in plain words: what freezing means for a
+- Do: the rulings H18, H19, H20 and H22 (`rulings/2026-10-22-H18.md` to `-H22.md`) decided what
+  goes into 1.0 (steps 1 and 3); check that the capsules and step 3 items follow them, then merge
+  steps 1 to 7 into main. Then ask H9 in plain words: what freezing means for a
   translator (projects saved from now on open in every later version; a later change that older
   apps cannot read makes them read-only, never damaged), the evidence (the passing checks, the
   capsule list), and the recommendation (ROADMAP.md H9). On yes: write `rulings/<date>-H9.md`,
@@ -311,6 +317,8 @@ Until INT-3 lands, every command below; after INT-3, `scripts/gates.sh` (to crea
   Windows step of `.github/workflows/ci.yml`; needs `gcc-mingw-w64-x86-64` and `nasm`)
 
 Plus the `format-older-reader` job, and the capsule tests on the Windows VM gate (`gates.ps1`).
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

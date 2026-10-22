@@ -14,7 +14,7 @@ proves: [P1, P7]
 no_loss: false
 size: 3-5 sessions (estimate)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Wait for the owner's answer to H7, then claim this card.
 blocked_by: none
 ---
@@ -88,6 +88,10 @@ pages, and the newest interface words in all ten languages.
     ones; journeys local until G5.
   - `help_home_shows_no_rc1_build_text_offline` (to create) in
     `parity/app/journeys/help.test.mjs`; journey.
+  - `help_pages_name_the_real_projects_folder` (to create) in `crates/tc-ui/tests/help_pages.rs`;
+    kind: unit; CI.
+  - `parity/app/journeys/bundled-upgrade.test.mjs` (to create; the port of tC4's
+    `e2e/bundled-upgrade.spec.ts`); journey.
   - app-language case k (#650) in `parity/app/journeys/app-language.test.mjs`; journey.
   - Proof it can fail: change one of the four records by one character, run the test, paste
     the failure in the log, restore it.
@@ -125,11 +129,26 @@ pages, and the newest interface words in all ten languages.
      build; Help and About name one version. The vendored help files stay byte for byte
      (`crates/tc-ui/tests/help_pages.rs`); choose where the rebuild hides or replaces the line
      and record the choice in the log. Write `help_home_shows_no_rc1_build_text_offline`.
+  5. Correct the two help pages that describe tC4, not this app, as a declared difference
+     (PLAN "differs on purpose"; H16 in `ROADMAP.md` asks for it): `st-where-projects-live.html`
+     (:129-131) names `~/pankosmia/tc4-projects` and this app keeps projects in
+     `~/translationCore4/projects` (`crates/tc-app/src/config.rs:17-19`); `gs-install.html`
+     (:129) points at translationCore4's releases and `start-tc4.sh`. Replace the folder table
+     and the install paragraph with this app's (the download page from the H16 ruling, or a
+     placeholder the ruling fills in later), as an overlay the vendor script re-applies so the
+     pinned vendored copies stay byte for byte. Write `help_pages_name_the_real_projects_folder`
+     in `crates/tc-ui/tests/help_pages.rs`: the served pages hold `translationCore4/projects`
+     and not `pankosmia/tc4-projects` (also in `search-index.json`).
+  6. Port tC4's `e2e/bundled-upgrade.spec.ts` (the bundle is re-vendored in this step) as
+     `parity/app/journeys/bundled-upgrade.test.mjs`: an app whose bundled resources are newer
+     than a project's pins offers the upgrade on open. CHK-3's coverage map names this file.
 - Files: `crates/tc-ui/assets/`, `crates/tc-ui/vendored-from-tc4.txt`, `crates/tc-ui/help/`,
   `crates/tc-ui/help-pages.txt`, call sites of changed keys, `parity/app/journeys/help.test.mjs`.
 - Done when: `cargo test -p tc-ui --test vendored_assets --test help_pages --test i18n_keys
   --test i18n_catalogs` passes; `sed -n 3p crates/tc-ui/vendored-from-tc4.txt` prints the new
-  commit.
+  commit; `grep -rn 'pankosmia/tc4-projects' crates/tc-ui/help` prints nothing once the overlay
+  is applied (or only the pinned vendored copy, if the overlay lives beside it: then the test
+  reads the served page); `node --test parity/app/journeys/bundled-upgrade.test.mjs` passes.
 - Record: log line `step 2` with the keys added and removed; `next` to step 3.
 
 ### Step 3: Capture the baseline and the gallery again
@@ -209,6 +228,8 @@ The full gate list: `scripts/gates.sh` once INT-3 lands. Until then, each must p
 Plus: in `parity/tc4-baseline`, `npm run check`; the help, app-language and Check journeys run
 locally with their summary lines in the log. Captures are taken on the owner's Linux PC (the
 machine fingerprint in `manifest.json`).
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

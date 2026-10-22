@@ -14,7 +14,7 @@ proves: [P1, P3]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -57,6 +57,12 @@ the document says it is covered.
 - **Invariants**:
   - INV-CLAIMED-TESTS-EXIST: every backticked name in the test column of a checked row resolves
     to a test that exists, unless the cell says `(pending: <ID>)` and card `<ID>` is not `done`.
+    A TC4-ISSUES row whose Status is `unit todo` fails once every card it names is `done` (or it
+    names none): the test must exist by then or the row must change. A `done` card's funnel
+    card names only tests that exist.
+  - INV-INVARIANT-NAMES-ARE-USED: every `INV-` name in a `done` card's Invariants list appears
+    in at least one file under `crates/*/tests`, `crates/*/src`, `parity/` or `.audit/tools`
+    (as a message or a test name).
   - INV-P1-COVERED: every live tC4 journey (24 at d310bf3: J1-J8, J9a, J9c, J9d, J11, J12, J13,
     J16, J17, J18, J20-J26) and every tC4 e2e spec (37 at d310bf3) maps to journey tests that
     exist, or to a card that is not `done`.
@@ -68,6 +74,9 @@ the document says it is covered.
   - A §15 row names a test that does not exist (49 of 219 names on S2 at 3b075d7, by the
     evidence's script; L54 names `loss_salvage_damaged_pack_lines`).
   - A card is done but the journey or test it promised is still missing.
+  - A `unit todo` row (89 rows on 2026-10-22) whose card finishes without writing the test: the
+    ledger never looks at it because it only reads `covered` and `done` rows.
+  - A done card's funnel card names `push_is_never_forced`, and no test has that name.
 - **Code**:
   - Types: none in product code. One pure module, `.audit/tools/claims.mjs` (to create):
     `testNames(repo)`, `resolve(name, names)`, `checkTable(path, rows, rule)`.
@@ -104,9 +113,15 @@ the document says it is covered.
   `python3 -I .audit/tools/board.py --json` lists `<ID>` with a state other than `done`. Messages:
   `INV-CLAIMED-TESTS-EXIST: docs/TC4-ISSUES.md:<line> (#<issue>) is covered by <name>, but no
   such test exists` and `... is pending on <ID>, but <ID> is done: write the test or fix the row`.
+  Third rule, for rows whose Status is `unit todo`: the row fails when every card id its unit
+  cell names is `done` on `board.py --json`, or when it names no card at all, with
+  `INV-CLAIMED-TESTS-EXIST: docs/TC4-ISSUES.md:<line> (#<issue>) waits on <IDs>, but they are
+  done: write the test or mark the row`. (A unit cell may name an old unit id such as `D2`; the
+  map from old ids to cards is `ROADMAP.md` "How the work is organised".)
 - Files: `.audit/tools/claims.mjs`, `.audit/tools/claims.test.mjs` (to create).
 - Done when: `node --test .audit/tools/claims.test.mjs` runs and the TC4-ISSUES test fails,
-  listing each unresolved claim. A scan of resume-build-lane at f9067bc found these candidates
+  listing each unresolved claim; the planted failure for the third rule (mark one `unit todo`
+  row's card `done` in a copy of the board's JSON) prints the `waits on` message. A scan of resume-build-lane at f9067bc found these candidates
   (estimate; your list is the truth): #507, #529 `imported_obsolete_checking_language_is_kept_and_ignored`,
   #737 and #42 `WordNav` (a component, not a test). The resolver test passes.
 - Record: a log line `step 1` with the failing list.
@@ -133,10 +148,11 @@ the document says it is covered.
   [<exact titles>] }`, to `{ "rust": "<crates/... test file>", "tests": [...] }`, to
   `{ "pending": "<card id>" }`, or to both a file and a pending card for a partial one. Start from
   `evidence/2026-10-21/done-definition.md` §2: J7 and J23 pending D2; J9a, J9c, J9d pending F1;
-  J24 pending E1b; J26 pending E1a; partial J3, J8, J11, J12, J13, J17, J18 with their pending
-  card. A spec with no test and no card (today `bundled-upgrade`, `j10-rtl`,
-  `j14-join-isolation`): map `j10-rtl` to G4; for the others, add a card (TRACKING.md "Adding a
-  work item") and map to it. Write `coverage.test.mjs`: the keys of `journeys` equal
+  J24 pending E1b; J26 pending E1a; partial J3, J12, J13 pending FIX-J; partial J8 pending D1,
+  J11 and J17 pending E1b, J18 pending C7a and E1a. The three specs with no test: `j10-rtl`
+  maps to G4; `bundled-upgrade` to REF1 (its step 2 ports it as
+  `parity/app/journeys/bundled-upgrade.test.mjs`); `j14-join-isolation` to E1b (its step 4 ports
+  it into `open-door43.test.mjs`). Add no card here; every spec has one. Write `coverage.test.mjs`: the keys of `journeys` equal
   `tc4.liveJourneys`; the keys of `specs` equal `tc4.specs`; each file and each title exists; each
   pending card is not `done` (`board.py --json`); `tc4.commit` equals
   `parity/tc4-baseline/manifest.json` `tc4.commit`. Message example:
@@ -145,6 +161,23 @@ the document says it is covered.
 - Done when: `node --test parity/app/journeys/coverage.test.mjs` passes; deleting the `J5` entry
   fails it naming J5; changing a title by one letter fails it naming the file and title. Revert.
 - Record: a log line `step 3` with the counts (mapped, partial, pending).
+
+### Step 3b: Check the cards' own claims
+
+- Do: add a fourth table to `.audit/tools/claims.test.mjs`, `INV-CLAIMED-TESTS-EXIST: units`:
+  for every card in `.audit/roadmap/units/` whose front matter has `state: done`, every
+  backticked snake_case name in the `- **Checks**` bullets of `## Funnel card` resolves through
+  `resolve(name, names)` (fn names, journey titles; `(to create)` is allowed only while the card
+  is not done). Message: `INV-CLAIMED-TESTS-EXIST: units/X.md names push_is_never_forced but no
+  test has that name`. Second assertion, `INV-INVARIANT-NAMES-ARE-USED`: every `INV-[A-Z0-9-]+`
+  in a done card's `- **Invariants**` list appears in at least one file under `crates/*/tests`,
+  `crates/*/src`, `parity/` or `.audit/tools`; message `INV-INVARIANT-NAMES-ARE-USED: units/X.md
+  names INV-PUSH-NEVER-FORCED but nothing prints or tests it`.
+- Files: `.audit/tools/claims.test.mjs`.
+- Done when: the test passes on today's done cards (fix any card it catches by renaming to the
+  real test, in that card's log as a `note`); misspelling one name in a done card fails it naming
+  the card and the name. Revert.
+- Record: a log line `step 3b` with the counts.
 
 ### Step 4: Write the P-item ledger
 
@@ -203,6 +236,8 @@ Run `scripts/gates.sh` (INT-3 made it; INT-4 needs INT-3) on the exact tree you 
 
 Plus: `node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs` passes,
 and each planted failure is in the log.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

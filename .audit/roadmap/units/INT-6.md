@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -46,8 +46,9 @@ root drive is 97% full, and a full disk fails builds and tests in the middle of 
   `.worktrees/resume-build-lane/target/lanes/b11`, `.worktrees/s2-proof-executor`,
   `.worktrees/s2-fix-git`, `.worktrees/s2-fix-meta`, `.worktrees/s2-fix-proof`,
   `.worktrees/s2-review-exec`, `.worktrees/s2-commit-check`, `.worktrees/s2-proof-handoff`,
-  the folder `.worktrees/s2-review-exec-evidence`, and `.claude/worktrees/s2-verify` (the lane's
-  HANDOFF still names it as S2's home). Also keep `.worktrees/rebuild-process-improvements`
+  the folder `.worktrees/s2-review-exec-evidence`, and `.claude/worktrees/s2-verify` (HANDOFF no
+  longer names it; it is kept until S2 merges because the S2 session's history started there and
+  the board may list it). Also keep `.worktrees/rebuild-process-improvements`
   (2fe47e2, one commit on no other branch; S2's tools replace it after M2). Also never touch a worktree that a card names in its
   `worktree:` field: `grep -h '^worktree:' .audit/roadmap/units/*.md | grep -v none`.
 - Read only with `git --no-optional-locks -C <worktree> status`, so the check does not even
@@ -272,6 +273,8 @@ root drive is 97% full, and a full disk fails builds and tests in the middle of 
 or skip), and `scripts/gates.sh --check-receipt` on the exact commit main moves to. The parity
 gate (`crates/tc-ui/tests/screen_record.rs`, in the `test` step) must pass with any recaptured
 files.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

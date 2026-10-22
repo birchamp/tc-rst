@@ -10,11 +10,12 @@ branch: none
 worktree: none
 depends: [E1a]
 needs_owner: []
+later: ["H14 from step 6"]
 proves: [P1, P2]
 no_loss: true
 size: 3-4 sessions (basis: B9b)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after E1a merges, then do step 1.
 blocked_by: none
 ---
@@ -97,6 +98,8 @@ Line numbers are from `resume-build-lane` at f9067bc (main after INT-4); find mo
   - Left to checks, and why: equality of Door43's `main` and the local `main` needs git on both
     sides; a test compares them.
 - **Checks** (CI `rust` unless named a journey; journeys run in G5's `app-e2e`):
+  - The `j14-join-isolation` case in `parity/app/journeys/open-door43.test.mjs` (to create, step
+    4; the port of tC4's spec); journey.
   - In `crates/tc-app/tests/app/port_contract.rs`, new `sync_port_contract!` cases (to create),
     run on the scripted and the real port: `share_pushes_the_checkpointed_main`,
     `open_from_door43_equals_main` (`FakeDoor43::tree_of`, `crates/tc-door43-fake/src/lib.rs:742`);
@@ -175,7 +178,9 @@ Line numbers are from `resume-build-lane` at f9067bc (main after INT-4); find mo
 
 - Do: Port tC4 `e2e/j17-open-from-door43.spec.ts` (b86270f) :95 (open, then sync), :209 (`[G2]`
   an invalid journal file refuses the open and writes nothing) and :226 (#766) to
-  `parity/app/journeys/open-door43.test.mjs`; add a private-repository case (seed the repository
+  `parity/app/journeys/open-door43.test.mjs`; port tC4 `e2e/j14-join-isolation.spec.ts` into
+  the same file as the join-cleanup case (a second person who joins a team project sees none of
+  the first person's local-only state; CHK-3's coverage map names this file for that spec); add a private-repository case (seed the repository
   with `private: true`; without a token the fake's git route answers 401 and its API 404,
   `crates/tc-door43-fake/src/api.rs:1553`, :925-935). Build `StartNotice`: `home/list` carries
   it in the launch whose start removed a `.staging-join-…` folder; Home shows `refusal.open-door43.removed`

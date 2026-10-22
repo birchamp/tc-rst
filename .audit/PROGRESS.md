@@ -1,3 +1,5 @@
+History: superseded by .audit/roadmap/ on 2026-10-21; do not update.
+
 # Progress toward done
 
 The goal is `docs/PLAN.md`, "Definition of done": the rebuild is done when P1 to P10 are each

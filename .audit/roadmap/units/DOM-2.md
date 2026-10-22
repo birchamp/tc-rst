@@ -14,7 +14,7 @@ proves: [P9]
 no_loss: true
 size: 2-3 d
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after S2 merges, then do step 1.
 blocked_by: none
 ---
@@ -99,8 +99,11 @@ saved record.
     usfm-js port); tc-versification's `u16` verse numbers, where 0 is legal and documented
     (`crates/tc-versification/src/spec.rs:10-11`); the bit-exact ports (`usfmjs.rs`,
     `wordmap.rs`).
-  - Left to checks, and why: "no `tc_usfm::Document`/`Node` outside tc-usfm" is a rule about
-    imports across crates; CHK-1's architecture test holds it.
+  - Left to checks, and why: "no `tc_usfm::Document`/`Node` outside tc-usfm" cannot be carried
+    by visibility, because tc-usfm's own integration tests need the types public; step 8 moves
+    them into `pub mod raw` (the Code-layer half), and CHK-1's
+    `low_level_types_stay_in_their_owning_crate` holds the rule across crates
+    (INV-ONE-PARSER-OWNER).
 - **Checks**:
   - `the_sidecar_readers_agree_on_every_tc4_record` and
     `the_aligned_usfm_readers_give_tc4s_cards_on_en_ult_titus` in
@@ -282,9 +285,13 @@ saved record.
   2. Move tc-align's walks of `tc_usfm::Document`/`Node` (`crates/tc-align/src/words.rs:16`
      and the functions that use them; `crates/tc-align/src/suggest/mod.rs:118-215`, if step 2
      left any) into tc-usfm functions that return the source words and the aligned walk.
-  3. If `crates/tc-arch` exists (CHK-1), remove tc-align from the allowlist of the rule "no
-     `tc_usfm::Document` or `Node` outside tc-usfm". If not, log a `note` that CHK-1 needs no
-     allowlist entry for it.
+  3. The Code-layer half of INV-ONE-PARSER-OWNER: move the five raw types out of the root
+     re-export (`crates/tc-usfm/src/lib.rs:44`) into `pub mod raw`, so the only import path is
+     `tc_usfm::raw::{Document, Node, Marker, Milestone, Span}` and a reader sees what it is
+     reaching for; tc-usfm's own integration tests import from `raw`. Then remove the tc-align
+     line from `crates/tc-arch/allow/imports.txt` (CHK-1's `low_level_types_stay_in_their_owning_crate`
+     fails on a stale line, so this is forced). If `crates/tc-arch` does not exist yet, log a
+     `note` that CHK-1's imports allow list needs no tc-align line.
 - Files: `crates/tc-usfm/src/`, `crates/tc-store/src/seed.rs`, `crates/tc-app/src/create.rs`,
   `crates/tc-align/src/words.rs`, `crates/tc-align/src/suggest/mod.rs`, `crates/tc-arch/`
   (if present).

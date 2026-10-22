@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 1 d (basis: a comparable finished item and how long it took)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card, then do step 1.
 blocked_by: none
 ---
@@ -68,6 +68,7 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 "Tests" plus the Windows clippy step from `.github/workflows/ci.yml`), plus:
 
 - ...
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done` (three for a no-loss item, one per lens; see `GLOSSARY.md` "Verification lenses"), and a `fix` line for every blocker and every major that harms a translator's data or view.
 
 ## Stop and ask when
 

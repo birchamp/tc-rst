@@ -10,11 +10,12 @@ branch: none
 worktree: none
 depends: [X, C7a, D1, UI-2, UI-3]
 needs_owner: []
+later: ["H11 from step 2"]
 proves: [P1, P2, P4]
 no_loss: true
 size: 5-6 sessions (basis: B10 and C0)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after X, C7a, D1, UI-2 and UI-3 merge, then do step 1.
 blocked_by: none
 ---
@@ -79,9 +80,11 @@ Line numbers are from `resume-build-lane` at f9067bc (main after INT-4); find mo
   - The toast says "{name}'s alignment replaced yours" (tC4 D108) though nothing was replaced.
 - **Code**:
   - Types: `Door43Sync` (to create) implements `SyncPort` over `tc-sync`. `OsKeychain` (to
-    create) implements `Keychain` (`crates/tc-app/src/account.rs:61`). A new `Hold` variant (to
-    create, `enum Hold`, `crates/tc-ui/src/app/save/mod.rs:113`) for a save refused for good: a
-    held field never blocks the gate (mod.rs:1207-1209). Sync results map onto `SyncFailure` and
+    create) implements `Keychain` (`crates/tc-app/src/account.rs:61`). FIX-R's `Hold::RefusedForThisOpen(NotSaved)`
+    (`units/FIX-R.md` step 2, `enum Hold`, `crates/tc-ui/src/app/save/mod.rs:113`) for a save
+    refused for good: a held field never blocks the gate (mod.rs:1207-1209). Create it here only
+    if FIX-R is not `done`, in FIX-R's shape and name, and add a `note` to FIX-R's log; never a
+    second variant for the same thing. Sync results map onto `SyncFailure` and
     `SyncBlock` (`crates/tc-api/src/refusal.rs`) with exhaustive matches.
   - One entry point: `impl Handle<SyncProject> for App` (`crates/tc-app/src/sync.rs:228`) calls
     the port; `AppDeps::production()` holds `Door43Sync`.
@@ -184,8 +187,11 @@ Line numbers are from `resume-build-lane` at f9067bc (main after INT-4); find mo
   reason still holds Home over two clicks, FR-32). If both unit tests pass at
   once, #801 does not happen here: keep the tests, log a `note`, skip the fix. Otherwise, in
   `crates/tc-ui/src/app/save/classify.rs` (exhaustive, no wildcard) send a refusal that can
-  never succeed to the new `Hold` variant, which keeps the text as a draft (the declared
-  difference at `docs/TC4-ISSUES.md:403`).
+  never succeed to `Hold::RefusedForThisOpen` (FIX-R step 2; see the funnel card's Types), which
+  keeps the text as a draft (the declared difference at `docs/TC4-ISSUES.md:403`). This card's
+  own work is the port of tC4 `e2e/sync-refusal.spec.ts` and the sync-specific reasons
+  (`stale_scope_save_keeps_text_and_home_leaves_in_one_click`); the #801 save-machine tests in
+  `crates/tc-ui/tests/app/save.rs` are FIX-R's.
 - Files: `crates/tc-ui/src/app/save/{mod.rs,classify.rs}`, `crates/tc-ui/tests/app/save.rs`,
   `parity/app/journeys/sync-refusal.test.mjs`.
 - Done when: `cargo test -p tc-ui --test app save` passes; with the `Hold` mapping reverted,

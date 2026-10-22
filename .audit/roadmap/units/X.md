@@ -12,11 +12,12 @@ depends: [S2, DOM-1, T]
 needs_owner: []
 proves: [P2, P3, P4, P5]
 no_loss: true
-size: 5-8 d, or about 4-6 d if H18 says unsupported (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d without the Door43 walk)
+size: 4-6 d (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; H18 unsupported removes the Door43 intake walk, docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d)
 merged: none
-updated: 2026-10-21
-next: Claim this card after S2, DOM-1 and T merge, then do step 1. Step 5 item 2 waits for H18; step 7 item 2 waits for H22 and H19.
+updated: 2026-10-22
+next: Claim this card after S2, DOM-1 and T merge, then do step 1. Steps 1 to 3 run beside S3; steps 4 to 8 wait for S3's "core merged" note.
 blocked_by: none
+later: ["S3 from step 4"]
 ---
 
 # X: Door43 sync and USB exchange (tc-sync)
@@ -32,9 +33,12 @@ byte for byte over git and over exchange files.
 Since the owner's rulings of 2026-10-21 (`.audit/roadmap/rulings/2026-10-21-outside-edits.md`,
 "OE"; `2026-10-21-carried-files.md`, "CF"): only translationCore's sync merges into a project
 (OE 1, OE 6). A folder pushed to Door43 by another tool is unsupported: the sync keeps the
-project's text and says so once (OE 7). Edits made with Door43's own tools are open (H18). A
-changed file inside an exchange file is open (H22, delta Q6). Intake keeps no backups of old
-carried versions (CF 2); what carried files do until translationCore uses them is open (H19).
+project's text and says so once (OE 7). Edits made with Door43's own tools are unsupported the
+same way: the sync keeps the project's text and says once who changed what
+(`rulings/2026-10-22-H18.md`, B). A hand-edited book inside an exchange file is not taken in and
+nothing is kept; the app says once that the file on the stick still has it
+(`rulings/2026-10-22-H22.md` part 3). Intake keeps no backups of old carried versions (CF 2);
+carried files work from now on, without git backups (`rulings/2026-10-22-H19.md`, A).
 
 ## Why it matters to a translator
 
@@ -70,8 +74,8 @@ the two rulings above; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.8, §2.9, §2
 §6 (row X), §7 (H18, Q3, Q6) and its "Review (2026-10-21)". The delta changes STORAGE.md when S2
 merges; where they differ, the delta wins.
 
-- `ls .audit/roadmap/rulings/` shows which of H18, H19 and H22 have a ruling file. A step part
-  that waits for one says so.
+- `ls .audit/roadmap/rulings/2026-10-22-H18.md .audit/roadmap/rulings/2026-10-22-H19.md .audit/roadmap/rulings/2026-10-22-H22.md`
+  lists three files: the rulings this card's steps 5 and 7 follow.
 
 Answered, never ask again: Q1, Q4 keep both and show the conflict; Q2 OBS syncs like Bible; Q3
 fetch anonymously, sign in on 401 or 404, retry; Q8 check `permissions.push` before the fetch; Q15.
@@ -83,8 +87,9 @@ move is one way and writes `moved.json` once (`.audit/rebuild.tsv:61`). Ruled 20
 (Door43 merges teammates' work that arrives by translationCore's sync), OE 7 (a folder pushed by
 another tool: keep the project's text, say so once), CF 1-CF 3 (a carried version records its
 hash, the version it replaced, its Door43 user and time; no old bytes kept; two versions that
-replaced one are a conflict). Open: H18 (Door43's own tools), H19 (delta Q3, carried files
-now or later), H22 (delta Q6, a changed file inside an exchange file).
+replaced one are a conflict). Ruled 2026-10-22: H18 B (Door43's own tools: unsupported, a notice,
+no intake walk), H19 A (carried files work now, without git backups), H22 part 3 (a changed book
+inside an exchange file: not taken in, nothing kept, one notice).
 
 ## Funnel card
 
@@ -100,16 +105,18 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
     derived bytes, for any transport (memory, zip, git), order, duplication, crash or retry.
   - INV-ONLY-TRANSLATIONCORE-MERGES (OE 1, OE 7): a derived file changed in a commit pushed by
     another tool, or inside an exchange file, never enters the project on its own; the project
-    keeps its text, the other version stays where it came from, and the app says so once. For
-    Door43's own tools this holds only if H18 says unsupported.
+    keeps its text, the other version stays where it came from, and the app says so once. This
+    covers Door43's own tools (`rulings/2026-10-22-H18.md`, B).
 - **Wrong states**: a force push drops a teammate's commit (RISKS #6); a refusal after intake rolls
   received work back or says "Nothing changed" while HEAD moved (Q8); intake writes over another
   program's file (§5.10 M1); half a batch applied after a crash (Y2, I2); a damaged teammate pack
   dropped (§9.2 N3); a copied username grouped as "Mine" (#161); an email or token in a change; a
   sync rewrites `moved.json`; "Saved" before the export was read back from the device (§10.1 E5);
   an invalid exchange zip; a share-made `main` a sync does not converge with (RISKS #5); a commit
-  pushed by another tool replaces the project's text, or is reported more than once (OE 7); a
-  hand-edited book file in an exchange file taken in with no *Import* (OE 1); a carried version
+  pushed by another tool replaces the project's text, or is reported more than once (OE 7, H18); a
+  hand-edited book file in an exchange file taken in, or kept as a copy (OE 1, H22 part 3); Door43
+  holds no `main` branch after a move and a sync pushes a new `main` from the app's own tree
+  (`evidence/2026-10-21/gap-tc4-straggler-sync-safety.md` state 3b); a carried version
   that is still a head, whose blob was lost, written over at intake (delta L151); intake writes
   `refs/tc/carried` or a backup pack (CF 2).
 - **Code**:
@@ -127,8 +134,8 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
     `SyncFailure`, `SyncBlock`, `SyncRefusal` are the one set. `ScriptedSync`
     (`crates/tc-app/src/sync.rs:118`) stays until E1a swaps in the real port. Not built (delta §3):
     the §11.3 walk over exchange files; the carried backups at intake (`refs/tc/carried`,
-    `sync_blob_backup`, `copy_blob_to_durable`; S3 step 9 deletes them from tc-store). If H18 says
-    unsupported: the §11.2 walk (`crates/tc-sync/src/walk.rs`) and §9.2 N4 are not built either.
+    `sync_blob_backup`, `copy_blob_to_durable`; S3 step 9 deletes them from tc-store); the §11.2
+    walk (`crates/tc-sync/src/walk.rs`) and §9.2 N4 (`rulings/2026-10-22-H18.md`, B).
   - Left to checks: Door43's behavior (non-fast-forward, cut connection, hook refusal) and
     convergence across devices are facts about other machines; no local type holds them.
 - **Checks** (to create unless marked; CI job `rust` via `cargo test --workspace` unless marked):
@@ -143,26 +150,27 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
     CONVERGES: `three_devices_converge_with_byte_identical_derived_files`,
     `exchange_idempotent_and_relayed`, `a_main_made_by_share_converges_with_one_made_by_sync`, and
     `fold_converges_under_any_union` (exists, property) over zip and git transports too;
-    `door43_ingest_deterministic` only if H18 says merged (it tests the web-edit walk).
+    `a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state` (step 5).
   - ONLY-TRANSLATIONCORE (to create, names from the delta or this card):
     `a_door43_edit_by_another_tool_is_reported_once` (delta L152) and
-    `a_folder_pushed_by_another_tool_keeps_the_project_text_and_is_reported_once` (OE 7), both if
-    H18 says unsupported (if merged, a folder push cannot be told from a web edit, delta §2.12);
-    step 7's exchange-file tests once H22 is ruled.
+    `a_folder_pushed_by_another_tool_keeps_the_project_text_and_is_reported_once` (OE 7)
+    (`rulings/2026-10-22-H18.md`, B); step 7's exchange-file test
+    `a_hand_edited_file_in_an_exchange_file_is_not_taken_in_and_named_once` (H22 part 3).
   - CARRIED: `a_conflict_side_whose_blob_was_lost_moves_to_its_conflict_copy_before_the_path_is_replaced`
-    (delta L151) driven through a sync, if H19 keeps carried files now.
+    (delta L151) driven through a sync (`rulings/2026-10-22-H19.md`, A: carried files work now).
   - Cost: `a_sync_costs_what_arrives_not_the_project` on Psalms and ten times Psalms (count).
   - Proof each can fail: each step names its mutation; quote the failure in the log. A `+` refspec
     fails `push_is_never_forced`; no compare-and-swap in `take_in` fails the outside-edit test; no
-    30 s cap fails the retry test; if H18 says merged, ordering by commit date fails
-    `door43_ingest_deterministic`; if unsupported, merging a foreign commit's derived file fails
-    `a_door43_edit_by_another_tool_is_reported_once`.
+    30 s cap fails the retry test; merging a foreign commit's derived file fails
+    `a_door43_edit_by_another_tool_is_reported_once`; pushing a new `main` when the remote has
+    none fails `a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state`.
 - **Prose**: in the commit that changes the behavior: `docs/STORAGE.md` §9.7 (tc-api's refusal
   types); §3 and §13.3 (`moved.json`: format `tc-moved`, version 1, written once by the move,
-  never rewritten by a sync; `docs/TC4-REQUEST-MOVED-NOTICE.md:66-71`); §11.2 and §9.2 N4 as H18
-  rules, §11.3 as H22 rules (delta §2.12, §2.13). The delta itself is applied by S2's merge.
-- **Human**: H18 (step 5 item 2), H22 with delta Q6 (step 7 item 2), H19 with delta Q3 (step 7
-  item 2, carried entries). The other sync questions are answered.
+  never rewritten by a sync; `docs/TC4-REQUEST-MOVED-NOTICE.md:66-71`); §11.2 and §9.2 N4 are not
+  built (H18 B), §11.3 is the notice only (H22 part 3) (delta §2.12, §2.13). The delta itself is
+  applied by S2's merge.
+- **Human**: none open. H18 (`rulings/2026-10-22-H18.md`, B), H19 (`-H19.md`, A) and H22
+  (`-H22.md`, part 3) are ruled; steps 5 and 7 cite them. The other sync questions are answered.
 
 ## Steps
 
@@ -248,15 +256,14 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
   3. Carried versions that arrive (delta §2.14, CF 2): keep no backup of an old version, write no
      `refs/tc/carried`. A version that is still a head (a conflict side that moves to its
      `.conflict-` copy) is written and flushed at its new place before the old place is written
-     over; a missing blob is stored again from the file first. If H19 parks carried files, this
-     item shrinks to keeping such files verbatim like foreign entries: STOP until the ruling file
-     exists (H19) for this item only.
+     over; a missing blob is stored again from the file first. Carried files work from now on
+     (`rulings/2026-10-22-H19.md`, A), so this item is built in full.
   3. In `crates/tc-store/tests/store/crash.rs`, with `kill_everywhere` (:85), `kill_everywhere_full`
      (:109) and kills around each git2 call (§16.2): `crash_intake_y2_some_packs_written_folds_whole_batches_only`,
      `crash_intake_y3_packs_written_batch_not_recomputes_the_same_changes`,
      `crash_intake_y4_merge_commit_not_made_commits_next`, `crash_usb_receive_i1_writes_nothing`,
      `crash_usb_receive_i2_takes_the_rest_on_retry`. In `tests/store/outside.rs`:
-     `intake_never_writes_over_a_file_another_program_wrote`. After H19 keeps carried files:
+     `intake_never_writes_over_a_file_another_program_wrote`. Carried files (H19 A):
      `a_conflict_side_whose_blob_was_lost_moves_to_its_conflict_copy_before_the_path_is_replaced`
      (delta L151) with the teammate's version arriving through `take_in`; if S3 already wrote it
      in tc-store, add the intake case to it.
@@ -274,23 +281,22 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
      Confirm with `git::ls_remote`, then write `.tc/sync.json` `confirmed` atomically (§9.5).
      Return the §9.7 `ExchangeReport`. Repack after a sync, never during (§9.8), with no
      `refs/tc/carried` step (delta §2.8).
-  2. Commits not made by translationCore. STOP until the ruling file exists (H18). Items 1, 3
-     and 4 go on meanwhile. Then, by the ruling:
-     - **Unsupported (B, the recommendation)**: write no walk and no §9.2 N4. At intake, for each
-       commit after the last app commit (one with the `Tc-Frontier` trailer) that changed a
-       derived file, add one line to the report, remembered by commit id so it is said once:
-       "Titus was changed on Door43 by jdoe (commit 3fa2c1d) with another tool. translationCore
-       kept its own text. That version is in Door43's history." (delta §2.12). The merge tree
-       takes the fold's projection for every derived file. Tests:
-       `a_door43_edit_by_another_tool_is_reported_once` (L152),
-       `a_folder_pushed_by_another_tool_keeps_the_project_text_and_is_reported_once` (OE 7).
-     - **Unsupported with Import (C)**: as B, and a changed book file from that commit is kept as
-       a copy with *Import* (§13.6, base = that commit's pack-set heads), through S3's `kept`
-       entry. About 0.5 d more (delta H18, inference).
-     - **Merged (A)**: write the §11.2 web-edit walk in `crates/tc-sync/src/walk.rs`: graph order,
-       never by date; its changes go through `take_in`. Add `door43_ingest_deterministic`. Tell the
-       owner that OE 7 cannot be kept exactly (delta §2.12).
-     Log the ruling's file and the branch taken.
+  2. Commits not made by translationCore: unsupported, with a notice (`rulings/2026-10-22-H18.md`,
+     answer B). Write no walk and no §9.2 N4. At intake, for each commit after the last app commit
+     (one with the `Tc-Frontier` trailer) that changed a derived file, add one line to the report,
+     remembered by commit id so it is said once: "Titus was changed on Door43 by jdoe (commit
+     3fa2c1d) with another tool. translationCore kept its own text. That version is in Door43's
+     history." (delta §2.12). The merge tree takes the fold's projection for every derived file.
+     Nothing is kept as a copy and nothing is offered for *Import*; a person who wants the web
+     version downloads the file and runs "Update a book". Tests:
+     `a_door43_edit_by_another_tool_is_reported_once` (L152),
+     `a_folder_pushed_by_another_tool_keeps_the_project_text_and_is_reported_once` (OE 7).
+  2b. Door43 holds no `main` branch (`evidence/2026-10-21/gap-tc4-straggler-sync-safety.md`, state
+     3b: an owner deleted it after a move). `git::ls_remote` in S1 sees no `refs/heads/main`: the
+     machine goes to a refusal state, pushes nothing (never a new `main` from the app's own tree),
+     and the report tells the person to ask the Door43 owner to restore the branch. Test
+     `a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state` against
+     `tc-door43-fake` with the branch removed.
   3. Tests against `tc-door43-fake`: `push_is_never_forced`, `non_fast_forward_retries_six_times_within_30_s_then_busy`,
      `a_save_during_every_sync_step_is_kept_and_pushed_next`, `crash_at_every_sync_step_converges_on_retry`
      (Y1-Y6), `a_damaged_remote_pack_is_salvaged_and_listed`, `no_email_or_token_in_any_change`,
@@ -298,8 +304,8 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
      (three app-data folders, one fake), and the five names `grep -n 'loss_g[18]_' docs/TC4-DELTA-2026-10-16.md`
      lists. Point `random_syncs_lose_no_work` and `_long` at the executor.
   4. Write each missing STORAGE §15 sync or Door43-edit test. Run the list on STORAGE.md after S2's
-     merge applied the delta. Skip a name whose row the delta retires, or H18 retires (L46, L90,
-     and L91's web half if unsupported; L14 then takes L152's test). This lists them (23 at 3b075d7):
+     merge applied the delta. Skip a name whose row the delta retires, or H18 B retires (L46, L90,
+     and L91's web half; L14 takes L152's test). This lists them (23 at 3b075d7):
 
      ```sh
      sed -n '/^## 15\./,/^## 16\./p' docs/STORAGE.md \
@@ -311,10 +317,10 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
   5. Run `random_syncs_lose_no_work_long` nightly: in `scripts/gates.sh` if
      `scripts/gates.sh --list | grep nightly` prints lines, else as a step of the
      `store-model-nightly` job in `.github/workflows/ci.yml`.
-- Files: `crates/tc-sync/src/sync.rs` (to create), `crates/tc-sync/src/walk.rs` (only if H18 says
-  merged), `crates/tc-sync/tests/sync/*.rs`, `.github/workflows/ci.yml` or `scripts/gates.sh`.
+- Files: `crates/tc-sync/src/sync.rs` (to create; no `walk.rs`), `crates/tc-sync/tests/sync/*.rs`,
+  `.github/workflows/ci.yml` or `scripts/gates.sh`.
 - Done when: `cargo test -p tc-sync` passes; item 4 prints only the three step-6 names and the
-  names H18 retired; item 2 is done for the ruled branch; each funnel-card mutation fails its
+  names H18 B retired; items 2 and 2b pass their tests; each funnel-card mutation fails its
   test, quoted in the log.
 - Record: log line `step 5`; update `state`, `updated`, `next`.
 
@@ -336,7 +342,7 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
      `a_main_made_by_share_converges_with_one_made_by_sync` (RISKS #5),
      `a_join_cut_off_leaves_only_a_staging_folder_the_next_start_removes` (§6.4 N1).
 - Files: `crates/tc-sync/src/{share.rs,join.rs}`, `crates/tc-sync/tests/sync/share.rs` (to create).
-- Done when: `cargo test -p tc-sync` passes; step 5 item 4 prints nothing but the names H18
+- Done when: `cargo test -p tc-sync` passes; step 5 item 4 prints nothing but the names H18 B
   retired (none once §15 follows the ruling); a sync that writes
   `moved.json` again fails `a_sync_never_rewrites_or_deletes_moved_json`. Restore.
 - Record: log line `step 6`; update `state`, `updated`, `next`.
@@ -348,17 +354,14 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
      verified from the device: Linux `rustix::fs::fadvise` (`Advice::DontNeed`); Windows
      `OpenOptionsExt::custom_flags` with `FILE_FLAG_NO_BUFFERING` and aligned reads; macOS
      `rustix::fs::fcntl_nocache`. No `unsafe`. "Saved" only after the verify.
-  2. Receive (§10.2 R1-R8) through `take_in`. No §11.3 walk (delta §2.13, §3). Two parts wait:
-     - A derived file in the zip that differs from the projection of the zip's own packs:
-       STOP until the ruling file exists (H22). With the delta's reading (§2.13): a book file or
-       story is kept in this project's `.tc/external/` with a `kept` entry whose base is `copy`
-       (S3 step 9's entry) and listed with *Import* ("Juan's file holds a changed Titus that was
-       not made in translationCore."); any other derived file is not taken in, with a one-line
-       notice. With the simpler choice (delta Q6): nothing is kept; the app keeps its own text
-       and says once that the file on the stick still has the change. The zip is never changed.
-     - Carried entries (§10.2 R5): STOP until the ruling file exists (H19). If kept now, R5 as
-       written, minus the backups (CF 2). If parked, such files travel verbatim like foreign
-       entries.
+  2. Receive (§10.2 R1-R8) through `take_in`. No §11.3 walk (delta §2.13, §3). Two ruled parts:
+     - A derived file in the zip that differs from the projection of the zip's own packs
+       (`rulings/2026-10-22-H22.md` part 3): nothing is kept and nothing is offered for *Import*;
+       the app keeps its own text and says once, for example "Juan's file holds a changed Titus
+       that was not made in translationCore. It was not taken in; the file on the stick still has
+       it." The zip is never changed, so nothing is lost.
+     - Carried entries (§10.2 R5): R5 as written, minus the backups (CF 2;
+       `rulings/2026-10-22-H19.md`, A).
   3. Move the team simulator to a new `publish = false` crate `crates/tc-team-sim` (to create):
      `crates/tc-journal/tests/sim/mod.rs`, what it uses of `tests/support/` and `tests/common/`,
      `Transport` and `InMemory` (`tests/properties.rs:44-61` at f9067bc), and the body of
@@ -372,10 +375,10 @@ now or later), H22 (delta Q6, a changed file inside an exchange file).
   6. Tests: `exchange_idempotent_and_relayed`, `usb_both_directions`, `usb_export_name_sanitized`,
      `usb_export_verify_reads_device`, `loss_usb_one_bad_pack_rest_taken`,
      `loss_usb_damaged_carried_entry_not_recorded` (delta L83's new wording: nothing taken in
-     without the person), `a_teammates_audio_file_arrives_byte_for_byte` (#705; after H19), the U1
-     and U2 crash rows, and after H22 one test per branch of item 2's first part, for example
-     `a_hand_edited_book_file_in_an_exchange_file_is_kept_with_import` and
-     `a_hand_edited_other_file_in_an_exchange_file_is_not_taken_in_and_named_once`.
+     without the person), `a_teammates_audio_file_arrives_byte_for_byte` (#705; H19 A), the U1
+     and U2 crash rows, and for item 2's first part (H22 part 3)
+     `a_hand_edited_file_in_an_exchange_file_is_not_taken_in_and_named_once` (a book file and
+     another derived file, both cases: the project's text unchanged, no `kept` entry, one notice).
 - Files: `crates/tc-sync/src/exchange.rs`, `crates/tc-team-sim/` (to create), `crates/tc-journal/{Cargo.toml,tests/}`,
   `crates/tc-sync/tests/sync/{exchange.rs,transports.rs}` (to create).
 - Done when: `cargo test -p tc-journal --test properties fold_converges_under_any_union` and
@@ -416,10 +419,9 @@ features and with each of `--features gallery`, `--features app`, `--features te
 - The CHK-2 hook is on in every tc-sync rig; the op-count test passes on both corpora; every
   funnel-card test exists, runs in CI and has a recorded failing mutation.
 - `grep -rn "refs/tc/carried\|sync_blob_backup\|copy_blob_to_durable\|take_in_held" crates/tc-sync`
-  prints nothing (delta §3). If H18 says unsupported, `test -e crates/tc-sync/src/walk.rs || echo absent`
-  prints `absent`.
-- H18, H19 and H22 each have a ruling file, and the card's log names the branch each step took.
-  Merge with a part still waiting only if the owner says so in a ruling.
+  prints nothing (delta §3). `test -e crates/tc-sync/src/walk.rs || echo absent` prints `absent`
+  (H18 B).
+- The card's log names the ruling file each of steps 4, 5 and 7 followed (H18, H19, H22).
 - Three verification lenses (FUNNEL §8 item 5); fix every blocker and every major that harms data
   or what the translator sees.
 
@@ -430,9 +432,12 @@ features and with each of `--features gallery`, `--features app`, `--features te
 - A step would edit files that S3 (`tc-store`), DOM-1 (`tc-door43`) or E1a (`tc-app`) has claimed
   on an active branch: ask that card's owner; do not edit.
 - A gate fails twice in a row and you cannot tell why.
-- A step part waits for H18, H19 or H22 and `.audit/roadmap/rulings/` has no file for it: do the
-  rest of the step, log a `block` line naming the part and the H-id, and stop there. Never pick
-  a branch yourself.
+- A step would need a choice the H18, H19 or H22 ruling files do not make: ask the owner, as
+  above; never pick a branch yourself.
+- A Door43 repository whose owner deleted `main` after a move (step 5 item 2b) is reachable only
+  by an owner's action on Door43. Beyond the refusal that item builds, the state is outside REACH
+  (README "Rules that never bend"): do not test what tC4 does there; log it as a minor with this
+  reason.
 - Intake or receive would merge a file's changes into the project without a person's *Import*,
   keep a backup of an old carried version, or write `refs/tc/carried`: stop. The 2026-10-21
   rulings (OE 1, CF 2) forbid it.
@@ -443,7 +448,9 @@ features and with each of `--features gallery`, `--features app`, `--features te
 
 - Evidence (`.audit/roadmap/evidence/2026-10-21/`): `storage-remaining.md` §4, ST-4, ST-7, ST-8,
   ST-12; `health-domain.md` §7, F3, F14; `tc4-bugs.md` §2, §5; `done-definition.md` P2-P4, DOD-10
-  to DOD-12; `verification.md` ST-8 (#801 and #791 already had rows).
+  to DOD-12; `verification.md` ST-8 (#801 and #791 already had rows);
+  `gap-tc4-straggler-sync-safety.md` (state 3b, no `main` on Door43; step 5 item 2b).
+- Rulings: `rulings/2026-10-22-H18.md` (B), `-H19.md` (A), `-H22.md` (part 3).
 - `docs/STORAGE.md` §6.4, §9, §10, §11, §15, §16; `docs/APP-DESIGN.md` R10 (:3263), R13 (:3266);
   `docs/TC4-ISSUES.md` (f9067bc) rows 282-310 and 312.
 - tC4 (b86270f): `src/data/share/syncOperation.ts`, `test/sync/syncOperation.test.ts`,
@@ -453,3 +460,5 @@ features and with each of `--features gallery`, `--features app`, `--features te
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
+- 2026-10-22 | roadmap review (completeness review 2026-10-22) | ruling | none | H18 B, H19 A and H22 part 3 applied: step 5 item 2 is the notice only, step 7 item 2 keeps nothing, carried files are built in full; size 4-6 d | rulings/2026-10-22-H18.md
+- 2026-10-22 | roadmap review (completeness review 2026-10-22) | note | none | step 5 item 2b: a Door43 repository with no main refuses (gap-tc4-straggler state 3b); `later: S3 from step 4` so the board shows the step-4 wait | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md

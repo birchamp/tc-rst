@@ -10,11 +10,12 @@ branch: none
 worktree: none
 depends: [S2, DOM-2]
 needs_owner: []
+later: ["S3 from step 7"]
 proves: [P4, P5, P9]
 no_loss: true
 size: 4-7 d (basis: B1a's seed took about 2 h; §13.1 is the bulk; +1 to +2 d for Update a book, docs/STORAGE-DELTA-2026-10-21.md §6)
 merged: none
-updated: 2026-10-21
+updated: 2026-10-22
 next: Claim this card after S2 and DOM-2 merge, then do step 1.
 blocked_by: none
 ---
@@ -192,11 +193,11 @@ and `2026-10-21-carried-files.md`; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.1
   where step 7a or 7b finds the delta's text wrong, and say so in the log.
 - **Human**: H13 (`ROADMAP.md`): with no versification file, guess the scheme from the contents
   and say so, or use English as tC4 does? Recommendation: guess and say which. Only one test waits
-  for it. Ruling file: `rulings/<date>-H13.md`. H20 (delta Q5): Update a book with no known base;
-  step 7b waits for it. H18: step 8 item (2) waits for it. H21 (Q8) and H22 (Q2, Q6) reuse step
-  7a's job under the recommendations; another answer may add work (see "Stop and ask when").
-  These are listed in `ROADMAP.md`; they are not in `needs_owner` because only one step each
-  waits, as with H13.
+  for it. Ruling file: `rulings/<date>-H13.md`. Ruled 2026-10-22: H20 A with the empty-verse
+  rule (`rulings/2026-10-22-H20.md`; step 7b); H18 B, Door43 tool edits unsupported
+  (`rulings/2026-10-22-H18.md`; step 8 item (2) builds the notice only); H21 A and H22 parts 1
+  and 3 (`-H21.md`, `-H22.md`) reuse step 7a's job as recommended, so no extra work. H13 is not
+  in `needs_owner` because only one test waits and the card gives English until then.
 
 ## Steps
 
@@ -368,8 +369,12 @@ and `2026-10-21-carried-files.md`; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.1
 
 ### Step 7a: Update a book from USFM or a story from Markdown, with a known base (§13.6)
 
-- Only when STORAGE has §13.6 and S2's planner is on your branch ("Before you start"). The store
-  half (3) also needs S3 step 9 (d). Numbered 7a so other cards' references to steps 8 and 9 hold.
+- Two halves with one owner (this card), so the planner is written once. **Step 7a-1**, the pure
+  half (part (1) below plus part (2)'s format items), needs only STORAGE §13.6 and S2's planner on
+  your branch ("Before you start") and runs *before* S3 step 9 (d): S3's `import_kept` calls
+  `tc_import::update::plan_update` and must have it. Log it as `step 7a-1`. **Step 7a-2**, the
+  store half (parts (3) and (4)), needs S3 step 9 (d). Numbered 7a so other cards' references to
+  steps 8 and 9 hold. D1 step 3 waits for both halves ("Before you start" of D1).
 - Do: (1) Pure half in `crates/tc-import/src/update.rs` (to create), §13.6 U1, U3, U4, U5. U1:
   decode with the codec (§13.5) and the decoders in `crates/tc-journal/src/outside.rs`, with
   §13.5's refusals and the line; a story decodes into StoryBase, Frame and StoryRef; a file whose
@@ -388,8 +393,8 @@ and `2026-10-21-carried-files.md`; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.1
   parents carries it. Tell V's owner (V pins both). (3) Store half: `Store::update_book` in
   `crates/tc-store/src/store.rs` beside `create_imported`. U6: seal the batch, fold, materialize
   the book, report imported / in conflict / not readable. S3's *Import* of a kept copy calls
-  `plan_update` with the entry's base and adds `reconciles` and `Imported{md5}`; write no second
-  planner. The person also chooses a book (F1's screen); when the file's `\id` names another
+  `plan_update` (step 7a-1) with the entry's base and adds `reconciles` and `Imported{md5}`;
+  there is no planner in `tc-store`. The person also chooses a book (F1's screen); when the file's `\id` names another
   book, refuse naming both and write nothing (inference: no ruling names this case; tell F1's
   owner). (4) Write the step 7a checks of the funnel card in `crates/tc-import/tests/update.rs`
   and `crates/tc-store/tests/store/update.rs` (to create). `update_a_book_conserves` runs random
@@ -404,27 +409,32 @@ and `2026-10-21-carried-files.md`; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.1
   release build; giving the changes the project's current heads as parents fails
   `update_a_book_conflicts_a_verse_changed_on_both_sides` naming
   INV-UPDATE-NEVER-OVERWRITES-NEWER-WORK; restore.
-- Record: log line `step 7a` that names the job (`Store::update_book`) and its report type, for
-  F1 step 8; update `state`, `updated` and `next`.
+- Record: log line `step 7a-1` when the pure half merges (S3 step 9 (d) waits for it), and
+  `step 7a` when the store half does, naming the job (`Store::update_book`) and its report type,
+  for F1 step 8; update `state`, `updated` and `next`.
 
 ### Step 7b: Update a book with no known base (H20)
 
-- STOP until the ruling file exists (H20). A file chosen from anywhere has no base (delta U2 b);
-  until the ruling, `UpdateBase::None` refuses with `NotBuilt` and F1's menu item stays off.
-- Do, by the ruling: (A, the recommendation and the delta's U3 text) a value equal to the
-  project's text or to any version in that record's History imports nothing; any other
-  difference is a change with no parents and `unknown_base`; all of them form the import's one
-  grouped row (§8.1) with *Accept all from the file* (C7a reuses `OutsideEditLarge`'s choices).
-  (B) the base is the project's current heads: no conflicts; L148's protection goes, so tell the
-  roadmap which rows and tests change before you write it. (C) the base is the heads of a
-  checkpoint the person picks: add `UpdateBase::Commit(..)`; F1 adds a step to its screen, so
-  tell F1's owner. Then write `updating_from_an_old_export_reverts_nothing` (L148),
+- Ruling: `rulings/2026-10-22-H20.md` chose A with an empty-verse rule. A file chosen from
+  anywhere has no base (delta U2 b).
+- Do, by the ruling: a verse equal to the project's text or to any version in that record's
+  History imports nothing. A verse empty in the project and with text in the file imports
+  directly, with no conflict. A verse with text in the project and empty in the file leaves the
+  project's text, with no conflict, and the report lists it as "left as it was: empty in the
+  file". "Empty" is the test Home's drafted count uses (no words; markers alone are empty). Any
+  other difference is a change with no parents and `unknown_base`; all of them form the import's
+  one grouped row (§8.1) with *Accept all from the file* (C7a reuses `OutsideEditLarge`'s
+  choices), and the project's text stays shown until a choice is made. Write
+  `an_empty_project_verse_takes_the_files_text_without_a_conflict` and
+  `an_empty_file_verse_leaves_the_projects_text` for the two empty-verse rules. Then write
+  `updating_from_an_old_export_reverts_nothing` (L148),
   `a_no_base_import_never_becomes_the_provisional_text`, and the no-base half of
   `update_a_book_conserves`.
 - Files: `crates/tc-import/src/update.rs`, `crates/tc-import/tests/update.rs`,
   `crates/tc-store/tests/store/update.rs`.
-- Done when: the tests pass; under A, ranking an `unknown_base` import change above the others
-  fails `a_no_base_import_never_becomes_the_provisional_text`; restore.
+- Done when: the tests pass; ranking an `unknown_base` import change above the others fails
+  `a_no_base_import_never_becomes_the_provisional_text`; making an empty project verse a conflict
+  fails `an_empty_project_verse_takes_the_files_text_without_a_conflict`; restore both.
 - Record: log line `step 7b` naming the ruling file; update `state`, `updated` and `next`.
 
 ### Step 8: Move a Door43 team from tC4 4.x, and bridge stragglers (I-6)
@@ -434,12 +444,10 @@ and `2026-10-21-carried-files.md`; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.1
   `tc_sync::sync`. The merge commit removes `ingredients/checking/journal/**`, adds
   `ingredients/tc/**` and writes `ingredients/tc/moved.json` once (format `tc-moved`, version 1,
   the application id as one constant, no person's name; `docs/TC4-REQUEST-MOVED-NOTICE.md:18-35`).
-  Specify it in STORAGE §3 and §13.3. (2) Q13, a Door43 web edit made before the move: STOP until
-  the ruling file exists (H18). If H18 says merged: at the move, compare R's derived files with
-  the tC4 fold of R's journal and record each difference as a Door43 edit (today's §11.2). If
-  unsupported (B): keep the project's text and give X's one notice per commit (delta §2.12); with
-  *Import* offered (C): keep each changed book file as a copy and import it through step 7a's job
-  with that commit's heads as the base. Write the test to match. (3) Bridge: tC4 segments that
+  Specify it in STORAGE §3 and §13.3. (2) Q13, a Door43 web edit made before the move
+  (`rulings/2026-10-22-H18.md`, B: unsupported): keep the project's text and give X's one notice
+  per commit naming who made it and that Door43's history keeps it (delta §2.12); nothing is
+  compared, kept as a copy or offered for import. Write the test to match. (3) Bridge: tC4 segments that
   reach R after the move are converted with `tc4::convert_segments`; commits whose message ends in
   "(tC4)" are skipped; the report says that teammate still uses tC4. (4) Tests with
   `tc-door43-fake`: `team_move_tc4_no_phantom_door43_edits` (STORAGE §15),
@@ -448,7 +456,13 @@ and `2026-10-21-carried-files.md`; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.1
   `a_door43_web_edit_made_before_the_move_is_kept` (Q13; under H18 B, kept means kept in Door43's
   history and named in one notice), and
   `a_moved_repository_holds_files_tc4_refuses_to_sync` (the tree holds a file under `ingredients/`
-  that tC4's round-1 sync does not derive, so tC4 answers `sync.verify-failed`).
+  that tC4's round-1 sync does not derive, so tC4 answers `sync.verify-failed`), and
+  `a_moved_repository_with_no_main_branch_keeps_the_stragglers_branch`
+  (`evidence/2026-10-21/gap-tc4-straggler-sync-safety.md` state 3b: a repository whose default
+  branch is not `main`, where tC4 uploads a straggler's work unchecked; the move writes
+  `moved.json` on the default branch too, or refuses naming the state, and the report names the
+  teammate; X step 5 item 2b refuses a *sync* against such a repository, this test covers the
+  *move*).
 - Files: `crates/tc-sync/src/move_team.rs`, `crates/tc-sync/tests/sync/move_team.rs` (to create),
   `docs/STORAGE.md`.
 - Done when: `cargo test -p tc-sync` passes with these tests; making the bridge drop segments fails
@@ -500,14 +514,12 @@ features, `--features gallery`, `--features app` and `--features test-hooks`;
 - A step would edit files S3 (`tc-store`), X (`tc-sync`) or F1 (`tc-app`) has claimed: ask that
   card's owner; do not edit.
 - A gate fails twice in a row and you cannot tell why.
-- Step 7b or step 8 item (2) is reached and the H20 or H18 ruling file does not exist: log a
-  `block` line naming it and go on with the other steps; do not guess the rule.
-- S3 step 9 already wrote §13.6's planning inside `tc-store`: do not write a second one; ask S3's
-  owner which half is left, and move the pure half into `tc-import` only with their yes.
-- H21's ruling asks about alignment or decision files like book files (delta Q8 B): an import per
-  sidecar kind is new scope; stop and ask the roadmap to size it before you write it.
-- H22's ruling leaves the delta on Q2 (*Bring it back*) or Q6 (an exchange file's copy): check
-  that step 7a's job still serves it with its own base; if not, stop and ask.
+- S3 step 9 (d) is being written and step 7a-1 has not merged: tell S3's owner the date 7a-1
+  will merge; S3's `import_kept` calls `tc_import::update::plan_update` and writes no planner of
+  its own.
+- (H21 chose A and H22 chose the notice-only exchange-file rule, so the sidecar import and the
+  exchange-file copy are not built; if a later ruling reopens either, stop and ask the roadmap to
+  size it before you write it.)
 - F1's screen and step 7a's report disagree on a word or a count (imported, to review, not
   readable): agree the words with F1's owner; F1 owns the screen.
 
@@ -526,6 +538,7 @@ features, `--features gallery`, `--features app` and `--features test-hooks`;
   §4.3, §5, §6 (I row: +1 to +2 d), §7 (H18, Q5, Q8); `ROADMAP.md` H18, H20-H22; `units/F1.md`
   (menu item and screen), `units/S3.md` step 9 (store *Import*), `units/D1.md` (the question).
 
+- `evidence/2026-10-21/gap-tc4-straggler-sync-safety.md` (the straggler states step 8 tests; state 3b is the no-`main` repository).
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
