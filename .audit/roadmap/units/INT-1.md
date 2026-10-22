@@ -15,7 +15,7 @@ no_loss: false
 size: under 1 h (basis: three git push commands and a check)
 merged: none
 updated: 2026-10-22
-next: Step 2, the secret scan of the three branches.
+next: Step 3, push each branch under its own name.
 blocked_by: none
 ---
 
@@ -242,3 +242,4 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
 - 2026-10-22 | roadmap session (Cursor) | ruling | none | H1 answered yes; the two sessions holding resume-build-lane and s2-proof-executor have ended, so nothing writes to those branches during the push | .audit/roadmap/rulings/2026-10-22-H1.md
 - 2026-10-22 | roadmap session (Cursor) | claim | none | H1 is yes: steps 2, 3, 4, 6; the three branches are resume-build-lane (43496296), s2-proof-executor (3b075d7), storage | .audit/roadmap/rulings/2026-10-22-H1.md
+- 2026-10-22 | roadmap session (Cursor) | step 2 | none | the two scans printed only the three `== ` lines: 0 NEW lines, no key or secret file names on any branch | none
