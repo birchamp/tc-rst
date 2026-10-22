@@ -1,0 +1,349 @@
+---
+id: DOM-2
+title: One reader per job and one set of identifiers
+track: A
+lane: domain
+milestone: M1
+state: todo
+owner: none
+branch: none
+worktree: none
+depends: [S2]
+needs_owner: []
+proves: [P9]
+no_loss: true
+size: 2-3 d
+merged: none
+updated: 2026-10-21
+next: Claim this card after S2 merges, then do step 1.
+blocked_by: none
+---
+
+# DOM-2: One reader per job and one set of identifiers
+
+## Goal
+
+Before `tc-import` is written, each import job has one reader: one for aligned USFM, one for
+tC4's alignment sidecar, one for translation-question tables (the lenient one tC4 uses).
+Chapter, verse, story and frame numbers and git object ids are defined once, in `tc-core`,
+and every small text parser round-trips. The JavaScript whitespace rule and the USFM scans
+that live outside `tc-usfm` move to one place each.
+
+## Why it matters to a translator
+
+Carry-over (P9) must read a tC4 or USFM project exactly as tC4 does: an aligned verse must
+show the cards tC4 shows, and one bad row in a questions table must not hide every question
+of a book or a story. A verse numbered 0 or a reference written `TIT +1:1` must never reach a
+saved record.
+
+## Before you start
+
+- `python3 -I .audit/tools/board.py | grep -E '^\| S2 '` shows `done`.
+- `grep -rn "split_aligned\|decode_alignments" crates/*/src | grep -v "^crates/tc-journal/src/alignment.rs\|^crates/tc-journal/src/fold/sidecar.rs"`
+  lists the production callers. On resume-build-lane: `tc-store/src/commands.rs:1033`
+  (`add_book_text`, Add books). On s2-proof-executor: `tc-journal/src/outside.rs` (outside
+  edits). Write what main shows in the log.
+- `grep -rn "from_aligned(\|from_aligned_usfm(\|record::from_record(" crates/`: only test
+  callers of `from_aligned` (`crates/tc-align/src/usfm.rs:58`), `from_aligned_usfm`
+  (`suggest/mod.rs:114`) and `from_record` (`record.rs:51`).
+- `grep -rn "parse_story_questions" crates/` prints only `tc-obs` (no production caller);
+  `crates/tc-resources/src/load.rs:417` reads every questions part with the strict
+  `tc_helps::tsv::parse_questions`.
+- `grep -rn "pub struct StoryNo\|pub struct FrameNo\|pub struct ChapterNo\|pub struct VerseNo" crates/`
+  prints `tc-api/src/ids.rs:433`, `tc-journal/src/ids.rs:289, 293, 319, 333`,
+  `tc-obs/src/ids.rs:14, 46`.
+- `grep -rn "impl FromStr for\|impl std::str::FromStr for" crates/*/src | wc -l` prints 27
+  on resume-build-lane.
+- If `S3` is in an active state on the board, run
+  `git diff --stat main...<S3's branch> -- crates/tc-store crates/tc-journal` and keep the
+  list: steps 2, 3, 5 and 8 edit those crates (see "Stop and ask when").
+
+## Funnel card
+
+- **Invariants**:
+  - INV-ONE-READER-PER-JOB: each import input (aligned USFM, tC4's alignment sidecar, a
+    questions table) has one production reader, and it reads as tC4 reads.
+  - INV-IDS-ROUND-TRIP: for every small `FromStr` type, `parse(x.to_string()) == Ok(x)`; for
+    identifiers the app writes itself, a parsed text prints back exactly as written.
+  - INV-ZERO-IS-NOT-A-VERSE: no chapter, verse or story number 0 can be built; frame 0 is a
+    story's title, by name (`FrameNo::TITLE`).
+- **Wrong states**:
+  - Aligned USFM read in two shapes: `split_aligned` gives one group per run of words, tC4
+    one card per outermost source word (`crates/tc-align/src/usfm.rs:7-14`; they differ in 5
+    of Titus' 46 verses), so a translator could see a source word on two cards after Add
+    books.
+  - One bad row (an `x` in the Occurrence column) in a questions table hides all its
+    questions (strict reader at load.rs:417), where tC4 reads past it
+    (`crates/tc-obs/src/questions.rs:17-19`).
+  - `Reference` parses `TIT +1:1` (`crates/tc-core/src/lib.rs:130`, `u16::parse` takes `+`);
+    `VerseSpan::single(0)` builds a value that prints `0`, which its own parser refuses
+    (lib.rs:32-37).
+  - Three `StoryNo` types and two `FrameNo` types, joined by fallible converters
+    (`crates/tc-app/src/story.rs:276`, `create.rs:132-133`, `conflicts.rs:124`).
+- **Code**:
+  - Types: in `crates/tc-core/src/ids.rs` (to create): `ChapterNo(NonZeroU16)`,
+    `VerseNo(NonZeroU16)`, `StoryNo(u8)` with 1 to 50 (as all three copies have it today;
+    serde as a number, as tc-api's), `FrameNo(u16)` with a private field and `TITLE`.
+    `Reference` and `ChapterVerse` (`crates/tc-helps/src/refs.rs:9-12`) get private fields
+    and typed numbers. `VerseSpan::single` takes a `VerseNo`. `tc_core::js::{is_space, trim}`
+    (to create).
+  - One entry point: one reader per job. Aligned USFM: `tc_journal::alignment::split_aligned`
+    (tc-journal is below both tc-align and tc-store), giving tC4's cards. Sidecar: a
+    per-record reader factored out of `tc_journal::fold::decode_alignments`. Questions: the
+    lenient reader moved from `tc_obs::questions` into `tc_helps::tsv` (tc-resources depends
+    on tc-helps, not on tc-obs).
+  - Removed: `from_aligned` and `from_record` (tc-align); the duplicate id types and the
+    three converters; `tc_door43::ObjectId` (`crates/tc-door43/src/git_tree.rs:18`); the
+    whitespace copies and the USFM scans outside tc-usfm (each listed in its step).
+  - Left alone: tc-usfm's UTF-16 whitespace (`crates/tc-usfm/src/derivations/js.rs:40`, a
+    usfm-js port); tc-versification's `u16` verse numbers, where 0 is legal and documented
+    (`crates/tc-versification/src/spec.rs:10-11`); the bit-exact ports (`usfmjs.rs`,
+    `wordmap.rs`).
+  - Left to checks, and why: "no `tc_usfm::Document`/`Node` outside tc-usfm" is a rule about
+    imports across crates; CHK-1's architecture test holds it.
+- **Checks**:
+  - `the_sidecar_readers_agree_on_every_tc4_record` and
+    `the_aligned_usfm_readers_give_tc4s_cards_on_en_ult_titus` in
+    `crates/tc-align/tests/one_reader_per_job.rs` (to create); kind: differential over
+    `fixtures/tc4/sample-burrito/ingredients/checking/alignments/TIT.json`,
+    `fixtures/tc4/conformance-fixtures/import/tc3/cfm_fbt_tit_book.zip` and
+    `fixtures/tc4/test-fixtures/usfm-corpus/en_ult-TIT-aligned.usfm`; runs in: CI job `rust`,
+    `cargo test --workspace`.
+  - `questions_with_one_bad_row_still_load` in `crates/tc-resources/tests/load.rs` (to
+    create); kind: unit through the public API; runs in: CI `rust`.
+  - `ids_round_trip` (to create) in each crate with a small `FromStr` (its
+    `tests/properties.rs`, else `tests/ids.rs`) and `zero_is_not_a_chapter_verse_or_story`
+    in `crates/tc-core/tests/ids.rs` (to create); kind: property and unit; runs in: CI `rust`.
+  - Wire forms and no loss: `crates/tc-api/tests/golden.rs`, tc-journal's `canonical.rs`,
+    `versioning.rs`, `properties.rs`, `loss.rs`, `outside.rs` and `cargo test -p tc-store`
+    pass with no change to `fixtures/`.
+  - Proof it can fail: (1) route OBS questions back to `parse_questions`: the load test
+    fails. (2) Let `split_aligned` keep per-run groups: the en_ult differential fails on TIT
+    1:1. (3) Put `u16::parse` back in `Reference::from_str`: `ids_round_trip` in tc-core fails
+    on `TIT +1:1`. Record each output.
+- **Prose**: `docs/STORAGE.md` §13.5: the aligned-USFM reader gives tC4's cards.
+- **Human**: none. Reading as tC4 reads follows `AGENTS.md` "Matching tC4".
+
+## Steps
+
+### Step 1: Write the differential tests and record what they find
+
+- Do:
+  1. Create `crates/tc-align/tests/one_reader_per_job.rs`. Sidecar: for every verse record
+     of the sample burrito's `TIT.json`, compare `decode_alignments(BookId::Titus, bytes)`'s
+     value with `record::from_record(record, basis)` (build `basis` as
+     `crates/tc-align/tests/tc4_vectors.rs:251` does); then do the same for every tC3 record
+     of the zip (read as `crates/tc-align/tests/tc3_import.rs:55` `imported()` does), each
+     wrapped as a one-verse sidecar `{"chapters": {c: {v: record}}}`. Aligned USFM: for every
+     verse of en_ult Titus, compare `split_aligned`'s value with `from_aligned`'s cards, as
+     links (each source word to its target words) and as card groupings.
+  2. Count, for TIT 1:1, how many of `split_aligned`'s groups name ἐκλεκτῶν: more than one
+     means the aligner would show that source word on two cards.
+  3. Run it. Copy every disagreement (verse, field, both values) into the log.
+- Files: `crates/tc-align/tests/one_reader_per_job.rs`.
+- Done when: `cargo test -p tc-align --test one_reader_per_job -- --nocapture` runs, and the
+  log lists the disagreements. Expected from `crates/tc-align/src/usfm.rs:10-14`: equal links
+  in all 46 verses, different groupings in 5.
+- Record: a log line `step 1` with the counts; set `next` to step 2.
+
+### Step 2: Keep one aligned-USFM reader, with tC4's cards
+
+- Do:
+  1. In `crates/tc-journal/src/alignment.rs`, make `split_aligned` join runs under one
+     outermost source word into one card, as `from_aligned` does
+     (`crates/tc-align/src/usfm.rs:7-14`, and its code). Keep STORAGE §13.5's no-loss rule:
+     the verse is taken apart only when weaving the per-run groups back gives the content
+     byte for byte; otherwise it stays as written.
+  2. Make the step 1 aligned-USFM test assert equality, and see it pass.
+  3. Delete `from_aligned`; point its tests (`tc-align/tests/psalms.rs`, `rtl.rs`,
+     `tc4_vectors.rs`) at `split_aligned`. Rewrite `TrainingVerse::from_aligned_usfm` over
+     `split_aligned` so it no longer walks `Document`; it stays public because
+     `tests/suggestion_budget.rs` and tc-app's `suggest_tests.rs` use it.
+  4. Update `docs/STORAGE.md` §13.5's bullet on aligned USFM: groups are tC4's cards.
+- Files: `crates/tc-journal/src/alignment.rs`, `crates/tc-align/src/usfm.rs`,
+  `crates/tc-align/src/suggest/mod.rs`, `crates/tc-align/tests/*.rs` named above,
+  `docs/STORAGE.md`.
+- Done when: `cargo test -p tc-journal -p tc-align -p tc-store` passes;
+  `cargo test -p tc-align --release --test suggestion_budget -- --ignored` passes (the CI
+  `alignment-budget` job); `grep -rn "fn from_aligned(" crates/` prints nothing.
+- Record: a log line `step 2`; set `next` to step 3.
+
+### Step 3: Keep one alignment-sidecar reader
+
+- Do:
+  1. Factor the per-record body of `decode_alignments` (`crates/tc-journal/src/fold/sidecar.rs:132`)
+     into `pub fn decode_alignment_record(record: &Value, at: &str, chapter: u16, first: u16,
+     last: u16) -> Result<AlignmentValue, SidecarError>` (to create; take the arguments the
+     loop has).
+  2. For each disagreement step 1 found, port `from_record`'s rule
+     (`crates/tc-align/src/record.rs:1-30` lists them: digit-string occurrences read as
+     numbers, fractions refused, unknown fields kept in `extra`, tC3's `"type"` kept on the
+     word) into the kept reader. Never drop a field: a field the reader does not know goes to
+     `extra`.
+  3. Delete `from_record`; point `tests/tc3_import.rs` and `tests/tc4_vectors.rs` at
+     `decode_alignment_record`. Make the step 1 sidecar test assert agreement with the
+     previous `from_record` results saved as expected values.
+- Files: `crates/tc-journal/src/fold/sidecar.rs`, `crates/tc-journal/src/fold.rs`,
+  `crates/tc-align/src/record.rs`, `crates/tc-align/src/lib.rs`, `crates/tc-align/tests/*.rs`.
+- Done when: `cargo test -p tc-journal -p tc-align` passes; `grep -rn "fn from_record" crates/`
+  prints nothing.
+- Record: a log line `step 3` that names the kept readers (`split_aligned`,
+  `decode_alignments` with `decode_alignment_record`); I's card reads them from this log; set
+  `next` to step 4.
+
+### Step 4: Read questions tables as tC4 does
+
+- Do:
+  1. Move `parse_story_questions` and its helpers from `crates/tc-obs/src/questions.rs` into
+     `crates/tc-helps/src/tsv.rs` as `parse_questions_leniently(text, scope)`; keep
+     `tc_obs::questions` as a call to it, or delete it if nothing else needs it.
+  2. In `crates/tc-resources/src/load.rs:417`, read `HelpsPart::ObsQuestions` with it.
+  3. Sibling: tC4 reads Bible questions with the same `deriveTqItems`
+     (`src/data/derive.ts:323` and `:670` in the tC4 clone). Read lines 323-348 there. If it
+     reads past a bad row for Bible questions too, read `HelpsPart::Questions` with the
+     lenient reader (`TsvScope::Book`); record what you found in the log either way.
+  4. Add `questions_with_one_bad_row_still_load` to `crates/tc-resources/tests/load.rs`: a
+     questions table with one row whose Occurrence is `x` loads every other question, for
+     OBS (and for a Bible book if 4.3 applies).
+- Files: `crates/tc-helps/src/tsv.rs`, `crates/tc-obs/src/questions.rs`,
+  `crates/tc-resources/src/load.rs`, `crates/tc-resources/tests/load.rs`.
+- Done when: `cargo test -p tc-helps -p tc-obs -p tc-resources` passes; proof mutation (1)
+  fails the new test.
+- Record: a log line `step 4`; set `next` to step 5.
+
+### Step 5: Define the numbers and the git object id once, in tc-core
+
+- Do:
+  1. Create `crates/tc-core/src/ids.rs` with `ChapterNo`, `VerseNo`, `StoryNo`, `FrameNo` as
+     the funnel card says; their `Display` forms are today's. `StoryNo` serializes as a
+     number with `try_from = "u8"`, as `crates/tc-api/src/ids.rs:431-433` does.
+  2. Replace the copies: `crates/tc-journal/src/ids.rs:286-336` and
+     `crates/tc-obs/src/ids.rs:14-60` become `pub use tc_core::{…}`;
+     `crates/tc-api/src/ids.rs:431-470` becomes `pub use tc_core::StoryNo`. Add `tc-core` to
+     `crates/tc-obs/Cargo.toml`. Keep each crate's helper functions (`StoryNo::all`,
+     `story_ipath`, `story_frame`) where they are, over the shared types.
+  3. Delete the converters `journal_story` (`crates/tc-app/src/story.rs:276`), the
+     conversion at `crates/tc-app/src/create.rs:132-133` and `story`
+     (`crates/tc-app/src/conflicts.rs:124`).
+  4. Replace `tc_door43::ObjectId` with `tc_core::GitOid`: `git_tree.rs` keeps its SHA-1
+     hashing and returns `GitOid::from_bytes`; where text is parsed, use
+     `GitOid::parse_any_case`, which accepts what `ObjectId::from_str` accepted.
+- Files: `crates/tc-core/src/ids.rs`, `crates/tc-core/src/lib.rs`, the files named above,
+  and every caller the compiler names (on resume-build-lane `ObjectId` is used in
+  `tc-door43/src/{client,error,lib,verify}.rs` and `tc-resources/src/{fetched,lexicon}.rs`).
+- Done when: `grep -rn "pub struct StoryNo\|pub struct FrameNo\|pub struct ChapterNo\|pub struct VerseNo\|pub struct ObjectId" crates/`
+  prints only `crates/tc-core/src/ids.rs`; `cargo test -p tc-api --test golden` and
+  `cargo test -p tc-journal --test canonical --test versioning` pass and
+  `git diff --exit-code -- fixtures/ crates/tc-api/tests/` prints nothing.
+- Record: a log line `step 5`; set `next` to step 6.
+
+### Step 6: Make the reference types strict and round-trip every small parser
+
+- Do:
+  1. `crates/tc-core/src/lib.rs`: `Reference`'s fields become private with getters, its
+     chapter a `ChapterNo`; `from_str` accepts digits only (no `+`), as `VerseSpan` does
+     (lib.rs:80-85). `VerseSpan::single` takes a `VerseNo` (3 non-test callers).
+     `crates/tc-helps/src/refs.rs:9-12`: `ChapterVerse`'s fields become private.
+  2. Add `proptest` to `crates/tc-core/Cargo.toml` `[dev-dependencies]` (workspace
+     version). For each of the 27 `FromStr` types (list them with the grep in "Before you
+     start"), add `ids_round_trip`: `parse(x.to_string()) == Ok(x)` over generated values.
+     For identifiers the app writes itself (tc-core, tc-api, `tc-door43/src/names.rs`), also
+     assert that a text that parses prints back unchanged. Parsers of outside files
+     (`tc-versification`, `tc-burrito`, `tc-resources/src/pin.rs`) keep the spellings they
+     accept today; give them the first property only.
+  3. Add `zero_is_not_a_chapter_verse_or_story` in `crates/tc-core/tests/ids.rs`.
+- Files: `crates/tc-core/src/lib.rs`, `crates/tc-core/Cargo.toml`, `crates/tc-helps/src/refs.rs`,
+  the test files named in the funnel card, and callers the compiler names.
+- Done when: `cargo test --workspace` passes; proof mutation (3) fails tc-core's
+  `ids_round_trip` (paste it in the log).
+- Record: a log line `step 6`; set `next` to step 7.
+
+### Step 7: Define the JavaScript whitespace rule once
+
+- Do: create `crates/tc-core/src/js.rs` with `pub fn is_space(c: char) -> bool` and `pub fn
+  trim(text: &str) -> &str` (ECMAScript `WhiteSpace` and `LineTerminator`, the table of
+  `crates/tc-app/src/js.rs:7-24`) and one table test over every code point that any copy
+  treats as space. Replace the copies: `tc-api/src/model.rs:96, 111`, `tc-app/src/js.rs:7,
+  22`, `tc-check/src/js.rs:7`, `tc-helps/src/blocks.rs:126, 141`,
+  `tc-resources/src/strongs.rs:171`, `tc-obs/src/js.rs:8, 23`, and
+  `tc-usfm/src/codec.rs:261` once a test shows its formula agrees on every `char`.
+- Files: `crates/tc-core/src/js.rs`, `crates/tc-core/src/lib.rs`, the files above.
+- Done when: `grep -rn "fn is_space\|fn js_space\|fn is_js_space\|fn is_whitespace\|fn is_js_whitespace\|fn js_trim" crates/*/src`
+  prints only `crates/tc-core/src/js.rs` and `crates/tc-usfm/src/derivations/js.rs`;
+  `cargo test --workspace` passes.
+- Record: a log line `step 7`; set `next` to step 8.
+
+### Step 8: Move the USFM scans into tc-usfm
+
+- Do:
+  1. Move `source_book_name`, `markers` and `seed_book` (`crates/tc-store/src/seed.rs:31,
+     46, 97`) and `skeleton` and `id_book` (`crates/tc-app/src/create.rs:143, 334`) into
+     tc-usfm as pure functions with their tests; callers call tc-usfm.
+  2. Move tc-align's walks of `tc_usfm::Document`/`Node` (`crates/tc-align/src/words.rs:16`
+     and the functions that use them; `crates/tc-align/src/suggest/mod.rs:118-215`, if step 2
+     left any) into tc-usfm functions that return the source words and the aligned walk.
+  3. If `crates/tc-arch` exists (CHK-1), remove tc-align from the allowlist of the rule "no
+     `tc_usfm::Document` or `Node` outside tc-usfm". If not, log a `note` that CHK-1 needs no
+     allowlist entry for it.
+- Files: `crates/tc-usfm/src/`, `crates/tc-store/src/seed.rs`, `crates/tc-app/src/create.rs`,
+  `crates/tc-align/src/words.rs`, `crates/tc-align/src/suggest/mod.rs`, `crates/tc-arch/`
+  (if present).
+- Done when: `grep -rn "tc_usfm::Document\|tc_usfm::Node\|use tc_usfm::{[^}]*Document" crates/*/src | grep -v "^crates/tc-usfm/"`
+  prints nothing; `cargo test --workspace` passes.
+- Record: a log line `step 8`; set `next` to step 9.
+
+### Step 9: Run the full gates
+
+- Do: run the full gate list and the extra gates below.
+- Files: none.
+- Done when: every gate passes.
+- Record: a log line `gate`; set `state: verifying` and `next`.
+
+## Gates before merge
+
+Run `scripts/gates.sh` (INT-3 creates it; it lands before this item can start). If it is
+missing, run every command of `AGENTS.md` "Tests" and the Windows step:
+
+- `cargo fmt --all --check`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo test --workspace`
+- `cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings`, and
+  again with `--features gallery`, `--features app` and `--features test-hooks`
+- `cargo clippy -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings`
+- `cargo clippy -p tc-app --lib -- -D warnings`
+- `cargo clippy -p tc-server -p tc4 --lib --bins -- -D warnings`
+- `cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings`
+
+Plus:
+
+- `cargo test -p tc-align --release --test suggestion_budget -- --ignored --nocapture` (CI's
+  `alignment-budget` job).
+- `git diff --exit-code <claim commit> -- fixtures/` prints nothing: no fixture changed.
+- This is a no-loss item: the review runs the three verification lenses of `FUNNEL.md` §8
+  item 5, and `cargo test -p tc-journal --test properties --test loss --test outside` passes.
+
+## Stop and ask when
+
+- S3 is active and its branch changes a file that step 2, 3, 5 or 8 edits (the list from
+  "Before you start"): ask the owner which item goes first. Steps 1, 4, 6 and 7 do not touch
+  tc-store and can go first.
+- Step 1 shows the readers disagree on the plain text of a verse, or on a link (not only on
+  grouping): that is a loss risk; stop.
+- Making `split_aligned` give tC4's cards would leave a verse with its markup in the text
+  where it is taken apart today.
+- A gate fails twice and you cannot tell why.
+
+## References
+
+- `.audit/roadmap/evidence/2026-10-21/health-domain.md` §3, §6 items 2, 3, 5-8, F4-F8, F10;
+  `checks-inventory.md` C5.
+- `crates/tc-journal/src/alignment.rs:235`; `crates/tc-journal/src/fold/sidecar.rs:132`,
+  `:342`; `crates/tc-align/src/usfm.rs:1-58`; `crates/tc-align/src/record.rs:1-51`;
+  `crates/tc-align/src/suggest/mod.rs:114-215`; `crates/tc-obs/src/questions.rs:1-60`;
+  `crates/tc-resources/src/load.rs:405-420`; `crates/tc-core/src/lib.rs`,
+  `crates/tc-core/src/digest.rs:48-125`; `crates/tc-door43/src/git_tree.rs:18`.
+- `docs/STORAGE.md` §13.5 (aligned USFM); tC4 `src/data/derive.ts:323-348`, `:585-597`.
+
+## Log
+
+- 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-domain.md
