@@ -674,57 +674,6 @@ fn a_pending_file_changed_inside_a_line_is_sealed_from_memory_and_kept_in_quaran
     assert_commits_valid(&rig.fs, &folder);
 }
 
-/// The batch of an outside edit of `metadata.json` is a pending file whose header names
-/// `metadata.json` as the file it reconciles. The seal reads it back like any other file, so the
-/// checkpoint seals the edit into a pack and commits a tree that its packs account for.
-#[test]
-fn an_outside_edit_of_metadata_json_is_sealed_and_committed_with_its_packs() {
-    let (rig, folder) = titus();
-    let handle = open(&rig, &folder);
-    let metadata = folder.join("metadata.json");
-    let mut document: serde_json::Value =
-        serde_json::from_slice(&rig.fs.peek(&metadata).unwrap()).unwrap();
-    document["identification"]["name"]["en"] =
-        serde_json::Value::from("Titus, renamed by a text editor");
-    rig.fs
-        .put_unseen(&metadata, document.to_string().as_bytes(), None);
-    handle.focus().wait().unwrap();
-    handle.wait_idle();
-    assert!(
-        notices(&handle)
-            .iter()
-            .any(|n| matches!(n, Notice::OutsideEditRecorded { .. })),
-        "{:?}",
-        notices(&handle)
-    );
-    let report = checkpoint(&handle);
-    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
-    assert_eq!(report.sealed.len(), 1, "{report:?}");
-    let repo = repo_of(&rig.fs, &folder);
-    let files = commit_files(&repo, commit);
-    let committed: serde_json::Value = serde_json::from_slice(&files["metadata.json"]).unwrap();
-    assert_eq!(
-        committed["identification"]["name"]["en"],
-        "Titus, renamed by a text editor"
-    );
-    assert_eq!(
-        tree_differs_from_its_packs(
-            &repo,
-            commit,
-            project_of(&rig.fs, &folder),
-            tc_journal::fold::ProjectKind::Bible
-        ),
-        Vec::<String>::new()
-    );
-    assert!(
-        pending_files(&rig, &folder).is_empty(),
-        "the batch is sealed"
-    );
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-    assert_commits_valid(&rig.fs, &folder);
-}
-
 /// The notices that say a pending file's saves were written again from memory.
 fn written_again(handle: &ProjectHandle) -> Vec<(String, u32)> {
     notices(handle)

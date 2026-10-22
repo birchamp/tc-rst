@@ -1374,13 +1374,15 @@ fn a_dismissed_alignment_is_kept_with_its_flag() {
 #[test]
 fn read_only_refuses_every_command_and_writes_nothing() {
     let (fs, folder) = rich();
-    let (_rig, writer) = open(&fs, &folder);
-    // The folder on another computer, whose open finds the lock naming this one.
-    let other = rig_as(fs.other_machine(), "/app-desktop", "host-2");
-    let reader = other.store.open(&folder, &OpenOptions::default()).unwrap();
+    let (rig, writer) = open(&fs, &folder);
+    writer.close().unwrap();
+    drop(rig);
+    // The projects folder is found to be cloud-synced: the next open is read-only.
+    let cloud = cloud_synced_rig(fs.clone());
+    let reader = cloud.store.open(&folder, &OpenOptions::default()).unwrap();
     assert!(matches!(
         reader.facts().mode,
-        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::OpenOnAnotherComputer { .. })
+        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::UnsafeFolder(_))
     ));
     let before = files(&fs, &folder);
     for (name, command) in every_command(&reader) {
@@ -1408,7 +1410,6 @@ fn read_only_refuses_every_command_and_writes_nothing() {
         .filter(|k| *k != ".tc/lock" && before.get(*k) != after.get(*k))
         .collect();
     assert!(changed.is_empty(), "a read-only open wrote {changed:?}");
-    writer.close().unwrap();
 }
 
 /// An Open Bible Stories project made as a new one is (§3.2): its details and each story's

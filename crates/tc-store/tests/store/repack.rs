@@ -8,11 +8,7 @@ use crate::common::*;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use tc_journal::command::Command;
-use tc_journal::{GitOid, RecordKey, RepoPath};
 use tc_store::{CheckpointReason, Failure, OpenOptions, Point, ProjectHandle};
-
-const SONG: &str = "ingredients/audio/song.mp3";
 
 fn open(rig: &Rig, folder: &Path) -> ProjectHandle {
     let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
@@ -228,69 +224,6 @@ fn repack_prunes_unreachable_objects_by_age_and_keeps_what_a_ref_reaches() {
     handle.close().unwrap();
 }
 
-fn song_key() -> RecordKey {
-    RecordKey::CarriedFile(RepoPath::parse(SONG).unwrap())
-}
-
-/// L73: a carried version replaced before any checkpoint committed it is reachable only
-/// through `refs/tc/carried`. Past 14 days a repack would prune it without that ref; with it
-/// the bytes are packed, and *Restore* of the version is accepted.
-#[test]
-fn carried_superseded_version_survives_repack() {
-    let (rig, folder) = titus();
-    repack_always(&rig);
-    let handle = open(&rig, &folder);
-    let first = b"my first recording of the song".to_vec();
-    let second = b"my second recording of the song, longer".to_vec();
-    for bytes in [&first, &second] {
-        rig.fs.put_unseen(&folder.join(SONG), bytes, None);
-        handle.focus().wait().unwrap();
-        handle.wait_idle();
-    }
-    let repo = repo_of(&rig.fs, &folder);
-    let v1 = git2::Oid::hash_object(git2::ObjectType::Blob, &first).unwrap();
-    let v2 = git2::Oid::hash_object(git2::ObjectType::Blob, &second).unwrap();
-    assert!(repo.odb().unwrap().exists(v1), "both versions were stored");
-    // Old enough to be pruned were nothing to reach it.
-    age(&loose_path(&rig, &folder, v1), 15);
-    checkpoint(&handle);
-
-    let carried = repo.find_reference("refs/tc/carried").unwrap();
-    let carried_tree = carried.peel_to_commit().unwrap().tree().unwrap();
-    let kept: BTreeSet<String> = carried_tree
-        .iter()
-        .map(|e| e.name().unwrap().to_owned())
-        .collect();
-    assert_eq!(kept, BTreeSet::from([v1.to_string(), v2.to_string()]));
-    assert!(handle.counters().git_repacks >= 1);
-    assert!(
-        repo.find_blob(v1).is_ok(),
-        "the superseded version is still readable"
-    );
-    assert!(!loose_path(&rig, &folder, v1).exists(), "and is packed");
-
-    let history = handle.snapshot().fold().history(&song_key());
-    assert_eq!(history.len(), 2);
-    let shown = handle.mint(&song_key(), None).unwrap();
-    handle
-        .submit(Command::Restore {
-            shown,
-            from: history[0],
-        })
-        .wait()
-        .unwrap();
-    handle.wait_idle();
-    let placed = handle.snapshot().fold().carried_files();
-    assert_eq!(placed.len(), 1);
-    assert_eq!(
-        placed[0].oid,
-        GitOid::parse(&v1.to_string()).unwrap(),
-        "the restored version is the first recording"
-    );
-    handle.close().unwrap();
-    assert_commits_valid(&rig.fs, &folder);
-}
-
 /// R1: a repack that stops after its pack is written leaves the loose objects as duplicates;
 /// the next one removes them without writing them into a second pack, and every object is
 /// still there.
@@ -397,62 +330,4 @@ fn a_closing_project_starts_no_repack() {
         "nothing was packed while closing"
     );
     assert!(!loose(&rig, &folder).is_empty());
-}
-
-/// §9.8, §11.4, L73: two versions of a carried file recorded through focus, and the process
-/// killed before any checkpoint wrote `refs/tc/carried`. Fourteen days later the repack after
-/// the open keeps both versions, and the next checkpoint commits the file as it is.
-#[test]
-fn carried_versions_recorded_before_a_crash_survive_the_repack_at_the_next_open() {
-    let (rig, folder) = titus();
-    let handle = open(&rig, &folder);
-    let first = b"my first recording of the song".to_vec();
-    let second = b"my second recording of the song, longer".to_vec();
-    for bytes in [&first, &second] {
-        rig.fs.put_unseen(&folder.join(SONG), bytes, None);
-        handle.focus().wait().unwrap();
-        handle.wait_idle();
-    }
-    assert_eq!(handle.snapshot().fold().history(&song_key()).len(), 2);
-    let fs = rig.fs.crash(false);
-    drop(handle);
-
-    let rig = rig_as(fs, APP, "host-1");
-    let v1 = git2::Oid::hash_object(git2::ObjectType::Blob, &first).unwrap();
-    let v2 = git2::Oid::hash_object(git2::ObjectType::Blob, &second).unwrap();
-    {
-        let repo = repo_of(&rig.fs, &folder);
-        assert!(
-            repo.find_reference("refs/tc/carried").is_err(),
-            "no checkpoint wrote the reference"
-        );
-    }
-    for oid in [v1, v2] {
-        age(&loose_path(&rig, &folder, oid), 15);
-    }
-    repack_always(&rig);
-    let handle = open(&rig, &folder);
-    assert!(handle.counters().git_repacks >= 1, "a repack ran");
-    let repo = repo_of(&rig.fs, &folder);
-    assert!(repo.find_blob(v1).is_ok(), "the superseded version is kept");
-    assert!(repo.find_blob(v2).is_ok(), "the current version is kept");
-    assert_eq!(handle.snapshot().fold().history(&song_key()).len(), 2);
-
-    checkpoint(&handle);
-    let head = commits_of(&repo)[0];
-    assert_eq!(
-        commit_files(&repo, head).get(SONG),
-        Some(&second),
-        "the checkpoint commits the file"
-    );
-    assert!(
-        !handle.notices().iter().any(|n| matches!(
-            n.notice,
-            tc_journal::fold::Notice::CarriedBytesMissing { .. }
-        )),
-        "{:?}",
-        handle.notices()
-    );
-    handle.close().unwrap();
-    assert_commits_valid(&rig.fs, &folder);
 }

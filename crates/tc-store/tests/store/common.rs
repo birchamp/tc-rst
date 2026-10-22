@@ -12,8 +12,8 @@ use tc_journal::{
 };
 use tc_store::fault::FaultFs;
 use tc_store::{
-    CommandError, FakePlatform, Hooks, ManualClock, NewProject, OpenOptions, ProjectHandle, Store,
-    StoreConfig, StoreReply,
+    CommandError, FakePlatform, FolderFacts, Hooks, ManualClock, NewProject, OpenOptions,
+    ProjectHandle, Store, StoreConfig, StoreReply, UnsafeFolder,
 };
 
 pub const APP: &str = "/app";
@@ -107,6 +107,28 @@ pub fn rig(fs: FaultFs) -> Rig {
 
 pub fn rig_as(fs: FaultFs, app: &str, host: &str) -> Rig {
     let (config, _) = config(&fs, app, host);
+    let store = Store::start(config).unwrap();
+    store.wait_cleanup();
+    watch_burrito(&store, &fs);
+    Rig { fs, store }
+}
+
+/// This computer's store when a cloud client syncs the projects folder: every open is
+/// read-only (§5.0). One instance runs per computer, so a test opens with it only after the
+/// writable session closed.
+pub fn cloud_synced_rig(fs: FaultFs) -> Rig {
+    let (mut config, _) = config(&fs, APP, "host-1");
+    config.platform = Arc::new(FakePlatform {
+        host: "host-1".into(),
+        machine: "machine-of-host-1".into(),
+        facts: FolderFacts {
+            unsafe_folder: Some(UnsafeFolder::CloudSynced {
+                client: "OneDrive".into(),
+            }),
+            network: false,
+        },
+        ..FakePlatform::default()
+    });
     let store = Store::start(config).unwrap();
     store.wait_cleanup();
     watch_burrito(&store, &fs);

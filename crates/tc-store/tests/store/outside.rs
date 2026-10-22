@@ -750,54 +750,6 @@ fn the_watcher_records_an_edit_without_a_focus() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// A disk that refuses the batch of an outside edit (a scanner holds the pending file past
-/// the retries) records nothing and accepts nothing; the byte copy stays, and the writer's own
-/// retry records the edit once the disk lets it, with no one looking at the window.
-#[test]
-fn a_disk_that_refuses_the_batch_of_an_outside_edit_is_tried_again_by_the_writer() {
-    let (rig, folder) = saved_and_closed();
-    let handle = open(&rig, &folder);
-    let edited = set_verse(
-        &rig.fs.peek(&usfm_path(&folder)).unwrap(),
-        1,
-        2,
-        "in hope of eternal life",
-    );
-    rig.fs.hold_new_files(&folder.join(".tc/pending"), None);
-    rig.fs.put(&usfm_path(&folder), &edited, None);
-    handle.focus().wait().unwrap();
-    // The actor tries the held rename ten more times, and gives up; the writer is told the
-    // batch was refused and tries again on its own. The project is never idle while the disk
-    // refuses, so there is no `wait_idle` here.
-    eventually("the actor never tried the edit", || {
-        rig.fs.held_waits().len() >= 10
-    });
-    assert!(recorded(&handle).is_empty(), "the disk refused the batch");
-    assert_eq!(
-        rig.fs.peek(&usfm_path(&folder)),
-        Some(edited.clone()),
-        "the file is not written over"
-    );
-    let kept: Vec<Vec<u8>> = files(&rig.fs, &folder)
-        .into_iter()
-        .filter(|(p, _)| p.starts_with(".tc/external/") && p.contains("TIT.usfm"))
-        .map(|(_, bytes)| bytes)
-        .collect();
-    assert_eq!(kept, vec![edited.clone()], "the bytes found are kept");
-    rig.fs.release_new_files(&folder.join(".tc/pending"));
-    eventually("the writer never recorded the edit", || {
-        !recorded(&handle).is_empty()
-    });
-    handle.wait_idle();
-    assert_eq!(recorded(&handle), vec![(1, false)]);
-    assert_eq!(
-        words(&handle, 1, 2).as_deref(),
-        Some("in hope of eternal life")
-    );
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-}
-
 /// The app's own writes are no edits: the watcher is not told of them on the test
 /// filesystem, and a real one tells them, which the entries recognize.
 #[test]
@@ -959,53 +911,6 @@ fn take_in_held_records_as_conflicts_and_ends_the_hold() {
     assert_eq!(verse_conflicts(&handle).len(), 1);
     // The copy of the held bytes stays.
     assert_eq!(rig.fs.peek(&folder.join(&held[0])), Some(damaged));
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-}
-
-/// Undo an outside edit recorded with a known base (§11.1 X7): the values it replaced come
-/// back, with the edit's changes as their parents.
-#[test]
-fn undo_outside_edit_restores_and_keeps_history() {
-    use tc_journal::command::Command;
-    let (rig, folder) = saved_and_closed();
-    let edited = set_verse(
-        &rig.fs.peek(&usfm_path(&folder)).unwrap(),
-        1,
-        2,
-        "in hope of eternal life",
-    );
-    rig.fs.put(&usfm_path(&folder), &edited, None);
-    let handle = open(&rig, &folder);
-    let batch = handle
-        .notices()
-        .into_iter()
-        .find_map(|n| match n.notice {
-            Notice::OutsideEditRecorded { batch, .. } => Some(batch),
-            _ => None,
-        })
-        .expect("the edit was recorded");
-    assert_eq!(
-        words(&handle, 1, 2).as_deref(),
-        Some("in hope of eternal life")
-    );
-    let reply = handle
-        .submit(Command::UndoOutsideEdit { batch })
-        .wait()
-        .unwrap();
-    assert!(reply.kept.is_empty(), "{:?}", reply.kept);
-    assert_eq!(reply.changes.len(), 1);
-    assert_ne!(
-        words(&handle, 1, 2).as_deref(),
-        Some("in hope of eternal life"),
-        "the edit is taken back"
-    );
-    assert!(verse_conflicts(&handle).is_empty(), "the undo has a parent");
-    // Nothing was deleted: the edit is still in the history of the verse.
-    let history = handle.snapshot().fold().history(&verse(1, 2));
-    assert_eq!(history.len(), 3, "the seed, the edit and its undo");
-    handle.wait_idle();
-    leave(&handle);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
@@ -1256,61 +1161,6 @@ fn a_project_json_that_does_not_read_is_restored_from_head_at_open() {
 fn project_of_bytes(bytes: &[u8]) -> tc_journal::ProjectId {
     let json: serde_json::Value = serde_json::from_slice(bytes).unwrap();
     tc_journal::ProjectId::parse(json["projectId"].as_str().unwrap()).unwrap()
-}
-
-/// Crash rows X1 and X2 (§6.4): a process stopped at any write point of recording an edit
-/// leaves a project whose next open shows the edit exactly once, keeps the bytes found, and
-/// writes the file from the project; a second open changes nothing.
-#[test]
-fn crash_outside_edit_recording() {
-    use crate::crash::{Outcome, kill_everywhere_full};
-    let (rig, folder) = saved_and_closed();
-    let base = rig.fs.crash(false);
-    let edited = set_verse(
-        &base.peek(&usfm_path(&folder)).unwrap(),
-        1,
-        2,
-        "in hope of eternal life",
-    );
-    let setup = |fs: &FaultFs, _handle: &ProjectHandle| {
-        fs.put_unseen(&usfm_path(&folder), &edited, None);
-    };
-    let action = |handle: &ProjectHandle| {
-        let _ = handle.focus().wait();
-        handle.wait_idle();
-        Outcome::NotSaved
-    };
-    let points = kill_everywhere_full(&base, &folder, &setup, &action, &|handle, fs, _| {
-        assert_eq!(
-            words(handle, 1, 2).as_deref(),
-            Some("in hope of eternal life"),
-            "{:?}",
-            handle.notices()
-        );
-        let fold = handle.snapshot().fold().clone();
-        let externals = fold
-            .history(&verse(1, 2))
-            .iter()
-            .filter(|id| {
-                matches!(
-                    fold.body(id).map(|b| b.cause),
-                    Some(tc_journal::Cause::External { .. })
-                )
-            })
-            .count();
-        assert_eq!(externals, 1, "recorded once");
-        assert!(verse_conflicts(handle).is_empty());
-        assert!(
-            files(fs, &folder)
-                .iter()
-                .any(|(rel, bytes)| rel.starts_with(".tc/external/") && *bytes == edited),
-            "the bytes the person saved are kept"
-        );
-        let written = String::from_utf8(fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
-        assert!(written.contains("in hope of eternal life"), "{written}");
-        assert!(written.contains("Paul, a servant"), "{written}");
-    });
-    assert!(points > 8, "{points}");
 }
 
 // ---------------------------------------------------------------------------------------

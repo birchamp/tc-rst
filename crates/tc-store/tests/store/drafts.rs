@@ -315,21 +315,25 @@ fn a_copy_of_a_read_only_project_carries_its_drafts() {
         "typed before the copy",
     );
     writer.wait_idle();
-    // The folder reaches another computer that finds the lock naming this one: read-only,
-    // and the person copies the project.
-    let other = rig_as(rig.fs.other_machine(), "/app-desktop", "host-2");
-    let reader = other.store.open(&folder, &OpenOptions::default()).unwrap();
+    writer.close().unwrap();
+    let fs = rig.fs.clone();
+    drop(rig);
+    // The projects folder is found to be cloud-synced: read-only, and the person copies the
+    // project.
+    let cloud = cloud_synced_rig(fs.clone());
+    let reader = cloud.store.open(&folder, &OpenOptions::default()).unwrap();
     assert!(matches!(
         reader.facts().mode,
-        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::OpenOnAnotherComputer { .. })
+        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::UnsafeFolder(_))
     ));
     assert!(
         reader.offered_drafts().is_empty(),
         "a read-only open offers nothing"
     );
     reader.close().unwrap();
-    let copy = rig.store.copy_project(&folder, "Titus copy").unwrap();
-    writer.close().unwrap();
+    let copy = cloud.store.copy_project(&folder, "Titus copy").unwrap();
+    drop(cloud);
+    let rig = crate::common::rig(fs);
     let handle = rig.store.open(&copy, &OpenOptions::default()).unwrap();
     let offered = handle.offered_drafts();
     assert_eq!(offered.len(), 1, "{offered:?}");

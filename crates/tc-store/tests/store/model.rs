@@ -5,8 +5,7 @@
 //! The model keeps two kinds of work. A **save** is words the person saved through the app (a
 //! verse, a section of several verses in one batch, the project's name) and was told were saved.
 //! A **put** is the whole bytes another program wrote into the folder (an edit of a verse in the
-//! book file, an edit of `metadata.json`, a version of either put back, a byte the disk changed
-//! under the same size and time). The no-loss invariant:
+//! book file, an edit of `metadata.json`, a version of either put back). The no-loss invariant:
 //!
 //! - every save is a version of its record in History (readable), unless the damage the run did
 //!   took every copy of it (a journal line cut away, and no file in the folder showing it; for a
@@ -33,13 +32,18 @@
 //!
 //! The steps: saves, materializations and checkpoints, each of which can be killed before any of
 //! its write points (with or without a power cut, a torn write or not); a kill right after the
-//! rename of a file; outside edits, reverts (keeping the old time or not), same-size damage and
-//! deletions while open and while closed; pending files and packs cut, changed or deleted, in
+//! rename of a file; outside edits, reverts (keeping the old time or not) and deletions while
+//! open and while closed; pending files and packs cut, changed or deleted, in
 //! place while open or while closed, or held open by another program; files whose reads are
-//! denied while replacement is allowed; a lost manifest or heads files; the person's choice
-//! on a held file; restarts; the window's focus; the clock. The
-//! generator favours the sequences the reviews found bugs in: a crash followed by damage while
-//! closed, a kill after a rename followed by a revert, a file held around an open.
+//! denied while replacement is allowed; a lost manifest or heads files; restarts; the window's
+//! focus; the clock. The generator favours the sequences the reviews found bugs in: a crash
+//! followed by another program's change while closed, a kill after a rename followed by a
+//! revert, a file held around an open.
+//!
+//! One translationCore runs per computer (`rulings/2026-10-22-one-instance.md`), so a run
+//! never has two sessions open at once. Disk damage that keeps a file's size and time is
+//! outside what a translator can reach, and the 2026-10-21 rulings remove its hold (R10) and
+//! the person's *Take in* / *Restore* of a held file: the model has no such steps.
 
 use crate::common::*;
 use proptest::prelude::*;
@@ -148,8 +152,6 @@ pub enum Step {
     /// A backup tool (`cp -p`, `rsync -a`, Time Machine) puts back the `back`-th older version
     /// of a file with the modification time it had when the run first saw it, unseen.
     RevertKeepTime { file: File, back: u8 },
-    /// The disk changes a letter of a file and leaves its size and time as they were, unseen.
-    Damage { file: File },
     /// Another program deletes a file the app derives.
     Delete { file: File },
     /// Another program sets a file's modification time to now and leaves its bytes (a sync
@@ -176,8 +178,6 @@ pub enum Step {
     },
     /// `.tc/` loses the manifest, or every heads file, while the app is closed.
     LoseTc { heads: bool },
-    /// The person settles a held file: takes it in as an edit, or restores it.
-    Choose { take_in: bool },
     /// The window gets focus.
     Focus,
     /// Ten seconds pass.
@@ -1163,49 +1163,6 @@ impl Run {
         self.settle_put(told)
     }
 
-    /// The disk changes a letter in the words of a file and keeps its size and time.
-    fn damage(&mut self, file: File) -> Result<(), String> {
-        let rel = file.rel();
-        let fs = self.fs();
-        let path = self.path(rel);
-        let (Some(mut bytes), Ok(meta)) = (fs.peek(&path), tc_store::Vfs::metadata(&fs, &path))
-        else {
-            return Ok(());
-        };
-        // The first letter of a word of the book file (never a marker's), or of the name.
-        let text = String::from_utf8_lossy(&bytes).into_owned();
-        let from = match file {
-            File::Usfm => Some(0),
-            File::Meta => text
-                .find("\"name\"")
-                .and_then(|i| text[i..].find("\"en\": \"").map(|j| i + j + 7)),
-        };
-        let Some(at) = from.and_then(|from| {
-            let mut marker = false;
-            for (i, b) in bytes.iter().enumerate().skip(from) {
-                match *b {
-                    b'\\' => marker = true,
-                    b'\n' if file == File::Meta => return None,
-                    b if b.is_ascii_whitespace() => marker = false,
-                    b if b.is_ascii_lowercase() && !marker => return Some(i),
-                    _ => {}
-                }
-            }
-            None
-        }) else {
-            return Ok(());
-        };
-        bytes[at] = b'a' + (bytes[at] - b'a' + 1) % 26;
-        self.put(
-            rel,
-            bytes,
-            Some(meta.mtime_ns),
-            false,
-            format!("damage of {rel}"),
-        );
-        Ok(())
-    }
-
     /// Another program deletes a derived file: a deletion is never an edit (I11).
     fn delete(&mut self, file: File) -> Result<(), String> {
         self.observe_live_projection();
@@ -1334,36 +1291,6 @@ impl Run {
     }
 
     /// The person settles the first held file.
-    fn choose(&mut self, take_in: bool) -> Result<(), String> {
-        if self.handle.is_none() {
-            return Ok(());
-        }
-        self.observe_live_projection();
-        let held = self
-            .handle()
-            .notices()
-            .into_iter()
-            .find_map(|n| match n.notice {
-                Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. } => {
-                    Some(path.as_str().to_owned())
-                }
-                _ => None,
-            });
-        let Some(rel) = held else {
-            return Ok(());
-        };
-        self.log.push(format!("chose {rel} (take in: {take_in})"));
-        let done = if take_in {
-            self.handle().take_in_held(&rel).wait().map(|_| ())
-        } else {
-            self.handle().restore_held(&rel).wait()
-        };
-        if let Err(e) = done {
-            self.refused(&format!("the choice for {rel}"), e)?;
-        }
-        self.settle()
-    }
-
     /// After a put while open, the store's watcher may act on it.
     fn settle_put(&mut self, told: bool) -> Result<(), String> {
         if told && self.handle.is_some() {
@@ -2003,7 +1930,6 @@ impl Run {
             Step::EditName { told } => self.edit_name(*told),
             Step::Revert { file, back, told } => self.revert(*file, *back, *told, false),
             Step::RevertKeepTime { file, back } => self.revert(*file, *back, false, true),
-            Step::Damage { file } => self.damage(*file),
             Step::Delete { file } => self.delete(*file),
             Step::Touch { file } => {
                 let fs = self.fs();
@@ -2020,7 +1946,6 @@ impl Run {
             Step::DeleteDuringSeal { which, at } => self.delete_during_seal(*which, *at),
             Step::Flip { journal, which, at } => self.flip(*journal, *which, *at),
             Step::LoseTc { heads } => self.lose_tc(*heads),
-            Step::Choose { take_in } => self.choose(*take_in),
             Step::Focus => self.focus(),
             Step::Advance => {
                 self.fs().advance(Duration::from_secs(10));
@@ -2300,7 +2225,6 @@ fn a_fault() -> impl Strategy<Value = Step> {
             told: false
         }),
         2 => (a_file(), 0u8..3).prop_map(|(file, back)| Step::RevertKeepTime { file, back }),
-        1 => a_file().prop_map(|file| Step::Damage { file }),
         1 => a_file().prop_map(|file| Step::Delete { file }),
         1 => (a_journal(), any::<u8>())
             .prop_map(|(journal, which)| Step::DeleteJournal { journal, which }),
@@ -2323,7 +2247,6 @@ fn a_step() -> impl Strategy<Value = Step> {
         2 => (a_file(), 0u8..3, any::<bool>())
             .prop_map(|(file, back, told)| Step::Revert { file, back, told }),
         3 => a_fault(),
-        1 => any::<bool>().prop_map(|take_in| Step::Choose { take_in }),
         1 => a_file().prop_map(|file| Step::Touch { file }),
         1 => Just(Step::Focus),
         2 => Just(Step::Advance),
@@ -2334,7 +2257,7 @@ fn a_step() -> impl Strategy<Value = Step> {
 fn a_chunk() -> impl Strategy<Value = Vec<Step>> {
     prop_oneof![
         8 => a_step().prop_map(|step| vec![step]),
-        // A crash, then damage while the app is closed.
+        // A crash, then another program's change while the app is closed.
         3 => (an_act(), a_kill(), a_fault()).prop_map(|(act, kill, fault)| {
             vec![Step::Act { act, kill: Some(Kill { at: kill.at % 40, ..kill }) }, fault]
         }),
@@ -2427,31 +2350,6 @@ fn a_chunk() -> impl Strategy<Value = Vec<Step>> {
                 Step::Act { act: Act::Save(3), kill: None },
             ]
         }),
-        // Bytes settled by a read after their time stamp, damaged, found by the next open's
-        // storage check and held, perhaps saved again by another program, and the person's
-        // choice.
-        1 => (a_file(), any::<bool>(), any::<bool>()).prop_map(|(file, again, take_in)| {
-            vec![
-                Step::Act { act: Act::Leave, kill: None },
-                Step::Advance,
-                crash(),
-                Step::Open,
-                Step::Damage { file },
-                crash(),
-                Step::Open,
-                Step::Advance,
-                if again {
-                    match file {
-                        File::Usfm => Step::Edit { verse: 1, told: false },
-                        File::Meta => Step::EditName { told: false },
-                    }
-                } else {
-                    Step::Touch { file }
-                },
-                Step::Focus,
-                Step::Choose { take_in },
-            ]
-        }),
         // A pending file the open read cut in place, so a value can no longer be read, and
         // the book file deleted: the job must not rebuild it without the value (R15).
         1 => any::<bool>().prop_map(|told| {
@@ -2482,7 +2380,12 @@ fn a_history(chunks: usize) -> impl Strategy<Value = Vec<Step>> {
 /// that take them: R1 needs a save served while a checkpoint's job runs
 /// (`a_checkpoint_job_never_places_an_older_version_over_a_newer_edit`); R7, R17 and Removed
 /// a book removed (`a_book_is_added_with_stubs_removed_with_what_was_seen_and_restored_either_way`).
-const ROWS_OUT_OF_REACH: [&str; 4] = ["R1", "R7", "R17", "Removed"];
+/// R3, R10, R13, Kept, TakeIn and Restore need a held book file or `metadata.json`, which only
+/// R10's hold for disk damage made: the 2026-10-21 rulings remove R10 and *Take in* /
+/// *Restore* (docs/STORAGE-DELTA-2026-10-21.md §3), and S3 step 9 deletes them.
+const ROWS_OUT_OF_REACH: [&str; 10] = [
+    "R1", "R3", "R7", "R10", "R13", "R17", "Kept", "Removed", "TakeIn", "Restore",
+];
 
 fn histories(cases: u32, chunks: usize, every_row: bool) {
     let terminal_before = terminal_boundaries();
@@ -2611,112 +2514,6 @@ fn a_head_whose_value_can_no_longer_be_read() -> Vec<Step> {
         },
         act(Act::Save(2)),
         act(Act::Leave),
-    ]
-}
-
-/// Two writes of the book file killed after their renames, in two sessions, and a revert to
-/// the bytes of the first while the app is closed: the revert is the person's, and is kept.
-fn a_revert_to_an_earlier_write_of_two_stopped_ones() -> Vec<Step> {
-    let usfm = Holdable::File(File::Usfm);
-    vec![
-        act(Act::Save(1)),
-        act(Act::Leave),
-        act(Act::Save(1)),
-        Step::KillAfterRename { file: File::Usfm },
-        act(Act::Leave),
-        Step::Lock {
-            what: usfm,
-            on: true,
-        },
-        Step::Open,
-        act(Act::Save(1)),
-        Step::KillAfterRename { file: File::Usfm },
-        Step::Lock {
-            what: usfm,
-            on: false,
-        },
-        Step::Advance,
-        Step::Revert {
-            file: File::Usfm,
-            back: 0,
-            told: false,
-        },
-    ]
-}
-
-/// The same for `metadata.json`, where the ledger does name a second write. A book file's write
-/// begins only after a read placed the bytes of the first, but a group writes `metadata.json`
-/// after recording a revert to the bytes a stopped write replaced (R9), which settles nothing:
-/// the second write then no longer names the first one's bytes, and a revert to them is kept.
-fn a_revert_to_the_earlier_of_two_stopped_writes_of_metadata_json() -> Vec<Step> {
-    let meta = Holdable::File(File::Meta);
-    vec![
-        act(Act::Name),
-        act(Act::Leave),
-        act(Act::Name),
-        Step::KillAfterRename { file: File::Meta },
-        act(Act::Leave),
-        Step::Advance,
-        Step::Revert {
-            file: File::Meta,
-            back: 0,
-            told: false,
-        },
-        // Held through the open, whose own job would otherwise settle the write for good.
-        Step::Lock {
-            what: meta,
-            on: true,
-        },
-        Step::Open,
-        act(Act::Name),
-        Step::KillAfterRename { file: File::Meta },
-        Step::Lock {
-            what: meta,
-            on: false,
-        },
-        Step::Advance,
-        Step::Revert {
-            file: File::Meta,
-            back: 0,
-            told: false,
-        },
-    ]
-}
-
-/// `metadata.json` written by a group killed after its rename, and put back by another program
-/// while the app is closed: the revert is the person's, and is kept.
-fn a_revert_of_metadata_json_after_a_kill_past_its_rename() -> Vec<Step> {
-    vec![
-        act(Act::Name),
-        act(Act::Leave),
-        act(Act::Name),
-        Step::KillAfterRename { file: File::Meta },
-        act(Act::Leave),
-        Step::Advance,
-        Step::Revert {
-            file: File::Meta,
-            back: 0,
-            told: false,
-        },
-    ]
-}
-
-/// A file written by a group killed right after its rename, and put back while the app is
-/// closed by a backup tool that keeps the old version's size and time: the restore is the
-/// person's, and is kept.
-fn a_restore_with_its_old_time_after_a_kill_past_its_rename(file: File) -> Vec<Step> {
-    let save = match file {
-        File::Usfm => Act::Save(1),
-        File::Meta => Act::Name,
-    };
-    vec![
-        act(save),
-        act(Act::Leave),
-        Step::Advance,
-        act(save),
-        Step::KillAfterRename { file },
-        act(Act::Leave),
-        Step::RevertKeepTime { file, back: 0 },
     ]
 }
 
@@ -3154,10 +2951,6 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             false_adoption_witness(),
         ),
         (
-            "oracle_independence_omitted_notice",
-            omitted_notice_witness(),
-        ),
-        (
             "metadata_unreadable_but_replaceable",
             metadata_unreadable_but_replaceable(),
         ),
@@ -3216,26 +3009,6 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             a_head_whose_value_can_no_longer_be_read(),
         ),
         (
-            "a_revert_to_an_earlier_write_of_two_stopped_ones",
-            a_revert_to_an_earlier_write_of_two_stopped_ones(),
-        ),
-        (
-            "a_revert_to_the_earlier_of_two_stopped_writes_of_metadata_json",
-            a_revert_to_the_earlier_of_two_stopped_writes_of_metadata_json(),
-        ),
-        (
-            "a_revert_of_metadata_json_after_a_kill_past_its_rename",
-            a_revert_of_metadata_json_after_a_kill_past_its_rename(),
-        ),
-        (
-            "a_restore_of_the_book_file_with_its_old_time",
-            a_restore_with_its_old_time_after_a_kill_past_its_rename(File::Usfm),
-        ),
-        (
-            "a_restore_of_metadata_json_with_its_old_time",
-            a_restore_with_its_old_time_after_a_kill_past_its_rename(File::Meta),
-        ),
-        (
             "a_converged_metadata_json_written_again",
             a_converged_metadata_json_written_again(),
         ),
@@ -3252,10 +3025,6 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             a_saved_name_whose_last_copy_is_metadata_while_the_book_is_missing(),
         ),
         (
-            "a_book_file_damaged_with_its_stat_kept",
-            a_book_file_damaged_with_its_stat_kept(),
-        ),
-        (
             "a_metadata_revert_after_a_held_journal_and_kills_past_its_rename",
             a_metadata_revert_after_a_held_journal_and_kills_past_its_rename(),
         ),
@@ -3264,20 +3033,8 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             a_book_revert_after_an_outside_edit_and_a_kill_past_its_rename(),
         ),
         (
-            "damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save",
-            damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save(),
-        ),
-        (
             "a_book_revert_before_tc_is_lost",
             a_book_revert_before_tc_is_lost(),
-        ),
-        (
-            "damage_twice_then_restore_from_the_project",
-            damage_twice_then_restore_from_the_project(),
-        ),
-        (
-            "a_restored_damage_reverted_with_its_old_time",
-            a_restored_damage_reverted_with_its_old_time(),
         ),
         (
             "a_recorded_revert_whose_pending_file_is_deleted",
@@ -3316,10 +3073,6 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files(),
         ),
         (
-            "reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage",
-            reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage(),
-        ),
-        (
             "reverts_of_both_files_around_a_cut_and_kills",
             reverts_of_both_files_around_a_cut_and_kills(),
         ),
@@ -3338,28 +3091,10 @@ fn false_adoption_witness() -> Vec<Step> {
     ]
 }
 
-fn omitted_notice_witness() -> Vec<Step> {
-    vec![
-        act(Act::Leave),
-        Step::Advance,
-        crash(),
-        Step::Open,
-        Step::Damage { file: File::Usfm },
-        crash(),
-        Step::Open,
-        Step::Choose { take_in: false },
-    ]
-}
-
 /// These run only the generic oracle; independent probe controls remain separate.
 #[test]
 fn oracle_independence_false_adoption() {
     assert_kept(&false_adoption_witness());
-}
-
-#[test]
-fn oracle_independence_omitted_notice() {
-    assert_kept(&omitted_notice_witness());
 }
 
 fn assert_kept(steps: &[Step]) {
@@ -3381,31 +3116,6 @@ fn a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file() {
 #[test]
 fn a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent() {
     assert_kept(&a_head_whose_value_can_no_longer_be_read());
-}
-
-#[test]
-fn a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept() {
-    assert_kept(&a_revert_to_an_earlier_write_of_two_stopped_ones());
-    assert_kept(&a_revert_to_the_earlier_of_two_stopped_writes_of_metadata_json());
-}
-
-#[test]
-fn a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept() {
-    assert_kept(&a_revert_of_metadata_json_after_a_kill_past_its_rename());
-}
-
-#[test]
-fn a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept() {
-    assert_kept(&a_restore_with_its_old_time_after_a_kill_past_its_rename(
-        File::Usfm,
-    ));
-}
-
-#[test]
-fn a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept() {
-    assert_kept(&a_restore_with_its_old_time_after_a_kill_past_its_rename(
-        File::Meta,
-    ));
 }
 
 #[test]
@@ -3783,32 +3493,6 @@ fn a_saved_name_whose_last_copy_is_metadata_while_the_book_is_missing_is_kept() 
     assert_kept(&a_saved_name_whose_last_copy_is_metadata_while_the_book_is_missing());
 }
 
-/// The disk changes a letter of the book file and keeps its size and time while the app is
-/// closed after a crash.
-fn a_book_file_damaged_with_its_stat_kept() -> Vec<Step> {
-    vec![
-        Step::Advance,
-        killed(Act::Name, 0),
-        Step::Damage { file: File::Usfm },
-    ]
-}
-
-#[test]
-fn a_book_file_damaged_with_its_stat_kept_is_repaired() {
-    assert_kept(&a_book_file_damaged_with_its_stat_kept());
-}
-
-fn kill_with(act: Act, at: u16, power_cut: bool, torn: bool) -> Step {
-    Step::Act {
-        act,
-        kill: Some(Kill {
-            at,
-            power_cut,
-            torn,
-        }),
-    }
-}
-
 fn lock(what: Holdable, on: bool) -> Step {
     Step::Lock { what, on }
 }
@@ -3894,31 +3578,6 @@ fn a_book_revert_after_an_outside_edit_and_a_kill_past_its_rename_is_kept() {
     assert_kept(&a_book_revert_after_an_outside_edit_and_a_kill_past_its_rename());
 }
 
-/// Found by the bounded model on 2026-10-20 (round r2-1).
-fn damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save() -> Vec<Step> {
-    vec![
-        kill_with(Act::Checkpoint, 35, true, false),
-        Step::Damage { file: File::Usfm },
-        act(Act::Save(1)),
-        lock(pending_held(203, true), true),
-        act(Act::Checkpoint),
-        act(Act::Save(2)),
-        lock(pending_held(203, true), false),
-        act(Act::Save(3)),
-        kill_with(Act::Save(3), 10, false, true),
-        Step::Revert {
-            file: File::Usfm,
-            back: 2,
-            told: false,
-        },
-    ]
-}
-
-#[test]
-fn damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save_is_kept() {
-    assert_kept(&damage_after_a_power_cut_in_a_checkpoint_then_a_torn_save());
-}
-
 /// Found by the bounded model on 2026-10-20 (round r2-2).
 fn a_book_revert_before_tc_is_lost() -> Vec<Step> {
     vec![
@@ -3946,62 +3605,6 @@ fn a_book_revert_before_tc_is_lost() -> Vec<Step> {
 #[test]
 fn a_book_revert_before_tc_is_lost_is_kept() {
     assert_kept(&a_book_revert_before_tc_is_lost());
-}
-
-/// Found by the bounded model on 2026-10-20 (round r2-3).
-fn damage_twice_then_restore_from_the_project() -> Vec<Step> {
-    vec![
-        killed(Act::Save(1), 19),
-        Step::Damage { file: File::Usfm },
-        act(Act::Leave),
-        Step::Advance,
-        crash(),
-        Step::Open,
-        Step::Damage { file: File::Usfm },
-        crash(),
-        Step::Open,
-        Step::Advance,
-        Step::Touch { file: File::Usfm },
-        Step::Focus,
-        Step::Choose { take_in: false },
-    ]
-}
-
-#[test]
-fn damage_twice_then_restore_from_the_project_is_kept() {
-    assert_kept(&damage_twice_then_restore_from_the_project());
-}
-
-/// Found by the bounded model on 2026-10-20 (round r2-4).
-fn a_restored_damage_reverted_with_its_old_time() -> Vec<Step> {
-    vec![
-        act(Act::Leave),
-        Step::Advance,
-        crash(),
-        Step::Open,
-        Step::Damage { file: File::Usfm },
-        crash(),
-        Step::Open,
-        Step::Advance,
-        Step::Touch { file: File::Usfm },
-        Step::Focus,
-        Step::Choose { take_in: false },
-        crash(),
-        Step::RevertKeepTime {
-            file: File::Usfm,
-            back: 0,
-        },
-        killed(Act::Name, 0),
-        Step::RevertKeepTime {
-            file: File::Usfm,
-            back: 0,
-        },
-    ]
-}
-
-#[test]
-fn a_restored_damage_reverted_with_its_old_time_is_repaired() {
-    assert_kept(&a_restored_damage_reverted_with_its_old_time());
 }
 
 /// Found by the bounded model on 2026-10-20 (round r3-11).
@@ -4371,73 +3974,6 @@ fn an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files() -> Vec<Step> {
 #[test]
 fn an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files_is_kept() {
     assert_kept(&an_outside_edit_after_a_flip_and_a_cut_of_held_pending_files());
-}
-
-/// Found by the long model on 2026-10-21 (seed 20261021002, after the seal fix).
-fn reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage() -> Vec<Step> {
-    vec![
-        Step::KillAfterRename { file: File::Usfm },
-        act(Act::Save(4)),
-        Step::Advance,
-        Step::RevertKeepTime {
-            file: File::Usfm,
-            back: 0,
-        },
-        killed(Act::Section(2), 15),
-        Step::Cut {
-            journal: Journal::Pending,
-            which: 54,
-            keep: 0,
-            at_line: false,
-        },
-        kill_with(Act::Leave, 3, true, false),
-        crash(),
-        Step::DeleteJournal {
-            journal: Journal::Pending,
-            which: 124,
-        },
-        Step::KillAfterRename { file: File::Usfm },
-        act(Act::Section(2)),
-        Step::Advance,
-        Step::Revert {
-            file: File::Usfm,
-            back: 2,
-            told: false,
-        },
-        Step::KillAfterRename { file: File::Usfm },
-        Step::Revert {
-            file: File::Usfm,
-            back: 2,
-            told: false,
-        },
-        kill_with(Act::Section(1), 18, true, false),
-        Step::Flip {
-            journal: Journal::Pending,
-            which: 102,
-            at: 55976,
-        },
-        crash(),
-        Step::RevertKeepTime {
-            file: File::Usfm,
-            back: 2,
-        },
-        act(Act::Leave),
-        Step::Advance,
-        crash(),
-        Step::Open,
-        Step::Damage { file: File::Usfm },
-        crash(),
-        Step::Open,
-        Step::Advance,
-        Step::Touch { file: File::Usfm },
-        Step::Focus,
-        Step::Choose { take_in: true },
-    ]
-}
-
-#[test]
-fn reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage_are_kept() {
-    assert_kept(&reverts_kept_with_their_old_time_through_kills_cuts_and_a_taken_in_damage());
 }
 
 /// Found by the long model on 2026-10-21 (seed 20261021003).

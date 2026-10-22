@@ -84,24 +84,26 @@ fn an_open_removes_stale_git_lock_files() {
 fn a_read_only_open_writes_nothing_in_git() {
     let (rig, folder) = titus();
     let dir = git_dir(&rig.fs, &folder);
-    // The open on this computer holds the project; the other computer's open is read-only.
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
+    handle.close().unwrap();
+    let fs = rig.fs.clone();
+    drop(rig);
     std::fs::write(dir.join("index.lock"), b"another process").unwrap();
     // A configuration a person's tool changed is not set again by a reader.
     let mut config = git2::Config::open(&dir.join("config")).unwrap();
     config.set_bool("core.autocrlf", true).unwrap();
     let before = tree_of_files(&dir);
-    let other = rig_as(rig.fs.other_machine(), "/app-desktop", "host-2");
-    let reader = other.store.open(&folder, &OpenOptions::default()).unwrap();
+    // The projects folder is found to be cloud-synced: the next open is read-only.
+    let cloud = cloud_synced_rig(fs);
+    let reader = cloud.store.open(&folder, &OpenOptions::default()).unwrap();
     reader.wait_idle();
     assert!(matches!(
         reader.facts().mode,
-        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::OpenOnAnotherComputer { .. })
+        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::UnsafeFolder(_))
     ));
     reader.close().unwrap();
     assert_eq!(tree_of_files(&dir), before);
-    handle.close().unwrap();
 }
 
 /// L87 (G4's guard): libgit2 refuses a folder another account owns. That is not damage: the

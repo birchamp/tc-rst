@@ -1,5 +1,5 @@
-//! The silent-loss cases of `docs/STORAGE.md` §15.3 that unit S1 owns: two writers in one
-//! folder (L64), a lost rename (L80), a disk error after the rename (L86), a read-only open
+//! The silent-loss cases of `docs/STORAGE.md` §15.3 that unit S1 owns: a journal file of
+//! another installation appearing in the folder (L64), a lost rename (L80), a disk error after the rename (L86), a read-only open
 //! (L87), a pack deleted outside the app (L65, the local half), a rename retry (L82) and
 //! storage damage (L83).
 
@@ -16,12 +16,17 @@ fn notices_of(handle: &tc_store::ProjectHandle) -> Vec<Notice> {
     handle.notices().into_iter().map(|n| n.notice).collect()
 }
 
+/// The second-writer guard, the one test the one-instance ruling keeps until the owner
+/// answers its open point (`rulings/2026-10-22-one-instance.md`): a journal file this
+/// installation did not write appears while the project is open (a sync tool copying another
+/// computer's saves into a folder nobody recognised as synced). The project turns read-only
+/// with a notice, and both computers' saves are kept.
 #[test]
-fn loss_pending_names_never_collide_two_writers() {
+fn an_unknown_journal_file_appearing_turns_the_project_read_only() {
     let (rig, folder) = titus();
-    let other_fs = rig.fs.other_machine();
-    let other = rig_as(other_fs, "/app-desktop", "host-2");
-    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    // Another computer saves into its own copy of the project.
+    let theirs_fs = rig.fs.copy();
+    let other = rig_as(theirs_fs.clone(), "/app-desktop", "host-2");
     let theirs = other
         .store
         .open(
@@ -32,43 +37,25 @@ fn loss_pending_names_never_collide_two_writers() {
             },
         )
         .unwrap();
-    save_verse(&mine, 1, 10, "mine").unwrap();
-    save_verse(&theirs, 1, 11, "theirs").unwrap();
-    let pending = pending_files(&rig.fs, &folder);
-    assert_eq!(pending.len(), 2, "two files, neither replaced: {pending:?}");
-    drop(mine);
-    drop(theirs);
-    let reopened = rig_as(rig.fs.crash(false), APP, "host-1");
-    let handle = reopened
-        .store
-        .open(&folder, &OpenOptions::default())
-        .unwrap();
-    assert_eq!(words(&handle, 1, 10).as_deref(), Some("mine"));
-    assert_eq!(words(&handle, 1, 11).as_deref(), Some("theirs"));
-    handle.close().unwrap();
-}
-
-#[test]
-fn second_writer_detected_read_only() {
-    let (rig, folder) = titus();
-    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    let other = rig_as(rig.fs.other_machine(), "/app-desktop", "host-2");
-    let theirs = other
-        .store
-        .open(
-            &folder,
-            &OpenOptions {
-                other_computer_closed: true,
-                ..OpenOptions::default()
-            },
-        )
-        .unwrap();
-    save_verse(&mine, 1, 12, "kept").unwrap();
     save_verse(&theirs, 1, 13, "also kept").unwrap();
+    let theirs_device = theirs.facts().device;
+    let brought: Vec<(String, Vec<u8>)> = pending_files(&theirs_fs, &folder)
+        .into_iter()
+        .map(|rel| {
+            let bytes = theirs_fs.peek(&folder.join(&rel)).unwrap();
+            (rel, bytes)
+        })
+        .collect();
+    assert_eq!(brought.len(), 1, "{brought:?}");
+    drop(theirs);
+    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&mine, 1, 12, "kept").unwrap();
+    for (rel, bytes) in &brought {
+        rig.fs.put(&folder.join(rel), bytes, None);
+    }
     mine.checkpoint(tc_store::CheckpointReason::LeavingTranslate)
         .wait()
         .unwrap();
-    let theirs_device = theirs.facts().device;
     match mine.facts().mode {
         Mode::ReadOnly(ReadOnlyReason::SecondWriter { device }) => {
             assert_eq!(device, theirs_device)
@@ -78,35 +65,14 @@ fn second_writer_detected_read_only() {
     assert!(notices_of(&mine).contains(&Notice::SecondWriter {
         device: theirs_device
     }));
-    // Both installations' work is in the fold, and nothing more is written.
+    // Both computers' work is in the fold, and nothing more is written.
     assert_eq!(words(&mine, 1, 12).as_deref(), Some("kept"));
     assert_eq!(words(&mine, 1, 13).as_deref(), Some("also kept"));
     assert!(matches!(
         save_verse(&mine, 1, 14, "x"),
         Err(tc_store::CommandError::ReadOnly(_))
     ));
-    drop(theirs);
     drop(mine);
-}
-
-#[test]
-fn a_lock_naming_another_computer_opens_read_only() {
-    let (rig, folder) = titus();
-    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    let other = rig_as(rig.fs.other_machine(), "/app-desktop", "host-2");
-    let theirs = other.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_eq!(
-        theirs.facts().mode,
-        Mode::ReadOnly(ReadOnlyReason::OpenOnAnotherComputer {
-            host: "host-1".into()
-        })
-    );
-    theirs.close().unwrap();
-    mine.close().unwrap();
-    // Closed: the lock's content is cleared, so the other computer opens it writable.
-    let theirs = other.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_eq!(theirs.facts().mode, Mode::Writable);
-    theirs.close().unwrap();
 }
 
 #[test]
