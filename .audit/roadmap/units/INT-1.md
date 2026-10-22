@@ -4,18 +4,18 @@ title: Back up the unpushed branches off this PC
 track: A
 lane: integration
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: roadmap session (Cursor)
+branch: track-INT-1
+worktree: /home/bot/tc-rst/.worktrees/track-INT-1
 depends: []
-needs_owner: [H1]
+needs_owner: []
 proves: []
 no_loss: false
 size: under 1 h (basis: three git push commands and a check)
 merged: none
 updated: 2026-10-22
-next: H1 is answered yes (`rulings/2026-10-22-H1.md`): do step 1, then 2, 3, 4, 6.
+next: Step 2, the secret scan of the three branches.
 blocked_by: none
 ---
 
@@ -241,3 +241,4 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
 - 2026-10-22 | roadmap session (Cursor) | ruling | none | H1 answered yes; the two sessions holding resume-build-lane and s2-proof-executor have ended, so nothing writes to those branches during the push | .audit/roadmap/rulings/2026-10-22-H1.md
+- 2026-10-22 | roadmap session (Cursor) | claim | none | H1 is yes: steps 2, 3, 4, 6; the three branches are resume-build-lane (43496296), s2-proof-executor (3b075d7), storage | .audit/roadmap/rulings/2026-10-22-H1.md
