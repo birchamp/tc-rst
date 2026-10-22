@@ -174,7 +174,7 @@ fn a_save_reads_no_pack_and_writes_a_bounded_number_of_files() {
         assert!(read < 64 * 1024, "a save read {read} bytes");
         let created = log.iter().filter(|op| op.kind == OpKind::Create).count();
         assert_eq!(created, 1, "one pending file: {log:?}");
-        assert_eq!(delta.fsyncs, 2, "the file and its folder");
+        assert_eq!(delta.fsyncs, 2, "the file and its folder: {log:?}");
         writes.push(log.len());
         handle.close().unwrap();
     }
