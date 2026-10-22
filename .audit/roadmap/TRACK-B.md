@@ -16,7 +16,7 @@ The evaluation compared five ways to split the remaining work (`evidence/2026-10
 | Export (D2) | Keep in the main team | Small, waits for S2, touches the busiest app files |
 | Import plus its screens (I, F1) | Split into B′ | The screens touch the hot tc-app and tc-ui files |
 
-The owner answered H2 on 2026-10-22 (`rulings/2026-10-22-H2.md`): the second developer is Elias, working through agents, able to work in either language; he takes Package B. B′ stays a later option.
+The owner answered H2 on 2026-10-22 (`rulings/2026-10-22-H2.md`): the second developer is Elias (`eliaspinero`), working through agents, able to work in either language; he takes Package B. B′ stays a later option. The hand-off starts only when the owner says go (he was not ready on 2026-10-22); INT-7 runs before that regardless.
 
 If H2 names nobody by the end of M1, the app lane takes G1, G3 and G4 in that order on Track A
 after E1b, using the GitHub Windows and macOS runners (A3); no Mac is needed on this PC; INT-7's
