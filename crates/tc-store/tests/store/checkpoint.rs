@@ -444,7 +444,7 @@ fn a_checkpoint_after_one_save_writes_only_changed_trees() {
         );
         assert_eq!(c.git_commits_written, 1, "{c:?}");
         for path in &cost.opened {
-            let text = path.to_string_lossy();
+            let text = slashed(path);
             if let Some(name) = text.rsplit('/').next()
                 && name.ends_with(".usfm")
             {

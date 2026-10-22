@@ -204,7 +204,7 @@ fn a_reopen_after_packs_and_stale_files_materializes_forward_and_records_no_outs
     let intent = probe
         .log()
         .iter()
-        .find(|op| op.path.to_string_lossy().contains(".tc/heads"))
+        .find(|op| slashed(&op.path).contains(".tc/heads"))
         .map(|op| op.index - start)
         .unwrap();
     drop(probe_handle);

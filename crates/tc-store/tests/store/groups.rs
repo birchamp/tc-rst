@@ -50,7 +50,7 @@ fn words_of(handle: &ProjectHandle, key: &RecordKey) -> String {
 /// The book code a path of a book's file names: `TIT` of `ingredients/TIT.usfm`,
 /// `ingredients/checking/alignments/TIT.json` or the heads file of either.
 fn book_of(path: &Path) -> Option<String> {
-    let text = path.to_string_lossy().replace("%2F", "/");
+    let text = slashed(path).replace("%2F", "/");
     let name = text.rsplit('/').next()?;
     let stem = name.split('.').next()?;
     (stem.len() == 3
@@ -120,7 +120,7 @@ fn a_books_materialize_touches_only_that_books_files() {
         );
         assert!(c.derived_read <= cost.psalms_files as u64 + 1, "{c:?}");
         for path in cost.opened.iter().chain(&cost.written) {
-            let text = path.to_string_lossy();
+            let text = slashed(path);
             assert!(
                 !text.contains("/ingredients/tc/changes/") && !text.contains("/.tc/pending/"),
                 "{text}: no journal file is touched"
@@ -130,7 +130,7 @@ fn a_books_materialize_touches_only_that_books_files() {
             }
         }
         let allowed = |p: &std::path::PathBuf| {
-            let t = p.to_string_lossy();
+            let t = slashed(p);
             book_of(p).is_some()
                 || t.ends_with("/metadata.json")
                 || t.contains("/.tc/")
@@ -264,7 +264,8 @@ fn an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once() {
         let is_derived = |path: &std::path::PathBuf| {
             path.strip_prefix(&corpus.folder)
                 .ok()
-                .and_then(|p| p.to_str())
+                .map(slashed)
+                .as_deref()
                 .and_then(tc_journal::fold::DerivedFile::from_path)
                 .is_some()
         };

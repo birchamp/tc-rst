@@ -22,7 +22,7 @@ fn open_once(fs: &FaultFs, folder: &std::path::Path) -> (StoreCounters, Vec<Path
 }
 
 fn is_journal(path: &std::path::Path) -> bool {
-    let text = path.to_string_lossy();
+    let text = slashed(path);
     text.contains("/ingredients/tc/changes/") || text.contains("/.tc/pending/")
 }
 

@@ -577,6 +577,9 @@ def main():
     environment = dict(os.environ)
     environment["CARGO_TARGET_DIR"] = str(target)
     environment["CARGO_NET_OFFLINE"] = "true"
+    # The bounded model must judge each mutant by the same histories (FUNNEL §5: fixed seeds
+    # in checks, random ones in the nightly job), or a fresh random find stops the run.
+    environment.setdefault("PROPTEST_RNG_SEED", "20261022001")
     environment.pop("TC_MODEL_NO_NAMED", None)
     print(json.dumps({"event": "executor-start", "pid": os.getpid(), "base": args.base,
                       "source": str(source), "target": str(target), "evidence": str(evidence)}), flush=True)

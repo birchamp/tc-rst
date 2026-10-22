@@ -101,6 +101,11 @@ pub fn config(fs: &FaultFs, app: &str, host: &str) -> (StoreConfig, Arc<ManualCl
     )
 }
 
+/// `path` with `/` between its parts, so tests can match folder names on Windows too.
+pub fn slashed(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 pub fn rig(fs: FaultFs) -> Rig {
     rig_as(fs, APP, "host-1")
 }
