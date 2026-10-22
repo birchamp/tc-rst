@@ -503,6 +503,10 @@ impl Run {
 
     /// The process died: the next one finds the files as a kill or a power cut leaves them.
     fn crash(&mut self, power_cut: bool) {
+        let before: BTreeMap<&'static str, Option<Vec<u8>>> = [USFM, META]
+            .into_iter()
+            .map(|rel| (rel, self.fs().peek(&self.path(rel))))
+            .collect();
         let fs = self.fs().crash(power_cut);
         self.observe_notices(&fs);
         // The narrow metadata witness uses the actual surviving complete Burrito.
@@ -517,19 +521,16 @@ impl Run {
         // earlier write is what the app placed last, whatever another program also put.
         for rel in [USFM, META] {
             let now = self.fs().peek(&self.path(rel));
+            // Only bytes the power cut itself brought back can be the app's earlier write;
+            // bytes that were there before it (another program's put) stay that program's.
             if let Some(bytes) = &now
                 && power_cut
+                && before.get(rel) != Some(&now)
                 && self.app_wrote.get(rel) != Some(bytes)
                 && self
                     .app_versions
                     .get(rel)
                     .is_some_and(|seen| seen.contains(bytes))
-                // Bytes another program put there and the app has not looked at are that
-                // program's, whatever the app once wrote.
-                && !self
-                    .puts
-                    .iter()
-                    .any(|p| p.rel == rel && !p.retired && p.bytes == *bytes)
             {
                 self.app_wrote.insert(rel, bytes.clone());
                 self.last_seen.insert(rel, now);
@@ -3089,6 +3090,10 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             "a_put_of_an_earlier_write_before_a_power_cut",
             a_put_of_an_earlier_write_before_a_power_cut(),
         ),
+        (
+            "a_retired_put_of_an_earlier_write_before_a_power_cut",
+            a_retired_put_of_an_earlier_write_before_a_power_cut(),
+        ),
     ]
 }
 
@@ -4199,4 +4204,70 @@ fn a_save_only_a_damaged_committed_pack_holds() -> Vec<Step> {
 #[test]
 fn a_save_only_a_damaged_committed_pack_holds_is_salvaged() {
     assert_kept(&a_save_only_a_damaged_committed_pack_holds());
+}
+
+/// Found by the long model on 2026-10-22 (seed 20261021003, after the fixes above), an
+/// oracle bug of the same kind: another program's put of an earlier app write was retired
+/// (the project shows its text) before a power cut, and the oracle took it for the power
+/// cut's rollback of the app's write. Only bytes the power cut brought back can be that.
+fn a_retired_put_of_an_earlier_write_before_a_power_cut() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        crash(),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        killed(Act::Leave, 0),
+        Step::RevertKeepTime {
+            file: File::Meta,
+            back: 0,
+        },
+        crash(),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Name),
+        act(Act::Leave),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Usfm), false),
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+        Step::EditName { told: true },
+        kill_with(Act::Leave, 0, true, false),
+        Step::Revert {
+            file: File::Usfm,
+            back: 2,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn a_retired_put_of_an_earlier_write_before_a_power_cut_is_no_loss() {
+    assert_kept(&a_retired_put_of_an_earlier_write_before_a_power_cut());
 }
