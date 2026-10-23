@@ -50,6 +50,8 @@ const textPin = (env, repo) => JSON.parse(fs.readFileSync(
 // commits, which the fake cannot serve (the download rightly refuses another commit under a
 // pinned version); so the text's pin is first moved to the fake's release through the upgrade
 // screen, as a translator's upgrade would, and its install removed: this computer lacks it.
+// shortcut: the fake has one en_ult release, so the pin is also the latest and this cannot tell
+// "the pinned version" from "the newest"; a fake control route that adds a release would.
 browserTest('j3_a_download_from_the_seeded_fake_installs_the_pinned_version', async () => {
   await withApp(async ({ page, env }) => {
     await settings(page).click();
@@ -75,8 +77,12 @@ browserTest('j3_a_download_from_the_seeded_fake_installs_the_pinned_version', as
     const download = page.getByTestId('sources-download');
     await download.waitFor();
     await download.click();
-    await until('the source text is installed', () => installs(env, 'unfoldingWord', 'en_ult').length > 0, 60_000);
-    assert.equal(await page.getByTestId('sources-error').count(), 0, 'the download says no failure');
+    // The package's other parts (notes, word links) download too: wait for the whole of it.
+    const finished = page.getByTestId('sources-done').or(page.getByTestId('sources-error'));
+    await finished.waitFor({ timeout: 60_000 });
+    assert.equal(await page.getByTestId('sources-error').count(), 0,
+      `the download says no failure: ${await finished.textContent()}`);
+    assert.equal(installs(env, 'unfoldingWord', 'en_ult').length, 1, 'the source text is installed');
     assert.ok((await env.door43.requests()).some((r) => r.path.startsWith('/unfoldingWord/en_ult/')), 'the text came from the fake');
     const [installed] = installs(env, 'unfoldingWord', 'en_ult');
     assert.equal(installed.sha, pinned.sha, 'the install on disk is the pinned commit');
@@ -107,5 +113,21 @@ browserTest('Get source texts reads a package only after the internet question, 
     await page.getByTestId('sources-download').waitFor();
     const asked = (await apiRequests(env.door43)).map((r) => `${r.path}?${r.query ?? ''}`);
     assert.deepEqual(asked, ['/api/v1/catalog/search?owner=unfoldingWord']);
+  }, { door43: true });
+});
+
+// es-419_gl publishes no resources on this fake: its package says so and offers no download.
+browserTest('a package with nothing for the book says so and offers no download', async () => {
+  await withApp(async ({ page }) => {
+    await settings(page).click();
+    await page.getByTestId('settings-manage-sources').click();
+    await page.getByTestId('sources-modal').waitFor();
+    await page.getByTestId('understand').waitFor();
+    await page.getByTestId('sources-modal').getByText('Español (Latinoamérica)', { exact: true }).first().click();
+    await page.getByTestId('net-ask').waitFor();
+    await page.getByTestId('net-confirm').click();
+    const none = en['sources.noneForBook'].replace('{book}', 'Titus').replace('{lang}', 'Español (Latinoamérica)');
+    await page.getByText(none).waitFor();
+    assert.equal(await page.getByTestId('sources-download').count(), 0, 'nothing to download');
   }, { door43: true });
 });
