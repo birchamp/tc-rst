@@ -138,7 +138,9 @@ impl Scale {
                 "hung: {} app job(s) still live after 60 s",
                 self.app.jobs().live()
             );
-            tokio::task::block_in_place(|| std::thread::sleep(std::time::Duration::from_millis(10)));
+            tokio::task::block_in_place(|| {
+                std::thread::sleep(std::time::Duration::from_millis(10))
+            });
         }
     }
 

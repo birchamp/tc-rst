@@ -142,6 +142,11 @@ end.
 
 ## Checklist: merge an item
 
+One merge into main at a time (owner rule, 2026-10-23). The orchestrator (the audit session)
+hands out turns; only the session whose turn it is moves main, and it waits for main's CI to
+finish green before it hands the turn back. A roadmap-only change never goes to main on its own:
+it rides with the next card's merge.
+
 1. Make the merge commit, with the card's `done` edit, in a separate worktree; run
    `scripts/gates.sh` there; main moves only when `scripts/gates.sh --check-receipt` exits 0 on
    that commit. A fix after a failed gate is a new commit, gated again. The card's log holds a
