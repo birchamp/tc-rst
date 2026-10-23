@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d
 merged: none
 updated: 2026-10-23
-next: Step 3 item 2: move HANDOFF's owner section into README's rules, then delete it.
+next: Step 5: add the board step to scripts/gates.sh and ci.yml (fetch-depth 0).
 blocked_by: none
 ---
 
@@ -266,3 +266,5 @@ could build it a second time, or skip a step that keeps text safe.
 - 2026-10-23 16:43 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-INT-5 from main eaf809d1 while INT-7 waits for its merge turn (the orchestrator's queue); steps 2, 3 (items 1, 4-6) and 4 were done early on main, per the 2026-10-22 note | python3 -I -B .audit/tools/board.py
 - 2026-10-23 16:45 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | union_test.py written; without the lines: `AssertionError: False is not true : INV-LOGS-NEVER-CONFLICT: .audit/minors.tsv conflicted; .gitattributes needs '.audit/minors.tsv merge=union'`; with the two merge=union lines after `* -text`: `OK`; line 4 is still `* -text` | python3 -I .audit/tools/union_test.py
 - 2026-10-23 16:47 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | history line added to the three .audit/plans files (STATUS.md and PROGRESS.md had it from 2026-10-22); head -qn1 prints it five times | head -qn1 .audit/STATUS.md .audit/PROGRESS.md .audit/plans/RESUME-2026-10-20.md .audit/plans/CONTINUE-REBUILD-2026-10-20.md .audit/plans/HANDOFF-resume-lane.md
+- 2026-10-23 16:49 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | item 2 done (items 1, 3-6 were done on 2026-10-22): HANDOFF's owner section deleted. Checked against README's rules: the fix rule, typed state machines, default models and the workflow-message rule were there; short plain questions are README "When to stop and ask". Moved to README as rules: "Speed is judged against tC4 … on the reference laptop" and "Hours, not days: one verification pass, the simplest change, reuse tested work, deterministic tests over reading code". The push bullet is gone; 49 lines | grep -nE 'Runs and how to resume|STATUS\.md|PROGRESS\.md|standing authorization|Push only main' .audit/HANDOFF.md
+- 2026-10-23 16:49 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | already on main since 2026-10-22: AGENTS.md's PLAN paragraph holds the roadmap sentence | grep -c 'roadmap/TRACKING.md' AGENTS.md
