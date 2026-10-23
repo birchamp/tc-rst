@@ -17,7 +17,6 @@ import { REPO } from '../../view-gallery/node-lib.mjs';
 
 const en = catalog('en');
 const BIBLE = 'sample_burrito';
-const fflate = createRequire(import.meta.url)(path.join(REPO, 'parity', 'tc4-baseline', 'node_modules', 'fflate'));
 
 async function openFix(page) {
   await page.getByTestId(`project-${BIBLE}`).getByRole('button', { name: /Titus/ }).click();
@@ -33,6 +32,8 @@ async function openFix(page) {
 /** A Door43 export of es-419 Translation Words Links (the English fixture under the Spanish
  * repository's name) whose metadata declares `commit`, as a Door43 download of it would. */
 function exportZip(commit) {
+  // Resolved here, not at load: CI's node job installs nothing, and the file must still load there.
+  const fflate = createRequire(import.meta.url)(path.join(REPO, 'parity', 'tc4-baseline', 'node_modules', 'fflate'));
   const dir = path.join(REPO, 'fixtures', 'tc4', 'test-fixtures', 'resources', 'en_twl@v86');
   const metadata = JSON.parse(fs.readFileSync(path.join(dir, 'metadata.json'), 'utf8'));
   const dcs = metadata.identification.primary.dcs;
