@@ -4,10 +4,10 @@ title: One gate list for CI and every local runner; merge only with a passing ga
 track: A
 lane: checks
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: checks lane (Claude Code 2198ee19)
+branch: track-INT-3
+worktree: .worktrees/int-3
 depends: [INT-2]
 needs_owner: []
 proves: []
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5-1 d
 merged: none
 updated: 2026-10-22
-next: Claim this card after INT-2 merges, then do step 1.
+next: step 1
 blocked_by: none
 ---
 
@@ -313,3 +313,4 @@ exactly these, so on the merge commit it is this card's gate. Plus:
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-22 23:07 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-3 in .worktrees/int-3. INT-2 is done (78eeec19) but main's CI run 39893217059 started no job (GitHub Actions billing, INT-2's last note), so "Before you start" is met except the green run; steps 1-6 are local and go ahead, step 7's merge waits for a green main | python3 -I .audit/tools/board.py
