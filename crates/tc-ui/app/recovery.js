@@ -169,6 +169,12 @@ export function draftRequests(store, instance, freshId) {
     if (!body || typeof body !== 'object' || Array.isArray(body)) continue;
     body.request = freshId();
     body.text = entry.text;
+    if (draft.path === 'editor/draft') {
+      // The focus template predates the capture listener's last keystroke.
+      body.changed = entry.at;
+      body.instance = entry.instance;
+      body.shown = entry.base;
+    }
     requests.push({ path: draft.path, body: JSON.stringify(body) });
   }
   return requests;

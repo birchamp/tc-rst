@@ -163,10 +163,193 @@ impl Node {
     }
 }
 
+/// One row of a prediction batch; all tree comparisons use the same normalized values.
+struct PredictRow {
+    numeric: [f64; NUMERIC],
+    categorical: [u32; CATEGORICAL],
+    output: usize,
+}
+
+/// A split outside the batch's range sends every row down the same branch. Morphology
+/// is usually constant here: each source n-gram is paired with many target n-grams.
+struct PredictBounds {
+    numeric: [[f64; 2]; NUMERIC],
+    categorical: [Option<u32>; CATEGORICAL],
+}
+
+impl PredictBounds {
+    fn of(rows: &[PredictRow]) -> Self {
+        let mut bounds = Self {
+            numeric: [[f64::INFINITY, f64::NEG_INFINITY]; NUMERIC],
+            categorical: rows
+                .first()
+                .map_or([None; CATEGORICAL], |row| row.categorical.map(Some)),
+        };
+        for row in rows {
+            for (range, value) in bounds.numeric.iter_mut().zip(row.numeric) {
+                range[0] = range[0].min(value);
+                range[1] = range[1].max(value);
+            }
+            for (constant, value) in bounds.categorical.iter_mut().zip(row.categorical) {
+                if *constant != Some(value) {
+                    *constant = None;
+                }
+            }
+        }
+        bounds
+    }
+}
+
+/// Partitions row indices in place without moving the feature arrays.
+fn partition(rows: &mut [usize], mut left: impl FnMut(usize) -> bool) -> usize {
+    let mut boundary = 0;
+    for at in 0..rows.len() {
+        if left(rows[at]) {
+            rows.swap(boundary, at);
+            boundary += 1;
+        }
+    }
+    boundary
+}
+
+/// Preorder nodes keep a fitted tree contiguous. A branch's left child is the next
+/// node; its right child follows the complete left subtree.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum CompiledNode {
+    Leaf(f64),
+    Numeric {
+        feature: usize,
+        split: f64,
+        right: usize,
+    },
+    Categorical {
+        feature: usize,
+        split: u32,
+        right: usize,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CompiledTree {
+    nodes: Vec<CompiledNode>,
+}
+
+impl CompiledTree {
+    fn of(tree: &Node) -> Self {
+        fn append(tree: &Node, nodes: &mut Vec<CompiledNode>) {
+            let at = nodes.len();
+            nodes.push(CompiledNode::Leaf(0.0));
+            nodes[at] = match tree {
+                Node::Leaf(value) => CompiledNode::Leaf(*value),
+                Node::Numeric {
+                    feature,
+                    split,
+                    left,
+                    right,
+                } => {
+                    append(left, nodes);
+                    let next = nodes.len();
+                    append(right, nodes);
+                    CompiledNode::Numeric {
+                        feature: *feature,
+                        split: *split,
+                        right: next,
+                    }
+                }
+                Node::Categorical {
+                    feature,
+                    split,
+                    left,
+                    right,
+                } => {
+                    append(left, nodes);
+                    let next = nodes.len();
+                    append(right, nodes);
+                    CompiledNode::Categorical {
+                        feature: *feature,
+                        split: *split,
+                        right: next,
+                    }
+                }
+            };
+        }
+        let mut nodes = Vec::new();
+        append(tree, &mut nodes);
+        Self { nodes }
+    }
+
+    fn accumulate(
+        &self,
+        at: usize,
+        rows: &[PredictRow],
+        bounds: &PredictBounds,
+        order: &mut [usize],
+        output: &mut [f64],
+    ) {
+        if order.is_empty() {
+            return;
+        }
+        match self.nodes[at] {
+            CompiledNode::Leaf(value) => {
+                // No partition changed a complete batch's membership. With no refused
+                // candidates its outputs are contiguous and need no indirect indexing.
+                if order.len() == rows.len() {
+                    let first = rows[0].output;
+                    let end = rows[rows.len() - 1].output + 1;
+                    if end - first == rows.len() {
+                        for score in &mut output[first..end] {
+                            *score += value;
+                        }
+                        return;
+                    }
+                }
+                for &row in order.iter() {
+                    output[rows[row].output] += value;
+                }
+            }
+            CompiledNode::Numeric {
+                feature,
+                split,
+                right,
+            } => {
+                if bounds.numeric[feature][1] <= split {
+                    return self.accumulate(at + 1, rows, bounds, order, output);
+                }
+                if bounds.numeric[feature][0] > split {
+                    return self.accumulate(right, rows, bounds, order, output);
+                }
+                let boundary = partition(order, |row| rows[row].numeric[feature] <= split);
+                let (yes, no) = order.split_at_mut(boundary);
+                self.accumulate(at + 1, rows, bounds, yes, output);
+                self.accumulate(right, rows, bounds, no, output);
+            }
+            CompiledNode::Categorical {
+                feature,
+                split,
+                right,
+            } => {
+                if let Some(value) = bounds.categorical[feature] {
+                    return self.accumulate(
+                        if value == split { at + 1 } else { right },
+                        rows,
+                        bounds,
+                        order,
+                        output,
+                    );
+                }
+                let boundary = partition(order, |row| rows[row].categorical[feature] == split);
+                let (yes, no) = order.split_at_mut(boundary);
+                self.accumulate(at + 1, rows, bounds, yes, output);
+                self.accumulate(right, rows, bounds, no, output);
+            }
+        }
+    }
+}
+
 /// A fitted booster: its trees and the categorical values it has seen.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Booster {
-    trees: Vec<Node>,
+    trees: Vec<CompiledTree>,
     learning_rate: f64,
     values: HashMap<String, u32>,
 }
@@ -175,17 +358,45 @@ pub struct Booster {
 const UNSEEN: u32 = u32::MAX;
 
 impl Booster {
-    /// JLBoost's `predict_single`: the trees' outputs summed, times the learning rate.
-    pub(crate) fn score(&self, features: &Features) -> f64 {
-        let categorical = features
-            .categorical
-            .each_ref()
-            .map(|v| self.values.get(v).copied().unwrap_or(UNSEEN));
-        let mut output = 0.0;
-        for tree in &self.trees {
-            output += tree.predict(&features.numeric, &categorical);
+    /// Each tree visits a small batch while its nodes and the feature rows stay hot. A
+    /// row receives exactly one leaf per tree, in the original tree order: batching does
+    /// not reorder its floating-point sum. `None` is a candidate refused by placed links.
+    pub(crate) fn scores(&self, features: impl IntoIterator<Item = Option<Features>>) -> Vec<f64> {
+        const BATCH: usize = 64;
+        let mut features = features.into_iter();
+        let mut output = Vec::with_capacity(features.size_hint().0);
+        let mut rows = Vec::with_capacity(BATCH);
+        let mut order = Vec::with_capacity(BATCH);
+        loop {
+            rows.clear();
+            let first = output.len();
+            for features in features.by_ref().take(BATCH) {
+                let at = output.len();
+                output.push(0.0);
+                if let Some(features) = features {
+                    rows.push(PredictRow {
+                        numeric: features.numeric.map(numeric_value),
+                        categorical: features
+                            .categorical
+                            .each_ref()
+                            .map(|v| self.values.get(v).copied().unwrap_or(UNSEEN)),
+                        output: at,
+                    });
+                }
+            }
+            if first == output.len() {
+                return output;
+            }
+            let bounds = PredictBounds::of(&rows);
+            for tree in &self.trees {
+                order.clear();
+                order.extend(0..rows.len());
+                tree.accumulate(0, &rows, &bounds, &mut order, &mut output);
+            }
+            for row in &rows {
+                output[row.output] *= self.learning_rate;
+            }
         }
-        output * self.learning_rate
     }
 
     /// The number of trees accepted by training.
@@ -449,8 +660,92 @@ pub(crate) fn fit(
         }
     }
     Ok(Booster {
-        trees,
+        trees: trees.iter().map(CompiledTree::of).collect(),
         learning_rate,
         values,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn batching_keeps_every_confidence_bit_across_splits_and_chunk_boundaries() {
+        let trees = vec![
+            Node::Leaf(1e16),
+            Node::Numeric {
+                feature: 14,
+                split: 0.5,
+                left: Box::new(Node::Categorical {
+                    feature: 0,
+                    split: 0,
+                    left: Box::new(Node::Leaf(-1e16)),
+                    right: Box::new(Node::Leaf(1.0)),
+                }),
+                right: Box::new(Node::Leaf(3.0)),
+            },
+            Node::Numeric {
+                feature: 13,
+                split: -0.0,
+                left: Box::new(Node::Leaf(-0.25)),
+                right: Box::new(Node::Leaf(0.125)),
+            },
+            Node::Categorical {
+                feature: 7,
+                split: 1,
+                left: Box::new(Node::Leaf(0.0)),
+                right: Box::new(Node::Leaf(-1e16)),
+            },
+        ];
+        let booster = Booster {
+            trees: trees.iter().map(CompiledTree::of).collect(),
+            learning_rate: 0.7,
+            values: HashMap::from([("known".into(), 0), ("other".into(), 1)]),
+        };
+        for omitted in [false, true] {
+            for count in [0, 1, 63, 64, 65, 129] {
+                let features: Vec<_> = (0..count)
+                    .map(|at| {
+                        if omitted && at % 7 == 0 {
+                            return None;
+                        }
+                        let mut row = Features {
+                            numeric: [0.0; NUMERIC],
+                            categorical: Default::default(),
+                        };
+                        row.numeric[13] =
+                            [f64::NAN, f64::NEG_INFINITY, -0.0, f64::INFINITY][at % 4];
+                        row.numeric[14] = [-1.0, 0.5, 0.75][at % 3];
+                        row.categorical[0] = ["known", "unseen", "other"][at % 3].into();
+                        row.categorical[7] = ["known", "other"][at % 2].into();
+                        Some(row)
+                    })
+                    .collect();
+                let expected: Vec<_> = features
+                    .iter()
+                    .map(|row| {
+                        row.as_ref()
+                            .map_or(0.0, |row| {
+                                let categorical = row.categorical.each_ref().map(|value| {
+                                    booster.values.get(value).copied().unwrap_or(UNSEEN)
+                                });
+                                let mut score = 0.0;
+                                for tree in &trees {
+                                    score += tree.predict(&row.numeric, &categorical);
+                                }
+                                score * booster.learning_rate
+                            })
+                            .to_bits()
+                    })
+                    .collect();
+                let actual: Vec<_> = booster
+                    .scores(features)
+                    .into_iter()
+                    .map(f64::to_bits)
+                    .collect();
+                assert_eq!(actual, expected, "{count} rows, omitted={omitted}");
+            }
+        }
+    }
 }

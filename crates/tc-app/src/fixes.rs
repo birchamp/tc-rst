@@ -253,6 +253,10 @@ impl Handle<FixSideload> for App {
 impl Handle<FixRepin> for App {
     async fn handle(&self, req: FixRepin) -> Result<PlanView, ApiError> {
         let session = self.read(&req.at)?;
+        #[cfg(feature = "test-hooks")]
+        if let Some(view) = self.scripted_plan() {
+            return Ok(view);
+        }
         let found = self
             .fix_found(&session, req.tool, req.unit)
             .await?

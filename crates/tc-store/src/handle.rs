@@ -678,6 +678,15 @@ impl ProjectHandle {
         self.drafts.discard(id)
     }
 
+    /// Cancel the exact current editor draft after its earlier draft calls have completed.
+    /// Other current text and offered drafts stay. Returns after the list is durable.
+    pub fn discard_current_draft(&self, draft: Draft, at: WallTime) -> bool {
+        if let Mode::ReadOnly(_) = self.facts().mode {
+            return false;
+        }
+        self.drafts.cancel(draft, at)
+    }
+
     /// Takes an unsaved text in as an offered draft (APP-DESIGN §6.6), written before this
     /// returns its number; `None` when it could not be written, and the text stays where it
     /// was. A read-only project takes nothing.

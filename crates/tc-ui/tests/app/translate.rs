@@ -7,13 +7,15 @@ use tc_api::editor::{
     ChapterText, CommentView, FrameRow, PaneChapter, PaneVerse, RowSource, SourceFrame, VerseRow,
 };
 use tc_api::ids::{ProjectId, ProjectRef, RecordRef, RefPart, WallMs};
+use tc_api::model::section::ParaFormat;
 use tc_api::shown::{PersonLabel, Shown, Who};
 use tc_core::BookId;
 use tc_ui::app::shell::Editing;
 use tc_ui::app::translate::{
-    SourcePlace, box_text, changed_while_typing, comments_in_focus, editing_focus,
-    parse_verse_place, range_span, section_ranges, sections, source_keys_for, source_place,
-    target_paragraphs, verse_key, verse_place,
+    SourcePlace, box_text, card_tokens, card_verses, changed_while_typing, comments_in_focus,
+    editing_focus, editing_section, parse_verse_place, range_span, section_key, section_place,
+    section_ranges, sections, source_keys_for, source_place, target_paragraphs, verse_key,
+    verse_place,
 };
 
 fn keys(list: &[&str]) -> Vec<String> {
@@ -33,6 +35,8 @@ fn row(key: &str, lead: Option<u8>, before: Option<u8>) -> VerseRow {
             token: super::save_kit::tok(1),
             marker: None,
         },
+        format: None,
+        covered: Vec::new(),
     }
 }
 
@@ -180,6 +184,7 @@ fn the_comments_tab_shows_each_verses_newest_comment_in_focus() {
         verse,
         text: text.into(),
         at: WallMs(at),
+        token: super::save_kit::tok(at.unsigned_abs()),
     };
     let comments = [
         comment(3, "older", 1),
@@ -280,5 +285,84 @@ fn cross_frame_translate_shows_the_mapped_source_verse() {
     assert_eq!(
         source_place(BookId::Jonah, 2, "1", &SourceFrame::Same),
         SourcePlace::Same
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The section card (unit B4b).
+// ---------------------------------------------------------------------------------------------
+
+fn section_open(chapter: u16, section: &[&str]) -> Editing {
+    let project = ProjectRef::parse("sample_burrito").unwrap();
+    let id = ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap();
+    let key = section_key(&project, &id, BookId::Titus, chapter, &keys(section)).unwrap();
+    Editing::Section {
+        key,
+        keys: keys(section),
+    }
+}
+
+#[test]
+fn a_section_is_one_place_whatever_spans_it_holds() {
+    assert_eq!(
+        section_place(BookId::Titus, 2, &keys(&["9", "10"])),
+        "TIT 2:9-10"
+    );
+    assert_eq!(
+        section_place(BookId::Titus, 2, &keys(&["9-10"])),
+        "TIT 2:9-10",
+        "a join does not move the card's buffer"
+    );
+    assert_eq!(
+        section_place(BookId::Titus, 2, &keys(&["11", "12-13"])),
+        "TIT 2:11-13"
+    );
+    assert_eq!(section_place(BookId::Titus, 3, &keys(&["4"])), "TIT 3:4-4");
+    let open = section_open(2, &["9", "10"]);
+    let Editing::Section { key, .. } = &open else {
+        panic!("{open:?}")
+    };
+    assert_eq!(key.field.kind, FieldKind::Section);
+    assert_eq!(key.field.place.as_str(), "TIT 2:9-10");
+}
+
+#[test]
+fn the_helps_follow_the_whole_open_section_in_its_chapter_only() {
+    let open = section_open(2, &["9", "10-11", "12"]);
+    assert_eq!(
+        editing_focus(&open, BookId::Titus, 2),
+        Some(keys(&["9", "10-11", "12"]))
+    );
+    assert_eq!(editing_focus(&open, BookId::Titus, 1), None);
+    assert_eq!(
+        editing_section(&open, BookId::Titus, 2),
+        Some(&keys(&["9", "10-11", "12"])[..])
+    );
+    assert_eq!(editing_section(&open, BookId::Genesis, 2), None);
+    assert_eq!(editing_section(&Editing::None, BookId::Titus, 2), None);
+    assert!(open.is_open(), "an open card keeps the exits off");
+}
+
+#[test]
+fn a_card_opens_on_its_rows_and_is_based_on_every_verse_it_displays() {
+    let token = super::save_kit::tok;
+    let mut one = row("9-10", None, None);
+    one.words.value = "  Exhorta a los siervos \n".into();
+    one.format = Some(ParaFormat::Q1);
+    one.covered = vec![token(7)];
+    let mut stub = row("11", None, None);
+    stub.drafted = false;
+    stub.words.value = "___".into();
+    stub.words.token = token(8);
+    let rows = [&one, &stub];
+    let verses = card_verses(&rows);
+    assert_eq!(verses[0].key, "9-10");
+    assert_eq!(verses[0].body, "Exhorta a los siervos");
+    assert_eq!(verses[0].format, Some(ParaFormat::Q1));
+    assert!(!verses[1].drafted && verses[1].body.is_empty());
+    assert_eq!(
+        card_tokens(&rows),
+        [token(1), token(7), token(8)],
+        "each verse's token, then the verses it covers"
     );
 }

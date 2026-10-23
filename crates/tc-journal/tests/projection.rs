@@ -297,3 +297,211 @@ fn a_story_splices_its_frames_and_reference_into_the_template() {
         "frame 2 has no record and keeps the template's text"
     );
 }
+
+fn story_one_with(template: &str, frame_zero: Option<&str>) -> String {
+    let mut ana = Dev::new(1);
+    let story = tc_journal::StoryNo::new(1).expect("story");
+    let mut changes = vec![ana.one(
+        Record::StoryBase {
+            story,
+            value: template.into(),
+        },
+        vec![],
+    )];
+    if let Some(title) = frame_zero {
+        changes.push(ana.one(
+            Record::Frame {
+                story,
+                frame: tc_journal::FrameNo(0),
+                value: title.into(),
+            },
+            vec![],
+        ));
+    }
+    let state = FoldState::fold(
+        ProjectKind::Stories,
+        changes.into_iter().map(FoldInput::from),
+    );
+    String::from_utf8(state.render(&DerivedFile::Story(story)).expect("story")).expect("utf-8")
+}
+
+/// tC4's `TITLE_RE` and `writeTitle`: frame 0 is what follows `# N. `, and the number is the
+/// line's own, so a title a person types never loses it (docs/evidence/state-seed-check-2026-10-18.md
+/// §4.1, §5.1).
+#[test]
+fn a_story_title_is_the_text_after_its_number() {
+    let template = "# 1. The Creation\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)\n\nText.\n";
+    assert_eq!(
+        story_one_with(template, None),
+        template,
+        "no record: untouched"
+    );
+    assert_eq!(
+        story_one_with(template, Some("La Creación")),
+        template.replace("The Creation", "La Creación")
+    );
+    assert_eq!(
+        story_one_with(template, Some("")),
+        template.replace("# 1. The Creation", "# 1."),
+        "an empty title is `# N.`"
+    );
+    let seed = template.replace("# 1. The Creation", "# 1.");
+    assert_eq!(
+        story_one_with(&seed, Some("La Creación")),
+        template.replace("The Creation", "La Creación")
+    );
+}
+
+#[test]
+fn a_story_titles_check_text_has_no_number() {
+    let mut ana = Dev::new(1);
+    let story = tc_journal::StoryNo::new(2).expect("story");
+    let template = "# 2. How God made it\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-02-01.jpg)\n\nText.\n";
+    let seed = FoldState::fold(
+        ProjectKind::Stories,
+        [FoldInput::from(ana.one(
+            Record::StoryBase {
+                story,
+                value: template.into(),
+            },
+            vec![],
+        ))],
+    );
+    let texts = seed.check_texts(tc_journal::pins::Collection::Stories);
+    let target = tc_journal::CheckTarget::Frame {
+        story,
+        frame: tc_journal::FrameNo(0),
+    };
+    let title = texts.text(&target).expect("the title has a text");
+    assert_eq!(title.content(), "How God made it");
+}
+
+/// tC4's `relationshipsFromPins`: a pin whose flavor is not scripture, parascriptural or
+/// peripheral (the OBS source text is `gloss/textStories`) has no relationship, since the
+/// schema would refuse it and the whole group's relationships would be dropped
+/// (docs/evidence/state-seed-check-2026-10-18.md §4.3).
+#[test]
+fn a_pin_that_is_no_scripture_has_no_relationship_and_makes_no_anomaly() {
+    let mut ana = Dev::new(1);
+    let slot = |repo: &str, flavor: &str| {
+        obj(&[
+            ("repoPath", Json::from(repo)),
+            ("version", Json::from("v1")),
+            ("flavor", Json::from(flavor)),
+        ])
+    };
+    let changes = vec![ana.one(
+        support::pins(
+            PinGroup::Primary,
+            &[
+                ("obs", slot("git.door43.org/uW/en_obs", "gloss/textStories")),
+                (
+                    "obsNotes",
+                    slot("git.door43.org/uW/en_obs-tn", "parascriptural/x-obsNotes"),
+                ),
+                ("bare", slot("git.door43.org/uW/en_bare", "textTranslation")),
+            ],
+        ),
+        vec![],
+    )];
+    let state = fold(&changes);
+    assert_eq!(
+        state
+            .anomalies()
+            .filter(|a| matches!(a, tc_journal::fold::Anomaly::InvalidForBurrito { .. }))
+            .count(),
+        0
+    );
+    let source = state.metadata_source((1, 0));
+    let ids: Vec<&str> = source
+        .relationships
+        .iter()
+        .map(|r| r["id"].as_str().expect("id"))
+        .collect();
+    assert_eq!(ids, ["dcs::uW/en_obs-tn"]);
+}
+
+/// A story's check session reads that story's decisions and comments only (R1): the other
+/// forty-nine are never touched, however many they hold.
+#[test]
+fn a_story_reads_its_own_decisions_and_comments() {
+    use tc_journal::record::{CommentTarget, UserStatus};
+    use tc_journal::{CheckId, CheckKey, CheckTarget, FrameNo, ToolId};
+    let mut ana = Dev::new(1);
+    let template = |n: u8| {
+        format!(
+            "# {n}. T\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-{n:02}-01.jpg)\n\nText.\n"
+        )
+    };
+    let story = |n: u8| tc_journal::StoryNo::new(n).expect("story");
+    let mut changes = Vec::new();
+    for n in [1, 2] {
+        changes.push(ana.one(
+            Record::StoryBase {
+                story: story(n),
+                value: template(n),
+            },
+            vec![],
+        ));
+    }
+    let key = |n: u8, id: &str| CheckKey {
+        tool: ToolId::TranslationNotes,
+        check_id: CheckId::parse(id).expect("id"),
+        target: CheckTarget::Frame {
+            story: story(n),
+            frame: FrameNo(1),
+        },
+        occurrence: 1,
+    };
+    for (n, id) in [(1, "aaaa"), (1, "bbbb"), (2, "cccc")] {
+        changes.push(ana.one(
+            check(&key(n, id), decision(Some(UserStatus::Valid), false, None)),
+            vec![],
+        ));
+    }
+    let on_frame = |n: u8| CommentTarget::Frame {
+        story: story(n),
+        frame: FrameNo(1),
+    };
+    changes.push(ana.one(comment(1, on_frame(1), "uno"), vec![]));
+    changes.push(ana.one(comment(2, on_frame(2), "dos"), vec![]));
+    changes.push(ana.one(
+        comment(3, CommentTarget::Check(key(1, "aaaa")), "sobre el chequeo"),
+        vec![],
+    ));
+    let state = FoldState::fold(
+        ProjectKind::Stories,
+        changes.into_iter().map(FoldInput::from),
+    );
+
+    let decisions = |n: u8| -> Vec<String> {
+        state
+            .story_decisions(ToolId::TranslationNotes, story(n))
+            .iter()
+            .map(|d| d.key.check_id.as_str().to_owned())
+            .collect()
+    };
+    assert_eq!(decisions(1), ["aaaa", "bbbb"]);
+    assert_eq!(decisions(2), ["cccc"]);
+    assert_eq!(decisions(3), Vec::<String>::new(), "a story with none");
+    assert!(
+        state
+            .story_decisions(ToolId::TranslationWords, story(1))
+            .is_empty(),
+        "another tool's decisions are not these"
+    );
+    // The story's own comments: on its frames and on its checks, never another story's.
+    assert_eq!(state.story_comments_of(story(1)).len(), 2);
+    assert_eq!(state.story_comments_of(story(2)).len(), 1);
+    assert!(state.story_comments_of(story(3)).is_empty());
+    // The whole collection's read still holds all of them.
+    assert_eq!(
+        state
+            .decisions(
+                ToolId::TranslationNotes,
+                tc_journal::pins::Collection::Stories
+            )
+            .len(),
+        3
+    );
+}

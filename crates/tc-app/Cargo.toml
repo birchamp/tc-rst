@@ -25,6 +25,8 @@ tc-check = { path = "../tc-check" }
 tc-core = { path = "../tc-core" }
 tc-burrito = { path = "../tc-burrito" }
 tc-door43 = { path = "../tc-door43" }
+# What the Community Checking preview prints of a book (B8); the exports come with D2.
+tc-export = { path = "../tc-export" }
 # The helps the Understand screen shows: blocks and highlights (B3).
 tc-helps = { path = "../tc-helps" }
 tc-journal = { path = "../tc-journal" }

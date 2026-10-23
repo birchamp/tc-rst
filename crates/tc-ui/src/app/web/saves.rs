@@ -19,6 +19,7 @@ use leptos::prelude::*;
 use tc_api::align::AlignSave;
 use tc_api::app::{Hello, HelloView, OpenSession};
 use tc_api::buffer::{BufferEntry, BufferKey, DraftCall, FieldKind, SentSave};
+use tc_api::editor::{DiscardDraft, Draft};
 use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::{ProjectId, ProjectRef, RequestId, Scope, ServerInstance, ViewSeq, WallMs};
 use tc_api::shown::PersonLabel;
@@ -32,7 +33,7 @@ use super::api::{Api, Busy};
 use super::js::{self, LocalStore};
 use super::{ServerState, bridge};
 use crate::app::buffer::{self, StoreError};
-use crate::app::client::CallError;
+use crate::app::client::{CallError, Transport};
 use crate::app::save::classify::{Answered, classify};
 use crate::app::save::indicator::{self, Indicator, Worst};
 use crate::app::save::{
@@ -55,13 +56,44 @@ pub trait FieldWriter {
     /// The draft request, if the kind has a server draft.
     fn draft(
         &self,
+        _api: &Api,
+        _key: &BufferKey,
+        _text: &str,
+        _base: &[ShownToken],
+    ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
+        None
+    }
+    /// A production draft keeps the entry's run and last-keystroke timestamp.
+    fn draft_entry(
+        &self,
         api: &Api,
         key: &BufferKey,
-        text: &str,
-        base: &[ShownToken],
-    ) -> Option<LocalBoxFuture<Result<(), CallError>>>;
+        _scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
+        self.draft(api, key, &entry.text, &entry.base)
+    }
+    /// A typed production draft, retained whole if its reply is lost.
+    fn draft_request(
+        &self,
+        _key: &BufferKey,
+        _scope: Option<Scope>,
+        _entry: &BufferEntry,
+    ) -> Option<Draft> {
+        None
+    }
     /// How `boot.js` posts the field's draft after three panics (6.8), if it has one.
-    fn draft_call(&self, key: &BufferKey, base: &[ShownToken]) -> Option<DraftCall>;
+    fn draft_call(&self, _key: &BufferKey, _base: &[ShownToken]) -> Option<DraftCall> {
+        None
+    }
+    fn draft_call_entry(
+        &self,
+        key: &BufferKey,
+        _scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<DraftCall> {
+        self.draft_call(key, &entry.base)
+    }
 }
 
 /// A hook the navigation gate runs once every field is saved (B6 registers `align/flush`).
@@ -84,6 +116,21 @@ pub(super) struct RuntimeHooks {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WriteCap(());
 
+#[derive(Default)]
+struct DraftLane {
+    running: bool,
+    active: Option<Draft>,
+    completed: Option<Draft>,
+    next: Option<Draft>,
+    failed: Option<(Draft, CallError)>,
+}
+
+struct CancelDraft {
+    request: DiscardDraft,
+    drafted: bool,
+    ambiguous: bool,
+}
+
 struct Inner {
     api: Api,
     state: ServerState,
@@ -91,6 +138,10 @@ struct Inner {
     machine: RefCell<SaveMachine>,
     writers: RefCell<HashMap<FieldKind, Rc<dyn FieldWriter>>>,
     shown: RefCell<HashMap<BufferKey, ArcRwSignal<String>>>,
+    /// The timestamp of this page's latest text, also when localStorage refused its entry.
+    changed: RefCell<HashMap<BufferKey, WallMs>>,
+    drafts: RefCell<HashMap<BufferKey, DraftLane>>,
+    cancels: RefCell<HashMap<BufferKey, CancelDraft>>,
     /// The focused editor of each field and the template `boot.js` holds for it.
     tracked: RefCell<HashMap<BufferKey, (web_sys::HtmlElement, String)>>,
     /// What the runtime does when the saves find out something only it can act on.
@@ -135,6 +186,9 @@ impl Saves {
                 machine: RefCell::new(SaveMachine::new(instance, Box::new(js::random_request_id))),
                 writers: RefCell::new(HashMap::new()),
                 shown: RefCell::new(HashMap::new()),
+                changed: RefCell::new(HashMap::new()),
+                drafts: RefCell::new(HashMap::new()),
+                cancels: RefCell::new(HashMap::new()),
                 tracked: RefCell::new(HashMap::new()),
                 runtime: RefCell::new(None),
                 timer: Cell::new(None),
@@ -186,7 +240,51 @@ impl Saves {
     /// An editor mounts on a field: the signal is the text it shows, which the machine changes
     /// only while the editor is not focused (AD37).
     pub fn open(&self, key: &BufferKey, scope: FieldScope, pair: Pair) -> ArcRwSignal<String> {
-        let (text, commands) = self.machine(|m| m.open(key.clone(), scope, pair, js::now_ms()));
+        self.open_over(key, scope, pair, Vec::new())
+    }
+
+    /// A new comment has no token until its first save answers.
+    pub fn open_comment(
+        &self,
+        key: &BufferKey,
+        scope: FieldScope,
+        pair: Option<Pair>,
+    ) -> ArcRwSignal<String> {
+        if let Some(pair) = pair {
+            return self.open(key, scope, pair);
+        }
+        let text = self.machine(|m| m.open_comment(key.clone(), scope));
+        let shown = ArcRwSignal::new(text);
+        self.0.shown.borrow_mut().insert(key.clone(), shown.clone());
+        self.after();
+        shown
+    }
+
+    /// Clearing cannot retract a saved comment. The machine chooses the latest version,
+    /// including a save in flight, rather than the value an earlier render showed.
+    pub fn revert_comment(&self, key: &BufferKey) -> String {
+        let (text, commands) = self.machine(|m| m.revert_comment(key, js::now_ms()));
+        self.run(commands);
+        if matches!(
+            self.state(key),
+            Some(FieldSave::Clean | FieldSave::SavedWithWarning(_))
+        ) {
+            self.clean_acked_drafts(key);
+        }
+        text
+    }
+
+    /// As [`open`](Self::open) for a field that displays several records, a section card: the
+    /// tokens of the others follow `pair.token` in its base.
+    pub fn open_over(
+        &self,
+        key: &BufferKey,
+        scope: FieldScope,
+        pair: Pair,
+        rest: Vec<ShownToken>,
+    ) -> ArcRwSignal<String> {
+        let (text, commands) =
+            self.machine(|m| m.open_over(key.clone(), scope, pair, rest, js::now_ms()));
         let shown = ArcRwSignal::new(text);
         self.0.shown.borrow_mut().insert(key.clone(), shown.clone());
         self.run(commands);
@@ -203,6 +301,14 @@ impl Saves {
         } else {
             Source::Program
         };
+        let changed = buffer::read(&LocalStore::open(), key)
+            .filter(|entry| {
+                source == Source::Input
+                    && entry.instance == self.0.state.instance.get_untracked()
+                    && entry.text == text
+            })
+            .map_or_else(|| WallMs(js::wall_ms()), |entry| entry.at);
+        self.0.changed.borrow_mut().insert(key.clone(), changed);
         let commands = self.machine(|m| m.typed(key, text, source, js::now_ms()));
         self.run(commands);
     }
@@ -260,6 +366,12 @@ impl Saves {
         self.run(commands);
     }
 
+    /// See [`SaveMachine::redraft`].
+    pub fn redraft(&self, key: &BufferKey) {
+        let commands = self.machine(|m| m.redraft(key, js::now_ms()));
+        self.run(commands);
+    }
+
     /// Cancel of a section card.
     pub fn discard(&self, key: &BufferKey) {
         self.untrack(key);
@@ -298,6 +410,10 @@ impl Saves {
 
     pub fn indicator(&self) -> ArcRwSignal<Indicator> {
         self.0.indicator.clone()
+    }
+
+    pub fn invalid_text_reason(&self) -> Option<String> {
+        self.machine(|m| m.invalid_text_reason())
     }
 
     /// Changes after every run of the machine: a view that reads a field's `notice` tracks it.
@@ -427,6 +543,7 @@ impl Saves {
                     None => continue,
                 }
             };
+            self.0.changed.borrow_mut().insert(key.clone(), entry.at);
             let commands = self.machine(|m| m.restore(key, entry, scope, now));
             self.run(commands);
         }
@@ -504,10 +621,17 @@ impl Saves {
     }
 
     fn align_saves(&self) -> Vec<AlignSave> {
-        self.0
+        let mut states: Vec<AlignSave> = self
+            .0
             .state
             .align_saves
-            .with_untracked(|saves| saves.values().cloned().collect())
+            .with_untracked(|saves| saves.values().cloned().collect());
+        if let Some(reason) = super::align::edit_failure() {
+            states.push(AlignSave::Failed(tc_api::write::NotSaved::Disk(reason)));
+        } else if super::align::edits_pending() {
+            states.push(AlignSave::Unsaved);
+        }
+        states
     }
 
     fn checkpoint_failed(&self) -> bool {
@@ -564,17 +688,32 @@ impl Saves {
                     instance,
                 } => self.resend(key, sent, base, instance),
                 Command::Draft { key, text, base } => {
-                    if let Some(future) = self
-                        .writer(key.field.kind)
-                        .and_then(|writer| writer.draft(&self.0.api, &key, &text, &base))
-                    {
+                    let entry = self.machine(|m| m.template(&key)).map(|mut entry| {
+                        entry.text = text;
+                        entry.base = base;
+                        entry.at = self.changed_at(&key);
+                        entry
+                    });
+                    let writer = self.writer(key.field.kind);
+                    let request = entry.as_ref().and_then(|entry| {
+                        writer
+                            .as_ref()
+                            .and_then(|writer| writer.draft_request(&key, self.scope(&key), entry))
+                    });
+                    if let Some(request) = request {
+                        self.queue_draft(key, request);
+                    } else if let Some(future) = entry.and_then(|entry| {
+                        writer.and_then(|writer| {
+                            writer.draft_entry(&self.0.api, &key, self.scope(&key), &entry)
+                        })
+                    }) {
                         // Best effort: a draft's answer changes nothing.
                         spawn_local(async move {
                             let _ = future.await;
                         });
                     }
                 }
-                // No draft endpoint discards yet; C2 adds it with `editor/draft`.
+                // The card already awaited durable server discard before dropping its field.
                 Command::DiscardDraft { .. } => {}
                 Command::Show { key, text } => {
                     if let Some(shown) = self.0.shown.borrow().get(&key) {
@@ -595,10 +734,10 @@ impl Saves {
     /// mirror gets the entry in any case. Another run's item is left for the offer, and this
     /// run's text of the field then lives in the mirror (6.6).
     fn write(&self, key: &BufferKey, mut entry: BufferEntry, mirror: bool) {
-        entry.at = WallMs(js::wall_ms());
+        entry.at = self.changed_at(key);
         entry.draft = self
             .writer(key.field.kind)
-            .and_then(|writer| writer.draft_call(key, &entry.base));
+            .and_then(|writer| writer.draft_call_entry(key, self.scope(key), &entry));
         let written = buffer::write_entry(&mut LocalStore::open(), key, &entry);
         if let Some(error) = &written.failure {
             self.report_buffer_failure(error);
@@ -606,6 +745,301 @@ impl Saves {
         if mirror && let Some(line) = written.line {
             bridge::buffer_changed(&line);
         }
+    }
+
+    fn queue_draft(&self, key: BufferKey, request: Draft) {
+        self.0
+            .drafts
+            .borrow_mut()
+            .entry(key.clone())
+            .or_default()
+            .next = Some(request);
+        self.start_drafts(key);
+    }
+
+    fn start_drafts(&self, key: BufferKey) {
+        {
+            let mut drafts = self.0.drafts.borrow_mut();
+            let lane = drafts.entry(key.clone()).or_default();
+            if lane.running || lane.failed.is_some() || lane.next.is_none() {
+                return;
+            }
+            lane.running = true;
+        }
+        let saves = self.clone();
+        spawn_local(async move {
+            loop {
+                let request = saves.0.drafts.borrow_mut().get_mut(&key).and_then(|lane| {
+                    let request = lane.next.take();
+                    lane.active = request.clone();
+                    request
+                });
+                let Some(request) = request else { break };
+                let result = saves.0.api.call(&request).await;
+                if let Some(lane) = saves.0.drafts.borrow_mut().get_mut(&key) {
+                    lane.active = None;
+                    match result {
+                        Ok(()) => lane.completed = Some(request),
+                        Err(error) => {
+                            lane.failed = Some((request, error));
+                            break;
+                        }
+                    }
+                }
+            }
+            if let Some(lane) = saves.0.drafts.borrow_mut().get_mut(&key) {
+                lane.running = false;
+            }
+            saves.after();
+        });
+    }
+
+    async fn drain_drafts(&self, key: &BufferKey) -> Result<(), String> {
+        let failed = self.0.drafts.borrow_mut().get_mut(key).and_then(|lane| {
+            let failed = lane.failed.take();
+            if failed.is_some() {
+                lane.running = true;
+            }
+            failed
+        });
+        if let Some((mut request, error)) = failed {
+            if ambiguous(&error) {
+                let hello = self.0.api.call(&Hello {}).await.map_err(|error| {
+                    let mut drafts = self.0.drafts.borrow_mut();
+                    let lane = drafts.entry(key.clone()).or_default();
+                    lane.running = false;
+                    lane.failed = Some((request.clone(), error.clone()));
+                    drop(drafts);
+                    self.after();
+                    error.to_string()
+                })?;
+                if hello.instance != request.instance {
+                    let mut drafts = self.0.drafts.borrow_mut();
+                    let lane = drafts.entry(key.clone()).or_default();
+                    lane.running = false;
+                    lane.failed = Some((request, error));
+                    drop(drafts);
+                    self.after();
+                    return Err(
+                        "The app restarted; the draft is kept for the next open.".to_owned()
+                    );
+                }
+            } else {
+                request.request = js::random_request_id();
+            }
+            // Resolve this exact earlier call before a newer put or Cancel can overtake it.
+            if let Some(lane) = self.0.drafts.borrow_mut().get_mut(key) {
+                lane.active = Some(request.clone());
+            }
+            let result = self.0.api.call(&request).await;
+            if let Err(error) = result {
+                let mut drafts = self.0.drafts.borrow_mut();
+                let lane = drafts.entry(key.clone()).or_default();
+                lane.running = false;
+                lane.active = None;
+                lane.failed = Some((request, error.clone()));
+                drop(drafts);
+                self.after();
+                return Err(error.to_string());
+            }
+            if let Some(lane) = self.0.drafts.borrow_mut().get_mut(key) {
+                lane.running = false;
+                lane.active = None;
+                lane.completed = Some(request);
+            }
+            self.after();
+        }
+        self.start_drafts(key.clone());
+        loop {
+            let state = self.0.drafts.borrow().get(key).map(|lane| {
+                (
+                    lane.running,
+                    lane.failed.as_ref().map(|(_, error)| error.to_string()),
+                )
+            });
+            match state {
+                Some((_, Some(error))) => return Err(error),
+                Some((true, None)) => self.changed().await,
+                _ => return Ok(()),
+            }
+        }
+    }
+
+    /// Save never waits for a draft. Once a clean Ack arrives, remember only the calls
+    /// already outstanding, then remove their exact entries after those calls finish.
+    /// A later keystroke's text/time/tokens cannot match any of these compare-and-removes.
+    fn clean_acked_drafts(&self, key: &BufferKey) {
+        let captured: Vec<Draft> = self
+            .0
+            .drafts
+            .borrow()
+            .get(key)
+            .map(|lane| {
+                lane.active
+                    .iter()
+                    .chain(lane.next.iter())
+                    .chain(lane.completed.iter())
+                    .chain(lane.failed.iter().map(|(request, _)| request))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+        if captured.is_empty() {
+            return;
+        }
+        let (saves, key) = (self.clone(), key.clone());
+        spawn_local(async move {
+            if saves.drain_drafts(&key).await.is_err() {
+                return;
+            }
+            for draft in captured {
+                let request = DiscardDraft {
+                    at: draft.at,
+                    request: js::random_request_id(),
+                    instance: draft.instance,
+                    field: draft.field,
+                    shown: draft.shown,
+                    text: draft.text,
+                    changed: draft.changed,
+                };
+                let result = saves.0.api.call(&request).await;
+                if result.as_ref().is_err_and(ambiguous)
+                    && let Ok(hello) = saves.0.api.call(&Hello {}).await
+                    && hello.instance == request.instance
+                {
+                    let _ = saves.0.api.call(&request).await;
+                }
+            }
+        });
+    }
+
+    /// Cancel waits for the current draft lane and its durable compare-and-remove. Any
+    /// failure leaves the field and its buffer in place; the card's Retry calls this again.
+    pub async fn discard_confirmed(&self, key: &BufferKey) -> Result<bool, String> {
+        let Some(mut entry) = self.machine(|m| m.template(key)) else {
+            return Ok(true);
+        };
+        entry.text = self
+            .machine(|m| m.text(key).map(str::to_owned))
+            .unwrap_or_default();
+        entry.at = self.changed_at(key);
+        let writer = self
+            .writer(key.field.kind)
+            .ok_or("The draft cannot be discarded.")?;
+        let draft = writer
+            .draft_request(key, self.scope(key), &entry)
+            .ok_or("The project is no longer open; the draft is kept.")?;
+        {
+            let mut cancels = self.0.cancels.borrow_mut();
+            let same = cancels.get(key).is_some_and(|cancel| {
+                cancel.request.instance == entry.instance
+                    && cancel.request.shown == entry.base
+                    && cancel.request.text == entry.text
+                    && cancel.request.changed == entry.at
+            });
+            if !same {
+                cancels.insert(
+                    key.clone(),
+                    CancelDraft {
+                        request: DiscardDraft {
+                            at: draft.at.clone(),
+                            request: js::random_request_id(),
+                            instance: draft.instance,
+                            field: draft.field,
+                            shown: draft.shown.clone(),
+                            text: draft.text.clone(),
+                            changed: draft.changed,
+                        },
+                        drafted: false,
+                        ambiguous: false,
+                    },
+                );
+            }
+        }
+        self.drain_drafts(key).await?;
+        if !self.matches_entry(key, &entry) {
+            return Ok(false);
+        }
+        let drafted = self
+            .0
+            .cancels
+            .borrow()
+            .get(key)
+            .is_some_and(|cancel| cancel.drafted);
+        if !drafted {
+            self.queue_draft(key.clone(), draft);
+            self.drain_drafts(key).await?;
+            if let Some(cancel) = self.0.cancels.borrow_mut().get_mut(key) {
+                cancel.drafted = true;
+            }
+        }
+        let (mut request, lost) = self
+            .0
+            .cancels
+            .borrow()
+            .get(key)
+            .map(|cancel| (cancel.request.clone(), cancel.ambiguous))
+            .ok_or("The draft changed while Cancel waited.")?;
+        if lost {
+            let hello = self
+                .0
+                .api
+                .call(&Hello {})
+                .await
+                .map_err(|error| error.to_string())?;
+            if hello.instance != request.instance {
+                return Err("The app restarted; the draft is kept for the next open.".to_owned());
+            }
+        }
+        match self.0.api.call(&request).await {
+            Ok(()) => {
+                self.0.cancels.borrow_mut().remove(key);
+                if self.matches_entry(key, &entry) {
+                    self.discard(key);
+                    self.0.changed.borrow_mut().remove(key);
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Err(error) => {
+                if let Some(cancel) = self.0.cancels.borrow_mut().get_mut(key) {
+                    cancel.ambiguous = ambiguous(&error);
+                    if !cancel.ambiguous {
+                        request.request = js::random_request_id();
+                        cancel.request = request;
+                    }
+                }
+                Err(error.to_string())
+            }
+        }
+    }
+
+    fn matches_entry(&self, key: &BufferKey, entry: &BufferEntry) -> bool {
+        self.changed_at(key) == entry.at
+            && self.machine(|m| {
+                m.text(key) == Some(entry.text.as_str())
+                    && m.base(key) == Some(entry.base.as_slice())
+                    && m.instance() == entry.instance
+            })
+    }
+
+    fn changed_at(&self, key: &BufferKey) -> WallMs {
+        *self
+            .0
+            .changed
+            .borrow_mut()
+            .entry(key.clone())
+            .or_insert_with(|| WallMs(js::wall_ms()))
+    }
+
+    fn scope(&self, key: &BufferKey) -> Option<Scope> {
+        self.0.state.sessions.with_untracked(|sessions| {
+            sessions
+                .iter()
+                .find(|session| session.at.project == key.project && session.id == key.id)
+                .map(|session| session.at.clone())
+        })
     }
 
     fn report_buffer_failure(&self, error: &StoreError) {
@@ -636,7 +1070,16 @@ impl Saves {
                 None => Err(CallError::Api(ApiError::Unavailable(Feature::Writes))),
             };
             let answered = classify(result);
+            let acked = matches!(&answered, Answered::Acked(_));
             let commands = saves.machine(|m| m.reply(&key, sent.request, answered, js::now_ms()));
+            if acked
+                && matches!(
+                    saves.state(&key),
+                    Some(FieldSave::Clean | FieldSave::SavedWithWarning(_))
+                )
+            {
+                saves.clean_acked_drafts(&key);
+            }
             saves.run(commands);
         });
     }
@@ -736,9 +1179,10 @@ impl Saves {
                 self.untrack(&key);
                 continue;
             };
+            template.at = self.changed_at(&key);
             template.draft = self
                 .writer(key.field.kind)
-                .and_then(|writer| writer.draft_call(&key, &template.base));
+                .and_then(|writer| writer.draft_call_entry(&key, self.scope(&key), &template));
             let (Ok(json), Ok(item)) = (serde_json::to_string(&template), buffer::item_key(&key))
             else {
                 continue;
@@ -785,4 +1229,12 @@ fn boot_call(name: &str, args: &[JsValue]) {
         array.push(arg);
     }
     let _ = function.apply(&boot, &array);
+}
+
+fn ambiguous(error: &CallError) -> bool {
+    matches!(
+        error,
+        CallError::Dropped
+            | CallError::Transport(Transport::Unreachable(_) | Transport::Status(503))
+    )
 }

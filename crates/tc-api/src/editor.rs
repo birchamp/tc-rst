@@ -1,12 +1,13 @@
-//! The `editor` service's reads (APP-DESIGN §3.7, §3.9, units B3 and B4a): the open book with
-//! its rail and comments, the source panes of a chapter, and the translation's text of the
-//! book's chapters. The saves come with C2.
+//! Translate reads and writes (APP-DESIGN §3.7, §3.9, B3/B4/C2): each save carries
+//! the displayed tokens; a draft carries its original buffer timestamp and server run.
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
-use crate::ids::{RecordRef, RefPart, Scope, ViewSeq, WallMs};
+use crate::ids::{RecordRef, RefPart, RequestId, Scope, ServerInstance, StoryNo, ViewSeq, WallMs};
+use crate::model::section::ParaFormat;
 use crate::shown::{Direction, Known, Shown};
+use crate::token::ShownToken;
 
 /// `editor/book`: the book Understand and Translate show.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +24,7 @@ pub struct Book {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct BookView {
+    pub view: ViewSeq,
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
     pub book: BookId,
     /// The chapters the book holds, in order.
@@ -50,6 +52,7 @@ pub struct RailBook {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct CommentView {
+    pub token: ShownToken,
     pub chapter: u16,
     pub verse: u16,
     pub text: String,
@@ -272,4 +275,149 @@ pub struct VerseRow {
     /// What the verse box edits: the verse's whole `words`, every poem line with its markers
     /// (#786, Q-20), with the token of the version shown and its conflict marker.
     pub words: Shown<String>,
+    /// The paragraph or poetry marker line (`\p`, `\q1`, `\q2`) the previous verse's layout
+    /// ends with, which opens this verse's line in the section card (tC4's `gapMarkerOf`, #54);
+    /// none for a chapter's first verse and where the layout holds none of the three.
+    pub format: Option<ParaFormat>,
+    /// The tokens of the verses a span covers (`4-5` covers 5), in order: the section card
+    /// displays every verse of its section, so its save names them (STORAGE §5.2).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub covered: Vec<ShownToken>,
+}
+
+/// `editor/saveVerse`: replace only the displayed verse's words (STORAGE §5.1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveVerse {
+    pub at: Scope,
+    pub request: RequestId,
+    /// The verse the field displayed.
+    pub shown: ShownToken,
+    pub words: String,
+}
+
+/// `editor/saveSection`: the Save button's text and the tokens
+/// of every verse the card displayed, in order, a span's covered verses included; the server
+/// reads the section's verse keys from them (a Text with a later `last` is a span) and builds
+/// the values (APP-DESIGN 3.8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveSection {
+    pub at: Scope,
+    pub request: RequestId,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+    pub book: BookId,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub displayed: Vec<ShownToken>,
+    /// The Type-mode text of the card (`model::section`).
+    pub text: String,
+}
+
+/// `editor/saveLayout`: replace only the layout after the displayed verse (STORAGE §5.1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveLayout {
+    pub at: Scope,
+    pub request: RequestId,
+    pub shown: ShownToken,
+    pub layout: String,
+}
+
+/// `editor/draft`: unsaved text beside the save queue (STORAGE §5.14, R22/R26).
+/// The run and last-keystroke timestamp come from the BufferEntry, including after reload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Draft {
+    pub at: Scope,
+    pub request: RequestId,
+    pub instance: ServerInstance,
+    pub field: DraftField,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub shown: Vec<ShownToken>,
+    pub text: String,
+    /// BufferEntry::at, not the time this request or retry was sent.
+    pub changed: WallMs,
+}
+
+/// `editor/discardDraft`: Cancel's exact current entry. A differing/newer current draft
+/// and every offered draft stay; the removal is durable before this request succeeds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscardDraft {
+    pub at: Scope,
+    pub request: RequestId,
+    pub instance: ServerInstance,
+    pub field: DraftField,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub shown: Vec<ShownToken>,
+    pub text: String,
+    pub changed: WallMs,
+}
+
+/// Unsaved editor fields. New user comments carry no token; a check comment carries its
+/// decision's token (C4); every other field carries the displayed record, or every displayed
+/// verse for a section.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum DraftField {
+    Frame,
+    StoryRef,
+    UserComment {
+        target: CommentTarget,
+    },
+    Words,
+    Layout,
+    Section {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+        book: BookId,
+    },
+    CheckComment,
+}
+
+/// The anchor of an Understand comment. A frame numbered zero is the story title.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum CommentTarget {
+    Verse {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+        book: BookId,
+        chapter: u16,
+        verse: u16,
+    },
+    Frame {
+        story: StoryNo,
+        frame: u16,
+    },
+}
+
+/// `editor/addComment`: blur commits the box once. A displayed token revises that same
+/// comment, keeping its earlier text in History; no token adds a new comment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddComment {
+    pub at: Scope,
+    pub request: RequestId,
+    pub target: CommentTarget,
+    pub shown: Option<ShownToken>,
+    pub text: String,
 }

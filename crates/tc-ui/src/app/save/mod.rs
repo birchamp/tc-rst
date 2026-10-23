@@ -29,7 +29,7 @@ pub mod classify;
 pub mod indicator;
 pub mod rules;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use tc_api::API_VERSION;
 use tc_api::app::OpenSession;
@@ -265,8 +265,9 @@ struct Field {
     /// A line for this field went to the mirror and no removal followed.
     mirrored: bool,
     notice: Option<Notice>,
-    /// The newest refresh the field has not taken.
-    waiting: Option<(Pair, Option<PersonLabel>)>,
+    /// The newest refresh the field has not taken, with the tokens of the other records it
+    /// read (a section card's other verses, as `open_over`'s `rest`).
+    waiting: Option<(Pair, Vec<ShownToken>, Option<PersonLabel>)>,
     /// The navigation gate has retried this field's failure, or the failure came during it.
     gate_retried: bool,
     /// A save was asked for and the field had no open: send it once an open is listed.
@@ -280,15 +281,33 @@ impl Field {
         instance: ServerInstance,
         pair: Pair,
     ) -> Self {
+        Self::over(
+            kind_rules,
+            scope,
+            instance,
+            pair.value,
+            vec![pair.token],
+            pair.view,
+        )
+    }
+
+    fn over(
+        kind_rules: FieldRules,
+        scope: FieldScope,
+        instance: ServerInstance,
+        value: String,
+        base: Vec<ShownToken>,
+        view: Option<View>,
+    ) -> Self {
         Self {
             rules: kind_rules,
             scope,
             instance,
             unanswered: None,
-            current: pair.value.clone(),
-            persisted: Some(pair.value),
-            base: vec![pair.token],
-            pair_view: pair.view,
+            current: value.clone(),
+            persisted: Some(value),
+            base,
+            pair_view: view,
             own_view: None,
             own: Vec::new(),
             refused: None,
@@ -370,7 +389,7 @@ impl Field {
 
     fn note_waiting(&mut self) {
         if self.is_dirty()
-            && let Some((pair, by)) = &self.waiting
+            && let Some((pair, _, by)) = &self.waiting
             && self.differs_from_base(pair)
         {
             self.notice = Some(Notice { by: by.clone() });
@@ -409,6 +428,10 @@ pub struct SaveMachine {
     instance: ServerInstance,
     ids: Box<dyn FnMut() -> RequestId>,
     fields: BTreeMap<BufferKey, Field>,
+    /// A blur can be acknowledged before the read cache learns a newly minted comment.
+    /// Keep its proved pair outside active fields so timers, gates and indicators never
+    /// scan comments visited earlier in this open. The outer map has one entry per open.
+    comment_pairs: HashMap<Option<Scope>, HashMap<BufferKey, Pair>>,
     sessions: Vec<OpenSession>,
     gating: bool,
 }
@@ -429,6 +452,7 @@ impl SaveMachine {
             instance,
             ids,
             fields: BTreeMap::new(),
+            comment_pairs: HashMap::new(),
             sessions: Vec::new(),
             gating: false,
         }
@@ -448,12 +472,62 @@ impl SaveMachine {
         pair: Pair,
         now: Ms,
     ) -> (String, Vec<Command>) {
+        self.open_over(key, scope, pair, Vec::new(), now)
+    }
+
+    /// A new user comment has no record yet. Its first Ack supplies the token that later
+    /// edits revise; remounting an unread/new box must retain that learned identity.
+    pub fn open_comment(&mut self, key: BufferKey, scope: FieldScope) -> String {
+        self.reopen_comment(&key, &scope);
+        let field = self.fields.entry(key).or_insert_with(|| {
+            Field::over(
+                rules(FieldKind::Comment),
+                scope.clone(),
+                self.instance,
+                String::new(),
+                Vec::new(),
+                None,
+            )
+        });
+        field.scope = scope;
+        field.editor = Some(Editor { focused: false });
+        field.current.clone()
+    }
+
+    /// A saved comment cannot be retracted by clearing its box. Prefer the save already
+    /// on its way over an older render's text, so a clear cannot revert that save.
+    pub fn revert_comment(&mut self, key: &BufferKey, now: Ms) -> (String, Vec<Command>) {
+        let value = self
+            .fields
+            .get(key)
+            .map(|field| match &field.state {
+                FieldSave::Saving { sent } => sent.text.clone(),
+                _ => field.persisted.clone().unwrap_or_default(),
+            })
+            .unwrap_or_default();
+        let commands = self.typed(key, &value, Source::Program, now);
+        (value, commands)
+    }
+
+    /// As [`open`](Self::open) for a field that displays several records, a section card: its
+    /// saves and drafts are based on the tokens of all of them, `pair.token` first and `rest`
+    /// after, in the order the card shows the verses. A field the machine already holds keeps
+    /// the base it has, as `open` does, unless it takes the read whole.
+    pub fn open_over(
+        &mut self,
+        key: BufferKey,
+        scope: FieldScope,
+        pair: Pair,
+        rest: Vec<ShownToken>,
+        now: Ms,
+    ) -> (String, Vec<Command>) {
         let mut out = Vec::new();
+        self.reopen_comment(&key, &scope);
         if let Some(field) = self.fields.get_mut(&key) {
             field.editor = Some(Editor { focused: false });
             field.scope = scope;
             let shown = field.current.clone();
-            out.extend(self.refresh(&key, pair, None));
+            out.extend(self.refresh_over(&key, pair, rest, None));
             self.pump(now, &mut out);
             let shown = self.fields.get(&key).map_or(shown, |f| f.current.clone());
             // `Show` is for an editor already on screen; this one shows what is returned.
@@ -461,10 +535,37 @@ impl SaveMachine {
             return (shown, out);
         }
         let mut field = Field::new(rules(key.field.kind), scope, self.instance, pair);
+        field.base.extend(rest);
         field.editor = Some(Editor { focused: false });
         let shown = field.current.clone();
         self.fields.insert(key, field);
         (shown, out)
+    }
+
+    fn reopen_comment(&mut self, key: &BufferKey, scope: &FieldScope) {
+        if key.field.kind != FieldKind::Comment || self.fields.contains_key(key) {
+            return;
+        }
+        let at = match scope {
+            FieldScope::App => None,
+            FieldScope::Project(Some(at)) => Some(at.clone()),
+            FieldScope::Project(None) => return,
+        };
+        if let Some(pair) = self
+            .comment_pairs
+            .get_mut(&at)
+            .and_then(|pairs| pairs.remove(key))
+        {
+            self.fields.insert(
+                key.clone(),
+                Field::new(
+                    rules(FieldKind::Comment),
+                    scope.clone(),
+                    self.instance,
+                    pair,
+                ),
+            );
+        }
     }
 
     /// After a reload in the same server run (AD22): the entry becomes a field with no editor.
@@ -481,21 +582,18 @@ impl SaveMachine {
         if self.fields.contains_key(&key) || entry.instance != self.instance {
             return out;
         }
-        let Some(token) = entry.base.first().cloned() else {
+        if entry.base.is_empty() && key.field.kind != FieldKind::Comment {
             return out;
-        };
+        }
         let kind_rules = rules(key.field.kind);
-        let mut field = Field::new(
+        let mut field = Field::over(
             kind_rules,
             scope,
             self.instance,
-            Pair {
-                value: entry.text.clone(),
-                token,
-                view: None,
-            },
+            entry.text.clone(),
+            entry.base.clone(),
+            None,
         );
-        field.base = entry.base.clone();
         field.persisted = None;
         field.pair_view = None;
         field.touched = true;
@@ -679,6 +777,29 @@ impl SaveMachine {
         field.editor = None;
         field.notice = None;
         if field.is_clean_state() || field.is_kept_over_restart() {
+            if key.field.kind == FieldKind::Comment
+                && field.is_clean_state()
+                && let Some(token) = field.base.first().cloned()
+            {
+                let at = match &field.scope {
+                    FieldScope::App => Some(None),
+                    FieldScope::Project(Some(at)) => Some(Some(at.clone())),
+                    FieldScope::Project(None) => None,
+                };
+                if let Some(at) = at {
+                    self.comment_pairs.entry(at).or_default().insert(
+                        key.clone(),
+                        Pair {
+                            value: field
+                                .persisted
+                                .clone()
+                                .unwrap_or_else(|| field.current.clone()),
+                            token,
+                            view: field.pair_view,
+                        },
+                    );
+                }
+            }
             self.fields.remove(key);
             return out;
         }
@@ -725,16 +846,27 @@ impl SaveMachine {
         match answered {
             Answered::Acked(ack) => {
                 // A verse save also writes the verse's reflowed alignment (R25, Q-6), whose
-                // token comes back beside the verse's: the field's token is its value's.
+                // token comes back beside the verse's: the field's token is its value's. A
+                // section card is based on every verse it displays, and its `Ack` answers each,
+                // in the order of the base (`section_ack`): cutting the base to the first verse
+                // would have the next save read the whole text as that verse.
                 let own = match ack.saved.as_slice() {
                     [saved] => ack
                         .tokens
                         .iter()
                         .find(|t| t.record == saved.record)
-                        .map(|token| (saved, token)),
+                        .and_then(|token| match field.base.len() {
+                            0 | 1 => Some(vec![token.token.clone()]),
+                            n => ack
+                                .tokens
+                                .get(..n)
+                                .filter(|all| all.first() == Some(token))
+                                .map(|all| all.iter().map(|t| t.token.clone()).collect()),
+                        })
+                        .map(|base| (saved, base)),
                     _ => None,
                 };
-                let Some((saved, token)) = own else {
+                let Some((saved, base)) = own else {
                     fail(
                         key,
                         field,
@@ -746,7 +878,7 @@ impl SaveMachine {
                     return out;
                 };
                 field.reissues = 0;
-                field.base = vec![token.token.clone()];
+                field.base = base;
                 field.persisted = Some(saved.text.clone());
                 field.pair_view = field
                     .pair_view
@@ -755,7 +887,7 @@ impl SaveMachine {
                 if field
                     .waiting
                     .as_ref()
-                    .is_some_and(|(pair, _)| !field.is_newer(pair))
+                    .is_some_and(|(pair, ..)| !field.is_newer(pair))
                 {
                     field.waiting = None;
                 }
@@ -785,12 +917,17 @@ impl SaveMachine {
                 } else {
                     field.state = FieldSave::Dirty { since: now };
                     field.note_waiting();
+                    // The remaining text now has the Ack's tokens. Refresh its server draft
+                    // immediately even when the prior draft had the same text (R26).
+                    field.draft_due = Some(now);
+                    field.draft_text = None;
                     out.push(Command::Write {
                         key: key.clone(),
                         entry: entry_of(field),
                         mirror: true,
                     });
                     field.mirrored = true;
+                    pump_draft(key, field, now, &mut out);
                 }
             }
             Answered::Lost => {
@@ -868,6 +1005,17 @@ impl SaveMachine {
         pair: Pair,
         by: Option<PersonLabel>,
     ) -> Vec<Command> {
+        self.refresh_over(key, pair, Vec::new(), by)
+    }
+
+    /// As [`refresh`](Self::refresh) for a read of several records, a section card's.
+    fn refresh_over(
+        &mut self,
+        key: &BufferKey,
+        pair: Pair,
+        rest: Vec<ShownToken>,
+        by: Option<PersonLabel>,
+    ) -> Vec<Command> {
         let mut out = Vec::new();
         let Some(field) = self.fields.get_mut(key) else {
             return out;
@@ -887,14 +1035,14 @@ impl SaveMachine {
             field
                 .waiting
                 .as_ref()
-                .is_none_or(|(held, _)| match (pair.view, held.view) {
+                .is_none_or(|(held, ..)| match (pair.view, held.view) {
                     (Some(view), Some(held)) => view >= held,
                     _ => true,
                 });
         if !newer_than_waiting {
             return out;
         }
-        field.waiting = Some((pair, by));
+        field.waiting = Some((pair, rest, by));
         if field.is_saving() {
             // Judged when the reply has come: it may be this field's own save.
             return out;
@@ -926,6 +1074,10 @@ impl SaveMachine {
     /// newer than anything it holds.
     pub fn sessions(&mut self, open: &[OpenSession], now: Ms) -> Vec<Command> {
         let mut out = Vec::new();
+        self.comment_pairs.retain(|at, _| {
+            at.as_ref()
+                .is_none_or(|at| open.iter().any(|session| session.at == *at))
+        });
         self.sessions = open.to_vec();
         let ctx = Ctx {
             sessions: &self.sessions,
@@ -974,6 +1126,7 @@ impl SaveMachine {
             return;
         }
         self.instance = instance;
+        self.comment_pairs.clear();
         self.fields.retain(|_, field| field.editor.is_some());
         for field in self.fields.values_mut() {
             if let FieldSave::Saving { sent } = &field.state {
@@ -1130,6 +1283,19 @@ impl SaveMachine {
         })
     }
 
+    /// Another write of the field's record (a mark under a typed check comment) moved the
+    /// token its draft names: the unsaved text is drafted again at once, so a *Keep* after a
+    /// crash continues from that write instead of standing beside it as a conflict.
+    pub fn redraft(&mut self, key: &BufferKey, now: Ms) -> Vec<Command> {
+        let mut out = Vec::new();
+        if let Some(field) = self.fields.get_mut(key) {
+            field.draft_due = Some(now);
+            field.draft_text = None;
+            pump_draft(key, field, now, &mut out);
+        }
+        out
+    }
+
     /// The worst state of all fields: an error, a save in flight, unsaved or held text, or
     /// saved. A field kept over a restart counts while its text differs from the stored text.
     pub fn worst(&self) -> Worst {
@@ -1153,6 +1319,13 @@ impl SaveMachine {
             .filter(|(_, field)| matches!(field.state, FieldSave::Failed(_)))
             .map(|(key, _)| key.field.kind)
             .collect()
+    }
+
+    pub fn invalid_text_reason(&self) -> Option<String> {
+        self.fields.values().find_map(|field| match &field.state {
+            FieldSave::Failed(error) => error.invalid_text_reason().map(str::to_owned),
+            _ => None,
+        })
     }
 
     /// The disk warnings of fields saved with one.
@@ -1419,7 +1592,7 @@ fn take_waiting(key: &BufferKey, field: &mut Field, out: &mut Vec<Command>) {
     if field.is_saving() || !field.is_clean_state() || field.focused() {
         return;
     }
-    let Some((pair, _)) = field.waiting.take() else {
+    let Some((pair, rest, _)) = field.waiting.take() else {
         return;
     };
     if !field.is_newer(&pair) {
@@ -1427,7 +1600,7 @@ fn take_waiting(key: &BufferKey, field: &mut Field, out: &mut Vec<Command>) {
     }
     field.current = pair.value.clone();
     field.persisted = Some(pair.value.clone());
-    field.base = vec![pair.token];
+    field.base = std::iter::once(pair.token).chain(rest).collect();
     field.pair_view = field.pair_view.max(pair.view);
     field.touched = false;
     field.notice = None;

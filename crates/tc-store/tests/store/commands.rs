@@ -1636,7 +1636,8 @@ fn an_obs_frame_is_saved_by_tc4s_text_rules_and_whole_or_not_at_all() {
         story.contains("This is how God made everything."),
         "{story}"
     );
-    assert!(story.starts_with("# The Creation"), "{story}");
+    // The title is saved without its number and written as tC4's `writeTitle` writes it.
+    assert!(story.starts_with("# 1. The Creation\n"), "{story}");
     assert_valid_burrito(&rig.fs, &folder);
     handle.close().unwrap();
     // The crash sweep of one frame save.

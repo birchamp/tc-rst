@@ -1,0 +1,127 @@
+{
+  "path": "check/item",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "list": {
+      "tool": "translationNotes",
+      "unit": {
+        "type": "book",
+        "value": "TIT"
+      }
+    },
+    "index": 7
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "index": 7,
+      "view": 43,
+      "checkId": "abcd",
+      "place": "TIT 1:1",
+      "title": "knowledge",
+      "note": [
+        {
+          "kind": "p",
+          "quote": 0,
+          "spans": [
+            {
+              "text": "The words faith and knowledge are abstract nouns."
+            }
+          ],
+          "depth": 0,
+          "number": null,
+          "cells": [],
+          "header": false
+        }
+      ],
+      "helpsDir": "ltr",
+      "article": {
+        "link": {
+          "type": "academy",
+          "value": {
+            "slug": "figs-abstractnouns"
+          }
+        },
+        "title": "Abstract Nouns",
+        "category": {
+          "type": "note",
+          "value": "grammar"
+        }
+      },
+      "sources": {
+        "type": "verse",
+        "value": {
+          "original": {
+            "type": "ready",
+            "value": {
+              "testament": "nt",
+              "verse": "Παῦλος, δοῦλος Θεοῦ"
+            }
+          },
+          "gateway": {
+            "type": "pane",
+            "value": {
+              "pane": "ult",
+              "text": {
+                "type": "verse",
+                "value": {
+                  "tokens": [
+                    "Paul",
+                    ", ",
+                    "a"
+                  ],
+                  "lit": [
+                    0
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "target": {
+        "words": [
+          "Pablo",
+          "siervo"
+        ],
+        "selected": [
+          0
+        ],
+        "verse": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "decision": {
+        "value": {
+          "status": "valid",
+          "nothingToSelect": false,
+          "bookmarked": true,
+          "comment": "ask the team",
+          "invalidated": false
+        },
+        "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+        "marker": null
+      },
+      "notices": [
+        {
+          "type": "invalidated",
+          "value": {
+            "count": 2
+          }
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

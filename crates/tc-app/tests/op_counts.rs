@@ -21,12 +21,18 @@ mod store_world;
 mod op_counts {
     mod align;
     mod check;
+    mod comments;
+    mod conflicts;
     pub mod corpus;
+    mod export;
     pub mod harness;
     mod home;
     mod lint;
     mod plans;
     mod probes;
+    mod section;
     mod session;
+    mod story;
+    mod translate;
     mod understand;
 }

@@ -368,6 +368,20 @@ impl Actions {
 
     /// Follows a plan job until it ends, telling `progress` which repository it downloads.
     async fn follow_plan(&self, job: JobId, progress: impl Fn(String)) -> Planned {
+        match self.follow_job(job, progress).await {
+            Ok(JobOutcome::PlanReady(plan)) => Planned::Ready(plan),
+            Ok(_) | Err(None) => Planned::Stopped,
+            Err(Some(error)) => Planned::Failed(error),
+        }
+    }
+
+    /// Follows a job until it ends, telling `progress` which repository it installs. `Err(None)`:
+    /// cancelled, or gone.
+    pub(super) async fn follow_job(
+        &self,
+        job: JobId,
+        progress: impl Fn(String),
+    ) -> Result<JobOutcome, Option<ApiError>> {
         let mut waited = 0;
         loop {
             let state = self
@@ -376,9 +390,9 @@ impl Actions {
                 .jobs
                 .with_untracked(|jobs| jobs.get(&job).map(|view| view.state.clone()));
             match state {
-                Some(JobState::Done(JobOutcome::PlanReady(plan))) => return Planned::Ready(plan),
-                Some(JobState::Done(_)) | Some(JobState::Cancelled) => return Planned::Stopped,
-                Some(JobState::Failed(error)) => return Planned::Failed(error),
+                Some(JobState::Done(outcome)) => return Ok(outcome),
+                Some(JobState::Cancelled) => return Err(None),
+                Some(JobState::Failed(error)) => return Err(Some(error)),
                 Some(JobState::Running(running)) => {
                     if let Phase::Install { repo } = running.phase {
                         progress(repo);
@@ -397,7 +411,7 @@ impl Actions {
                             .jobs
                             .try_update(|jobs| crate::app::effects::merge_job(jobs, view));
                     }
-                    Ok(None) => return Planned::Stopped,
+                    Ok(None) => return Err(None),
                     Err(_) => {}
                 }
             }

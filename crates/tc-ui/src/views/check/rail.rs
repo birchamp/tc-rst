@@ -5,9 +5,8 @@
 use std::sync::Arc;
 
 use leptos::prelude::*;
-use tc_api::check::{CheckEmpty, RailRow, Tool};
+use tc_api::check::{CheckEmpty, CheckUnit, RailRow, Tool};
 use tc_api::model::rail::{self, Filter, GroupLabel, SortMode};
-use tc_core::BookId;
 use wasm_bindgen::JsCast;
 
 use super::picker::{dropped_note, rung_key, tool_name};
@@ -139,11 +138,15 @@ fn filter_key(filter: Filter) -> String {
     format!("check.filter.{}", filter.id())
 }
 
-fn sort_key(mode: SortMode) -> String {
+/// A sort's label; a story's By verse is By frame (tC4 `check.sort.byFrame`).
+fn sort_key(mode: SortMode, story: bool) -> String {
+    if story && mode == SortMode::ByVerse {
+        return "check.sort.byFrame".to_owned();
+    }
     format!("check.sort.{}", mode.id())
 }
 
-fn category_name(category: tc_api::check::Category) -> &'static str {
+pub(super) fn category_name(category: tc_api::check::Category) -> &'static str {
     use tc_api::check::{Category, NoteCategory, WordCategory};
     match category {
         Category::Note(n) => match n {
@@ -302,9 +305,16 @@ fn focus_is_unmoved() -> bool {
 }
 
 /// tC4's `CheckRail`.
-fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: BookId) -> AnyView {
+fn check_rail(
+    s: &AppState,
+    actions: &Actions,
+    rail: &Rail,
+    tool: Tool,
+    kind: CheckUnit,
+) -> AnyView {
     let c = s.c.clone();
-    let unit = book.english_name().to_owned();
+    let story = matches!(kind, CheckUnit::Story(_));
+    let unit = super::picker::unit_label(kind);
     let terms = Arc::new(rail.view.terms.clone());
     let rows = Arc::new(rail.rows.clone());
     let progress = rail.view.progress;
@@ -416,7 +426,7 @@ fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: Bo
                             style=rail_chip(shown == mode).to_style()
                             on:click=move |_| actions.set_check_sort(mode)
                         >
-                            {t_dyn(&sort_key(mode), &[], None)}
+                            {t_dyn(&sort_key(mode, story), &[], None)}
                         </button>
                     }
                 })
@@ -686,55 +696,93 @@ fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: Bo
     .into_any()
 }
 
+/// What a tool's session shows, apart from the rows themselves: a patch to a row leaves the
+/// detail column as it is, so the focus in it survives a mark.
+#[derive(Debug, Clone, PartialEq)]
+enum Shown {
+    Deriving,
+    Failed(String),
+    Empty(CheckEmpty),
+    Rail,
+}
+
 /// tC4's `CheckSession`: deriving, an error, a designed empty state, or the rail and the detail.
 pub fn check_session(
     s: &AppState,
     actions: &Actions,
-    book: BookId,
+    unit: CheckUnit,
     tool: Tool,
 ) -> impl IntoView + use<> {
     let session = s.c.session.clone();
-    let (s, actions) = (s.clone(), actions.clone());
-    move || {
-        session.with(|session| match session {
-            None | Some(Session::Loading(_)) => {
-                let p =
-                    crate::css! { "font-size": "var(--fs-ui)", "color": "var(--text-tertiary)" };
-                centered(
-                    view! { <p style=p.to_style()>{t(keys::check::DERIVING, &[])}</p> }.into_any(),
-                )
-            }
-            Some(Session::Failed(_, error)) => {
-                let p = crate::css! {
-                    "font-size": "var(--fs-ui)",
-                    "color": "var(--tc-invalid)",
-                    "line-height": "var(--lh-body)",
-                };
-                centered(
-                    view! { <p data-testid="check-error" style=p.to_style()>{error.clone()}</p> }
-                        .into_any(),
-                )
-            }
-            Some(Session::Open(rail)) => match rail.view.empty {
-                Some(empty) => centered(check_empty(&actions, rail, empty)),
-                None => {
-                    let root = crate::css! { "flex": 1, "display": "flex", "min-height": 0 };
-                    let main = crate::css! {
-                        "flex": 1,
-                        "overflow": "auto",
-                        "min-width": 0,
-                        "background": "var(--surface-app)",
-                    };
-                    view! {
-                        <div data-testid="check-session" style=root.to_style()>
-                            {check_rail(&s, &actions, rail, tool, book)}
-                            // The item detail is B5b's.
-                            <main style=main.to_style()></main>
-                        </div>
-                    }
-                    .into_any()
-                }
-            },
+    let shown = {
+        let session = session.clone();
+        Memo::new(move |_| {
+            session.with(|session| match session {
+                None | Some(Session::Loading(_)) => Shown::Deriving,
+                Some(Session::Failed(_, error)) => Shown::Failed(error.clone()),
+                Some(Session::Open(rail)) => match rail.view.empty {
+                    Some(empty) => Shown::Empty(empty),
+                    None => Shown::Rail,
+                },
+            })
         })
+    };
+    let (s, actions) = (s.clone(), actions.clone());
+    move || match shown.get() {
+        Shown::Deriving => {
+            let p = crate::css! { "font-size": "var(--fs-ui)", "color": "var(--text-tertiary)" };
+            centered(view! { <p style=p.to_style()>{t(keys::check::DERIVING, &[])}</p> }.into_any())
+        }
+        Shown::Failed(error) => {
+            let p = crate::css! {
+                "font-size": "var(--fs-ui)",
+                "color": "var(--tc-invalid)",
+                "line-height": "var(--lh-body)",
+            };
+            centered(
+                view! { <p data-testid="check-error" style=p.to_style()>{error}</p> }.into_any(),
+            )
+        }
+        Shown::Empty(empty) => {
+            let (session, actions) = (session.clone(), actions.clone());
+            centered(
+                (move || {
+                    session.with(|session| match session {
+                        Some(Session::Open(rail)) => check_empty(&actions, rail, empty),
+                        _ => ().into_any(),
+                    })
+                })
+                .into_any(),
+            )
+        }
+        Shown::Rail => {
+            let root = crate::css! { "flex": 1, "display": "flex", "min-height": 0 };
+            let main = crate::css! {
+                "flex": 1,
+                "overflow": "auto",
+                "min-width": 0,
+                "background": "var(--surface-app)",
+            };
+            let rail = {
+                let (session, s, actions) = (session.clone(), s.clone(), actions.clone());
+                move || {
+                    session.with(|session| match session {
+                        Some(Session::Open(rail)) => check_rail(&s, &actions, rail, tool, unit),
+                        _ => ().into_any(),
+                    })
+                }
+            };
+            // Row patches update the rail without remounting the detail or its comment field.
+            let detail = super::detail::check_detail(&s, &actions, unit, tool);
+            let academy = super::detail::academy_drawer(&s, &actions);
+            view! {
+                <div data-testid="check-session" style=root.to_style()>
+                    {rail}
+                    <main style=main.to_style()>{detail}</main>
+                    {academy}
+                </div>
+            }
+            .into_any()
+        }
     }
 }

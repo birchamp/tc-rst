@@ -883,10 +883,7 @@ enum Msg {
         project: ProjectId,
         unit: DraftUnit,
     },
-    AlignSuggestions {
-        folder: ProjectRef,
-        on: bool,
-    },
+    AlignSuggestions,
     LastUsed {
         folder: ProjectRef,
         at: WallMs,
@@ -972,9 +969,12 @@ impl PrefsWriter {
         self.send(Msg::DraftUnit { project, unit });
     }
 
-    /// The aligner's suggestions switch for a folder, written at once.
+    /// The aligner's suggestions switch: readers see it now, and it is written at once.
     pub fn set_align_suggestions(&self, folder: ProjectRef, on: bool) {
-        self.send(Msg::AlignSuggestions { folder, on });
+        lock(&self.shared.docs)
+            .app
+            .set_align_suggestions(&folder, on);
+        self.send(Msg::AlignSuggestions);
     }
 
     /// When a folder was last used, written at once.
@@ -1099,10 +1099,7 @@ impl Task {
                     .with_project(&project, |doc| doc.set_draft_unit(unit));
                 self.write_now(&Target::Project(project)).await;
             }
-            Msg::AlignSuggestions { folder, on } => {
-                lock(&self.shared.docs)
-                    .app
-                    .set_align_suggestions(&folder, on);
+            Msg::AlignSuggestions => {
                 self.write_now(&Target::App).await;
             }
             Msg::LastUsed { folder, at } => {

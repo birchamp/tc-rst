@@ -37,6 +37,8 @@ use crate::views::modals::sign_in::ShareSignIn;
 use crate::views::modals::source_texts::SourceTexts;
 use crate::views::modals::upgrade_set::UpgradeSet;
 use crate::views::open_progress::OpenProgress;
+use crate::views::story_draft::StoryDraft;
+use crate::views::story_understand::StoryUnderstand;
 use crate::views::understand::Understand;
 
 /// tC4's `App`: the frame, the top bar, the screen in its boundary, and the dialogs in tC4's
@@ -366,9 +368,18 @@ fn SaveIndicator() -> impl IntoView {
         open.get().then(|| {
             let actions = actions.clone();
             let indicator = runtime.saves().indicator();
+            let reason = {
+                let saves = send_wrapper::SendWrapper::new(runtime.saves().clone());
+                let changes = saves.changes();
+                Signal::derive(move || {
+                    changes.track();
+                    saves.invalid_text_reason()
+                })
+            };
             view! {
                 <SaveIndicatorView
                     indicator=Signal::derive(move || indicator.get())
+                    reason=reason
                     on_retry=Callback::new(move |which| actions.retry(which))
                 />
             }
@@ -381,7 +392,11 @@ fn SaveIndicator() -> impl IntoView {
 /// a Retry for the failure tC4's `retryFor` names. `data-state` is the fields' worst state,
 /// never the checkpoint's.
 #[component]
-pub fn SaveIndicatorView(indicator: Signal<Indicator>, on_retry: Callback<Retry>) -> impl IntoView {
+pub fn SaveIndicatorView(
+    indicator: Signal<Indicator>,
+    on_retry: Callback<Retry>,
+    #[prop(optional, into)] reason: Signal<Option<String>>,
+) -> impl IntoView {
     let style = move || {
         let error = indicator.with(Indicator::is_error);
         crate::css! {
@@ -435,6 +450,7 @@ pub fn SaveIndicatorView(indicator: Signal<Indicator>, on_retry: Callback<Retry>
         >
             <StatusDot status=status size=8.0 />
             {move || t(indicator.with(Indicator::label_key), &[])}
+            {move || reason.get().map(|text| view! { <span role="alert" data-testid="save-refusal-text">{text}</span> })}
             {button}
         </div>
     }
@@ -493,12 +509,29 @@ fn main_view(s: &AppState) -> AnyView {
     match screen {
         Screen::Home => view! { <Home /> }.into_any(),
         Screen::Understand => view! { <Understand /> }.into_any(),
-        Screen::Check => view! { <Check /> }.into_any(),
-        Screen::Draft => view! { <crate::views::translate::Translate /> }.into_any(),
-        // B8 Community Checking, B7 the story views.
-        Screen::CommunityChecking
-        | Screen::StoryUnderstand
-        | Screen::StoryDraft
-        | Screen::Nothing => ().into_any(),
+        Screen::Check => view! {
+            <Check />
+            <crate::views::review::ReviewOverOther />
+        }
+        .into_any(),
+        // tC4 #679: the conflict review shows in Translate, in place of its columns.
+        Screen::Draft => {
+            let review = s.review.clone();
+            let open = Memo::new(move |_| review.with(Option::is_some));
+            (move || {
+                if open.get() {
+                    view! { <crate::views::review::ConflictReview /> }.into_any()
+                } else {
+                    view! { <crate::views::translate::Translate /> }.into_any()
+                }
+            })
+            .into_any()
+        }
+        Screen::StoryUnderstand => view! { <StoryUnderstand /> }.into_any(),
+        Screen::StoryDraft => view! { <StoryDraft /> }.into_any(),
+        Screen::CommunityChecking => {
+            view! { <crate::views::community_checking::CommunityChecking /> }.into_any()
+        }
+        Screen::Nothing => ().into_any(),
     }
 }

@@ -73,6 +73,9 @@ counters! {
     ItemsDerived => items_derived,
     /// Rows written into a reply.
     RowsSerialized => rows_serialized,
+    /// Checks whose state was computed from their decision and their text (C4: a change
+    /// re-assesses the checks it reaches, PERF:79-80).
+    ChecksAssessed => checks_assessed,
     /// Chapters projected as USFM.
     ChaptersProjected => chapters_projected,
     /// A book's resources loaded from the resource store.
@@ -202,6 +205,27 @@ impl CountingSnapshot {
         self.snapshot.fold().body(change)
     }
 
+    /// Every folded version of a record, oldest first: its History (STORAGE §8.3). Costs the
+    /// record's own versions.
+    pub fn history(&self, key: &RecordKey) -> Vec<ChangeId> {
+        let ids = self.snapshot.fold().history(key);
+        self.count(AppCounter::RecordsRead, ids.len().max(1));
+        ids
+    }
+
+    /// The change a record's projection shows, when it shows one change.
+    pub fn projected_change(&self, key: &RecordKey) -> Option<ChangeId> {
+        self.count(AppCounter::RecordsRead, 1);
+        self.snapshot.fold().projected_change(key)
+    }
+
+    /// The journal's anomalies: changes it keeps apart, incomplete batches.
+    pub fn anomalies(&self) -> Vec<tc_journal::fold::Anomaly> {
+        let all: Vec<_> = self.snapshot.fold().anomalies().cloned().collect();
+        self.count(AppCounter::KeysProbed, all.len());
+        all
+    }
+
     /// One conflict, by its id.
     pub fn conflict(&self, id: &ConflictId) -> Option<Conflict> {
         self.count(AppCounter::RecordsRead, 1);
@@ -278,6 +302,47 @@ impl CountingSnapshot {
             self.count(AppCounter::BookUsfm, 1);
         }
         self.snapshot.fold().check_texts(collection)
+    }
+
+    /// [`Self::check_texts`] of `chapters` of `book` only (C4): those chapters' text.
+    pub fn check_texts_at(&self, book: BookId, chapters: &[u16]) -> CheckTexts<'_> {
+        self.count(AppCounter::ChaptersProjected, chapters.len());
+        self.snapshot.fold().check_texts_at(book, chapters)
+    }
+
+    /// The decisions `keys` names, each read against the text of `chapters` of its book, as
+    /// [`Self::decisions`] reads them: a re-assessment after a change (C4). Costs those
+    /// decisions and those chapters.
+    pub fn decisions_at(
+        &self,
+        tool: ToolId,
+        collection: Collection,
+        keys: &[RecordKey],
+        chapters: &[u16],
+    ) -> Vec<ProjectedDecision> {
+        self.count(AppCounter::RecordsRead, keys.len());
+        self.count(AppCounter::ChaptersProjected, chapters.len());
+        self.snapshot
+            .fold()
+            .decisions_at(tool, collection, keys, chapters)
+    }
+
+    /// Every decision of `tool` on one story's frames: what a story's Check session opens with.
+    pub fn story_decisions(
+        &self,
+        tool: ToolId,
+        story: tc_journal::StoryNo,
+    ) -> Vec<ProjectedDecision> {
+        let decisions = self.snapshot.fold().story_decisions(tool, story);
+        self.count(AppCounter::RecordsRead, decisions.len());
+        decisions
+    }
+
+    /// Every comment record of one story: on its frames and on its frame checks.
+    pub fn story_comments_of(&self, story: tc_journal::StoryNo) -> Vec<RecordKey> {
+        let keys = self.snapshot.fold().story_comments_of(story);
+        self.count(AppCounter::KeysProbed, keys.len());
+        keys
     }
 
     pub fn alignments_of(&self, book: BookId) -> Vec<RecordKey> {

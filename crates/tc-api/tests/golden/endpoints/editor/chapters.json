@@ -32,7 +32,9 @@
                 "value": "Recuérdales que se sujeten",
                 "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
                 "marker": null
-              }
+              },
+              "format": null,
+              "covered": []
             },
             {
               "key": "2-3",
@@ -48,7 +50,11 @@
                   "conflict": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
                   "versions": 2
                 }
-              }
+              },
+              "format": "q1",
+              "covered": [
+                "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+              ]
             },
             {
               "key": "4",
@@ -61,7 +67,9 @@
                 "value": "___",
                 "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
                 "marker": null
-              }
+              },
+              "format": null,
+              "covered": []
             }
           ]
         }

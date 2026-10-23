@@ -78,6 +78,8 @@ pub(super) struct Facts {
     /// What the stored alignment is checked against.
     pub basis: Basis,
     pub source: SourceVerse,
+    /// The alignment's conflict, when it has two versions (#791).
+    pub marker: Option<tc_api::shown::ConflictMarker>,
 }
 
 /// What the session knows beside the aligner.
@@ -223,6 +225,7 @@ pub(super) fn build(aligner: &Aligner, facts: &Facts, now: &Moment) -> AlignerVi
             .collect(),
         status: rail_status(aligner, facts),
         save: now.save.clone(),
+        marker: facts.marker.clone(),
     }
 }
 

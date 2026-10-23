@@ -112,12 +112,12 @@ impl Parts {
 
     /// A decision changes its check list's rows; on a frame, its story too. tc-api has no
     /// translationQuestions tool, so a tQ decision names no list: its record is still listed.
-    fn check(&mut self, check: &CheckKey) {
+    fn check(&mut self, check: &CheckKey) -> Result<(), Everything> {
         let unit = match &check.target {
             CheckTarget::Verse { book, .. } => CheckUnit::Book(*book),
             CheckTarget::Frame { story, .. } => {
                 self.stories.insert(story.get());
-                CheckUnit::Stories
+                CheckUnit::Story(StoryNo::new(story.get()).map_err(|_| Everything)?)
             }
         };
         let tool = match check.tool {
@@ -128,6 +128,18 @@ impl Parts {
         if let Some(tool) = tool {
             self.checks.insert(CheckListRef { tool, unit });
         }
+        Ok(())
+    }
+
+    /// A story's frame changed: each check of the story reads its frame's text, so both of
+    /// the story's lists may have rows that changed, as a verse's do (`text`).
+    fn story_text(&mut self, story: tc_journal::StoryNo) -> Result<(), Everything> {
+        self.stories.insert(story.get());
+        let unit = CheckUnit::Story(StoryNo::new(story.get()).map_err(|_| Everything)?);
+        for tool in [Tool::TranslationNotes, Tool::TranslationWords] {
+            self.checks.insert(CheckListRef { tool, unit });
+        }
+        Ok(())
     }
 
     /// A book's text changed: each check of the book reads its verse's text, and a check
@@ -166,11 +178,11 @@ impl Parts {
             }
             // An alignment links words; no check reads it.
             RecordKey::Alignment(book, chapter, _) => self.chapter(*book, chapter.get()),
-            RecordKey::Check(check) => self.check(check),
+            RecordKey::Check(check) => self.check(check)?,
             // A comment's place is in its value, not its key: one read of the record.
             RecordKey::Comment(_) => match comment_target(key).ok_or(Everything)? {
                 CommentTarget::Verse { book, chapter, .. } => self.chapter(book, chapter.get()),
-                CommentTarget::Check(check) => self.check(&check),
+                CommentTarget::Check(check) => self.check(&check)?,
                 CommentTarget::Frame { story, .. } => {
                     self.stories.insert(story.get());
                 }
@@ -182,9 +194,9 @@ impl Parts {
             RecordKey::Versification => return Err(Everything),
             // A profile names a person in the review and in every "changed by" line.
             RecordKey::DeviceProfile(_) => self.conflicts = true,
-            RecordKey::StoryBase(story)
-            | RecordKey::Frame(story, _)
-            | RecordKey::StoryRef(story) => {
+            // A frame with no record of its own shows the story's template text of it.
+            RecordKey::Frame(story, _) | RecordKey::StoryBase(story) => self.story_text(*story)?,
+            RecordKey::StoryRef(story) => {
                 self.stories.insert(story.get());
             }
             // No screen of this version shows carried files or a newer minor's kinds, and a

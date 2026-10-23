@@ -1,5 +1,5 @@
 // Translate (B4a): the grid by section and by verse, a chapter switch, the verse card on real
-// saves through the store (the test build's `test/saveVerse`, until C2's `editor/saveVerse`), its
+// saves through the production `editor/saveVerse`, its
 // save states, Cancel, the editing lock, and the refresh rule of AD37 when a teammate's change
 // arrives under an open card (a Door43 sync or a USB file brings one; here the test writes it
 // through the store as another request would), with an Arabic IME composition.
@@ -45,7 +45,7 @@ async function verse(env, n) {
 /** A teammate's change to Titus 1:`n`, written through the store over the version it shows. */
 async function teammateWrites(env, n, words) {
   const row = await verse(env, n);
-  await env.call('test/saveVerse', { at: await scope(env), request: newRequestId(), shown: row.words.token, words });
+  await env.call('editor/saveVerse', { at: await scope(env), request: newRequestId(), shown: row.words.token, words });
 }
 
 browserTest('translate_shows_the_source_beside_the_translation_by_section_and_by_verse', async () => {
@@ -110,8 +110,8 @@ browserTest('a_typed_verse_saves_on_blur_and_the_card_locks_the_exits_meanwhile'
     assert.equal((await verse(env, 2)).words.value, 'con la esperanza de la vida eterna, que Dios prometió');
     await until('the grid shows it', async () => (await page.getByTestId('draft-target-text').first().textContent()).includes('que Dios prometió'));
     assert.equal(await tab('Understand').isDisabled(), false, 'the lock ends with the card');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 browserTest('a_held_save_shows_saving_and_cancel_puts_the_verse_back', async () => {
   await withApp(async ({ page, env }) => {
@@ -131,20 +131,31 @@ browserTest('a_held_save_shows_saving_and_cancel_puts_the_verse_back', async () 
     await box(page, 1).waitFor({ state: 'detached' });
     await until('saved again', async () => (await verse(env, 1)).words.value === before);
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
-// Without a verse writer (C2 brings `editor/saveVerse`), a save is refused and says so: the
-// text stays in the card and in the buffer, the indicator offers Retry.
-browserTest('a_build_without_a_verse_save_says_not_saved_and_keeps_the_text', async () => {
-  await withApp(async ({ page }) => {
+// A failed production save keeps the exact text and offers Retry on the normal UI build.
+browserTest('a_failed_verse_save_keeps_the_text_and_retry_stores_it', async () => {
+  await withApp(async ({ page, env }) => {
     await openTranslate(page);
     await openVerse(page, 3);
-    await box(page, 3).press('Control+End');
-    await box(page, 3).pressSequentially(' x');
+    const original = await box(page, 3).inputValue();
+    const wanted = `${original} x`;
+    let refuse = true;
+    await page.route('**/api/v1/editor/saveVerse', async (route) => {
+      if (refuse) {
+        refuse = false;
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'err', value: { type: 'notSaved', value: { type: 'disk', value: 'fixture write refused' } } }) });
+      }
+      return route.continue();
+    });
+    await box(page, 3).fill(wanted);
     await until('error', async () => (await indicator(page).getAttribute('data-state')) === 'error', 5_000);
-    assert.equal(await page.getByTestId('save-indicator').getByRole('button', { name: 'Retry' }).count(), 1);
-    assert.ok((await box(page, 3).inputValue()).endsWith(' x'));
+    assert.equal(await box(page, 3).inputValue(), wanted);
+    assert.equal((await verse(env, 3)).words.value, original);
+    await indicator(page).getByRole('button', { name: 'Retry' }).click();
+    await until('retry saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    assert.equal((await verse(env, 3)).words.value, wanted);
   });
 });
 
@@ -168,8 +179,8 @@ browserTest('refresh_under_open_clean_editor_swaps_value_and_token_together', as
     await page.getByRole('button', { name: 'Save verse' }).click();
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     assert.equal((await verse(env, 4)).words.marker, null, 'no conflict: the card saved nothing over the change');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // AD37: a card the person typed in keeps its text and its base; the change is named, and the
 // save becomes a second version, never a revert. The typing is an Arabic IME composition.
@@ -197,8 +208,8 @@ browserTest('refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_i
     assert.equal(row.words.marker?.versions, 2, 'the save is a second version beside the change');
     await page.getByTestId('conflict-marker-1:5').waitFor();
     assert.equal(await page.getByTestId('conflicts-review').getAttribute('data-count'), '1');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // The toolbar's count of conflicts is the project's: a conflict a sync or a USB file brings in
 // another book shows on the screen the person is on, with no need to leave it.
@@ -210,12 +221,12 @@ browserTest('a_conflict_in_another_book_shows_in_the_open_books_toolbar', async 
     const jonah = await env.call('editor/chapters', { at, book: 'JON' });
     const { token } = jonah.chapters[0].verses.find((v) => v.key === '1').words;
     for (const words of ['Jonás, uno', 'Jonás, dos']) {
-      await env.call('test/saveVerse', { at, request: newRequestId(), shown: token, words });
+      await env.call('editor/saveVerse', { at, request: newRequestId(), shown: token, words });
     }
     await page.getByTestId('conflicts-review').waitFor();
     assert.equal(await page.getByTestId('conflicts-review').getAttribute('data-count'), '1');
-  }, { hooks: true });
-}, { hooks: true });
+  });
+});
 
 // tC4 #131, #118: in a project of another numbering, Translate's source column shows for each
 // project verse the source verse its numbering names, under that verse's place, one verse per
@@ -258,16 +269,25 @@ browserTest('cross_frame_translate_shows_the_mapped_source_verse', async () => {
   }, { scenario: 'en-pins' });
 });
 
-// tC4 app-language e (Translate's half; the comment's is C3's): a verse typed before a language
-// switch is saved by the card's blur and survives the switch; the book and chapter stay, and the
-// card opens again in the new language on the same text.
+// tC4 app-language e: a comprehension note and a verse typed before a language switch are
+// saved by their blurs and survive the switch; the book and chapter stay, the card opens again
+// in the new language on the same text, and the note shows in Understand (C3 adds the note).
 browserTest('app_language_e_a_verse_typed_before_the_switch_survives_it', async () => {
   await withApp(async ({ page, env }) => {
+    const en = catalog('en');
     const es = catalog('es-419');
     const TEXT = 'Pablo, siervo de Dios y apóstol de Jesucristo.';
-    await openTranslate(page);
+    const NOTE = 'Pablo se presenta como siervo y apóstol.';
+    await titus(page).click();
+    await page.getByTestId('understand-unit-s1').waitFor();
     await page.getByRole('button', { name: '2', exact: true }).click();
     await page.getByRole('heading', { name: 'Titus 2' }).waitFor();
+    await page.getByRole('tab', { name: en['understand.byVerse'], exact: true }).click();
+    const note = page.getByPlaceholder(en['understand.commentsPlaceholderVerse']).first();
+    await note.fill(NOTE);
+    await note.blur();
+    await until('the note is saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    await page.getByTestId('mode-switch').getByRole('tab', { name: en['nav.draft'] }).click();
     await page.getByRole('tab', { name: 'Verse', exact: true }).click();
     await page.getByRole('button', { name: 'start this verse' }).first().click();
     await box(page, 1).fill(TEXT);
@@ -286,8 +306,12 @@ browserTest('app_language_e_a_verse_typed_before_the_switch_survives_it', async 
     assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), TEXT);
     await page.getByRole('button', { name: es['draft.cancelVerse'], exact: true }).click();
     await page.getByLabel(label, { exact: true }).waitFor({ state: 'detached' });
-  }, { hooks: true });
-}, { hooks: true });
+    await page.getByTestId('mode-switch').getByRole('tab', { name: es['nav.understand'] }).click();
+    const shown = page.getByPlaceholder(es['understand.commentsPlaceholderVerse']).first();
+    await until('the note shows in Spanish', async () => (await shown.count()) > 0 && (await shown.inputValue()) === NOTE);
+    assert.ok((await env.call('editor/book', { at: await scope(env), book: 'TIT' })).comments.some((c) => c.text === NOTE));
+  });
+});
 
 // tC4 app-language i (#657, the left-to-right project's half; a right-to-left project is made by
 // C6's create): scripture follows the project, not the interface. Under Arabic the page reads

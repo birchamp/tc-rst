@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
 use tc_api::align::{
-    AlignEdit, AlignPlace, AlignerView, BankClick, BankSelection, IndexItem, RailState, Word,
+    AlignEdit, AlignPlace, AlignerView, BankClick, BankSelection, Edit, IndexItem, RailState, Word,
 };
 use tc_api::event::{ChangeCause, Event, SessionEvent};
 use tc_api::query::QueryKey;
@@ -287,44 +287,143 @@ pub fn refresh_for(event: &Event, book: BookId) -> Refresh {
     }
 }
 
-/// The person's edits in the order they were made, one on its way at a time. A second click
-/// made before the reply to the first is kept and sent when it comes, so it is never refused
-/// and never lost (A-14, `fast_clicks_are_queued_not_refused`).
+/// The exact request that may already have reached the actor. Retry must keep all of it,
+/// including its server run: a restarted server no longer has the original reply cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SentEdit {
+    pub request: Edit,
+    pub run: tc_api::ids::ServerInstance,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditFailure {
+    Retryable(String),
+    /// The actor or open changed. Keep the actions visible as unsaved; never replay them on
+    /// a different actor merely because the same verse is on screen.
+    Refused(String),
+}
+
+impl EditFailure {
+    pub fn message(&self) -> &str {
+        match self {
+            Self::Retryable(message) | Self::Refused(message) => message,
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+enum Flight {
+    #[default]
+    Idle,
+    Preparing(AlignEdit),
+    Sending(SentEdit),
+    Failed {
+        sent: SentEdit,
+        reason: EditFailure,
+    },
+}
+
+/// The person's edits in order. An unanswered or refused edit stays ahead of every later
+/// click until its exact request succeeds; a transport failure is never an acknowledgement.
 #[derive(Debug, Default)]
 pub struct EditQueue {
     waiting: VecDeque<AlignEdit>,
-    sending: bool,
+    flight: Flight,
+    generation: u64,
 }
 
 impl EditQueue {
-    /// An edit: to send now when none is on its way, else after the reply to the last.
+    pub fn is_idle(&self) -> bool {
+        matches!(self.flight, Flight::Idle) && self.waiting.is_empty()
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn failure(&self) -> Option<&EditFailure> {
+        match &self.flight {
+            Flight::Failed { reason, .. } => Some(reason),
+            _ => None,
+        }
+    }
+
     pub fn push(&mut self, edit: AlignEdit) -> Option<AlignEdit> {
+        self.generation = self.generation.wrapping_add(1);
         self.waiting.push_back(edit);
         self.next()
     }
 
-    /// The reply came: the next edit to send, if one waits.
+    /// The web boundary binds a prepared edit to one immutable request before it sends it.
+    pub fn sent(&mut self, sent: SentEdit) {
+        if matches!(&self.flight, Flight::Preparing(edit) if edit == &sent.request.edit) {
+            self.flight = Flight::Sending(sent);
+        }
+    }
+
+    pub fn failed(&mut self, reason: EditFailure) {
+        self.flight = match std::mem::take(&mut self.flight) {
+            Flight::Sending(sent) | Flight::Failed { sent, .. } => Flight::Failed { sent, reason },
+            other => other,
+        };
+    }
+
+    /// Only an ambiguous transport failure can resend. A typed refusal retains the actions
+    /// for the person and does not silently reinterpret card positions against a newer actor.
+    pub fn retry(&mut self) -> Option<SentEdit> {
+        match std::mem::take(&mut self.flight) {
+            Flight::Failed {
+                sent,
+                reason: EditFailure::Retryable(_),
+            } => {
+                self.flight = Flight::Sending(sent.clone());
+                Some(sent)
+            }
+            other => {
+                self.flight = other;
+                None
+            }
+        }
+    }
+
     pub fn replied(&mut self) -> Option<AlignEdit> {
-        self.sending = false;
+        if !matches!(self.flight, Flight::Sending(_) | Flight::Preparing(_)) {
+            return None;
+        }
+        self.flight = Flight::Idle;
         self.next()
     }
 
-    /// The aligner these edits were made on is gone or was replaced: they are for a view nobody
-    /// sees. How many were kept waiting.
+    /// Used only after the surrounding project/view was explicitly reset. Error replies
+    /// retain this queue instead of entering this path.
     pub fn drop_waiting(&mut self) -> usize {
-        self.sending = false;
+        self.generation = self.generation.wrapping_add(1);
+        self.flight = Flight::Idle;
         let waiting = self.waiting.len();
         self.waiting.clear();
         waiting
     }
 
     fn next(&mut self) -> Option<AlignEdit> {
-        if self.sending {
+        if !matches!(self.flight, Flight::Idle) {
             return None;
         }
         let edit = self.waiting.pop_front()?;
-        self.sending = true;
+        self.flight = Flight::Preparing(edit.clone());
         Some(edit)
+    }
+
+    #[cfg(test)]
+    fn pending(&self) -> Vec<AlignEdit> {
+        let first = match &self.flight {
+            Flight::Idle => None,
+            Flight::Preparing(edit) => Some(edit.clone()),
+            Flight::Sending(sent) | Flight::Failed { sent, .. } => Some(sent.request.edit.clone()),
+        };
+        first
+            .into_iter()
+            .chain(self.waiting.iter().cloned())
+            .collect()
     }
 }
 
@@ -584,6 +683,7 @@ mod tests {
     #[test]
     fn fast_clicks_are_queued_not_refused() {
         let mut queue = EditQueue::default();
+        assert!(queue.is_idle());
         assert_eq!(
             queue.push(click(0)),
             Some(click(0)),
@@ -593,9 +693,12 @@ mod tests {
             assert_eq!(queue.push(click(n)), None, "{n} waits for the reply");
         }
         let mut sent = vec![click(0)];
+        assert!(!queue.is_idle(), "a reply is still outstanding");
         while let Some(next) = queue.replied() {
+            assert!(!queue.is_idle(), "the next click is now on its way");
             sent.push(next);
         }
+        assert!(queue.is_idle(), "the final reply drained the queue");
         assert_eq!(sent, (0..5).map(click).collect::<Vec<_>>());
         // And a click after everything has settled goes at once again.
         assert_eq!(queue.push(click(9)), Some(click(9)));
@@ -610,5 +713,116 @@ mod tests {
         assert_eq!(queue.drop_waiting(), 2);
         assert_eq!(queue.replied(), None);
         assert_eq!(queue.push(click(3)), Some(click(3)));
+    }
+
+    fn sent(edit: AlignEdit, n: u8) -> SentEdit {
+        SentEdit {
+            request: Edit {
+                at: tc_api::ids::Scope {
+                    project: tc_api::ids::ProjectRef::parse("queued").unwrap(),
+                    epoch: tc_api::ids::Epoch::new(1),
+                },
+                request: tc_api::ids::RequestId::from_bytes([n; 16]),
+                aligner: tc_api::ids::AlignerId::new(7),
+                seq: u64::from(n),
+                edit,
+            },
+            run: tc_api::ids::ServerInstance::from_bytes([9; 16]),
+        }
+    }
+
+    #[test]
+    fn a_failed_request_and_later_clicks_stay_pending_until_the_exact_retry_succeeds() {
+        let mut queue = EditQueue::default();
+        let first = queue.push(click(0)).unwrap();
+        let request = sent(first, 1);
+        queue.sent(request.clone());
+        queue.push(click(1));
+        queue.failed(EditFailure::Retryable("reply lost".into()));
+        assert!(!queue.is_idle());
+        assert_eq!(queue.pending(), vec![click(0), click(1)]);
+        assert_eq!(queue.retry(), Some(request));
+        assert_eq!(queue.replied(), Some(click(1)));
+        assert_eq!(queue.pending(), vec![click(1)]);
+        assert_eq!(queue.replied(), None);
+        assert!(queue.is_idle());
+    }
+
+    #[test]
+    fn a_stale_actor_is_refused_with_the_original_actions_retained() {
+        let mut queue = EditQueue::default();
+        let first = queue.push(click(0)).unwrap();
+        queue.sent(sent(first, 1));
+        queue.push(click(1));
+        queue.failed(EditFailure::Refused("the aligner changed".into()));
+        assert_eq!(queue.retry(), None);
+        assert_eq!(queue.replied(), None);
+        assert_eq!(queue.pending(), vec![click(0), click(1)]);
+        assert!(matches!(queue.failure(), Some(EditFailure::Refused(_))));
+        assert!(!queue.is_idle());
+    }
+
+    fn conservation(actions: &[u8], drop_on_failure: bool) -> bool {
+        let mut queue = EditQueue::default();
+        let mut expected = VecDeque::new();
+        let mut next = 0u32;
+        let mut failed = false;
+        for action in actions {
+            match action % 4 {
+                0 => {
+                    let edit = click(next);
+                    next += 1;
+                    expected.push_back(edit.clone());
+                    if let Some(edit) = queue.push(edit) {
+                        queue.sent(sent(edit, (next % 250) as u8));
+                    }
+                }
+                1 if !expected.is_empty() && !failed => {
+                    if drop_on_failure {
+                        queue.drop_waiting();
+                    } else {
+                        queue.failed(EditFailure::Retryable("lost".into()));
+                    }
+                    failed = true;
+                }
+                2 if failed => {
+                    if queue.retry().is_none() {
+                        return false;
+                    }
+                    failed = false;
+                }
+                3 if !expected.is_empty() && !failed => {
+                    expected.pop_front();
+                    if let Some(edit) = queue.replied() {
+                        queue.sent(sent(edit, (next % 250) as u8));
+                    }
+                }
+                _ => {}
+            }
+            if queue.pending() != expected.iter().cloned().collect::<Vec<_>>() {
+                return false;
+            }
+            if queue.is_idle() != expected.is_empty() {
+                return false;
+            }
+        }
+        true
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    proptest::proptest! {
+        #[test]
+        fn transport_failures_and_retries_conserve_every_unanswered_click(
+            actions in proptest::collection::vec(0u8..4, 0..200)
+        ) {
+            proptest::prop_assert!(conservation(&actions, false));
+        }
+    }
+
+    #[test]
+    fn the_old_drop_on_failure_is_caught_by_the_same_conservation_model() {
+        let actions = [0, 0, 1, 2, 3, 3];
+        assert!(conservation(&actions, false));
+        assert!(!conservation(&actions, true));
     }
 }

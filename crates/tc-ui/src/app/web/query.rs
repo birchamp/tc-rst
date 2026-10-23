@@ -292,8 +292,8 @@ impl CachedQuery for tc_api::helps::Article {
     }
 }
 
-/// The Check picker (B5a): both tools' lists, the book's verses for the Align card, and the
-/// pins the preflight reads.
+/// The Check picker (B5a): both tools' lists, the book's verses for the Align card (a story has
+/// none: its own text), and the pins the preflight reads.
 impl CachedQuery for tc_api::check::Picker {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         use tc_api::check::{CheckListRef, CheckUnit, Tool};
@@ -302,18 +302,76 @@ impl CachedQuery for tc_api::check::Picker {
         let list = |tool| {
             QueryKey::CheckList(CheckListRef {
                 tool,
-                unit: CheckUnit::Book(self.book),
+                unit: self.unit,
             })
+        };
+        let text = match self.unit {
+            CheckUnit::Book(book) => QueryKey::Book(book),
+            CheckUnit::Story(story) => QueryKey::Story(story),
         };
         project_read(
             &self.at,
             vec![
                 list(Tool::TranslationWords),
                 list(Tool::TranslationNotes),
-                QueryKey::Book(self.book),
+                text,
                 QueryKey::Aspect(Aspect::Pins),
             ],
         )
+    }
+}
+
+/// The stories' rail (B7): every story's row follows any change of a story.
+impl CachedQuery for tc_api::story::List {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            (1..=tc_api::ids::StoryNo::COUNT)
+                .filter_map(|n| tc_api::ids::StoryNo::new(n).ok())
+                .map(tc_api::query::QueryKey::Story)
+                .collect(),
+        )
+    }
+}
+
+/// One story (B7): its text and its comments, the pictures and the gateway story its pins give.
+impl CachedQuery for tc_api::story::Open {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        let mut keys = resource_keys();
+        keys.push(tc_api::query::QueryKey::Story(self.story));
+        project_read(&self.at, keys)
+    }
+}
+
+/// The preview of a book (B8): any change in the book.
+impl CachedQuery for tc_api::export::Book {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, vec![tc_api::query::QueryKey::Book(self.book)])
+    }
+}
+
+/// The preview of the stories (B8): any change of a story, and the pins its pictures follow.
+impl CachedQuery for tc_api::export::Stories {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        let mut keys = resource_keys();
+        keys.extend(
+            (1..=tc_api::ids::StoryNo::COUNT)
+                .filter_map(|n| tc_api::ids::StoryNo::new(n).ok())
+                .map(tc_api::query::QueryKey::Story),
+        );
+        project_read(&self.at, keys)
+    }
+}
+
+impl CachedQuery for tc_api::helps::Story {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}
+
+impl CachedQuery for tc_api::helps::StoryArticle {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
     }
 }
 
@@ -340,5 +398,53 @@ impl CachedQuery for tc_api::check::Rows {
 impl CachedQuery for tc_api::resources::FixState {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         project_read(&self.at, resource_keys())
+    }
+}
+
+/// A check's detail and its article (B5b): read by the Check screen's actions when a check is
+/// selected or changed, never kept in the cache.
+impl CachedQuery for tc_api::check::Item {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            vec![tc_api::query::QueryKey::CheckList(self.list)],
+        )
+    }
+}
+
+impl CachedQuery for tc_api::check::CheckArticleRead {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}
+
+/// The conflict review (B11): a tab lists the project's conflicts, so it follows the conflict
+/// list; a version's text is the record's value, so an edit of a conflicted record, which
+/// changes the counts or adds a conflict, is in the same aspect.
+impl CachedQuery for tc_api::conflicts::List {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            vec![tc_api::query::QueryKey::Aspect(
+                tc_api::event::Aspect::Conflicts,
+            )],
+        )
+    }
+
+    fn view(ok: &Self::Ok) -> Option<tc_api::ids::ViewSeq> {
+        Some(ok.view)
+    }
+}
+
+/// A record's History: every change of the record, and a resolution of its conflict.
+impl CachedQuery for tc_api::conflicts::History {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(
+            &self.at,
+            vec![
+                tc_api::query::QueryKey::Record(self.record.clone()),
+                tc_api::query::QueryKey::Aspect(tc_api::event::Aspect::Conflicts),
+            ],
+        )
     }
 }

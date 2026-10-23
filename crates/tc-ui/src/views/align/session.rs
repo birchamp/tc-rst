@@ -17,7 +17,9 @@ use crate::app::web::align::{Rail, Screen};
 use crate::app::web::{Actions, AppState};
 use crate::attrs::Attrs;
 use crate::css::Css;
-use crate::ds::{Button, ButtonVariant, ChipState, Overline, OverlineTone, Size, WordChip};
+use crate::ds::{
+    Button, ButtonVariant, Callout, CalloutTone, ChipState, Overline, OverlineTone, Size, WordChip,
+};
 use crate::i18n::{keys, t, t_dyn};
 use crate::views::item_nav::{Which, item_nav_button};
 
@@ -25,7 +27,15 @@ use crate::views::item_nav::{Which, item_nav_button};
 /// nothing to align, or the verse (tC4's `Align` and `AlignBlocked`).
 pub fn align_session(s: &AppState, actions: &Actions, book: BookId) -> impl IntoView + use<> {
     let (s, actions) = (s.clone(), actions.clone());
-    move || {
+    let error = s.a.edit_error.clone();
+    let notice = move || {
+        error.get().map(|message| view! {
+        <Callout tone=CalloutTone::Warn attrs=Attrs::from([("role", "alert"), ("data-testid", "align-edit-error")])>
+            {message}
+        </Callout>
+    })
+    };
+    let screen = move || {
         let screen = s.a.screen.get();
         match screen {
             Screen::Loading => {
@@ -39,7 +49,8 @@ pub fn align_session(s: &AppState, actions: &Actions, book: BookId) -> impl Into
             Screen::Blocked(why) => blocked(why, book),
             Screen::Ready(view) => ready(&s, &actions, book, *view),
         }
-    }
+    };
+    (notice, screen).into_any()
 }
 
 fn notice_box() -> Css {
@@ -938,7 +949,12 @@ fn mark_valid_bar(s: &AppState, actions: &Actions, view: &AlignerView) -> impl I
 }
 
 /// The header: the reference, and "Item n of total" (tC4's `AlignHeader`).
-fn header(s: &AppState, view: &AlignerView, book: BookId) -> impl IntoView + use<> {
+fn header(
+    s: &AppState,
+    actions: &Actions,
+    view: &AlignerView,
+    book: BookId,
+) -> impl IntoView + use<> {
     let items = s.a.rail.with_untracked(|rail| match rail {
         Rail::Ready(rows) => Some(rows.items.clone()),
         Rail::Loading | Rail::Failed(_) => None,
@@ -983,9 +999,25 @@ fn header(s: &AppState, view: &AlignerView, book: BookId) -> impl IntoView + use
             ],
         )
     });
+    let marker = view.marker.clone().map(|marker| {
+        let actions = actions.clone();
+        let conflict = marker.conflict.clone();
+        crate::views::conflict_markers::versions_marker(
+            "align-conflict-marker",
+            &label,
+            marker.versions,
+            Callback::new(move |()| {
+                actions.open_review(
+                    tc_api::conflicts::ReviewTab::Alignments,
+                    Some(conflict.clone()),
+                );
+            }),
+        )
+    });
     view! {
         <div style=row.to_style()>
             <span style=small.to_style()>{label.clone()}</span>
+            {marker}
             <div style="flex: 1;"></div>
             {item_of.map(|text| view! { <span data-testid="align-item-counter" style=counter.to_style()>{text}</span> })}
         </div>
@@ -1093,7 +1125,7 @@ fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> An
         .collect();
     let session = view! {
         <div data-testid="align-session">
-            {header(s, &view, book)}
+            {header(s, actions, &view, book)}
             {how_toggle(s)}
             {stale}
             <div style=panel.to_style()>

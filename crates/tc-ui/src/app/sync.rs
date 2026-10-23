@@ -7,7 +7,7 @@ use tc_api::ApiError;
 use tc_api::ids::ProjectRef;
 use tc_api::jobs::SyncResultView;
 use tc_api::refusal::{Message, Refusal};
-use tc_api::shown::{PersonLabel, Who};
+use tc_api::shown::{Computer, PersonLabel, Who};
 
 use crate::i18n::{Key, keys, t, t_dyn};
 
@@ -152,6 +152,16 @@ impl SyncToast {
             .is_some_and(|v| v.verse_conflicts > 0 || v.alignments > 0)
     }
 
+    /// The review tab Review opens at: the verses, else the alignments, so the review never
+    /// opens on an empty tab (tC4 opens nothing without a verse conflict).
+    pub fn review_tab(&self) -> tc_api::conflicts::ReviewTab {
+        use tc_api::conflicts::ReviewTab;
+        match self.synced() {
+            Some(v) if v.verse_conflicts == 0 && v.alignments > 0 => ReviewTab::Alignments,
+            _ => ReviewTab::Text,
+        }
+    }
+
     /// Download: a pinned version is not on this computer (D88 point 6).
     pub fn download(&self) -> bool {
         self.synced().is_some_and(|v| v.missing_pins > 0)
@@ -193,11 +203,20 @@ pub fn failure_text(error: &ApiError) -> String {
 }
 
 /// How the toast and the conflict review name a person (tC4 `actorLabel`, #680): "Mine", the
-/// Door43 name or the name the teammate gave, else "Teammate n" by the server's numbering.
+/// Door43 name or the name the teammate gave, else "Teammate n" by the server's numbering,
+/// with the computer when versions from two computers carry one person's label (STORAGE §8.5).
 pub fn person_label(label: &PersonLabel) -> String {
-    match &label.who {
+    let person = match &label.who {
         Who::Mine => t(keys::conflicts::MINE, &[]),
         Who::Username(name) | Who::DisplayName(name) => name.clone(),
         Who::Teammate(n) => t(keys::conflicts::TEAMMATE, &[("n", n)]),
+    };
+    match label.computer {
+        None => person,
+        Some(Computer::This) => t(keys::review::computer::THIS, &[("person", &person)]),
+        Some(Computer::Other(n)) => t(
+            keys::review::computer::OTHER,
+            &[("person", &person), ("n", &n)],
+        ),
     }
 }

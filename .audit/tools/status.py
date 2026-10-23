@@ -1,7 +1,7 @@
-"""Write .audit/STATUS.md: which units are on main, which remain, which can start now, and the
+"""Write .audit/STATUS.md: which units are in a ref, which remain, which can start now, and the
 arguments to restart the runs. Run it in the repository: python3 -I .audit/tools/status.py [ref].
 
-Done units come from the merge commits on main (and a fixed list of units merged before this
+Done units come from Merge/Build unit commits in that ref (and a fixed list of units merged before this
 script existed), so the file is right even when nobody updated it by hand.
 """
 import os, re, subprocess, sys
@@ -44,11 +44,11 @@ FIXES = [("FIX-helps", "tC4 #773, #661"), ("FIX-misc", "tC4 #701, #552, #549"), 
 def main():
     sha = git("rev-parse", "--short", REF).strip()
     when = git("log", "-1", "--format=%cI", REF).strip()
-    subjects = git("log", "--merges", "--format=%s", REF).splitlines()
+    subjects = git("log", "--format=%s", REF).splitlines()
     done = set(BASE_DONE)
     ids = {u["id"] for u in design_units()} | {k for k, _ in STORAGE} | {k for k, _ in FIXES}
     for s in subjects:
-        m = re.match(r"Merge ([A-Za-z0-9-]+)[:\s]", s)
+        m = re.match(r"(?:Merge|Build) ([A-Za-z0-9-]+)[:\s]", s)
         if m and m.group(1) in ids: done.add(m.group(1))
         m = re.match(r"Merge storage: unit (\w+)", s)
         if m: done.add(m.group(1))
@@ -58,7 +58,7 @@ def main():
            "the watcher regenerates it whenever main moves. `.audit/PROGRESS.md` is the written summary,",
            "`.audit/HANDOFF.md` says how to continue.", ""]
     total = len(units); n = sum(u["id"] in done for u in units)
-    out += [f"**App layer: {n} of {total} units on main.** Storage: {sum(k in done for k, _ in STORAGE)} of {len(STORAGE)}. "
+    out += [f"**App layer: {n} of {total} units in `{REF}`.** Storage: {sum(k in done for k, _ in STORAGE)} of {len(STORAGE)}. "
             f"Fixes from the tC4 sweep: {sum(k in done for k, _ in FIXES)} of {len(FIXES)}.", ""]
     out += ["## Storage (`docs/STORAGE.md`)", "", "| Unit | What | State |", "|---|---|---|"]
     out += [f"| {k} | {w} | {'done' if k in done else 'to do'} |" for k, w in STORAGE]
@@ -78,9 +78,10 @@ def main():
     lane_done = sorted({u["id"].lower() for u in units if u["id"] in done} | {"C", "S1"} & done | ({"S2"} & done) | ({"X"} & done) | ({"I"} & done) | ({"P"} & done))
     lane_done += [k for k in ("flife",) if "FIX-quit" in done]
     out += ["", "## Restarting the lane", "",
-            "Units on main go into `done`; units with a branch in progress go into `cont` (see HANDOFF).", "",
+            "Units in the reported ref go into `done`; units with a branch in progress go into `cont` (see HANDOFF).",
+            "Restart from that ref, not an older checkout. The example uses this report's worktree.", "",
             "```js", "Workflow({ scriptPath: '.audit/workflows/build-lane.js', args: {",
-            "  root: '/home/bot/tc-rst', tc4: '/home/bot/unfoldingword/translationcore4',",
+            f"  root: '{REPO}', tc4: '/home/bot/unfoldingword/translationcore4',",
             f"  done: {lane_done},",
             "  skip: ['ftext', 'falign'], cont: {}, notes: {} } })", "```", ""]
     path = os.path.join(REPO, ".audit/STATUS.md")

@@ -39,15 +39,15 @@ use crate::store_world::{APP, backend_over};
 
 const SAMPLE: &str = "sample_burrito";
 
-struct World {
-    t: TestApp,
+pub(super) struct World {
+    pub(super) t: TestApp,
     _fake: FakeDoor43,
     _dir: tempfile::TempDir,
 }
 
 /// The `shared` scenario on the store, its sideloaded resources installed as `tc4 serve
 /// --scenario` installs them, and the app's Door43 the fake.
-async fn shared() -> World {
+pub(super) async fn shared() -> World {
     let fake = FakeDoor43::start().await.unwrap();
     tc_door43_fake::seeded::parity_account(&fake).await.unwrap();
     let fs = FaultFs::new();
@@ -83,7 +83,7 @@ fn sync(n: u8) -> SyncProject {
     }
 }
 
-fn script(app: &App, n: u8, outcome: ScriptedSync) -> impl Future<Output = ()> {
+pub(super) fn script(app: &App, n: u8, outcome: ScriptedSync) -> impl Future<Output = ()> {
     let app = app.clone();
     async move {
         post(
@@ -101,7 +101,7 @@ fn script(app: &App, n: u8, outcome: ScriptedSync) -> impl Future<Output = ()> {
     }
 }
 
-async fn internet_on(app: &App) {
+pub(super) async fn internet_on(app: &App) {
     post(
         app,
         &Set {
@@ -113,7 +113,7 @@ async fn internet_on(app: &App) {
     .unwrap();
 }
 
-async fn sign_in(app: &App) {
+pub(super) async fn sign_in(app: &App) {
     post(
         app,
         &SignIn {
@@ -140,7 +140,7 @@ async fn ended(app: &App, job: JobId) -> JobState {
     state.unwrap()
 }
 
-async fn synced(app: &App, n: u8) -> SyncResultView {
+pub(super) async fn synced(app: &App, n: u8) -> SyncResultView {
     let job = post(app, &sync(n)).await.unwrap();
     match ended(app, job).await {
         JobState::Done(JobOutcome::Synced(view)) => view,
@@ -149,7 +149,7 @@ async fn synced(app: &App, n: u8) -> SyncResultView {
 }
 
 /// The card once its summary is computed, after the sync told Home it changed.
-async fn card_with_counts(app: &App) -> HomeCard {
+pub(super) async fn card_with_counts(app: &App) -> HomeCard {
     for _ in 0..1000 {
         let card: HomeCard = post(
             app,
@@ -167,7 +167,7 @@ async fn card_with_counts(app: &App) -> HomeCard {
     panic!("the card's summary never came");
 }
 
-fn teammate(n: u16) -> PersonLabel {
+pub(super) fn teammate(n: u16) -> PersonLabel {
     PersonLabel {
         who: Who::Teammate(n),
         computer: None,
@@ -185,7 +185,7 @@ fn titus_tile(card: &HomeCard) -> BookTileView {
         .clone()
 }
 
-const TWO_TEAMMATES: fn() -> ScriptedSync = || ScriptedSync::Synced {
+pub(super) const TWO_TEAMMATES: fn() -> ScriptedSync = || ScriptedSync::Synced {
     teammates: Some(TeammatesEdit {
         book: BookId::Titus,
         chapter: 1,

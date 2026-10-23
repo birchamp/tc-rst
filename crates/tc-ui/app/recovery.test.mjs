@@ -147,6 +147,26 @@ test('a_draft_request_adds_request_and_text_and_keeps_the_rest', () => {
   assert.deepEqual(JSON.parse(request.body), { ...JSON.parse(ENTRY.draft.body), request: 'abc', text: ENTRY.text });
 });
 
+test('production_drafts_take_the_keystrokes_time_run_and_tokens_from_the_entry', () => {
+  const entry = {
+    ...UNSENT,
+    at: 1792501234567,
+    draft: { path: 'editor/draft', body: JSON.stringify({
+      at: { project: KEY.project, epoch: 3 },
+      instance: 'stale-template-run', shown: ['stale-template-token'], changed: 0,
+      field: { type: 'words' },
+    }) },
+  };
+  const [request] = R.draftRequests(storage({ [ITEM]: JSON.stringify(entry) }), entry.instance, () => 'draft-id');
+  const body = JSON.parse(request.body);
+  assert.equal(body.changed, entry.at);
+  assert.equal(body.instance, entry.instance);
+  assert.deepEqual(body.shown, entry.base);
+  assert.equal(body.text, entry.text);
+  assert.equal(body.request, 'draft-id');
+  assert.deepEqual(body.at, { project: KEY.project, epoch: 3 });
+});
+
 test('an_entry_with_a_save_in_flight_gets_no_draft', () => {
   // Its tokens are those from before the save: a draft over them would stand beside the
   // person's own save as a conflict. The entry stays, with its save, for the offer (6.6).

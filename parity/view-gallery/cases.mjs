@@ -15,6 +15,7 @@ import path from 'node:path';
 import { applyPatch } from './lib.mjs';
 import { REPO } from './node-lib.mjs';
 import { stateNamed } from './states.mjs';
+import { runSteps } from './steps.mjs';
 
 /** tC4's repo path of the Bible sample. */
 const BIBLE = '_local_/_local_/sample_burrito';
@@ -115,6 +116,31 @@ const upgradeConfirmation = ({ updates, plan, offer = 'upgrade-set-primary', app
     await app.page.getByTestId('upgrade-apply').click();
     await app.page.getByTestId('upgrade-confirm-error').waitFor();
   }
+};
+
+/** B5b's route to the re-pin confirmation: the internet off, the Check picker of Titus, the
+ * Translation Words card's "Fix this…", and an installed version chosen. The sample holds no other
+ * copy of es-419 TWL, so `resources/fixState` is answered once with one installed version added
+ * over the server's own reply (the release name the case writes, a commit of its own), and the plan
+ * is scripted with the recorded gateway change's counts, as tC4's case borrows them. */
+const repinConfirmation = async (app, env) => {
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.home();
+  await script(env, { type: 'plan', value: { plan: 93, what: { type: 'repin', value: { rung: 'primary', language: 'es-419', moves: [twlMove] } }, decisionsAtRisk: 2, rows: [wordsRow(carried(2, 0))], blocked: [], alignments: null } });
+  await app.openTitus();
+  await app.openCheck();
+  await app.page.route('**/api/v1/resources/fixState', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const pin = body.value.pin;
+    const candidate = { repoPath: pin.repoPath, version: nextVersion(pin.version), sha: '19'.repeat(20) };
+    await route.fulfill({ response, json: { ...body, value: { ...body.value, candidates: [candidate] } } });
+  }, { times: 1 });
+  await app.page.getByTestId('fix-translationWords').click();
+  await app.page.getByTestId('guided-fix').waitFor();
+  await app.page.getByTestId(`fix-repin-${'19'.repeat(6)}`).click();
+  await app.page.getByTestId('upgrade-confirm').waitFor();
+  await app.page.getByTestId('guided-fix').waitFor({ state: 'detached' });
 };
 
 /** The change of checking language over Understand, from Project settings, the plan scripted. */
@@ -339,12 +365,20 @@ const ALIGN_UNAVAILABLE = ['undrafted', 'unpinned', 'missing', 'versification-un
 
 export const CASES = [
   // ---- S4: the verse conflict review --------------------------------------------------------
+  // The Rust app: each state's own route, which goes through the driver alone (the sync is
+  // the environment's scripted one, B10), then the case's steps (B11).
   { name: 'conflict-review', group: 'S4', state: 'review',
+    rust: (app, env) => stateNamed('review').route(app, env),
     why: 'The review of Titus 1:1 after two teammates changed it from one version on Door43, no version selected.' },
   { name: 'conflict-review-selected', group: 'S4', state: 'review',
     steps: [{ do: 'click', target: '[data-testid="conflict-version"]' }],
+    rust: async (app, env) => {
+      await stateNamed('review').route(app, env);
+      await runSteps(app.page, [{ do: 'click', target: '[data-testid="conflict-version"]' }]);
+    },
     why: 'The same review with the first version selected (view-local in ConflictReview.jsx).' },
   { name: 'conflict-review-mine', group: 'S4', state: 'review-mine',
+    rust: (app, env) => stateNamed('review-mine').route(app, env),
     why: 'The review with three versions: two teammates\' and one I saved before the sync.' },
 
   // ---- S12: OBS Community Checking --------------------------------------------------------
@@ -399,6 +433,7 @@ export const CASES = [
     },
     why: 'The confirmation of an upgrade of the Greek New Testament text (UpgradeSet.jsx TextUpgrade), with the number of Titus verses whose alignments it marks invalid, counted by tC4\'s rule over the sample\'s alignment file.' },
   { name: 'upgrade-repin', group: 'M9b', state: 'guided-fix',
+    rust: repinConfirmation,
     patch: (s, ctx) => {
       const from = s.fix.pin;
       const offer = { rung: s.fix.rung, upgrades: [{ repoPath: from.repoPath, slots: ['translationWordsLinks'], from, to: { repoPath: from.repoPath, version: nextVersion(from.version), flavor: from.flavor }, publishedAt: null }], current: [], kind: 'repin' };

@@ -151,6 +151,14 @@ macro_rules! unscoped {
 }
 
 scoped!(
+    crate::editor::AddComment,
+    crate::story::SaveFrame,
+    crate::story::SaveRef,
+    crate::editor::SaveVerse,
+    crate::editor::SaveLayout,
+    crate::editor::SaveSection,
+    crate::editor::Draft,
+    crate::editor::DiscardDraft,
     crate::prefs::SetDraftUnit,
     crate::prefs::SetAlignSuggestions,
     crate::prefs::RecordPlace,
@@ -161,6 +169,7 @@ scoped!(
     crate::session::CopyProject,
     crate::session::OtherComputerClosed,
     crate::resources::Download,
+    crate::check::Decide,
     crate::resources::PlanUpgrade,
     crate::resources::PlanGateway,
     crate::resources::ApplyPlan,
@@ -173,6 +182,7 @@ scoped!(
     crate::align::Suggest,
     crate::align::Flush,
     crate::align::Close,
+    crate::conflicts::Resolve,
 );
 unscoped!(
     crate::app::Quit,
@@ -193,8 +203,6 @@ unscoped!(
     crate::create::AddBlankBooks,
     crate::create::AddUsfmBooks,
 );
-#[cfg(feature = "test-hooks")]
-scoped!(crate::test::SaveVerse);
 #[cfg(feature = "test-hooks")]
 unscoped!(
     crate::test::Crash,

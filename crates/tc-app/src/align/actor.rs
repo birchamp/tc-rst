@@ -7,7 +7,7 @@ use std::future::pending;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use tc_align::suggest::{RawLink, SessionInput};
+use tc_align::suggest::{RawLink, SessionInput, TrainingVerse};
 use tc_align::{Aligner, Click};
 use tc_api::ApiError;
 use tc_api::align::{
@@ -17,16 +17,17 @@ use tc_api::event::{Event, SessionEvent, SessionMode};
 use tc_api::ids::{AlignerId, Scope};
 use tc_api::write::NotSaved;
 use tc_core::BookId;
-use tc_journal::command::AlignmentEdit;
+use tc_journal::command::{AlignmentEdit, DraftField};
 use tc_journal::record::TargetWord;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, Sleep, sleep_until};
 
 use super::open::{Ready, Tokens};
 use super::save::{Effect, Event as SaveEvent, Machine, SAVE_AFTER, State, next};
-use super::suggest::SuggestHub;
+use super::suggest::{Learner, SuggestHub, saved_verse};
 use super::view::{Facts, Moment, build};
 use crate::backend::{BoxFuture, CommandError, ProjectHandle, StoreCommand, StoreReply};
+use crate::clock::Clock;
 use crate::events::EventBus;
 
 /// What the session around the aligner says now: the project's suggestions switch and the
@@ -96,6 +97,8 @@ pub(super) struct Env {
     pub bus: EventBus,
     pub scope: Scope,
     pub handle: Arc<dyn ProjectHandle>,
+    pub clock: Arc<dyn Clock>,
+    pub learner: Learner,
 }
 
 struct Actor {
@@ -116,6 +119,7 @@ struct Actor {
     /// The generation the running timer was armed with.
     armed: u64,
     saving: Option<BoxFuture<Result<StoreReply, CommandError>>>,
+    learning: Option<TrainingVerse>,
     /// Flushes and closes waiting for the links to be saved.
     flushing: Vec<oneshot::Sender<AlignSave>>,
     closing: Vec<oneshot::Sender<AlignSave>>,
@@ -158,6 +162,7 @@ pub(super) fn spawn(env: Env, ready: Ready) -> Handle {
         timer: None,
         armed: 0,
         saving: None,
+        learning: None,
         flushing: Vec::new(),
         closing: Vec::new(),
         done: false,
@@ -220,8 +225,12 @@ impl Actor {
             match wake {
                 Wake::Saved(outcome) => {
                     self.saving = None;
+                    let learning = self.learning.take();
                     let result = match outcome {
                         Ok(reply) => {
+                            if let Some(verse) = learning {
+                                self.env.learner.saved(self.facts.testament, verse);
+                            }
                             if let Some((_, token)) = reply
                                 .tokens
                                 .into_iter()
@@ -503,17 +512,39 @@ impl Actor {
                 Effect::Disarm => self.timer = None,
                 Effect::Start { .. } => self.start(),
                 Effect::MarkSaved => self.aligner.mark_saved(),
+                Effect::Draft { .. } => self.draft(),
             }
         }
     }
 
-    fn start(&mut self) {
+    fn links(&self) -> AlignmentEdit {
         let value = self.aligner.value();
-        let edit = AlignmentEdit {
+        AlignmentEdit {
             alignments: value.alignments.clone(),
             word_bank: value.word_bank.clone(),
             done: value.done,
-        };
+        }
+    }
+
+    fn draft(&self) {
+        let command = StoreCommand::draft(
+            DraftField::Alignment,
+            vec![self.tokens.alignment.clone(), self.tokens.verse.clone()],
+            self.links().to_json(),
+            tc_journal::WallTime(self.env.clock.now().0),
+        );
+        // Submitting queues the draft beside the store actor (R22); its writer owns the
+        // throttle and flushes on close. Waiting on its reply would delay an aligner click.
+        drop(self.env.handle.submit(command));
+    }
+
+    fn start(&mut self) {
+        self.learning = saved_verse(
+            self.tokens.alignment.key(),
+            self.aligner.value(),
+            self.aligner.verse(),
+        );
+        let edit = self.links();
         let command = StoreCommand::save_alignment(
             self.tokens.alignment.clone(),
             self.tokens.verse.clone(),

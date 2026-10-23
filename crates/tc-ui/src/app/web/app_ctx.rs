@@ -151,6 +151,8 @@ pub struct AppState {
     pub c: super::check::CheckState,
     /// The Align tool (B6).
     pub a: super::align::AlignState,
+    /// The conflict review over Translate (B11, tC4 `conflictReview`).
+    pub review: ArcRwSignal<Option<crate::app::review::ReviewState>>,
     /// `/ui/<build>/`, where the logo and the catalogs are.
     pub base: Arc<str>,
     /// What the server holds: the internet switch, the account, the saved language, the
@@ -199,6 +201,7 @@ impl AppState {
             ),
             c: super::check::CheckState::new(),
             a: super::align::AlignState::new(),
+            review: ArcRwSignal::new(None),
             base: Arc::from(base),
             server,
         }
@@ -282,6 +285,13 @@ impl Actions {
             }
             let s = this.s();
             s.view_error.try_set(None);
+            // The open's overlay waits for the screen it landed on to read its book or story
+            // (`book_shown`). A tab pressed before that read, inside the overlay's first 300 ms,
+            // unmounts that screen, so nothing would ever take the overlay down, and its scrim
+            // and focus trap would hold the whole window. The screen moved to shows its own
+            // loading state instead.
+            s.u.opening.try_set(None);
+            s.review.try_set(None);
             s.view.try_set(view);
         });
     }
@@ -312,6 +322,7 @@ impl Actions {
         let s = self.s();
         s.view_error.try_set(None);
         s.editing.try_set(Editing::None);
+        s.review.try_set(None);
         let project = s.project.get_untracked();
         s.project.try_set(None);
         s.view.try_set(View::Home);
@@ -449,6 +460,7 @@ impl Actions {
             Pending::Updates => self.check_updates_now(),
             Pending::UpgradeSet(rung) => self.upgrade_set_now(rung),
             Pending::UpgradeText(repo) => self.upgrade_text_now(repo),
+            Pending::Fix(id) => self.fix_fetch_now(id),
         }
     }
 
@@ -472,7 +484,9 @@ impl Actions {
             }
             Pending::Catalog => self.catalog_dropped(),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
+            // Not now: the download never started, and the guided fix is as it was.
             Pending::Download
+            | Pending::Fix(_)
             | Pending::Updates
             | Pending::UpgradeSet(_)
             | Pending::UpgradeText(_)
@@ -677,7 +691,10 @@ impl Actions {
     pub fn retry(&self, which: Retry) {
         match which {
             Retry::Checkpoint => {}
-            Retry::Story | Retry::Note | Retry::Save => self.0.runtime.saves().retry(),
+            Retry::Story | Retry::Note | Retry::Save => {
+                self.0.runtime.saves().retry();
+                self.retry_align_save();
+            }
         }
     }
 
@@ -801,9 +818,6 @@ impl Actions {
             tc_api::home::Door43Card::Local => Pending::Share(Box::new(ShareProject::of(card))),
         });
     }
-
-    /// A card's conflict chip: B11 opens the project's conflict review.
-    pub fn open_project_conflicts(&self, _project: ProjectRef) {}
 
     /// Import's kind step: F1 draws the files step it leads to.
     pub fn import_pick_kind(&self, _kind: ImportKind) {}
@@ -996,11 +1010,12 @@ impl Actions {
         self.s().sync_result.try_set(None);
     }
 
-    /// The toast's Review: B11 opens the synced project's conflict review. The toast stays
-    /// until the review is open, so a failed open keeps its links (tC4 #724).
+    /// The toast's Review: the synced project's conflict review. The toast stays until the
+    /// review is open, so a failed open keeps its links (tC4 #724).
     pub fn sync_review(&self) {
         if let Some(toast) = self.s().sync_result.get_untracked() {
-            self.open_project_conflicts(toast.project);
+            let tab = toast.review_tab();
+            self.open_project_conflicts(toast.project, None, tab);
         }
     }
 

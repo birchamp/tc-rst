@@ -62,7 +62,7 @@ pub(crate) struct AlignCache {
 
 impl AlignCache {
     /// Saves the open aligner's links and lets go of it: the person leaves the project, or the
-    /// app quits. A save that fails is reported: the links were the only copy.
+    /// app quits. A failed save is reported; its alignment draft stays for the next open.
     pub(crate) async fn finish(
         &self,
         app_reports: &crate::reports::ReportLog,
@@ -70,6 +70,7 @@ impl AlignCache {
         project: &str,
     ) {
         let Some(open) = self.slot.lock().await.take() else {
+            self.hub.forget();
             return;
         };
         if let Ok(not_saved @ (AlignSave::Failed(_) | AlignSave::Unsaved | AlignSave::Saving)) =
@@ -88,6 +89,7 @@ impl AlignCache {
                 now,
             );
         }
+        self.hub.forget();
     }
 }
 
@@ -121,11 +123,13 @@ impl App {
         }
     }
 
-    fn align_env(&self, session: &ProjectSession) -> Env {
+    fn align_env(&self, session: &Arc<ProjectSession>) -> Env {
         Env {
             bus: self.inner.bus.clone(),
             scope: session.scope().clone(),
             handle: session.handle().clone(),
+            clock: self.inner.clock.clone(),
+            learner: suggest::Learner::new(self.clone(), session),
         }
     }
 }

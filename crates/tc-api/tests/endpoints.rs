@@ -49,6 +49,15 @@ const PHASE_0: &[&str] = &[
     "helps/article",
     // B4a: Translate's text.
     "editor/chapters",
+    // C2: production Translate saves and drafts.
+    "editor/addComment",
+    "story/saveFrame",
+    "story/saveRef",
+    "editor/saveVerse",
+    "editor/saveLayout",
+    "editor/saveSection",
+    "editor/draft",
+    "editor/discardDraft",
     // B9b: the share dialog's first step, the repository link, and Open from Door43.
     "account/repoLink",
     "account/orgs",
@@ -57,6 +66,15 @@ const PHASE_0: &[&str] = &[
     "check/picker",
     "check/open",
     "check/rows",
+    // B5b: the detail of a check, its article, and the marks.
+    "check/item",
+    "check/article",
+    "check/decide",
+    // B7: the stories of an Open Bible Stories project, their helps and their checks.
+    "story/list",
+    "story/open",
+    "helps/story",
+    "helps/storyArticle",
     "resources/fixState",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",
@@ -88,13 +106,19 @@ const PHASE_0: &[&str] = &[
     "resources/fixFetch",
     "resources/fixSideload",
     "resources/fixRepin",
+    // B11: the conflict review, a record's History, and keeping one version.
+    "conflicts/list",
+    "conflicts/history",
+    "conflicts/resolve",
+    // B8: what the Community Checking preview prints.
+    "export/book",
+    "export/stories",
     "test/quiet",
     "test/echo",
     "test/crash",
     "test/hold",
     "test/release",
     "test/fieldStore",
-    "test/saveVerse",
     "test/fieldLog",
     "test/fieldDraft",
     "test/keychain",

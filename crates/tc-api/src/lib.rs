@@ -28,12 +28,14 @@ pub mod align;
 pub mod app;
 pub mod buffer;
 pub mod check;
+pub mod conflicts;
 pub mod create;
 pub mod door43;
 pub mod editor;
 pub mod endpoint;
 pub mod error;
 pub mod event;
+pub mod export;
 pub mod feedback;
 pub mod helps;
 pub mod home;
@@ -48,6 +50,7 @@ pub mod resources;
 pub mod session;
 pub mod settings;
 pub mod shown;
+pub mod story;
 #[cfg(feature = "test-hooks")]
 pub mod test;
 pub mod token;
@@ -133,13 +136,29 @@ macro_rules! endpoint_table {
             query "editor/book": $crate::editor::Book => $crate::editor::BookView;
             query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;
             query "editor/chapters": $crate::editor::Chapters => $crate::editor::ChaptersView;
+            command "editor/addComment": $crate::editor::AddComment => $crate::write::Ack;
+            command "editor/saveVerse": $crate::editor::SaveVerse => $crate::write::Ack;
+            command "editor/saveLayout": $crate::editor::SaveLayout => $crate::write::Ack;
+            command "editor/saveSection": $crate::editor::SaveSection => $crate::write::Ack;
+            command "editor/draft": $crate::editor::Draft => ();
+            command "editor/discardDraft": $crate::editor::DiscardDraft => ();
 
             query "helps/passage": $crate::helps::Passage => $crate::helps::PassageView;
             query "helps/article": $crate::helps::Article => $crate::helps::ArticleView;
+            query "helps/story": $crate::helps::Story => $crate::helps::PassageView;
+            query "helps/storyArticle": $crate::helps::StoryArticle => $crate::helps::ArticleView;
+
+            query "story/list": $crate::story::List => $crate::story::StoryList;
+            command "story/saveFrame": $crate::story::SaveFrame => $crate::write::Ack;
+            command "story/saveRef": $crate::story::SaveRef => $crate::write::Ack;
+            query "story/open": $crate::story::Open => $crate::story::StoryView;
 
             query "check/picker": $crate::check::Picker => $crate::check::PickerView;
             query "check/open": $crate::check::Open => $crate::check::CheckSessionView;
             query "check/rows": $crate::check::Rows => $crate::check::RowsView;
+            query "check/item": $crate::check::Item => $crate::check::CheckItemView;
+            query "check/article": $crate::check::CheckArticleRead => $crate::helps::ArticleView;
+            command "check/decide": $crate::check::Decide => $crate::write::Ack;
 
             query "align/index": $crate::align::Index => $crate::align::IndexView;
             command "align/open": $crate::align::Open => $crate::align::Opened;
@@ -148,6 +167,11 @@ macro_rules! endpoint_table {
             command "align/suggest": $crate::align::Suggest => $crate::align::AlignerView;
             command "align/flush": $crate::align::Flush => $crate::align::AlignSave;
             command "align/close": $crate::align::Close => $crate::align::AlignSave;
+
+            query "conflicts/list": $crate::conflicts::List => $crate::conflicts::ReviewView;
+            query "conflicts/history": $crate::conflicts::History
+                => $crate::conflicts::HistoryView;
+            command "conflicts/resolve": $crate::conflicts::Resolve => $crate::write::Ack;
 
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;
@@ -178,6 +202,9 @@ macro_rules! endpoint_table {
             command "resources/fixSideload": $crate::resources::FixSideload => ();
             command "resources/fixRepin": $crate::resources::FixRepin
                 => $crate::resources::PlanView;
+
+            query "export/book": $crate::export::Book => $crate::export::BookPrint;
+            query "export/stories": $crate::export::Stories => $crate::export::StoriesPrint;
         }
     };
 }
@@ -196,7 +223,6 @@ macro_rules! test_hook_table {
             command "test/hold": $crate::test::Hold => ();
             command "test/release": $crate::test::Release => ();
             command "test/fieldStore": $crate::test::FieldStore => $crate::write::Ack;
-            command "test/saveVerse": $crate::test::SaveVerse => $crate::write::Ack;
             query "test/fieldLog": $crate::test::FieldLog => $crate::test::FieldLogView;
             command "test/fieldDraft": $crate::test::FieldDraft => ();
             command "test/keychain": $crate::test::Keychain => $crate::test::KeychainView;

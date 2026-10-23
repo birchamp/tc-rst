@@ -52,8 +52,8 @@ fn files_on_disk(folder: &Path) -> BTreeMap<String, Vec<u8>> {
 }
 
 /// Starts `tc4 serve --scenario` on the sample over an empty projects folder, with `extra`
-/// flags, and checks what every scenario start says: the loaded and the refused project, the
-/// installed resources, no session.
+/// flags, and checks what every scenario start says: the two loaded projects, the installed
+/// resources, no session.
 fn serve_sample(extra: &[&str]) -> (TempDir, PathBuf, PathBuf, String) {
     let work = TempDir::new().unwrap();
     let state = work.path().join("state");
@@ -84,15 +84,11 @@ fn serve_sample(extra: &[&str]) -> (TempDir, PathBuf, PathBuf, String) {
         stderr.contains("loaded sample_burrito (3 declared differences)"),
         "{stderr}"
     );
-    // The whole line, so a format string that lost a continuation fails here.
-    let refused =
-        "refused sample_burrito_obs, 52 mismatches (docs/evidence/state-seed-check-2026-10-18.md):";
     assert!(
-        stderr
-            .lines()
-            .any(|line| line == format!("tc4: scenario {}: {refused}", state.display())),
+        stderr.contains("loaded sample_burrito_obs (1 declared differences)"),
         "{stderr}"
     );
+    assert!(!stderr.contains("refused"), "{stderr}");
     assert!(stderr.contains("12 resources installed"), "{stderr}");
     assert!(tc4.quit().success());
 
@@ -106,15 +102,16 @@ fn serve_sample(extra: &[&str]) -> (TempDir, PathBuf, PathBuf, String) {
 #[test]
 fn tc4_serve_with_a_scenario_writes_its_projects_to_the_store() {
     let (_work, state, projects, stderr) = serve_sample(&[]);
-    let names: Vec<String> = std::fs::read_dir(&projects)
+    let mut names: Vec<String> = std::fs::read_dir(&projects)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
-    assert_eq!(names, ["sample_burrito"]);
+    names.sort();
+    assert_eq!(names, ["sample_burrito", "sample_burrito_obs"]);
     assert!(
         stderr.lines().any(|line| line
             == format!(
-                "tc4: scenario {}: 1 projects written to {}",
+                "tc4: scenario {}: 2 projects written to {}",
                 state.display(),
                 projects.display()
             )),

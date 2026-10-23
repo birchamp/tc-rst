@@ -1,30 +1,47 @@
-//! The Check screen's state and actions (unit B5a): tC4's `s.checkTool`, `s.checkSession` (the
-//! rail and its place), `s.fix` and the actions `openCheckTool`, `closeCheckTool`,
-//! `setCheckIndex`, `openFix` and `closeModal`. The decisions are in [`crate::app::check`].
+//! The Check screen's state and actions (units B5a and B5b): tC4's `s.checkTool`,
+//! `s.checkSession` (the rail and its place), `s.fix` and the actions `openCheckTool`,
+//! `closeCheckTool`, `setCheckIndex`, `openFix` and `closeModal`; the active check's detail, its
+//! selection, its marks, its comment and the Academy drawer. The decisions are in
+//! [`crate::app::check`] and [`crate::app::check_item`].
 //!
 //! The rail arrives whole once per session, then by row (AD17): a `Changed` event whose scope
 //! names the tool's list asks `check/rows` for the rows changed since the rail's view, and a
 //! list derived again (its resource, numbering or scope changed) is opened again.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeSet;
+use std::rc::Rc;
 
 use leptos::prelude::*;
 use tc_api::ApiError;
-use tc_api::check::{
-    CheckListRef, CheckSessionView, CheckUnit, Open, RailRow, RailRows, RailSince, Rows, RowsView,
-    Tool,
+use tc_api::buffer::{
+    BufferEntry, BufferKey, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave,
 };
+use tc_api::check::{
+    CheckArticleRead, CheckItemView, CheckListRef, CheckSessionView, CheckUnit, Decide, DecideEdit,
+    Item, Open, RailRow, RailRows, RailSince, Rows, RowsView, Tool,
+};
+use tc_api::editor::{Draft, DraftField};
+use tc_api::helps::ArticleView;
+use tc_api::ids::Scope;
 use tc_api::model::rail::{self, Filter, SortMode};
 use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, RecordPlace};
 use tc_api::query::QueryKey;
-use tc_api::resources::{FixState, FixView};
+use tc_api::resources::FixState;
+use tc_api::token::ShownToken;
+use tc_api::write::Ack;
 use wasm_bindgen_futures::spawn_local;
 
-use super::ListenerId;
 use super::app_ctx::{Actions, Dialog};
 use super::js;
+use super::saves::{FieldWriter, LocalBoxFuture};
+use super::{Api, ListenerId};
 use crate::app::check::CheckView;
-use crate::app::client::CallError;
+use crate::app::check_item::{self, DecisionWrites, MarkFailure};
+use crate::app::client::{CallError, Transport};
+use crate::app::fix::{Fix, FixScreen};
+use crate::app::save::{FieldScope, Pair, Source, View};
+use crate::app::shell::ProjectFlavor;
 
 /// An open tool's rail.
 #[derive(Debug, Clone, PartialEq)]
@@ -44,12 +61,27 @@ pub enum Session {
     Failed(Tool, String),
 }
 
-/// The guided fix (M11, tC4 `s.fix`).
+/// The active check's detail (tC4's `cs.items[activeIndex]` with its panes).
 #[derive(Debug, Clone, PartialEq)]
-pub enum Fix {
-    Loading(Tool),
-    Ready(Tool, FixView),
-    Failed(Tool, String),
+pub enum Detail {
+    Loading(u32),
+    Ready(Box<CheckItemView>),
+    Failed(u32, String),
+}
+
+/// The Academy drawer's article (tC4's `cs.article` while `academyOpen`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Academy {
+    Loading,
+    Read(ArticleView),
+    Failed(String),
+}
+
+/// The last mark's outcome.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Marking {
+    Idle,
+    Failed(MarkFailure),
 }
 
 /// The Check screen's view state.
@@ -67,6 +99,15 @@ pub struct CheckState {
     pub return_to: ArcRwSignal<Option<Tool>>,
     /// The tool whose rail took the focus once when it opened (#42, `useFocusOnOpen`).
     pub focused_for: ArcRwSignal<Option<Tool>>,
+    /// The active check's detail.
+    pub detail: ArcRwSignal<Option<Detail>>,
+    /// The words tapped in the draft, one local value until a mark saves it (#757).
+    pub selection: ArcRwSignal<BTreeSet<u32>>,
+    /// The Academy drawer, closed or on the active check's article.
+    pub academy: ArcRwSignal<Option<Academy>>,
+    pub marking: ArcRwSignal<Marking>,
+    /// The comment editor of the active check is open.
+    pub comment_open: ArcRwSignal<bool>,
 }
 
 impl CheckState {
@@ -80,6 +121,11 @@ impl CheckState {
             fix: ArcRwSignal::new(None),
             return_to: ArcRwSignal::new(None),
             focused_for: ArcRwSignal::new(None),
+            detail: ArcRwSignal::new(None),
+            selection: ArcRwSignal::new(BTreeSet::new()),
+            academy: ArcRwSignal::new(None),
+            marking: ArcRwSignal::new(Marking::Idle),
+            comment_open: ArcRwSignal::new(false),
         }
     }
 }
@@ -91,6 +137,14 @@ impl Default for CheckState {
 }
 
 thread_local! {
+    /// Counts the reads of the active check's detail: only the newest may land.
+    static ITEMS: Cell<u64> = const { Cell::new(0) };
+    /// Counts the Academy article reads asked for.
+    static ARTICLES: Cell<u64> = const { Cell::new(0) };
+    /// Every write of a decision, a mark or a comment, goes through here.
+    static WRITES: DecisionWrites = DecisionWrites::default();
+    /// The detail a write's Ack tells, when the Ack is for the check it shows.
+    static DETAIL: RefCell<Option<ArcRwSignal<Option<Detail>>>> = const { RefCell::new(None) };
     /// Counts the opens asked for: only the newest may land (tC4's `checkSessionSeq`).
     static OPENS: Cell<u64> = const { Cell::new(0) };
     /// The listener that patches the open rail.
@@ -108,6 +162,168 @@ fn current_open() -> u64 {
     OPENS.with(Cell::get)
 }
 
+fn bump(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
+    counter.with(|c| {
+        c.set(c.get() + 1);
+        c.get()
+    })
+}
+
+fn current(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
+    counter.with(Cell::get)
+}
+
+/// Writes a decision: a mark or a comment of one check, after the write before it, over the
+/// newest token the page knows of the check. Its Ack's token and comment as stored are taken at
+/// once, before any read, by the next write and by the detail when it shows that check.
+async fn write_decision(api: &Api, mut request: Decide) -> Result<Ack, CallError> {
+    let writes = WRITES.with(DecisionWrites::clone);
+    let _turn = writes.turn().await;
+    request.decision = writes.token(&request.place, &request.check_id, &request.decision);
+    let ack = api.call(&request).await?;
+    if let ([update], [saved]) = (ack.tokens.as_slice(), ack.saved.as_slice()) {
+        writes.learn(&request.place, &request.check_id, &update.token);
+        if let Some(detail) = DETAIL.with(|d| d.borrow().clone()) {
+            detail.maybe_update(|d| match d {
+                Some(Detail::Ready(view)) => check_item::take_ack(
+                    view,
+                    &request.place,
+                    &request.check_id,
+                    &update.token,
+                    &saved.text,
+                ),
+                _ => false,
+            });
+        }
+    }
+    Ok(ack)
+}
+
+/// How a check comment is saved: a `check/decide` with the comment, over the newest decision
+/// token the page knows, else the one the field holds. Nothing here reads the item: the place
+/// the buffer entry names is the check. Its draft (`editor/draft`, A-10) names the same
+/// token, so a draft kept after a crash continues from the person's own marks instead of
+/// standing beside them as a conflict.
+struct CommentWriter;
+
+/// The newest decision token the page knows for the check a comment's place names.
+fn newest_token(key: &BufferKey, base: &[ShownToken]) -> Option<ShownToken> {
+    let (_, place, check_id) = check_item::parse_comment_place(key.field.place.as_str())?;
+    let base = base.first()?;
+    Some(WRITES.with(|w| w.token(&place, &check_id, base)))
+}
+
+fn comment_draft(key: &BufferKey, scope: Option<Scope>, entry: &BufferEntry) -> Option<Draft> {
+    Some(Draft {
+        at: scope?,
+        request: js::random_request_id(),
+        instance: entry.instance,
+        field: DraftField::CheckComment,
+        shown: vec![newest_token(key, &entry.base)?],
+        text: entry.text.clone(),
+        changed: entry.at,
+    })
+}
+
+impl FieldWriter for CommentWriter {
+    fn save(
+        &self,
+        api: &Api,
+        key: &BufferKey,
+        sent: &SentSave,
+        base: &[ShownToken],
+    ) -> LocalBoxFuture<Result<Ack, CallError>> {
+        let api = api.clone();
+        let request = check_item::parse_comment_place(key.field.place.as_str())
+            .zip(sent.scope.clone())
+            .zip(base.first().cloned())
+            .map(|(((list, place, check_id), at), decision)| Decide {
+                at,
+                request: sent.request,
+                list,
+                place,
+                check_id,
+                decision,
+                verse: None,
+                edit: DecideEdit::Comment {
+                    text: sent.text.clone(),
+                },
+            });
+        Box::pin(async move {
+            let Some(request) = request else {
+                return Err(CallError::Transport(Transport::Unreadable(
+                    "a check comment with no place, open or token".to_owned(),
+                )));
+            };
+            write_decision(&api, request).await
+        })
+    }
+
+    fn draft_request(
+        &self,
+        key: &BufferKey,
+        scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<Draft> {
+        comment_draft(key, scope, entry)
+    }
+
+    fn draft_entry(
+        &self,
+        api: &Api,
+        key: &BufferKey,
+        scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<LocalBoxFuture<Result<(), CallError>>> {
+        let api = api.clone();
+        let request = comment_draft(key, scope, entry)?;
+        Some(Box::pin(async move { api.call(&request).await }))
+    }
+
+    fn draft_call_entry(
+        &self,
+        key: &BufferKey,
+        scope: Option<Scope>,
+        entry: &BufferEntry,
+    ) -> Option<DraftCall> {
+        let mut body = serde_json::to_value(comment_draft(key, scope, entry)?).ok()?;
+        let body = body.as_object_mut()?;
+        body.remove("request");
+        body.remove("text");
+        Some(DraftCall {
+            path: "editor/draft".to_owned(),
+            body: serde_json::to_string(body).ok()?,
+        })
+    }
+}
+
+/// The writers of the Check screen's fields, registered before the buffer's entries come back
+/// as fields (AD22).
+pub(super) fn register_writers(saves: &super::saves::Saves) {
+    saves.register(FieldKind::CheckComment, Rc::new(CommentWriter));
+}
+
+/// The buffer key of the check comment of `view`'s check, in the open `at`.
+pub(crate) fn comment_key(
+    tool: Tool,
+    project: &crate::app::shell::CurrentProject,
+    view: &CheckItemView,
+) -> Option<BufferKey> {
+    Some(BufferKey {
+        project: project.at.project.clone(),
+        id: project.id.clone(),
+        field: FieldKey {
+            kind: FieldKind::CheckComment,
+            place: FieldPlace::parse(&check_item::comment_place(
+                tool,
+                &view.place,
+                &view.check_id,
+            ))
+            .ok()?,
+        },
+    })
+}
+
 fn rows_of(view: &CheckSessionView) -> Vec<RailRow> {
     match &view.rows {
         RailRows::Full(rows) => rows.clone(),
@@ -116,15 +332,24 @@ fn rows_of(view: &CheckSessionView) -> Vec<RailRow> {
 }
 
 impl Actions {
-    fn check_list(&self, tool: Tool) -> Option<(tc_api::ids::Scope, CheckListRef)> {
+    /// What the open project's checks are of: the open book, or the open story.
+    pub(super) fn check_unit(&self) -> Option<CheckUnit> {
         let s = self.s();
-        let at = s.project.get_untracked()?.at;
-        let book = s.u.book.get_untracked()?;
+        match s.project.get_untracked()?.flavor {
+            ProjectFlavor::TextTranslation => Some(CheckUnit::Book(s.u.book.get_untracked()?)),
+            ProjectFlavor::TextStories => Some(CheckUnit::Story(crate::app::story::story_of(
+                s.u.chapter.get_untracked(),
+            )?)),
+        }
+    }
+
+    fn check_list(&self, tool: Tool) -> Option<(tc_api::ids::Scope, CheckListRef)> {
+        let at = self.s().project.get_untracked()?.at;
         Some((
             at,
             CheckListRef {
                 tool,
-                unit: CheckUnit::Book(book),
+                unit: self.check_unit()?,
             },
         ))
     }
@@ -141,22 +366,29 @@ impl Actions {
         c.filter.try_set(Filter::All);
         c.sort.try_set(None);
         c.active.try_set(None);
+        self.forget_detail();
         c.session.try_set(Some(Session::Loading(tool)));
         self.stop_rail_listener();
+        DETAIL.with(|d| *d.borrow_mut() = Some(c.detail.clone()));
         let this = self.clone();
         spawn_local(async move {
             let place = RecordPlace {
                 at: at.clone(),
                 request: js::random_request_id(),
-                place: PlaceUpdate::Book {
-                    book: match list.unit {
-                        CheckUnit::Book(book) => book,
-                        CheckUnit::Stories => return,
+                place: match list.unit {
+                    CheckUnit::Book(book) => PlaceUpdate::Book {
+                        book,
+                        mode: Some(PlaceMode::Check),
+                        chapter: None,
+                        verse: PlaceChange::Keep,
+                        tool: Some(tool),
                     },
-                    mode: Some(PlaceMode::Check),
-                    chapter: None,
-                    verse: PlaceChange::Keep,
-                    tool: Some(tool),
+                    CheckUnit::Story(story) => PlaceUpdate::Story {
+                        story,
+                        mode: Some(PlaceMode::Check),
+                        frame: PlaceChange::Keep,
+                        tool: Some(tool),
+                    },
                 },
             };
             let _ = this.runtime().api().call(&place).await;
@@ -172,11 +404,15 @@ impl Actions {
             let c = &this.s().c;
             match result {
                 Ok(view) => {
-                    c.active.try_set(Some(view.start));
+                    let (start, empty) = (view.start, view.empty.is_some());
+                    c.active.try_set(Some(start));
                     let rows = rows_of(&view);
                     c.session
                         .try_set(Some(Session::Open(Box::new(Rail { view, rows }))));
                     this.start_rail_listener(list);
+                    if !empty {
+                        this.load_item(start);
+                    }
                 }
                 Err(CallError::Dropped) => {}
                 // A pin went missing since the tool was last open (a resume, or a teammate's
@@ -195,6 +431,7 @@ impl Actions {
     pub fn close_check_tool(&self) {
         next_open();
         self.stop_rail_listener();
+        self.forget_detail();
         let c = &self.s().c;
         if let CheckView::Tool(tool) = c.view.get_untracked() {
             c.return_to.try_set(Some(tool));
@@ -210,6 +447,7 @@ impl Actions {
         self.reset_align();
         next_open();
         self.stop_rail_listener();
+        self.forget_detail();
         let c = &self.s().c;
         c.view.try_set(CheckView::Picker);
         c.session.try_set(None);
@@ -219,9 +457,17 @@ impl Actions {
         c.focused_for.try_set(None);
     }
 
-    /// A row of the rail, or the arrow keys (tC4 `setCheckIndex`).
+    /// A row of the rail, the arrow keys, or Previous and Next (tC4 `setCheckIndex`): the
+    /// comment of the check left is saved if its editor is open (A-10), and the new check's
+    /// detail is read.
     pub fn select_check(&self, index: u32) {
-        self.s().c.active.try_set(Some(index));
+        let c = &self.s().c;
+        if c.active.get_untracked() == Some(index) {
+            return;
+        }
+        self.leave_item();
+        c.active.try_set(Some(index));
+        self.load_item(index);
     }
 
     pub fn set_check_filter(&self, filter: Filter) {
@@ -233,11 +479,11 @@ impl Actions {
     }
 
     /// Retry on a picker whose read failed (tC4's `preflight-retry`).
-    pub fn reload_picker(&self, book: tc_core::BookId) {
+    pub fn reload_picker(&self, unit: CheckUnit) {
         if let Some(project) = self.s().project.get_untracked() {
             self.runtime().cache().refresh(&tc_api::check::Picker {
                 at: project.at,
-                book,
+                unit,
             });
         }
     }
@@ -267,7 +513,8 @@ impl Actions {
             }
             match result {
                 Ok(Some(view)) => {
-                    fix.try_set(Some(Fix::Ready(tool, view)));
+                    let screen = FixScreen::new(super::fix::next_id(), tool, view);
+                    fix.try_set(Some(Fix::Ready(Box::new(screen))));
                 }
                 // Nothing is missing any more: there is nothing to fix.
                 Ok(None) | Err(CallError::Dropped) => {
@@ -347,11 +594,281 @@ impl Actions {
                     });
                     if !whole {
                         this.open_check_tool(list.tool);
+                    } else {
+                        this.refresh_item();
                     }
                 }
                 Ok(RowsView::Reopen) => this.open_check_tool(list.tool),
                 Err(_) => {}
             }
         });
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// The active check's detail (unit B5b)
+// ---------------------------------------------------------------------------------------
+
+impl Actions {
+    /// The tool and the open the detail reads from, while a tool is shown.
+    fn detail_target(&self) -> Option<(tc_api::ids::Scope, CheckListRef)> {
+        let CheckView::Tool(tool) = self.s().c.view.get_untracked() else {
+            return None;
+        };
+        self.check_list(tool)
+    }
+
+    /// The detail and everything that belongs to it goes: another tool, the picker, or no
+    /// project. A comment still being typed is saved by its editor leaving.
+    fn forget_detail(&self) {
+        let c = &self.s().c;
+        bump(&ITEMS);
+        bump(&ARTICLES);
+        c.comment_open.try_set(false);
+        c.detail.try_set(None);
+        c.selection.try_set(BTreeSet::new());
+        c.academy.try_set(None);
+        c.marking.try_set(Marking::Idle);
+    }
+
+    /// Before another check shows: its editor closes (which saves the comment typed in it,
+    /// A-10), the drawer and the last mark's failure go, and the selection is the new check's.
+    fn leave_item(&self) {
+        let c = &self.s().c;
+        c.comment_open.try_set(false);
+        c.academy.try_set(None);
+        c.marking.try_set(Marking::Idle);
+    }
+
+    /// Reads check `index` for the detail (tC4 shows it from the list it holds; the server
+    /// answers it here). The newest read is the one that lands.
+    pub(crate) fn load_item(&self, index: u32) {
+        let c = &self.s().c;
+        let Some((at, list)) = self.detail_target() else {
+            return;
+        };
+        let attempt = bump(&ITEMS);
+        c.detail.try_set(Some(Detail::Loading(index)));
+        self.read_item(at, list, index, attempt);
+    }
+
+    /// Reads the active check again (a change reached it, or a mark was saved): the detail
+    /// stays on screen, and only a read that differs changes it.
+    pub(crate) fn refresh_item(&self) {
+        let c = &self.s().c;
+        let (Some((at, list)), Some(index)) = (self.detail_target(), c.active.get_untracked())
+        else {
+            return;
+        };
+        if matches!(c.detail.get_untracked(), Some(Detail::Loading(_)) | None) {
+            return;
+        }
+        let attempt = bump(&ITEMS);
+        self.read_item(at, list, index, attempt);
+    }
+
+    fn read_item(&self, at: tc_api::ids::Scope, list: CheckListRef, index: u32, attempt: u64) {
+        let this = self.clone();
+        spawn_local(async move {
+            let result = this.runtime().read_once(&Item { at, list, index }).await;
+            if current(&ITEMS) != attempt {
+                return;
+            }
+            match result {
+                Ok(view) => this.apply_item(view),
+                Err(CallError::Dropped) => {}
+                Err(CallError::Api(ApiError::ToolNotReady)) => this.reset_check(),
+                Err(error) => {
+                    this.s()
+                        .c
+                        .detail
+                        .try_set(Some(Detail::Failed(index, error.to_string())));
+                }
+            }
+        });
+    }
+
+    /// A read of the active check lands: the selection follows the stored one only when the
+    /// check or its words changed (tC4's effect on `activeIndex` and `targetText`), and the
+    /// comment's field takes the decision the read shows (AD37).
+    fn apply_item(&self, view: CheckItemView) {
+        let c = &self.s().c;
+        WRITES.with(|w| w.learn(&view.place, &view.check_id, &view.decision.token));
+        let local = c.selection.get_untracked();
+        let selection = c.detail.with_untracked(|shown| {
+            let shown = match shown {
+                Some(Detail::Ready(shown)) => Some(&**shown),
+                _ => None,
+            };
+            check_item::selection_after_read(shown, &view, &local)
+        });
+        if selection != local {
+            c.selection.try_set(selection);
+        }
+        let same = c
+            .detail
+            .with_untracked(|d| matches!(d, Some(Detail::Ready(shown)) if **shown == view));
+        if !same {
+            self.refresh_comment(&view);
+            c.detail.try_set(Some(Detail::Ready(Box::new(view))));
+        }
+    }
+
+    /// The comment's field, if its editor is open, learns what the read shows of the decision.
+    fn refresh_comment(&self, view: &CheckItemView) {
+        let (Some(project), CheckView::Tool(tool)) = (
+            self.s().project.get_untracked(),
+            self.s().c.view.get_untracked(),
+        ) else {
+            return;
+        };
+        let Some(key) = comment_key(tool, &project, view) else {
+            return;
+        };
+        let pair = Pair {
+            value: view.decision.value.comment.clone().unwrap_or_default(),
+            token: view.decision.token.clone(),
+            view: Some(View::of(Some(&project.at), view.view)),
+        };
+        self.runtime().saves().refresh(&key, pair, None);
+    }
+
+    /// One act on the shown check, saved at once (AD20). The writes of decisions go one at a time
+    /// (`write_decision`); a reply that comes after the person moved to another check is not for
+    /// the check now shown, so it changes the rail's rows and nothing on screen.
+    pub fn mark(&self, edit: DecideEdit) {
+        let c = self.s().c.clone();
+        let (Some((at, list)), Some(Detail::Ready(view))) =
+            (self.detail_target(), c.detail.get_untracked())
+        else {
+            return;
+        };
+        let (place, check_id) = (view.place.clone(), view.check_id.clone());
+        let comment = self
+            .s()
+            .project
+            .get_untracked()
+            .and_then(|project| comment_key(list.tool, &project, &view));
+        let request = Decide {
+            at,
+            request: js::random_request_id(),
+            list,
+            place: place.clone(),
+            check_id: check_id.clone(),
+            decision: view.decision.token.clone(),
+            verse: view.target.verse.clone(),
+            edit,
+        };
+        c.marking.try_set(Marking::Idle);
+        let this = self.clone();
+        spawn_local(async move {
+            // A write's reply is never dropped: its Ack carries the next token (AD2).
+            let result = write_decision(this.runtime().api(), request).await;
+            if let Ok(ack) = &result {
+                this.patch_rail(ack);
+                if let Some(key) = &comment {
+                    this.runtime().saves().redraft(key);
+                }
+            }
+            let c = &this.s().c;
+            let shown = c.detail.with_untracked(|d| {
+                matches!(d, Some(Detail::Ready(v)) if v.place == place && v.check_id == check_id)
+            });
+            if !shown {
+                return;
+            }
+            match result {
+                Ok(_) => {
+                    c.marking.try_set(Marking::Idle);
+                    this.refresh_item();
+                }
+                Err(error) => {
+                    let failure = MarkFailure::of(&error);
+                    let look_again = failure == MarkFailure::LookAgain;
+                    c.marking.try_set(Marking::Failed(failure));
+                    if look_again {
+                        this.refresh_item();
+                    }
+                }
+            }
+        });
+    }
+
+    /// The rows a write's `Ack` carries go into the rail at once (AD17).
+    fn patch_rail(&self, ack: &Ack) {
+        if ack.rows.is_empty() {
+            return;
+        }
+        self.s().c.session.try_update(|s| {
+            if let Some(Session::Open(rail)) = s {
+                rail::patch(&mut rail.rows, &ack.rows);
+                rail.view.progress = tc_api::check::RailProgress {
+                    decided: rail.rows.iter().filter(|r| r.flags.decided).count() as u32,
+                    total: rail.rows.len() as u32,
+                };
+            }
+        });
+    }
+
+    /// "Learn more" (tC4's `setAcademyOpen(true)`): the drawer opens on the check's article.
+    pub fn open_academy(&self) {
+        let c = &self.s().c;
+        let (Some((at, list)), Some(index)) = (self.detail_target(), c.active.get_untracked())
+        else {
+            return;
+        };
+        let attempt = bump(&ARTICLES);
+        c.academy.try_set(Some(Academy::Loading));
+        let this = self.clone();
+        spawn_local(async move {
+            let result = this
+                .runtime()
+                .read_once(&CheckArticleRead { at, list, index })
+                .await;
+            if current(&ARTICLES) != attempt {
+                return;
+            }
+            let state = match result {
+                Ok(view) => Academy::Read(view),
+                Err(CallError::Dropped) => return,
+                Err(error) => Academy::Failed(error.to_string()),
+            };
+            this.s().c.academy.try_set(Some(state));
+        });
+    }
+
+    pub fn close_academy(&self) {
+        bump(&ARTICLES);
+        self.s().c.academy.try_set(None);
+    }
+
+    /// The comment's button: the editor opens or closes. Closing it with text typed saves the
+    /// text (A-10); opening it takes the stored comment.
+    pub fn toggle_comment(&self) {
+        let open = &self.s().c.comment_open;
+        open.try_set(!open.get_untracked());
+    }
+
+    /// The comment editor's place for the active check, while a project and a detail are shown.
+    pub(crate) fn comment_field(&self) -> Option<(BufferKey, Pair, FieldScope)> {
+        let project = self.s().project.get_untracked()?;
+        let CheckView::Tool(tool) = self.s().c.view.get_untracked() else {
+            return None;
+        };
+        let Some(Detail::Ready(view)) = self.s().c.detail.get_untracked() else {
+            return None;
+        };
+        let key = comment_key(tool, &project, &view)?;
+        let pair = Pair {
+            value: view.decision.value.comment.clone().unwrap_or_default(),
+            token: view.decision.token.clone(),
+            view: Some(View::of(Some(&project.at), view.view)),
+        };
+        Some((key, pair, FieldScope::Project(Some(project.at))))
+    }
+
+    /// The text the person typed went into the comment's field.
+    pub(crate) fn comment_typed(&self, key: &BufferKey, text: &str) {
+        self.runtime().saves().typed(key, text, Source::Input);
     }
 }

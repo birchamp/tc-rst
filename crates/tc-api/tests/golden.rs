@@ -32,10 +32,13 @@ use tc_api::buffer::{
     BufferEntry, BufferKey, BufferLine, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave,
 };
 use tc_api::check::{
-    AlignProgress, CardCount, Category, CheckEmpty, CheckListRef, CheckPlace, CheckProgress,
-    CheckSessionView, CheckUnit, Dot, DroppedNote, NextCheck, NoteCategory, Open as CheckOpen,
-    Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows, RailSince,
-    ResourceCitation, RowFlags, Rows, RowsView, Rung, Tool, ToolCard, ToolState,
+    AlignProgress, CardCount, Category, CheckArticle, CheckArticleRead, CheckCollection,
+    CheckEmpty, CheckItemView, CheckListRef, CheckNotice, CheckPlace, CheckProgress,
+    CheckSessionView, CheckSources, CheckUnit, Decide, DecideEdit, DecisionStatus, DecisionView,
+    Dot, DroppedNote, GatewayText, GatewayView, Item, NextCheck, NoteCategory, Open as CheckOpen,
+    OriginalView, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows,
+    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, TargetWords,
+    Testament as CheckTestament, Tool, ToolCard, ToolState,
 };
 use tc_api::create::{
     AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
@@ -43,19 +46,21 @@ use tc_api::create::{
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::editor::{
-    Book, BookView, ChapterText, Chapters, ChaptersView, CommentView, FrameRow, PaneChapter,
-    PaneText, PaneVerse, RailBook, RowSource, SourceFrame, SourcePane, Sources, SourcesView,
-    VerseRow,
+    AddComment, Book, BookView, ChapterText, Chapters, ChaptersView, CommentView,
+    DiscardDraft as EditorDiscardDraft, Draft as EditorDraft, DraftField as EditorDraftField,
+    FrameRow, PaneChapter, PaneText, PaneVerse, RailBook, RowSource, SaveLayout, SaveSection,
+    SaveVerse, SourceFrame, SourcePane, Sources, SourcesView, VerseRow,
 };
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
     Aspect, ChangeCause, ChangeParts, ChangeScope, ChapterRef, CheckpointOutcome, Event,
     EventFrame, RecordChange, SessionEvent, SessionMode, StartupProgress, StartupState,
 };
+use tc_api::export;
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::helps::{
     Article, ArticleLink, ArticleView, LitVerse, NoteCard, PaneFocus, Passage, PassageView,
-    ReadySlot, SimplifiedVerse, Slot, WordCard,
+    ReadySlot, SimplifiedVerse, Slot, Story as HelpsStory, StoryArticle, WordCard,
 };
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
@@ -63,13 +68,14 @@ use tc_api::home::{
     StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
 };
 use tc_api::ids::{
-    AlignerId, CheckSessionId, ConflictRef, Epoch, JobId, LocaleId, ProjectId, ProjectRef,
-    RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId, ViewSeq,
-    WallMs,
+    AlignerId, ChangeRef, CheckSessionId, ConflictRef, Epoch, JobId, LocaleId, ProjectId,
+    ProjectRef, RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId,
+    ViewSeq, WallMs,
 };
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
 };
+use tc_api::model::section::ParaFormat;
 use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_api::net::{NetView, Set, State as NetState};
 use tc_api::prefs::{
@@ -93,19 +99,26 @@ use tc_api::session::{
 use tc_api::settings::{
     CurrentGateway, GatewayCard, Save, SettingsView, ShownValues, ViewFromHome,
 };
-use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
+use tc_api::shown::{Computer, ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
+use tc_api::story;
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
-    QuietView, Release, Reset, SaveVerse, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
+    QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
     TeammatesEdit, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
 };
-use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ShownToken};
+use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ReviewToken, ShownToken};
 use tc_core::BookId;
+
+use tc_api::conflicts::{
+    ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion, HistoryView,
+    List as ConflictList, MadeBy, NoticeEntry, NoticeView, Resolve, ReviewEntries, ReviewPlace,
+    ReviewTab, ReviewView, TabCount, Version, VersionCause, VersionValue,
+};
 
 /// An example value for a golden file.
 trait Example {
@@ -172,7 +185,10 @@ fn check_places() -> Vec<CheckPlace> {
 }
 
 fn check_units() -> Vec<CheckUnit> {
-    vec![CheckUnit::Book(BookId::Psalms), CheckUnit::Stories]
+    vec![
+        CheckUnit::Book(BookId::Psalms),
+        CheckUnit::Story(StoryNo::new(7).unwrap()),
+    ]
 }
 
 fn ack() -> Ack {
@@ -856,7 +872,7 @@ fn gateway_plan() -> PlanView {
         rows: vec![
             PlanRow {
                 tool: Tool::TranslationWords,
-                unit: CheckUnit::Book(BookId::Titus),
+                unit: CheckCollection::Book(BookId::Titus),
                 decisions: 2,
                 against: "es-419_twl".into(),
                 carry: Some(Carry {
@@ -866,7 +882,7 @@ fn gateway_plan() -> PlanView {
             },
             PlanRow {
                 tool: Tool::TranslationNotes,
-                unit: CheckUnit::Book(BookId::Titus),
+                unit: CheckCollection::Book(BookId::Titus),
                 decisions: 2,
                 against: "es-419_tn".into(),
                 carry: None,
@@ -874,7 +890,7 @@ fn gateway_plan() -> PlanView {
         ],
         blocked: vec![BlockedUnit {
             tool: Tool::TranslationNotes,
-            unit: CheckUnit::Stories,
+            unit: CheckCollection::Stories,
             reason: BlockReason::VersificationUnknown,
         }],
         alignments: Some(12),
@@ -1099,6 +1115,99 @@ impl Example for SaveVerse {
             request: request(18),
             shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
             words: "Paul, a servant of God".into(),
+        }
+    }
+}
+
+impl Example for SaveSection {
+    fn example() -> Self {
+        SaveSection {
+            at: scope(),
+            request: request(19),
+            book: BookId::Titus,
+            displayed: vec![
+                token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+                token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            ],
+            text: "1-2 Paul, a servant of God\n\t3 an apostle".into(),
+        }
+    }
+}
+
+impl Example for SaveLayout {
+    fn example() -> Self {
+        SaveLayout {
+            at: scope(),
+            request: request(20),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            layout: "\n\\q1\n".into(),
+        }
+    }
+}
+
+impl Example for AddComment {
+    fn example() -> Self {
+        Self {
+            at: scope(),
+            request: request(23),
+            target: tc_api::editor::CommentTarget::Verse {
+                book: BookId::Titus,
+                chapter: 1,
+                verse: 4,
+            },
+            shown: None,
+            text: "Discuss this verse with the team.".into(),
+        }
+    }
+}
+impl Example for story::SaveFrame {
+    fn example() -> Self {
+        Self {
+            at: scope(),
+            request: request(24),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            text: "Así fue como Dios hizo todo.".into(),
+        }
+    }
+}
+impl Example for story::SaveRef {
+    fn example() -> Self {
+        Self {
+            at: scope(),
+            request: request(25),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            text: "Una historia de la Biblia: Génesis 1-2".into(),
+        }
+    }
+}
+
+impl Example for EditorDraft {
+    fn example() -> Self {
+        EditorDraft {
+            at: scope(),
+            request: request(21),
+            instance: ServerInstance::from_bytes([7; 16]),
+            field: EditorDraftField::Section {
+                book: BookId::Titus,
+            },
+            shown: SaveSection::example().displayed,
+            text: "1-2 Paul, a servant of God\n\t3 an apostle".into(),
+            changed: WallMs(1_792_000_000_000),
+        }
+    }
+}
+
+impl Example for EditorDiscardDraft {
+    fn example() -> Self {
+        let draft = EditorDraft::example();
+        Self {
+            at: draft.at,
+            request: request(22),
+            instance: draft.instance,
+            field: draft.field,
+            shown: draft.shown,
+            text: draft.text,
+            changed: draft.changed,
         }
     }
 }
@@ -1570,6 +1679,7 @@ impl Example for Book {
 impl Example for BookView {
     fn example() -> Self {
         BookView {
+            view: ViewSeq::new(42),
             book: BookId::Titus,
             chapters: vec![1, 2, 3],
             rail: vec![
@@ -1583,6 +1693,7 @@ impl Example for BookView {
                 },
             ],
             comments: vec![CommentView {
+                token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
                 chapter: 1,
                 verse: 4,
                 text: "Pablo escribe a Tito.".into(),
@@ -1708,6 +1819,8 @@ impl Example for ChaptersView {
                         lead: None,
                         before: Some(0),
                         words: words("Recuérdales que se sujeten", None),
+                        format: None,
+                        covered: Vec::new(),
                     },
                     VerseRow {
                         key: RefPart::parse("2-3").unwrap(),
@@ -1723,6 +1836,8 @@ impl Example for ChaptersView {
                                 versions: 2,
                             }),
                         ),
+                        format: Some(ParaFormat::Q1),
+                        covered: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
                     },
                     VerseRow {
                         key: RefPart::parse("4").unwrap(),
@@ -1732,6 +1847,8 @@ impl Example for ChaptersView {
                         lead: None,
                         before: None,
                         words: words("___", None),
+                        format: None,
+                        covered: Vec::new(),
                     },
                 ],
             }],
@@ -1841,6 +1958,7 @@ impl Example for ArticleView {
     fn example() -> Self {
         ArticleView::Found {
             title: "God".into(),
+            path: "payload/kt/god.md".into(),
             blocks: vec![
                 ArticleBlock::new(BlockKind::H, 0, spans("", "Definition:")),
                 ArticleBlock {
@@ -2012,6 +2130,7 @@ impl Example for AlignerView {
                 total: 4,
             },
             save: AlignSave::Unsaved,
+            marker: None,
         }
     }
 }
@@ -2159,7 +2278,7 @@ impl Example for Picker {
     fn example() -> Self {
         Picker {
             at: scope(),
-            book: BookId::Titus,
+            unit: CheckUnit::Book(BookId::Titus),
         }
     }
 }
@@ -2196,12 +2315,128 @@ impl Example for PickerView {
                     })),
                 },
             ],
-            align: CardCount::Counted(AlignProgress {
+            align: Some(CardCount::Counted(AlignProgress {
                 done: 0,
                 total: 5,
                 next: Some("1:1".into()),
-            }),
+            })),
             old_twl: None,
+        }
+    }
+}
+
+impl Example for HelpsStory {
+    fn example() -> Self {
+        HelpsStory {
+            at: scope(),
+            story: StoryNo::new(1).unwrap(),
+        }
+    }
+}
+
+impl Example for StoryArticle {
+    fn example() -> Self {
+        StoryArticle {
+            at: scope(),
+            link: ArticleLink::Academy {
+                slug: "figs-metaphor".into(),
+            },
+        }
+    }
+}
+
+impl Example for story::List {
+    fn example() -> Self {
+        story::List { at: scope() }
+    }
+}
+
+impl Example for story::StoryList {
+    fn example() -> Self {
+        story::StoryList {
+            stories: vec![
+                story::StoryRow {
+                    story: StoryNo::new(1).unwrap(),
+                    title: "La Creación".into(),
+                    drafted: Known::Known(13),
+                },
+                story::StoryRow {
+                    story: StoryNo::new(2).unwrap(),
+                    title: String::new(),
+                    drafted: Known::Unknown,
+                },
+            ],
+        }
+    }
+}
+
+impl Example for story::Open {
+    fn example() -> Self {
+        story::Open {
+            at: scope(),
+            story: StoryNo::new(1).unwrap(),
+        }
+    }
+}
+
+impl Example for story::StoryView {
+    fn example() -> Self {
+        story::StoryView {
+            view: ViewSeq::new(42),
+            title_token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            reference_token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            story: StoryNo::new(1).unwrap(),
+            title: "La Creación".into(),
+            reference: "Una historia de la Biblia: Génesis 1-2".into(),
+            frames: vec![
+                story::FrameView {
+                    token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+                    text: "Así fue como Dios hizo todo.".into(),
+                    image: Some(
+                        "/media/obs/uW~obs_images_360~7146d5b504f6b63b9e11f7dc0b18c594d0ae179d/360px/obs-en-01-01.jpg"
+                            .into(),
+                    ),
+                },
+                story::FrameView {
+                    token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+                    text: String::new(),
+                    image: None,
+                },
+            ],
+            gateway: Some(story::GatewayStory {
+                title: "The Creation".into(),
+                reference: "A Bible story from: Genesis 1-2".into(),
+                frames: vec!["This is how God made everything.".into(), String::new()],
+            }),
+            source: Some(story::SourceNotice::Mismatch {
+                message: "the gateway story has 15 frames, the project's has 16".into(),
+            }),
+            source_version: Some("v9".into()),
+            image_note: Some(story::ImageNote {
+                wanted: 16,
+                packs: vec![
+                    story::PackReport {
+                        pin: "git.door43.org/uW/obs_images_360@7146d5b504f6".into(),
+                        installed_at: None,
+                        via: None,
+                        files: 0,
+                        error: Some("not installed".into()),
+                    },
+                    story::PackReport {
+                        pin: "git.door43.org/uW/obs_images_361@aaaaaaaaaaaa".into(),
+                        installed_at: Some("/home/ana/resources/obs_images_361".into()),
+                        via: Some(story::PackVia::Metadata),
+                        files: 0,
+                        error: Some("the listing could not be read".into()),
+                    },
+                ],
+            }),
+            comments: vec![story::FrameComment {
+                token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+                frame: 0,
+                text: "Check the title with the team.".into(),
+                at: WallMs(1_790_000_000_000),
+            }],
         }
     }
 }
@@ -2268,6 +2503,328 @@ impl Example for RowsView {
     }
 }
 
+impl Example for Item {
+    fn example() -> Self {
+        Item {
+            at: scope(),
+            list: titus_tn(),
+            index: 7,
+        }
+    }
+}
+
+impl Example for CheckArticleRead {
+    fn example() -> Self {
+        CheckArticleRead {
+            at: scope(),
+            list: titus_tn(),
+            index: 7,
+        }
+    }
+}
+
+impl Example for CheckItemView {
+    fn example() -> Self {
+        CheckItemView {
+            index: 7,
+            view: ViewSeq::new(43),
+            check_id: "abcd".into(),
+            place: verse_place(BookId::Titus, "1", "1"),
+            title: "knowledge".into(),
+            note: vec![ArticleBlock::new(
+                BlockKind::P,
+                0,
+                vec![ArticleSpan {
+                    text: "The words faith and knowledge are abstract nouns.".into(),
+                    ..ArticleSpan::default()
+                }],
+            )],
+            helps_dir: Some(Direction::Ltr),
+            article: CheckArticle {
+                link: ArticleLink::Academy {
+                    slug: "figs-abstractnouns".into(),
+                },
+                title: Some("Abstract Nouns".into()),
+                category: Category::Note(NoteCategory::Grammar),
+            },
+            sources: CheckSources::Verse {
+                original: OriginalView::Ready {
+                    testament: CheckTestament::Nt,
+                    verse: Some("Παῦλος, δοῦλος Θεοῦ".into()),
+                },
+                gateway: GatewayView::Pane {
+                    pane: "ult".into(),
+                    text: GatewayText::Verse {
+                        tokens: vec!["Paul".into(), ", ".into(), "a".into()],
+                        lit: vec![0],
+                    },
+                },
+            },
+            target: TargetWords {
+                words: vec!["Pablo".into(), "siervo".into()],
+                selected: vec![0],
+                verse: Some(token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")),
+            },
+            decision: Shown {
+                value: DecisionView {
+                    status: Some(DecisionStatus::Valid),
+                    nothing_to_select: false,
+                    bookmarked: true,
+                    comment: Some("ask the team".into()),
+                    invalidated: false,
+                },
+                token: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+                marker: None,
+            },
+            notices: vec![CheckNotice::Invalidated { count: 2 }],
+        }
+    }
+}
+
+impl Example for Decide {
+    fn example() -> Self {
+        Decide {
+            at: scope(),
+            request: request(23),
+            list: titus_tn(),
+            place: verse_place(BookId::Titus, "1", "1"),
+            check_id: "abcd".into(),
+            decision: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            verse: Some(token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")),
+            edit: DecideEdit::Valid { words: vec![0, 1] },
+        }
+    }
+}
+
+fn review_token(body: &str) -> ReviewToken {
+    ReviewToken::from_body(body).unwrap()
+}
+
+fn titus_1_1() -> RecordRef {
+    record(r#"{"book":"TIT","chapter":1,"kind":"verse","verse":1}"#)
+}
+
+fn version(change: char, who: Who, at: i64, shown: bool, text: &str) -> Version {
+    Version {
+        change: ChangeRef::parse(&change.to_string().repeat(64)).unwrap(),
+        by: MadeBy::Person(PersonLabel {
+            who,
+            computer: None,
+        }),
+        at: WallMs(at),
+        clock_ahead: false,
+        shown,
+        value: VersionValue::Text(text.into()),
+    }
+}
+
+impl Example for ConflictList {
+    fn example() -> Self {
+        ConflictList {
+            at: scope(),
+            tab: ReviewTab::Text,
+        }
+    }
+}
+
+impl Example for ReviewView {
+    /// Titus 1:1 after two teammates changed it from one version (the gallery's S4).
+    fn example() -> Self {
+        let counts = [2, 0, 0, 0, 0, 1];
+        ReviewView {
+            view: ViewSeq::new(12),
+            tabs: ReviewTab::ALL
+                .into_iter()
+                .zip(counts)
+                .map(|(tab, count)| TabCount { tab, count })
+                .collect(),
+            entries: ReviewEntries::Conflicts(vec![ConflictEntry {
+                conflict: ConflictRef::parse(&"c".repeat(64)).unwrap(),
+                kind: ConflictKind::VerseText,
+                record: titus_1_1(),
+                place: ReviewPlace::Verse {
+                    book: BookId::Titus,
+                    chapter: 1,
+                    verse: 1,
+                },
+                group: 0,
+                versions: vec![
+                    version(
+                        'b',
+                        Who::Teammate(2),
+                        1_790_812_920_000,
+                        true,
+                        "Pablo, versión del compañero 2.",
+                    ),
+                    version(
+                        'a',
+                        Who::Teammate(1),
+                        1_790_812_860_000,
+                        false,
+                        "Pablo, versión del compañero 1.",
+                    ),
+                ],
+                review: vec![review_token(
+                    "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                )],
+                incomplete_history: false,
+                unreadable: 0,
+            }]),
+        }
+    }
+}
+
+impl Example for History {
+    fn example() -> Self {
+        History {
+            at: scope(),
+            record: titus_1_1(),
+        }
+    }
+}
+
+impl Example for HistoryView {
+    fn example() -> Self {
+        HistoryView {
+            versions: vec![
+                HistoryVersion {
+                    version: version(
+                        'b',
+                        Who::Mine,
+                        1_790_812_920_000,
+                        true,
+                        "Pablo, siervo de Dios.",
+                    ),
+                    cause: VersionCause::Kept,
+                },
+                HistoryVersion {
+                    version: Version {
+                        by: MadeBy::Import,
+                        ..version('a', Who::Mine, 1_790_000_000_000, false, "Pablo, siervo")
+                    },
+                    cause: VersionCause::Imported,
+                },
+            ],
+        }
+    }
+}
+
+impl Example for Resolve {
+    fn example() -> Self {
+        Resolve {
+            at: scope(),
+            request: request(24),
+            conflict: ConflictRef::parse(&"c".repeat(64)).unwrap(),
+            review: vec![review_token(
+                "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+            )],
+            keep: ChangeRef::parse(&"a".repeat(64)).unwrap(),
+        }
+    }
+}
+
+/// Every notice the Notices tab words.
+fn review_notices() -> Vec<NoticeView> {
+    let file = || "ingredients/TIT.usfm".to_owned();
+    vec![
+        NoticeView::DamagedChanges { recovered: 212 },
+        NoticeView::NewerApp,
+        NoticeView::ClockAhead {
+            by: Some(PersonLabel {
+                who: Who::Username("juan".into()),
+                computer: None,
+            }),
+            days: 3,
+        },
+        NoticeView::OutsideEditRecorded {
+            file: file(),
+            changes: 4,
+        },
+        NoticeView::OutsideEditHeld { file: file() },
+        NoticeView::OutsideEditUnreadable { file: file() },
+        NoticeView::DetailsEditedOutside,
+        NoticeView::WriteBlocked { file: file() },
+        NoticeView::FileRepaired { file: file() },
+        NoticeView::FileMissing { file: file() },
+        NoticeView::FileUnreadable { file: file() },
+        NoticeView::StorageDamage { file: file() },
+        NoticeView::FileMoved {
+            file: "ingredients/tit.USFM".into(),
+            to: file(),
+        },
+        NoticeView::FolderCopied,
+        NoticeView::SecondWriter,
+        NoticeView::SavedWithDiskError,
+        NoticeView::ImportUnfinished,
+        NoticeView::IncompleteChanges { have: 3, of: 5 },
+        NoticeView::KeptApart { changes: 2 },
+    ]
+}
+
+/// Every place a review entry names.
+fn review_places() -> Vec<ReviewPlace> {
+    vec![
+        ReviewPlace::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 4,
+        },
+        ReviewPlace::ChapterFront {
+            book: BookId::Titus,
+            chapter: 2,
+        },
+        ReviewPlace::Book {
+            book: BookId::Jonah,
+        },
+        ReviewPlace::Check {
+            tool: Some(Tool::TranslationNotes),
+            place: verse_place(BookId::Titus, "1", "4"),
+        },
+        ReviewPlace::Story {
+            story: StoryNo::new(3).unwrap(),
+            frame: Some(4),
+        },
+        ReviewPlace::Project,
+    ]
+}
+
+fn review_values() -> Vec<VersionValue> {
+    vec![
+        VersionValue::Text("Pablo, siervo de Dios".into()),
+        VersionValue::Joined { by: 4 },
+        VersionValue::Absent,
+        VersionValue::NotShown,
+    ]
+}
+
+fn review_makers() -> Vec<MadeBy> {
+    vec![
+        MadeBy::Person(PersonLabel {
+            who: Who::Mine,
+            computer: None,
+        }),
+        MadeBy::Door43,
+        MadeBy::ExchangeFile,
+        MadeBy::Import,
+    ]
+}
+
+fn review_entries() -> Vec<ReviewEntries> {
+    vec![
+        ReviewEntries::Conflicts(Vec::new()),
+        ReviewEntries::Detached(vec![DetachedEntry {
+            record: record(r#"{"kind":"check"}"#),
+            what: DetachedKind::Decision,
+            place: review_places()[3].clone(),
+        }]),
+        ReviewEntries::Notices(vec![NoticeEntry {
+            notice: NoticeView::WriteBlocked {
+                file: "ingredients/TIT.usfm".into(),
+            },
+        }]),
+    ]
+}
+
 impl Example for Script {
     fn example() -> Self {
         Script {
@@ -2284,6 +2841,88 @@ impl Example for Script {
                     restored: 0,
                 },
             },
+        }
+    }
+}
+
+impl Example for export::Book {
+    fn example() -> Self {
+        export::Book {
+            at: scope(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for export::BookPrint {
+    fn example() -> Self {
+        let verse = |label: &str, text: Option<&str>| export::PrintVerse {
+            label: RefPart::parse(label).unwrap(),
+            text: text.map(str::to_owned),
+        };
+        export::BookPrint {
+            items: vec![
+                export::PrintItem::Chapter(export::PrintChapter {
+                    chapter: 1,
+                    verses: vec![
+                        verse("1", Some("Pablo, siervo de Dios")),
+                        verse("2-3", None),
+                    ],
+                }),
+                export::PrintItem::Gap(export::Run { from: 2, to: 2 }),
+                export::PrintItem::Chapter(export::PrintChapter {
+                    chapter: 3,
+                    verses: vec![verse("1", Some("Recuérdales"))],
+                }),
+            ],
+            undrafted: true,
+        }
+    }
+}
+
+impl Example for export::Stories {
+    fn example() -> Self {
+        export::Stories { at: scope() }
+    }
+}
+
+impl Example for export::StoriesPrint {
+    fn example() -> Self {
+        let story = |n: u8| StoryNo::new(n).unwrap();
+        export::StoriesPrint {
+            items: vec![
+                export::PrintStoryItem::Story(export::PrintStory {
+                    story: story(1),
+                    title: "La Creación".into(),
+                    frames: vec![
+                        export::PrintFrame::Drafted(export::DraftedFrame {
+                            frame: 1,
+                            text: "Así fue como Dios hizo todo.".into(),
+                            picture: Some(
+                                "/media/obs/git.door43.org~uW~obs_images_360~7146d5b504f6b63b9e11f7dc0b18c594d0ae179d/360px/obs-en-01-01.jpg"
+                                    .into(),
+                            ),
+                        }),
+                        export::PrintFrame::Gap(export::Run { from: 2, to: 16 }),
+                    ],
+                    reference: Some("Una historia bíblica de: Génesis 1-2".into()),
+                }),
+                export::PrintStoryItem::Gap(export::StoryRun {
+                    from: story(2),
+                    to: story(3),
+                }),
+                export::PrintStoryItem::Story(export::PrintStory {
+                    story: story(4),
+                    title: String::new(),
+                    frames: vec![export::PrintFrame::Drafted(export::DraftedFrame {
+                        frame: 1,
+                        text: "Dios dijo".into(),
+                        picture: None,
+                    })],
+                    reference: None,
+                }),
+            ],
+            undrafted: true,
         }
     }
 }
@@ -2425,6 +3064,8 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "align/flush",
             "align/keepReflow",
             "align/open",
+            "check/decide",
+            "conflicts/resolve",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
@@ -2441,7 +3082,14 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "session/drafts",
             "session/keepDraft",
             "session/otherComputerClosed",
-            "test/saveVerse",
+            "editor/saveSection",
+            "editor/addComment",
+            "story/saveFrame",
+            "story/saveRef",
+            "editor/saveVerse",
+            "editor/saveLayout",
+            "editor/draft",
+            "editor/discardDraft",
         ])
     );
 }
@@ -2598,6 +3246,9 @@ fn api_errors() -> Vec<ApiError> {
 fn not_saved() -> Vec<NotSaved> {
     vec![
         NotSaved::Refused(SaveRefusal::IncoherentView),
+        NotSaved::Refused(SaveRefusal::InvalidText {
+            reason: "a comment needs text".into(),
+        }),
         NotSaved::Disk("The disk is full.".into()),
         NotSaved::ReadOnly(ReadOnlyReason::SecondWriter),
         NotSaved::LookAgain,
@@ -2687,14 +3338,14 @@ fn session_events() -> Vec<SessionEvent> {
                     },
                     CheckListRef {
                         tool: Tool::TranslationWords,
-                        unit: CheckUnit::Stories,
+                        unit: CheckUnit::Story(StoryNo::new(12).unwrap()),
                     },
                 ],
                 records: vec![RecordChange {
                     record: verse,
                     by: Some(PersonLabel {
-                        who: Who::Teammate(2),
-                        computer: Some("LAPTOP-7".into()),
+                        who: Who::Username("equipo".into()),
+                        computer: Some(Computer::Other(2)),
                     }),
                 }],
                 aspects: vec![Aspect::Conflicts],
@@ -2842,6 +3493,16 @@ fn shared_types_have_golden_json() {
             wire_samples(&suggest_statuses()),
         ),
         ("types/check-places.json", plain_samples(&check_places())),
+        (
+            "types/review.json",
+            json!({
+                "notices": wire_samples(&review_notices()),
+                "places": wire_samples(&review_places()),
+                "values": wire_samples(&review_values()),
+                "makers": wire_samples(&review_makers()),
+                "entries": wire_samples(&review_entries()),
+            }),
+        ),
         ("types/check-units.json", wire_samples(&check_units())),
         (
             "types/check-lists.json",
@@ -2897,6 +3558,7 @@ fn no_golden_file_is_left_without_its_endpoint_or_type() {
         "check-units",
         "check-lists",
         "buffer",
+        "review",
     ] {
         expected.insert(golden_dir().join(format!("types/{file}.json")));
     }

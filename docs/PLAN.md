@@ -172,6 +172,57 @@ And these (unit C6):
 - A project whose projects folder cannot keep a copy safe is copied to this computer's local
   projects folder, and Home lists it there (Q-30). tC4 has no such copy.
 
+And these (unit B4b):
+
+- While a section card holds text it has not saved, the save indicator reads "Unsaved
+  changes". tC4 4.0's indicator follows only its verse saves and reads "Saved" then, even
+  when every word of the section has just been deleted and nothing is stored. The M18 case
+  `section-empty-confirm` shows it, with a residual.
+- A paragraph or poetry line before a verse with no words stays before that verse when the
+  section is saved: the format typed on that verse's line, or the line it had when the text
+  gives it none. tC4 4.0 gives that line to the next verse with words, so a section save that
+  left a seeded book's verses undrafted moved or removed the lines the book took from its
+  source. An explicitly typed number-only line keeps its requested format through Place
+  mode and pin moves too; omitting that line keeps the stored format, while an explicitly
+  unindented line removes it. tC4's serializer omits number-only lines.
+- When a section's first verse has no words, the text a Place session writes keeps the format
+  of its first line, so a save from Place keeps it. tC4 4.0's `serializeDraft` drops it (its
+  own Save reads the session, not the text).
+- A typed span followed by an empty pin inside it keeps every other pin through Place and
+  back to Type. For `1-4 0` followed by bare `2`, pins 1, 3 and 4 stay on the word and pin 2
+  stays in the bank. tC4's serializer drops pin 1. The rebuild writes the covering span and
+  then its empty interior override, preserving verse boundaries as well as words and formats.
+
+And this (unit C2):
+
+- Section Cancel waits until the server durably removes that card's current draft. A failed
+  Cancel keeps the card and text and offers Retry, so a cancelled draft cannot return as a
+  recovery offer after a crash. tC4 4.0 closes the local card immediately and has no equivalent
+  durable draft removal.
+
+And this (unit C3):
+
+- A story text the story file cannot hold, once tC4's own clean-up has run (blank frame lines,
+  carriage returns and a title's or reference's outer spaces go, as in tC4), is not saved, and
+  the save indicator says why beside Retry while the card keeps the text: an emptied reference
+  line ("The reference needs text."), or a frame line that would read back as the picture,
+  title or reference line. tC4 4.0 puts the saved reference back into an emptied box without
+  a word, and shows only "Save failed — retry" for the others, whose retry can never succeed.
+
+And this (unit B11):
+
+- The conflict review lists, besides tC4's verses whose text two people changed, everything
+  else a project can hold in two versions (alignments, checks and comments, settings, sources
+  and books), the records that lost their place and the notices, each in a tab of its own,
+  read only until unit C7b. The tabs show only while one of them holds something, so a
+  project with verse conflicts alone shows tC4's review. tC4 4.0 keeps the newest version of
+  those records and only counts them on the sync result, so the person cannot see what was
+  set aside.
+- An aligned verse and a check decision that hold two versions show "2 versions · Review" on
+  the Align and Check screens (#791); tC4 4.0 shows nothing there.
+- A version dated more than a day after this computer's clock says the clock it was made on
+  may be wrong, and the review has a History of the verse (#78). tC4 4.0 has neither.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

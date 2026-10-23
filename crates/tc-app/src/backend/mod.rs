@@ -22,7 +22,9 @@ use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::ProjectRef;
 use tc_api::token::TokenTextError;
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::{Choice, Command, Draft, DraftField, SectionValue, UpgradePlan};
+use tc_journal::command::{
+    Choice, Command, DecisionEdit, Draft, DraftField, SectionValue, UpgradePlan,
+};
 use tc_journal::fold::{ConflictId, Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
 use tc_journal::{BookId, ChangeId, DeviceId, RecordKey, ShownToken};
@@ -328,6 +330,46 @@ impl StoreCommand {
         )
     }
 
+    /// `SaveLayout` (STORAGE §5.1): only the displayed verse's layout changes.
+    pub fn save_layout(shown: EditToken, layout: String) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::SaveLayout {
+                shown: shown.0,
+                layout,
+            },
+            listed,
+        )
+    }
+
+    /// A comment box blur adds once; later blurs continue the displayed comment.
+    pub fn add_comment(target: tc_journal::record::CommentTarget, text: String) -> Self {
+        Self::new(Command::AddComment { target, text }, Vec::new())
+    }
+
+    pub fn revise_comment(shown: EditToken, text: String) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::ReviseComment {
+                shown: shown.0,
+                text,
+            },
+            listed,
+        )
+    }
+
+    /// OBS frames and their closing reference share the store's validated command.
+    pub fn save_frame(shown: EditToken, text: String) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::SaveFrame {
+                shown: shown.0,
+                text,
+            },
+            listed,
+        )
+    }
+
     /// `AddBook` (STORAGE §5.7): a blank book seeded from the chapters and verses of
     /// `source`. It writes no record that existed, so it carries no token.
     pub fn add_book(book: BookId, source: String) -> Self {
@@ -407,6 +449,25 @@ impl StoreCommand {
         ];
         Self::new(
             Command::SaveAlignment {
+                shown: shown.0,
+                verse_shown: verse_shown.0,
+                value,
+            },
+            listed,
+        )
+    }
+
+    /// `SaveDecision` (STORAGE §5.4): one act of the checker over the decision the detail showed,
+    /// and the verse whose text it was judged against (the same token again when the check
+    /// names no verse text). The store checks only what was displayed, so a change made
+    /// meanwhile elsewhere becomes a conflict, never a refusal.
+    pub fn save_decision(shown: EditToken, verse_shown: EditToken, value: DecisionEdit) -> Self {
+        let listed = [&shown, &verse_shown]
+            .into_iter()
+            .map(|t| (t.key().clone(), t.heads().to_vec()))
+            .collect();
+        Self::new(
+            Command::SaveDecision {
                 shown: shown.0,
                 verse_shown: verse_shown.0,
                 value,
@@ -1033,6 +1094,13 @@ pub trait ProjectStore: Send + Sync + 'static {
         Err(StoreError::Other("this store has no teammates".to_owned()))
     }
 
+    /// A scripted sync ended: Door43 has `folder`'s project as `fold` holds it, so the next
+    /// teammates edit from it (B11). A store with no teammates keeps nothing.
+    #[cfg(feature = "test-hooks")]
+    fn synced(&self, folder: &ProjectRef, fold: FoldState) {
+        let _ = (folder, fold);
+    }
+
     /// tc-store's hold points, which `test/hold` arms beside the app's own (C1a); `None` for a
     /// store that has none.
     #[cfg(feature = "test-hooks")]
@@ -1068,12 +1136,28 @@ pub trait ProjectHandle: Send + Sync {
     /// commands and their queue waits. What a count test reads.
     fn counters(&self) -> StoreCounters;
 
+    /// The notices listed now (STORAGE §2.6): what the files and this computer showed that
+    /// the fold does not list. A backend with no files has none.
+    fn notices(&self) -> Vec<StoreNotice> {
+        Vec::new()
+    }
+
     /// Drafts from an earlier session that differ from what their records hold (O12).
     fn offered_drafts(&self) -> Vec<OfferedDraft>;
 
     /// *Discard* of an offered draft: its entry leaves `drafts.json` (STORAGE §5.14), written
     /// before this returns. Whether the file holds the change.
     fn discard_draft(&self, id: u64) -> bool;
+
+    /// Cancel only the current draft matching this editor's exact text, base and time.
+    /// A newer entry and offered drafts stay; true means the resulting list is durable.
+    fn discard_current_draft(
+        &self,
+        field: DraftField,
+        shown: Vec<EditToken>,
+        text: String,
+        at: tc_journal::WallTime,
+    ) -> bool;
 
     /// Takes an unsaved text in as an offered draft of `drafts.json` (APP-DESIGN §6.6),
     /// written before this returns its number; the same text of the field already offered

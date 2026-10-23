@@ -7,6 +7,10 @@
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/align.test.mjs
 //   (TC4_PERF=1 asserts the round trip's 30 ms; build the UI with --release for it)
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { newRequestId } from '../env-rust.mjs';
 import { browserTest, recordRequests, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
@@ -26,6 +30,79 @@ const chip = (page, word) => page.locator(`[data-testid="align-bank"] > button[d
 const card = (page, greek) => page.locator('[data-testid^="align-card-"]', { has: page.locator(`span[lang="el"]:text-is("${greek}")`) }).first();
 const placed = (page) => page.getByTestId('align-progress').textContent();
 const saveState = (page) => page.getByTestId('save-indicator').getAttribute('data-state');
+
+/** Hold an edit before it reaches the server, so later UI clicks certainly wait behind it. */
+async function holdNextEdit(page) {
+  let release;
+  let reached;
+  const held = new Promise((resolve) => { release = resolve; });
+  const entered = new Promise((resolve) => { reached = resolve; });
+  let first = true;
+  await page.route('**/api/v1/align/edit', async (route) => {
+    if (first) {
+      first = false;
+      reached();
+      await held;
+    }
+    await route.continue();
+  });
+  return { entered, release };
+}
+
+/** The initial fe selection is visible; its placement, another selection and its placement
+ * are then sent faster than the first reply. Both resulting links must survive. */
+async function queueTwoLinks(page) {
+  await chip(page, 'fe').click();
+  await until('fe chosen', async () => (await chip(page, 'fe').getAttribute('data-armed')) === '1');
+  const hold = await holdNextEdit(page);
+  await card(page, 'πίστιν').click();
+  await hold.entered;
+  await chip(page, 'verdad').click();
+  await card(page, 'ἀληθείας').click();
+  return hold;
+}
+
+async function expectTwoLinks(page) {
+  await until('eight words placed', async () => (await placed(page)) === '8 of 27 words placed');
+  assert.equal(await card(page, 'πίστιν').locator('button[data-word="fe"]').count(), 1);
+  assert.equal(await card(page, 'ἀληθείας').locator('button[data-word="verdad"]').count(), 1);
+}
+
+/** Leave through Home so the store checkpoints, then assert the projected links and manifest. */
+async function expectTwoStoredLinks(page, env) {
+  const closed = page.waitForResponse((response) => response.url().endsWith('/api/v1/session/close'));
+  await page.getByTestId('project-switch').click();
+  await page.getByTestId(`project-${BIBLE}`).waitFor();
+  await closed;
+  // Close schedules the checkpoint; settings waits for that folder's leave to finish.
+  await env.call('settings/viewFromHome', { project: BIBLE });
+  const folder = path.join(env.projectsDir, BIBLE);
+  const alignment = JSON.parse(fs.readFileSync(path.join(folder, 'ingredients/checking/alignments/TIT.json'), 'utf8')).chapters['1']['1'];
+  for (const [source, target] of [['πίστιν', 'fe'], ['ἀληθείας', 'verdad']]) {
+    assert.ok(alignment.alignments.some((group) => group.topWords.some((word) => word.word === source)
+      && group.bottomWords.some((word) => word.word === target)), `${source} keeps ${target} on disk`);
+    assert.ok(!alignment.wordBank.some((word) => word.word === target), `${target} is placed`);
+  }
+  const metadata = JSON.parse(fs.readFileSync(path.join(folder, 'metadata.json'), 'utf8'));
+  for (const [ingredient, expected] of Object.entries(metadata.ingredients)) {
+    const bytes = fs.readFileSync(path.join(folder, ingredient));
+    assert.equal(bytes.length, expected.size, `${ingredient}: size`);
+    assert.equal(crypto.createHash('md5').update(bytes).digest('hex'), expected.checksum.md5, `${ingredient}: checksum`);
+  }
+}
+
+/** Exercise the production close callback registered by Saves::guard_close. */
+async function installCloseBridge(context) {
+  await context.addInitScript(() => {
+    window.__canClose = true;
+    window.tc4Shell = {
+      bufferChanged: () => {},
+      takeBuffered: async () => [],
+      setCanClose: (clean) => { window.__canClose = clean; },
+      onCloseRequested: (answer) => { window.__requestClose = answer; },
+    };
+  });
+}
 
 browserTest('j5_align_steps_that_do_not_save', async () => {
   await withApp(async ({ page }) => {
@@ -208,6 +285,104 @@ browserTest('fast_clicks_in_the_page_are_queued_not_refused', async () => {
   });
 });
 
+/** A real suggestions-switch change emits status frames while page edits are pending. */
+browserTest('suggestion_refresh_keeps_queued_links_and_the_workspace', async () => {
+  await withApp(async ({ page, env }) => {
+    await openAlign(page);
+    const hold = await queueTwoLinks(page);
+    try {
+      const changed = page.waitForResponse((response) => response.url().endsWith('/api/v1/prefs/setAlignSuggestions'));
+      await page.getByTestId('align-suggest-switch').check();
+      await changed;
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await page.getByTestId('align-bank').isVisible(), true, 'refresh leaves the workspace mounted');
+      hold.release();
+      await expectTwoLinks(page);
+      await page.getByText('All checking tools').click();
+      await page.getByTestId('open-align').waitFor();
+      await page.getByTestId('open-align').click();
+      await expectTwoLinks(page);
+      await expectTwoStoredLinks(page, env);
+    } finally {
+      hold.release();
+    }
+  });
+});
+
+/** The server cannot close a verse before the queued placements even reach it. */
+browserTest('closing_the_tool_drains_queued_links_before_saving', async () => {
+  await withApp(async ({ page, env }) => {
+    await openAlign(page);
+    const requests = recordRequests(page);
+    const hold = await queueTwoLinks(page);
+    try {
+      const mark = requests.mark();
+      await page.getByText('All checking tools').click();
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      assert.equal(requests.api(mark).filter((url) => url.endsWith('/align/close')).length, 0, 'no close can overtake the first placement');
+      hold.release();
+      await page.getByTestId('open-align').waitFor();
+      await page.getByTestId('open-align').click();
+      await expectTwoLinks(page);
+      await expectTwoStoredLinks(page, env);
+    } finally {
+      hold.release();
+    }
+  });
+});
+
+/** The production shell guard waits for queued UI edits and the real store's held save.
+ * A typed flush failure is injected at the HTTP boundary, after that save, so this tests the
+ * page's failure and Retry handling; store-level failure recovery remains tc-app's proof. */
+browserTest('queued_links_hold_the_close_guard_through_save_failure_and_retry', async () => {
+  await withApp(async ({ page, env }) => {
+    await openAlign(page);
+    await page.waitForFunction(() => typeof window.__requestClose === 'function');
+    const requests = recordRequests(page);
+    const hold = await queueTwoLinks(page);
+    let first = true;
+    await page.route('**/api/v1/align/flush', async (route) => {
+      if (!first) return route.continue();
+      first = false;
+      const response = await route.fetch();
+      // Observe the real saved event before replacing the flush reply, so a later Saved
+      // event cannot hide the failure the page is about to receive.
+      await until('real save observed', () => page.evaluate(() => window.__canClose === true));
+      return route.fulfill({ response, json: { type: 'ok', value: { type: 'failed', value: { type: 'disk', value: 'The disk is full.' } } } });
+    });
+    await env.call('test/hold', { request: newRequestId(), at: 'save' });
+    try {
+      assert.equal(await page.evaluate(() => window.__canClose), false, 'pending page placements already hold the shell guard');
+      const mark = requests.mark();
+      await page.evaluate(() => {
+        window.__closeResult = 'waiting';
+        window.__requestClose().then((answer) => { window.__closeResult = answer; });
+      });
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      assert.equal(requests.api(mark).filter((url) => url.endsWith('/align/flush')).length, 0, 'flush waits for the queued placements');
+      assert.equal(await page.evaluate(() => window.__closeResult), 'waiting');
+      hold.release();
+      await expectTwoLinks(page);
+      await until('save held before durability', async () => (await saveState(page)) === 'saving');
+      assert.equal(await page.evaluate(() => window.__canClose), false);
+      assert.equal(await page.evaluate(() => window.__closeResult), 'waiting', 'the held save cannot allow close');
+      await env.call('test/release', { request: newRequestId(), at: 'save' });
+      await until('guard refused on failure', () => page.evaluate(() => window.__closeResult === false));
+      assert.equal(await saveState(page), 'error');
+      assert.equal(await page.evaluate(() => window.__canClose), false);
+      const beforeRetry = requests.mark();
+      await page.getByTestId('save-indicator').getByRole('button', { name: 'Retry' }).click();
+      await until('retry saved alignment', async () => (await saveState(page)) === 'saved');
+      assert.equal(requests.api(beforeRetry).filter((url) => url.endsWith('/align/flush')).length, 1, 'Retry flushes the server-owned aligner');
+      assert.equal(await page.evaluate(() => window.__requestClose()), true);
+      await expectTwoStoredLinks(page, env);
+    } finally {
+      hold.release();
+      await env.call('test/release', { request: newRequestId(), at: 'save' });
+    }
+  }, { init: installCloseBridge });
+});
+
 /** A verse is not left while its links cannot be saved (a full disk): the server refuses the
  * switch, and the page shows the verse that stays open, with its links, not an error. */
 browserTest('a_refused_verse_switch_keeps_the_open_verse_shown', async () => {
@@ -316,3 +491,99 @@ browserTest('align_placement_paints_within_30_ms_on_a_psalms_sized_rail', async 
     if (process.env.TC4_PERF === '1') assert.ok(p(times, 0.95) <= 30, `p95 ${p(times, 0.95).toFixed(1)} ms over the 30 ms budget`);
   });
 });
+
+browserTest('a_newer_completed_edit_prevents_an_old_saved_flush_reply_from_allowing_close', async () => {
+  await withApp(async ({ page, env }) => {
+    await openAlign(page);
+    await page.waitForFunction(() => typeof window.__requestClose === 'function');
+    await chip(page, 'fe').click();
+    await until('fe selected', async () => (await chip(page, 'fe').getAttribute('data-armed')) === '1');
+    await card(page, 'πίστιν').click();
+    await until('first link placed', async () => (await placed(page)) === '7 of 27 words placed');
+    let release;
+    let reached;
+    const held = new Promise((resolve) => { release = resolve; });
+    const entered = new Promise((resolve) => { reached = resolve; });
+    let first = true;
+    await page.route('**/api/v1/align/flush', async (route) => {
+      if (!first) return route.continue();
+      first = false;
+      const response = await route.fetch();
+      reached();
+      await held;
+      return route.fulfill({ response });
+    });
+    const requests = recordRequests(page);
+    const mark = requests.mark();
+    try {
+      await page.evaluate(() => {
+        window.__closeResult = 'waiting';
+        window.__requestClose().then((value) => { window.__closeResult = value; });
+      });
+      await entered;
+      await chip(page, 'verdad').click();
+      await until('verdad selected', async () => (await chip(page, 'verdad').getAttribute('data-armed')) === '1');
+      await card(page, 'ἀληθείας').click();
+      await expectTwoLinks(page);
+      release();
+      await until('close can finish after saving the newer edit', () => page.evaluate(() => window.__closeResult === true));
+      assert.equal(requests.api(mark).filter((url) => url.endsWith('/align/flush')).length, 2, 'an idle queue cannot make the older flush certify the newer links');
+      await expectTwoStoredLinks(page, env);
+    } finally {
+      release();
+    }
+  }, { init: installCloseBridge });
+});
+
+for (const lostReply of [false, true]) {
+  browserTest(`queued_links_survive_${lostReply ? 'a_lost_reply' : 'a_request_that_never_arrived'}_and_retry_the_exact_request`, async () => {
+    await withApp(async ({ page, env, errors, allow }) => {
+      await openAlign(page);
+      await chip(page, 'fe').click();
+      await until('fe selected', async () => (await chip(page, 'fe').getAttribute('data-armed')) === '1');
+      let release;
+      let reached;
+      const held = new Promise((resolve) => { release = resolve; });
+      const entered = new Promise((resolve) => { reached = resolve; });
+      let requests = 0;
+      let original;
+      await page.route('**/api/v1/align/edit', async (route) => {
+        requests += 1;
+        if (requests === 1) {
+          original = route.request().postDataJSON();
+          if (lostReply) await route.fetch();
+          reached();
+          await held;
+          return route.abort('failed');
+        }
+        if (requests === 2) {
+          assert.deepEqual(route.request().postDataJSON(), original, 'scope, aligner, seq, request id and edit all survive Retry');
+        }
+        return route.continue();
+      });
+      try {
+        await card(page, 'πίστιν').click();
+        await entered;
+        await chip(page, 'verdad').click();
+        await card(page, 'ἀληθείας').click();
+        release();
+        await until('the failed edit is visible', async () => (await saveState(page)) === 'error');
+        await page.getByTestId('align-edit-error').waitFor();
+        assert.equal(requests, 1, 'later clicks wait behind the unanswered request');
+        assert.equal(await page.evaluate(() => window.__canClose), false, 'the failed queue still holds the shell guard');
+        assert.equal(await page.evaluate(() => window.__requestClose()), false, 'a known failure refuses close instead of hanging');
+        await page.getByTestId('save-indicator').getByRole('button', { name: 'Retry' }).click();
+        await expectTwoLinks(page);
+        await until('retry flushed the retained links', async () => (await saveState(page)) === 'saved');
+        assert.equal(await page.getByTestId('align-edit-error').count(), 0);
+        await expectTwoStoredLinks(page, env);
+      } finally {
+        release();
+      }
+      // Chromium reports the one deliberately aborted fetch; every other error still fails.
+      const aborted = 'console: Failed to load resource: net::ERR_FAILED';
+      assert.equal(errors.filter((error) => error === aborted).length, 1);
+      allow(/^console: Failed to load resource: net::ERR_FAILED$/);
+    }, { init: installCloseBridge });
+  });
+}

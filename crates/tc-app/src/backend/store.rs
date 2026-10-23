@@ -48,8 +48,8 @@ use super::{
     BoxFuture, CheckpointReason, CommandError, CopyFailure, DraftToken, EditToken, Listing,
     OfferedDraft, OpenFailure, Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore,
     Published, ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError,
-    StoreEvent, StoreReply, Stored, SummaryFiles, SummaryStamp, SummaryWatch, UnusableFolder,
-    UnusableReason,
+    StoreEvent, StoreNotice, StoreReply, Stored, SummaryFiles, SummaryStamp, SummaryWatch,
+    UnusableFolder, UnusableReason,
 };
 use crate::clock::Clock;
 use crate::jobs::ProgressSink;
@@ -1418,6 +1418,13 @@ impl ProjectHandle for StoreHandle {
         }
     }
 
+    fn notices(&self) -> Vec<StoreNotice> {
+        self.inner()
+            .as_ref()
+            .map(|handle| handle.notices())
+            .unwrap_or_default()
+    }
+
     fn offered_drafts(&self) -> Vec<OfferedDraft> {
         self.inner()
             .as_ref()
@@ -1429,6 +1436,23 @@ impl ProjectHandle for StoreHandle {
         self.inner()
             .as_ref()
             .is_some_and(|handle| handle.discard_draft(id))
+    }
+
+    fn discard_current_draft(
+        &self,
+        field: DraftField,
+        shown: Vec<EditToken>,
+        text: String,
+        at: tc_journal::WallTime,
+    ) -> bool {
+        let draft = Draft {
+            field,
+            shown: shown.into_iter().map(|token| token.0).collect(),
+            text,
+        };
+        self.inner()
+            .as_ref()
+            .is_some_and(|handle| handle.discard_current_draft(draft, at))
     }
 
     fn offer_draft(

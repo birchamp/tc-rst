@@ -739,6 +739,11 @@ impl SessionRegistry {
                 at: session.scope.clone(),
                 event: SessionEvent::Checkpoint(outcome),
             });
+            // Home is already showing: its card was read before this checkpoint wrote the
+            // files its counts come from (a kept verse's conflict among them, J18).
+            registry.inner.bus.publish(Event::HomeCard {
+                project: session.scope.project.clone(),
+            });
             {
                 let mut slots = lock(&registry.inner.slots);
                 if let Some(slot) = slots
@@ -1002,14 +1007,29 @@ async fn pump(
     mut events: mpsc::UnboundedReceiver<StoreEvent>,
 ) {
     let mut previous = session.read();
+    session.checks().begin(previous.seq());
     while let Some(event) = events.recv().await {
         let event = match event {
             StoreEvent::Committed { seq, delta, cause } => {
+                // Logged before the UI hears of it, so the rows it asks for re-assess only
+                // what changed.
+                session.checks().note(seq, &delta);
                 let newest = session.read();
                 let me = session.handle.facts().device;
-                let labels = newest.person_labels(me);
+                let labels = std::cell::OnceCell::new();
                 let label = |device: &tc_journal::DeviceId| {
-                    labels.get(device).map(wire::scope::person_label)
+                    if *device == me {
+                        Some(wire::scope::person_label(
+                            &tc_journal::fold::PersonLabel::Mine,
+                        ))
+                    } else {
+                        // Local saves need no other device's profile. Numbering an unknown
+                        // teammate is project-wide work, deferred until a change names one.
+                        labels
+                            .get_or_init(|| newest.person_labels(me))
+                            .get(device)
+                            .map(wire::scope::person_label)
+                    }
                 };
                 let conflicts_changed = previous.conflict_counts() != newest.conflict_counts();
                 let scope = wire::scope::change_scope(

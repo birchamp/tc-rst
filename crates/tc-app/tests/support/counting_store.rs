@@ -241,6 +241,16 @@ impl ProjectHandle for CountingHandle {
         self.inner.discard_draft(id)
     }
 
+    fn discard_current_draft(
+        &self,
+        field: tc_journal::command::DraftField,
+        shown: Vec<EditToken>,
+        text: String,
+        at: tc_journal::WallTime,
+    ) -> bool {
+        self.inner.discard_current_draft(field, shown, text, at)
+    }
+
     fn offer_draft(
         &self,
         field: tc_journal::command::DraftField,

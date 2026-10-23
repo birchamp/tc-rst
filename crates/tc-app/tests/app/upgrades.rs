@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tc_api::ApiError;
-use tc_api::check::{CheckUnit, Tool};
+use tc_api::check::{CheckCollection, CheckUnit, Tool};
 use tc_api::ids::{JobId, PlanId, Scope};
 use tc_api::jobs::{JobOutcome, JobState};
 use tc_api::net::Set;
@@ -283,6 +283,8 @@ struct World {
     at: Scope,
     tn: ResourcePin,
     decided: Vec<(CheckKey, DecisionRecord)>,
+    /// The store's hold points.
+    hooks: Arc<tc_store::Hooks>,
 }
 
 /// The sample's Titus on tc-store's in-memory file system with the English notes and links
@@ -463,7 +465,8 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
         });
     }
     let fs = FaultFs::new();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let hooks = Arc::<tc_store::Hooks>::default();
+    let backend = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
     let folder = backend
         .store()
         .create(&NewProject {
@@ -531,6 +534,7 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
         at,
         tn,
         decided,
+        hooks,
     }
 }
 
@@ -834,7 +838,7 @@ async fn j12_an_upgrade_moves_one_sets_pins_and_carries_decisions_in_one_batch()
     };
     assert_eq!(
         (row.tool, row.unit),
-        (Tool::TranslationNotes, CheckUnit::Book(BookId::Titus))
+        (Tool::TranslationNotes, CheckCollection::Book(BookId::Titus))
     );
     assert_eq!((row.decisions, row.against.as_str()), (14, "en_tn"));
     let carry = row.carry.unwrap();
@@ -1184,7 +1188,7 @@ async fn j13_a_new_checking_language_moves_the_primary_set_and_keeps_the_english
     };
     assert_eq!(
         (row.tool, row.unit),
-        (Tool::TranslationNotes, CheckUnit::Book(BookId::Titus))
+        (Tool::TranslationNotes, CheckCollection::Book(BookId::Titus))
     );
     let carry = row.carry.unwrap();
     assert_eq!((carry.carried, carry.check_again), (7, 7));
@@ -1237,6 +1241,46 @@ async fn j13_a_new_checking_language_moves_the_primary_set_and_keeps_the_english
         let now = resource_of(&w, key);
         assert!(now == spanish || now == was.resource, "{}", key.check_id);
     }
+}
+
+/// Going Home closes the session behind the person, and its leave writes the derived files
+/// after `session/close` has answered: Settings opened from the card meanwhile names the
+/// checking language just chosen, never the one the files held before.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn settings_from_home_right_after_a_change_name_the_new_checking_language() {
+    let w = world(0, 0).await;
+    install_spanish_suite(&w).await;
+    let view = plan_gateway(&w, 71).await;
+    assert_eq!(
+        ok(&w.t.app, &confirm(&w, view.plan, 72)).await,
+        PlanApplied::Applied
+    );
+    w.hooks.hold(tc_store::Point::BeforeCheckpoint);
+    ok(
+        &w.t.app,
+        &tc_api::session::Close {
+            request: rid(73),
+            at: w.at.clone(),
+        },
+    )
+    .await;
+    let app = w.t.app.clone();
+    let mut settings = tokio::spawn(async move {
+        ok(
+            &app,
+            &tc_api::settings::ViewFromHome {
+                project: super::common::folder(PROJECT),
+            },
+        )
+        .await
+    });
+    if let Ok(early) = tokio::time::timeout(Duration::from_millis(300), &mut settings).await {
+        panic!("Settings answered before the leave wrote the pins: {early:?}");
+    }
+    w.hooks.release(tc_store::Point::BeforeCheckpoint);
+    let current = settings.await.unwrap().gateway.current.unwrap();
+    assert_eq!(current.gateway, spanish());
+    assert_eq!(current.autonym, "Español (Latinoamérica)");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1347,7 +1391,7 @@ async fn a_project_whose_numbering_is_unknown_cannot_carry_its_decisions_over() 
         (blocked.tool, blocked.unit, blocked.reason),
         (
             Tool::TranslationNotes,
-            CheckUnit::Book(BookId::Titus),
+            CheckCollection::Book(BookId::Titus),
             tc_api::resources::BlockReason::VersificationUnknown
         )
     );
@@ -1949,7 +1993,7 @@ async fn a_tw_only_change_that_drops_a_decided_article_is_counted() {
     };
     assert_eq!(
         (row.tool, row.unit),
-        (Tool::TranslationWords, CheckUnit::Book(BookId::Titus))
+        (Tool::TranslationWords, CheckCollection::Book(BookId::Titus))
     );
     assert_eq!(
         row.decisions as usize, citing_god,

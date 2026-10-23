@@ -472,6 +472,15 @@ fn settings_button(actions: &Actions, card: Signal<Option<HomeCard>>) -> impl In
 const CONFLICT_WARN: &str =
     "color: #7A4A06; font-weight: var(--fw-heavy); font-family: var(--font-ui);";
 
+/// The book of a card's first verse conflict, where its review opens (tC4
+/// `openProjectConflicts`).
+fn first_book(card: Signal<Option<HomeCard>>) -> Option<tc_core::BookId> {
+    card.with_untracked(|c| match c.as_ref().map(|c| &c.books) {
+        Some(Known::Known(books)) => books.iter().find(|b| b.conflicts > 0).map(|b| b.book),
+        _ => None,
+    })
+}
+
 /// The card's conflict count (#679): nothing while unknown or none.
 fn conflicts_chip(
     actions: &Actions,
@@ -498,7 +507,7 @@ fn conflicts_chip(
                     data-testid=format!("conflicts-{project}")
                     data-count=count.clone()
                     aria-label=move || t(keys::home::CONFLICTS_LABEL, &[("n", &n.to_string())])
-                    on:click=move |_| actions.open_project_conflicts(project_open.clone())
+                    on:click=move |_| actions.open_project_conflicts(project_open.clone(), first_book(card), tc_api::conflicts::ReviewTab::Text)
                     style=style
                 >
                     {branch_icon()}

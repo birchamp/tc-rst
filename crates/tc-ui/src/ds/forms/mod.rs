@@ -67,13 +67,18 @@ fn bare(mark: impl IntoView + 'static, style: Css, attrs: Attrs) -> impl IntoVie
 /// handlers.
 #[component]
 pub fn DropZone(
-    #[prop(optional, into)] title: Option<String>,
+    #[prop(optional, into)] title: MaybeProp<String>,
     #[prop(optional, into)] hint: Option<String>,
+    #[prop(optional, into)] disabled: Signal<bool>,
     #[prop(optional)] on_click: Option<Callback<web_sys::Event>>,
     #[prop(optional)] style: Css,
     #[prop(optional)] attrs: Attrs,
 ) -> impl IntoView {
-    let title = title.unwrap_or_else(|| "Drop your file here, or browse".into());
+    let title = move || {
+        title
+            .get()
+            .unwrap_or_else(|| "Drop your file here, or browse".into())
+    };
     let s = css! {
         "width": "100%",
         "padding": "34px 20px",
@@ -89,6 +94,7 @@ pub fn DropZone(
         border: Some(Edge::DashedTone.into()),
         radius: Some(Corner::Xl.into()),
         interactive: Some(Interactive::Choice),
+        disabled,
         on_click,
         style: s.into(),
         attrs,
@@ -114,14 +120,20 @@ pub fn FilterChip(
     #[prop(optional, into)] mark: Option<String>,
     #[prop(optional)] tone: Tone,
     #[prop(optional)] on_click: Option<Callback<web_sys::Event>>,
-    #[prop(optional)] style: Css,
+    /// May change while the chip is on screen, as a choice's look follows its selection.
+    #[prop(optional, into)]
+    style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
     /// Redrawn when the selection changes the label's colour.
     #[prop(optional)]
     children: Option<ChildrenFn>,
 ) -> impl IntoView {
     let solid = Signal::derive(move || tone == Tone::Ocean && selected.get());
-    let s = css! { "padding": "7px 14px", "cursor": "pointer", "font": "inherit" }.merge(&style);
+    let s = Signal::derive(move || {
+        style.with(|style| {
+            css! { "padding": "7px 14px", "cursor": "pointer", "font": "inherit" }.merge(style)
+        })
+    });
     let prefix = mark
         .filter(|m| !m.is_empty())
         .map(|m| format!("{m} "))
@@ -152,7 +164,7 @@ pub fn FilterChip(
         interactive: Some(Interactive::Choice),
         selected,
         on_click,
-        style: s.into(),
+        style: s,
         attrs,
         children: Some(Box::new(move || text.into_any())),
         ..Default::default()

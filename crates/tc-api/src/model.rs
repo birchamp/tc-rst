@@ -4,9 +4,13 @@
 //! [`draft`] is the draft machine of C1b. [`ArticleBlock`] is a block of help text as the helps
 //! panes draw it: tc-helps renders it on the server (`tc_helps::blocks`, a port of tC4's
 //! `renderArticleBlocks`), and the UI cuts a long note's preview with [`take_spans`], tC4's
-//! `takeSpans`. A differential test in tc-app holds this copy to tc-helps' own.
+//! `takeSpans`. A differential test in tc-app holds this copy to tc-helps' own. [`print`] is the
+//! Community Checking preview's pages, tc-export's print parts on pages the UI measures (B8).
 
 pub mod draft;
+pub mod print;
+pub mod section;
+pub mod selection;
 
 use serde::{Deserialize, Serialize};
 
@@ -85,6 +89,27 @@ impl ArticleBlock {
     pub fn text(&self) -> String {
         self.spans.iter().map(|s| s.text.as_str()).collect()
     }
+}
+
+/// JavaScript's `\s`: what tC4's `split(/\s+/)` and `trim()` treat as space. Rust's
+/// `char::is_whitespace` adds U+0085 and leaves out U+FEFF.
+pub fn js_space(c: char) -> bool {
+    matches!(
+        c,
+        '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r' | ' ' | '\u{A0}' | '\u{1680}' | '\u{2000}'
+            ..='\u{200A}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{202F}'
+                | '\u{205F}'
+                | '\u{3000}'
+                | '\u{FEFF}'
+    )
+}
+
+/// JavaScript's `trim()`.
+pub fn js_trim(text: &str) -> &str {
+    text.trim_matches(js_space)
 }
 
 /// The length of `text` as JavaScript counts it: UTF-16 code units, the unit tC4's preview

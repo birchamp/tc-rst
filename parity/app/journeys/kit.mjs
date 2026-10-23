@@ -68,7 +68,7 @@ export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
  * (`en-pins` for B3, `shared` for B10). `init(context, env)` runs before the page
  * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass. With
  * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`). With `hooks`, the page is the
- * test build's (`TC4_UI_HOOKS`), whose verse card saves through `test/saveVerse` (B4a).
+ * test build's (`TC4_UI_HOOKS`), which also includes the no-loss probe. Translate saves use production endpoints in either build.
  */
 export async function withApp(body, { locale = 'en', probe = false, hooks = false, init, seed, door43: fake = false, scenario: named = 'sample' } = {}) {
   const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });

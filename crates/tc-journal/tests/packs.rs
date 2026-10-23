@@ -455,6 +455,22 @@ fn line_spans(bytes: &[u8]) -> Vec<(usize, usize)> {
     spans
 }
 
+#[test]
+fn cancelled_bit_flips_leave_a_line_available_for_salvage() {
+    let pack = seal(&spec(local(9)), &changes(2)).unwrap().packs.remove(0);
+    let intact = reread(&pack);
+    let spans = line_spans(&pack.bytes);
+    let mut damaged = pack.bytes.clone();
+    let restored = spans[0].0 + 1;
+    let corrupted = spans[1].0 + 1;
+    for (at, bit) in [(restored, 2), (restored, 2), (corrupted, 5)] {
+        damaged[at] ^= 1 << bit;
+    }
+    let read = read_pack(&pack.path.to_string(), &damaged, project());
+    assert!(matches!(read.status, PackStatus::Damaged(_)));
+    assert_eq!(read.entries, intact.entries[..1]);
+}
+
 /// An intact pack passes P2 to P4; a damaged one salvages exactly the lines whose bytes
 /// (and the line feeds around them) are intact, and nothing else.
 #[test]
@@ -489,11 +505,9 @@ fn pack_round_trip_and_salvage() {
             );
 
             let mut damaged = pack.bytes.clone();
-            let mut touched = BTreeSet::new();
             for (at, bit) in &flips {
                 let at = at.index(damaged.len());
                 damaged[at] ^= 1 << bit;
-                touched.insert(at);
             }
             if damaged == pack.bytes {
                 return Ok(());
@@ -508,7 +522,8 @@ fn pack_round_trip_and_salvage() {
             let expected: BTreeSet<ChangeId> = spans
                 .iter()
                 .zip(intact.entries.iter())
-                .filter(|((from, to), _)| touched.range(from..=to).next().is_none())
+                // Repeated flips can restore a byte; only net damage invalidates its line.
+                .filter(|((from, to), _)| damaged[*from..=*to] == pack.bytes[*from..=*to])
                 .map(|(_, entry)| entry.id())
                 .collect();
             let salvaged: BTreeSet<ChangeId> = read.entries.iter().map(Verified::id).collect();

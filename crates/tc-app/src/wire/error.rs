@@ -28,6 +28,9 @@ pub fn command_error(error: CommandError) -> Result<ApiError, UnwordedRefusal> {
         CommandError::Refused(RuleRefusal::Incoherent(_)) => {
             ApiError::NotSaved(NotSaved::Refused(SaveRefusal::IncoherentView))
         }
+        CommandError::Refused(RuleRefusal::Text(reason)) => {
+            ApiError::NotSaved(NotSaved::Refused(SaveRefusal::InvalidText { reason }))
+        }
         CommandError::Refused(RuleRefusal::LastBook) => {
             ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook))
         }

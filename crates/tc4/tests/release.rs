@@ -16,10 +16,9 @@ use tempfile::TempDir;
 /// tag of the fixture backend's seed (feature `fixture-backend`). Since B1b `tc4 serve
 /// --scenario` calls the seed in a build with the feature, so the tag and the flag guard the
 /// release binary as well as `release_build_resolves_no_fixture_backend_and_no_test_hook`.
-const HOOK_TEXT: [&str; 16] = [
+const HOOK_TEXT: [&str; 15] = [
     "test/crash",
     "test/fieldStore",
-    "test/saveVerse",
     "test/fieldLog",
     "test/fieldDraft",
     "test/echo",
@@ -184,6 +183,20 @@ fn release_has_no_test_hooks() {
         assert_eq!(tc4.api(path, "{}").status, 404, "{path}");
     }
     assert_eq!(tc4.api("app/hello", "{}").status, 200);
+    // Production Translate routes exist without hooks and reject incomplete typed requests.
+    for path in [
+        "editor/saveVerse",
+        "editor/saveLayout",
+        "editor/saveSection",
+        "editor/draft",
+        "editor/discardDraft",
+    ] {
+        let reply = tc4.api(path, "{}");
+        assert_eq!(reply.status, 200, "{path}");
+        let body = reply.json();
+        assert_eq!(body["type"], "err", "{path}: {body}");
+        assert_eq!(body["value"]["type"], "badRequest", "{path}: {body}");
+    }
     assert_eq!(tc4.quit().code(), Some(0));
     drop(tc4);
     std::thread::sleep(Duration::from_millis(50));

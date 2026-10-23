@@ -1015,6 +1015,75 @@ impl FoldState {
             }
             Collection::Stories => (self.story_attached().collect(), None),
         };
+        self.decisions_in(tool, collection, keys, text)
+    }
+
+    /// [`Self::check_texts`] of `chapters` of one book only: a target elsewhere has no text
+    /// here. What a Check screen re-assesses a decision it shows under another key with, when
+    /// a change names that chapter, without the rest of the book's text (PERF:80).
+    pub fn check_texts_at(&self, book: BookId, chapters: &[u16]) -> CheckTexts<'_> {
+        CheckTexts {
+            state: self,
+            book: Some((book, self.chapters_text(book, chapters))),
+        }
+    }
+
+    /// The projected text of `chapters` of a book, as [`Self::book_text`] projects each.
+    fn chapters_text(&self, book: BookId, chapters: &[u16]) -> BookText {
+        let rewound = rewound_batches(self, book);
+        BookText {
+            chapters: chapters
+                .iter()
+                .map(|&c| (c, self.chapter_text(book, c, &rewound)))
+                .collect(),
+            facts: Default::default(),
+        }
+    }
+
+    /// [`Self::decisions`] of the decisions `keys` names, each read against the text of the
+    /// chapters `chapters` of its book, by the same rule: what a Check screen re-assesses when a
+    /// change names a decision or the verse it was judged against, without the rest of the
+    /// book's text (PERF:79-80). A key of another tool or collection, a key with no decision,
+    /// and, for a book, a target outside `chapters` read as [`Self::decisions`] would not
+    /// show them: absent, or with no text.
+    pub fn decisions_at(
+        &self,
+        tool: ToolId,
+        collection: Collection,
+        keys: &[RecordKey],
+        chapters: &[u16],
+    ) -> Vec<ProjectedDecision> {
+        let text = match collection {
+            Collection::Book(book) => {
+                if !self.book(book).projects() {
+                    return Vec::new();
+                }
+                Some(self.chapters_text(book, chapters))
+            }
+            Collection::Stories => None,
+        };
+        let keys = keys.iter().filter_map(|key| self.key_idx(key)).collect();
+        self.decisions_in(tool, collection, keys, text)
+    }
+
+    /// [`Self::decisions`] of one story's frames: what a story's Check session opens with. It
+    /// reads that story's decisions only, never the other forty-nine's.
+    pub fn story_decisions(&self, tool: ToolId, story: StoryNo) -> Vec<ProjectedDecision> {
+        let keys = self
+            .story_attached
+            .get(&story)
+            .map(|keys| keys.iter().copied().collect())
+            .unwrap_or_default();
+        self.decisions_in(tool, Collection::Stories, keys, None)
+    }
+
+    fn decisions_in(
+        &self,
+        tool: ToolId,
+        collection: Collection,
+        keys: Vec<KeyIdx>,
+        text: Option<BookText>,
+    ) -> Vec<ProjectedDecision> {
         let resolved = self
             .pins
             .answer(tool, collection)
@@ -1995,20 +2064,36 @@ fn slot_json(j: &Json) -> Value {
     Value::Object(m)
 }
 
-/// Splices a story's title, frames and reference into its template (see
-/// `FoldState::story_markdown`). Lines keep their terminators; a part with no record keeps
-/// the template's text.
+/// tC4's `TITLE_RE` (`journal/story.mjs:15`): `# `, ASCII digits, `.`, then nothing or a space
+/// and the title. Gives the digits and the title, which is empty for `# 2.`. A line of another
+/// form is none.
+fn title_parts(line: &str) -> Option<(&str, &str)> {
+    let rest = line.strip_prefix("# ")?;
+    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+    if digits == 0 {
+        return None;
+    }
+    let after = rest[digits..].strip_prefix('.')?;
+    let title = if after.is_empty() {
+        ""
+    } else {
+        after.strip_prefix(' ')?
+    };
+    Some((&rest[..digits], title))
+}
+
 /// The template's text of frame `n` of a story, as [`splice_story`] cuts the template: frame
-/// 0 is its first `# ` line without the `# `, frame n the paragraph after its n-th image
-/// line, without the paragraph's last line ending.
+/// 0 is the title of its first `# ` line (what follows `# N. `, as tC4 reads it; the number
+/// is the line's own), frame n the paragraph after its n-th image line, without the
+/// paragraph's last line ending.
 pub(crate) fn template_frame(base: &str, n: u16) -> Option<String> {
     let lines: Vec<&str> = base.split_inclusive('\n').collect();
     let body = |line: &str| line.trim_end_matches(['\n', '\r']).to_owned();
     if n == 0 {
-        return lines
-            .iter()
-            .map(|l| body(l))
-            .find_map(|b| b.strip_prefix("# ").map(str::to_owned));
+        return lines.iter().map(|l| body(l)).find_map(|b| {
+            let rest = b.strip_prefix("# ")?;
+            Some(title_parts(&b).map_or(rest, |(_, title)| title).to_owned())
+        });
     }
     let reference_at = lines.iter().rposition(|l| {
         let b = body(l);
@@ -2051,6 +2136,9 @@ pub(crate) fn template_frame(base: &str, n: u16) -> Option<String> {
     None
 }
 
+/// Splices a story's title, frames and reference into its template (see
+/// `FoldState::story_markdown`). Lines keep their terminators; a part with no record keeps
+/// the template's text.
 pub(crate) fn splice_story(
     base: &str,
     frame: impl Fn(u16) -> Option<String>,
@@ -2082,7 +2170,16 @@ pub(crate) fn splice_story(
             title_done = true;
             match frame(0) {
                 Some(title) => {
+                    // tC4's `writeTitle`: `# N. title`, or `# N.` for an empty one; the
+                    // number stays the line's own.
                     out.push_str("# ");
+                    if let Some((number, _)) = title_parts(&text) {
+                        out.push_str(number);
+                        out.push('.');
+                        if !title.is_empty() {
+                            out.push(' ');
+                        }
+                    }
                     out.push_str(&title);
                     out.push_str(terminator(line));
                 }

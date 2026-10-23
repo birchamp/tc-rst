@@ -13,11 +13,13 @@ pub mod app_ctx;
 pub(crate) mod bridge;
 pub mod check;
 mod create;
+mod fix;
 pub(crate) mod js;
 mod panic;
 #[cfg(feature = "test-hooks")]
 mod probe;
 mod query;
+mod review;
 mod saves;
 mod shell;
 mod sources;
@@ -531,6 +533,7 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     }
     // The writers first, then the buffer's entries of this run come back as fields (AD22).
     let saves = Saves::new(api.clone(), state.clone(), Rc::clone(busy));
+    check::register_writers(&saves);
     #[cfg(feature = "test-hooks")]
     let probe = probe::requested();
     #[cfg(not(feature = "test-hooks"))]
@@ -539,7 +542,6 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     if probe {
         probe::register(&saves);
     }
-    #[cfg(feature = "test-hooks")]
     translate::register(&saves);
     saves.restore(&hello);
     saves.guard_close();

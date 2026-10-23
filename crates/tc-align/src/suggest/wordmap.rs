@@ -260,6 +260,41 @@ impl Run<'_> {
 const SOURCE_NGRAM_LENGTH: usize = 3;
 const TARGET_NGRAM_LENGTH: usize = 5;
 
+/// A sentence-only score belongs to its n-gram, independently of the candidate on
+/// the other side. Derive it once before the source/target product is scored.
+struct NgramMetrics {
+    frequency: f64,
+    lemma_frequency: Option<f64>,
+    position: f64,
+    words: f64,
+    characters: f64,
+}
+
+fn metrics(sentence: &[Token], grams: &[Ngram], frequencies: &Frequencies) -> Vec<NgramMetrics> {
+    grams
+        .iter()
+        .map(|gram| {
+            // Parser n-grams are nonempty runs inside this sentence.
+            let tokens = &sentence[gram.start..gram.start + gram.len];
+            NgramMetrics {
+                frequency: frequencies.read(&gram.keys.key),
+                lemma_frequency: gram
+                    .keys
+                    .lemma_key
+                    .as_ref()
+                    .map(|key| frequencies.read(key)),
+                position: (1.0 + tokens[0].position as f64) / tokens[0].sentence_token_len as f64,
+                words: tokens.len() as f64 / tokens[0].sentence_token_len as f64,
+                characters: tokens
+                    .iter()
+                    .map(|token| utf16_len(&token.text))
+                    .sum::<usize>() as f64
+                    / tokens[0].sentence_char_len as f64,
+            }
+        })
+        .collect()
+}
+
 fn divide_safe(dividend: f64, divisor: f64) -> f64 {
     if divisor == 0.0 {
         0.0
@@ -300,6 +335,19 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
         sentence_targets.increment(&n.keys.key, n.keys.lemma_key.as_deref());
     }
 
+    let source_metrics = metrics(source, &source_ngrams, &sentence_sources);
+    let target_metrics = metrics(target, &target_ngrams, &sentence_targets);
+    let empty_metrics = NgramMetrics {
+        frequency: sentence_targets.read(&empty.key),
+        lemma_frequency: empty
+            .lemma_key
+            .as_ref()
+            .map(|key| sentence_targets.read(key)),
+        position: 0.0,
+        words: 0.0,
+        characters: 0.0,
+    };
+
     let mut predictions = Vec::with_capacity(source_ngrams.len() * (target_ngrams.len() + 1));
     for (s, source_ngram) in source_ngrams.iter().enumerate() {
         let targets = target_ngrams
@@ -327,6 +375,10 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
     let mut frequencies = Vec::with_capacity(predictions.len());
     for p in &predictions {
         let alignment = memory.alignments.read(&p.key);
+        if alignment == 0.0 {
+            frequencies.push((0.0, 0.0, 0.0));
+            continue;
+        }
         let source_frequency = memory.sources.read(&source_ngrams[p.source].keys.key);
         let target_frequency = memory.targets.read(&target_keys(p).key);
         frequencies.push((alignment, source_frequency, target_frequency));
@@ -335,7 +387,13 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
     let filtered: Vec<f64> = predictions
         .iter()
         .zip(&frequencies)
-        .map(|(p, (alignment, _, _))| divide_safe(*alignment, sums[p.key.as_str()]))
+        .map(|(p, (alignment, _, _))| {
+            if *alignment == 0.0 {
+                0.0
+            } else {
+                divide_safe(*alignment, sums[p.key.as_str()])
+            }
+        })
         .collect();
     for ((p, (alignment, source_frequency, target_frequency)), filtered) in
         predictions.iter_mut().zip(frequencies).zip(filtered)
@@ -354,6 +412,10 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
             continue;
         };
         let alignment = memory.alignments.read(lemma);
+        if alignment == 0.0 {
+            lemma_frequencies.push(Some((0.0, 0.0, 0.0)));
+            continue;
+        }
         let s = &source_ngrams[p.source].keys;
         let t = target_keys(p);
         let source_frequency = memory
@@ -369,7 +431,10 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
         .iter()
         .zip(&lemma_frequencies)
         .map(|(p, f)| match f {
-            Some((alignment, _, _)) => divide_safe(*alignment, lemma_sums[p.key.as_str()]),
+            Some((alignment, _, _)) if *alignment != 0.0 => {
+                divide_safe(*alignment, lemma_sums[p.key.as_str()])
+            }
+            Some(_) => 0.0,
             None => 0.0,
         })
         .collect();
@@ -388,15 +453,16 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
     // The per-prediction algorithms.
     for p in &mut predictions {
         let s = &source_ngrams[p.source];
-        let s_tokens = &source[s.start..s.start + s.len];
         let t = p.target.map(|t| &target_ngrams[t]);
         let t_keys = t.map_or(&empty, |t| &t.keys);
         let t_tokens: &[Token] = t.map_or(&[], |t| &target[t.start..t.start + t.len]);
+        let sm = &source_metrics[p.source];
+        let tm = p.target.map_or(&empty_metrics, |at| &target_metrics[at]);
 
         // AlignmentRelativeOccurrence.
         if let Some(t) = t {
-            let y_range = sentence_sources.read(s.keys.lemma_key.as_deref().unwrap_or(&s.keys.key));
-            let x_range = sentence_targets.read(t.keys.lemma_key.as_deref().unwrap_or(&t.keys.key));
+            let y_range = sm.lemma_frequency.unwrap_or(sm.frequency);
+            let x_range = tm.lemma_frequency.unwrap_or(tm.frequency);
             let y = f64::from(s.occurrence);
             let x = f64::from(t.occurrence);
             let x_prime =
@@ -412,11 +478,7 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
         // AlignmentPosition.
         let mut position = 0.0;
         if !t_tokens.is_empty() {
-            let source_position = 1.0 + s_tokens[0].position as f64;
-            let target_position = 1.0 + t_tokens[0].position as f64;
-            let source_relative = source_position / s_tokens[0].sentence_token_len as f64;
-            let target_relative = target_position / t_tokens[0].sentence_token_len as f64;
-            position = 1.0 - (source_relative - target_relative).abs();
+            position = 1.0 - (sm.position - tm.position).abs();
         }
         if let Some(relative) = p.scores.relative_occurrence {
             position *= relative;
@@ -437,25 +499,14 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
             p.scores.ngram_length = 0.0;
             p.scores.character_length = 0.0;
         } else {
-            let primary = s_tokens.len() as f64 / s_tokens[0].sentence_token_len as f64;
-            let secondary = t_tokens.len() as f64 / t_tokens[0].sentence_token_len as f64;
-            p.scores.ngram_length = (1.0 - (primary - secondary).abs()).powf(5.0);
-            let chars =
-                |tokens: &[Token]| tokens.iter().map(|t| utf16_len(&t.text)).sum::<usize>() as f64;
-            let primary = chars(s_tokens) / s_tokens[0].sentence_char_len as f64;
-            let secondary = chars(t_tokens) / t_tokens[0].sentence_char_len as f64;
-            p.scores.character_length = (1.0 - (primary - secondary).abs()).powf(5.0);
+            p.scores.ngram_length = (1.0 - (sm.words - tm.words).abs()).powf(5.0);
+            p.scores.character_length = (1.0 - (sm.characters - tm.characters).abs()).powf(5.0);
         }
 
         // AlignmentOccurrences, against the sentence index.
-        p.scores.alignment_occurrences = similarity(
-            sentence_sources.read(&s.keys.key),
-            sentence_targets.read(&t_keys.key),
-        );
-        p.scores.lemma_alignment_occurrences = match (&s.keys.lemma_key, &t_keys.lemma_key) {
-            (Some(sl), Some(tl)) => {
-                similarity(sentence_sources.read(sl), sentence_targets.read(tl))
-            }
+        p.scores.alignment_occurrences = similarity(sm.frequency, tm.frequency);
+        p.scores.lemma_alignment_occurrences = match (sm.lemma_frequency, tm.lemma_frequency) {
+            (Some(source), Some(target)) => similarity(source, target),
             _ => 0.0,
         };
 

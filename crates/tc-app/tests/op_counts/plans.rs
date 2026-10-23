@@ -247,7 +247,7 @@ async fn plan_cost_follows_affected_books() {
                     && view
                         .rows
                         .iter()
-                        .all(|r| r.unit == tc_api::check::CheckUnit::Book(PSALMS)),
+                        .all(|r| r.unit == tc_api::check::CheckCollection::Book(PSALMS)),
                 "{view:?}"
             );
         },

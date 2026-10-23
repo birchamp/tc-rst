@@ -31,8 +31,21 @@ pub struct ConflictMarker {
 #[serde(rename_all = "camelCase")]
 pub struct PersonLabel {
     pub who: Who,
-    /// The computer's name, when the same person works on more than one.
-    pub computer: Option<String>,
+    /// Which computer made the version, when versions from two computers carry one person's
+    /// label (STORAGE §8.5).
+    pub computer: Option<Computer>,
+}
+
+/// A computer of one person, as the review tells their versions apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum Computer {
+    /// This computer.
+    This,
+    /// "Computer 2": another computer of the person, numbered from 1 among the person's
+    /// computers other than this one, in the order of their ids.
+    Other(u16),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

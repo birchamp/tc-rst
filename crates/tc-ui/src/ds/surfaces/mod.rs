@@ -380,6 +380,10 @@ pub fn Modal(
     #[prop(into, default = Signal::from(true))]
     closable: Signal<bool>,
     #[prop(optional)] footer: Option<ChildrenFn>,
+    /// Whether the footer row is drawn; always when not given. tC4 passes `footer={null}` on a
+    /// step with no buttons (Add a book's first step), and the dialog then has no footer row.
+    #[prop(optional, into)]
+    footer_shown: Option<Signal<bool>>,
     /// Extra attributes of the scrim.
     #[prop(optional)]
     attrs: Attrs,
@@ -414,10 +418,13 @@ pub fn Modal(
                 <Stack direction=Direction::Column gap=16 style=css! { "padding": "18px 24px 4px" }>
                     {children.map(|c| c())}
                 </Stack>
-                {footer.map(|f| view! {
-                    <Stack direction=Direction::Row gap=10 justify=Justify::End style=css! { "padding": "18px 24px 22px" }>
-                        {f()}
-                    </Stack>
+                {footer.map(|f| move || {
+                    let f = f.clone();
+                    footer_shown.is_none_or(|shown| shown.get()).then(move || view! {
+                        <Stack direction=Direction::Row gap=10 justify=Justify::End style=css! { "padding": "18px 24px 22px" }>
+                            {f()}
+                        </Stack>
+                    })
                 })}
             </Surface>
         }

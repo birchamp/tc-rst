@@ -11,7 +11,7 @@
 //! These tests use real time and a multi-thread runtime: the store writes its file on the
 //! blocking pool. The page's own clock is virtual.
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -19,20 +19,29 @@ use proptest::prelude::*;
 use tc_api::buffer::{
     BufferEntry, BufferKey, BufferLine, FieldKey, FieldKind, FieldPlace, SentSave,
 };
-use tc_api::ids::{ProjectId, ProjectRef, RequestId, WallMs};
+use tc_api::editor::{AddComment, CommentTarget, Draft, DraftField, SaveVerse};
+use tc_api::ids::{ProjectId, ProjectRef, RequestId, Scope, WallMs};
+use tc_api::shown::Shown;
+use tc_api::story::{SaveFrame, SaveRef};
 use tc_api::test::{
-    Crash, CrashPoint, FieldDraft, FieldLogView, FieldStore, Hold, HoldPoint, Release, TokenBase,
+    Crash, CrashPoint, FieldDraft, FieldLogView, FieldStore, Hold, HoldPoint, Release, StoredText,
+    TokenBase,
 };
-use tc_api::write::Ack;
-use tc_api::{ApiError, Reply, ShownToken};
-use tc_app::{Answer, App, Then};
+use tc_api::write::{Ack, SaveRefusal};
+use tc_api::{ApiError, NotSaved, Reply, ShownToken};
+use tc_app::config::ProjectsFolder;
+use tc_app::wire::token::shown;
+use tc_app::{Answer, App, StoreChoice, Then};
+use tc_journal::record::VerseValue;
+use tc_journal::{ChangeId, FrameNo, Record, RecordKey};
 use tc_ui::app::buffer::{self, MemStore};
 use tc_ui::app::client::{CallError, Transport};
-use tc_ui::app::save::classify::{Answered, classify};
+use tc_ui::app::save::classify::{Answered, SaveError, classify};
 use tc_ui::app::save::{Command, FieldSave, FieldScope, Pair, ResendCheck, SaveMachine, Source};
 use tokio::task::JoinHandle;
 
-use super::common::{TestApp, field_log};
+use super::common::{Parts, TestApp, field_log, post};
+use crate::store_world::{StoreWorld, add_obs, progress, store_world, tit};
 
 const FIELD: &str = "probe-a";
 const TEXTS: [&str; 7] = [
@@ -112,6 +121,95 @@ struct World {
     last_typed: String,
     /// Each clean `Ack`'s text and the field's value at that moment.
     clean_checks: Vec<(String, String)>,
+    production: Option<ProjectField>,
+}
+
+/// The production mode reads its audit from the actual journal, independently of Acks.
+struct ProjectField {
+    _world: StoreWorld,
+    at: Scope,
+    key: BufferKey,
+    baseline: HashSet<ChangeId>,
+    initial_heads: Vec<ChangeId>,
+    requests: HashMap<RequestId, (String, Vec<ChangeId>)>,
+    record: RecordKey,
+    kind: ProductionKind,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ProductionKind {
+    Verse,
+    Frame,
+    Title,
+    Reference,
+    Comment,
+}
+
+impl ProductionKind {
+    fn path(self) -> &'static str {
+        match self {
+            Self::Verse => "editor/saveVerse",
+            Self::Frame | Self::Title => "story/saveFrame",
+            Self::Reference => "story/saveRef",
+            Self::Comment => "editor/addComment",
+        }
+    }
+
+    fn draft(self) -> DraftField {
+        match self {
+            Self::Verse => DraftField::Words,
+            Self::Frame | Self::Title => DraftField::Frame,
+            Self::Reference => DraftField::StoryRef,
+            Self::Comment => DraftField::UserComment {
+                target: Self::comment_target(),
+            },
+        }
+    }
+
+    fn comment_target() -> CommentTarget {
+        CommentTarget::Verse {
+            book: tc_core::BookId::Titus,
+            chapter: 1,
+            verse: 12,
+        }
+    }
+}
+
+fn record_text(record: Record) -> String {
+    match record {
+        Record::Verse {
+            value: VerseValue::Text { words, .. },
+            ..
+        } => words,
+        Record::Frame { value, .. } => value,
+        Record::StoryRef { value, .. } => value.unwrap_or_default(),
+        Record::Comment { value, .. } => value.text,
+        other => panic!("a saved text field must stay text: {other:?}"),
+    }
+}
+
+fn snapshot_text(snapshot: &tc_app::backend::Snapshot, key: &RecordKey) -> String {
+    if let Some(record) = snapshot.fold().projected(key) {
+        return record_text(record);
+    }
+    // The imported OBS fixture keeps untouched text in StoryBase until that field's
+    // first save. The displayed value is still its exact rendered frame or reference.
+    let (RecordKey::Frame(story, _) | RecordKey::StoryRef(story)) = key else {
+        panic!("a missing text record has no displayed fallback")
+    };
+    let bytes = snapshot
+        .fold()
+        .render(&tc_journal::fold::DerivedFile::Story(*story))
+        .unwrap();
+    let rendered = tc_obs::story::parse_story(std::str::from_utf8(&bytes).unwrap()).unwrap();
+    match key {
+        RecordKey::Frame(_, FrameNo(0)) => rendered.title,
+        RecordKey::Frame(_, FrameNo(frame)) => {
+            rendered.frames[usize::from(*frame) - 1].text.clone()
+        }
+        RecordKey::StoryRef(_) => rendered.reference.unwrap_or_default(),
+        _ => unreachable!(),
+    }
 }
 
 fn store_body(sent: &SentSave, base: &[ShownToken]) -> Vec<u8> {
@@ -137,7 +235,126 @@ impl World {
             now: 0.0,
             last_typed: String::new(),
             clean_checks: Vec::new(),
+            production: None,
         }
+    }
+
+    async fn verse() -> Self {
+        Self::project_field(ProductionKind::Verse).await
+    }
+
+    async fn project_field(kind: ProductionKind) -> Self {
+        let world = store_world();
+        let folder = match kind {
+            ProductionKind::Frame | ProductionKind::Title | ProductionKind::Reference => {
+                add_obs(&world)
+            }
+            ProductionKind::Verse | ProductionKind::Comment => world.bible.clone(),
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let projects = dir.path().join("projects");
+        std::fs::create_dir(&projects).unwrap();
+        let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+            config.projects = ProjectsFolder::Given(projects);
+            deps.store = StoreChoice::Given(world.store());
+        })
+        .await;
+        let open = t
+            .app
+            .sessions()
+            .open_screen(&folder, progress())
+            .await
+            .unwrap();
+        let session = t.app.read(&open.at).unwrap();
+        session.handle().wait_idle();
+        let story = tc_journal::StoryNo::new(1).unwrap();
+        let record = match kind {
+            ProductionKind::Verse => tit(1, 12),
+            ProductionKind::Frame => RecordKey::Frame(story, FrameNo(1)),
+            ProductionKind::Title => RecordKey::Frame(story, FrameNo(0)),
+            ProductionKind::Reference => RecordKey::StoryRef(story),
+            ProductionKind::Comment => {
+                let ack = post(
+                    &t.app,
+                    &AddComment {
+                        at: open.at.clone(),
+                        request: fresh_id(),
+                        target: ProductionKind::comment_target(),
+                        shown: None,
+                        text: "the comment already shown".to_owned(),
+                    },
+                )
+                .await
+                .unwrap();
+                session
+                    .handle()
+                    .parse_edit(&ack.tokens[0].token)
+                    .unwrap()
+                    .key()
+                    .clone()
+            }
+        };
+        let snapshot = session.handle().snapshot();
+        let key = BufferKey {
+            project: open.at.project.clone(),
+            id: session.id().clone(),
+            field: FieldKey {
+                kind: match kind {
+                    ProductionKind::Verse => FieldKind::Verse,
+                    ProductionKind::Frame => FieldKind::Frame,
+                    ProductionKind::Title => FieldKind::StoryTitle,
+                    ProductionKind::Reference => FieldKind::StoryRef,
+                    ProductionKind::Comment => FieldKind::Comment,
+                },
+                place: FieldPlace::parse(match kind {
+                    ProductionKind::Verse | ProductionKind::Comment => "TIT 1:12",
+                    ProductionKind::Frame => "1:1",
+                    ProductionKind::Title => "1:0",
+                    ProductionKind::Reference => "1:ref",
+                })
+                .unwrap(),
+            },
+        };
+        let initial = snapshot_text(&snapshot, &record);
+        let verse = ProjectField {
+            _world: world,
+            at: open.at,
+            key,
+            baseline: snapshot.fold().history(&record).into_iter().collect(),
+            initial_heads: snapshot.fold().shown_heads(&record, None),
+            record,
+            kind,
+            requests: HashMap::new(),
+        };
+        let page = Page::new(&t.app, MemStore::new());
+        Self {
+            dir,
+            t,
+            page,
+            mirror: Vec::new(),
+            now: 0.0,
+            last_typed: initial,
+            clean_checks: Vec::new(),
+            production: Some(verse),
+        }
+    }
+
+    fn key(&self) -> BufferKey {
+        self.production
+            .as_ref()
+            .map_or_else(key, |verse| verse.key.clone())
+    }
+
+    fn scope(&self) -> FieldScope {
+        self.production.as_ref().map_or(FieldScope::App, |verse| {
+            FieldScope::Project(Some(verse.at.clone()))
+        })
+    }
+
+    fn path(&self) -> &'static str {
+        self.production
+            .as_ref()
+            .map_or("test/fieldStore", |field| field.kind.path())
     }
 
     /// Carries the machine's commands out as `web::saves` does.
@@ -213,17 +430,35 @@ impl World {
                 }
                 Command::Draft { text, base, .. } => {
                     // Best effort, never awaited: a held store must not hold the page.
-                    let body = serde_json::to_vec(&FieldDraft {
-                        request: fresh_id(),
-                        field: FIELD.to_owned(),
-                        shown: base[0].clone(),
-                        text,
-                    })
-                    .unwrap();
+                    let (path, body) = if let Some(verse) = &self.production {
+                        let entry = buffer::read(&self.page.store, &verse.key).unwrap();
+                        (
+                            "editor/draft",
+                            serde_json::to_vec(&Draft {
+                                at: verse.at.clone(),
+                                request: fresh_id(),
+                                instance: entry.instance,
+                                field: verse.kind.draft(),
+                                shown: base,
+                                text,
+                                changed: entry.at,
+                            })
+                            .unwrap(),
+                        )
+                    } else {
+                        (
+                            "test/fieldDraft",
+                            serde_json::to_vec(&FieldDraft {
+                                request: fresh_id(),
+                                field: FIELD.to_owned(),
+                                shown: base[0].clone(),
+                                text,
+                            })
+                            .unwrap(),
+                        )
+                    };
                     let app = self.t.app.clone();
-                    drop(tokio::spawn(async move {
-                        app.call("test/fieldDraft", &body).await
-                    }));
+                    drop(tokio::spawn(async move { app.call(path, &body).await }));
                 }
                 Command::DiscardDraft { .. } | Command::Show { .. } | Command::ReadSessions => {}
             }
@@ -232,8 +467,50 @@ impl World {
 
     fn send(&mut self, sent: SentSave, base: &[ShownToken]) {
         let app = self.t.app.clone();
-        let body = store_body(&sent, base);
-        let handle = tokio::spawn(async move { app.call("test/fieldStore", &body).await });
+        let path = self.path();
+        let body = if let Some(verse) = &mut self.production {
+            let at = sent
+                .scope
+                .clone()
+                .expect("a production save keeps its original scope");
+            let session = app.read(&at).unwrap();
+            let token = session.handle().parse_edit(&base[0]).unwrap();
+            let request = (buffer::nfc(&sent.text), token.heads().to_vec());
+            if let Some(previous) = verse.requests.insert(sent.request, request.clone()) {
+                assert_eq!(previous, request, "a retry retains the exact text and base");
+            }
+            match verse.kind {
+                ProductionKind::Verse => serde_json::to_vec(&SaveVerse {
+                    at,
+                    request: sent.request,
+                    shown: base[0].clone(),
+                    words: sent.text.clone(),
+                }),
+                ProductionKind::Frame | ProductionKind::Title => serde_json::to_vec(&SaveFrame {
+                    at,
+                    request: sent.request,
+                    shown: base[0].clone(),
+                    text: sent.text.clone(),
+                }),
+                ProductionKind::Reference => serde_json::to_vec(&SaveRef {
+                    at,
+                    request: sent.request,
+                    shown: base[0].clone(),
+                    text: sent.text.clone(),
+                }),
+                ProductionKind::Comment => serde_json::to_vec(&AddComment {
+                    at,
+                    request: sent.request,
+                    target: ProductionKind::comment_target(),
+                    shown: Some(base[0].clone()),
+                    text: sent.text.clone(),
+                }),
+            }
+            .unwrap()
+        } else {
+            store_body(&sent, base)
+        };
+        let handle = tokio::spawn(async move { app.call(path, &body).await });
         self.page.inflight.push_back(Flight { sent, handle });
     }
 
@@ -253,10 +530,58 @@ impl World {
     }
 
     async fn log(&mut self) -> FieldLogView {
-        self.ask(&tc_api::test::FieldLog {
-            field: FIELD.to_owned(),
-        })
-        .await
+        if let Some(verse) = &self.production {
+            let session = self.t.app.read(&verse.at).unwrap();
+            let snapshot = session.handle().snapshot();
+            let record = &verse.record;
+            let mut changes: Vec<_> = snapshot
+                .fold()
+                .history(record)
+                .into_iter()
+                .filter(|id| !verse.baseline.contains(id))
+                .map(|id| (id, snapshot.fold().body(&id).unwrap()))
+                .collect();
+            changes.sort_by_key(|(_, body)| body.seq);
+            let mut previous = verse.initial_heads.clone();
+            let stores = changes
+                .into_iter()
+                .map(|(id, body)| {
+                    let words = record_text(body.record);
+                    let request = verse
+                        .requests
+                        .iter()
+                        .find(|(_, (text, parents))| *text == words && *parents == body.parents)
+                        .map(|(request, _)| *request)
+                        .expect("each journal change came from a submitted production save");
+                    let base = if body.parents == previous {
+                        TokenBase::Current
+                    } else {
+                        TokenBase::Stale
+                    };
+                    previous = vec![id];
+                    StoredText {
+                        request,
+                        text: words,
+                        base,
+                    }
+                })
+                .collect();
+            FieldLogView {
+                current: Shown {
+                    value: snapshot_text(&snapshot, record),
+                    token: shown(&snapshot.mint(record, None).unwrap()).unwrap(),
+                    marker: None,
+                },
+                stores,
+                draft: None,
+                drafts: 0,
+            }
+        } else {
+            self.ask(&tc_api::test::FieldLog {
+                field: FIELD.to_owned(),
+            })
+            .await
+        }
     }
 
     async fn open_editor(&mut self) {
@@ -269,24 +594,26 @@ impl World {
             token: log.current.token,
             view: None,
         };
-        let (_, commands) = self.page.m.open(key(), FieldScope::App, pair, self.now);
+        let (key, scope) = (self.key(), self.scope());
+        let (_, commands) = self.page.m.open(key, scope, pair, self.now);
         self.page.editor = true;
         self.run(commands).await;
     }
 
     async fn type_text(&mut self, text: &str) {
+        let key = self.key();
         self.open_editor().await;
         if !self.page.focused {
             self.page.focused = true;
-            let commands = self.page.m.focus(&key(), self.now);
+            let commands = self.page.m.focus(&key, self.now);
             self.run(commands).await;
         }
         // boot.js's capture listener, before the WebAssembly sees the keystroke, which then
         // leaves the write to it only if it says its item took the text.
-        let template = self.page.m.template(&key()).unwrap();
+        let template = self.page.m.template(&key).unwrap();
         let input = buffer::input_to_entry(
             &mut self.page.store,
-            &key(),
+            &key,
             text,
             WallMs(self.now as i64),
             &template,
@@ -299,20 +626,22 @@ impl World {
         } else {
             Source::Program
         };
-        let commands = self.page.m.typed(&key(), text, source, self.now);
+        let commands = self.page.m.typed(&key, text, source, self.now);
         self.last_typed = text.to_owned();
         self.run(commands).await;
     }
 
     async fn blur(&mut self) {
+        let key = self.key();
         if self.page.focused {
             self.page.focused = false;
-            let commands = self.page.m.blur(&key(), self.now);
+            let commands = self.page.m.blur(&key, self.now);
             self.run(commands).await;
         }
     }
 
     async fn advance(&mut self, ms: f64) {
+        let key = self.key();
         let until = self.now + ms;
         let mut rounds = 0;
         while let Some(deadline) = self.page.m.next_deadline().filter(|d| *d <= until) {
@@ -321,7 +650,7 @@ impl World {
                 rounds < 1000,
                 "a deadline that never passes: {deadline} at {} in {:?}",
                 self.now,
-                self.page.m.state(&key())
+                self.page.m.state(&key)
             );
             self.now = deadline.max(self.now);
             let commands = self.page.m.tick(self.now);
@@ -335,6 +664,7 @@ impl World {
     /// The oldest call's answer, given to the machine. `keep_last` says whether an answer
     /// after which the process ended reached the page before it did.
     async fn deliver(&mut self, keep_last: bool) -> Delivered {
+        let key = self.key();
         let Some(flight) = self.page.inflight.pop_front() else {
             return Delivered::Answered;
         };
@@ -364,23 +694,14 @@ impl World {
         if let Some(reply) = reply
             && (!ended || keep_last)
         {
-            let commands = self
-                .page
-                .m
-                .reply(&key(), request, classify(reply), self.now);
+            let commands = self.page.m.reply(&key, request, classify(reply), self.now);
             self.run(commands).await;
-            if matches!(self.page.m.state(&key()), Some(FieldSave::Clean)) {
-                let text = buffer::nfc(self.page.m.text(&key()).unwrap());
+            if matches!(self.page.m.state(&key), Some(FieldSave::Clean)) {
+                let text = buffer::nfc(self.page.m.text(&key).unwrap());
                 // The value at this moment; an app that ended meanwhile says nothing about it.
-                if let Ok(Reply::Ok(log)) = self
-                    .t
-                    .app
-                    .request(&tc_api::test::FieldLog {
-                        field: FIELD.to_owned(),
-                    })
-                    .await
-                {
-                    self.clean_checks.push((text, log.current.value));
+                if !ended {
+                    let value = self.log().await.current.value;
+                    self.clean_checks.push((text, value));
                 }
             }
         }
@@ -393,12 +714,13 @@ impl World {
 
     /// The oldest call's reply is lost; its work on the server goes on.
     async fn cut(&mut self) {
+        let key = self.key();
         if let Some(flight) = self.page.inflight.pop_front() {
             drop(flight.handle);
             let commands = self
                 .page
                 .m
-                .reply(&key(), flight.sent.request, Answered::Lost, self.now);
+                .reply(&key, flight.sent.request, Answered::Lost, self.now);
             self.run(commands).await;
         }
     }
@@ -411,7 +733,8 @@ impl World {
         drop(old.inflight);
         for (k, entry) in buffer::entries(&self.page.store) {
             if entry.instance == self.page.m.instance() {
-                let commands = self.page.m.restore(k, entry, FieldScope::App, self.now);
+                let scope = self.scope();
+                let commands = self.page.m.restore(k, entry, scope, self.now);
                 self.run(commands).await;
             }
         }
@@ -486,10 +809,11 @@ impl World {
     /// landed before the crash, and the newer text continues from it), and over the entry's own
     /// token otherwise, so a change made since becomes a conflict.
     async fn offer(&mut self) {
+        let key = self.key();
         let newest: Option<BufferEntry> =
             buffer::merge(Vec::new(), &buffer::current_lines(&self.mirror))
                 .into_iter()
-                .filter(|(k, _)| *k == key())
+                .filter(|(k, _)| *k == key)
                 .map(|(_, entry)| entry)
                 .max_by_key(|entry| entry.at);
         let Some(entry) = newest else {
@@ -499,7 +823,7 @@ impl World {
         let stored = log.current.value;
         if buffer::same_text(&entry.text, &stored) {
             self.mirror
-                .push(buffer::removed_line(&key(), entry.instance).unwrap());
+                .push(buffer::removed_line(&key, entry.instance).unwrap());
             return;
         }
         let landed = entry
@@ -519,11 +843,13 @@ impl World {
         };
         self.ask(&keep).await;
         self.mirror
-            .push(buffer::removed_line(&key(), entry.instance).unwrap());
+            .push(buffer::removed_line(&key, entry.instance).unwrap());
     }
 
     /// Everything answered and saved, with nothing held.
     async fn settle(&mut self) {
+        let key = self.key();
+        self.page.m.begin_gate();
         for _ in 0..40 {
             self.keep_alive().await;
             while self.t.app.holding() > 0 {
@@ -543,21 +869,28 @@ impl World {
                 }
             }
             self.blur().await;
-            let commands = self.page.m.retry(self.now);
+            // A restored comment waits for a user blur or navigation; unlike verse and
+            // frame text, its timer only writes a draft. Finish through the real gate.
+            let commands = self.page.m.flush_for_gate(self.now);
             self.run(commands).await;
+            if matches!(self.page.m.state(&key), Some(FieldSave::Failed(_))) {
+                break;
+            }
             self.advance(3000.0).await;
-            let saved = matches!(self.page.m.state(&key()), Some(FieldSave::Clean) | None);
+            let saved = matches!(self.page.m.state(&key), Some(FieldSave::Clean) | None);
             if saved && self.page.inflight.is_empty() {
                 break;
             }
         }
+        self.page.m.end_gate();
         super::common::until_quiet(&self.t.app).await;
     }
 
     /// The row's assertions: the last text stored, once; no request id twice; no store over an
     /// older version; no earlier text marked clean in its place; every mirror line readable.
     async fn check(&mut self) {
-        let state = self.page.m.state(&key()).cloned();
+        let key = self.key();
+        let state = self.page.m.state(&key).cloned();
         assert!(
             matches!(state, Some(FieldSave::Clean) | None),
             "the field ends saved: {state:?}"
@@ -815,7 +1148,10 @@ fn crash_steps() -> impl Strategy<Value = Vec<Step>> {
 }
 
 async fn play(steps: Vec<Step>) {
-    let mut w = World::new().await;
+    play_world(World::new().await, steps).await;
+}
+
+async fn play_world(mut w: World, steps: Vec<Step>) {
     for step in steps {
         w.keep_alive().await;
         match step {
@@ -835,6 +1171,64 @@ async fn play(steps: Vec<Step>) {
         }
     }
     w.settle().await;
+    if w.production.as_ref().is_some_and(|field| {
+        matches!(
+            field.kind,
+            ProductionKind::Reference | ProductionKind::Comment
+        )
+    }) && w.last_typed.is_empty()
+    {
+        // Empty comments and closing references are invalid. Keep those inputs in the
+        // generator: a refusal must retain the buffer, including across reload, before
+        // a deliberate valid correction finishes the normal no-loss audit.
+        let key = w.key();
+        assert!(
+            matches!(
+                w.page.m.state(&key),
+                Some(FieldSave::Failed(SaveError::NotSaved(NotSaved::Refused(
+                    SaveRefusal::InvalidText { .. }
+                ))))
+            ),
+            "an invalid text edit has a typed refusal: {:?}",
+            w.page.m.state(&key)
+        );
+        assert_eq!(buffer::read(&w.page.store, &key).unwrap().text, "");
+        assert_eq!(w.page.m.text(&key), Some(""));
+        let log = w.log().await;
+        assert!(!log.current.value.is_empty());
+        assert!(log.stores.iter().all(|saved| !saved.text.is_empty()));
+        w.reload().await;
+        assert_eq!(buffer::read(&w.page.store, &key).unwrap().text, "");
+        assert_eq!(w.page.m.text(&key), Some(""));
+        w.type_text("a valid correction after the refused empty text")
+            .await;
+        w.settle().await;
+    }
+    if !w.last_typed.is_empty()
+        && matches!(
+            w.page.m.state(&w.key()),
+            Some(FieldSave::Failed(SaveError::NotSaved(NotSaved::Refused(
+                SaveRefusal::InvalidText { .. }
+            ))))
+        )
+    {
+        // A refused old edit can finish after the person corrected it. FR-32 still
+        // waits for explicit Retry; this sends the correction with a fresh identity.
+        let key = w.key();
+        assert_eq!(
+            buffer::read(&w.page.store, &key).unwrap().text,
+            w.last_typed
+        );
+        let old_requests = &w.production.as_ref().unwrap().requests;
+        let commands = w.page.m.retry(w.now);
+        assert!(commands.iter().any(|command| matches!(command,
+            Command::Send { sent, .. }
+                if buffer::same_text(&sent.text, &w.last_typed)
+                    && !old_requests.contains_key(&sent.request)
+        )));
+        w.run(commands).await;
+        w.settle().await;
+    }
     w.check().await;
 }
 
@@ -881,4 +1275,165 @@ fn a_status_503_is_a_lost_reply() {
         classify(Err(CallError::Api(ApiError::RequestReused))),
         Answered::Reissue
     ));
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(48))]
+
+    /// The same reload/lost-reply property on editor/saveVerse, its real project tokens,
+    /// the production Draft path and tc-store's journal, rather than test/fieldStore.
+    #[test]
+    fn production_reload_anywhere_stores_the_last_text_once(steps in reload_steps()) {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                tokio::time::timeout(Duration::from_secs(30), async {
+                    play_world(World::verse().await, steps).await;
+                }).await.expect("the production save/reload scenario finishes");
+            });
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(48))]
+
+    #[test]
+    fn c3_reload_anywhere_keeps_each_saved_field_once(
+        kind in prop::sample::select(vec![ProductionKind::Frame, ProductionKind::Title, ProductionKind::Reference, ProductionKind::Comment]),
+        steps in reload_steps(),
+    ) {
+        tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap()
+            .block_on(async {
+                tokio::time::timeout(Duration::from_secs(30), async {
+                    play_world(World::project_field(kind).await, steps).await;
+                }).await.expect("the C3 field reload scenario finishes");
+            });
+    }
+}
+
+multi! {
+    async fn a_refused_empty_reference_survives_reload_until_corrected() {
+        for steps in [vec![Step::Type(0)], vec![Step::Type(0), Step::Blur, Step::Type(1)]] {
+            play_world(World::project_field(ProductionKind::Reference).await, steps).await;
+        }
+    }
+
+}
+
+multi! {
+    /// Each C3 shape gets the concrete lost-reply/newer-typing/reload case in addition to
+    /// the sampled interleavings above; the same journal audit checks its exact identity.
+    async fn c3_lost_reply_then_newer_typing_reloads_without_duplicate_or_stale_saves() {
+        for kind in [ProductionKind::Frame, ProductionKind::Title, ProductionKind::Reference, ProductionKind::Comment] {
+            let mut w = World::project_field(kind).await;
+            w.hold().await;
+            w.type_text("the first text").await;
+            w.blur().await;
+            super::common::until_held_count(&w.t.app, 1).await;
+            w.type_text("the first text, followed by newer typing").await;
+            w.cut().await;
+            w.reload().await;
+            w.release().await;
+            w.settle().await;
+            w.check().await;
+            assert_eq!(w.log().await.stores.len(), 2, "{kind:?}");
+        }
+    }
+}
+
+multi! {
+    async fn three_comment_pauses_write_only_drafts_then_blur_revises_one_comment() {
+        let mut w = World::project_field(ProductionKind::Comment).await;
+        let at = w.production.as_ref().unwrap().at.clone();
+        let teammate = post(&w.t.app, &AddComment {
+            at: at.clone(), request: fresh_id(), target: ProductionKind::comment_target(),
+            shown: None, text: "a teammate's independent note".to_owned(),
+        }).await.unwrap();
+        let session = w.t.app.read(&at).unwrap();
+        let teammate_key = session.handle().parse_edit(&teammate.tokens[0].token).unwrap().key().clone();
+        let teammate_heads = session.handle().snapshot().fold().heads(&teammate_key);
+        for text in ["the first pause", "a second thought", "the final note before blur"] {
+            w.type_text(text).await;
+            w.advance(2500.0).await;
+            assert!(w.log().await.stores.is_empty(), "a pause cannot revise the comment");
+        }
+        w.blur().await;
+        w.settle().await;
+        w.check().await;
+        let log = w.log().await;
+        assert_eq!(log.stores.len(), 1);
+        assert_eq!(log.current.value, "the final note before blur");
+        assert_eq!(session.handle().snapshot().fold().heads(&teammate_key), teammate_heads);
+        assert_eq!(record_text(session.handle().snapshot().fold().projected(&teammate_key).unwrap()), "a teammate's independent note");
+        let own = &w.production.as_ref().unwrap().record;
+        assert_eq!(session.handle().snapshot().fold().history(own).len(), 2, "one revision retains the original in History");
+    }
+}
+
+multi! {
+    /// Adding has no comment token yet. Its request identity must still prevent a retry
+    /// from minting a second CommentId, including while the first write waits on disk.
+    async fn a_tokenless_comment_add_waits_for_durability_and_lost_reply_retries_one_identity() {
+        let w = World::verse().await;
+        let field = w.production.as_ref().unwrap();
+        let session = w.t.app.read(&field.at).unwrap();
+        let before = session.handle().snapshot().fold().comments_of(tc_core::BookId::Titus).len();
+        let hooks = field._world.hooks.clone();
+        hooks.hold(tc_store::Point::BeforeDurablePending);
+        struct Release(std::sync::Arc<tc_store::Hooks>);
+        impl Drop for Release {
+            fn drop(&mut self) { self.0.release(tc_store::Point::BeforeDurablePending); }
+        }
+        let held = Release(hooks.clone());
+        let req = AddComment {
+            at: field.at.clone(), request: fresh_id(), target: ProductionKind::comment_target(),
+            shown: None, text: "a new comment whose reply can be lost".to_owned(),
+        };
+        let body = serde_json::to_vec(&req).unwrap();
+        let first_app = w.t.app.clone();
+        let first_body = body.clone();
+        let first = tokio::spawn(async move { first_app.call("editor/addComment", &first_body).await });
+        super::common::until("comment save reaches durability", || {
+            hooks.reached(tc_store::Point::BeforeDurablePending) > 0
+        }).await;
+        assert!(!first.is_finished(), "no saved Ack before durability");
+        assert_eq!(session.handle().snapshot().fold().comments_of(tc_core::BookId::Titus).len(), before);
+        let retry_app = w.t.app.clone();
+        let retry_body = body.clone();
+        let retry = tokio::spawn(async move { retry_app.call("editor/addComment", &retry_body).await });
+        first.abort();
+        drop(held);
+        let reply = tokio::time::timeout(Duration::from_secs(5), retry).await.unwrap().unwrap();
+        let again = w.t.app.call("editor/addComment", &body).await;
+        assert_eq!(reply, again, "the identical Ack includes the identical comment token");
+        let Answer::Reply { body, .. } = reply else { panic!("{reply:?}") };
+        let Reply::Ok(ack): Reply<Ack> = serde_json::from_slice(&body).unwrap() else { panic!("a durable comment add succeeds") };
+        assert_eq!(ack.saved[0].text, req.text);
+        let token = session.handle().parse_edit(&ack.tokens[0].token).unwrap();
+        assert!(matches!(token.key(), RecordKey::Comment(_)));
+        assert_eq!(session.handle().snapshot().fold().history(token.key()).len(), 1);
+        assert_eq!(session.handle().snapshot().fold().comments_of(tc_core::BookId::Titus).len(), before + 1);
+    }
+}
+
+multi! {
+    async fn clearing_a_displayed_comment_is_refused_and_keeps_every_version() {
+        let w = World::project_field(ProductionKind::Comment).await;
+        let field = w.production.as_ref().unwrap();
+        let session = w.t.app.read(&field.at).unwrap();
+        let before = session.handle().snapshot();
+        let req = AddComment {
+            at: field.at.clone(), request: fresh_id(), target: ProductionKind::comment_target(),
+            shown: Some(shown(&before.mint(&field.record, None).unwrap()).unwrap()), text: String::new(),
+        };
+        let refused = post(&w.t.app, &req).await;
+        assert!(matches!(refused, Err(ApiError::NotSaved(NotSaved::Refused(SaveRefusal::InvalidText { .. })))), "clearing must keep the existing note: {refused:?}");
+        let after = session.handle().snapshot();
+        assert_eq!(after.fold().heads(&field.record), before.fold().heads(&field.record));
+        assert_eq!(after.fold().history(&field.record), before.fold().history(&field.record));
+        assert_eq!(record_text(after.fold().projected(&field.record).unwrap()), "the comment already shown");
+    }
 }

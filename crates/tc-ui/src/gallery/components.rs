@@ -802,8 +802,9 @@ fn checkbox(p: Props) -> AnyView {
 
 fn drop_zone(p: Props) -> AnyView {
     DropZone(DropZoneProps {
-        title: p.str("title"),
+        title: p.str("title").into(),
         hint: p.str("hint"),
+        disabled: p.flag_signal("disabled"),
         on_click: handler(&p, "onClick"),
         style: p.css("style"),
         attrs: p.rest(),
@@ -817,7 +818,7 @@ fn filter_chip(p: Props) -> AnyView {
         mark: p.str("mark"),
         tone: p.keyword("tone").unwrap_or_default(),
         on_click: handler(&p, "onClick"),
-        style: p.css("style"),
+        style: p.css("style").into(),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
     })
@@ -1153,6 +1154,7 @@ fn modal(p: Props) -> AnyView {
         on_close: p.screen_handler("onClose"),
         closable: p.handler_on("onClose"),
         footer: children_fn(&p, "footer"),
+        footer_shown: None,
         children: children_fn(&p, "children"),
         attrs: p.rest(),
         live_attrs: Vec::new(),
@@ -1192,6 +1194,7 @@ fn verse_marker(p: Props) -> AnyView {
         size: p.num("size").unwrap_or(d.size),
         state: p.keyword("state").unwrap_or_default(),
         on_pick_up: handler(&p, "onPickUp"),
+        on_pointer_up: None,
         label: p.str("label"),
         style: p.css("style"),
         attrs: p.rest(),

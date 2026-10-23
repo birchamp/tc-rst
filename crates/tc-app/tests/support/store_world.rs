@@ -227,6 +227,31 @@ pub fn store_world() -> StoreWorld {
     store_world_with(FakePlatform::default())
 }
 
+/// Adds the real OBS fixture to a test's isolated store, through the store's Burrito writer.
+pub fn add_obs(world: &StoreWorld) -> ProjectRef {
+    use tc_app::backend::seed::{Tc4Folder, fixture_project_id, tc4_state_seed};
+    let source = Tc4Folder::read(&repo_root().join("fixtures/tc4/sample-burrito-obs")).unwrap();
+    let seed = tc4_state_seed(&source, fixture_project_id("sample_burrito_obs")).unwrap();
+    let records = seed
+        .fold
+        .record_keys()
+        .into_iter()
+        .filter_map(|key| seed.fold.projected(&key))
+        .collect();
+    let path = world
+        .backend
+        .store()
+        .create(&NewProject {
+            name: "sample_burrito_obs".to_owned(),
+            kind: ProjectKind::Stories,
+            records,
+            books: Vec::new(),
+        })
+        .unwrap();
+    assert_valid_burrito(&world.fs, &path);
+    folder("sample_burrito_obs")
+}
+
 /// A world whose computer `platform` describes: a cloud-synced folder, another host.
 pub fn store_world_with(platform: FakePlatform) -> StoreWorld {
     let base = base();

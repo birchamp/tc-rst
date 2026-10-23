@@ -388,6 +388,21 @@ async fn the_other_at_once_writes_happen_at_once() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn the_suggestion_switch_is_visible_before_its_writer_runs() {
+    let env = prefs();
+    env.prefs.set_align_suggestions(folder("titus"), true);
+    assert_eq!(env.prefs.align_suggestions(&folder("titus")), Some(true));
+    env.prefs.set_align_suggestions(folder("titus"), false);
+    assert_eq!(env.prefs.align_suggestions(&folder("titus")), Some(false));
+    settle().await;
+    assert_eq!(env.prefs.align_suggestions(&folder("titus")), Some(false));
+    assert_eq!(
+        json_of(&env, &AppDataPath::app_prefs())["alignSuggestions"]["titus"],
+        json!(false)
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_failed_locale_save_is_refused_and_changes_nothing() {
     let files = Arc::new(MemoryFiles::new());
     let seeded = br#"{"schemaVersion":1,"appLocale":"es-419"}"#.to_vec();

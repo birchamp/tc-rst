@@ -289,61 +289,23 @@ fn bible_project_reproduces_every_file_in_every_scenario() {
     }
 }
 
-/// The OBS sample's mismatches, written up in docs/evidence/state-seed-check-2026-10-18.md
-/// and handed to the storage team: the same in every scenario.
-pub(crate) fn obs_written_up() -> Vec<(String, Option<String>, Option<String>, CheckRule)> {
-    let mut out = vec![
-        (
-            RESOURCES.to_owned(),
-            Some("pins Primary".to_owned()),
-            Some("relationships".to_owned()),
-            CheckRule::FoldAnomaly,
-        ),
-        (
-            RESOURCES.to_owned(),
-            Some("pins Fallback".to_owned()),
-            Some("relationships".to_owned()),
-            CheckRule::FoldAnomaly,
-        ),
-    ];
-    for story in 1..=50 {
-        out.push((
-            format!("ingredients/content/{story:02}.md"),
-            Some(format!("story {story} frame 0")),
-            None,
-            CheckRule::FrameText,
-        ));
-    }
-    out
-}
-
+/// The OBS sample passes the check in every scenario: the three findings of
+/// docs/evidence/state-seed-check-2026-10-18.md §4 (frame 0 read with the story's number,
+/// `settings.json` not a derived file of a story project, a relationship the schema refuses)
+/// are fixed in tc-journal (B7), so the project loads. Its seed is one `StoryBase` for each of
+/// the fifty stories, the file as it is, and no other story record.
 #[test]
-fn obs_project_outcome_is_exactly_the_written_up_mismatches() {
+fn the_obs_sample_passes_the_check_in_every_scenario() {
     for scenario in SCENARIOS {
-        let found = mismatches(seed(OBS, scenario_files(scenario, OBS)));
-        let tuples: Vec<_> = found.iter().map(tuple).collect();
-        assert_eq!(tuples, obs_written_up(), "{scenario}");
-        // The title: tC4 reads it without the story's number, the fold with it.
-        let story_one = found
+        let seed = seed(OBS, scenario_files(scenario, OBS))
+            .unwrap_or_else(|refused| panic!("{scenario}: {refused}"));
+        assert_eq!(seed.report.counts.changes, 66, "{scenario}");
+        let stories = seed
+            .batches
             .iter()
-            .find(|m| m.record.as_deref() == Some("story 1 frame 0"))
-            .unwrap();
-        assert_eq!(story_one.source, "\"La Creación\"");
-        assert_eq!(story_one.projected, "\"1. La Creación\"");
-        let story_two = found
-            .iter()
-            .find(|m| m.record.as_deref() == Some("story 2 frame 0"))
-            .unwrap();
-        assert_eq!(
-            (story_two.source.as_str(), story_two.projected.as_str()),
-            ("\"\"", "\"2.\"")
-        );
-        let anomaly = &found[0];
-        assert!(
-            anomaly.projected.contains("\"gloss\""),
-            "{scenario}: {}",
-            anomaly.projected
-        );
+            .filter(|b| matches!(b.label, BatchLabel::Story(_)))
+            .count();
+        assert_eq!(stories, 50, "{scenario}");
     }
 }
 

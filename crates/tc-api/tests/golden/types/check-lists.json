@@ -9,7 +9,8 @@
   {
     "tool": "translationNotes",
     "unit": {
-      "type": "stories"
+      "type": "story",
+      "value": 7
     }
   },
   {
@@ -22,7 +23,8 @@
   {
     "tool": "translationWords",
     "unit": {
-      "type": "stories"
+      "type": "story",
+      "value": 7
     }
   }
 ]
