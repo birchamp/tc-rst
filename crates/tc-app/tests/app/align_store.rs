@@ -427,3 +427,109 @@ async fn mark_valid_survives_quit_and_reopen_on_the_store() {
     rig.t.app.quit().await;
     rig.assert_burrito();
 }
+
+/// INV-TEXT-DIRECTION-HAS-ONE-SOURCE (tC4 #832.1): a direction changed in Project settings is
+/// the direction Home's card, the open project, Align and Settings show, in this app and in a
+/// new app on the same folders: Settings writes the metadata field every reader reads first.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart() {
+    use tc_api::align::{Open, Opened};
+    use tc_api::home::{Card, HomeCard};
+    use tc_api::settings::{Save, SettingsView, ShownValues, ViewFromHome};
+    use tc_api::shown::Direction;
+    let mut rig = Rig::new().await;
+    let project = folder(SAMPLE);
+    let settings = |t: &TestApp| {
+        let (app, project) = (t.app.clone(), project.clone());
+        async move {
+            post::<ViewFromHome>(&app, &ViewFromHome { project })
+                .await
+                .unwrap()
+        }
+    };
+    let view: SettingsView = settings(&rig.t).await;
+    assert_eq!(view.direction, Direction::Ltr);
+    post(
+        &rig.t.app,
+        &Save {
+            request: request(230),
+            project: project.clone(),
+            shown: ShownValues {
+                direction: view.direction,
+                font: view.font.clone(),
+            },
+            direction: Direction::Rtl,
+            font: view.font.clone().unwrap_or_else(|| "Noto Sans".to_owned()),
+        },
+    )
+    .await
+    .unwrap();
+    for restarted in [false, true] {
+        if restarted {
+            rig.restart(false).await;
+        }
+        let where_ = if restarted {
+            "after a restart"
+        } else {
+            "in this app"
+        };
+        let card: HomeCard = post(
+            &rig.t.app,
+            &Card {
+                project: project.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(card.dir, Direction::Rtl, "Home's card {where_}");
+        let opened = super::super::understand::opened(&rig.t.app).await;
+        assert_eq!(opened.dir, Direction::Rtl, "the open project {where_}");
+        let align = post(
+            &rig.t.app,
+            &Open {
+                at: opened.session.at.clone(),
+                request: request(231),
+                book: BookId::Titus,
+                verse: None,
+            },
+        )
+        .await
+        .unwrap();
+        let Opened::Ready(align) = align else {
+            panic!("{align:?}")
+        };
+        assert_eq!(align.target_dir, Direction::Rtl, "Align {where_}");
+        post(
+            &rig.t.app,
+            &tc_api::session::Close {
+                at: opened.session.at,
+                request: request(232),
+            },
+        )
+        .await
+        .unwrap();
+        rig.t.app.sessions().settled(&project).await;
+        assert_eq!(
+            settings(&rig.t).await.direction,
+            Direction::Rtl,
+            "Settings {where_}"
+        );
+    }
+}
+
+/// tC4 #832.2: a project imported from tC4 names no language in settings.json; Settings then
+/// shows the name the metadata gives the language, not an empty field.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_imported_project_shows_its_metadata_language_name_in_settings() {
+    use tc_api::settings::{SettingsView, ViewFromHome};
+    let rig = Rig::new().await;
+    let view: SettingsView = post(
+        &rig.t.app,
+        &ViewFromHome {
+            project: folder(SAMPLE),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(view.language_name, "Español (Latinoamérica)");
+}

@@ -669,7 +669,7 @@ fn words_tab(
                             on_mouse_enter=enter
                             on_mouse_leave=leave
                             title=title
-                            body=Box::new(move || slug.clone().into_any())
+                            body=Box::new(move || view! { <span dir="auto">{slug.clone()}</span> }.into_any())
                             action_label=t(keys::understand::WORD_LINK, &[])
                             on_action=Callback::new(move |()| actions.load_help_article(link.clone()))
                             attr:data-focused=move || lit.get().then_some("true")
@@ -742,8 +742,11 @@ fn questions_tab(
             view! {
                 <div data-testid="understand-question" dir=dir data-frame=q.verse.as_str().to_owned()
                     data-focused=move || is_active.get().then_some("true") style=style>
-                    <p style=q_style.clone()>{q.question.clone()}</p>
-                    <p style=a_style.clone()>
+                    // The pane's `dir` lays the cards out; each text reads in its own
+                    // direction, so an English question under an Arabic set is not
+                    // laid out backwards (tC4 #836).
+                    <p dir="auto" style=q_style.clone()>{q.question.clone()}</p>
+                    <p dir="auto" style=a_style.clone()>
                         <span style=answer.clone()>{t(keys::understand::ANSWER, &[])}" · "</span>
                         {q.response.clone()}
                     </p>
@@ -994,7 +997,7 @@ pub(crate) fn expandable_note(blocks: Vec<ArticleBlock>) -> impl IntoView {
         "padding": 0,
     };
     view! {
-        {move || if expanded.get() { note_blocks(&blocks) } else { note_blocks(&preview) }}
+        <div dir="auto">{move || if expanded.get() { note_blocks(&blocks) } else { note_blocks(&preview) }}</div>
         <button
             type="button"
             data-testid="note-expand"

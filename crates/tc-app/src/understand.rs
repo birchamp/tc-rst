@@ -494,10 +494,15 @@ impl App {
             .read(&session.at)
             .map(|s| crate::home::api_kind(s.handle().facts().kind))
             .map_err(JobEnd::Failed)?;
-        let metadata = peek
-            .map(|p| p.metadata)
-            .unwrap_or_else(|| Err("the project's metadata could not be read".to_owned()));
-        let facts = crate::home::card_facts(&metadata, &req.project, kind);
+        let (metadata, text_direction) = match peek {
+            Some(p) => (p.metadata, p.text_direction),
+            None => (
+                Err("the project's metadata could not be read".to_owned()),
+                None,
+            ),
+        };
+        let facts =
+            crate::home::card_facts(&metadata, text_direction.as_deref(), &req.project, kind);
         let place = req.unit.and_then(|unit| {
             let key = match unit {
                 OpenUnit::Book(book) => book.code().to_owned(),

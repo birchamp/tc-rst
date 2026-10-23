@@ -294,3 +294,21 @@ browserTest('arabic_helps_panes_are_rtl_in_an_english_interface', async () => {
     assert.equal(await page.evaluate(() => document.documentElement.dir || 'ltr'), 'ltr', 'the interface stays English');
   }, { scenario: 'en-pins' });
 });
+
+// tC4 #836: an English question under an Arabic set keeps its own direction; the pane's
+// direction lays the cards out, each text reads as it is written.
+browserTest('an_english_question_under_an_arabic_set_reads_left_to_right', async () => {
+  await withApp(async ({ page }) => {
+    await page.route('**/api/v1/helps/passage', async (route) => {
+      const reply = await (await route.fetch()).json();
+      if (reply.value.questions.type === 'ready') reply.value.questions.value.dir = 'rtl';
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
+    });
+    await openTitus(page);
+    await page.getByRole('tab', { name: 'Questions', exact: true }).click();
+    const question = page.getByTestId('understand-question').first();
+    await question.waitFor();
+    assert.equal(await question.getAttribute('dir'), 'rtl', 'the pane is laid out in the set\'s direction');
+    assert.equal(await question.locator('p').first().evaluate((el) => getComputedStyle(el).direction), 'ltr', 'the English question reads left to right');
+  }, { scenario: 'en-pins' });
+});

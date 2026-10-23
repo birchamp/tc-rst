@@ -410,6 +410,18 @@ impl StoreCommand {
         )
     }
 
+    /// `SetMeta` (STORAGE §3.4): one project detail over the token that showed it.
+    pub fn set_meta(shown: EditToken, value: Option<tc_journal::Json>) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::SetMeta {
+                shown: shown.0,
+                value,
+            },
+            listed,
+        )
+    }
+
     /// `SaveSection` (STORAGE §5.2): one edit token per verse and chapter front the section
     /// editor displayed, with its new value, or `None` for one displayed and left as it was;
     /// and the book's layout token when the book has one. The store checks only what was
@@ -899,6 +911,9 @@ pub struct ProjectPeek {
     /// shape); `Err` says why it could not be read. The card reads its facts from it
     /// (`crate::home::card_facts`).
     pub metadata: Result<serde_json::Value, String>,
+    /// The settings file's `textDirection`, the second source of a project's direction
+    /// (`crate::direction`).
+    pub text_direction: Option<String>,
     pub remote: Option<Door43Remote>,
     /// `None` when the saves could not be looked at (another program holds `.tc/pending` or
     /// `.tc/materialized.json`): no summary is then the card's, and its counts show "—".

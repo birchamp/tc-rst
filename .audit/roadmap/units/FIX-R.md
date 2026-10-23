@@ -4,7 +4,7 @@ title: Fix the tC4 bugs the rebuild repeats; reconcile TC4-ISSUES
 track: A
 lane: app
 milestone: M1
-state: claimed
+state: building
 owner: C7a session (Claude Code 3058c665)
 branch: track-FIX-R
 worktree: .worktrees/track-FIX-R
@@ -325,3 +325,4 @@ the log. This item is no-loss: the review uses three lenses (FUNNEL.md §8).
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-bugs.md
 - 2026-10-23 10:40 EDT | C7a session (Claude Code 3058c665) | claim | none | claimed on track-FIX-R from main d293375a (INT-4 landed) while C7a's gate waits for a heavy slot; every "Before you start" line prints as the card says, except that `word_card` takes `rtl_orig: bool`, not a direction | .worktrees/track-FIX-R
+- 2026-10-23 11:40 EDT | C7a session (Claude Code 3058c665) | note | none | step 1, the Rust side: `tc_app::direction::{project_direction, script_direction, of_fold}` is the one reader (card_facts, the open reply, Align and both Settings paths call it; `ProjectPeek.text_direction` carries settings.json's field to Home's card); Settings writes `languages[0].scriptDirection` through the new `StoreCommand::set_meta` before `textDirection`; Settings shows the metadata's language name when settings.json names none; the aligner's card body takes the translation's `dir`, and each question, note and word text reads `dir="auto"`. The two tests live beside the align store rig (`crates/tc-app/tests/app/align_store.rs`), not in create.rs: the store world's sample names its language "English" and holds no original-language resources, so Align cannot open there. Proofs: with Settings' metadata write and the name fallback cut, `a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart` failed `Home's card in this app: left: Ltr right: Rtl` and `an_imported_project_shows_its_metadata_language_name_in_settings` failed `left: "" right: "Español (Latinoamérica)"`. `settings_from_home_mints_only_for_shown_values` now injects the arriving change into the metadata field, since `textDirection` alone no longer changes a direction the metadata names. The two journeys are written and wait for a heavy slot | cargo test -p tc-app --test app -- direction_changed language_name

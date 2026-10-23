@@ -316,6 +316,7 @@ fn word_card(
     armed_now: bool,
     lens: Lens,
     rtl_orig: bool,
+    target_dir: Direction,
 ) -> impl IntoView + use<> {
     let index = card.index;
     let over = RwSignal::new(false);
@@ -488,7 +489,9 @@ fn word_card(
             }
         >
             {header}
-            <div style=body.to_style()>{placed}{suggested}{empty}</div>
+            // The placed words are the translation's: they read in its direction, whatever
+            // the original's (tC4 #830).
+            <div style=body.to_style() dir=dir_name(target_dir)>{placed}{suggested}{empty}</div>
         </div>
     }
 }
@@ -1119,6 +1122,7 @@ fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> An
                 armed_now,
                 lens,
                 view.orig_dir == Direction::Rtl,
+                view.target_dir,
             )
             .into_any()
         })

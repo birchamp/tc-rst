@@ -416,8 +416,20 @@ fn set_path(
 impl ProjectStore for MemoryBackend {
     fn peek(&self, folder: &ProjectRef) -> Result<super::ProjectPeek, StoreError> {
         let (state, snapshot, version) = self.current(folder)?;
+        let text_direction = tc_journal::keys::SettingKey::parse("textDirection")
+            .ok()
+            .and_then(
+                |key| match snapshot.fold().projected(&RecordKey::Setting(key)) {
+                    Some(tc_journal::Record::Setting {
+                        value: Some(tc_journal::Json::Str(text)),
+                        ..
+                    }) => Some(text),
+                    _ => None,
+                },
+            );
         Ok(super::ProjectPeek {
             metadata: Ok(metadata_document(snapshot.fold())),
+            text_direction,
             remote: state.seeded.remote.clone(),
             // The fold's version, in the store's form: no pending save, no manifest.
             stamp: Some(SummaryStamp::of(
