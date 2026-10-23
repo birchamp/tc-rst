@@ -109,11 +109,17 @@ jobs:
 
   alignment-budget:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # The runner image leaves too little disk for this workspace ("No space left on device",
+      # runs 39305042134 and 39317068070); these three trees are not needed here.
+      - run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      # With no name, rustup installs the toolchain rust-toolchain.toml names: the one pin.
+      - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test -p tc-align --release --test suggestion_budget -- --ignored --nocapture
+      - run: scripts/gates.sh --step alignment-budget
 
   # The tC4 visual-parity baseline: its screenshots (by sha256), DOM snapshots, manifest, README
   # and the owner's rulings in docs/PLAN.md must agree, the mock server must answer the sync

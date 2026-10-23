@@ -13,6 +13,7 @@ STEPS=(
   "clippy-release-app|cargo clippy --locked -p tc-app --lib -- -D warnings"
   "clippy-windows|cargo clippy --locked --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings"
   "test|cargo test --locked --workspace"
+  "alignment-budget|cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture"
   "wasm-ui|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings"
   "wasm-ui-gallery|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features gallery -- -D warnings"
   "wasm-ui-app|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features app -- -D warnings"

@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d plus about 1.5 h of gates (basis: the full test run took about 899 s of binaries plus builds)
 merged: none
 updated: 2026-10-23
-next: step 2
+next: step 3
 blocked_by: none
 ---
 
@@ -265,3 +265,4 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
 - 2026-10-23 07:31 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-4 in .worktrees/track-INT-4 (the checks lane takes the integration lane's card: nobody holds that lane, and INT-4 needs INT-2 and INT-3). INT-3's merge 5f2b69af is on main; its CI run 39946614391 is in progress and gates this card's merge, not its local steps. Main's previous tip 04a686fd was green on run 39942717141 | gh run view 39946614391
 - 2026-10-23 07:32 EDT | checks lane (Claude Code 2198ee19) | takeover | 2b1d722b | The resume lane session (Enjoy d8a954f9) ended on 2026-10-22 (owner); the five B5b rows of .audit/b5b-minors-pending.tsv are appended to .audit/minors.tsv and the file deleted in `Claim C7a boundary: fold B5b minors` on resume-build-lane | git log -1 resume-build-lane
 - 2026-10-23 07:32 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | BOUNDARY=2b1d722b7b11fd5c10a2928a3476c5e2ad5ce76e; pending file gone at BOUNDARY; 2 B11 rows; no MISSING row | git show 2b1d722b:.audit/minors.tsv
+- 2026-10-23 07:33 EDT | checks lane (Claude Code 2198ee19) | step 2 | 97da2945 | Merge commit 97da2945 (ten Unit trailers; BOUNDARY is an ancestor), then track-INT-1 merged (its card only). Conflicts: .audit/minors.tsv (both sides appended: every row of both kept, header once, as TRACKING says), .audit/HANDOFF.md (main's roadmap text kept over the lane's old "work in flight"), crates/tc-app/src/align/suggest.rs (the lane's C5 rewrite already announces Reading before the training job starts, under the hub's lock, which is what INT-2's fix did, so the lane's file is taken whole). Decided (technical): the card says to log a block for a conflict outside ci.yml, C7a.md and S2.md; these three have mechanical resolutions, so they are resolved and reviewed (FUNNEL §8) before step 3 instead. ci.yml auto-merged; the lane's alignment-budget job now has INT-2's four first steps and runs `scripts/gates.sh --step alignment-budget`, and that step is in STEPS (INT-3's note); node tests pass | git log -1 --format=%(trailers) 97da2945
