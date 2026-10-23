@@ -4,10 +4,10 @@ title: Conflict choices: text and passage
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: C7a session (Claude Code 3058c665)
+branch: track-C7a
+worktree: .worktrees/track-C7a
 depends: []
 needs_owner: []
 proves: [P1, P2, P3]
@@ -15,7 +15,7 @@ no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
 merged: none
 updated: 2026-10-22
-next: Wait for INT-4 to land resume-build-lane (B11's records) on main; then claim on a fresh `track-C7a` worktree from main and do step 1.
+next: Do step 1 (KeepPhase) on track-C7a; merge main again after INT-4 lands resume-build-lane, before the gates.
 blocked_by: none
 ---
 
@@ -267,3 +267,4 @@ Plus:
 - 2026-10-21 | roadmap | note | f9067bc | next in the resume lane session's own plan (.audit/plans/HANDOFF-resume-lane.md); it adopts this card at its next boundary | .worktrees/resume-build-lane/.audit/plans/HANDOFF-resume-lane.md
 - 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | note | none | `KeepPhase` (step 1) is the first `NetEnd<T>` in the UI; UI-3 step 2b generalises it, so a verifier of this card does not ask for the generalisation here. Last sign of life of the lane: f9067bc 2026-10-21 12:16; the gone rule is TRACKING.md "pick up" | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
 - 2026-10-22 | roadmap session (Cursor) | takeover | 43496296 | the owner confirmed at 12:53 that the tC4 Rebuild session (Enjoy d8a954f9) has ended; its two uncommitted minors rows are committed as WIP on resume-build-lane (43496296); the card is released (todo, no owner) because C7a's step 1 was never started; INT-4 lands the branch; `depends` stays empty because B11 is done and C7a's code starts from main after INT-4 | .worktrees/resume-build-lane
+- 2026-10-22 20:50 EDT | C7a session (Claude Code 3058c665) | claim | none | claimed before INT-4 lands: track-C7a is cut from resume-build-lane 43496296 (B11, the two B11 minors rows) with main 81cedaca merged in (7c84cef0, HANDOFF.md took main's text); the merge into main waits for INT-4, as the start session said | .worktrees/track-C7a
