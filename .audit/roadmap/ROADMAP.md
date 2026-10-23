@@ -245,7 +245,7 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 
 | ID | Action | Why | Needed by |
 |---|---|---|---|
-| A1 | Run once on the Linux PC: `sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm` | Lets this PC run CI's Windows clippy, so a local gate pass means a CI pass (INT-3's receipts) | INT-2 step 7, INT-3 step 5 |
+| A1 | ~~Install MinGW and NASM on the Linux PC~~ Done: both are installed (`x86_64-w64-mingw32-gcc` and `nasm` on PATH, confirmed 2026-10-23) | This PC can run CI's Windows clippy locally | done |
 | A2 | Optional: GitHub Pro, to make the CI check required before main changes | GitHub refuses required checks on a private repository on the free plan (HTTP 403). INT-3's merge receipt guards merges without it | none |
 | A3 | Add `eliaspinero` (Elias, H2) as a collaborator on `birchamp/tc-rst` when the owner says the hand-off starts (not yet, 2026-10-22), and confirm GitHub Actions minutes for Windows and macOS runners | Add the second developer as a collaborator on `birchamp/tc-rst`, and confirm GitHub Actions minutes for Windows and macOS runners | Track B pushes `ext/*` branches and runs installers on those runners | Track B start, G3 |
 | A4 | Create the GitHub environment `windows-signing` (deployment branch: the default branch only) and the repository secrets for the Windows signing identity (H4) and the help-desk key (H15); the secret names go into `docs/RELEASE.md` once H4 and H15 are answered. Creating environments and secrets needs repository admin, which a collaborator lacks (inference about GitHub, not cited) | G3's signed run after merge and G1's help-desk key read need them; nobody was assigned to create them | G1 step 7, G3 step 7 |
