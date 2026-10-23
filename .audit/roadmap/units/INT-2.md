@@ -4,7 +4,7 @@ title: Make CI green and trustworthy
 track: A
 lane: checks
 milestone: M0
-state: claimed
+state: building
 owner: checks lane (Claude Code 2198ee19)
 branch: track-INT-2
 worktree: .worktrees/int-2
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: one cfg guard, a toolchain file and CI edits)
 merged: none
 updated: 2026-10-22
-next: step 1
+next: step 5: run the Linux gates and the VM clippy (steps 1-4 are in this commit)
 blocked_by: none
 ---
 
@@ -292,3 +292,7 @@ CI's `lint-windows` stand in); the `node --test` line of `parity-baseline`. Plus
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
 - 2026-10-22 20:46 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-2 in .worktrees/int-2; added the TMPDIR line to ~/.tc-env (it was missing) | python3 -I .audit/tools/board.py
+- 2026-10-22 20:54 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | harness.rs: the symlink is under cfg(unix); cfg(windows) tries symlink_dir and falls back to a copy_tree; clippy -p tc-app --all-targets passed and op_counts printed `test result: ok. 24 passed` | cargo test --locked -p tc-app --test op_counts
+- 2026-10-22 20:54 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | 14 hits of os::unix in crates/*/tests and crates/*/examples, all guarded: harness.rs:181 (step 1); state_seed.rs:752; scenario.rs:75; store.rs:176; seed.rs:555 (tc-app, covers 558 and 567); folders.rs:45; mutations.rs:1046 and 1071 (covers 1082 and 1106); tc-resources seed.rs:774 (covers 777 and 786); loss.rs:445; foldbench.rs:251 | grep -rn "os::unix" crates/*/tests crates/*/examples
+- 2026-10-22 20:54 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | rust-toolchain.toml pins 1.99.1 with rustfmt, clippy, wasm32 and x86_64-pc-windows-gnu; `rustup show active-toolchain` prints 1.99.1-x86_64-unknown-linux-gnu (overridden by rust-toolchain.toml) | rustup show active-toolchain
+- 2026-10-22 20:54 EDT | checks lane (Claude Code 2198ee19) | step 4 | none | ci.yml: lint-linux, lint-windows, lint-wasm, test (push) and nightly-windows (schedule, dispatch); 12 cargo lines, 11 with --locked, 5 timeouts; --locked proof: with the last [[package]] of Cargo.lock removed, `cargo metadata --locked` exits 101 saying "--locked was passed to prevent this"; the workflow_dispatch run is logged after the push | python3 -I -c "import yaml; print(sorted(yaml.safe_load(open('.github/workflows/ci.yml'))['jobs']))"
