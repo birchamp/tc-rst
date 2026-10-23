@@ -8,7 +8,7 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
   "Swept" line above.
 - Scope: five areas (align; USFM, Translate and helps; check and resources; sync, storage
   and import; shell, startup, languages and help). Each area lists the issues named for it
-  and every other tC4 issue in that area opened or updated since 2026-10-01. An issue that
+  and every other tC4 issue in that area opened or updated since 2026-10-01 (sweep of 2026-10-19) or since 2026-10-19 (sweep of 2026-10-23). An issue that
   touches two areas appears in both, with each area's verdict.
 - Method: each area was triaged, then checked by a verifier who reran the claims. Where the
   verifier overturned a verdict, this file uses the verifier's status, evidence and action.
@@ -37,12 +37,12 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 
 | Area | rebuild bug | unit todo | reference change | covered | owner question | not applicable | Rows |
 |---|---|---|---|---|---|---|---|
-| Align | 2 | 6 | 1 | 25 | 1 | 1 | 36 |
-| USFM, Translate and helps | 1 | 13 | 2 | 28 | 1 | 9 | 54 |
-| Check and resources | 3 | 3 | 2 | 32 | 2 | 22 | 64 |
-| Sync, storage and import | 1 | 29 | 4 | 16 | 2 | 13 | 65 |
+| Align | 2 | 7 | 1 | 24 | 1 | 1 | 36 |
+| USFM, Translate and helps | 1 | 13 | 1 | 29 | 1 | 9 | 54 |
+| Check and resources | 2 | 3 | 2 | 33 | 2 | 22 | 64 |
+| Sync, storage and import | 1 | 29 | 3 | 17 | 2 | 13 | 65 |
 | Shell, startup, languages and help | 4 | 35 | 1 | 17 | 0 | 19 | 76 |
-| All area rows | 11 | 86 | 10 | 118 | 6 | 64 | 295 |
+| All area rows | 10 | 87 | 8 | 120 | 6 | 64 | 295 |
 
 Counted from the rows on 2026-10-23 (the 2026-10-19 table had gone stale as units finished;
 two rows that said "done" now say covered). A row counts once per area table. The 2026-10-23
@@ -58,7 +58,7 @@ The first four come from tC4's commit range; the rest come from the issue triage
 
 | # | Issue | Failing scenario | Crate | Regression test | Fix |
 |---|---|---|---|---|---|
-| 1 | #773 | GEN 33:5 note mix3 is titled "his eyes … the women … whom God has graciously given to your servant". gyfv, r2u9 and h9hm are also wrong; only zczu is right. 38 of the 2,224 Genesis Notes checks take this path. | tc-helps (`highlight_quote`, used by `CheckItem::title`) | `a_reordered_quote_lights_only_its_own_phrase` (tC4's five vectors on `GEN-773.usfm`, plus TIT 2:2 "in love") | Port `shortestRunInstances` into the multi-word fallback. Keep the single-word and strict paths. h9hm is a plain note, so it affects only the helps highlight. |
+| 1 | #773 | GEN 33:5 note mix3 is titled "his eyes … the women … whom God has graciously given to your servant". gyfv, r2u9 and h9hm are also wrong; only zczu is right. 38 of the 2,224 Genesis Notes checks take this path. | tc-helps (`highlight_quote`, used by `CheckItem::title`) | `a_reordered_quote_lights_only_its_own_phrase` (tC4's five vectors on `GEN-773.usfm`, plus TIT 2:2 "in love") | Port `shortestRunInstances` into the multi-word fallback. Keep the single-word and strict paths. h9hm is a plain note, so it affects only the helps highlight. Fixed by 2026-10-23: the test passes. |
 | 2 | #782 | The shown text of en_ult Genesis 1:1's aligned content is "In the beginning God created  and the earth."; the aligner has 8 words and no "heavens". PSA 34:4, kept as written, has no "Yahweh". 633 of 1,533 Genesis verses with markup lose words; 67 of the 265 en_ult verses the import keeps as written lose words. | tc-usfm (`shown_text_v1`), read by tc-align and tc-journal | `shown_text_reads_words_inside_nested_alignments`; `a_verse_kept_as_written_shows_yahweh`; `selah_inside_qs_shows`; plus a tC4-imported verse with nested `\zaln` | Walk `\zaln` and word nodes at any depth, as tC4 9ad4d5c does. Add tC4's vectors (`fixtures/usfm/shown-text-vectors.json`); the existing vectors do not change. Update STORAGE §7.7 ("Shown text and hashed text"). Land before format 1.0. |
 | 3 | #795 | After the import split, MAT 5:22 shows "brotherwill", MAT 5:44 "enemiesand" and 1TH 3:2 "Godin" (12 Matthew and 3 1 Thessalonians verses). Opening MAT 5:22 in Align drops 2 of its 44 links, and "brotherwill" can never be aligned. | tc-usfm (`shown_text_v1`), tc-align | `a_footnote_between_words_keeps_its_space`; `imported_mat_5_22_opens_with_all_44_links` | Keep the character after `\f*` or `\x*` when the note sits between two non-space characters (tC4 PR #800), and after every other marker the shown text leaves out (`\va`, `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*`…), which PR #800 does not (declared difference, PLAN). Same change as #782. |
 | 4 | #787 | A record saved for "Pablo, siervo de Dios", reopened against "Pablo, esclavo de Dios", gives `is_stale()` false. "The draft changed" never shows after a sync, a kept version or an outside edit changed the verse. | tc-align (`Aligner::open`, `is_stale`), tc-api (`Freshness`) | `a_stale_value_opens_with_the_draft_changed_notice` | Done by FIX-align: `Aligner::is_stale` is the flag set at open by `needs_review` (row 6), kept until the first edit, Mark valid or `keep_reflow`; tc-api's `Freshness::Stale` carries it. The save on leaving stays (AD19). |
@@ -150,7 +150,7 @@ the rebuild fixed it or does as tC4 does:
 | D105.5 (#814) | Does an Align edit clear "needs review"? | owner question | tc-align; REF1 | `an_edit_clears_the_re_review_flag_tc3_or_tc4_set` (exists; changes if the owner follows tC4) | Owner question (asked 2026-10-23). tC4: only Mark valid clears it. The rebuild clears it at the first edit. Recommendation: follow tC4. `TC4-DELTA-2026-10-23.md` §5 Q37. |
 | #796 (export) | Never drop a verse's alignment silently, and keep imported markup | unit todo | D2 | `export_reports_and_keeps_a_verse_that_needs_review`; `export_keeps_inline_zaln_bytes_even_with_a_matching_record`; `a_record_with_nothing_placed_exports_the_stored_bytes` (all to create, D2) | Weave only a verse that passes `needs_review` and whose words match. Otherwise write the stored bytes and name the verse in a notice. Check for inline `\zaln` before validity (tC4 PR #799). |
 | D105 (#809, #811, #814) | The export leaves out a verse that needs review and names it | unit todo | D2; REF1 | `export_reports_and_keeps_a_verse_that_needs_review` (to create, D2) | tC4's notice is `cc.exportSkipped`: "Your alignment of these verses is not in the file. Check them in Align: {refs}". D2 uses that string (REF1 vendors it); the rebuild writes the stored bytes for such a verse, as the #796 (export) row says. |
-| #795 | One hash for the aligner and the alignment files | covered | tc-store, tc-align | `an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen` (to create, FIX-R step 5) | The rebuild stamps `plain_text_v1` of the stored NFC verse everywhere. The display half is #796 (word list). tC4 #800 also refuses a verse whose text starts on the next line ("tC4 cannot save an alignment for this verse"); the rebuild aligns it, a declared difference (PLAN). |
+| #795 | One hash for the aligner and the alignment files | unit todo | FIX-R; tc-store, tc-align | `an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen` (to create, FIX-R step 5) | The rebuild stamps `plain_text_v1` of the stored NFC verse everywhere. The display half is #796 (word list). tC4 #800 also refuses a verse whose text starts on the next line ("tC4 cannot save an alignment for this verse"); the rebuild aligns it, a declared difference (PLAN). |
 | #794 | Do not align over a verse that holds imported alignment markup | covered | tc-align, tc-store; T, I, REF1 | `a_verse_that_holds_alignment_markup_does_not_open`; `a_verse_edit_of_an_inline_aligned_verse_writes_no_alignment` (to create, T) | See §1 row 7. I lists such tC4 books in the import report. tC4 merged #799; REF1 takes its `align.unavailable.inline-alignment.*` strings in place of the rebuild's `align.unavailable.alignedInText`. |
 | #553 | Keep the alignments of an aligned USFM file on import or Add a book | unit todo | I (C6 done) | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` (to create, I) | Both paths call `split_aligned`. A verse it refuses keeps its text, is counted, and falls under #794. Compare in NFC (#793) and per verse with x-ref (#409). |
 | #793 | Suggestions: Hebrew source words in two Unicode forms | covered | tc-align | `memory_trained_on_nfc_records_suggests_for_raw_source_words` | See §1 row 8. |
@@ -200,7 +200,7 @@ the rebuild fixed it or does as tC4 does:
 | #27 | Merge concurrent edits automatically | covered | tc-journal | `merge_bookmark_and_status`; `loss_check_two_ways_visible` | None. |
 | #767 | Import creates an empty book after the size warning | covered | C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent`; `a_psalm_adds_whole_with_every_verse_and_its_selah` | See §1 row 17. C6 built the one-batch command `AddBookText` (APP-DESIGN C6 D3). No refusal stays, so `addBook.usfmTooLarge` is not vendored: the rebuild never refuses a book for its size. |
 | #782 | Words inside nested alignments are dropped | covered | tc-usfm | `shown_text_reads_words_inside_nested_alignments`; `selah_inside_qs_shows` | See §1 row 2 (fixed). |
-| #773 | A reordered quote picks up words from elsewhere | reference change | tc-helps | `a_reordered_quote_lights_only_its_own_phrase` | The check area shows it is a rebuild bug today (§1 row 1). |
+| #773 | A reordered quote picks up words from elsewhere | covered | tc-helps | `a_reordered_quote_lights_only_its_own_phrase` | Fixed: the test passes (2026-10-23, `crates/tc-helps/tests/highlight.rs`); §1 row 1. |
 | #664 | Test the Hebrew highlight with a maqaf | covered | tc-helps | `hebrew_quotes_split_maqaf_compounds_into_the_aligned_words` | Pin tC4's GEN 1:5, 1:7 and 1:28 cases. |
 | #553 | Keep the alignments of an aligned USFM file | unit todo | F1, I; B6, D2 (C6 done) | `aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records`; `a_verse_whose_alignment_does_not_read_apart_keeps_its_text_as_written` | Split on Add a book as on import (C6: `AddBookText`), and list kept verses (C6 keeps a verse that does not read apart as written; the list of them is F1's). Unit I also splits tC4 4.0 verses that hold `\zaln`. Kept verses: Align unavailable, reflow skipped, export bytes kept (#794). |
 | #420 | Keep a character style around an aligned word | covered | tc-usfm; D2 | `weave_writes_what_tc4_writes` | Add to PLAN's declared differences. |
@@ -245,7 +245,7 @@ the rebuild fixed it or does as tC4 does:
 
 | Issue | Title | Status | Unit or crate | Regression test | Action |
 |---|---|---|---|---|---|
-| #773 | A reordered quote's title and highlight pick up other words | rebuild bug | tc-helps; tc-check | `a_reordered_quote_lights_only_its_own_phrase` | See §1 row 1. |
+| #773 | A reordered quote's title and highlight pick up other words | covered | tc-helps; tc-check | `a_reordered_quote_lights_only_its_own_phrase` | Fixed: the test passes (2026-10-23); see §1 row 1. |
 | #765 | Hebrew quote shown instead of English when it has a maqaf | covered | tc-helps | `genesis_maqaf_quotes_title_in_the_ult` | No fix. The converter B3 or B5a builds from the ULT keeps nested `\zaln`; test 0 Hebrew titles over all of Genesis. |
 | #664 | Test the Hebrew highlight with a maqaf | covered | tc-helps | `every_jonah_note_quote_finds_its_words_in_the_uhb_verse` | None beyond #765. |
 | #769 | Group notes by figure, and fold groups | reference change | tc-check, tc-helps, B5a, B7, A3, A6a | `rail_groups_by_figure_in_first_note_order` (to create); `group_counts_ignore_the_filter`; `fold_survives_a_restart`; `next_into_a_folded_group_unfolds_it`; `fold_all_keeps_the_active_group_open` | See DELTA §3.7 and §3.12.1. Update APP-DESIGN §3.8 and §4.9. |
@@ -334,7 +334,7 @@ the rebuild fixed it or does as tC4 does:
 | #675 | Sync core: combine and rebuild | unit todo | X | `door43_ingest_deterministic`; `a_damaged_remote_pack_is_salvaged_and_listed` | The fold half is built and tested. |
 | #674 | Sync rules and the three-translator fixture | covered | tc-journal; X | `fold_converges_under_any_union`; `conservation` | X ports tC4's team-sync fixture cases as one library scenario. |
 | #673 | Spike on Door43 clone and push | not applicable | — | — | Pankosmia routes the rebuild does not use. |
-| #766 | Pin the source texts when an import has no pins | reference change | C8, F1, I, E1b, X | `open_writes_creation_pins_only_when_none_exist` | The check verifier says build it now (§4). |
+| #766 | Pin the source texts when an import has no pins | covered | C8, F1, I, E1b, X | `open_writes_creation_pins_only_when_none_exist` (`crates/tc-app/tests/app/store_scenario.rs`) | Built; tC4 carried #772 to rc.2. I, F1 and E1b keep it for their paths. |
 | #549 | Show a story project's own pictures | rebuild bug | tc-obs; B7, I | `a_project_picture_without_a_role_is_the_project_rung` | See §1 row 15. B7 serves the pictures of an installed pack at `/media/obs` and finds none of a project's own: no screen reaches a story project that carries pictures until X, F1 and E1b can bring one in, so the route for them is built with that unit. |
 | #161 | Two device ids under one name after a computer change | unit todo | S2, X | `a_new_device_copies_the_profile_and_both_group_as_mine`; `copied_username_is_replaced_by_the_first_signed_in_fetch` | The profile copy is untested. A hand-copied folder copies the first person's name; tell the owner. |
 | #160 | Record four sync risks | not applicable | P | — | tC4 documentation. P owns the scale risk. |
