@@ -89,3 +89,4 @@ INT-6	lane-b7 holds uncommitted work nobody has judged (3 files)	refs/wip/lane-b
 INT-6	lane-merge holds uncommitted work nobody has judged (2 files)	refs/wip/lane-merge/2026-10-23
 A8	fixed: a cancel after Door43 deleted the old token	2dfa188c
 A8	fixed: FlowRequest::SignIn had no product caller	f5c38d12
+INT-6	When the root drive is the fuller one, the watcher's prune frees build folders on /home, which frees nothing there; it only prints the act warning	.audit/tools/watch-runs.py

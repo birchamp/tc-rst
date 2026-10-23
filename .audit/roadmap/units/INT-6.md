@@ -4,7 +4,7 @@ title: Rescue stray work and free the disk
 track: A
 lane: integration
 milestone: M0
-state: verifying
+state: gating
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-INT-6
 worktree: .worktrees/track-INT-6
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d
 merged: none
 updated: 2026-10-23
-next: One verify pass (steps 1-5), then ask the orchestrator (local_d49edca7) for a merge turn; the merge gate is scripts/gates.sh --journeys.
+next: Wait for a merge turn from the orchestrator (local_d49edca7); then merge main in (keep INT-5's watch-runs.py and HANDOFF edits), make the merge commit in a separate worktree, run scripts/gates.sh --journeys there, move main only on --check-receipt.
 blocked_by: none
 ---
 
@@ -299,3 +299,5 @@ files.
 - 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner: "yes delete" | rulings/2026-10-23-disk-cleanup.md
 - 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | probe: `git worktree remove` refused the changed probe (`contains modified or untracked files`, exit 128), then removed it clean. Removed lane-b4b and lane-b5b with `git worktree remove` and their /var/tmp build folders; both branches still listed. df before: `/ 905G 295G 565G 35%`, `/home 916G 654G 217G 76%`; after: `/ 905G 222G 637G 26%`, `/home 916G 655G 215G 76%` | git worktree list; git branch --list lane-b4b lane-b5b
 - 2026-10-23 17:38 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | f5c38d12 | cherry-picked with -x, no conflict: 58aa8a9 as 2dfa188c, 599e516 as f5c38d12; two A8 rows appended. The account test passes; with 2dfa188c's account.rs reverted it fails (`panicked at crates/tc-app/tests/app/account.rs:687:5: assertion left == right failed`), restored; screen_record 48 passed; account-menu, j11-sign-in and share-open journeys: # pass 16, # fail 0, # skipped 0 | cargo test -p tc-app --test app a_cancel_once_the_token_calls_started_forgets_the_token_an_earlier_session_kept
+- 2026-10-23 17:41 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | one pass by a fresh read-only reviewer agent: the three refs hold exactly their worktrees' changes (diff check empty, counts 55/3/2); 2dfa188c and f5c38d12 equal 58aa8a9 and 599e516, touch the seven named files, match tC4 (a cancel during the token calls signs out), no deadlock, no project data touched, account test 1 passed; only lane-b4b and lane-b5b removed, branches kept; watch-runs.py parses with no relocate_idle, /var/tmp or du. §8: code deletes the unused flow and the relocation; checks exist, fail when reverted, run in CI; reach: a translator can cancel a sign-in; siblings: the prune missed .worktrees/*/target; no-loss: stray work saved first; one ruling file. No blocker, no major; two minors | reviewer report in this session
+- 2026-10-23 17:41 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | the prune now also covers .worktrees/*/target, where builds live now; the other minor (pruning /home frees nothing when / is the fuller drive) appended to .audit/minors.tsv | python3 -I -c "import ast; ast.parse(open('.audit/tools/watch-runs.py').read())"

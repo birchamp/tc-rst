@@ -175,7 +175,7 @@ while True:
         if free < 60 and time.time() - last_prune > 1800:
             last_prune = time.time()
             import glob
-            targets = [REPO + "/target"] + glob.glob(REPO + "/.claude/worktrees/*/target")
+            targets = [REPO + "/target"] + glob.glob(REPO + "/.claude/worktrees/*/target") + glob.glob(REPO + "/.worktrees/*/target")
             freed = []
             busy = busy_paths()
             for t in targets:
