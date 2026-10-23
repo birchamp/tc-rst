@@ -1965,3 +1965,45 @@ fn an_invalid_text_refusal_keeps_the_field_and_its_actionable_reason_until_retry
     page.deliver_ok();
     assert_eq!(page.state(&k), Some(FieldSave::Clean));
 }
+
+/// INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR (tC4 #801): a save refused for a reason no
+/// retry in this open can fix (a token the server will not take) is held, not failed: the gate
+/// lets the person go Home after one try, and the text stays buffered for the next open.
+#[test]
+fn a_save_refused_for_good_lets_the_person_go_home_and_keeps_the_text() {
+    let mut page = Page::new();
+    let k = key("a");
+    page.open(&k, "", 1);
+    page.focus(&k);
+    page.type_text(&k, "kept text");
+    page.blur(&k);
+    page.deliver(Answered::Failed(SaveError::NotSaved(NotSaved::BadToken)));
+    assert_eq!(
+        page.state(&k),
+        Some(FieldSave::Held(Hold::RefusedForThisOpen(
+            NotSaved::BadToken
+        )))
+    );
+    let passed = page.gate(|_, _| panic!("a held field sends nothing"), |_| {});
+    assert!(passed, "the gate lets the person go");
+    assert_eq!(
+        page.sends().len(),
+        1,
+        "no retry of a refusal that cannot change"
+    );
+    assert_eq!(
+        page.entry(&k).map(|e| e.text),
+        Some("kept text".to_owned()),
+        "the text stays for the next open"
+    );
+    // A disk failure is the other kind: a retry may well fix it, so the gate retries once.
+    let d = key("d");
+    page.open(&d, "", 1);
+    page.focus(&d);
+    page.type_text(&d, "later");
+    page.blur(&d);
+    page.deliver(Answered::Failed(SaveError::NotSaved(NotSaved::Disk(
+        "full".into(),
+    ))));
+    assert!(matches!(page.state(&d), Some(FieldSave::Failed(_))));
+}

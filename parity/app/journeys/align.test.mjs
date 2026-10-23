@@ -604,3 +604,19 @@ browserTest('an_ot_card_shows_placed_words_in_the_translation_direction', async 
     assert.ok(directions.length > 0 && directions.every((d) => d === 'ltr'), `placed words read in the translation's direction: ${directions.join(' ')}`);
   });
 });
+
+/** Owner answer Q30 (a), tC4 #825: a link a save or an open sent back to the word bank is listed
+ * on the Align screen with its word (the server's `dropped`); nothing goes back silently. */
+browserTest('a_link_sent_back_to_the_bank_is_listed', async () => {
+  await withApp(async ({ page }) => {
+    await page.route('**/api/v1/align/open', async (route) => {
+      const reply = await (await route.fetch()).json();
+      if (reply.type === 'ok') reply.value.dropped = [{ card: 1, top: [{ word: 'Παῦλος', occurrence: 1, occurrences: 1 }], word: { word: 'Pablo', occurrence: 1, occurrences: 1 } }];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
+    });
+    await openAlign(page);
+    const listed = page.getByTestId('align-dropped');
+    await listed.waitFor();
+    assert.match(await listed.textContent(), /word bank.*Pablo/);
+  });
+});

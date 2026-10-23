@@ -1127,11 +1127,33 @@ fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> An
             .into_any()
         })
         .collect();
+    // Links a save or an open sent back to the word bank are listed, never silently gone
+    // (owner answer Q30 (a), tC4 #825).
+    let dropped = (!view.dropped.is_empty()).then(|| {
+        let words = view
+            .dropped
+            .iter()
+            .map(|d| d.word.word.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let style = crate::css! {
+            "font-size": "var(--fs-caption-lg)",
+            "color": "var(--tc-warn-text)",
+            "background": "var(--surface-warm)",
+            "border": "var(--stroke) solid var(--tc-warn-border)",
+            "border-radius": "var(--radius-md)",
+            "padding": "10px 12px",
+            "margin": "0 0 14px",
+            "line-height": 1.5,
+        };
+        view! { <p data-testid="align-dropped" style=style.to_style()>{t(keys::align::DROPPED_LINKS, &[("words", &words)])}</p> }
+    });
     let session = view! {
         <div data-testid="align-session">
             {header(s, actions, &view, book)}
             {how_toggle(s)}
             {stale}
+            {dropped}
             <div style=panel.to_style()>
                 {mode_bar(s, lens, view.gateway.is_some(), view.testament)}
                 {ref_band(&view, lens)}

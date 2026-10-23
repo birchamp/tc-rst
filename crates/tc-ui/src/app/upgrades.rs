@@ -66,7 +66,7 @@ impl UpgradeState {
             return;
         }
         self.checking = false;
-        self.error = view.texts_error.as_ref().map(|reason| check_failed(reason));
+        self.error = view.texts_error.map(check_failed);
         self.offers = Some(Offers {
             project: project.clone(),
             view,
@@ -181,12 +181,10 @@ fn spent_by(plan: &PlanView) -> Option<Spent> {
     }
 }
 
-/// tC4's `upgrade.checkFailed`, with the reason.
-fn check_failed(reason: &str) -> String {
-    crate::i18n::t(
-        crate::i18n::keys::upgrade::CHECK_FAILED,
-        &[("reason", &reason)],
-    )
+/// One plain sentence per cause (tC4 #833.1), in place of tC4's `upgrade.checkFailed` with the
+/// client's own text as its reason.
+fn check_failed(why: tc_api::refusal::UpdateCheckFailure) -> String {
+    crate::i18n::t_dyn(why.key(), &[], None)
 }
 
 /// What the gateway dialog shows while a plan is made or written.

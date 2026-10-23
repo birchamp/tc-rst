@@ -109,12 +109,15 @@ pub enum FieldSave {
 }
 
 /// Why a field cannot save now.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Hold {
     /// Its project has no open in this run: it was closed, or reopened under another id.
     NoOpen,
     /// Its project is open read-only (A-10): the text stays for the offered copy.
     ReadOnly(ReadOnlyReason),
+    /// Refused for a reason no retry in this open can fix (tC4 #801): the text stays for the
+    /// offer at the project's next open, and the gate lets the person go.
+    RefusedForThisOpen(NotSaved),
     /// The server started again under the field, whose editor is still on screen: its text is
     /// buffered and waits for the offer at its project's next open, never saved by this page
     /// (AD4). Closing the editor forgets the field.
@@ -970,6 +973,16 @@ impl SaveMachine {
             }
             Answered::Failed(SaveError::NotSaved(NotSaved::ReadOnly(reason))) => {
                 field.state = FieldSave::Held(Hold::ReadOnly(reason));
+                field.send_on_open = true;
+                out.push(Command::Write {
+                    key: key.clone(),
+                    entry: entry_of(field),
+                    mirror: true,
+                });
+            }
+            Answered::Failed(SaveError::NotSaved(reason)) if !classify::retry_can_fix(&reason) => {
+                field.state = FieldSave::Held(Hold::RefusedForThisOpen(reason));
+                field.due = None;
                 field.send_on_open = true;
                 out.push(Command::Write {
                     key: key.clone(),

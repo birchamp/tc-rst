@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tc_api::endpoint::NetKind;
 use tc_api::ids::{JobId, PlanId, Scope};
 use tc_api::jobs::{JobKind, JobOutcome, Phase};
-use tc_api::refusal::{Refusal, ResourceRefusal};
+use tc_api::refusal::{Refusal, ResourceRefusal, UpdateCheckFailure};
 use tc_api::resources::{
     ApplyPlan, CheckUpdates, GatewayChange, GatewayRef, ImageChange, OfferRef, PlanApplied,
     PlanGateway, PlanUpgrade, PlanView, PlanWhat, RepoMove, SetOffer as SetOfferView, SetRung,
@@ -660,11 +660,36 @@ fn pin_changes(
 // resources/checkUpdates
 // ---------------------------------------------------------------------------------------
 
+/// Why a check could not be made, by what Door43 did: one arm per failure, so the screen
+/// says one plain sentence (tC4 #833.1).
+fn check_failure(error: &Door43Error) -> UpdateCheckFailure {
+    match error {
+        Door43Error::Offline { .. } | Door43Error::Unreachable { .. } => {
+            UpdateCheckFailure::Unreachable
+        }
+        Door43Error::AuthFailed { .. }
+        | Door43Error::NoWriteAccess { .. }
+        | Door43Error::RefRejected { .. }
+        | Door43Error::RefMoved { .. }
+        | Door43Error::NotFound { .. }
+        | Door43Error::NameExists { .. }
+        | Door43Error::RateLimited { .. }
+        | Door43Error::Rejected { .. } => UpdateCheckFailure::Refused,
+        Door43Error::Server { .. }
+        | Door43Error::UnexpectedResponse { .. }
+        | Door43Error::TooLarge { .. }
+        | Door43Error::Verification { .. }
+        | Door43Error::Cancelled { .. }
+        | Door43Error::Disk { .. }
+        | Door43Error::Setup { .. } => UpdateCheckFailure::Server,
+    }
+}
+
 fn net_error(error: &Door43Error) -> ApiError {
     match error {
         Door43Error::Offline { .. } => ApiError::NeedsInternet(NetKind::Sources),
         other => ApiError::Refused(Refusal::Resources(ResourceRefusal::UpdateCheckFailed {
-            reason: other.to_string(),
+            why: check_failure(other),
         })),
     }
 }
@@ -728,7 +753,7 @@ impl Handle<CheckUpdates> for App {
             .collect();
         let (texts, texts_error) = match updates::latest_releases(&client, &text_repos).await {
             Ok(latest) => (updates::text_offers(&pins, &testaments, &latest).0, None),
-            Err(error) => (Vec::new(), Some(error.to_string())),
+            Err(error) => (Vec::new(), Some(check_failure(&error))),
         };
         Ok(UpdatesView {
             sets,
