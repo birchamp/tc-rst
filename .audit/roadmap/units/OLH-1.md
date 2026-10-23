@@ -4,18 +4,18 @@ title: Highlight a note's words in the original-language pane
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: C7a session (Claude Code 3058c665)
+branch: track-OLH-1
+worktree: .worktrees/track-OLH-1
 depends: [INT-4]
 needs_owner: []
 proves: [P1]
 no_loss: false
 size: 2-3 sessions (basis: tC4 #840's scope; the gateway highlighter exists in tc-helps)
 merged: none
-updated: 2026-10-23
-next: Claim this card, then do step 1.
+updated: 2026-10-24
+next: Step 1: the matcher tests, then the function in tc-helps.
 blocked_by: none
 ---
 
@@ -118,3 +118,4 @@ moves to.
 ## Log
 
 - 2026-10-23 | integration lane (Claude Code 3d07d5f8) | created | none | from the owner's Q39 answer of 2026-10-23 | rulings/2026-10-23-Q39-original-language-highlight.md
+- 2026-10-24 | C7a session (Claude Code 3058c665) | claimed | none | on a branch cut from track-SWEEP (a7199102), as the orchestrator offered, while SWEEP waits for its merge turn | none
