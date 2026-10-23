@@ -18,7 +18,7 @@ const MAINBR = 'claude/focused-ride-5uzj7p'
 const MWT = `${ROOT}/.claude/worktrees/merge-main`
 const ENV = "In every shell command that runs cargo, rustc, node or npx, source ~/.tc-env first ('. ~/.tc-env && ...')."
 const ATTR = "End every commit message with the line 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'. Never push."
-const GATES = `cargo fmt --all -- --check; cargo clippy --workspace --all-targets -j 6 -- -D warnings; cargo test --workspace -j 6; cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -j 6 -- -D warnings, once without features and once with each tc-ui feature that exists (gallery, and app and harness if they exist); cargo clippy -p tc-api --target wasm32-unknown-unknown --all-targets -j 6 -- -D warnings`
+const GATES = 'scripts/gates.sh, from the worktree root with CARGO_BUILD_JOBS=6 exported; it prints "gates: all N steps passed" only when every step passed'
 const CTX = `This is the Rust rebuild of translationCore 4 (tC4), a Bible translation desktop app; losing, hiding or silently rewriting a translator's work is unacceptable. AGENTS.md is the rule book. The repository is ${ROOT}. ${ENV} The machine has 20 CPUs shared with other agents' builds (cargo -j 6) and about 300 GB free. Never delete anything outside the worktree you are told to use, and never touch .claude/worktrees/storage, phase0 or p0-*: other teams work there.${A.context ? '\n\n' + A.context : ''}`
 
 const ISSUE = { type: 'object', properties: { title: { type: 'string' }, severity: { type: 'string', enum: ['blocker', 'major', 'minor'] }, evidence: { type: 'string' }, fix: { type: 'string' } }, required: ['title', 'severity', 'evidence', 'fix'] }
@@ -54,6 +54,6 @@ const merged = await agent(`${CTX}\n\nYou MERGE ${toMerge} into ${MAINBR}. Use t
 if (!merged) return { merged: false, green: false, summary: 'merge agent died' }
 
 phase('Gate')
-const gate = await agent(`In ${MWT} (cd there; ${ENV}), check the merge of ${toMerge} into ${MAINBR}: git log -1 --format=%H; git status --porcelain (must be empty); git merge-base --is-ancestor ${MAINBR} HEAD (must hold); git merge-base --is-ancestor ${toMerge} HEAD (must hold). Then run: ${GATES}. Report merged=true if both ancestor checks hold, green=true only if every gate passed and the tree is clean, sha = HEAD, and in summary the test counts (passed, failed, ignored) and the first 40 lines of any failure verbatim.`, { label: `gate:${LABEL}`, phase: 'Gate', schema: GATE, effort: 'low' })
+const gate = await agent(`In ${MWT} (cd there; ${ENV}), check the merge of ${toMerge} into ${MAINBR}: git log -1 --format=%H; git status --porcelain (must be empty); git merge-base --is-ancestor ${MAINBR} HEAD (must hold); git merge-base --is-ancestor ${toMerge} HEAD (must hold). Then run: ${GATES}. Then run scripts/gates.sh --check-receipt. Report merged=true if both ancestor checks hold, green=true only if every gate passed, the tree is clean and scripts/gates.sh --check-receipt exited 0, sha = HEAD, and in summary the test counts (passed, failed, ignored) and the first 40 lines of any failure verbatim.`, { label: `gate:${LABEL}`, phase: 'Gate', schema: GATE, effort: 'low' })
 if (!gate) return { merged: false, green: false, summary: 'gate agent died', mergeReport: merged }
 return { ...gate, mergeReport: merged, review: reviewNote }

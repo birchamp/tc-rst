@@ -6,11 +6,12 @@ $env:RUST_TEST_THREADS = '4'
 # The VM's 80 GB disk filled with incremental caches; a gate run gains little from them.
 $env:CARGO_INCREMENTAL = '0'
 $gates = [ordered]@{
-  fmt    = 'cargo fmt --all -- --check'
-  clippy = 'cargo clippy --workspace --all-targets --keep-going -- -D warnings'
-  test   = 'cargo test --workspace --no-fail-fast'
-  wasm   = 'cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings'
+  fmt    = 'cargo fmt --all --check'
+  clippy = 'cargo clippy --locked --workspace --all-targets --keep-going -- -D warnings'
+  test   = 'cargo test --locked --workspace --no-fail-fast'
+  'wasm-ui' = 'cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings'
 }
+
 $failed = @()
 foreach ($g in $gates.Keys) {
   $t = [Diagnostics.Stopwatch]::StartNew()

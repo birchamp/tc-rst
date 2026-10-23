@@ -4,18 +4,18 @@ title: One gate list for CI and every local runner; merge only with a passing ga
 track: A
 lane: checks
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: done
+owner: checks lane (Claude Code 2198ee19)
+branch: track-INT-3
+worktree: .worktrees/int-3
 depends: [INT-2]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5-1 d
-merged: none
+merged: 172787f2
 updated: 2026-10-22
-next: Claim this card after INT-2 merges, then do step 1.
+next: none
 blocked_by: none
 ---
 
@@ -313,3 +313,19 @@ exactly these, so on the merge commit it is this card's gate. Plus:
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-22 23:07 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-3 in .worktrees/int-3. INT-2 is done (78eeec19) but main's CI run 39893217059 started no job (GitHub Actions billing, INT-2's last note), so "Before you start" is met except the green run; steps 1-6 are local and go ahead, step 7's merge waits for a green main | python3 -I .audit/tools/board.py
+- 2026-10-22 23:08 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | scripts/gates.sh (mode 100755): 12 steps, --list prints 12 lines, `UPDATE_REPORT= scripts/gates.sh --list` prints the refusal and exits 2, --step fmt exits 0, --check-receipt refuses with the INV-NO-UNGATED-MERGE line | scripts/gates.sh --list
+- 2026-10-22 23:10 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | gates-sync and gates-script tests written; red where expected: (a) "step fmt has no scripts/gates.sh --step fmt line", (b) the node --test line only, (c) gates.ps1 fmt differs, (d) build-lane.js GATES does not run scripts/gates.sh; the script tests pass. Mutation 1 (ci.yml gets `cargo test --workspace --release`): `gate drift: ci.yml runs "cargo test --workspace --release" but scripts/gates.sh does not`. Mutation 2 (refusal loop deleted): `not ok 1 - INV-GATES-NEVER-BLESS: the gate script refuses a blessing environment ... UPDATE_REPORT set: exit 0`. Both restored. Decided: the receipt test's scratch repo ignores /target as the real repo does, else the receipt folder itself dirties the tree | node --test .audit/tools/gates-sync.test.mjs .audit/tools/gates-script.test.mjs
+- 2026-10-22 23:10 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | ci.yml runs every cargo and node line as `scripts/gates.sh --step <name>`: 13 such lines, not 12, because nightly-windows runs `--step test` as well (the card's step 4 of INT-2 said INT-3 would replace that line); no cargo or node --test line is left; tests (a) and (b) pass | grep -c 'scripts/gates.sh --step' .github/workflows/ci.yml
+- 2026-10-22 23:10 EDT | checks lane (Claude Code 2198ee19) | step 4 | none | gates.ps1 holds the four entries the card gives (fmt, clippy with --keep-going, test with --no-fail-fast, wasm-ui); build-lane.js and merge-main.js GATES run scripts/gates.sh; merge-main.js's gate prompt requires scripts/gates.sh --check-receipt to exit 0 for green; `node --test .audit/tools/*.test.mjs`: 7 pass, 0 fail | node --test .audit/tools/*.test.mjs
+- 2026-10-22 23:10 EDT | checks lane (Claude Code 2198ee19) | gate | none | started scripts/gates.sh in .worktrees/int-3 (no other heavy run alive), log .enjoy-logs/int3-gates.log | .enjoy-logs/int3-gates.log
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | gate | 0e95a4ee | scripts/gates.sh on 0e95a4ee: 11 of 12 steps passed (cargo test 3040 passed, 0 failed, 7 ignored), step node failed on `CI loads every journey file over this environment` (parity/app/env-rust.test.mjs), which read the node line from ci.yml; no receipt | .enjoy-logs/int3-gates.log
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | fix | none | env-rust.test.mjs now reads the `node` entry of scripts/gates.sh, the one list, and still checks that its glob covers every journey file; `node --test parity/app/env-rust.test.mjs .audit/tools/*.test.mjs`: 15 pass | node --test parity/app/env-rust.test.mjs
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | step 5 | none | TRACKING.md "Checklist: merge an item" step 1 now requires the merge commit in a separate worktree, scripts/gates.sh there, and --check-receipt exit 0 before main moves; the full run is repeated on this tree (steps 5 and 6 edits included, so the receipt covers the final tree) | .audit/roadmap/TRACKING.md
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | AGENTS.md "Tests" points at scripts/gates.sh; `grep -c 'cargo clippy' AGENTS.md` prints 0 | AGENTS.md
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | gate | none | started scripts/gates.sh again in .worktrees/int-3, log .enjoy-logs/int3-gates-2.log | .enjoy-logs/int3-gates-2.log
+- 2026-10-22 23:44 EDT | checks lane (Claude Code 2198ee19) | gate | 01937571 | scripts/gates.sh: `gates: all 12 steps passed; receipt target/gates/19b910098a1684026c8a035e9a79f0557456303b.ok` (cargo test 3040 passed, 0 failed, 7 ignored); --check-receipt exits 0; with an untracked `probe` it prints the INV-NO-UNGATED-MERGE line and exits 1 | .enjoy-logs/int3-gates-2.log
+- 2026-10-22 23:48 EDT | checks lane (Claude Code 2198ee19) | verify | d9f79104 | Independent review (a fresh general-purpose agent, read only, ran the node tests, --list and --check-receipt) of main..HEAD outside .audit/roadmap. 1 Code: one list, one entry point; the receipt is looked up by tree and refused on a dirty tree. 2 Checks: the four drift tests and three script tests, both mutations seen failing (step 2), run in CI's node step. 3 Reach: a merge or a CI run. 4 Siblings: every cargo and node line of ci.yml, gates.ps1 and the two workflows were replaced. 5 No loss: not a no-loss item. 6 Prose: the top comment and the AGENTS.md bullet. No blockers; one major (`command -v a b` passes when either tool exists) and six minors | .audit/minors.tsv
+- 2026-10-22 23:48 EDT | checks lane (Claude Code 2198ee19) | fix | none | The clippy-windows check now requires both tools (two command -v calls; with nasm hidden from PATH it prints the install hint and fails). Also from the review: a failing --journeys run now prints its fail and skipped counts (the tap capture no longer exits the script first), and tee writes to stderr without truncating a redirected file. Two minors appended; the rest stay as reviewed | scripts/gates.sh
+- 2026-10-22 23:50 EDT | checks lane (Claude Code 2198ee19) | merge | 172787f2 | Merge commit `Merge INT-3: one gate list, and no merge without a passing gate` made in .worktrees/int-3-merge; scripts/gates.sh runs on it for its receipt, then --check-receipt, then the fast-forward and push once main's CI can run again (GitHub Actions billing, INT-2 log) | scripts/gates.sh --check-receipt
+- 2026-10-22 23:50 EDT | checks lane (Claude Code 2198ee19) | note | none | INT-4: keep INT-3's GATES lines in build-lane.js and merge-main.js. Add the line `"alignment-budget|cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture"` to STEPS and make that job run `scripts/gates.sh --step alignment-budget`; test (b) fails until you do | .audit/tools/gates-sync.test.mjs

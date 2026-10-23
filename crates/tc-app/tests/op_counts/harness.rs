@@ -176,11 +176,17 @@ pub async fn scale(
     // The corpus pins the English notes and words links of the bundle: the Check screen's lists
     // derive from them. One store for every scale, which reads it and never installs.
     std::fs::create_dir(dir.path().join("app-data")).unwrap();
-    std::os::unix::fs::symlink(
-        super::corpus::psalms_resources(),
-        dir.path().join("app-data/resources"),
-    )
-    .unwrap();
+    let link = dir.path().join("app-data/resources");
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(super::corpus::psalms_resources(), &link).unwrap();
+    #[cfg(windows)]
+    {
+        // Windows allows a symlink only in Developer Mode or as administrator; a copy of the
+        // corpus serves the same reads.
+        if std::os::windows::fs::symlink_dir(super::corpus::psalms_resources(), &link).is_err() {
+            copy_tree(super::corpus::psalms_resources(), &link);
+        }
+    }
     let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = tc_app::StoreChoice::Given(store);
@@ -304,4 +310,19 @@ pub async fn nothing(_: &Scale) {}
 /// The screen session open before the action.
 pub async fn opened(scale: &Scale) {
     scale.open().await;
+}
+
+/// A copy of `from`, for a Windows run that may not make a symlink.
+#[cfg(windows)]
+fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
 }

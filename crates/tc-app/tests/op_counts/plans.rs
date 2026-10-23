@@ -74,7 +74,14 @@ fn install_package(app_data: &Path, covers: &[BookId]) {
     // The harness shares one read-only store between its scales. This test installs, and a
     // package installed for one scale would otherwise stay installed for the next.
     if folder.is_symlink() {
+        #[cfg(unix)]
         std::fs::remove_file(&folder).unwrap();
+        // Windows removes a directory link as a directory.
+        #[cfg(windows)]
+        std::fs::remove_dir(&folder).unwrap();
+    } else if folder.is_dir() {
+        // The harness copied the corpus (Windows without symlink rights).
+        std::fs::remove_dir_all(&folder).unwrap();
     }
     let store = ResourceStore::open(folder).unwrap();
     let scale_dir = root().join("fixtures/scale/psa");

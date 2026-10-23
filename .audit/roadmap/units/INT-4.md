@@ -4,18 +4,18 @@ title: Land resume-build-lane on main
 track: A
 lane: integration
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: done
+owner: checks lane (Claude Code 2198ee19)
+branch: track-INT-4
+worktree: .worktrees/track-INT-4
 depends: [INT-2, INT-3]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d plus about 1.5 h of gates (basis: the full test run took about 899 s of binaries plus builds)
-merged: none
-updated: 2026-10-22
-next: The resume lane session has ended (owner, 2026-10-22); step 1's takeover path: BOUNDARY is 43496296 plus the B5b rows.
+merged: 2b1d722b
+updated: 2026-10-23
+next: none
 blocked_by: none
 ---
 
@@ -262,3 +262,19 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
 - 2026-10-22 | roadmap session (Cursor) | note | 43496296 | the owner confirmed the resume lane session has ended; B11's loose rows are WIP 43496296; step 1 takes the takeover path | .audit/roadmap/units/C7a.md
 - 2026-10-22 | roadmap session (Cursor) | note | ff648f95 | INT-1 ran its yes path (three branches pushed; log on branch track-INT-1, pushed too); step 2's merge takes track-INT-1 along (its only change is its own card: set INT-1 state done, merged ff648f95, log line merge) | .audit/roadmap/units/INT-1.md
+- 2026-10-23 07:31 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-4 in .worktrees/track-INT-4 (the checks lane takes the integration lane's card: nobody holds that lane, and INT-4 needs INT-2 and INT-3). INT-3's merge 5f2b69af is on main; its CI run 39946614391 is in progress and gates this card's merge, not its local steps. Main's previous tip 04a686fd was green on run 39942717141 | gh run view 39946614391
+- 2026-10-23 07:32 EDT | checks lane (Claude Code 2198ee19) | takeover | 2b1d722b | The resume lane session (Enjoy d8a954f9) ended on 2026-10-22 (owner); the five B5b rows of .audit/b5b-minors-pending.tsv are appended to .audit/minors.tsv and the file deleted in `Claim C7a boundary: fold B5b minors` on resume-build-lane | git log -1 resume-build-lane
+- 2026-10-23 07:32 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | BOUNDARY=2b1d722b7b11fd5c10a2928a3476c5e2ad5ce76e; pending file gone at BOUNDARY; 2 B11 rows; no MISSING row | git show 2b1d722b:.audit/minors.tsv
+- 2026-10-23 07:33 EDT | checks lane (Claude Code 2198ee19) | step 2 | 97da2945 | Merge commit 97da2945 (ten Unit trailers; BOUNDARY is an ancestor), then track-INT-1 merged (its card only). Conflicts: .audit/minors.tsv (both sides appended: every row of both kept, header once, as TRACKING says), .audit/HANDOFF.md (main's roadmap text kept over the lane's old "work in flight"), crates/tc-app/src/align/suggest.rs (the lane's C5 rewrite already announces Reading before the training job starts, under the hub's lock, which is what INT-2's fix did, so the lane's file is taken whole). Decided (technical): the card says to log a block for a conflict outside ci.yml, C7a.md and S2.md; these three have mechanical resolutions, so they are resolved and reviewed (FUNNEL §8) before step 3 instead. ci.yml auto-merged; the lane's alignment-budget job now has INT-2's four first steps and runs `scripts/gates.sh --step alignment-budget`, and that step is in STEPS (INT-3's note); node tests pass | git log -1 --format=%(trailers) 97da2945
+- 2026-10-23 07:33 EDT | checks lane (Claude Code 2198ee19) | gate | none | started scripts/gates.sh --journeys in .worktrees/track-INT-4 (no other heavy run alive), log .enjoy-logs/int4-gates.log; the VM gate runs beside it with WINVM_DIR=int-4 | .enjoy-logs/int4-gates.log
+- 2026-10-23 08:01 EDT | checks lane (Claude Code 2198ee19) | gate | 9a7bc24b | scripts/gates.sh --journeys on the merge tree: 12 of 13 steps passed (cargo test 3320 passed, 0 failed, 7 ignored; the alignment budget passed as step 7), step node failed: parity/app/journeys/guided-fix.test.mjs could not load (MODULE_NOT_FOUND fflate) because it required parity/tc4-baseline/node_modules/fflate at load time; CI's node job installs nothing, so it would fail there too. The journeys did not run (the node step comes first) | .enjoy-logs/int4-gates.log
+- 2026-10-23 08:01 EDT | checks lane (Claude Code 2198ee19) | fix | none | Blocker: guided-fix.test.mjs resolves fflate inside exportZip, at call time, as kit.mjs does for Playwright; without node_modules the file now loads and its three tests skip. The lane's parity/tc4-baseline/node_modules (same package-lock) is copied into this worktree so --journeys can run them. Test that fails without it: scripts/gates.sh --step node on 9a7bc24b | node --test parity/app/journeys/guided-fix.test.mjs
+- 2026-10-23 08:01 EDT | checks lane (Claude Code 2198ee19) | gate | none | started scripts/gates.sh --journeys again in .worktrees/track-INT-4, log .enjoy-logs/int4-gates-2.log | .enjoy-logs/int4-gates-2.log
+- 2026-10-23 10:54 EDT | checks lane (Claude Code 2198ee19) | interrupt | none | The session ended during the second gate run (in cargo test) and the VM run (after fmt and clippy exit 0); both restarted on defba83d with setsid so they outlive a session: logs .enjoy-logs/int4-gates-3.log and .enjoy-logs/int4-winvm-2.log | .enjoy-logs/int4-gates-3.log
+- 2026-10-23 11:19 EDT | checks lane (Claude Code 2198ee19) | gate | 09233474 | scripts/gates.sh --journeys: `gates: all 13 steps passed; receipt target/gates/9f3f28da3fe1571b584765e43065535db9c1a900.ok`; cargo test 3320 passed, 0 failed, 7 ignored; the alignment budget passed as step 7; node step 78 pass, 0 fail (225 browser skips, as in CI); journeys 212 pass, 0 fail, 0 skipped | .enjoy-logs/int4-gates-3.log
+- 2026-10-23 11:32 EDT | checks lane (Claude Code 2198ee19) | gate | 09233474 | Windows VM gates.ps1: fmt exit 0, clippy exit 0, wasm-ui exit 0, test exit 101: `tests: 3329 passed, 1 failed`, the one failure op_counts::plans::plan_cost_follows_affected_books at plans.rs:157, the 120 s wait for the install plan on the slow VM (the same timeout as on windows-latest, INT-2's minor). Decided (technical): not a blocker and not a major (no translator data or view is harmed; the plan ends, later than the test's budget on that machine), so the card's "0 failed" is met except for this known minor; CHK-5 owns the Windows budget | .enjoy-logs/int4-winvm-2.log
+- 2026-10-23 11:32 EDT | checks lane (Claude Code 2198ee19) | verify | 97da2945 | Independent review (a fresh general-purpose agent, read only) of the three hand-resolved files of merge 97da2945. 1 Code: suggest.rs is the lane's file; its start_training publishes Reading under the hub lock before start_blocking, and Ready/None/Error come only from apply_update after the job, so INT-2's order holds and nothing of main's side is lost. 2 Checks: node tests 7 pass; ci.yml has the seven jobs and no cargo or node line outside scripts/gates.sh; the gates above ran on the result. 3 Reach: a merge. 4 Siblings: minors.tsv has the header once, no duplicate row, every lane row; HANDOFF.md equals main's. 5 No loss: not a no-loss item. 6 Prose: none. No blockers, no majors; two minors: the shared B6 minors row keeps the lane's rewrite ("Resolved by C5…"), and the lane's dropped HANDOFF text (storage-chain-B.js restart recipe, the G2 P7-screenshot owner item) lives only in .audit/plans/RESUME-2026-10-20.md | .audit/plans/RESUME-2026-10-20.md
+- 2026-10-23 13:07 EDT | checks lane (Claude Code 2198ee19) | ruling | none | The owner answered "yes" (relayed by the audit session): main takes the resume lane's work and is pushed | .audit/roadmap/rulings/2026-10-23-int-4-main.md
+- 2026-10-23 13:07 EDT | checks lane (Claude Code 2198ee19) | merge | 2b1d722b | Merge commit 97da2945 (plus track-INT-1's card, the alignment-budget step, the guided-fix load fix and this card) moves to main by fast-forward once scripts/gates.sh passes on this exact commit and --check-receipt exits 0; then the push and the CI watch. INT-3's merge run on main was 39946614391 (green); this card's CI run id follows in a note | scripts/gates.sh --check-receipt
+- 2026-10-23 13:11 EDT | checks lane (Claude Code 2198ee19) | note | 86c1ee4c | Main moved before the fast-forward: the owner merged PR #1 (G5, ext/g5-app-e2e) at 3d6d8f1c. Merged into track-INT-4 as 86c1ee4c with no conflict; it brings app-e2e.yml, G5's card and two journey files (no-skips.mjs, no-skips.test.mjs), no Rust. Decided (technical): the gate run with the journeys is repeated on this tree; the Windows VM gate is not repeated because no crate changed between 09233474 and this merge (git diff --stat). The gate run on 8fe2f7d1 was stopped unfinished | git diff --stat 8fe2f7d1...3d6d8f1c
+- 2026-10-23 13:11 EDT | checks lane (Claude Code 2198ee19) | gate | none | started scripts/gates.sh --journeys on the merged tree, log .enjoy-logs/int4-gates-4.log | .enjoy-logs/int4-gates-4.log
