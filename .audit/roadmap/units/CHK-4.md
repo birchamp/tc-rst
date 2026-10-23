@@ -4,18 +4,18 @@ title: Deterministic and fast tests
 track: A
 lane: checks
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: building
+owner: checks lane (Claude Code 2198ee19)
+branch: track-CHK-4
+worktree: .worktrees/track-CHK-4
 depends: [INT-4]
 needs_owner: []
 proves: []
 no_loss: false
-size: 2-3 d
+size: 0.5 d (cut to the flaky waits by the ruling of 2026-10-23)
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: step A: raise the short waits of the tests that flaked
 blocked_by: none
 ---
 
@@ -23,9 +23,11 @@ blocked_by: none
 
 ## Goal
 
-A gate run gives the same verdict every time on the same tree: property tests use a fixed seed,
-no test asserts a wall-clock window, and no test sleeps and then asserts. No test binary takes
-more than 300 s, and a gate step fails when one does.
+Cut by the ruling `rulings/2026-10-23-tests-prove-behavior-not-speed.md`: a test asserts what the
+app does, never how fast. This card raises or removes the short waits in the tests that have
+flaked under load, so a wait only catches a hang (about a minute) and says so, and nothing more
+until a real flake appears. Virtual time, fixed seeds and per-binary time budgets are not built.
+The steps below the ruling line are the old plan, kept as history.
 
 ## Why it matters to a translator
 
@@ -242,3 +244,5 @@ fixed seed.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-23 14:11 EDT | checks lane (Claude Code 2198ee19) | ruling | 3cd1ac6a | The owner's ruling of 2026-10-23 cuts this card to the flaky waits: no virtual time, no fixed seed, no per-binary budget; a wait only catches a hang, about a minute, and says "hung" | .audit/roadmap/rulings/2026-10-23-tests-prove-behavior-not-speed.md
+- 2026-10-23 14:11 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-4 in .worktrees/track-CHK-4 from main 3cd1ac6a, ahead of INT-8's merge on the orchestrator's word, because main stays red on these waits. Scope: the two app-e2e journeys that flaked (a_focused_help_lights_its_words_in_the_passage, a_section_card_opened_after_a_reload_during_its_save_saves_each_verse), kit.mjs's 10 s default wait, upgrades.test.mjs's Settings wait, plan_cost_follows_affected_books' 120 s, the reset-hold and job-reporter waits, the HomeCard 5 s wait, and op_counts::story's record drift if it is a wait | python3 -I .audit/tools/board.py
