@@ -131,12 +131,14 @@ impl Scale {
         if let Some(handle) = self.store_handle() {
             tokio::task::block_in_place(|| handle.wait_idle());
         }
+        // A job a test holds at a hold point stays live on purpose; only the others must end.
         let started = std::time::Instant::now();
-        while self.app.jobs().live() > 0 {
+        while self.app.jobs().live() > self.app.holding() {
             assert!(
                 started.elapsed() < std::time::Duration::from_secs(60),
-                "hung: {} app job(s) still live after 60 s",
-                self.app.jobs().live()
+                "hung: {} app job(s) still live after 60 s, {} held by the test",
+                self.app.jobs().live(),
+                self.app.holding()
             );
             tokio::task::block_in_place(|| {
                 std::thread::sleep(std::time::Duration::from_millis(10))
