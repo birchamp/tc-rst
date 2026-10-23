@@ -10,7 +10,7 @@ branch: track-FIX-R
 worktree: .worktrees/track-FIX-R
 depends: [INT-4]
 needs_owner: []
-later: ["H12 from step 4", "S2 from step 2"]
+later: ["H12 from step 4"]
 proves: [P1, P8]
 no_loss: true
 size: 2-3 d
