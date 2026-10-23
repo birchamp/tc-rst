@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "about": "Lines of drafts-buffer.log and which of them the reduction keeps (SHELL.md item 6). Order is not part of the contract.",
+  "vectors": [
+    {
+      "name": "the last change of a field wins",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"a\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"ab\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}"
+      ],
+      "keep": [
+        1
+      ]
+    },
+    {
+      "name": "a removal without text ends the entry",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"a\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"removed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"instance\":\"abababababababababababababababab\"}}"
+      ],
+      "keep": []
+    },
+    {
+      "name": "a removal naming the held text ends the entry",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"a\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"removed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"instance\":\"abababababababababababababababab\",\"text\":\"a\"}}"
+      ],
+      "keep": []
+    },
+    {
+      "name": "a removal naming another text keeps the entry",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"ab\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"removed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"instance\":\"abababababababababababababababab\",\"text\":\"a\"}}"
+      ],
+      "keep": [
+        0
+      ]
+    },
+    {
+      "name": "texts are compared in NFC",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"é\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"removed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"instance\":\"abababababababababababababababab\",\"text\":\"é\"}}"
+      ],
+      "keep": []
+    },
+    {
+      "name": "a removal ends only its own run's entry",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"a\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"b\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"removed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"instance\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}}"
+      ],
+      "keep": [
+        0
+      ]
+    },
+    {
+      "name": "fields are kept apart",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"x\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"checkComment\",\"place\":\"tn TIT 1:4 abc1\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"y\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"removed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"instance\":\"abababababababababababababababab\"}}"
+      ],
+      "keep": [
+        1
+      ]
+    },
+    {
+      "name": "a change after a removal starts a new entry",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"a\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"removed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"instance\":\"abababababababababababababababab\"}}",
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"b\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}"
+      ],
+      "keep": [
+        2
+      ]
+    },
+    {
+      "name": "a torn last line is skipped",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"a\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "{\"type\":\"changed\",\"value\":{\"key\":"
+      ],
+      "keep": [
+        0
+      ]
+    },
+    {
+      "name": "a line that does not parse in the middle is skipped",
+      "lines": [
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"a\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}",
+        "not json",
+        "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"checkComment\",\"place\":\"tn TIT 1:4 abc1\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"y\",\"sent\":{\"request\":\"14141414141414141414141414141414\",\"text\":\"Paul, a servant of God\",\"scope\":{\"project\":\"en_ult | draft \\\"2\\\"\",\"epoch\":3}},\"at\":1760000000123,\"draft\":{\"path\":\"test/fieldDraft\",\"body\":\"{\\\"field\\\":\\\"verse-1\\\",\\\"shown\\\":\\\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\\\"}\"}}}}"
+      ],
+      "keep": [
+        0,
+        2
+      ]
+    }
+  ]
+}
