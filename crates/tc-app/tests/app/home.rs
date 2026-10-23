@@ -86,6 +86,27 @@ async fn card_event(events: &mut Subscription, name: &str) {
     .unwrap_or_else(|_| panic!("hung: no HomeCard event for {name} in 60 s"));
 }
 
+/// Waits for a `HomeCard` event of each of `names`, in any order: a job computes the cards in
+/// no promised order; panics after a minute, which only a hang reaches.
+async fn cards_event(events: &mut Subscription, names: &[&str]) {
+    let mut left: Vec<Event> = names
+        .iter()
+        .map(|name| Event::HomeCard {
+            project: folder(name),
+        })
+        .collect();
+    tokio::time::timeout(Duration::from_secs(60), async {
+        while !left.is_empty() {
+            match events.next().await {
+                Next::Frame(frame) => left.retain(|wanted| *wanted != frame.event),
+                other => panic!("{other:?}"),
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("hung: no HomeCard event for {left:?} in 60 s"));
+}
+
 /// Whether a `HomeCard` event came by now.
 fn card_events(events: &mut Subscription) -> usize {
     let mut n = 0;
@@ -432,8 +453,7 @@ async fn one_summary_job_runs_at_a_time() {
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert_eq!(store.asked(), 1);
     store.set(|g| g.hold = false);
-    card_event(&mut events, "a_copy").await;
-    card_event(&mut events, "b_copy").await;
+    cards_event(&mut events, &["a_copy", "b_copy"]).await;
     assert_eq!(store.asked(), 2);
 }
 

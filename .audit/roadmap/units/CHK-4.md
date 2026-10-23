@@ -4,10 +4,10 @@ title: Deterministic and fast tests
 track: A
 lane: checks
 milestone: M1
-state: done
+state: fixing
 owner: checks lane (Claude Code 2198ee19)
-branch: track-CHK-4
-worktree: .worktrees/track-CHK-4
+branch: chk-4-fix
+worktree: .worktrees/chk-4-fix
 depends: [INT-4]
 needs_owner: []
 proves: []
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (cut to the flaky waits by the ruling of 2026-10-23)
 merged: a522eadd
 updated: 2026-10-23
-next: none
+next: merge the fix (still this lane's turn), then INT-8
 blocked_by: none
 ---
 
@@ -253,3 +253,4 @@ fixed seed.
 - 2026-10-23 16:58 EDT | checks lane (Claude Code 2198ee19) | verify | a5f87180 | Independent review (a fresh general-purpose agent, read only, ran the node tests). 1 Code: bounds and messages only, plus settle() and drafts_written. 2 Checks: no assertion weakened beyond the ruling; the 300 ms rule stays proven by two other jobs.rs tests. 3 Reach: test code and CI only. 4 Siblings: drafts.rs already waits after each draft; no other Draft-then-crash test can flake toward failure. 5 No loss: no product code changed. 6 Prose: comments give reasons. One blocker: settle() waited for every live job, so op_counts::align::align_save_costs_one_verse_while_model_training_is_held, which holds a Train job during cost(), would hang 60 s and fail; no majors; minors recorded | .audit/minors.tsv
 - 2026-10-23 16:58 EDT | checks lane (Claude Code 2198ee19) | fix | none | settle() waits while live jobs exceed the test's held ones (App::holding), so a job held at a hold point on purpose is not waited for; relaunch's doc comment back on relaunch. op_counts align 5 ok (the held-training test among them), op_counts home 3 ok, app check_item:: 20 ok; fmt and clippy clean | .enjoy-logs/chk4-tests-3.log
 - 2026-10-23 16:58 EDT | checks lane (Claude Code 2198ee19) | merge | a522eadd | Merge commit `Merge CHK-4: tests wait for what the app does, not for a deadline`, on the orchestrator's turn; gated by scripts/gates.sh --journeys in .worktrees/chk-4-merge and by CI on gate/CHK-4, then main fast-forwards and its CI must finish green before the turn passes | scripts/gates.sh --check-receipt
+- 2026-10-23 18:22 EDT | checks lane (Claude Code 2198ee19) | fix | none | Main's own CI on 9982556a (runs 40030654585, 40030654998) failed on two races, not slowness, under the new 60 s bounds: (1) app::home::one_summary_job_runs_at_a_time waited for a_copy's HomeCard event, then b_copy's, but its helper discards other frames, so when the job finished b_copy first the second wait hung ("hung: no HomeCard event for b_copy in 60 s"); now cards_event waits for both in any order (the app promises no order). (2) section.test.mjs a_section_card_opened_after_a_reload_during_its_save_saves_each_verse checked the pill's visibility once while the reloaded page still loaded, found nothing, and went looking for Home's Titus button while the app restored Translate (Playwright's 30 s click timeout); it now waits for either before it chooses. No sibling of either race found (grep). home:: 21 ok; clippy clean. INT-8's local gate run was stopped; its merge is redone on this fix | gh run view 40030654585 --log-failed
