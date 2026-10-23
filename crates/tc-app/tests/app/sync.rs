@@ -41,6 +41,8 @@ const SAMPLE: &str = "sample_burrito";
 
 pub(super) struct World {
     pub(super) t: TestApp,
+    /// The store under the app, for teammates' changes a scripted sync has no words for.
+    pub(super) store: Arc<ScenarioStore>,
     _fake: FakeDoor43,
     _dir: tempfile::TempDir,
 }
@@ -56,9 +58,11 @@ pub(super) async fn shared() -> World {
     let (store, _) = ScenarioStore::write(backend, state).unwrap();
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
-    let t = app_over(dir.path(), Arc::new(store), fake.url()).await;
+    let store = Arc::new(store);
+    let t = app_over(dir.path(), store.clone(), fake.url()).await;
     World {
         t,
+        store,
         _fake: fake,
         _dir: dir,
     }
@@ -195,6 +199,7 @@ pub(super) const TWO_TEAMMATES: fn() -> ScriptedSync = || ScriptedSync::Synced {
             "Pablo, versión del compañero 2.".into(),
         ],
     }),
+    joined: None,
     restored: 0,
 };
 
@@ -240,6 +245,7 @@ async fn teammates_a_sync_receives_stand_as_one_verse_conflict_on_the_toast_the_
         1,
         ScriptedSync::Synced {
             teammates: None,
+            joined: None,
             restored: 0,
         },
     )
@@ -292,6 +298,7 @@ async fn a_second_sync_sends_again_what_door43_lost_and_still_names_the_conflict
         3,
         ScriptedSync::Synced {
             teammates: None,
+            joined: None,
             restored: 1,
         },
     )

@@ -391,9 +391,26 @@ pub enum ScriptedSync {
     /// `restored` is how many changes Door43 had lost and the sync sends again.
     Synced {
         teammates: Option<TeammatesEdit>,
+        /// Teammate 1 joined a run of verses into one on Door43, in one batch, from the
+        /// verses as Door43 held them: the sync receives the join (C7a's passage conflict
+        /// when this computer changed one of the verses meanwhile).
+        #[serde(default)]
+        joined: Option<TeammatesJoin>,
         restored: u32,
     },
     Failed(crate::refusal::SyncFailure),
+}
+
+/// Teammate 1's join of the verses `first` to `last` of one chapter into one span.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TeammatesJoin {
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+    pub book: tc_core::BookId,
+    pub chapter: u16,
+    pub first: u16,
+    pub last: u16,
 }
 
 /// Teammates' versions of one verse.

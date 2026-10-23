@@ -435,6 +435,7 @@ pub struct ResolveBulk {
     pub at: Scope,
     pub request: RequestId,
     pub person: Who,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub conflicts: Vec<BulkConflict>,
 }
 
@@ -444,6 +445,7 @@ pub struct ResolveBulk {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BulkConflict {
     pub conflict: ConflictRef,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub review: Vec<ReviewToken>,
 }
 

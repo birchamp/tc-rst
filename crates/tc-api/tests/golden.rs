@@ -105,7 +105,7 @@ use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
-    TeammatesEdit, TokenBase,
+    TeammatesEdit, TeammatesJoin, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -2889,6 +2889,12 @@ impl Example for Script {
                         chapter: 1,
                         verse: 1,
                         texts: vec!["Pablo, siervo".into(), "Pablo, esclavo".into()],
+                    }),
+                    joined: Some(TeammatesJoin {
+                        book: BookId::Titus,
+                        chapter: 1,
+                        first: 4,
+                        last: 5,
                     }),
                     restored: 0,
                 },

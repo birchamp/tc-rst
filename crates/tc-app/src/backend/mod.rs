@@ -1130,6 +1130,22 @@ pub trait ProjectStore: Send + Sync + 'static {
         Err(StoreError::Other("this store has no teammates".to_owned()))
     }
 
+    /// Teammate 1's join of the verses `first` to `last` of `chapter` of `book` in `folder`,
+    /// one batch over the verses' current versions, written as a sync's intake would: the
+    /// changes' ids. A store with no teammates refuses.
+    #[cfg(feature = "test-hooks")]
+    fn teammates_join_verses(
+        &self,
+        folder: &ProjectRef,
+        book: BookId,
+        chapter: tc_journal::ChapterNo,
+        first: tc_journal::VerseNo,
+        last: tc_journal::VerseNo,
+    ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
+        let _ = (folder, book, chapter, first, last);
+        Err(StoreError::Other("this store has no teammates".to_owned()))
+    }
+
     /// A scripted sync ended: Door43 has `folder`'s project as `fold` holds it, so the next
     /// teammates edit from it (B11). A store with no teammates keeps nothing.
     #[cfg(feature = "test-hooks")]

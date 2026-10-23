@@ -15,7 +15,7 @@ no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
 merged: none
 updated: 2026-10-22
-next: Do step 3 (the scripted join of Titus 1:4-5, the tc-app tests and the count tests) on track-C7a; merge main again after INT-4 lands resume-build-lane, before the gates.
+next: Do step 4 (`Choices`, the footer per kind, Restore on History rows, the bulk button, the words) on track-C7a; merge main again after INT-4 lands resume-build-lane, before the gates.
 blocked_by: none
 ---
 
@@ -111,7 +111,11 @@ Run these in the worktree; each must print what is said.
     `entry.review[0]` (temporary edit); verse 1:5's value must fail the test.
   - `restore_writes_over_every_shown_head` (to create). Proof: in the store's `restore`
     (`crates/tc-store/src/commands.rs:1390`), pass `&[]` as parents (temporary edit).
-  - `restore_writes_a_new_version_and_history_keeps_the_old` (to create, #78).
+  - `restore_writes_a_new_version_and_history_keeps_the_old` (to create, #78). Finding (step 3):
+    a Restore in a conflict of the text the versions started from is no edit against their base,
+    so the fold settles the conflict on the other side's edit by its merge rule (§7.3); the
+    no-loss test restores an earlier edit of this computer's instead, and C7b's History words
+    may say so.
   - `bulk_keep_leaves_out_conflicts_with_two_candidates` (to create). Proof: resolve every listed
     conflict in the handler (temporary edit).
   - `every_kind_has_its_choices` and `a_look_again_refusal_says_another_version_was_kept` (to
@@ -280,3 +284,4 @@ Plus:
 - 2026-10-22 20:50 EDT | C7a session (Claude Code 3058c665) | claim | none | claimed before INT-4 lands: track-C7a is cut from resume-build-lane 43496296 (B11, the two B11 minors rows) with main 81cedaca merged in (7c84cef0, HANDOFF.md took main's text); the merge into main waits for INT-4, as the start session said | .worktrees/track-C7a
 - 2026-10-22 21:20 EDT | C7a session (Claude Code 3058c665) | step 1 | none | `ReviewState.busy/.outcome/.sent` are one `KeepPhase`; `keep_version` presses it and feeds it a `KeepReply` built by a match on every `CallError` variant; the 14 review tests pass plus `a_press_while_a_keep_is_in_flight_sends_nothing` (15); wasm clippy with `--features app` passes; decision logged in the funnel card: `SentKeep` holds the request id, not a `Confirm` | cargo test -p tc-ui --test app app::review::
 - 2026-10-22 22:05 EDT | C7a session (Claude Code 3058c665) | step 2 | none | `KeepChoice`, `Resolve.choice`, `Restore`, `ResolveBulk`/`BulkKept` and `HistoryView.shown` on the wire; `choose` is the only caller of `StoreCommand::resolve`; `Restore` and `ResolveBulk` handlers and the two `StoreCommand` constructors; goldens `restore.json` and `resolveBulk.json` written; tc-api (all), routes, tc-app `app::conflicts::` (7) and tc-ui `app::review::` (15) pass; both wasm clippy runs pass. The journey `conflict-review.test.mjs` still reads `sent[0].keep`: step 5 moves it to `choice` | cargo test -p tc-api; cargo test -p tc-app --test app app::conflicts::
+- 2026-10-22 23:40 EDT | C7a session (Claude Code 3058c665) | step 3 | none | the scripted join (`ScriptedSync::Synced.joined`, `Teammates::join_verses`, one pack per batch) and `Teammates::sign_in`; tc-app `app::conflicts::` passes 12 (5 new: keep passage both sides, two restores, bulk); `op_counts::conflicts::` passes 4 (2 new). Proofs, each reverted: `review: vec![entry.review[0].clone()]` → `keep_passage_resolves_every_record_of_the_group` panicked `called Result::unwrap() on an Err value: NotSaved(LookAgain)`; store `restore` with `&[]` parents → `restore_writes_over_every_shown_head` failed `the shown version is replaced, the others stay: left: ["Pablo, mi primera versión.", "Pablo, mi segunda versión.", "Pablo, versión del compañero 1.", "Pablo, versión del compañero 2."] right: [3 texts]` (`restore_writes_a_new_version_and_history_keeps_the_old` still passed: it proves #78, not the parents); handler over every person's devices → `bulk_keep_leaves_out_conflicts_with_two_candidates` failed `left: Unchanged right: Written`. A bulk keep's work shows as `changes_indexed` (one per record kept), not `keys_updated`. Note: `tc-api --test roundtrip` takes 288 s here (CHK-4's budget is 300 s; it was over it while shrinking) | cargo test -p tc-app --test app app::conflicts::; cargo test -p tc-app --test op_counts op_counts::conflicts::
