@@ -111,6 +111,9 @@ pub(crate) struct Dirty {
     /// A `DeviceProfile` changed: the authors' names show in every comments file and in
     /// `conflicts.json`.
     pub comments_all: bool,
+    /// A story's text changed: a decision on it may be flagged, so every tool's story
+    /// decisions file shows it (as a book's files do for a verse).
+    pub story_decisions_all: bool,
     /// A `CarriedFile` record changed: carried files are placed or removed (§11.4).
     pub carried: bool,
     /// Every derived file may have changed (a rebuilt fold, a pin group).
@@ -127,6 +130,7 @@ impl Dirty {
         self.books.is_empty()
             && self.files.is_empty()
             && !self.comments_all
+            && !self.story_decisions_all
             && !self.carried
             && !self.everything
             && !self.metadata
@@ -137,6 +141,7 @@ impl Dirty {
         self.books.extend(other.books);
         self.files.extend(other.files);
         self.comments_all |= other.comments_all;
+        self.story_decisions_all |= other.story_decisions_all;
         self.carried |= other.carried;
         self.everything |= other.everything;
         self.metadata |= other.metadata;
@@ -192,6 +197,7 @@ impl Dirty {
                 }
                 RecordKey::StoryBase(s) | RecordKey::Frame(s, _) | RecordKey::StoryRef(s) => {
                     self.files.insert(DerivedFile::Story(*s));
+                    self.story_decisions_all = true;
                 }
                 RecordKey::DeviceProfile(_) => self.comments_all = true,
                 RecordKey::Comment(_) => {

@@ -565,6 +565,13 @@ impl Writer {
             project.files.insert(DerivedFile::StoryComments);
             project.files.insert(DerivedFile::Conflicts);
         }
+        if dirty.story_decisions_all {
+            for file in self.fold.derived_files() {
+                if matches!(file, DerivedFile::StoryDecisions(_)) {
+                    project.files.insert(file);
+                }
+            }
+        }
         project.carried |= dirty.carried;
         let mut groups: Vec<Group> = books.into_values().collect();
         let needed = project.whole
