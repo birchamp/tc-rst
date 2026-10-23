@@ -15,7 +15,7 @@ no_loss: true
 size: 1 d (basis: two contract files, two small tests, an APP-DESIGN edit)
 merged: none
 updated: 2026-10-23
-next: Steps 2 and 3 together: docs/contracts/shell-bridge.json, the names test, docs/contracts/SHELL.md.
+next: Step 4: edit docs/APP-DESIGN.md §10 and §5.3 and docs/TC4-ISSUES.md row #743.
 blocked_by: none
 ---
 
@@ -304,3 +304,5 @@ step 1's mutations and step 2's name edits are quoted in the log.
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/split-seams.md
 - 2026-10-23 13:33 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-INT-7 from main d293375a; INT-4 is done and H2 chose Track B, so step 5 will be skipped | python3 -I -B .audit/tools/board.py
 - 2026-10-23 13:45 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | ten vectors in fixtures/shell/buffer-vectors.json and the_buffer_reduction_matches_the_shell_contract_vectors pass; merge keeps the first of equal-`at` mirror lines per slot and current_lines yields one line per slot, so order is not part of the contract. Mutation 1 (drop `&& same_text`): `INV-SHELL-CONTRACT-PINNED: vector "a removal naming another text keeps the entry": current_lines kept {}, the contract keeps {…"text":"ab"…}`. Mutation 2 (`continue` to `break`): `INV-SHELL-CONTRACT-PINNED: vector "a line that does not parse in the middle is skipped": current_lines kept {…verse "a"…}, the contract keeps {…checkComment "y"…, …verse "a"…}`. Source restored, `git diff crates/tc-ui/src` empty | cargo test -p tc-ui --test app shell_contract
+- 2026-10-23 14:05 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | docs/contracts/shell-bridge.json (11 methods, 7 called by the page) and the_bridge_members_the_page_uses_match_the_shell_contract pass. Removing "takeBuffered" from calledByThePage: `INV-SHELL-CONTRACT-PINNED: bridge.rs calls {…, "takeBuffered"}, shell-bridge.json calledByThePage says {"bufferChanged", "feedbackSend", "onCloseRequested", "openExternal", "printPdf", "setCanClose"}`. Adding "chooseFolder": `INV-SHELL-CONTRACT-PINNED: bridge.rs calls {…}, shell-bridge.json calledByThePage says {"bufferChanged", "chooseFolder", …}`. Both restored | cargo test -p tc-ui --test app shell_contract
+- 2026-10-23 14:05 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | docs/contracts/SHELL.md v1 written with all eleven items of TRACK-B.md §4 (the card's table shows nine; items 10, the test harness, and 11, the help-desk key, were added to §4 later and are frozen too), the reduction rules in words and the §6 freeze list. Every path it names exists except docs/RELEASE.md, marked "G3, to create" | git ls-files on each path
