@@ -563,6 +563,42 @@ impl StoreCommand {
         )
     }
 
+    /// `Restore` (STORAGE §5.9): the value of `from` over the heads the token lists.
+    pub fn restore(shown: EditToken, from: ChangeId) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::Restore {
+                shown: shown.0,
+                from,
+            },
+            listed,
+        )
+    }
+
+    /// `ResolveBulk` (STORAGE §5.9 step 3): one batch over every listed conflict, each with
+    /// one review token per record; the store leaves out the conflicts the devices cannot
+    /// decide alone.
+    pub fn resolve_bulk(
+        devices: std::collections::BTreeSet<DeviceId>,
+        conflicts: Vec<(ConflictId, Vec<ReviewToken>)>,
+    ) -> Self {
+        let listed = conflicts
+            .iter()
+            .flat_map(|(_, tokens)| tokens.iter())
+            .map(|t| (t.key().clone(), t.heads().to_vec()))
+            .collect();
+        Self::new(
+            Command::ResolveBulk {
+                devices,
+                conflicts: conflicts
+                    .into_iter()
+                    .map(|(id, tokens)| (id, tokens.into_iter().map(|t| t.0).collect()))
+                    .collect(),
+            },
+            listed,
+        )
+    }
+
     /// The records the command writes, each with the heads its token named.
     #[cfg(feature = "fixture-backend")]
     pub(in crate::backend) fn shown(&self) -> &[(RecordKey, Vec<ChangeId>)] {

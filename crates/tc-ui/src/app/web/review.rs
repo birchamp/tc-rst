@@ -3,7 +3,7 @@
 //! [`crate::app::review`].
 
 use leptos::prelude::*;
-use tc_api::conflicts::{ConflictEntry, Resolve, ReviewTab};
+use tc_api::conflicts::{ConflictEntry, KeepChoice, Resolve, ReviewTab};
 use tc_api::ids::{ChangeRef, ConflictRef, RecordRef};
 use tc_api::write::Ack;
 use tc_api::{ApiError, NotSaved};
@@ -144,11 +144,12 @@ impl Actions {
         else {
             return;
         };
+        let choice = KeepChoice::Candidate { change };
         let mut request = None;
         self.update_review(|r| {
             request = r
                 .keep
-                .press(&entry.conflict, &change, js::random_request_id);
+                .press(&entry.conflict, &choice, js::random_request_id);
             if request.is_some() {
                 r.position = position;
             }
@@ -161,7 +162,7 @@ impl Actions {
             request,
             conflict: entry.conflict.clone(),
             review: entry.review.clone(),
-            keep: change,
+            choice,
         };
         let this = self.clone();
         spawn_local(async move {

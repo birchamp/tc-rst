@@ -12,8 +12,9 @@ use tc_core::BookId;
 
 use crate::check::{CheckPlace, Tool};
 use crate::ids::{ChangeRef, ConflictRef, RecordRef, RequestId, Scope, StoryNo, ViewSeq, WallMs};
-use crate::shown::PersonLabel;
-use crate::token::ReviewToken;
+use crate::shown::{PersonLabel, Who};
+use crate::token::{ReviewToken, ShownToken};
+use crate::write::Ack;
 
 /// The review's tabs, by kind (STORAGE §8.5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -320,8 +321,8 @@ pub enum NoticeView {
     KeptApart { changes: u32 },
 }
 
-/// `conflicts/history`: every version of one record, newest first (#78). Read only:
-/// Restore is unit C7a's.
+/// `conflicts/history`: every version of one record, newest first (#78), with the token a
+/// *Restore this version* ([`Restore`]) sends back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -334,6 +335,8 @@ pub struct History {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryView {
+    /// The record as the read showed it: what a [`Restore`] writes over.
+    pub shown: ShownToken,
     pub versions: Vec<HistoryVersion>,
 }
 
@@ -368,8 +371,32 @@ pub enum VersionCause {
     Newer,
 }
 
-/// `conflicts/resolve`: keep one version of a conflict (C7a's *Keep this version*; B11 on
-/// scripted outcomes). The tokens are the entry's `review`; a resolution over versions that
+/// A choice on a conflict of the Text tab (STORAGE §8.3), as the review offers it. Every
+/// choice writes one change per record of the conflict, so a passage's choice carries one
+/// review token per record of the passage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum KeepChoice {
+    /// *Keep this version*: the candidate, and on a grouped conflict its side.
+    Candidate { change: ChangeRef },
+    /// *Keep Maria's passage*: the first pick names the side; the others pick one version
+    /// where a record of the passage holds several, so no clock picks what is kept.
+    Passage { picks: Vec<ChangeRef> },
+    /// *Keep 4 and 5 separate*, with a version picked where a verse holds several.
+    Separate { picks: Vec<ChangeRef> },
+    /// *Keep the joined verses*, with the span picked where there are several.
+    Joined { picks: Vec<ChangeRef> },
+}
+
+/// `conflicts/resolve`: one choice on a conflict (C7a; B11 on scripted outcomes). The tokens
+/// are the entry's `review`, one per record of the conflict; a resolution over versions that
 /// changed since answers `NotSaved::LookAgain`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -379,5 +406,52 @@ pub struct Resolve {
     pub request: RequestId,
     pub conflict: ConflictRef,
     pub review: Vec<ReviewToken>,
-    pub keep: ChangeRef,
+    pub choice: KeepChoice,
+}
+
+/// `conflicts/restore`: History's *Restore this version* (STORAGE §5.9): the value of `from`
+/// written over the heads `shown` lists, which [`HistoryView`] gave with the record. On a
+/// record in conflict the restored text becomes the version shown and the other versions stay
+/// listed for a choice; nothing is written over a version the screen did not show.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Restore {
+    pub at: Scope,
+    pub request: RequestId,
+    pub record: RecordRef,
+    pub shown: ShownToken,
+    pub from: ChangeRef,
+}
+
+/// `conflicts/resolveBulk`: *Keep all of Maria's* (STORAGE §5.9 step 3): one batch that keeps
+/// `person`'s version in each listed conflict where their computers hold exactly one of its
+/// versions. A conflict whose versions changed since, that holds two versions from the
+/// person's computers, or none, is left for a choice of its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolveBulk {
+    pub at: Scope,
+    pub request: RequestId,
+    pub person: Who,
+    pub conflicts: Vec<BulkConflict>,
+}
+
+/// One conflict of a bulk keep, with the entry's tokens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BulkConflict {
+    pub conflict: ConflictRef,
+    pub review: Vec<ReviewToken>,
+}
+
+/// What a bulk keep did: the write, and the conflicts it left for a choice of their own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct BulkKept {
+    pub ack: Ack,
+    pub left: Vec<ConflictRef>,
 }

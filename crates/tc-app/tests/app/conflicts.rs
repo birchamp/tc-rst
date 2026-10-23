@@ -5,8 +5,8 @@
 //! request gets the first reply (A-27), and the verse's History lists every version (#78).
 
 use tc_api::conflicts::{
-    ConflictKind, History, HistoryVersion, List, MadeBy, Resolve, ReviewEntries, ReviewPlace,
-    ReviewTab, ReviewView, Version, VersionCause, VersionValue,
+    ConflictKind, History, HistoryVersion, KeepChoice, List, MadeBy, Resolve, ReviewEntries,
+    ReviewPlace, ReviewTab, ReviewView, Version, VersionCause, VersionValue,
 };
 use tc_api::editor::{Chapters, SaveVerse};
 use tc_api::event::Event;
@@ -183,7 +183,9 @@ async fn keep_this_version_resolves_with_review_tokens_and_a_second_send_gets_th
         request: rid(60),
         conflict: entry.conflict.clone(),
         review: entry.review.clone(),
-        keep: entry.versions[1].change.clone(),
+        choice: KeepChoice::Candidate {
+            change: entry.versions[1].change.clone(),
+        },
     };
     let first = post(app, &keep).await.unwrap();
     assert_eq!(first.stored, Stored::Written);
@@ -325,7 +327,9 @@ async fn verse_history_lists_every_version_with_person_and_time() {
         request: rid(62),
         conflict: entry.conflict.clone(),
         review: entry.review.clone(),
-        keep: entry.versions[0].change.clone(),
+        choice: KeepChoice::Candidate {
+            change: entry.versions[0].change.clone(),
+        },
     };
     post(app, &keep).await.unwrap();
     let after = history(app, &at, &entry.record).await;

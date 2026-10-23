@@ -115,9 +115,10 @@ use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ReviewToken, ShownToken};
 use tc_core::BookId;
 
 use tc_api::conflicts::{
-    ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion, HistoryView,
-    List as ConflictList, MadeBy, NoticeEntry, NoticeView, Resolve, ReviewEntries, ReviewPlace,
-    ReviewTab, ReviewView, TabCount, Version, VersionCause, VersionValue,
+    BulkConflict, BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History,
+    HistoryVersion, HistoryView, KeepChoice, List as ConflictList, MadeBy, NoticeEntry, NoticeView,
+    Resolve, ResolveBulk, Restore, ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount,
+    Version, VersionCause, VersionValue,
 };
 
 /// An example value for a golden file.
@@ -2686,6 +2687,7 @@ impl Example for History {
 impl Example for HistoryView {
     fn example() -> Self {
         HistoryView {
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
             versions: vec![
                 HistoryVersion {
                     version: version(
@@ -2718,7 +2720,57 @@ impl Example for Resolve {
             review: vec![review_token(
                 "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
             )],
-            keep: ChangeRef::parse(&"a".repeat(64)).unwrap(),
+            choice: KeepChoice::Passage {
+                picks: vec![
+                    ChangeRef::parse(&"a".repeat(64)).unwrap(),
+                    ChangeRef::parse(&"b".repeat(64)).unwrap(),
+                ],
+            },
+        }
+    }
+}
+
+impl Example for Restore {
+    fn example() -> Self {
+        Restore {
+            at: scope(),
+            request: request(25),
+            record: titus_1_1(),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            from: ChangeRef::parse(&"a".repeat(64)).unwrap(),
+        }
+    }
+}
+
+impl Example for ResolveBulk {
+    fn example() -> Self {
+        ResolveBulk {
+            at: scope(),
+            request: request(26),
+            person: Who::Username("juan".into()),
+            conflicts: vec![
+                BulkConflict {
+                    conflict: ConflictRef::parse(&"c".repeat(64)).unwrap(),
+                    review: vec![review_token(
+                        "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                    )],
+                },
+                BulkConflict {
+                    conflict: ConflictRef::parse(&"d".repeat(64)).unwrap(),
+                    review: vec![review_token(
+                        "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                    )],
+                },
+            ],
+        }
+    }
+}
+
+impl Example for BulkKept {
+    fn example() -> Self {
+        BulkKept {
+            ack: Ack::example(),
+            left: vec![ConflictRef::parse(&"d".repeat(64)).unwrap()],
         }
     }
 }
@@ -3066,6 +3118,8 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "align/open",
             "check/decide",
             "conflicts/resolve",
+            "conflicts/restore",
+            "conflicts/resolveBulk",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",

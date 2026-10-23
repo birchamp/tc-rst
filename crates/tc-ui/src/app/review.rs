@@ -8,7 +8,8 @@
 //! person here and on the sync result (#680, [`crate::app::sync::person_label`]).
 
 use tc_api::conflicts::{
-    ConflictEntry, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount, Version, VersionCause,
+    ConflictEntry, KeepChoice, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount, Version,
+    VersionCause,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, RecordRef, RequestId};
 use tc_api::shown::Who;
@@ -56,7 +57,7 @@ pub enum KeepPhase {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SentKeep {
     pub conflict: ConflictRef,
-    pub change: ChangeRef,
+    pub choice: KeepChoice,
     pub request: RequestId,
 }
 
@@ -79,25 +80,25 @@ pub struct KeepOutcome {
 }
 
 impl KeepPhase {
-    /// A press of Keep for `change` in `conflict`: the request to send, or `None` while one
-    /// is in flight. After a lost reply the same choice sends the same request; any other
-    /// choice, and any press after an answer, is a new request from `mint`.
+    /// A press of a choice in `conflict`: the request to send, or `None` while one is in
+    /// flight. After a lost reply the same choice sends the same request; any other choice,
+    /// and any press after an answer, is a new request from `mint`.
     pub fn press(
         &mut self,
         conflict: &ConflictRef,
-        change: &ChangeRef,
+        choice: &KeepChoice,
         mint: impl FnOnce() -> RequestId,
     ) -> Option<RequestId> {
         let sent = match self {
             Self::InFlight(_) => return None,
             Self::ReplyLost { sent, .. }
-                if &sent.conflict == conflict && &sent.change == change =>
+                if &sent.conflict == conflict && &sent.choice == choice =>
             {
                 sent.clone()
             }
             Self::Idle | Self::ReplyLost { .. } | Self::Answered { .. } => SentKeep {
                 conflict: conflict.clone(),
-                change: change.clone(),
+                choice: choice.clone(),
                 request: mint(),
             },
         };

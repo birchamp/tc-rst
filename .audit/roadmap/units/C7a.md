@@ -15,7 +15,7 @@ no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
 merged: none
 updated: 2026-10-22
-next: Do step 2 (the wire types, `choose`, the Restore and ResolveBulk handlers) on track-C7a; merge main again after INT-4 lands resume-build-lane, before the gates.
+next: Do step 3 (the scripted join of Titus 1:4-5, the tc-app tests and the count tests) on track-C7a; merge main again after INT-4 lands resume-build-lane, before the gates.
 blocked_by: none
 ---
 
@@ -85,8 +85,14 @@ Run these in the worktree; each must print what is said.
       `Separate { picks }`, `Joined { picks }` (`picks: Vec<ChangeRef>`). `Resolve.keep` becomes
       `Resolve.choice: KeepChoice`.
     - `Restore { at, request, record, shown, from }` (`conflicts/restore`);
-      `ResolveBulk { at, request, person: Who, conflicts }` (`conflicts/resolveBulk`) with reply
-      `BulkKept { ack, left: Vec<ConflictRef> }`; `HistoryView.shown: ShownToken`.
+      `ResolveBulk { at, request, person: Who, conflicts: Vec<BulkConflict { conflict, review }> }`
+      (`conflicts/resolveBulk`) with reply `BulkKept { ack, left: Vec<ConflictRef> }`;
+      `HistoryView.shown: ShownToken` (done, step 2). Decision (step 2): `shown` is the record's
+      edit token (`mint(key, None)`), the kind the store's `restore` takes (`ctx.edit`), so on a
+      record in conflict a Restore writes over the shown version only and the conflict stays
+      listed with the restored text as one side; a review token would need a change to
+      `tc-store`, which this card does not make. `Who` now refuses unknown fields, as every
+      request does.
     - `Choices` in `crates/tc-ui/src/app/review.rs`: `Candidate`, `PassageSides`,
       `JoinedOrSeparate`, `Later`, made by `fn choices(kind: ConflictKind) -> Choices`.
   - One entry point: `fn choose(conflict, review, &KeepChoice) -> Result<StoreCommand, ApiError>`
@@ -273,3 +279,4 @@ Plus:
 - 2026-10-22 | roadmap session (Cursor) | takeover | 43496296 | the owner confirmed at 12:53 that the tC4 Rebuild session (Enjoy d8a954f9) has ended; its two uncommitted minors rows are committed as WIP on resume-build-lane (43496296); the card is released (todo, no owner) because C7a's step 1 was never started; INT-4 lands the branch; `depends` stays empty because B11 is done and C7a's code starts from main after INT-4 | .worktrees/resume-build-lane
 - 2026-10-22 20:50 EDT | C7a session (Claude Code 3058c665) | claim | none | claimed before INT-4 lands: track-C7a is cut from resume-build-lane 43496296 (B11, the two B11 minors rows) with main 81cedaca merged in (7c84cef0, HANDOFF.md took main's text); the merge into main waits for INT-4, as the start session said | .worktrees/track-C7a
 - 2026-10-22 21:20 EDT | C7a session (Claude Code 3058c665) | step 1 | none | `ReviewState.busy/.outcome/.sent` are one `KeepPhase`; `keep_version` presses it and feeds it a `KeepReply` built by a match on every `CallError` variant; the 14 review tests pass plus `a_press_while_a_keep_is_in_flight_sends_nothing` (15); wasm clippy with `--features app` passes; decision logged in the funnel card: `SentKeep` holds the request id, not a `Confirm` | cargo test -p tc-ui --test app app::review::
+- 2026-10-22 22:05 EDT | C7a session (Claude Code 3058c665) | step 2 | none | `KeepChoice`, `Resolve.choice`, `Restore`, `ResolveBulk`/`BulkKept` and `HistoryView.shown` on the wire; `choose` is the only caller of `StoreCommand::resolve`; `Restore` and `ResolveBulk` handlers and the two `StoreCommand` constructors; goldens `restore.json` and `resolveBulk.json` written; tc-api (all), routes, tc-app `app::conflicts::` (7) and tc-ui `app::review::` (15) pass; both wasm clippy runs pass. The journey `conflict-review.test.mjs` still reads `sent[0].keep`: step 5 moves it to `choice` | cargo test -p tc-api; cargo test -p tc-app --test app app::conflicts::

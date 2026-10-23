@@ -6,8 +6,8 @@
 
 use tc_api::check::Tool;
 use tc_api::conflicts::{
-    ConflictEntry, ConflictKind, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount, Version,
-    VersionValue,
+    ConflictEntry, ConflictKind, KeepChoice, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount,
+    Version, VersionValue,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, ProjectRef, RecordRef, RequestId, WallMs};
 use tc_api::jobs::SyncResultView;
@@ -25,6 +25,11 @@ fn conflict(c: char) -> ConflictRef {
 
 fn change(c: char) -> ChangeRef {
     ChangeRef::parse(&c.to_string().repeat(64)).unwrap()
+}
+
+/// *Keep this version* of change `c`.
+fn choice(c: char) -> KeepChoice {
+    KeepChoice::Candidate { change: change(c) }
 }
 
 fn person(who: Who) -> MadeBy {
@@ -218,7 +223,7 @@ fn minter() -> (impl FnMut() -> RequestId, std::rc::Rc<std::cell::Cell<u8>>) {
 fn a_second_press_of_one_choice_sends_the_first_request() {
     let (mut mint, minted) = minter();
     let mut keep = KeepPhase::Idle;
-    let first = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    let first = keep.press(&conflict('1'), &choice('a'), &mut mint).unwrap();
     keep.reply(KeepReply::Lost("the app's server did not answer".into()));
     assert_eq!(
         keep.outcome(),
@@ -229,13 +234,13 @@ fn a_second_press_of_one_choice_sends_the_first_request() {
         "a lost reply says why"
     );
     assert!(!keep.busy(), "after a lost reply the button is on again");
-    let again = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    let again = keep.press(&conflict('1'), &choice('a'), &mut mint).unwrap();
     assert_eq!(first, again);
     keep.reply(KeepReply::Lost(String::new()));
-    let other = keep.press(&conflict('1'), &change('b'), &mut mint).unwrap();
+    let other = keep.press(&conflict('1'), &choice('b'), &mut mint).unwrap();
     assert_ne!(other, first);
     keep.reply(KeepReply::Lost(String::new()));
-    let elsewhere = keep.press(&conflict('2'), &change('b'), &mut mint).unwrap();
+    let elsewhere = keep.press(&conflict('2'), &choice('b'), &mut mint).unwrap();
     assert_ne!(elsewhere, other);
     assert_eq!(minted.get(), 3);
 }
@@ -247,10 +252,10 @@ fn a_second_press_of_one_choice_sends_the_first_request() {
 fn a_press_after_an_answer_is_a_new_request() {
     let (mut mint, _) = minter();
     let mut keep = KeepPhase::Idle;
-    let first = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    let first = keep.press(&conflict('1'), &choice('a'), &mut mint).unwrap();
     keep.reply(KeepReply::Lost(String::new()));
     assert_eq!(
-        keep.press(&conflict('1'), &change('a'), &mut mint),
+        keep.press(&conflict('1'), &choice('a'), &mut mint),
         Some(first),
         "a lost reply: the same request"
     );
@@ -260,11 +265,11 @@ fn a_press_after_an_answer_is_a_new_request() {
         Some(false),
         "a refusal is shown as not kept"
     );
-    let next = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    let next = keep.press(&conflict('1'), &choice('a'), &mut mint).unwrap();
     assert_ne!(next, first, "answered: a new request");
     keep.reply(KeepReply::Kept { disk_warning: None });
     assert_eq!(keep.outcome(), None, "kept with nothing to say");
-    keep.press(&conflict('1'), &change('b'), &mut mint).unwrap();
+    keep.press(&conflict('1'), &choice('b'), &mut mint).unwrap();
     keep.reply(KeepReply::Kept {
         disk_warning: Some("the disk complained".into()),
     });
@@ -284,10 +289,10 @@ fn a_press_after_an_answer_is_a_new_request() {
 fn a_press_while_a_keep_is_in_flight_sends_nothing() {
     let (mut mint, minted) = minter();
     let mut keep = KeepPhase::Idle;
-    let first = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    let first = keep.press(&conflict('1'), &choice('a'), &mut mint).unwrap();
     assert!(keep.busy());
-    assert_eq!(keep.press(&conflict('1'), &change('a'), &mut mint), None);
-    assert_eq!(keep.press(&conflict('2'), &change('b'), &mut mint), None);
+    assert_eq!(keep.press(&conflict('1'), &choice('a'), &mut mint), None);
+    assert_eq!(keep.press(&conflict('2'), &choice('b'), &mut mint), None);
     assert_eq!((keep.outcome(), minted.get()), (None, 1));
     keep.reply(KeepReply::Refused("no".into()));
     assert!(keep.outcome().is_some());
@@ -297,12 +302,12 @@ fn a_press_while_a_keep_is_in_flight_sends_nothing() {
         KeepPhase::Idle,
         "another conflict: the answer is gone"
     );
-    let second = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    let second = keep.press(&conflict('1'), &choice('a'), &mut mint).unwrap();
     assert_ne!(second, first);
     keep.reply(KeepReply::Lost("gone".into()));
     keep.dismiss();
     assert_eq!(
-        keep.press(&conflict('1'), &change('a'), &mut mint),
+        keep.press(&conflict('1'), &choice('a'), &mut mint),
         Some(second),
         "a lost reply survives a step: the same request goes again"
     );
