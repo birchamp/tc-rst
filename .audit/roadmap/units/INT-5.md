@@ -4,7 +4,7 @@ title: Converge the trackers onto the roadmap
 track: A
 lane: integration
 milestone: M0
-state: verifying
+state: gating
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-INT-5
 worktree: .worktrees/track-INT-5
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d
 merged: none
 updated: 2026-10-23
-next: Step 7: one verify pass, then wait for a merge turn from the orchestrator; S2 is not merged, so merge parked with next pointing at step 8.
+next: Wait for a merge turn from the orchestrator (local_d49edca7). Then: merge main into track-INT-5, keep any other card's watch-runs.py and HANDOFF.md change, set state parked (S2 is not merged) with next "When S2 is merged into main, merge main into track-INT-5 and do step 8.", make the merge commit in a separate worktree, gate it, move main only on --check-receipt.
 blocked_by: none
 ---
 
@@ -270,3 +270,5 @@ could build it a second time, or skip a step that keeps text safe.
 - 2026-10-23 16:44 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | already on main since 2026-10-22: AGENTS.md's PLAN paragraph holds the roadmap sentence | grep -c 'roadmap/TRACKING.md' AGENTS.md
 - 2026-10-23 16:44 EDT | integration lane (Claude Code 3d07d5f8) | step 5 | none | `board` step added after `node` in scripts/gates.sh, with `-B` on each python3 (without it board_test.py leaves .audit/tools/__pycache__, an untracked folder, and the gate then writes no receipt); ci.yml parity-baseline runs `--step board` with fetch-depth 0. `scripts/gates.sh --step board` exits 0; node --test .audit/tools/*.test.mjs: 7 pass, 0 fail (the drift test). With S3 set to building and owner none (not committed): exit 1, `[('error', 'S3', 'INV-TRACKER-TRUE: state is building but owner is none')]`; undone | scripts/gates.sh --step board
 - 2026-10-23 16:45 EDT | integration lane (Claude Code 3d07d5f8) | step 6 | none | status_tick, STATUS_SEEN and the call deleted from watch-runs.py (windows_gate_tick and the disk checks kept; it parses); tools README: union_test.py row added, status.py row says do not run it, watch-runs.py row no longer regenerates or pushes STATUS.md | grep -nE 'status_tick|STATUS' .audit/tools/watch-runs.py
+- 2026-10-23 16:46 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | one pass by a fresh read-only reviewer agent: every step's done-when holds; union_test fails without the lines for both logs; ci.yml parses, drift test 7/7; -B keeps the tree clean. §8: code fixes are structural (git attribute, deletion, CI step); checks exist, fail without the fix and run in CI; reach N/A (tooling); siblings: the watcher's only `git fetch` lived in status_tick, so windows_gate_tick stopped seeing a main pushed elsewhere (major, internal); no_loss false, one lens; prose: one reason comment. Minors: header row unchecked by union_test, smaller HANDOFF points dropped, INV-ONE-LIVE-TRACKER has no CI check | reviewer report in this session
+- 2026-10-23 16:46 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | the fetch moved into windows_gate_tick before it reads origin/main; three minors appended to .audit/minors.tsv | python3 -I -c "import ast; ast.parse(open('.audit/tools/watch-runs.py').read())"

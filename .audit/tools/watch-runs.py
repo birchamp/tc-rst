@@ -103,6 +103,7 @@ def windows_gate_tick():
         open(WIN_STATE, "w").write(run["sha"]); os.remove(WIN_RUN)
         return
     try:
+        subprocess.run(["git", "-C", REPO, "fetch", "-q", "origin"], timeout=120)
         sha = subprocess.run(["git", "-C", REPO, "rev-parse", "origin/claude/focused-ride-5uzj7p"], capture_output=True, text=True, timeout=30).stdout.strip()
     except Exception:
         return
