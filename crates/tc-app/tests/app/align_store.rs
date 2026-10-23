@@ -533,3 +533,75 @@ async fn an_imported_project_shows_its_metadata_language_name_in_settings() {
     .unwrap();
     assert_eq!(view.language_name, "Español (Latinoamérica)");
 }
+
+/// tC4 #795: a verse typed in decomposed (NFD) form, aligned and marked valid in the same
+/// session, is still valid after a restart. The aligner and the stored alignment hash the same
+/// text: the stored verse, in NFC.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen() {
+    use tc_api::editor::SaveVerse;
+    let mut rig = Rig::new().await;
+    let session = rig.open().await;
+    let at = session.scope().clone();
+    let key = RecordKey::Verse(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    );
+    let token = session.read().mint(&key, None).unwrap();
+    // "apóstol" with its accent as a combining mark, as some keyboards type it.
+    let nfd = "Pablo, siervo de Dios y apo\u{301}stol de Jesucristo";
+    post(
+        &rig.t.app,
+        &SaveVerse {
+            at: at.clone(),
+            request: request(240),
+            shown: tc_app::wire::token::shown(&token).unwrap(),
+            words: nfd.to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    let view = ready(&rig.t.app, &at, 1, 1).await;
+    let marked = edit(&rig.t.app, &at, &view, 241, AlignEdit::MarkValid)
+        .await
+        .unwrap();
+    assert_eq!(marked.status.state, RailState::Valid);
+    drop(session);
+    rig.t.app.quit().await;
+    rig.assert_burrito();
+
+    rig.restart(false).await;
+    let session = rig.open().await;
+    let reopened = ready(&rig.t.app, session.scope(), 1, 1).await;
+    assert_eq!(
+        reopened.status.state,
+        RailState::Valid,
+        "the alignment made for the NFD-typed verse stays valid"
+    );
+    // The fold's own check (§7.7): the hash the alignment recorded is the stored verse's, so
+    // the alignment files and the export keep it too.
+    let read = session.read();
+    let Some(Record::Verse {
+        value: tc_journal::record::VerseValue::Text { words, layout, .. },
+        ..
+    }) = read.projected(&key)
+    else {
+        panic!("Titus 1:1 holds text")
+    };
+    let Some(Record::Alignment { value, .. }) = read.projected(&RecordKey::Alignment(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    )) else {
+        panic!("Titus 1:1 is aligned")
+    };
+    assert_eq!(
+        value.target_verse_md5,
+        tc_journal::decision::verse_text_md5_v1(&format!("{words}{layout}")),
+        "one hash for the aligner and the alignment files"
+    );
+    drop(read);
+    drop(session);
+    rig.t.app.quit().await;
+}
