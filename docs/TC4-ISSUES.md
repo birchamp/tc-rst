@@ -39,10 +39,10 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 |---|---|---|---|---|---|---|---|
 | Align | 3 | 7 | 1 | 24 | 0 | 1 | 36 |
 | USFM, Translate and helps | 1 | 14 | 1 | 29 | 0 | 9 | 54 |
-| Check and resources | 2 | 3 | 2 | 33 | 2 | 22 | 64 |
+| Check and resources | 2 | 4 | 2 | 33 | 1 | 22 | 64 |
 | Sync, storage and import | 1 | 29 | 3 | 17 | 2 | 13 | 65 |
 | Shell, startup, languages and help | 4 | 35 | 1 | 17 | 0 | 19 | 76 |
-| All area rows | 11 | 88 | 8 | 120 | 4 | 64 | 295 |
+| All area rows | 11 | 89 | 8 | 120 | 3 | 64 | 295 |
 
 Counted from the rows on 2026-10-23 (the 2026-10-19 table had gone stale as units finished;
 two rows that said "done" now say covered). A row counts once per area table. The 2026-10-23
@@ -309,7 +309,7 @@ the rebuild fixed it or does as tC4 does:
 | #652 | Basic checks | not applicable | — | — | tC4 4.1.0. |
 | #653 | AI-assisted checking | not applicable | — | — | tC4 4.1.0. |
 | #651 | BT Servant | not applicable | — | — | tC4 4.2.0. |
-| #840 | Highlight the current note's words in the original-language text | owner question | tc-helps; REF1 | — | The owner said "yes orig lang highlights" (2026-10-23); whether to build it now or wait for tC4 is asked again. A tC4 enhancement after 4.0; both highlight only the gateway text today. `TC4-DELTA-2026-10-23.md` §5 Q39. |
+| #840 | Highlight the current note's words in the original-language text | unit todo | tc-helps, tc-ui; OLH-1 | `the_original_pane_marks_the_quote_at_its_occurrence`, `a_quote_the_verse_lacks_marks_nothing_in_the_original_pane` (to create, OLH-1) | Ruled 2026-10-23 (Q39, `rulings/2026-10-23-Q39-original-language-highlight.md`): build it now, ahead of tC4. Both highlight only the gateway text today. |
 
 ## 5. Sync, storage and import
 
