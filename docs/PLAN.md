@@ -130,9 +130,14 @@ Under the same rule, in the conflict review (B11 and C7a, 2026-10-23):
   show. A conflict of verses joined or split differently offers *Keep the joined verses* and
   *Keep the verses separate*, with the version clicked as the pick where a verse holds several.
   tC4 reviews verse text only and keeps the newest structure unasked.
-- History has *Restore this version* on every version but the one shown: the old value is
-  written as a new version with cause Restored, over the heads History showed, and the one it
-  replaces stays in History. tC4 has no History (#78).
+- History has *Restore this version* on every version but the one shown: the old version is
+  kept over every version of the record, as a choice on the conflict, so the conflict is
+  settled on it and every other version stays in History. tC4 has no History (#78).
+- A version of a passage conflict names its verse when it is not the conflict's ("Titus 1:5"
+  on the card). *Keep this version* is also offered on a book header, a chapter opening and
+  a story's text, frame and reference line, which tC4 does not review; the line over the
+  versions names the kind ("Passage · 3 versions") where tC4 always counts "versions of this
+  verse"; and a passage's version cards cannot be clicked, since a passage is kept by side.
 - *Keep all of <person>'s* keeps one person's version over every conflict of the tab where
   that person's computers hold exactly one of its versions; a conflict where they hold two, or
   none, is left for a choice of its own, and the result says how many. There is no "keep the

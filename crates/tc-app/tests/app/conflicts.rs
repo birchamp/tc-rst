@@ -9,8 +9,8 @@
 
 use tc_api::conflicts::{
     BulkConflict, ConflictEntry, ConflictKind, History, HistoryVersion, KeepChoice, List, MadeBy,
-    Resolve, ResolveBulk, Restore, ReviewEntries, ReviewPlace, ReviewTab, ReviewView, Version,
-    VersionCause, VersionValue,
+    Resolve, ResolveBulk, ReviewEntries, ReviewPlace, ReviewTab, ReviewView, Version, VersionCause,
+    VersionValue,
 };
 use tc_api::editor::{Chapters, ChaptersView, SaveVerse};
 use tc_api::event::Event;
@@ -826,94 +826,11 @@ async fn keep_my_passage_rewinds_the_join_and_keeps_my_verse() {
     assert_eq!(titus_1(&view, "4-5"), None);
 }
 
-/// #78: *Restore this version* writes the old value as a new version over the heads History
-/// showed, with cause Restored; the version it replaces stays in History, and a second send
-/// of the request gets the first reply.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn restore_writes_a_new_version_and_history_keeps_the_old() {
-    const NEW: &str = "Pablo, versículo dos cambiado aquí.";
-    let w = shared().await;
-    w.t.clock.set(START_MS);
-    let app = &w.t.app;
-    let at = opened(app).await.session.at;
-    let seed_text = titus_1(&chapters(app, &at).await, "2").unwrap();
-    let minted = app
-        .sessions()
-        .reader(&at)
-        .unwrap()
-        .read()
-        .mint(&tit(1, 2), None)
-        .unwrap();
-    post(
-        app,
-        &SaveVerse {
-            at: at.clone(),
-            request: rid(84),
-            shown: shown(&minted).unwrap(),
-            words: NEW.to_owned(),
-        },
-    )
-    .await
-    .unwrap();
-    let record = record_ref(&tit(1, 2)).unwrap();
-    let view: tc_api::conflicts::HistoryView = post(
-        app,
-        &History {
-            at: at.clone(),
-            record: record.clone(),
-        },
-    )
-    .await
-    .unwrap();
-    let causes = |versions: &[HistoryVersion]| -> Vec<(VersionCause, bool)> {
-        versions
-            .iter()
-            .map(|v| (v.cause, v.version.shown))
-            .collect()
-    };
-    assert_eq!(
-        causes(&view.versions),
-        vec![
-            (VersionCause::Edited, true),
-            (VersionCause::Imported, false)
-        ]
-    );
-    let old = view.versions[1].version.clone();
-    let restore = Restore {
-        at: at.clone(),
-        request: rid(85),
-        record: record.clone(),
-        shown: view.shown.clone(),
-        from: old.change.clone(),
-    };
-    let first = post(app, &restore).await.unwrap();
-    assert_eq!(first.stored, Stored::Written);
-    assert_eq!(first.tokens.len(), 1, "a new token for the record");
-    let again = post(app, &restore).await.unwrap();
-    assert_eq!(again, first, "a second send gets the first reply");
-
-    let after = history(app, &at, &record).await;
-    assert_eq!(
-        causes(&after),
-        vec![
-            (VersionCause::Restored, true),
-            (VersionCause::Edited, false),
-            (VersionCause::Imported, false)
-        ]
-    );
-    assert_eq!(after[0].version.value, old.value);
-    assert!(matches!(&after[0].version.by, MadeBy::Person(p) if p.who == Who::Mine));
-    assert_eq!(after[1].version.value, VersionValue::Text(NEW.into()));
-    assert_eq!(titus_1(&chapters(app, &at).await, "2").unwrap(), seed_text);
-}
-
-/// INV-A-CHOICE-NEVER-OVERWRITES-AN-UNSEEN-VERSION: a Restore on a record in conflict writes
-/// over the heads History's token lists, the version shown, and no other: the restored text
-/// takes the shown version's place among the versions, the two the screen did not show stay,
-/// the conflict stays listed, and the replaced version stays in History. (Restoring the text
-/// the versions all started from is no edit against it, so the fold would settle the conflict
-/// on the other side's edit by its merge rule; this restores an earlier edit of this
-/// computer's instead.)
+/// #78 and INV-A-CHOICE-NEVER-OVERWRITES-AN-UNSEEN-VERSION: *Restore this version* on a record
+/// in conflict keeps that old version over every version of the record, in one resolution over
+/// the entry's tokens: the conflict is settled on the restored text, every other version stays
+/// in History, and a second send of the request gets the first reply. (A restore over the shown
+/// head only would let the fold settle the conflict on the other side's text by its merge rule.)
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn restore_writes_over_every_shown_head() {
     const EARLIER: &str = "Pablo, mi primera versión.";
@@ -933,65 +850,54 @@ async fn restore_writes_over_every_shown_head() {
     };
     let entry = &entries[0];
     assert_eq!(entry.versions.len(), 3);
-    let shown_text = text_of(entry.versions.iter().find(|v| v.shown).unwrap());
-    let mut unshown: Vec<String> = entry
-        .versions
-        .iter()
-        .filter(|v| !v.shown)
-        .map(text_of)
-        .collect();
-    let view: tc_api::conflicts::HistoryView = post(
-        app,
-        &History {
-            at: at.clone(),
-            record: entry.record.clone(),
-        },
-    )
-    .await
-    .unwrap();
-    let earlier = view
-        .versions
+    let before = history(app, &at, &entry.record).await;
+    let earlier = before
         .iter()
         .find(|v| text_of(&v.version) == EARLIER)
         .unwrap()
         .version
         .clone();
     assert!(!earlier.shown);
-    let ack = post(
-        app,
-        &Restore {
-            at: at.clone(),
-            request: rid(94),
-            record: entry.record.clone(),
-            shown: view.shown.clone(),
+    let restore = Resolve {
+        at: at.clone(),
+        request: rid(94),
+        conflict: entry.conflict.clone(),
+        review: entry.review.clone(),
+        choice: KeepChoice::Restore {
             from: earlier.change.clone(),
         },
-    )
-    .await
-    .unwrap();
-    assert_eq!(ack.stored, Stored::Written);
-
-    let ReviewEntries::Conflicts(after) = tab(app, &at, ReviewTab::Text).await.entries else {
-        panic!()
     };
-    assert_eq!(after.len(), 1, "the conflict stays listed");
-    let mut texts: Vec<String> = after[0].versions.iter().map(text_of).collect();
-    texts.sort();
-    unshown.push(EARLIER.to_owned());
-    unshown.sort();
-    assert_eq!(
-        texts, unshown,
-        "the shown version is replaced, the others stay"
-    );
-    let restored = version_of(&after[0], &Who::Mine);
-    assert_eq!(text_of(&restored), EARLIER);
+    let first = post(app, &restore).await.unwrap();
+    assert_eq!(first.stored, Stored::Written);
+    let again = post(app, &restore).await.unwrap();
+    assert_eq!(again, first, "a second send gets the first reply");
+
+    let after = tab(app, &at, ReviewTab::Text).await;
+    assert_eq!(after.entries, ReviewEntries::Conflicts(Vec::new()));
+    let view = chapters(app, &at).await;
+    assert_eq!(view.conflicts, 0);
+    assert_eq!(titus_1(&view, "1").as_deref(), Some(EARLIER));
     let history = history(app, &at, &entry.record).await;
-    assert_eq!(history[0].cause, VersionCause::Restored);
-    assert!(
-        history
-            .iter()
-            .any(|v| v.cause == VersionCause::Edited && text_of(&v.version) == shown_text),
-        "the replaced version stays in History: {history:?}"
+    assert_eq!(
+        (
+            history[0].cause,
+            history[0].version.shown,
+            text_of(&history[0].version)
+        ),
+        (VersionCause::Kept, true, EARLIER.to_owned())
+    );
+    let mut texts: Vec<String> = history.iter().map(|v| text_of(&v.version)).collect();
+    texts.sort();
+    for text in [EARLIER, LATER, ONE, TWO] {
+        assert!(
+            texts.contains(&text.to_owned()),
+            "{text} stays in History: {texts:?}"
+        );
+    }
+    assert_eq!(
+        history.len(),
+        before.len() + 1,
+        "one new version, nothing removed"
     );
 }
 
@@ -1008,13 +914,23 @@ async fn bulk_keep_leaves_out_conflicts_with_two_candidates() {
     saved_here_then_closed(app, &tit(1, 3), MINE_THREE, 87).await;
     let project = folder("sample_burrito");
     let store = &w.store;
-    store
-        .teammates_edit_verse(
+    // The close releases the project's lock off the session's thread, a little after
+    // `settled`: the first write waits for it.
+    let mut tries = 0;
+    loop {
+        match store.teammates_edit_verse(
             &project,
             &tit(1, 1),
             &["Pablo, uno.", "Pablo, dos.", "Pablo, tres."],
-        )
-        .unwrap();
+        ) {
+            Ok(_) => break,
+            Err(e) if tries < 200 && e.to_string().contains("already open") => {
+                tries += 1;
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            Err(e) => panic!("{e}"),
+        }
+    }
     store
         .teammates_edit_verse(&project, &tit(1, 2), &["Tito, uno.", "Tito, dos."])
         .unwrap();

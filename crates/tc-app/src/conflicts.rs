@@ -12,13 +12,13 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use serde_json::json;
 use tc_api::conflicts::{
     BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion,
-    HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk, Restore,
+    HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk,
     ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version, VersionCause,
     VersionValue,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, StoryNo, WallMs};
 use tc_api::shown::{Computer, PersonLabel, Who};
-use tc_api::write::Ack;
+use tc_api::write::{Ack, SaveRefusal};
 use tc_api::{ApiError, NotSaved};
 use tc_journal::command::Choice;
 use tc_journal::fold::{Anomaly, Conflict, ConflictId, ConflictKind as Kind, Notice};
@@ -404,6 +404,7 @@ fn versions(
                 c.device,
                 Version {
                     change: ChangeRef::parse(&c.head.to_hex()).ok()?,
+                    place: place_of(&c.value.key()),
                     by: made_by(&c.device, labels),
                     at: WallMs(c.at.0),
                     clock_ahead: clock_ahead(c.at, now),
@@ -549,6 +550,7 @@ impl Handle<History> for App {
                 let body = read.body(&id)?;
                 let version = Version {
                     change: ChangeRef::parse(&id.to_hex()).ok()?,
+                    place: place_of(&key),
                     by: made_by(&body.device, &labels),
                     at: WallMs(body.at.0),
                     clock_ahead: clock_ahead(body.at, now),
@@ -572,17 +574,7 @@ impl Handle<History> for App {
             .map(|((_, version), cause)| HistoryVersion { version, cause })
             .collect();
         versions.reverse();
-        let shown = read
-            .mint(&key, None)
-            .map_err(|e| e.to_string())
-            .and_then(|t| wire::token::shown(&t).map_err(|e| e.to_string()))
-            .map_err(|reason| {
-                self.internal(
-                    "a record's edit token could not be made for its History",
-                    crate::reports::facts(json!({"reason": reason})),
-                )
-            })?;
-        Ok(HistoryView { shown, versions })
+        Ok(HistoryView { versions })
     }
 }
 
@@ -598,7 +590,10 @@ fn change_id(change: &ChangeRef) -> Result<ChangeId, ApiError> {
 /// journal [`Choice`], over the review's tokens, one per record of the conflict. A choice
 /// with no token writes nothing, and the store refuses one that lacks a record's token
 /// (`check_review_tokens`), so no record is written over a version the screen did not show.
+/// A Restore is the old version's value kept over every head of its record (`Values`): a
+/// restore over the shown head only would let the fold settle the conflict on the other side.
 fn choose(
+    read: &CountingSnapshot,
     conflict: &ConflictRef,
     review: Vec<ReviewToken>,
     choice: &KeepChoice,
@@ -621,6 +616,14 @@ fn choose(
         KeepChoice::Joined { picks } => Choice::KeepJoined {
             heads: heads(picks)?,
         },
+        KeepChoice::Restore { from } => {
+            let body = read.body(&change_id(from)?).ok_or_else(|| {
+                ApiError::NotSaved(NotSaved::Refused(SaveRefusal::Choice {
+                    reason: "this version cannot be read on this computer yet".to_owned(),
+                }))
+            })?;
+            Choice::Values(vec![body.record])
+        }
     };
     Ok(StoreCommand::resolve(conflict, review, choice))
 }
@@ -687,28 +690,8 @@ impl Handle<Resolve> for App {
             .iter()
             .map(|token| wire::token::review_token(handle.as_ref(), token))
             .collect::<Result<Vec<_>, _>>()?;
-        let command = choose(&req.conflict, review, &req.choice)?.requested_by(req.request);
-        match handle.submit(command).await {
-            Ok(reply) => self.ack(&reply),
-            Err(error) => Err(self.not_written(error)),
-        }
-    }
-}
-
-impl Handle<Restore> for App {
-    /// *Restore this version* (STORAGE §5.9): the version's value over the heads History's
-    /// token lists, as a new version with cause `Restore`, so the one it replaces stays in
-    /// History (#78).
-    async fn handle(&self, req: Restore) -> Result<Ack, ApiError> {
-        let session = self.writer(&req.at)?;
-        let handle = session.handle().clone();
-        let key = wire::scope::record_key(&req.record)?;
-        let shown = wire::token::edit_token(handle.as_ref(), &req.shown)?;
-        if *shown.key() != key {
-            return Err(bad_token());
-        }
-        let from = change_id(&req.from)?;
-        let command = StoreCommand::restore(shown, from).requested_by(req.request);
+        let command =
+            choose(&session.read(), &req.conflict, review, &req.choice)?.requested_by(req.request);
         match handle.submit(command).await {
             Ok(reply) => self.ack(&reply),
             Err(error) => Err(self.not_written(error)),

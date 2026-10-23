@@ -3,13 +3,10 @@
 //! [`crate::app::review`].
 
 use leptos::prelude::*;
-use tc_api::conflicts::{
-    BulkConflict, ConflictEntry, KeepChoice, Resolve, ResolveBulk, Restore, ReviewTab,
-};
+use tc_api::conflicts::{BulkConflict, ConflictEntry, KeepChoice, Resolve, ResolveBulk, ReviewTab};
 use tc_api::endpoint::{Endpoint, Write};
 use tc_api::ids::{ChangeRef, ConflictRef, RecordRef, RequestId, Scope};
 use tc_api::shown::PersonLabel;
-use tc_api::token::ShownToken;
 use tc_api::write::Ack;
 use wasm_bindgen_futures::spawn_local;
 
@@ -17,7 +14,6 @@ use super::app_ctx::Actions;
 use super::js;
 use crate::app::review::{KeepReply, Press, ReviewState, keep_reply, picks_of};
 use crate::app::shell::Editing;
-use crate::app::sync::person_label;
 
 fn kept(ack: Ack) -> KeepReply {
     KeepReply::Kept {
@@ -145,7 +141,7 @@ impl Actions {
             let kept_it = answer.is_ok();
             let reply = keep_reply(answer, reply);
             this.update_review(|r| {
-                r.keep.reply(reply);
+                r.keep.reply(request, reply);
                 if kept_it && made {
                     r.selected = None;
                 }
@@ -216,30 +212,18 @@ impl Actions {
             .collect()
     }
 
-    /// *Restore this version* (#78): the version's value written over the heads History
-    /// showed; the one it replaces stays in History.
-    pub fn restore_version(&self, record: RecordRef, shown: ShownToken, from: ChangeRef) {
-        let (rec, change) = (record.clone(), from.clone());
-        self.send(
-            Press::Restore { record, from },
-            None,
-            move |at, request| Restore {
-                at,
-                request,
-                record: rec,
-                shown,
-                from: change,
-            },
-            kept,
-        );
+    /// *Restore this version* (#78): the old version kept over every version of its record;
+    /// the others stay in History.
+    pub fn restore_version(&self, entry: ConflictEntry, position: usize, from: ChangeRef) {
+        self.choose(&entry, position, KeepChoice::Restore { from });
     }
 
     /// *Keep all of Maria's* over every conflict the tab lists: the reply says how many
     /// were left for a choice of their own.
     pub fn keep_all(&self, person: &PersonLabel, entries: Vec<ConflictEntry>) {
-        let label = person_label(person);
+        let label = person.clone();
         let who = person.who.clone();
-        let sent = entries.len();
+        let sent = u32::try_from(entries.len()).unwrap_or(u32::MAX);
         self.send(
             Press::KeepAll {
                 person: who.clone(),
@@ -261,8 +245,8 @@ impl Actions {
                 let left = u32::try_from(kept.left.len()).unwrap_or(u32::MAX);
                 KeepReply::KeptAll {
                     person: label,
-                    kept: u32::try_from(sent).unwrap_or(u32::MAX).saturating_sub(left),
-                    left,
+                    kept: sent.saturating_sub(left),
+                    sent,
                     disk_warning: kept.ack.disk_warning,
                 }
             },

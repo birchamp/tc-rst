@@ -262,6 +262,7 @@ browserTest('C7a. A teammate joined Titus 1:4-5 on Door43 while this computer ch
     const listed = await shown(page);
     assert.deepEqual(listed.map((v) => v.owner).sort(), ['Mine', 'Teammate 1', 'Teammate 1'], JSON.stringify(listed));
     assert.ok(listed.some((v) => v.text === MINE_FIVE), 'my verse 5 is one side');
+    assert.deepEqual(await page.getByTestId('conflict-version-place').allTextContents(), ['Titus 1:5', 'Titus 1:5'], 'the two versions of verse 5 (covered, and mine) name it; verse 4\'s does not');
     assert.ok(listed.some((v) => v.text.includes('a Tito') && v.text.includes('Por esta causa')), 'the joined text is the other');
     // One button per side; no version is clickable, each side is kept whole.
     const sides = page.getByTestId('conflict-keep-passage');
@@ -300,15 +301,16 @@ browserTest('C7a (#78). Every History row but the one shown has Restore this ver
     // Teammate 1's version, the one not shown: restored over the shown one, it is the text kept.
     const restore = rows.nth(1).getByTestId('history-restore');
     const from = await restore.getAttribute('data-ts');
-    const sent = requests(page, 'restore');
+    const sent = resolutions(page);
     await restore.dblclick();
     await page.getByTestId('conflict-none').waitFor({ timeout: 30_000 });
     assert.ok(sent.length >= 1);
     assert.equal(new Set(sent.map((r) => r.request)).size, 1, 'one request however often Restore was pressed');
-    assert.equal(sent[0].from, from);
+    assert.deepEqual(sent[0].choice, { type: 'restore', value: { from } });
+    assert.equal(sent[0].review.length, 1, 'over the record\'s token: every head');
     assert.equal(await page.getByTestId('conflict-error').count(), 0);
     const after = await env.call('conflicts/history', { at, record });
-    assert.equal(after.versions[0].cause, 'restored');
+    assert.equal(after.versions[0].cause, 'kept', 'the restored version is the one kept');
     assert.deepEqual(after.versions[0].version.value, { type: 'text', value: ONE });
     assert.ok(after.versions.some((v) => v.cause === 'edited' && v.version.value.value === TWO), 'the replaced version stays in History');
     await page.getByTestId('conflict-back').click();
@@ -343,7 +345,7 @@ browserTest('C7a. With two verses in conflict, Keep all of Teammate 1’s keeps 
     assert.equal(new Set(sent.map((r) => r.request)).size, 1, 'one request however often the button was pressed');
     assert.deepEqual(sent[0].person, { type: 'teammate', value: 1 });
     assert.equal(sent[0].conflicts.length, 2);
-    assert.match(await said.textContent(), /Teammate 1’s version was kept in 2 conflicts\. 0 are left/);
+    assert.match(await said.textContent(), /Teammate 1’s version was kept in 2 of 2 conflicts\./);
     await page.getByTestId('conflict-none').waitFor();
     const list = await env.call('conflicts/list', { at: await scope(env), tab: 'text' });
     assert.equal(list.entries.value.length, 0);

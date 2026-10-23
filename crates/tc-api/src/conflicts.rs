@@ -13,7 +13,7 @@ use tc_core::BookId;
 use crate::check::{CheckPlace, Tool};
 use crate::ids::{ChangeRef, ConflictRef, RecordRef, RequestId, Scope, StoryNo, ViewSeq, WallMs};
 use crate::shown::{PersonLabel, Who};
-use crate::token::{ReviewToken, ShownToken};
+use crate::token::ReviewToken;
 use crate::write::Ack;
 
 /// The review's tabs, by kind (STORAGE §8.5).
@@ -187,6 +187,8 @@ pub enum ReviewPlace {
 #[serde(rename_all = "camelCase")]
 pub struct Version {
     pub change: ChangeRef,
+    /// The record this is a version of: a passage's versions are of several verses.
+    pub place: ReviewPlace,
     pub by: MadeBy,
     pub at: WallMs,
     /// The version is dated more than a day after this computer's clock: "the clock of the
@@ -321,8 +323,7 @@ pub enum NoticeView {
     KeptApart { changes: u32 },
 }
 
-/// `conflicts/history`: every version of one record, newest first (#78), with the token a
-/// *Restore this version* ([`Restore`]) sends back.
+/// `conflicts/history`: every version of one record, newest first (#78).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -335,8 +336,6 @@ pub struct History {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryView {
-    /// The record as the read showed it: what a [`Restore`] writes over.
-    pub shown: ShownToken,
     pub versions: Vec<HistoryVersion>,
 }
 
@@ -393,6 +392,10 @@ pub enum KeepChoice {
     Separate { picks: Vec<ChangeRef> },
     /// *Keep the joined verses*, with the span picked where there are several.
     Joined { picks: Vec<ChangeRef> },
+    /// *Restore this version* from History (#78): that version's value as the one kept, over
+    /// every version of its record, so the conflict is settled on it and every other version
+    /// stays in History.
+    Restore { from: ChangeRef },
 }
 
 /// `conflicts/resolve`: one choice on a conflict (C7a; B11 on scripted outcomes). The tokens
@@ -407,21 +410,6 @@ pub struct Resolve {
     pub conflict: ConflictRef,
     pub review: Vec<ReviewToken>,
     pub choice: KeepChoice,
-}
-
-/// `conflicts/restore`: History's *Restore this version* (STORAGE §5.9): the value of `from`
-/// written over the heads `shown` lists, which [`HistoryView`] gave with the record. On a
-/// record in conflict the restored text becomes the version shown and the other versions stay
-/// listed for a choice; nothing is written over a version the screen did not show.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Restore {
-    pub at: Scope,
-    pub request: RequestId,
-    pub record: RecordRef,
-    pub shown: ShownToken,
-    pub from: ChangeRef,
 }
 
 /// `conflicts/resolveBulk`: *Keep all of Maria's* (STORAGE §5.9 step 3): one batch that keeps

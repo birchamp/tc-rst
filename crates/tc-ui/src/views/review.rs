@@ -17,7 +17,7 @@ use tc_api::conflicts::{
     ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version, VersionValue,
 };
 use tc_api::editor::{PaneText, SourceFrame, Sources};
-use tc_api::ids::{RecordRef, Scope};
+use tc_api::ids::Scope;
 use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
@@ -234,12 +234,13 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
             let error = outcome.map(outcome_callout);
             let content = view.with(|v| match v.as_ref().map(|v| &v.entries) {
                 Some(ReviewEntries::Conflicts(entries)) => match shown.get() {
-                    Some((_, entry, _)) => conflict_versions(
+                    Some((i, entry, _)) => conflict_versions(
                         &s,
                         &actions,
                         &at,
                         tab,
                         &entry,
+                        i,
                         entries,
                         together.get(),
                         busy,
@@ -324,13 +325,13 @@ fn outcome_callout(outcome: KeepOutcome) -> AnyView {
         KeepOutcome::KeptAll {
             person,
             kept,
-            left,
+            sent,
             disk_warning,
         } => (
             CalloutTone::Info,
             "conflict-kept-all",
             None,
-            kept_all_text(&person, kept, left),
+            kept_all_text(&person, kept, sent),
             disk_warning,
         ),
     };
@@ -513,6 +514,7 @@ fn conflict_versions(
     at: &Scope,
     tab: ReviewTab,
     entry: &ConflictEntry,
+    position: usize,
     all: &[ConflictEntry],
     together: usize,
     busy: Signal<bool>,
@@ -588,13 +590,16 @@ fn conflict_versions(
     let cards = entry
         .versions
         .iter()
-        .map(|v| version_card(actions, v.clone(), selected, choosable, dir))
+        .map(|v| {
+            let place = (v.place != entry.place).then(|| place_label(&v.place));
+            version_card(actions, v.clone(), place, selected, choosable, dir)
+        })
         .collect_view();
     let history = {
         let (s, actions, at) = (s.clone(), actions.clone(), at.clone());
-        let record = entry.record.clone();
+        let entry = entry.clone();
         let reference = reference.clone();
-        move || history_panel(&s, &actions, &at, &record, &reference, busy)
+        move || history_panel(&s, &actions, &at, &entry, position, &reference, busy)
     };
     let label = t(keys::conflicts::VERSIONS_OF, &[("ref", &reference)]);
     view! {
@@ -731,6 +736,7 @@ fn ult_reference(s: &AppState, at: &Scope, place: &ReviewPlace) -> Option<AnyVie
 fn version_card(
     actions: &Actions,
     version: Version,
+    place: Option<String>,
     selected: Memo<Option<tc_api::ids::ChangeRef>>,
     choosable: bool,
     dir: &'static str,
@@ -852,12 +858,17 @@ fn version_card(
         keys::conflicts::VERSION_LABEL,
         &[("version", &label), ("date", &date)],
     );
+    // A passage's versions are of several verses: each names its own.
+    let place = place.map(|place| {
+        view! { <span data-testid="conflict-version-place" style=date_style.to_style()>{place}</span> }
+    });
     let inner = view! {
         <span style="padding-top: 1px;">{mark}</span>
         <span style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
             <span style="display: flex; align-items: center; gap: 10px;">
                 <span data-testid="conflict-owner" style=pill.to_style()>{label}</span>
                 <span data-testid="conflict-date" style=date_style.to_style()>{date}</span>
+                {place}
             </span>
             {clock}
             {text}
@@ -1052,6 +1063,13 @@ fn structure_bar(
     position: usize,
     busy: Signal<bool>,
 ) -> AnyView {
+    // Off until a version is clicked: the fold needs the pick where a verse holds several,
+    // and a press without one would come back refused.
+    let picked = {
+        let review = actions.s().review.clone();
+        Memo::new(move |_| review.with(|r| r.as_ref().is_some_and(|r| r.selected.is_some())))
+    };
+    let off = Signal::derive(move || busy.get() || !picked.get());
     let joined = {
         let (actions, entry) = (actions.clone(), entry.clone());
         Callback::new(move |_| actions.keep_joined(entry.clone(), position))
@@ -1061,11 +1079,11 @@ fn structure_bar(
         Callback::new(move |_| actions.keep_separate(entry.clone(), position))
     };
     let buttons = view! {
-        <Button variant=ButtonVariant::Secondary disabled=busy on_click=separate
+        <Button variant=ButtonVariant::Secondary disabled=off on_click=separate
             attrs=Attrs::new().with("data-testid", "conflict-keep-separate")>
             {t(keys::review::KEEP_SEPARATE, &[])}
         </Button>
-        <Button disabled=busy on_click=joined attrs=Attrs::new().with("data-testid", "conflict-keep-joined")>
+        <Button variant=ButtonVariant::Secondary disabled=off on_click=joined attrs=Attrs::new().with("data-testid", "conflict-keep-joined")>
             {t(keys::review::KEEP_JOINED, &[])}
         </Button>
     }
@@ -1140,10 +1158,12 @@ fn history_panel(
     s: &AppState,
     actions: &Actions,
     at: &Scope,
-    record: &RecordRef,
+    entry: &ConflictEntry,
+    position: usize,
     reference: &str,
     busy: Signal<bool>,
 ) -> AnyView {
+    let record = &entry.record;
     let open = {
         let (review, record) = (s.review.clone(), record.clone());
         Memo::new(move |_| {
@@ -1169,33 +1189,34 @@ fn history_panel(
         }
     };
     let list = {
-        let (actions, at, record) = (actions.clone(), at.clone(), record.clone());
+        let (actions, at, entry) = (actions.clone(), at.clone(), entry.clone());
         let reference = reference.to_owned();
         move || {
             open.get()
-                .then(|| history_list(&actions, &at, &record, &reference, busy))
+                .then(|| history_list(&actions, &at, &entry, position, &reference, busy))
         }
     };
     view! { {button}{list} }.into_any()
 }
 
 /// Every version of the record, newest first, each with *Restore this version* but the one
-/// shown (STORAGE §5.9): the restore writes over the heads this read showed.
+/// shown: that version kept over every version of the record, as a choice on the conflict.
 fn history_list(
     actions: &Actions,
     at: &Scope,
-    record: &RecordRef,
+    entry: &ConflictEntry,
+    position: usize,
     reference: &str,
     busy: Signal<bool>,
 ) -> Option<AnyView> {
     let runtime = use_runtime()?;
     let read = runtime.cache().read(History {
         at: at.clone(),
-        record: record.clone(),
+        record: entry.record.clone(),
     });
     let title = t(keys::review::HISTORY_OF, &[("ref", &reference)]);
     let label = title.clone();
-    let (actions, record) = (actions.clone(), record.clone());
+    let (actions, entry) = (actions.clone(), entry.clone());
     let rows = move || {
         read.with(|l| {
             l.value().map(|view: &Arc<tc_api::conflicts::HistoryView>| {
@@ -1203,10 +1224,10 @@ fn history_list(
                     .iter()
                     .map(|v| {
                         let restore = (!v.version.shown).then(|| {
-                            let (actions, record) = (actions.clone(), record.clone());
-                            let (shown, from) = (view.shown.clone(), v.version.change.clone());
+                            let (actions, entry) = (actions.clone(), entry.clone());
+                            let from = v.version.change.clone();
                             let on_click = Callback::new(move |_| {
-                                actions.restore_version(record.clone(), shown.clone(), from.clone());
+                                actions.restore_version(entry.clone(), position, from.clone());
                             });
                             view! {
                                 <Button variant=ButtonVariant::Ghost size=Size::Sm disabled=busy on_click=on_click

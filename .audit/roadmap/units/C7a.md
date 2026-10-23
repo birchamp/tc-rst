@@ -4,7 +4,7 @@ title: Conflict choices: text and passage
 track: A
 lane: app
 milestone: M3
-state: verifying
+state: blocked
 owner: C7a session (Claude Code 3058c665)
 branch: track-C7a
 worktree: .worktrees/track-C7a
@@ -15,8 +15,8 @@ no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
 merged: none
 updated: 2026-10-23
-next: Three verify lines (loss; races and protocol; browser and parity), fix blockers and data/view majors; then wait for INT-4 to land resume-build-lane on main, merge main into track-C7a, run the full gate list, merge.
-blocked_by: none
+next: Wait for INT-4 to land resume-build-lane on main; then merge main into track-C7a, run the full gate list (`.audit/roadmap/units/C7a.md` "Gates before merge"), and merge with `Merge C7a: …` and `Unit: C7a`.
+blocked_by: INT-4 note "resume-build-lane landed on main" (the merge base; this card's code builds on B11, which is only on that branch)
 ---
 
 # C7a: Conflict choices: text and passage
@@ -82,9 +82,17 @@ Run these in the worktree; each must print what is said.
       nesting it would carry a second copy of the phase. `KeepReply` (`Kept`, `Refused`, `Lost`) is
       made from `Result<Ack, CallError>` by one match on every `CallError` variant.
     - `KeepChoice` in `crates/tc-api/src/conflicts.rs`: `Candidate { change }`, `Passage { picks }`,
-      `Separate { picks }`, `Joined { picks }` (`picks: Vec<ChangeRef>`). `Resolve.keep` becomes
-      `Resolve.choice: KeepChoice`.
-    - `Restore { at, request, record, shown, from }` (`conflicts/restore`);
+      `Separate { picks }`, `Joined { picks }` (`picks: Vec<ChangeRef>`), and, after the review
+      (fix 1), `Restore { from }`. `Resolve.keep` becomes `Resolve.choice: KeepChoice`.
+      `Version.place` names each version's record (fix 2).
+    - Withdrawn after the review (fix 1): `conflicts/restore` and `HistoryView.shown`. A restore
+      through `Command::Restore` carries an edit token, which on a record in conflict names the
+      shown head only, so a restore of the text the versions started from let the fold settle
+      the conflict on the other side by its merge rule and hide the translator's version. In the
+      review every History is on a record in conflict, so Restore is now `KeepChoice::Restore`
+      through `choose`: the old version's record as the fold's `Values` over the entry's review
+      tokens, kept over every head and refused when a head moved; its History cause is Kept.
+      The former design was:
       `ResolveBulk { at, request, person: Who, conflicts: Vec<BulkConflict { conflict, review }> }`
       (`conflicts/resolveBulk`) with reply `BulkKept { ack, left: Vec<ConflictRef> }`;
       `HistoryView.shown: ShownToken` (done, step 2). Decision (step 2): `shown` is the record's
@@ -295,3 +303,8 @@ Plus:
 - 2026-10-23 00:35 EDT | C7a session (Claude Code 3058c665) | step 4 | none | `Choices`/`choices` (25 arms), `Press`, the footer per kind (`passage_bar`, `structure_bar`), *Restore this version* on every History row but the shown one, the bulk row `conflict-bulk` with *Keep all of <person>'s*, the outcome callout per `KeepOutcome`, 14 words in `en.json` and every `*.pending.json`; `entry_keeps` deleted; `SaveRefusal::Choice`; tc-ui `app::review::` passes 17 (new: `every_kind_has_its_choices`, `a_look_again_refusal_says_another_version_was_kept`), `tc-api --test refusals` passes, the four wasm clippy runs and the native clippy of tc-api, tc-app, tc-ui, tc-server, tc4 pass | cargo test -p tc-ui --test app app::review::; cargo test -p tc-api --test refusals
 - 2026-10-23 02:20 EDT | C7a session (Claude Code 3058c665) | step 5 | none | `env.teammatesJoinVerses`, three `browserTest`s in `conflict-review.test.mjs` (passage keep, Restore from History, bulk keep; each double-pressed sends one request), J18's assertion moved to `choice`, `"C7a"` in `landed`. Three runs in a row: `# pass 6 # fail 0 # skipped 0` each (target/journey-run1..3.log, PLAYWRIGHT_MODULE=/home/bot/tc-rst/parity/tc4-baseline/node_modules/playwright). Captures: `capture-rust.mjs` refuses a partial run because this machine's font list changed since B11's captures (535 to 542 fonts; a partial recapture would mix machines); recaptured into a scratch folder instead and diffed the DOM of the three cases against `parity/app/dom/`: the only differences are the UI build hash in the logo path and my own version's date, both already in residuals.json, so C7a changes none of the three screens (History closed, one conflict: no Restore row, no bulk row) and `captures.json`, `dom/`, `screens/` and `residuals.json` stay as B11 left them. CHK-6 recaptures everything on one machine. `cargo test -p tc-ui --test screen_record` passes (48) | node --test parity/app/journeys/conflict-review.test.mjs
 - 2026-10-23 02:25 EDT | C7a session (Claude Code 3058c665) | step 6 | none | PLAN.md "Where the rebuild differs" gains the review's lines (B11's minor row 72) and C7a's passage, structure, Restore, bulk and refusal-words differences; TC4-ISSUES rows #679, #78 and #25 name the new tests (each found by grep in crates/parity); APP-DESIGN's C7a row carries the refinements; the minors row of step 4 had a stray dash in its unit column, corrected; `UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record` passes and changes report.json not at all | cargo test -p tc-ui --test screen_record
+- 2026-10-23 03:30 EDT | loss lens (Claude Code subagent of 3058c665) | verify | 3a3dba06 | Code: structure holds for Resolve and ResolveBulk (one entry point, tokens checked by the store), not for Restore, whose edit token lists the shown head only. Checks: the named tests exist, run in CI's `app` bin, each proof recorded; the bulk test failed once in three runs on the project's lock. Reach: Text tab, History, bulk row; dropped a sync during the review. Siblings: the edit-token writers share the rule; only Restore is offered on a record in conflict. No loss: one blocker, a Restore of the versions' base text settles the conflict on the other side's edit and hides the translator's version. Prose and Human: differences declared; the Restore behaviour needs words or withholding. Verdict: not a pass until the Restore blocker is fixed | the lens's report, quoted in this line
+- 2026-10-23 03:30 EDT | races and protocol lens (Claude Code subagent of 3058c665) | verify | 3a3dba06 | Code: `KeepPhase` and one `Actions::send` carry INV-ONE-RESOLVE-PER-PRESS; one gap, a reply is not matched to its request. Checks: the three press tests and the four server tests pass, each double send through the real reply cache. Reach: double press, lost reply, steps and tab changes, a top-bar leave while in flight, a reload. Siblings: `Confirm` and Create deferred to UI-3 as the card says. No loss: every write's tokens are checked or skipped by the store before any write. Prose and Human: reasons in comments; no owner question. Verdict: no blocker; one major, a reply after a top-bar leave and reopen can be shown for the wrong press; minors F2-F6 | the lens's report, quoted in this line
+- 2026-10-23 03:30 EDT | browser and parity lens (Claude Code subagent of 3058c665) | verify | 3a3dba06 | Code: `choices` has no wildcard, `failure_text` one arm per variant; gaps: a refusal's reason is a free string that can print a record key, and a structure press can be sent with no pick. Checks: 17 tc-ui tests; the journeys press every new button twice. Reach: passage and structure conflicts from a sync, Restore, the bulk keep, read-only. Siblings: refusal-by-words matches `check_item.rs`. No loss: every write carries what the screen showed. Prose and Human: five bullets in PLAN, APP-DESIGN's row; four differences undeclared. Verdict: not a pass until F1 (a passage's version cards do not name their verse) and F2 (a structure press with no pick comes back as key text) are fixed; F3-F10 minors | the lens's report, quoted in this line
+- 2026-10-23 04:20 EDT | C7a session (Claude Code 3058c665) | fix | none | fix 1 (loss blocker): Restore is `KeepChoice::Restore` through `choose` (the fold's `Values` over the entry's tokens, every head a parent); `conflicts/restore`, `HistoryView.shown` and `StoreCommand::restore` removed; `restore_writes_over_every_shown_head` now proves it on a three-version conflict (proof: `Choice::Candidate { head: from }` in its place → `NotSaved(Refused(Choice { reason: "the chosen version is not one of the conflict's versions" }))`, reverted). fix 2 (browser F1, major): `Version.place`; a card names its verse when it is not the conflict's ("Titus 1:5"), the journey asserts it. fix 3 (browser F2, major): the structure footer's buttons are off until a version is clicked, both secondary. fix 4 (races F1, major): `KeepPhase::reply(request, reply)` ignores a reply to another request; a test asserts it. fix 5 (loss F3): the bulk test waits for the closed project's lock; `app::conflicts::` passed 3 runs of 11. fix 6 (browser F3, words): "Your version was kept in {kept} of {sent} conflicts." and "{person}’s version was kept in {kept} of {sent} conflicts."; four more differences declared in PLAN. Count tests: `a_restore_costs_its_record` on a listed conflict, 4 pass. Clippy: native and the four wasm runs pass | cargo test -p tc-app --test app app::conflicts::; cargo test -p tc-ui --test app app::review::
+- 2026-10-23 04:50 EDT | C7a session (Claude Code 3058c665) | block | none | after the fixes the journey passes three runs in a row (`# pass 6 # fail 0 # skipped 0`, target/journey3-run1..3.log; the first rerun failed on my own assertion: both versions of verse 5, the covered one and mine, name "Titus 1:5", as they should). Every step is done and verified; the merge waits for INT-4 to land resume-build-lane on main. Then: merge main into track-C7a, run "Gates before merge", merge. Eleven minors appended to .audit/minors.tsv; a hand-over note is in the shared notes folder (C7a-session-notes.md) | node --test parity/app/journeys/conflict-review.test.mjs

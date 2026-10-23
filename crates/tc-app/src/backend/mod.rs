@@ -563,18 +563,6 @@ impl StoreCommand {
         )
     }
 
-    /// `Restore` (STORAGE §5.9): the value of `from` over the heads the token lists.
-    pub fn restore(shown: EditToken, from: ChangeId) -> Self {
-        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
-        Self::new(
-            Command::Restore {
-                shown: shown.0,
-                from,
-            },
-            listed,
-        )
-    }
-
     /// `ResolveBulk` (STORAGE §5.9 step 3): one batch over every listed conflict, each with
     /// one review token per record; the store leaves out the conflicts the devices cannot
     /// decide alone.

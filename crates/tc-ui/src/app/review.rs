@@ -72,8 +72,6 @@ pub enum Press {
         conflict: ConflictRef,
         choice: KeepChoice,
     },
-    /// *Restore this version* from a record's History.
-    Restore { record: RecordRef, from: ChangeRef },
     /// *Keep all of Maria's* over every conflict of the tab.
     KeepAll { person: Who },
 }
@@ -83,11 +81,11 @@ pub enum Press {
 pub enum KeepReply {
     /// The choice was made; the disk may have complained afterwards.
     Kept { disk_warning: Option<String> },
-    /// A bulk keep was made: `left` conflicts need a choice of their own.
+    /// A bulk keep was made: `kept` of `sent` conflicts, the rest for a choice of their own.
     KeptAll {
-        person: String,
+        person: PersonLabel,
         kept: u32,
-        left: u32,
+        sent: u32,
         disk_warning: Option<String>,
     },
     /// The server refused, in these words.
@@ -103,11 +101,11 @@ pub enum KeepOutcome {
     NotKept(String),
     /// Kept; the disk reported an error afterwards.
     DiskWarning(String),
-    /// A bulk keep: whose version, in how many conflicts, and how many are left.
+    /// A bulk keep: whose version, in how many of the conflicts sent.
     KeptAll {
-        person: String,
+        person: PersonLabel,
         kept: u32,
-        left: u32,
+        sent: u32,
         disk_warning: Option<String>,
     },
 }
@@ -130,12 +128,16 @@ impl KeepPhase {
         Some(request)
     }
 
-    /// The reply to the press in flight. A reply is only awaited after a press went in flight,
-    /// so in any other state there is nothing it answers.
-    pub fn reply(&mut self, reply: KeepReply) {
+    /// The reply to `request`, the press in flight. A reply to another request (a press made
+    /// before the review was left and opened again) answers nothing here, and in any other
+    /// state there is nothing it answers.
+    pub fn reply(&mut self, request: RequestId, reply: KeepReply) {
         let Self::InFlight(sent) = self else {
             return;
         };
+        if sent.request != request {
+            return;
+        }
         let sent = sent.clone();
         *self = match reply {
             KeepReply::Kept { disk_warning } => Self::Answered {
@@ -144,13 +146,13 @@ impl KeepPhase {
             KeepReply::KeptAll {
                 person,
                 kept,
-                left,
+                sent,
                 disk_warning,
             } => Self::Answered {
                 outcome: Some(KeepOutcome::KeptAll {
                     person,
                     kept,
-                    left,
+                    sent,
                     disk_warning,
                 }),
             },
@@ -330,12 +332,23 @@ pub fn keep_all_label(person: &PersonLabel) -> String {
     }
 }
 
-/// What a bulk keep says: whose version was kept where, and what is left.
-pub fn kept_all_text(person: &str, kept: u32, left: u32) -> String {
-    t(
-        keys::review::KEPT_ALL,
-        &[("person", &person), ("kept", &kept), ("left", &left)],
-    )
+/// What a bulk keep says: whose version was kept in how many of the conflicts sent; the
+/// rest are left for a choice of their own.
+pub fn kept_all_text(person: &PersonLabel, kept: u32, sent: u32) -> String {
+    match person.who {
+        Who::Mine if person.computer.is_none() => t(
+            keys::review::KEPT_ALL_MINE,
+            &[("kept", &kept), ("sent", &sent)],
+        ),
+        _ => t(
+            keys::review::KEPT_ALL,
+            &[
+                ("person", &person_label(person)),
+                ("kept", &kept),
+                ("sent", &sent),
+            ],
+        ),
+    }
 }
 
 impl ReviewState {

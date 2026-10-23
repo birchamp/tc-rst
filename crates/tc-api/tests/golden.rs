@@ -117,8 +117,8 @@ use tc_core::BookId;
 use tc_api::conflicts::{
     BulkConflict, BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History,
     HistoryVersion, HistoryView, KeepChoice, List as ConflictList, MadeBy, NoticeEntry, NoticeView,
-    Resolve, ResolveBulk, Restore, ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount,
-    Version, VersionCause, VersionValue,
+    Resolve, ResolveBulk, ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version,
+    VersionCause, VersionValue,
 };
 
 /// An example value for a golden file.
@@ -2608,6 +2608,11 @@ fn titus_1_1() -> RecordRef {
 fn version(change: char, who: Who, at: i64, shown: bool, text: &str) -> Version {
     Version {
         change: ChangeRef::parse(&change.to_string().repeat(64)).unwrap(),
+        place: ReviewPlace::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 1,
+        },
         by: MadeBy::Person(PersonLabel {
             who,
             computer: None,
@@ -2687,7 +2692,6 @@ impl Example for History {
 impl Example for HistoryView {
     fn example() -> Self {
         HistoryView {
-            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
             versions: vec![
                 HistoryVersion {
                     version: version(
@@ -2726,18 +2730,6 @@ impl Example for Resolve {
                     ChangeRef::parse(&"b".repeat(64)).unwrap(),
                 ],
             },
-        }
-    }
-}
-
-impl Example for Restore {
-    fn example() -> Self {
-        Restore {
-            at: scope(),
-            request: request(25),
-            record: titus_1_1(),
-            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
-            from: ChangeRef::parse(&"a".repeat(64)).unwrap(),
         }
     }
 }
@@ -3124,7 +3116,6 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "align/open",
             "check/decide",
             "conflicts/resolve",
-            "conflicts/restore",
             "conflicts/resolveBulk",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",

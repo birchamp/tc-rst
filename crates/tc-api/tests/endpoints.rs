@@ -110,8 +110,7 @@ const PHASE_0: &[&str] = &[
     "conflicts/list",
     "conflicts/history",
     "conflicts/resolve",
-    // C7a: Restore from History and the bulk keep.
-    "conflicts/restore",
+    // C7a: the bulk keep.
     "conflicts/resolveBulk",
     // B8: what the Community Checking preview prints.
     "export/book",

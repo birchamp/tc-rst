@@ -120,72 +120,95 @@ async fn a_verses_history_costs_its_versions() {
     }
 }
 
-/// C7a: *Restore this version* costs its record: one command, the record's own keys
-/// updated, and nothing of the rest of the project, on both corpora.
+/// C7a: *Restore this version* costs its record: one command, the old version read once,
+/// the record's own changes indexed, and no walk of the list or projection of a chapter, on
+/// both corpora.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_restore_costs_its_record() {
-    use tc_api::conflicts::{HistoryView, Restore};
+    use tc_api::conflicts::{HistoryView, KeepChoice, Resolve};
     use tc_api::write::Stored;
     use tc_app::backend::memory::Scripted;
 
-    let key = || {
-        tc_journal::RecordKey::Verse(
-            PSALMS,
-            tc_journal::ChapterNo::new(corpora().chapter).unwrap(),
-            tc_journal::VerseNo::new(1).unwrap(),
+    for backing in [Backing::Memory, Backing::Store] {
+        let inputs = std::sync::Mutex::new(Vec::new());
+        let (small, large) = costs_on_both(
+            backing,
+            async |s: &super::harness::Scale| {
+                opened(s).await;
+                let view: ReviewView = post(
+                    &s.app,
+                    &List {
+                        at: s.scope(),
+                        tab: ReviewTab::Text,
+                    },
+                )
+                .await
+                .unwrap();
+                let ReviewEntries::Conflicts(entries) = view.entries else {
+                    panic!()
+                };
+                let entry = entries[0].clone();
+                let history: HistoryView = post(
+                    &s.app,
+                    &History {
+                        at: s.scope(),
+                        record: entry.record.clone(),
+                    },
+                )
+                .await
+                .unwrap();
+                let from = history
+                    .versions
+                    .iter()
+                    .rev()
+                    .find(|v| !v.version.shown)
+                    .expect("a version to restore")
+                    .version
+                    .change
+                    .clone();
+                inputs.lock().unwrap().push((entry, from));
+                if let Some(memory) = s.memory() {
+                    memory.script(&s.folder, Scripted::Written).unwrap();
+                }
+            },
+            async |s: &super::harness::Scale| {
+                let (entry, from) = inputs.lock().unwrap().pop().unwrap();
+                let ack = post(
+                    &s.app,
+                    &Resolve {
+                        at: s.scope(),
+                        request: crate::common::rid(1),
+                        conflict: entry.conflict,
+                        review: entry.review,
+                        choice: KeepChoice::Restore { from },
+                    },
+                )
+                .await
+                .unwrap();
+                assert_eq!(ack.stored, Stored::Written);
+            },
         )
-    };
-    let inputs = std::sync::Mutex::new(Vec::new());
-    let (_, (stored, _)) = super::harness::costs_what_it_touches(
-        "a restore from History",
-        super::harness::OnStore::Everything,
-        async |s: &super::harness::Scale| {
-            opened(s).await;
-            let view: HistoryView = post(
-                &s.app,
-                &History {
-                    at: s.scope(),
-                    record: record_ref(&key()).unwrap(),
-                },
-            )
-            .await
-            .unwrap();
-            let newest = &view.versions[0].version.value;
-            let from = view
-                .versions
-                .iter()
-                .find(|v| &v.version.value != newest)
-                .expect("the corpus saved the verse more than once")
-                .version
-                .change
-                .clone();
-            inputs.lock().unwrap().push((view.shown, from));
-            if let Some(memory) = s.memory() {
-                memory.script(&s.folder, Scripted::Written).unwrap();
+        .await;
+        for (cost, scale) in [(small, "Psalms"), (large, "ten times")] {
+            // The old version's body, the token checks and the reply's token: a constant.
+            assert!(
+                cost.app.records_read <= 2 * READS_PER_CONFLICT,
+                "{backing:?} {scale}: {} records read for one restore",
+                cost.app.records_read
+            );
+            assert_eq!(cost.app.conflict_walks, 0, "{backing:?} {scale}");
+            assert_eq!(cost.app.chapters_projected, 0, "{backing:?} {scale}");
+            if backing == Backing::Store {
+                assert!(cost.store.commands > 0, "{backing:?} {scale}");
+                assert!(
+                    0 < cost.fold.changes_indexed
+                        && cost.fold.changes_indexed <= READS_PER_CONFLICT,
+                    "{backing:?} {scale}: {} changes for one restore",
+                    cost.fold.changes_indexed
+                );
             }
-        },
-        async |s: &super::harness::Scale| {
-            let (shown, from) = inputs.lock().unwrap().pop().unwrap();
-            let ack = post(
-                &s.app,
-                &Restore {
-                    at: s.scope(),
-                    request: crate::common::rid(1),
-                    record: record_ref(&key()).unwrap(),
-                    shown,
-                    from,
-                },
-            )
-            .await
-            .unwrap();
-            assert_eq!(ack.stored, Stored::Written);
-        },
-    )
-    .await;
-    assert!(stored.store.commands > 0, "{stored:?}");
-    assert!(stored.fold.keys_updated > 0, "{stored:?}");
-    assert_eq!(stored.app.conflict_walks, 0, "{stored:?}");
-    assert_eq!(stored.app.chapters_projected, 0, "{stored:?}");
+        }
+    }
 }
 
 /// C7a: *Keep all of <person>'s* costs the conflicts it was given, ten times as many on the

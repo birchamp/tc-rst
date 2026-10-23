@@ -49,6 +49,11 @@ fn person(who: Who) -> MadeBy {
 fn version(c: char, by: MadeBy) -> Version {
     Version {
         change: change(c),
+        place: ReviewPlace::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 1,
+        },
         by,
         at: WallMs(1_790_812_860_000),
         clock_ahead: false,
@@ -231,7 +236,10 @@ fn a_second_press_of_one_choice_sends_the_first_request() {
     let (mut mint, minted) = minter();
     let mut keep = KeepPhase::Idle;
     let first = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
-    keep.reply(KeepReply::Lost("the app's server did not answer".into()));
+    keep.reply(
+        in_flight(&keep),
+        KeepReply::Lost("the app's server did not answer".into()),
+    );
     assert_eq!(
         keep.outcome(),
         Some(KeepOutcome::NotKept(
@@ -242,10 +250,10 @@ fn a_second_press_of_one_choice_sends_the_first_request() {
     assert!(!keep.busy(), "after a lost reply the button is on again");
     let again = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
     assert_eq!(first, again);
-    keep.reply(KeepReply::Lost(String::new()));
+    keep.reply(in_flight(&keep), KeepReply::Lost(String::new()));
     let other = keep.press(&press_keep('1', 'b'), &mut mint).unwrap();
     assert_ne!(other, first);
-    keep.reply(KeepReply::Lost(String::new()));
+    keep.reply(in_flight(&keep), KeepReply::Lost(String::new()));
     let elsewhere = keep.press(&press_keep('2', 'b'), &mut mint).unwrap();
     assert_ne!(elsewhere, other);
     assert_eq!(minted.get(), 3);
@@ -259,13 +267,16 @@ fn a_press_after_an_answer_is_a_new_request() {
     let (mut mint, _) = minter();
     let mut keep = KeepPhase::Idle;
     let first = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
-    keep.reply(KeepReply::Lost(String::new()));
+    keep.reply(in_flight(&keep), KeepReply::Lost(String::new()));
     assert_eq!(
         keep.press(&press_keep('1', 'a'), &mut mint),
         Some(first),
         "a lost reply: the same request"
     );
-    keep.reply(KeepReply::Refused("Another version was kept.".into()));
+    keep.reply(
+        in_flight(&keep),
+        KeepReply::Refused("Another version was kept.".into()),
+    );
     assert_eq!(
         keep.outcome(),
         Some(KeepOutcome::NotKept("Another version was kept.".into())),
@@ -273,12 +284,15 @@ fn a_press_after_an_answer_is_a_new_request() {
     );
     let next = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
     assert_ne!(next, first, "answered: a new request");
-    keep.reply(KeepReply::Kept { disk_warning: None });
+    keep.reply(in_flight(&keep), KeepReply::Kept { disk_warning: None });
     assert_eq!(keep.outcome(), None, "kept with nothing to say");
     keep.press(&press_keep('1', 'b'), &mut mint).unwrap();
-    keep.reply(KeepReply::Kept {
-        disk_warning: Some("the disk complained".into()),
-    });
+    keep.reply(
+        in_flight(&keep),
+        KeepReply::Kept {
+            disk_warning: Some("the disk complained".into()),
+        },
+    );
     assert_eq!(
         keep.outcome(),
         Some(KeepOutcome::DiskWarning("the disk complained".into()))
@@ -294,10 +308,18 @@ fn a_press_while_a_keep_is_in_flight_sends_nothing() {
     let mut keep = KeepPhase::Idle;
     let first = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
     assert!(keep.busy());
+    keep.reply(
+        RequestId::from_bytes([9; 16]),
+        KeepReply::Refused("not mine".into()),
+    );
+    assert!(
+        keep.busy() && keep.outcome().is_none(),
+        "a reply to another press answers nothing here"
+    );
     assert_eq!(keep.press(&press_keep('1', 'a'), &mut mint), None);
     assert_eq!(keep.press(&press_keep('2', 'b'), &mut mint), None);
     assert_eq!((keep.outcome(), minted.get()), (None, 1));
-    keep.reply(KeepReply::Refused("no".into()));
+    keep.reply(in_flight(&keep), KeepReply::Refused("no".into()));
     assert!(keep.outcome().is_some());
     keep.dismiss();
     assert_eq!(
@@ -307,7 +329,7 @@ fn a_press_while_a_keep_is_in_flight_sends_nothing() {
     );
     let second = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
     assert_ne!(second, first);
-    keep.reply(KeepReply::Lost("gone".into()));
+    keep.reply(in_flight(&keep), KeepReply::Lost("gone".into()));
     keep.dismiss();
     assert_eq!(
         keep.press(&press_keep('1', 'a'), &mut mint),
@@ -592,16 +614,26 @@ fn a_look_again_refusal_says_another_version_was_kept() {
     let mut keep = KeepPhase::Idle;
     let (mut mint, _) = minter();
     keep.press(&keep_press(), &mut mint).unwrap();
-    keep.reply(tc_ui::app::review::keep_reply::<()>(
-        Err(api(NotSaved::LookAgain)),
-        |()| KeepReply::Kept { disk_warning: None },
-    ));
+    keep.reply(
+        in_flight(&keep),
+        tc_ui::app::review::keep_reply::<()>(Err(api(NotSaved::LookAgain)), |()| KeepReply::Kept {
+            disk_warning: None,
+        }),
+    );
     assert_eq!(
         keep.outcome(),
         Some(KeepOutcome::NotKept(
             "Another version of this verse is kept.".into()
         ))
     );
+}
+
+/// The request of the press in flight.
+fn in_flight(keep: &KeepPhase) -> RequestId {
+    match keep {
+        KeepPhase::InFlight(sent) => sent.request,
+        other => panic!("{other:?} has no press in flight"),
+    }
 }
 
 fn keep_press() -> Press {

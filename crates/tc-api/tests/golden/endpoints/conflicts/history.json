@@ -12,11 +12,18 @@
   "reply": {
     "type": "ok",
     "value": {
-      "shown": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
       "versions": [
         {
           "version": {
             "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "place": {
+              "type": "verse",
+              "value": {
+                "book": "TIT",
+                "chapter": 1,
+                "verse": 1
+              }
+            },
             "by": {
               "type": "person",
               "value": {
@@ -39,6 +46,14 @@
         {
           "version": {
             "change": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "place": {
+              "type": "verse",
+              "value": {
+                "book": "TIT",
+                "chapter": 1,
+                "verse": 1
+              }
+            },
             "by": {
               "type": "import"
             },
