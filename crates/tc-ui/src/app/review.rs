@@ -28,17 +28,31 @@ pub struct ReviewState {
     pub position: usize,
     /// The version clicked: the others fade.
     pub selected: Option<ChangeRef>,
-    /// A keep is in flight: Back, Previous, Next and Keep are off.
-    pub busy: bool,
-    /// What the last keep left to say, shown with or without a conflict left.
-    pub outcome: Option<KeepOutcome>,
-    /// The request of the last keep, with what it kept: a second press of the same choice
-    /// sends the same request, which the server answers with its first reply (A-27).
-    pub sent: Option<SentKeep>,
+    /// Where the last keep stands.
+    pub keep: KeepPhase,
     /// The record whose History shows.
     pub history: Option<RecordRef>,
 }
 
+/// Where the last keep stands: tC4's `busy`, `keepOutcome` and the request it sent as one
+/// state, so a keep is never both in flight and answered. The first network-reply state of
+/// the UI; UI-3 generalises it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeepPhase {
+    /// Nothing sent since the conflict showed.
+    Idle,
+    /// Sent and not answered: Back, Previous, Next and Keep are off.
+    InFlight(SentKeep),
+    /// Sent, and no usable answer came (the server did not answer, or the project was closed
+    /// under the review). The same press sends the same request again, and the server gives
+    /// its first reply if the keep was made (A-27); `error` says why it stopped.
+    ReplyLost { sent: SentKeep, error: String },
+    /// The server answered, with an `Ack` or a refusal: the next press is a new choice and a
+    /// new request, since the same one would get the same refusal again.
+    Answered { outcome: Option<KeepOutcome> },
+}
+
+/// A keep on its way: which version of which conflict, under which request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SentKeep {
     pub conflict: ConflictRef,
@@ -46,11 +60,94 @@ pub struct SentKeep {
     pub request: RequestId,
 }
 
+/// What the server's reply to a keep came to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeepReply {
+    /// The version was kept; the disk may have complained afterwards.
+    Kept { disk_warning: Option<String> },
+    /// The server refused, in these words.
+    Refused(String),
+    /// No usable answer, for this reason.
+    Lost(String),
+}
+
 /// The outcome of the last keep: an error to show, and whether the version was kept anyway.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeepOutcome {
     pub kept: bool,
     pub error: String,
+}
+
+impl KeepPhase {
+    /// A press of Keep for `change` in `conflict`: the request to send, or `None` while one
+    /// is in flight. After a lost reply the same choice sends the same request; any other
+    /// choice, and any press after an answer, is a new request from `mint`.
+    pub fn press(
+        &mut self,
+        conflict: &ConflictRef,
+        change: &ChangeRef,
+        mint: impl FnOnce() -> RequestId,
+    ) -> Option<RequestId> {
+        let sent = match self {
+            Self::InFlight(_) => return None,
+            Self::ReplyLost { sent, .. }
+                if &sent.conflict == conflict && &sent.change == change =>
+            {
+                sent.clone()
+            }
+            Self::Idle | Self::ReplyLost { .. } | Self::Answered { .. } => SentKeep {
+                conflict: conflict.clone(),
+                change: change.clone(),
+                request: mint(),
+            },
+        };
+        let request = sent.request;
+        *self = Self::InFlight(sent);
+        Some(request)
+    }
+
+    /// The reply to the keep in flight. A reply is only awaited after a press went in flight,
+    /// so in any other state there is nothing it answers.
+    pub fn reply(&mut self, reply: KeepReply) {
+        let Self::InFlight(sent) = self else {
+            return;
+        };
+        let sent = sent.clone();
+        *self = match reply {
+            KeepReply::Kept { disk_warning } => Self::Answered {
+                outcome: disk_warning.map(|error| KeepOutcome { kept: true, error }),
+            },
+            KeepReply::Refused(error) => Self::Answered {
+                outcome: Some(KeepOutcome { kept: false, error }),
+            },
+            KeepReply::Lost(error) => Self::ReplyLost { sent, error },
+        };
+    }
+
+    /// Another conflict shows: an answer is no longer about it. A lost reply stays, so the
+    /// same press on the same conflict still sends the same request.
+    pub fn dismiss(&mut self) {
+        if let Self::Answered { .. } = self {
+            *self = Self::Idle;
+        }
+    }
+
+    /// A keep is in flight: Back, Previous, Next and Keep are off.
+    pub fn busy(&self) -> bool {
+        matches!(self, Self::InFlight(_))
+    }
+
+    /// What the last keep left to say, shown with or without a conflict left.
+    pub fn outcome(&self) -> Option<KeepOutcome> {
+        match self {
+            Self::Idle | Self::InFlight(_) => None,
+            Self::ReplyLost { error, .. } => Some(KeepOutcome {
+                kept: false,
+                error: error.clone(),
+            }),
+            Self::Answered { outcome } => outcome.clone(),
+        }
+    }
 }
 
 impl ReviewState {
@@ -61,9 +158,7 @@ impl ReviewState {
             conflict,
             position: 0,
             selected: None,
-            busy: false,
-            outcome: None,
-            sent: None,
+            keep: KeepPhase::Idle,
             history: None,
         }
     }
@@ -91,42 +186,10 @@ impl ReviewState {
         self.position = position;
     }
 
-    /// The request a keep of `change` in `conflict` sends: the one sent for the same choice,
-    /// else a new one from `mint`.
-    pub fn request_for(
-        &mut self,
-        conflict: &ConflictRef,
-        change: &ChangeRef,
-        mint: impl FnOnce() -> RequestId,
-    ) -> RequestId {
-        match &self.sent {
-            Some(sent) if &sent.conflict == conflict && &sent.change == change => sent.request,
-            _ => {
-                let request = mint();
-                self.sent = Some(SentKeep {
-                    conflict: conflict.clone(),
-                    change: change.clone(),
-                    request,
-                });
-                request
-            }
-        }
-    }
-
-    /// The server answered the last keep, with an `Ack` or a refusal: the next press is a new
-    /// choice and sends a new request. With no answer (a lost reply) the next press sends the
-    /// same request, and the server gives its first reply if the keep was made (A-27).
-    pub fn answered(&mut self) {
-        self.sent = None;
-    }
-
     /// Another tab: its first entry shows.
     pub fn choose_tab(&mut self, tab: ReviewTab) {
         if self.tab != tab {
-            *self = Self {
-                outcome: None,
-                ..Self::at(tab, None)
-            };
+            *self = Self::at(tab, None);
         }
     }
 }

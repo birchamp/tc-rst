@@ -4,7 +4,7 @@ title: Conflict choices: text and passage
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: C7a session (Claude Code 3058c665)
 branch: track-C7a
 worktree: .worktrees/track-C7a
@@ -15,7 +15,7 @@ no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
 merged: none
 updated: 2026-10-22
-next: Do step 1 (KeepPhase) on track-C7a; merge main again after INT-4 lands resume-build-lane, before the gates.
+next: Do step 2 (the wire types, `choose`, the Restore and ResolveBulk handlers) on track-C7a; merge main again after INT-4 lands resume-build-lane, before the gates.
 blocked_by: none
 ---
 
@@ -73,10 +73,14 @@ Run these in the worktree; each must print what is said.
     (`crates/tc-ui/src/app/web/review.rs:19-26`).
 - **Code**:
   - Types (all to create):
-    - `KeepPhase` in `crates/tc-ui/src/app/review.rs`: `Idle`, `InFlight(SentKeep)`,
-      `ReplyLost(SentKeep)`, `Answered { outcome: Option<KeepOutcome> }`. `ReplyLost` keeps A-27:
-      after a lost reply the same press resends the same request. `SentKeep` holds the conflict, the
-      choice and a `Confirm` (`crates/tc-ui/src/app/confirm.rs`).
+    - `KeepPhase` in `crates/tc-ui/src/app/review.rs` (done, step 1): `Idle`, `InFlight(SentKeep)`,
+      `ReplyLost { sent: SentKeep, error }`, `Answered { outcome: Option<KeepOutcome> }`, with
+      `press`, `reply(KeepReply)`, `dismiss`, `busy`, `outcome`. `ReplyLost` keeps A-27: after a
+      lost reply the same press resends the same request, and its `error` is what the screen says
+      meanwhile. `SentKeep` holds the conflict, the choice and the request id, not a `Confirm`
+      (`crates/tc-ui/src/app/confirm.rs`): `Confirm` has no "reply lost, press again" state, and
+      nesting it would carry a second copy of the phase. `KeepReply` (`Kept`, `Refused`, `Lost`) is
+      made from `Result<Ack, CallError>` by one match on every `CallError` variant.
     - `KeepChoice` in `crates/tc-api/src/conflicts.rs`: `Candidate { change }`, `Passage { picks }`,
       `Separate { picks }`, `Joined { picks }` (`picks: Vec<ChangeRef>`). `Resolve.keep` becomes
       `Resolve.choice: KeepChoice`.
@@ -268,3 +272,4 @@ Plus:
 - 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | note | none | `KeepPhase` (step 1) is the first `NetEnd<T>` in the UI; UI-3 step 2b generalises it, so a verifier of this card does not ask for the generalisation here. Last sign of life of the lane: f9067bc 2026-10-21 12:16; the gone rule is TRACKING.md "pick up" | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
 - 2026-10-22 | roadmap session (Cursor) | takeover | 43496296 | the owner confirmed at 12:53 that the tC4 Rebuild session (Enjoy d8a954f9) has ended; its two uncommitted minors rows are committed as WIP on resume-build-lane (43496296); the card is released (todo, no owner) because C7a's step 1 was never started; INT-4 lands the branch; `depends` stays empty because B11 is done and C7a's code starts from main after INT-4 | .worktrees/resume-build-lane
 - 2026-10-22 20:50 EDT | C7a session (Claude Code 3058c665) | claim | none | claimed before INT-4 lands: track-C7a is cut from resume-build-lane 43496296 (B11, the two B11 minors rows) with main 81cedaca merged in (7c84cef0, HANDOFF.md took main's text); the merge into main waits for INT-4, as the start session said | .worktrees/track-C7a
+- 2026-10-22 21:20 EDT | C7a session (Claude Code 3058c665) | step 1 | none | `ReviewState.busy/.outcome/.sent` are one `KeepPhase`; `keep_version` presses it and feeds it a `KeepReply` built by a match on every `CallError` variant; the 14 review tests pass plus `a_press_while_a_keep_is_in_flight_sends_nothing` (15); wasm clippy with `--features app` passes; decision logged in the funnel card: `SentKeep` holds the request id, not a `Confirm` | cargo test -p tc-ui --test app app::review::

@@ -14,8 +14,8 @@ use tc_api::jobs::SyncResultView;
 use tc_api::shown::{Computer, PersonLabel, Who};
 use tc_core::BookId;
 use tc_ui::app::review::{
-    BackTo, Owner, ReviewState, back_label, consequence, group_others, kept_name, made_by,
-    notice_text, place_book, place_label, tabs_shown,
+    BackTo, KeepOutcome, KeepPhase, KeepReply, Owner, ReviewState, back_label, consequence,
+    group_others, kept_name, made_by, notice_text, place_book, place_label, tabs_shown,
 };
 use tc_ui::app::sync::{SyncEnd, SyncToast, person_label};
 
@@ -200,25 +200,44 @@ fn after_a_keep_the_conflict_now_at_its_place_shows() {
     assert_eq!(last.shown(&entries[..2]), Some(1));
 }
 
-/// A-27: a second press of Keep for the same version of the same conflict sends the first
-/// press's request, so the server answers it with its first reply and writes nothing more;
-/// another choice is a new request.
+/// A mint of request ids that counts what it minted.
+fn minter() -> (impl FnMut() -> RequestId, std::rc::Rc<std::cell::Cell<u8>>) {
+    let minted = std::rc::Rc::new(std::cell::Cell::new(0u8));
+    let count = minted.clone();
+    let mint = move || {
+        count.set(count.get() + 1);
+        RequestId::from_bytes([count.get(); 16])
+    };
+    (mint, minted)
+}
+
+/// A-27: after a lost reply, a second press of Keep for the same version of the same
+/// conflict sends the first press's request, so the server answers it with its first reply
+/// and writes nothing more; another choice is a new request.
 #[test]
 fn a_second_press_of_one_choice_sends_the_first_request() {
-    let mut state = ReviewState::at(ReviewTab::Text, None);
-    let mut minted = 0u8;
-    let mut mint = || {
-        minted += 1;
-        RequestId::from_bytes([minted; 16])
-    };
-    let first = state.request_for(&conflict('1'), &change('a'), &mut mint);
-    let again = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    let (mut mint, minted) = minter();
+    let mut keep = KeepPhase::Idle;
+    let first = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    keep.reply(KeepReply::Lost("the app's server did not answer".into()));
+    assert_eq!(
+        keep.outcome(),
+        Some(KeepOutcome {
+            kept: false,
+            error: "the app's server did not answer".into()
+        }),
+        "a lost reply says why"
+    );
+    assert!(!keep.busy(), "after a lost reply the button is on again");
+    let again = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
     assert_eq!(first, again);
-    let other = state.request_for(&conflict('1'), &change('b'), &mut mint);
+    keep.reply(KeepReply::Lost(String::new()));
+    let other = keep.press(&conflict('1'), &change('b'), &mut mint).unwrap();
     assert_ne!(other, first);
-    let elsewhere = state.request_for(&conflict('2'), &change('b'), &mut mint);
+    keep.reply(KeepReply::Lost(String::new()));
+    let elsewhere = keep.press(&conflict('2'), &change('b'), &mut mint).unwrap();
     assert_ne!(elsewhere, other);
-    assert_eq!(minted, 3);
+    assert_eq!(minted.get(), 3);
 }
 
 /// Once the server has answered a keep (a refusal such as "another version was kept"), the
@@ -226,21 +245,71 @@ fn a_second_press_of_one_choice_sends_the_first_request() {
 /// a press after a lost reply sends the same request.
 #[test]
 fn a_press_after_an_answer_is_a_new_request() {
-    let mut state = ReviewState::at(ReviewTab::Text, None);
-    let mut minted = 0u8;
-    let mut mint = || {
-        minted += 1;
-        RequestId::from_bytes([minted; 16])
-    };
-    let first = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    let (mut mint, _) = minter();
+    let mut keep = KeepPhase::Idle;
+    let first = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    keep.reply(KeepReply::Lost(String::new()));
     assert_eq!(
-        state.request_for(&conflict('1'), &change('a'), &mut mint),
-        first,
+        keep.press(&conflict('1'), &change('a'), &mut mint),
+        Some(first),
         "a lost reply: the same request"
     );
-    state.answered();
-    let next = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    keep.reply(KeepReply::Refused("Another version was kept.".into()));
+    assert_eq!(
+        keep.outcome().map(|o| o.kept),
+        Some(false),
+        "a refusal is shown as not kept"
+    );
+    let next = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
     assert_ne!(next, first, "answered: a new request");
+    keep.reply(KeepReply::Kept { disk_warning: None });
+    assert_eq!(keep.outcome(), None, "kept with nothing to say");
+    keep.press(&conflict('1'), &change('b'), &mut mint).unwrap();
+    keep.reply(KeepReply::Kept {
+        disk_warning: Some("the disk complained".into()),
+    });
+    assert_eq!(
+        keep.outcome(),
+        Some(KeepOutcome {
+            kept: true,
+            error: "the disk complained".into()
+        })
+    );
+}
+
+/// INV-ONE-RESOLVE-PER-PRESS: while a keep is in flight a press sends nothing, and the
+/// review says nothing about an outcome yet; Previous or Next after an answer clears what it
+/// said, but keeps a lost reply's request for the same press.
+#[test]
+fn a_press_while_a_keep_is_in_flight_sends_nothing() {
+    let (mut mint, minted) = minter();
+    let mut keep = KeepPhase::Idle;
+    let first = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    assert!(keep.busy());
+    assert_eq!(keep.press(&conflict('1'), &change('a'), &mut mint), None);
+    assert_eq!(keep.press(&conflict('2'), &change('b'), &mut mint), None);
+    assert_eq!((keep.outcome(), minted.get()), (None, 1));
+    keep.reply(KeepReply::Refused("no".into()));
+    assert!(keep.outcome().is_some());
+    keep.dismiss();
+    assert_eq!(
+        keep,
+        KeepPhase::Idle,
+        "another conflict: the answer is gone"
+    );
+    let second = keep.press(&conflict('1'), &change('a'), &mut mint).unwrap();
+    assert_ne!(second, first);
+    keep.reply(KeepReply::Lost("gone".into()));
+    keep.dismiss();
+    assert_eq!(
+        keep.press(&conflict('1'), &change('a'), &mut mint),
+        Some(second),
+        "a lost reply survives a step: the same request goes again"
+    );
+    let mut state = ReviewState::at(ReviewTab::Text, None);
+    state.keep = keep;
+    state.choose_tab(ReviewTab::Alignments);
+    assert_eq!(state.keep, KeepPhase::Idle, "another tab: a new start");
 }
 
 fn counts(text: u32, alignments: u32, notices: u32) -> Vec<TabCount> {

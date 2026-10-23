@@ -140,7 +140,7 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
     let review = s.review.clone();
     let busy = {
         let review = review.clone();
-        Signal::derive(move || review.with(|r| r.as_ref().is_some_and(|r| r.busy)))
+        Signal::derive(move || review.with(|r| r.as_ref().is_some_and(|r| r.keep.busy())))
     };
     let shown: Memo<Option<(usize, ConflictEntry, usize)>> = {
         let review = review.clone();
@@ -228,7 +228,7 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
     let body = {
         let (s, actions, at) = (s.clone(), actions.clone(), at.clone());
         move || {
-            let outcome = review.with(|r| r.as_ref().and_then(|r| r.outcome.clone()));
+            let outcome = review.with(|r| r.as_ref().and_then(|r| r.keep.outcome()));
             let error = outcome.map(|o| {
                 let style = measure().merge(&crate::css! {
                     "margin-bottom": 12,
