@@ -14,7 +14,7 @@ proves: [P1, P3]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-22
+updated: 2026-10-23
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -261,3 +261,4 @@ and each planted failure is in the log.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
+- 2026-10-23 23:50 EDT | C7a session (Claude Code 3058c665), for FIX-J | note | none | FIX-J's journeys exist on track-FIX-J: J3 `j3_a_download_from_the_seeded_fake_installs_the_pinned_version` (parity/app/journeys/source-texts.test.mjs), J12 `j12_an_upgrade_through_the_screens_moves_the_pin_on_disk` and J13 `j13_change_writes_the_primary_set_to_disk` (parity/app/journeys/upgrades.test.mjs); step 3's coverage map points J3, J12 and J13 at them, not at a pending card, once FIX-J merges | .audit/roadmap/units/FIX-J.md
