@@ -142,9 +142,11 @@ end.
 
 ## Checklist: merge an item
 
-1. Make the merge commit, with the card's `done` edit, in a separate worktree; run
-   `scripts/gates.sh` there; main moves only when `scripts/gates.sh --check-receipt` exits 0 on
-   that commit. A fix after a failed gate is a new commit, gated again. The card's log holds a
+1. Make the merge commit, with the card's `done` edit, in a separate worktree; then either run
+   `scripts/gates.sh` there or `scripts/gates.sh --wait-ci <card>` (it pushes the commit to
+   `gate/<card>` and waits for GitHub's `ci` and `app-e2e` runs, about 30 minutes, with no
+   local run needed); main moves only when `scripts/gates.sh --check-receipt` exits 0 on that
+   commit. A fix after a failed gate is a new commit, gated again. The card's log holds a
    `verify` line per `FUNNEL.md` §8 (who reviewed, the six questions answered in order, the
    evidence path) and a `fix` line for every blocker and every major that harms a translator's
    data or view. A no-loss item has three `verify` lines, one per lens (`GLOSSARY.md`
