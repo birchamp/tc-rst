@@ -26,7 +26,7 @@ never bend".
 | What | Where |
 |---|---|
 | Repository | `/home/bot/tc-rst` (main checked out; worktrees under `.worktrees/` (new, `.audit/roadmap/TRACKING.md`) and `.claude/worktrees/` (old; INT-6 cleans them)) |
-| Build folders | old worktrees link `target` to `/var/tmp/tc-rst-target/<worktree>`; the root drive is now full, so a new worktree builds in its own `target` on /home (`TRACKING.md` "claim an item"); never share one |
+| Build folders | Each worktree owns its `target/` inside the worktree, on `/home`. Never link a build folder to `/var/tmp`: that filled the root drive to 97% (2026-10-21). Never create a worktree inside a `target/` folder: a `cargo clean` there deletes it. |
 | Tools | Rust 1.99.1, Node 22, wasm-bindgen 0.2.129, Playwright 1.56.1 under the home folder; every shell that runs them starts with `. ~/.tc-env` (it also caps `RUST_TEST_THREADS=4` and sets the Playwright override) |
 | tC4 | `~/unfoldingword/translationcore4` at `d310bf3`, read-only, for builders; `~/unfoldingword/tc4-ref`, the same commit with `npm ci`, for parity and gallery runs (`TC4_ROOT`) |
 | Machine record | `docs/evidence/linux-machine-2026-10-18.md` (its CPU has SHA instructions; the reference laptop does not) |
