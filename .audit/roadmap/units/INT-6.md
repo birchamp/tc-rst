@@ -4,18 +4,18 @@ title: Rescue stray work and free the disk
 track: A
 lane: integration
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: integration lane (Claude Code 3d07d5f8)
+branch: track-INT-6
+worktree: .worktrees/track-INT-6
 depends: [INT-4]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: Step 1: save quick-timing, lane-b7 and lane-merge's uncommitted files to refs/wip/.
 blocked_by: none
 ---
 
@@ -292,3 +292,4 @@ files.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
+- 2026-10-23 17:00 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-INT-6 from main eaf809d1 while INT-7, INT-5 and SWEEP wait for merge turns | python3 -I -B .audit/tools/board.py
