@@ -4,18 +4,18 @@ title: Land resume-build-lane on main
 track: A
 lane: integration
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: checks lane (Claude Code 2198ee19)
+branch: track-INT-4
+worktree: .worktrees/track-INT-4
 depends: [INT-2, INT-3]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d plus about 1.5 h of gates (basis: the full test run took about 899 s of binaries plus builds)
 merged: none
-updated: 2026-10-22
-next: The resume lane session has ended (owner, 2026-10-22); step 1's takeover path: BOUNDARY is 43496296 plus the B5b rows.
+updated: 2026-10-23
+next: step 1
 blocked_by: none
 ---
 
@@ -262,3 +262,4 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
 - 2026-10-22 | roadmap session (Cursor) | note | 43496296 | the owner confirmed the resume lane session has ended; B11's loose rows are WIP 43496296; step 1 takes the takeover path | .audit/roadmap/units/C7a.md
 - 2026-10-22 | roadmap session (Cursor) | note | ff648f95 | INT-1 ran its yes path (three branches pushed; log on branch track-INT-1, pushed too); step 2's merge takes track-INT-1 along (its only change is its own card: set INT-1 state done, merged ff648f95, log line merge) | .audit/roadmap/units/INT-1.md
+- 2026-10-23 07:31 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-4 in .worktrees/track-INT-4 (the checks lane takes the integration lane's card: nobody holds that lane, and INT-4 needs INT-2 and INT-3). INT-3's merge 5f2b69af is on main; its CI run 39946614391 is in progress and gates this card's merge, not its local steps. Main's previous tip 04a686fd was green on run 39942717141 | gh run view 39946614391
