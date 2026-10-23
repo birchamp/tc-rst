@@ -4,7 +4,7 @@ title: Conflict choices: text and passage
 track: A
 lane: app
 milestone: M3
-state: gating
+state: done
 owner: C7a session (Claude Code 3058c665)
 branch: track-C7a
 worktree: .worktrees/track-C7a
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1, P2, P3]
 no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
-merged: none
+merged: 9edb6891
 updated: 2026-10-23
-next: Read .enjoy-logs/c7a-gates.log in the worktree; on a pass, merge C7a into main as TRACKING says.
+next: done.
 blocked_by: none
 ---
 
@@ -310,3 +310,5 @@ Plus:
 - 2026-10-23 04:50 EDT | C7a session (Claude Code 3058c665) | block | none | after the fixes the journey passes three runs in a row (`# pass 6 # fail 0 # skipped 0`, target/journey3-run1..3.log; the first rerun failed on my own assertion: both versions of verse 5, the covered one and mine, name "Titus 1:5", as they should). Every step is done and verified; the merge waits for INT-4 to land resume-build-lane on main. Then: merge main into track-C7a, run "Gates before merge", merge. Eleven minors appended to .audit/minors.tsv; a hand-over note is in the shared notes folder (C7a-session-notes.md) | node --test parity/app/journeys/conflict-review.test.mjs
 - 2026-10-23 10:05 EDT | C7a session (Claude Code 3058c665) | unblock | b9491277 | INT-4 landed resume-build-lane on main (d293375a); main merged into track-C7a, the one conflict (.audit/minors.tsv) kept every row of both sides | git log -1 b9491277
 - 2026-10-23 10:06 EDT | C7a session (Claude Code 3058c665) | gate | none | started `. ~/.tc-env && PLAYWRIGHT_MODULE=/home/bot/tc-rst/parity/tc4-baseline/node_modules/playwright scripts/gates.sh --journeys` in .worktrees/track-C7a (second heavy run beside INT-4's gate) | .worktrees/track-C7a/.enjoy-logs/c7a-gates.log
+- 2026-10-23 10:20 EDT | C7a session (Claude Code 3058c665) | gate | none | the run started at 10:06 was stopped: the checklist gates the merge commit itself, so it runs on this commit instead; two other gate runs were alive (INT-4, G5), so it waits for a free slot | .enjoy-logs/c7a-gates.log
+- 2026-10-23 10:20 EDT | C7a session (Claude Code 3058c665) | merge | none | this commit is the merge commit (main b9491277 merged in, the work's tip 9edb6891); main moves to it by fast-forward once scripts/gates.sh --journeys passes here and --check-receipt exits 0, then the push under the push rule | scripts/gates.sh --check-receipt
