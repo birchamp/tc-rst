@@ -4,18 +4,18 @@ title: Converge the trackers onto the roadmap
 track: A
 lane: integration
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: integration lane (Claude Code 3d07d5f8)
+branch: track-INT-5
+worktree: .worktrees/track-INT-5
 depends: [INT-4]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: Step 1: write .audit/tools/union_test.py, see it fail, then add the two merge=union lines.
 blocked_by: none
 ---
 
@@ -263,3 +263,4 @@ could build it a second time, or skip a step that keeps text safe.
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
 - 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | note | none | Done early, on main, so a new session finds the roadmap (review T1, T7): step 2 for `.audit/STATUS.md` and `.audit/PROGRESS.md` (the three `.audit/plans/*` files are on `resume-build-lane` only; mark them when INT-4 lands them); step 3 items 1, 4, 5 and 6 and the worktree rows of HANDOFF.md (item 2 stays); step 4; the `board.py` and `board_test.py` rows of `.audit/tools/README.md` (step 6's row change). Steps 1, 5, 6's watcher work and 7 stay | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
+- 2026-10-23 16:43 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-INT-5 from main eaf809d1 while INT-7 waits for its merge turn (the orchestrator's queue); steps 2, 3 (items 1, 4-6) and 4 were done early on main, per the 2026-10-22 note | python3 -I -B .audit/tools/board.py
