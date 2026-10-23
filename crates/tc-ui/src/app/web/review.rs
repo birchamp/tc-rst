@@ -3,42 +3,25 @@
 //! [`crate::app::review`].
 
 use leptos::prelude::*;
-use tc_api::conflicts::{ConflictEntry, KeepChoice, Resolve, ReviewTab};
-use tc_api::ids::{ChangeRef, ConflictRef, RecordRef};
+use tc_api::conflicts::{
+    BulkConflict, ConflictEntry, KeepChoice, Resolve, ResolveBulk, Restore, ReviewTab,
+};
+use tc_api::endpoint::{Endpoint, Write};
+use tc_api::ids::{ChangeRef, ConflictRef, RecordRef, RequestId, Scope};
+use tc_api::shown::PersonLabel;
+use tc_api::token::ShownToken;
 use tc_api::write::Ack;
-use tc_api::{ApiError, NotSaved};
 use wasm_bindgen_futures::spawn_local;
 
 use super::app_ctx::Actions;
 use super::js;
-use crate::app::client::CallError;
-use crate::app::review::{KeepReply, ReviewState};
+use crate::app::review::{KeepReply, Press, ReviewState, keep_reply, picks_of};
 use crate::app::shell::Editing;
-use crate::i18n::{keys, t};
+use crate::app::sync::person_label;
 
-/// What a keep that did not happen says after "The version was not kept.".
-fn failure_text(error: &CallError) -> String {
-    match error {
-        CallError::Api(ApiError::NotSaved(NotSaved::LookAgain)) => {
-            t(keys::conflicts::OTHER_KEPT, &[])
-        }
-        CallError::Api(api) => api.to_string(),
-        CallError::Dropped => error.to_string(),
-        CallError::Transport(transport) => transport.to_string(),
-    }
-}
-
-/// What the server's reply came to: an answer, or no usable one. Only a reply from the API
-/// is an answer; a failed connection or a closed project may hide a keep that was made.
-fn keep_reply(reply: Result<Ack, CallError>) -> KeepReply {
-    match reply {
-        Ok(ack) => KeepReply::Kept {
-            disk_warning: ack.disk_warning,
-        },
-        Err(error @ CallError::Api(_)) => KeepReply::Refused(failure_text(&error)),
-        Err(error @ (CallError::Dropped | CallError::Transport(_))) => {
-            KeepReply::Lost(failure_text(&error))
-        }
+fn kept(ack: Ack) -> KeepReply {
+    KeepReply::Kept {
+        disk_warning: ack.disk_warning,
     }
 }
 
@@ -129,52 +112,160 @@ impl Actions {
         });
     }
 
-    /// Keep this version (tC4 `keepVersion`): one resolution over every version the entry
-    /// showed. Off while it runs; a second press of the same choice after a lost reply sends
-    /// the same request, whose first reply the server gives again (A-27). The review stays
-    /// at its place and shows the conflict now there.
-    pub fn keep_version(&self, entry: ConflictEntry, position: usize) {
+    /// One path for every press of the review (INV-ONE-RESOLVE-PER-PRESS): the press goes
+    /// through [`crate::app::review::KeepPhase`], which gives it a request only while none
+    /// is in flight and the same request again after a lost reply, whose first reply the
+    /// server gives again (A-27). `build` makes the request; `reply` reads its answer.
+    fn send<E: Write + Endpoint + 'static>(
+        &self,
+        press: Press,
+        position: Option<usize>,
+        build: impl FnOnce(Scope, RequestId) -> E,
+        reply: impl FnOnce(E::Ok) -> KeepReply + 'static,
+    ) {
         let s = self.s();
         let Some(project) = s.project.get_untracked() else {
             return;
         };
-        let Some(change) = s
-            .review
-            .with_untracked(|r| r.as_ref().and_then(|r| r.selected.clone()))
-        else {
-            return;
-        };
-        let choice = KeepChoice::Candidate { change };
         let mut request = None;
         self.update_review(|r| {
-            request = r
-                .keep
-                .press(&entry.conflict, &choice, js::random_request_id);
-            if request.is_some() {
+            request = r.keep.press(&press, js::random_request_id);
+            if let (Some(_), Some(position)) = (request, position) {
                 r.position = position;
             }
         });
         let Some(request) = request else {
             return;
         };
-        let resolve = Resolve {
-            at: project.at,
-            request,
-            conflict: entry.conflict.clone(),
-            review: entry.review.clone(),
-            choice,
-        };
+        let made = matches!(press, Press::Keep { .. });
+        let req = build(project.at, request);
         let this = self.clone();
         spawn_local(async move {
-            let reply = this.runtime().api().call(&resolve).await;
-            let kept = reply.is_ok();
-            let reply = keep_reply(reply);
+            let answer = this.runtime().api().call(&req).await;
+            let kept_it = answer.is_ok();
+            let reply = keep_reply(answer, reply);
             this.update_review(|r| {
                 r.keep.reply(reply);
-                if kept {
+                if kept_it && made {
                     r.selected = None;
                 }
             });
         });
+    }
+
+    /// A choice on `entry` (tC4 `keepVersion` for *Keep this version*): one resolution over
+    /// every version the entry showed. The review stays at its place and shows the conflict
+    /// now there.
+    fn choose(&self, entry: &ConflictEntry, position: usize, choice: KeepChoice) {
+        let (conflict, review) = (entry.conflict.clone(), entry.review.clone());
+        self.send(
+            Press::Keep {
+                conflict: conflict.clone(),
+                choice: choice.clone(),
+            },
+            Some(position),
+            move |at, request| Resolve {
+                at,
+                request,
+                conflict,
+                review,
+                choice,
+            },
+            kept,
+        );
+    }
+
+    /// Keep this version: the version clicked.
+    pub fn keep_version(&self, entry: ConflictEntry, position: usize) {
+        let Some(change) = self
+            .s()
+            .review
+            .with_untracked(|r| r.as_ref().and_then(|r| r.selected.clone()))
+        else {
+            return;
+        };
+        self.choose(&entry, position, KeepChoice::Candidate { change });
+    }
+
+    /// *Keep Maria's passage*: her side's versions, every record of the passage.
+    pub fn keep_passage(&self, entry: ConflictEntry, position: usize, person: &PersonLabel) {
+        let picks = picks_of(&entry, person);
+        if picks.is_empty() {
+            return;
+        }
+        self.choose(&entry, position, KeepChoice::Passage { picks });
+    }
+
+    /// *Keep the joined verses*, with the version clicked as the span picked, if any.
+    pub fn keep_joined(&self, entry: ConflictEntry, position: usize) {
+        let picks = self.picked();
+        self.choose(&entry, position, KeepChoice::Joined { picks });
+    }
+
+    /// *Keep the verses separate*, with the version clicked as the text picked, if any.
+    pub fn keep_separate(&self, entry: ConflictEntry, position: usize) {
+        let picks = self.picked();
+        self.choose(&entry, position, KeepChoice::Separate { picks });
+    }
+
+    fn picked(&self) -> Vec<ChangeRef> {
+        self.s()
+            .review
+            .with_untracked(|r| r.as_ref().and_then(|r| r.selected.clone()))
+            .into_iter()
+            .collect()
+    }
+
+    /// *Restore this version* (#78): the version's value written over the heads History
+    /// showed; the one it replaces stays in History.
+    pub fn restore_version(&self, record: RecordRef, shown: ShownToken, from: ChangeRef) {
+        let (rec, change) = (record.clone(), from.clone());
+        self.send(
+            Press::Restore { record, from },
+            None,
+            move |at, request| Restore {
+                at,
+                request,
+                record: rec,
+                shown,
+                from: change,
+            },
+            kept,
+        );
+    }
+
+    /// *Keep all of Maria's* over every conflict the tab lists: the reply says how many
+    /// were left for a choice of their own.
+    pub fn keep_all(&self, person: &PersonLabel, entries: Vec<ConflictEntry>) {
+        let label = person_label(person);
+        let who = person.who.clone();
+        let sent = entries.len();
+        self.send(
+            Press::KeepAll {
+                person: who.clone(),
+            },
+            None,
+            move |at, request| ResolveBulk {
+                at,
+                request,
+                person: who,
+                conflicts: entries
+                    .into_iter()
+                    .map(|e| BulkConflict {
+                        conflict: e.conflict,
+                        review: e.review,
+                    })
+                    .collect(),
+            },
+            move |kept| {
+                let left = u32::try_from(kept.left.len()).unwrap_or(u32::MAX);
+                KeepReply::KeptAll {
+                    person: label,
+                    kept: u32::try_from(sent).unwrap_or(u32::MAX).saturating_sub(left),
+                    left,
+                    disk_warning: kept.ack.disk_warning,
+                }
+            },
+        );
     }
 }

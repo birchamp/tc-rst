@@ -3309,6 +3309,9 @@ fn not_saved() -> Vec<NotSaved> {
         NotSaved::Refused(SaveRefusal::InvalidText {
             reason: "a comment needs text".into(),
         }),
+        NotSaved::Refused(SaveRefusal::Choice {
+            reason: "the chosen version is not one of the conflict's versions".into(),
+        }),
         NotSaved::Disk("The disk is full.".into()),
         NotSaved::ReadOnly(ReadOnlyReason::SecondWriter),
         NotSaved::LookAgain,

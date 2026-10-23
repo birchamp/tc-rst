@@ -112,6 +112,10 @@ pub enum SaveRefusal {
     IncoherentView,
     /// The last present book of a project cannot be removed (STORAGE §5.7).
     LastBook,
+    /// A choice in the conflict review the store cannot make into changes (STORAGE §8.3):
+    /// the chosen version is not one of the conflict's, a version cannot be read here yet.
+    /// The review shows the reason.
+    Choice { reason: String },
 }
 
 /// Why a project is open read-only (STORAGE §5.0, §6.1, O1, O4, O5). Unit variants only, so

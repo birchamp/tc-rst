@@ -6,7 +6,8 @@
 //!
 //! The rebuild adds, each a declared difference: tabs for the kinds tC4 does not review, drawn
 //! only while one of them holds something (STORAGE §8.5, Q-9); the clock warning on a version;
-//! and History (#78), read only until C7a's Restore.
+//! History (#78) with *Restore this version*; and the choices of the other kinds of the Text
+//! tab (C7a): a passage's sides, the joined or separate verses, and *Keep all of Maria's*.
 
 use std::sync::Arc;
 
@@ -17,13 +18,14 @@ use tc_api::conflicts::{
 };
 use tc_api::editor::{PaneText, SourceFrame, Sources};
 use tc_api::ids::{RecordRef, Scope};
-use tc_api::shown::Direction as TextDir;
+use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
 use crate::app::review::{
-    BackTo, Owner, back_label, cause_label, consequence, group_others, kept_name, made_by,
-    notice_text, place_label, tab_label, tabs_shown,
+    BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
+    group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
+    notice_text, persons, place_label, tab_label, tabs_shown,
 };
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::attrs::Attrs;
@@ -229,25 +231,20 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
         let (s, actions, at) = (s.clone(), actions.clone(), at.clone());
         move || {
             let outcome = review.with(|r| r.as_ref().and_then(|r| r.keep.outcome()));
-            let error = outcome.map(|o| {
-                let style = measure().merge(&crate::css! {
-                    "margin-bottom": 12,
-                    "overflow-wrap": "anywhere",
-                });
-                let not_kept =
-                    (!o.kept).then(|| view! { <strong>{t(keys::conflicts::KEEP_ERROR, &[])}</strong> });
-                view! {
-                    <Callout tone=CalloutTone::Warn style=style
-                        attrs=Attrs::new().with("role", "alert").with("data-testid", "conflict-error")>
-                        {not_kept}" "{o.error}
-                    </Callout>
-                }
-            });
+            let error = outcome.map(outcome_callout);
             let content = view.with(|v| match v.as_ref().map(|v| &v.entries) {
-                Some(ReviewEntries::Conflicts(_)) => match shown.get() {
-                    Some((_, entry, _)) => {
-                        conflict_versions(&s, &actions, &at, tab, &entry, together.get()).into_any()
-                    }
+                Some(ReviewEntries::Conflicts(entries)) => match shown.get() {
+                    Some((_, entry, _)) => conflict_versions(
+                        &s,
+                        &actions,
+                        &at,
+                        tab,
+                        &entry,
+                        entries,
+                        together.get(),
+                        busy,
+                    )
+                    .into_any(),
                     None => none(t(keys::conflicts::NONE, &[])).into_any(),
                 },
                 Some(ReviewEntries::Detached(entries)) => detached(entries).into_any(),
@@ -266,12 +263,11 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
     let footer = {
         let actions = actions.clone();
         move || {
-            shown.get().map(|(i, entry, _)| {
-                if tab == ReviewTab::Text && entry_keeps(&entry) {
-                    keep_bar(&actions, &entry, i, busy).into_any()
-                } else {
-                    later_bar().into_any()
-                }
+            shown.get().map(|(i, entry, _)| match offered(tab, &entry) {
+                Choices::Candidate => keep_bar(&actions, &entry, i, busy).into_any(),
+                Choices::PassageSides => passage_bar(&actions, &entry, i, busy).into_any(),
+                Choices::JoinedOrSeparate => structure_bar(&actions, &entry, i, busy).into_any(),
+                Choices::Later => later_bar().into_any(),
             })
         }
     };
@@ -296,10 +292,57 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
     .into_any()
 }
 
-/// Whether the Text tab can keep one of the entry's versions now: tC4's verse text, with
-/// every version readable. The other kinds' choices are unit C7a's and C7b's.
-fn entry_keeps(entry: &ConflictEntry) -> bool {
-    entry.kind == ConflictKind::VerseText && entry.unreadable == 0
+/// What the Text tab offers for `entry` now: its kind's choices, with every version readable
+/// (no choice replaces a version this computer cannot read yet). The other tabs' choices are
+/// unit C7b's.
+fn offered(tab: ReviewTab, entry: &ConflictEntry) -> Choices {
+    if tab == ReviewTab::Text && entry.unreadable == 0 {
+        choices(entry.kind)
+    } else {
+        Choices::Later
+    }
+}
+
+/// What the last press left to say: a warning when nothing was kept or the disk complained,
+/// else what a bulk keep did.
+fn outcome_callout(outcome: KeepOutcome) -> AnyView {
+    let style = measure().merge(&crate::css! {
+        "margin-bottom": 12,
+        "overflow-wrap": "anywhere",
+    });
+    let (tone, test_id, lead, text, more) = match outcome {
+        KeepOutcome::NotKept(why) => (
+            CalloutTone::Warn,
+            "conflict-error",
+            Some(t(keys::conflicts::KEEP_ERROR, &[])),
+            why,
+            None,
+        ),
+        KeepOutcome::DiskWarning(warning) => {
+            (CalloutTone::Warn, "conflict-error", None, warning, None)
+        }
+        KeepOutcome::KeptAll {
+            person,
+            kept,
+            left,
+            disk_warning,
+        } => (
+            CalloutTone::Info,
+            "conflict-kept-all",
+            None,
+            kept_all_text(&person, kept, left),
+            disk_warning,
+        ),
+    };
+    let lead = lead.map(|lead| view! { <strong>{lead}</strong>" " });
+    let more = more.map(|more| view! { <p style="margin: 6px 0 0;">{more}</p> });
+    view! {
+        <Callout tone=tone style=style
+            attrs=Attrs::new().with("role", "alert").with("data-testid", test_id)>
+            {lead}{text}{more}
+        </Callout>
+    }
+    .into_any()
 }
 
 fn none(text: String) -> impl IntoView {
@@ -460,13 +503,19 @@ fn kind_line(entry: &ConflictEntry) -> String {
 }
 
 /// One conflict: tC4's `ConflictVersions`, the place and its versions, newest first.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one conflict's drawing takes the review's state, place and list as they are"
+)]
 fn conflict_versions(
     s: &AppState,
     actions: &Actions,
     at: &Scope,
     tab: ReviewTab,
     entry: &ConflictEntry,
+    all: &[ConflictEntry],
     together: usize,
+    busy: Signal<bool>,
 ) -> AnyView {
     let reference = place_label(&entry.place);
     let group = crate::css! {
@@ -529,7 +578,12 @@ fn conflict_versions(
         let review = s.review.clone();
         Memo::new(move |_| review.with(|r| r.as_ref().and_then(|r| r.selected.clone())))
     };
-    let choosable = tab == ReviewTab::Text && entry_keeps(entry);
+    let choosable = matches!(
+        offered(tab, entry),
+        Choices::Candidate | Choices::JoinedOrSeparate
+    );
+    let bulk = (all.len() > 1 && offered(tab, entry) != Choices::Later)
+        .then(|| bulk_row(actions, entry, all, busy));
     let dir = dir_of(s);
     let cards = entry
         .versions
@@ -540,7 +594,7 @@ fn conflict_versions(
         let (s, actions, at) = (s.clone(), actions.clone(), at.clone());
         let record = entry.record.clone();
         let reference = reference.clone();
-        move || history_panel(&s, &actions, &at, &record, &reference)
+        move || history_panel(&s, &actions, &at, &record, &reference, busy)
     };
     let label = t(keys::conflicts::VERSIONS_OF, &[("ref", &reference)]);
     view! {
@@ -552,6 +606,7 @@ fn conflict_versions(
                 <span style=legend.to_style()>{swatches}</span>
             </div>
             {notes}
+            {bulk}
             {ult}
             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">{cards}</div>
             {history}
@@ -922,6 +977,138 @@ fn keep_bar(
     .into_any()
 }
 
+/// The footer's frame: the keep bar's, with its contents in a row.
+fn footer_frame(hint: String, buttons: AnyView, test_id: &'static str) -> AnyView {
+    let bar = crate::css! {
+        "flex": "none",
+        "box-sizing": "border-box",
+        "min-height": 68,
+        "display": "flex",
+        "align-items": "center",
+        "padding": "10px 24px",
+        "background": "var(--surface-card)",
+        "border-top": HAIR,
+    };
+    let inner = measure().merge(&crate::css! {
+        "width": "100%",
+        "display": "flex",
+        "align-items": "center",
+        "flex-wrap": "wrap",
+        "gap": 12,
+    });
+    let hint_style = crate::css! {
+        "font-size": "var(--fs-ui-sm)",
+        "font-weight": "var(--fw-bold)",
+        "color": "var(--uw-slate)",
+    };
+    view! {
+        <div data-testid=test_id style=bar.to_style()>
+            <div style=inner.to_style()>
+                <span style=hint_style.to_style()>{hint}</span>
+                <span style="flex: 1;"></span>
+                {buttons}
+            </div>
+        </div>
+    }
+    .into_any()
+}
+
+/// A passage's footer (STORAGE §8.3): *Keep Maria's passage* for each person with a version,
+/// every verse of the passage as that person left it.
+fn passage_bar(
+    actions: &Actions,
+    entry: &ConflictEntry,
+    position: usize,
+    busy: Signal<bool>,
+) -> AnyView {
+    let buttons = persons(entry)
+        .into_iter()
+        .map(|person| {
+            let (actions, entry) = (actions.clone(), entry.clone());
+            let label = keep_passage_label(&person);
+            let who = person.who.clone();
+            let on_click = Callback::new(move |_| actions.keep_passage(entry.clone(), position, &person));
+            view! {
+                <Button disabled=busy on_click=on_click
+                    attrs=Attrs::new().with("data-testid", "conflict-keep-passage").with("data-who", format!("{who:?}"))>
+                    {label}
+                </Button>
+            }
+        })
+        .collect_view()
+        .into_any();
+    footer_frame(
+        t(keys::review::PASSAGE_HINT, &[]),
+        buttons,
+        "conflict-passage-bar",
+    )
+}
+
+/// A verse-structure footer (STORAGE §8.3): *Keep the joined verses* or *Keep the verses
+/// separate*, with the version clicked as the pick where a verse holds several.
+fn structure_bar(
+    actions: &Actions,
+    entry: &ConflictEntry,
+    position: usize,
+    busy: Signal<bool>,
+) -> AnyView {
+    let joined = {
+        let (actions, entry) = (actions.clone(), entry.clone());
+        Callback::new(move |_| actions.keep_joined(entry.clone(), position))
+    };
+    let separate = {
+        let (actions, entry) = (actions.clone(), entry.clone());
+        Callback::new(move |_| actions.keep_separate(entry.clone(), position))
+    };
+    let buttons = view! {
+        <Button variant=ButtonVariant::Secondary disabled=busy on_click=separate
+            attrs=Attrs::new().with("data-testid", "conflict-keep-separate")>
+            {t(keys::review::KEEP_SEPARATE, &[])}
+        </Button>
+        <Button disabled=busy on_click=joined attrs=Attrs::new().with("data-testid", "conflict-keep-joined")>
+            {t(keys::review::KEEP_JOINED, &[])}
+        </Button>
+    }
+    .into_any();
+    footer_frame(
+        t(keys::review::STRUCTURE_HINT, &[]),
+        buttons,
+        "conflict-structure-bar",
+    )
+}
+
+/// *Keep all of Maria's* for each person with a version here, over every conflict the tab
+/// lists (STORAGE §5.9 step 3); the reply says how many were left for a choice of their own.
+fn bulk_row(
+    actions: &Actions,
+    entry: &ConflictEntry,
+    all: &[ConflictEntry],
+    busy: Signal<bool>,
+) -> AnyView {
+    let row = crate::css! {
+        "display": "flex",
+        "align-items": "center",
+        "flex-wrap": "wrap",
+        "gap": 8,
+    };
+    let buttons = persons(entry)
+        .into_iter()
+        .map(|person: PersonLabel| {
+            let (actions, all) = (actions.clone(), all.to_vec());
+            let label = keep_all_label(&person);
+            let who = person.who.clone();
+            let on_click = Callback::new(move |_| actions.keep_all(&person, all.clone()));
+            view! {
+                <Button variant=ButtonVariant::Secondary size=Size::Sm disabled=busy on_click=on_click
+                    attrs=Attrs::new().with("data-testid", "conflict-keep-all").with("data-who", format!("{who:?}"))>
+                    {label}
+                </Button>
+            }
+        })
+        .collect_view();
+    view! { <div data-testid="conflict-bulk" style=row.to_style()>{buttons}</div> }.into_any()
+}
+
 /// The footer of a conflict this build has no choice for: every version is kept (C7b).
 fn later_bar() -> AnyView {
     let bar = crate::css! {
@@ -955,6 +1142,7 @@ fn history_panel(
     at: &Scope,
     record: &RecordRef,
     reference: &str,
+    busy: Signal<bool>,
 ) -> AnyView {
     let open = {
         let (review, record) = (s.review.clone(), record.clone());
@@ -981,13 +1169,25 @@ fn history_panel(
         }
     };
     let list = {
-        let (at, record, reference) = (at.clone(), record.clone(), reference.to_owned());
-        move || open.get().then(|| history_list(&at, &record, &reference))
+        let (actions, at, record) = (actions.clone(), at.clone(), record.clone());
+        let reference = reference.to_owned();
+        move || {
+            open.get()
+                .then(|| history_list(&actions, &at, &record, &reference, busy))
+        }
     };
     view! { {button}{list} }.into_any()
 }
 
-fn history_list(at: &Scope, record: &RecordRef, reference: &str) -> Option<AnyView> {
+/// Every version of the record, newest first, each with *Restore this version* but the one
+/// shown (STORAGE §5.9): the restore writes over the heads this read showed.
+fn history_list(
+    actions: &Actions,
+    at: &Scope,
+    record: &RecordRef,
+    reference: &str,
+    busy: Signal<bool>,
+) -> Option<AnyView> {
     let runtime = use_runtime()?;
     let read = runtime.cache().read(History {
         at: at.clone(),
@@ -995,12 +1195,27 @@ fn history_list(at: &Scope, record: &RecordRef, reference: &str) -> Option<AnyVi
     });
     let title = t(keys::review::HISTORY_OF, &[("ref", &reference)]);
     let label = title.clone();
+    let (actions, record) = (actions.clone(), record.clone());
     let rows = move || {
         read.with(|l| {
             l.value().map(|view: &Arc<tc_api::conflicts::HistoryView>| {
                 view.versions
                     .iter()
                     .map(|v| {
+                        let restore = (!v.version.shown).then(|| {
+                            let (actions, record) = (actions.clone(), record.clone());
+                            let (shown, from) = (view.shown.clone(), v.version.change.clone());
+                            let on_click = Callback::new(move |_| {
+                                actions.restore_version(record.clone(), shown.clone(), from.clone());
+                            });
+                            view! {
+                                <Button variant=ButtonVariant::Ghost size=Size::Sm disabled=busy on_click=on_click
+                                    style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }
+                                    attrs=Attrs::new().with("data-testid", "history-restore").with("data-ts", v.version.change.as_str().to_owned())>
+                                    {t(keys::review::RESTORE, &[])}
+                                </Button>
+                            }
+                        });
                         let text = match &v.version.value {
                             VersionValue::Text(text) => text.trim().to_owned(),
                             VersionValue::Joined { by } => {
@@ -1020,6 +1235,7 @@ fn history_list(at: &Scope, record: &RecordRef, reference: &str) -> Option<AnyVi
                                 style="display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: var(--stroke-hair) solid var(--border-hair);">
                                 <span style="font-size: var(--fs-caption); font-weight: var(--fw-bold); color: var(--uw-slate);">{meta}</span>
                                 <span style="font-family: var(--font-scripture); font-size: var(--fs-verse); line-height: var(--lh-verse); color: var(--text-scripture); white-space: pre-wrap;">{text}</span>
+                                {restore}
                             </li>
                         }
                     })
