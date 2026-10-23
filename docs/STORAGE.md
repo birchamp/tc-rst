@@ -1279,7 +1279,7 @@ order from the names; the fold is order-independent. Content:
 …
 ```
 
-`purpose` is `save`, `intake` (changes recorded by an intake, such as ingested Door43 edits) or
+`purpose` is `save`, `intake` (changes an intake writes, such as the salvage of a received pack) or
 `salvage` (changes recovered from a damaged pack, §4.4). The batch of an *Import* or *Bring it
 back* of a kept copy adds `"reconciles":{"path":…,"seenMd5":…}`, `seenMd5` the copy's md5, so
 that a crash after the batch never imports the copy twice (§6.4 X3); `path` is the file the
