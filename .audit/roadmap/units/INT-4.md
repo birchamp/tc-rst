@@ -4,7 +4,7 @@ title: Land resume-build-lane on main
 track: A
 lane: integration
 milestone: M0
-state: building
+state: done
 owner: checks lane (Claude Code 2198ee19)
 branch: track-INT-4
 worktree: .worktrees/track-INT-4
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d plus about 1.5 h of gates (basis: the full test run took about 899 s of binaries plus builds)
-merged: none
+merged: 2b1d722b
 updated: 2026-10-23
-next: step 3
+next: none
 blocked_by: none
 ---
 
@@ -274,3 +274,5 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
 - 2026-10-23 11:19 EDT | checks lane (Claude Code 2198ee19) | gate | 09233474 | scripts/gates.sh --journeys: `gates: all 13 steps passed; receipt target/gates/9f3f28da3fe1571b584765e43065535db9c1a900.ok`; cargo test 3320 passed, 0 failed, 7 ignored; the alignment budget passed as step 7; node step 78 pass, 0 fail (225 browser skips, as in CI); journeys 212 pass, 0 fail, 0 skipped | .enjoy-logs/int4-gates-3.log
 - 2026-10-23 11:32 EDT | checks lane (Claude Code 2198ee19) | gate | 09233474 | Windows VM gates.ps1: fmt exit 0, clippy exit 0, wasm-ui exit 0, test exit 101: `tests: 3329 passed, 1 failed`, the one failure op_counts::plans::plan_cost_follows_affected_books at plans.rs:157, the 120 s wait for the install plan on the slow VM (the same timeout as on windows-latest, INT-2's minor). Decided (technical): not a blocker and not a major (no translator data or view is harmed; the plan ends, later than the test's budget on that machine), so the card's "0 failed" is met except for this known minor; CHK-5 owns the Windows budget | .enjoy-logs/int4-winvm-2.log
 - 2026-10-23 11:32 EDT | checks lane (Claude Code 2198ee19) | verify | 97da2945 | Independent review (a fresh general-purpose agent, read only) of the three hand-resolved files of merge 97da2945. 1 Code: suggest.rs is the lane's file; its start_training publishes Reading under the hub lock before start_blocking, and Ready/None/Error come only from apply_update after the job, so INT-2's order holds and nothing of main's side is lost. 2 Checks: node tests 7 pass; ci.yml has the seven jobs and no cargo or node line outside scripts/gates.sh; the gates above ran on the result. 3 Reach: a merge. 4 Siblings: minors.tsv has the header once, no duplicate row, every lane row; HANDOFF.md equals main's. 5 No loss: not a no-loss item. 6 Prose: none. No blockers, no majors; two minors: the shared B6 minors row keeps the lane's rewrite ("Resolved by C5…"), and the lane's dropped HANDOFF text (storage-chain-B.js restart recipe, the G2 P7-screenshot owner item) lives only in .audit/plans/RESUME-2026-10-20.md | .audit/plans/RESUME-2026-10-20.md
+- 2026-10-23 13:07 EDT | checks lane (Claude Code 2198ee19) | ruling | none | The owner answered "yes" (relayed by the audit session): main takes the resume lane's work and is pushed | .audit/roadmap/rulings/2026-10-23-int-4-main.md
+- 2026-10-23 13:07 EDT | checks lane (Claude Code 2198ee19) | merge | 2b1d722b | Merge commit 97da2945 (plus track-INT-1's card, the alignment-budget step, the guided-fix load fix and this card) moves to main by fast-forward once scripts/gates.sh passes on this exact commit and --check-receipt exits 0; then the push and the CI watch. INT-3's merge run on main was 39946614391 (green); this card's CI run id follows in a note | scripts/gates.sh --check-receipt
