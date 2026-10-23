@@ -53,7 +53,7 @@ run_step() {
   local name="$1" cmd
   cmd="$(command_of "$name")"
   if [[ -z "$cmd" ]]; then echo "gates: no step named $name" >&2; return 1; fi
-  if [[ "$name" == clippy-windows || "$cmd" == *x86_64-pc-windows-gnu* ]] && ! command -v x86_64-w64-mingw32-gcc nasm > /dev/null; then
+  if [[ "$name" == clippy-windows || "$cmd" == *x86_64-pc-windows-gnu* ]] && ! { command -v x86_64-w64-mingw32-gcc && command -v nasm; } > /dev/null; then
     echo "gates: clippy-windows needs x86_64-w64-mingw32-gcc and nasm: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm" >&2
     return 1
   fi
@@ -82,7 +82,7 @@ journeys() {
   local tap
   tap="$(TC4_BIN="$target/debug/tc4" TC4_UI="$target/tc-ui-app" TC4_UI_HOOKS="$target/tc-ui-app-hooks" \
     TC4_DOOR43_FAKE="$target/debug/tc-door43-fake" \
-    node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee /dev/stderr)"
+    node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee >(cat >&2))" || true
   local failed skipped
   failed="$(printf '%s\n' "$tap" | sed -n 's/^# fail \([0-9]*\)$/\1/p' | tail -1)"
   skipped="$(printf '%s\n' "$tap" | sed -n 's/^# skipped \([0-9]*\)$/\1/p' | tail -1)"
