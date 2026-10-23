@@ -44,17 +44,9 @@ anything that writes project data.
   fail if the behavior it names breaks.
 - Parsers get round-trip property tests (`proptest`). Merge and storage code gets
   property tests for convergence and no-loss, plus crash-injection tests.
-- Before you commit, run `cargo fmt --all`, then
-  `cargo clippy --workspace --all-targets -- -D warnings`, then `cargo test --workspace`.
-  All three must pass. `tc-ui`'s components compile for `wasm32` only, so a change to
-  `crates/tc-ui` must also pass
-  `cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings`, with
-  and without `--features gallery`. CI runs all of these.
-- The workspace build always has the test hooks, through dev-dependencies, so it never sees
-  the code a release build compiles. A change to a crate that `tc-app`, `tc-server` or `tc4`
-  builds (`tc-store` among them) must also pass CI's two steps without them:
-  `cargo clippy -p tc-app --lib -- -D warnings` and
-  `cargo clippy -p tc-server -p tc4 --lib --bins -- -D warnings`.
+- Before you commit, run `scripts/gates.sh` (`--list` prints its steps). It is the list CI
+  runs; every step must pass, and main moves only to a commit `scripts/gates.sh --check-receipt`
+  accepts.
 
 ## Performance
 
