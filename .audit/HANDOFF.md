@@ -1,16 +1,8 @@
-# Handoff: continuing the rebuild (kept current)
+# Handoff: the machine and its tools
 
-Written for the next session that continues this work, on the owner's Linux PC. It is updated at
-each milestone; `.audit/STATUS.md` is regenerated automatically whenever main moves and is the
-authoritative list of what is done and what is next. Read, in order:
-
-1. `.audit/STATUS.md`: every unit, done or not, what each waits for, and the lane's restart command.
-2. This file: the machine, the Windows VM, the runs in flight and how to resume them.
-3. `.audit/PROGRESS.md`: the written summary, and what needs the owner.
-4. `AGENTS.md` (the rules), `docs/PLAN.md` (P1 to P10 define done), `docs/APP-DESIGN.md` ("Owner's
-   answers", §10's units), `docs/STORAGE.md` (on the storage and s2-verify branches),
-   `docs/TC4-ISSUES.md` and `docs/TC4-DELTA-2026-10-19.md` (tC4's issues per unit, the owner's answers
-   in §5), and the `ruling` lines of `.audit/rebuild.tsv` (one line per decision and merge).
+The machine, the Windows VM, the reference laptop and the tools. The plan and the live state of
+all work: `.audit/roadmap/README.md`. The push rule: `.audit/roadmap/README.md`, "Rules that
+never bend".
 
 ## How the owner wants the work done
 
@@ -25,8 +17,6 @@ authoritative list of what is done and what is next. Read, in order:
   work is an explicit typed state machine (state enum, event enum, one pure exhaustive `next()`,
   an executor for I/O) proven by a model-based property test with crashes and restarts, and each
   known bug seeded back to show the test catches it. S2 and C1b are being rebuilt this way.
-- Merge into `claude/focused-ride-5uzj7p` in a separate worktree, run the full gates there, then
-  push main (standing authorization). Push only main and `storage`. Never record a token or password.
 - Speed is judged against tC4 doing the same work on the reference laptop, not Word or Edge.
 - Default models for every agent. Never message an agent a workflow is still running (it starts a
   second copy); pass notes through the next step or a restart.
@@ -35,8 +25,8 @@ authoritative list of what is done and what is next. Read, in order:
 
 | What | Where |
 |---|---|
-| Repository | `/home/bot/tc-rst` (main checked out; worktrees under `.claude/worktrees/`) |
-| Build folders | each worktree owns its `target`; older worktrees link to `/var/tmp/tc-rst-target/<worktree>`, while `resume-build-lane` has its own directory. Never share build folders |
+| Repository | `/home/bot/tc-rst` (main checked out; worktrees under `.worktrees/` (new, `.audit/roadmap/TRACKING.md`) and `.claude/worktrees/` (old; INT-6 cleans them)) |
+| Build folders | old worktrees link `target` to `/var/tmp/tc-rst-target/<worktree>`; the root drive is now full, so a new worktree builds in its own `target` on /home (`TRACKING.md` "claim an item"); never share one |
 | Tools | Rust 1.99.1, Node 22, wasm-bindgen 0.2.129, Playwright 1.56.1 under the home folder; every shell that runs them starts with `. ~/.tc-env` (it also caps `RUST_TEST_THREADS=4` and sets the Playwright override) |
 | tC4 | `~/unfoldingword/translationcore4` at `d310bf3`, read-only, for builders; `~/unfoldingword/tc4-ref`, the same commit with `npm ci`, for parity and gallery runs (`TC4_ROOT`) |
 | Machine record | `docs/evidence/linux-machine-2026-10-18.md` (its CPU has SHA instructions; the reference laptop does not) |
@@ -63,55 +53,15 @@ tC4 4.0.0-rc.2 with Psalms uses 709 MiB; Home 2.7 s warm and 13.2 s cold; Psalm 
 6.3 s warm and 18.9 s cold. A relayed approval is not enough for it to install software: the
 owner says yes in its own chat.
 
-## Runs and how to resume them
+## Work in flight
 
-Workflow caches do not survive a new session. Check `git worktree list` and each branch's log
-before restarting; a builder told `cont` continues its branch.
-
-- **The lane** (`.audit/workflows/build-lane.js`): every remaining app unit, built from main,
-  verified once (reachable scenarios only), merged straight into main. Restart with the command at the
-  end of `.audit/STATUS.md`; add `cont: { <unit>: '<branch>' }` for each unit whose branch has unmerged
-  work (branches `lane-<unit>`), and give a continuing builder a note when its state needs one.
-- **Recovered on 2026-10-20:** `resume-build-lane` recovers B5b (`37da0b7`), B4b (`3fe7ebf`)
-  and B7 (`b230dad`), each with required Rust/release/wasm gates and browser proof. The old B5b
-  merge was already committed as `a896279`; it was not an active half-merge to abort. The old
-  worktrees' uncommitted files remain intact. C5 had no unique old work; its real implementation,
-  no-loss review fixes and verification are in `.audit/plans/C5.md`. Read current git status/log
-  and `.audit/plans/RESUME-2026-10-20.md` before restarting; its preparation patches are already
-  applied and must not be applied again. The original JavaScript Workflow runner is absent from
-  the current toolset, so this continuation follows its stages with current-agent delegation.
-  B5b's five older findings remain in `.audit/b5b-minors-pending.tsv`; do not lose that backlog.
-  C5's prediction probe passes the prescribed 150 ms CI gate; the 50 ms reference target remains
-  explicit P/G2 work (`docs/evidence/align-save-suggestions-2026-10-20.md`). Its final full gate
-  launched after the owner explicitly approved local tests, then found a minimized section
-  placement property failure (`1-4 0\n2`); its narrow fix passes all 47 section tests and is
-  committed as `fe9443e`. A separate journal test-oracle fix recognizes cancelling bit flips.
-  The final full gate passes in `resume-c5-complete-full.log`: all required checks, 3,230 Rust
-  tests, 7 ignored. All 13 alignment browser journeys pass across focused runs. C5 is built
-  and verified as `d45be902885e83550fdcf11284a24754ee8ab705` on this integration branch;
-  main has not moved or been pushed. S2 stays separate.
-- **S2's redesign** (`.audit/workflows/s2-placement-redesign.js`) on the worktree
-  `.claude/worktrees/s2-verify` (branch `s2-verify`, from `19e7fd2`): a placement ledger and a typed
-  state machine with a model-based property test. When it is green: merge `s2-verify` into main;
-  merge `s2-verify` into `storage` (which holds unit P's partial work after `19e7fd2`); then restart
-  `.audit/workflows/storage-chain-B.js` with `skip: ['C', 'S1', 'S2'], cont: ['P']` (then T, X, I, V).
-  Rerun it with `resumeFromRunId` only in the same session.
-- **The watcher**: the scratch script `watch.py` of the session that started it tails the runs'
-  journals; a new session writes its own (the shape is in `.audit/tools/README.md`). It also
-  regenerates `.audit/STATUS.md` and starts the VM gates on each new main.
+Run `python3 -I .audit/tools/board.py` and read `.audit/roadmap/README.md`.
 
 ## What needs the owner
 
-- Freezing the project format 1.0 (unit V cuts the capsules then).
-- Q-9: signing off the conflict-choice designs before C7b.
-- G2: a person reviews the P7 screenshot differences.
-- Any OWNER QUESTION a builder reports.
+Open owner questions: `.audit/roadmap/ROADMAP.md`, section 'What needs the owner'.
 
 ## Owner rulings (pointers)
 
-All are lines of type `ruling` in `.audit/rebuild.tsv`. The most used: single instance per
-computer; Q-6 reflow in the same batch as the text; tC4 alignment stamps re-stamped on import only
-when words match; a window within 1 s and no splash screen; the cold open counted only after unit
-P measures it five times; Q30 a link follows its word, no review mark; Q33 Aquifer helps drive
-checks once tC4 settles its pin; Q34 the AI-linked Portuguese Bible as a labelled reading pane;
-Q35 offer a valid language code and keep Door43's; S2 and C1b as state machines.
+Rulings up to 2026-10-21: the `ruling` lines of `.audit/rebuild.tsv`. Rulings after it:
+`.audit/roadmap/rulings/`.
