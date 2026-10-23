@@ -6,16 +6,16 @@ lane: checks
 milestone: M0
 state: gating
 owner: checks lane (Claude Code 2198ee19)
-branch: track-INT-8
-worktree: .worktrees/track-INT-8
-depends: [INT-3, G5]
+branch: int-8-main
+worktree: .worktrees/int-8-main
+depends: [INT-3]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d (basis: INT-3's receipt code and tests, which this extends)
 merged: none
 updated: 2026-10-23
-next: merge by the CI route once G5 is done: push the merge commit to gate/INT-8, --wait-ci INT-8, fast-forward main, push, tell the lanes
+next: merge after CHK-4 is on main and green (the orchestrator gave this lane the turn): merge main in, gate, fast-forward, see main green, tell the lanes
 blocked_by: none
 ---
 
@@ -113,3 +113,4 @@ tests pass.
 - 2026-10-23 14:05 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | README.md push rule: gate/<card> branches; TRACKING.md merge checklist step 1: the CI route, no local full run needed; ROADMAP.md M0 row; DONE depends on INT-8 | python3 -I .audit/tools/board.py --check
 - 2026-10-23 14:09 EDT | checks lane (Claude Code 2198ee19) | verify | fdea1e22 | Independent review (a fresh general-purpose agent, read only, ran the node tests). 1 Code: one entry point check_receipt; a dirty tree, an in-progress or cancelled run, a missing or failing gh all refuse. 2 Checks: the fake-gh test covers accept, ci-alone and other-tree; the jq filter matches the API's shape. 3 Reach: a merge. 4 Siblings: the wait loop uses the same filter. 5 No loss: not a no-loss item. 6 Prose: README and TRACKING. No blockers; one major: a pull_request-event run has the commit's head_sha but tests the PR's merge ref, so it must not count; minors recorded | .audit/minors.tsv
 - 2026-10-23 14:09 EDT | checks lane (Claude Code 2198ee19) | fix | none | ci_receipt and the --wait-ci loop keep push-event runs only (`.event == "push"` in both jq selects); --wait-ci refuses at once without gh. Node tests 10 pass | scripts/gates.sh
+- 2026-10-23 17:00 EDT | checks lane (Claude Code 2198ee19) | note | none | The merge queue puts INT-8 before G5 (owner rule, one merge at a time), so INT-8's three commits are moved onto main as branch int-8-main without G5's gate commits; track-INT-8 is kept as history. On main's gates.sh the local receipt is accepted as main accepts it today (no journeys requirement; G5 adds that when it merges), plus the CI receipt; node tests 7 pass. depends drops G5 | git log claude/focused-ride-5uzj7p..int-8-main
