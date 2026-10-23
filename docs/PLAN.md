@@ -107,9 +107,9 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   words, the span or the original-language text changed, or the alignment is marked for
   re-review (#787, #796). The reference d310bf3 shows the notice only for a changed text or
   changed words, and its rail calls an alignment valid when only its words are wrong. Since
-  #814 (D105, in rc.2) tC4 uses one rule too. One part differs: in tC4 only Mark valid clears
-  "needs review", while the rebuild clears it at the first edit (owner question of 2026-10-23,
-  `docs/TC4-DELTA-2026-10-23.md` §5).
+  #814 (D105, in rc.2) tC4 uses one rule too. Only Mark valid clears "needs review", in tC4 and,
+  by the owner's ruling of 2026-10-23 (Q37), in the rebuild; the rebuild still clears it at the
+  first edit until FIX-R changes it (`docs/TC4-ISSUES.md` §1 row 23).
 - A carry-over that loses no link is saved when the translator leaves the verse
   (APP-DESIGN AD19); tC4 writes nothing at open (#787).
 - Align's cards are a Tab stop while words are chosen, and Enter or Space places them, so a

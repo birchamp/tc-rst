@@ -37,12 +37,12 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 
 | Area | rebuild bug | unit todo | reference change | covered | owner question | not applicable | Rows |
 |---|---|---|---|---|---|---|---|
-| Align | 2 | 7 | 1 | 24 | 1 | 1 | 36 |
-| USFM, Translate and helps | 1 | 13 | 1 | 29 | 1 | 9 | 54 |
+| Align | 3 | 7 | 1 | 24 | 0 | 1 | 36 |
+| USFM, Translate and helps | 1 | 14 | 1 | 29 | 0 | 9 | 54 |
 | Check and resources | 2 | 3 | 2 | 33 | 2 | 22 | 64 |
 | Sync, storage and import | 1 | 29 | 3 | 17 | 2 | 13 | 65 |
 | Shell, startup, languages and help | 4 | 35 | 1 | 17 | 0 | 19 | 76 |
-| All area rows | 10 | 87 | 8 | 120 | 6 | 64 | 295 |
+| All area rows | 11 | 88 | 8 | 120 | 4 | 64 | 295 |
 
 Counted from the rows on 2026-10-23 (the 2026-10-19 table had gone stale as units finished;
 two rows that said "done" now say covered). A row counts once per area table. The 2026-10-23
@@ -90,6 +90,7 @@ reproduces and fixes them:
 | 20 | #832 | Settings → Right to left → Save: Home and Align still read left to right; an imported project's language name shows empty. | tc-app (`settings.rs`, `home.rs`, `align/open.rs`) | `a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart`; `an_imported_project_shows_its_metadata_language_name_in_settings` (to create) | FIX-R step 1. |
 | 21 | #833 (.1) | Internet on, no connection, Settings → Manage source texts → Check for updates: the raw error text shows. | tc-app (`upgrades.rs`) | `an_offline_update_check_shows_one_plain_sentence` (to create) | FIX-R step 2: one plain sentence. |
 | 22 | #836 | Understand with the BSOJ Arabic set: an English question (ar_tq Titus) reads right to left. | tc-ui (`views/helps_panel.rs`) | `an_english_question_under_an_arabic_set_reads_left_to_right` (to create, journey) | FIX-R step 1: the text's own language decides its direction. |
+| 23 | #814 (D105.5) | Align: a verse marked "needs review" after a source upgrade; move one word: the mark goes away though the rest was never checked. The owner ruled that only Mark valid clears it (Q37). | tc-align (`is_stale` in `aligner.rs`); FIX-R | `an_edit_keeps_the_review_mark_until_mark_valid` (to create; replaces `an_edit_clears_the_re_review_flag_tc3_or_tc4_set` in `crates/tc-align/tests/tc4_edit.rs:597`) | Keep the mark through edits; clear it only on Mark valid. |
 
 Other findings from the verifiers that are not bugs in shipped behavior:
 
@@ -147,7 +148,7 @@ the rebuild fixed it or does as tC4 does:
 |---|---|---|---|---|---|
 | #796 (word list) | The aligner and the export split a footnote verse into different words | covered | tc-align, tc-usfm; D2 | `the_bank_is_the_export_for_every_vector` | See §1 row 5, done by FIX-text. tC4 did the same in #809 and #811 (D105.1). |
 | #796 (review rule) | One "needs review" rule for the rail, the open verse and the export | covered | tc-align, tc-store; T, D2 | `a_record_holding_a_word_the_verse_lacks_is_invalid_on_the_rail`; `after_a_source_upgrade_the_open_verse_shows_the_notice` | See §1 row 6. tC4 adopted one rule in #814 (D105). Whether an edit clears the flag is the D105.5 row. The fold's `invalid` reads the hash only: T. |
-| D105.5 (#814) | Does an Align edit clear "needs review"? | owner question | tc-align; REF1 | `an_edit_clears_the_re_review_flag_tc3_or_tc4_set` (exists; changes if the owner follows tC4) | Owner question (asked 2026-10-23). tC4: only Mark valid clears it. The rebuild clears it at the first edit. Recommendation: follow tC4. `TC4-DELTA-2026-10-23.md` §5 Q37. |
+| D105.5 (#814) | Does an Align edit clear "needs review"? | rebuild bug | tc-align; FIX-R | `an_edit_keeps_the_review_mark_until_mark_valid` (to create; replaces `an_edit_clears_the_re_review_flag_tc3_or_tc4_set`) | Ruled 2026-10-23 (Q37, `rulings/2026-10-23-Q37-needs-review.md`): follow tC4, only Mark valid clears it. The rebuild clears it at the first edit today: §1 row 23. |
 | #796 (export) | Never drop a verse's alignment silently, and keep imported markup | unit todo | D2 | `export_reports_and_keeps_a_verse_that_needs_review`; `export_keeps_inline_zaln_bytes_even_with_a_matching_record`; `a_record_with_nothing_placed_exports_the_stored_bytes` (all to create, D2) | Weave only a verse that passes `needs_review` and whose words match. Otherwise write the stored bytes and name the verse in a notice. Check for inline `\zaln` before validity (tC4 PR #799). |
 | D105 (#809, #811, #814) | The export leaves out a verse that needs review and names it | unit todo | D2; REF1 | `export_reports_and_keeps_a_verse_that_needs_review` (to create, D2) | tC4's notice is `cc.exportSkipped`: "Your alignment of these verses is not in the file. Check them in Align: {refs}". D2 uses that string (REF1 vendors it); the rebuild writes the stored bytes for such a verse, as the #796 (export) row says. |
 | #795 | One hash for the aligner and the alignment files | unit todo | FIX-R; tc-store, tc-align | `an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen` (to create, FIX-R step 5) | The rebuild stamps `plain_text_v1` of the stored NFC verse everywhere. The display half is #796 (word list). tC4 #800 also refuses a verse whose text starts on the next line ("tC4 cannot save an alignment for this verse"); the rebuild aligns it, a declared difference (PLAN). |
@@ -234,7 +235,7 @@ the rebuild fixed it or does as tC4 does:
 | #702 | Text zoom sliders | not applicable | — | — | tC4 4.1.0. |
 | #719 | Add source Bibles to a project | not applicable | later B9a | — | tC4 4.1.0. |
 | #615 | The Understand journey after the Resume journey | not applicable | C3 (J16 port) | — | The fix is inside tC4's J16 at the reference; port J16 as written. |
-| #628 (rc links) | Raw `rc://` links in helps (BSOJ Arabic notes for Titus) | owner question | tc-helps; REF1 | — | Owner question (asked 2026-10-23). tC4 4.0 and the rebuild show the raw link. Recommendation: show the linked article's title as plain text. `TC4-DELTA-2026-10-23.md` §5 Q38. |
+| #628 (rc links) | Raw `rc://` links in helps (BSOJ Arabic notes for Titus) | unit todo | tc-helps; FIX-R | `a_bare_rc_link_shows_as_its_raw_text` (to create) | Ruled 2026-10-23 (Q38, `rulings/2026-10-23-Q38-raw-rc-links.md`): raw links are fine, as in tC4 4.0. The rebuild already shows them raw; the test keeps it so. |
 | #810 | Poetry verse as one body; poem lines shown as tabs | reference change | REF1 (H7); T step 4 | `verse_editor_shows_every_poem_line`; `no_change_section_save_on_psalm_3_writes_nothing` | tC4 shows poem lines as tabs and no longer cuts a verse at a mid-verse `\p`, `\b`, `\ts\*`, `\q3` or heading. The rebuild shows `\q` markers until the owner answers H7 (recommendation: keep markers). |
 | #812 | Editing a verse with a mid-verse `\p`, `\b` or `\ts\*` line changes only the part before it | unit todo | T step 4 | `every_bundled_ult_and_ust_verse_body_holds_every_target_word` (to create) | Right by code read: `split_verse` treats only the trailing run of layout lines as layout. The corpus test pins it, with 1SA 2:2, 1SA 4:1, REV 7:12 and MAT 27:9 saved whole. |
 | #829 | Poetry indents two characters wide per level | not applicable | REF1 (H7) | — | Only for poem lines shown as tabs (#810). If the owner chooses tabs in H7, REF1 takes it. |
@@ -308,7 +309,7 @@ the rebuild fixed it or does as tC4 does:
 | #652 | Basic checks | not applicable | — | — | tC4 4.1.0. |
 | #653 | AI-assisted checking | not applicable | — | — | tC4 4.1.0. |
 | #651 | BT Servant | not applicable | — | — | tC4 4.2.0. |
-| #840 | Highlight the current note's words in the original-language text | owner question | tc-helps; REF1 | — | Owner question (asked 2026-10-23). A tC4 enhancement after 4.0; both highlight only the gateway text today. Recommendation: wait for tC4 and port it through REF1. `TC4-DELTA-2026-10-23.md` §5 Q39. |
+| #840 | Highlight the current note's words in the original-language text | owner question | tc-helps; REF1 | — | The owner said "yes orig lang highlights" (2026-10-23); whether to build it now or wait for tC4 is asked again. A tC4 enhancement after 4.0; both highlight only the gateway text today. `TC4-DELTA-2026-10-23.md` §5 Q39. |
 
 ## 5. Sync, storage and import
 
