@@ -612,3 +612,45 @@ fn open_bible_stories_helps_load_from_door43() {
         PartStatus::Missing(Missing::NotPinned)
     );
 }
+
+/// tC4 reads past a bad row of the OBS questions: one row the strict reader refuses (a cell
+/// past the seventh, an Occurrence that is not a count) hides no other question.
+#[test]
+fn one_bad_obs_question_row_hides_no_other_question() {
+    let (_dir, store) = store();
+    let en = install_fixtures(&store);
+    let dir = "en_obs-tq@v10";
+    let mut tsv = String::from_utf8(fixture(&format!(
+        "tc4/test-fixtures/resources/{dir}/OBS.tsv"
+    )))
+    .unwrap();
+    let good = tsv.lines().count() - 1;
+    tsv.push_str("1:2\tbad1\t\t\tx\tA bad row?\tStill read.\textra\n");
+    let metadata = fixture(&format!("tc4/test-fixtures/resources/{dir}/metadata.json"));
+    let zip = common::zip(&[
+        ("en_obs-tq/metadata.json", &metadata),
+        ("en_obs-tq/ingredients/OBS.tsv", tsv.as_bytes()),
+    ]);
+    let obs_tq = common::fixture_pin(dir, "unfoldingWord/en_obs-tq", "v10");
+    tc_resources::install_dcs_zip(&store, &obs_tq, &zip, 1 << 30).unwrap();
+    let english = set("en", "unfoldingWord")
+        .with(SetSlot::ObsQuestions, obs_tq)
+        .with(SetSlot::TranslationWords, en.tw.clone())
+        .with(SetSlot::TranslationAcademy, en.ta.clone());
+    let pins = ProjectPins {
+        primary: Some(english.clone()),
+        fallback: Some(english),
+        ..ProjectPins::default()
+    };
+    let loaded = load_obs(&store, &pins);
+    assert!(
+        loaded.parts[&HelpsPart::ObsQuestions].is_loaded(),
+        "{:?}",
+        loaded.parts[&HelpsPart::ObsQuestions]
+    );
+    let read: usize = (1..=50)
+        .flat_map(|story| (0..=20).filter_map(move |frame| ObsRef::new(story, frame)))
+        .map(|frame| loaded.helps.obs_questions_for(frame).count())
+        .sum();
+    assert!(read >= good, "{read} questions read of {good} good rows");
+}

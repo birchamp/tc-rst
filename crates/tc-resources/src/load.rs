@@ -414,7 +414,21 @@ fn load_table(
             HelpsPart::WordLinks | HelpsPart::ObsWordLinks => {
                 helps.add_word_links(&source, parse_word_links(&text, scope).map_err(unreadable)?)
             }
-            _ => helps.add_questions(&source, parse_questions(&text, scope).map_err(unreadable)?),
+            // tC4 reads past a bad row of the OBS questions; one row hides no other question.
+            HelpsPart::ObsQuestions => helps.add_questions(
+                &source,
+                tc_helps::tsv::parse_obs_questions(&text).map_err(unreadable)?,
+            ),
+            HelpsPart::Questions => {
+                helps.add_questions(&source, parse_questions(&text, scope).map_err(unreadable)?)
+            }
+            // Articles are folders of Markdown, read by `load_articles`, never a table.
+            HelpsPart::WordArticles | HelpsPart::AcademyArticles => {
+                return Err(Missing::Unreadable {
+                    source: name.clone(),
+                    problem: "articles are not a table".to_owned(),
+                });
+            }
         };
         added.map_err(unreadable)
     })();

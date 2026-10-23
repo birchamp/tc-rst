@@ -25,6 +25,9 @@
 //! touches. The writers write no byte order mark and LF line ends. A cell whose text ends
 //! in a CR is written with one more, which reading drops.
 
+mod obs_questions;
+pub use obs_questions::parse_obs_questions;
+
 use tc_core::BookId;
 
 use crate::Error;
