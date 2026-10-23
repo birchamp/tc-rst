@@ -4,10 +4,10 @@ title: Make CI green and trustworthy
 track: A
 lane: checks
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: checks lane (Claude Code 2198ee19)
+branch: track-INT-2
+worktree: .worktrees/int-2
 depends: []
 needs_owner: []
 proves: []
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: one cfg guard, a toolchain file and CI edits)
 merged: none
 updated: 2026-10-22
-next: Claim this card, then do step 1.
+next: step 1
 blocked_by: none
 ---
 
@@ -291,3 +291,4 @@ CI's `lint-windows` stand in); the `node --test` line of `parity-baseline`. Plus
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-22 20:46 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-2 in .worktrees/int-2; added the TMPDIR line to ~/.tc-env (it was missing) | python3 -I .audit/tools/board.py
