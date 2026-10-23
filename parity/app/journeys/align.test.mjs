@@ -594,7 +594,8 @@ browserTest('an_ot_card_shows_placed_words_in_the_translation_direction', async 
   await withApp(async ({ page }) => {
     await page.route('**/api/v1/align/open', async (route) => {
       const reply = await (await route.fetch()).json();
-      if (reply.type === 'ok') reply.value.origDir = 'rtl';
+      // `align/open` answers an `Opened` enum: the view is inside its `ready` envelope.
+      if (reply.type === 'ok' && reply.value.type === 'ready') reply.value.value.origDir = 'rtl';
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
     });
     await openAlign(page);
@@ -611,7 +612,7 @@ browserTest('a_link_sent_back_to_the_bank_is_listed', async () => {
   await withApp(async ({ page }) => {
     await page.route('**/api/v1/align/open', async (route) => {
       const reply = await (await route.fetch()).json();
-      if (reply.type === 'ok') reply.value.dropped = [{ card: 1, top: [{ word: 'Παῦλος', occurrence: 1, occurrences: 1 }], word: { word: 'Pablo', occurrence: 1, occurrences: 1 } }];
+      if (reply.type === 'ok' && reply.value.type === 'ready') reply.value.value.dropped = [{ card: 1, top: [{ word: 'Παῦλος', occurrence: 1, occurrences: 1 }], word: { word: 'Pablo', occurrence: 1, occurrences: 1 } }];
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
     });
     await openAlign(page);

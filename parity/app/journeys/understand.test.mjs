@@ -301,7 +301,12 @@ browserTest('an_english_question_under_an_arabic_set_reads_left_to_right', async
   await withApp(async ({ page }) => {
     await page.route('**/api/v1/helps/passage', async (route) => {
       const reply = await (await route.fetch()).json();
-      if (reply.value.questions.type === 'ready') reply.value.questions.value.dir = 'rtl';
+      // An Arabic set's questions as the server answers them, one left in English (the
+      // scenario installs no questions, so the slot is drawn as a ready one).
+      reply.value.questions = {
+        type: 'ready',
+        value: { items: [{ id: 'q1', chapter: '1', verse: '1', question: 'Who wrote this letter?', response: 'Paul.' }], dir: 'rtl', fallback: false },
+      };
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
     });
     await openTitus(page);
