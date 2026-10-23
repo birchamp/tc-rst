@@ -4,18 +4,18 @@ title: Back up the unpushed branches off this PC
 track: A
 lane: integration
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: gating
+owner: roadmap session (Cursor)
+branch: track-INT-1
+worktree: /home/bot/tc-rst/.worktrees/track-INT-1
 depends: []
-needs_owner: [H1]
+needs_owner: []
 proves: []
 no_loss: false
 size: under 1 h (basis: three git push commands and a check)
 merged: none
 updated: 2026-10-22
-next: H1 is answered yes (`rulings/2026-10-22-H1.md`): do step 1, then 2, 3, 4, 6.
+next: Step 6: merge track-INT-1 into main with INT-4's integration merge (set state done, merged, log line merge there).
 blocked_by: none
 ---
 
@@ -241,3 +241,10 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
 - 2026-10-22 | roadmap session (Cursor) | ruling | none | H1 answered yes; the two sessions holding resume-build-lane and s2-proof-executor have ended, so nothing writes to those branches during the push | .audit/roadmap/rulings/2026-10-22-H1.md
+- 2026-10-22 | roadmap session (Cursor) | claim | none | H1 is yes: steps 2, 3, 4, 6; the three branches are resume-build-lane (43496296), s2-proof-executor (3b075d7), storage | .audit/roadmap/rulings/2026-10-22-H1.md
+- 2026-10-22 | roadmap session (Cursor) | step 2 | none | the two scans printed only the three `== ` lines: 0 NEW lines, no key or secret file names on any branch | none
+- 2026-10-22 | roadmap session (Cursor) | step 3 | none | PUSH resume-build-lane 43496296a5cf5296631a05332c0b57f14923e252 (new branch); PUSH s2-proof-executor 3b075d7f7b8f9f4df6cb9b4d9d2dee429d4989ab (new branch); PUSH storage dd63328b40c49bd24f4dbefafdd34609c2ae1ad6 (0d7d4f76..dd63328b, fast-forward); no prompt for credentials | none
+- 2026-10-22 | roadmap session (Cursor) | step 4 | none | ls-remote tips equal the pushed shas; `rev-list --count <sha> --not --remotes` prints 0 for all three; CI runs started: https://github.com/birchamp/tc-rst/actions/runs/39818790386 (resume-build-lane), https://github.com/birchamp/tc-rst/actions/runs/39818797278 (s2-proof-executor), https://github.com/birchamp/tc-rst/actions/runs/39818815348 (storage); results are information only | none
+- 2026-10-22 | roadmap session (Cursor) | verify | none | reviewer: the same session (no second session exists today; INT-4's merge rereads this card). 1 What could a translator lose: nothing, a push reads objects only. 2 Does the code make the wrong state unrepresentable: not code; the push loop pushes recorded shas, never main, never forced. 3 Can each check fail: counts printed 90/69/56 before and 0 after. 4 Prose: none needed. 5 Human: H1 answered. 6 Evidence: the step 3 and 4 lines above | .audit/roadmap/rulings/2026-10-22-H1.md
+- 2026-10-22 | roadmap session (Cursor) | note | none | commits made on these branches after this backup are not covered; their owners push them at their own stage boundaries under the H1 ruling | none
+- 2026-10-22 | roadmap session (Cursor) | gate | none | step 6: this branch changes only its own card; its merge rides with INT-4's integration merge so the full gate list runs once (step 6 allows it); INT-4 sets state done and merged | .audit/roadmap/units/INT-4.md
