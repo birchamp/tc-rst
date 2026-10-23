@@ -4,7 +4,7 @@ title: Rescue stray work and free the disk
 track: A
 lane: integration
 milestone: M0
-state: claimed
+state: building
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-INT-6
 worktree: .worktrees/track-INT-6
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d
 merged: none
 updated: 2026-10-23
-next: Step 1: save quick-timing, lane-b7 and lane-merge's uncommitted files to refs/wip/.
+next: Step 2: cherry-pick -x 58aa8a9 599e516, append the two A8 rows, run the account test, the three sign-in journeys and screen_record.
 blocked_by: none
 ---
 
@@ -293,3 +293,4 @@ files.
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
 - 2026-10-23 17:00 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-INT-6 from main eaf809d1 while INT-7, INT-5 and SWEEP wait for merge turns | python3 -I -B .audit/tools/board.py
+- 2026-10-23 17:00 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | before: `/dev/sda4 905G 295G 565G 35% /` and `/dev/sdb2 916G 637G 233G 74% /home` (the root drive was freed since 2026-10-21). Unowned worktrees with changes are the card's three; saved with a copy of each index: refs/wip/quick-timing/2026-10-23 1aac5ece (55), refs/wip/lane-b7/2026-10-23 9a504201 (3), refs/wip/lane-merge/2026-10-23 ab8f616a (2). Each ref holds exactly the changed and untracked files (the diff check printed nothing) and each status count is unchanged. int-8-main (6) and track-FIX-R (3) are owned by running sessions and were not touched | git for-each-ref refs/wip/

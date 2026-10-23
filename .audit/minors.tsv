@@ -84,3 +84,6 @@ B5b	A mark that stores nothing new blanks the displayed comment until the refres
 B5b	Only one waiting mark is kept	The `QUEUED` slot is a single value, so a third click made during one round-trip drops the second (a Bookmark followed by Mark invalid) without notice.
 B5b	Each mark recomputes the whole list on the Ack path	Each mark's `with_list` after the write recomputes every row's state for the book, which PERFORMANCE.md lines 89–90 want to be 1 ms for one check. There is no op-count test for a mark on Psalms. B5a D4 and the C4 row defer re-assessment to C4.
 B5b	The `drag_range` differential test compares the function with a copy of its own formula	`a_drag_selects_whole_words_and_mark_valid_saves_them` builds `expected` with the same union as `drag_range`. Only the `from_indices` and `indices` round trip is independent.
+INT-6	quick-timing holds uncommitted work nobody has judged (55 files, the untracked crates/tc-timing/ among them)	refs/wip/quick-timing/2026-10-23
+INT-6	lane-b7 holds uncommitted work nobody has judged (3 files)	refs/wip/lane-b7/2026-10-23
+INT-6	lane-merge holds uncommitted work nobody has judged (2 files)	refs/wip/lane-merge/2026-10-23
