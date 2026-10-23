@@ -4,7 +4,7 @@ title: Sweep tC4 again, then every week
 track: A
 lane: integration
 milestone: M1
-state: building
+state: verifying
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-SWEEP
 worktree: .worktrees/track-SWEEP
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d, then about 1 h a week
 merged: none
 updated: 2026-10-23
-next: Step 4: write docs/TC4-DELTA-2026-10-23.md, the TC4-ISSUES rows and range line, the PLAN corrections and the unclaimed cards' notes from .audit/roadmap/evidence/2026-10-23-sweep/.
+next: One verify pass on the step 4 diff; then ask the orchestrator for a merge turn. Q37-Q39 wait for the owner; their rows say owner question (asked 2026-10-23).
 blocked_by: none
 ---
 
@@ -247,3 +247,4 @@ it), and CHK-3's TC4-ISSUES test if CHK-3 has landed.
 - 2026-10-23 16:46 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | ~/unfoldingword/tc4-sweep cloned with no checkout, tags fetched: v4.0.0-rc.2 is a5ce0307; 19 first-parent merges 9ad4d5c..origin/main; tips origin/main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, origin/release/4.0 d25b7871904228a342c0d80280136d8636833653; no v4.0.0 tag; the reference clone still at d310bf3 | git -C ~/unfoldingword/tc4-sweep rev-parse origin/main origin/release/4.0
 - 2026-10-23 16:46 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | tc4-issue-sweep.js takes base, releaseBase, since and date (range, release log, issue search, delta name); storage context points at docs/STORAGE.md on main or s2-proof-executor; the unit list is board.py; the sweep clone is never checked out and the reference clone never touched; README row lists the arguments. The fixed-value grep prints nothing; node --check passes | grep -n "2026-10-19\|2026-10-01\|d310bf3\.\.\|'storage'" .audit/workflows/tc4-issue-sweep.js
 - 2026-10-23 16:58 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | by two read-only agents, every line classified (19 main merges + 40 release commits + 41 issues = 100). Commits: covered 25, unit todo 7, reference change 8, not applicable 19, rebuild bug 0, owner question 0. Issues: covered 16, unit todo 10, reference change 1 (#791), rebuild bug 5 (#825, #830, #832, #833.1, #836, all FIX-R), owner question 2 (#822 H13, #837 H14), not applicable 7; 22 have rows, 19 need new ones; #782, #787, #789, #790, #793-#796 and #786 move from rebuild bug to covered (tests exist and pass). Three choices no H question covers go to the owner: does an Align edit clear "needs review" (#814 D105.5), raw rc:// links in Arabic notes (#628), the original-language highlight (#840) | .audit/roadmap/evidence/2026-10-23-sweep/
+- 2026-10-23 17:06 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | written by an agent from the step 3 files, checked here: docs/TC4-DELTA-2026-10-23.md (changes C55-C75, not-applicable list, 7 interface strings, Q37-Q39 pending with the owner, the licence note); docs/TC4-ISSUES.md: range line on line 3, 24 rows added and 31 changed (8 rebuild bug rows now covered with existing tests; #710 also covered, its test is crates/tc-door43/tests/push.rs), §1 rows 18-22 for the five FIX-R bugs; Counts recounted from the rows: 11 rebuild bug, 86 unit todo, 10 reference change, 118 covered, 6 owner question, 64 not applicable, 295 rows (the old table was stale: it said 269, there were 271). docs/PLAN.md: the declared differences for #789/D106, #790/D107, #791/D108, #796/D105, #794 and #800 say what tC4 does since rc.2, and one new difference: a verse whose text starts on the next line can still be aligned (the owner is told). D2's card got one test (to create) and a note; T, E1a, E1b, F1, G1, I and FIX-R already list theirs. tc4_issues_names_its_swept_range fails without the line (`INV-THE-SWEEP-NAMES-ITS-RANGE: docs/TC4-ISSUES.md has no line …`) and passes with it; baseline tests 12/12; the 15-issue grep prints nothing | node --test parity/tc4-baseline/baseline.test.mjs
