@@ -154,9 +154,7 @@ fn every_fixture_verse_reads_apart_and_weaves_back() {
                 }
                 Err(e) => panic!("{at}: {e}"),
             };
-            if let Ok(counted) = tc_usfm::target_words(&parsed.plain) {
-                assert_eq!(counted, parsed.words, "{at}");
-            }
+            assert_eq!(tc_usfm::target_words(&parsed.plain), parsed.words, "{at}");
             match weave(&parsed.plain, &parsed.groups) {
                 Ok(again) => {
                     let again = parse_aligned(&again).unwrap();
@@ -254,7 +252,6 @@ fn titus_1_1_in_the_ult_takes_apart_as_expected() {
     assert_eq!(paul.sources[0].morph.as_deref(), Some("Gr,N,,,,,NMS,"));
     // The plain text's own words agree with the \w words of the aligned verse.
     let plain_words: Vec<(String, u32, u32)> = tc_usfm::target_words(&aligned.plain)
-        .unwrap()
         .into_iter()
         .map(|w| (w.text, w.occurrence, w.occurrences))
         .collect();
@@ -352,11 +349,13 @@ fn hebrew_alternate_chapter_number_leads_into_its_verse() {
     assert!(v17.body().starts_with("\\va 1\\va*\n"));
     assert!(!v17.display_text().contains('1'));
     assert!(!v17.display_text().contains('2'));
-    let first_word = book.verse(1, span("1")).unwrap().words()[0];
-    assert_eq!(first_word.text, "וַֽ\u{2060}יְהִי֙");
     // The maqaf (U+05BE) joins two words; it is not part of either.
     let unit = book.verse(1, span("1")).unwrap();
-    let v1: Vec<&str> = unit.words().iter().map(|w| w.text).collect();
+    let v1: Vec<String> = tc_usfm::target_words(unit.body())
+        .into_iter()
+        .map(|w| w.text)
+        .collect();
+    assert_eq!(v1[0], "וַֽ\u{2060}יְהִי֙");
     assert!(v1.iter().all(|w| !w.contains('\u{05BE}')));
     assert!(
         unit.display_text()
@@ -552,4 +551,32 @@ fn tokenizer_matches_the_reference_library() {
             .collect();
         assert_eq!(actual, expected, "{}: {text:?}", case["source"]);
     }
+}
+
+#[test]
+fn display_tokens_give_the_display_text_of_every_fixture_verse() {
+    // The source panes show `display_text` and light words by their index in
+    // `display_tokens`, so the two must be the same text in every verse.
+    let mut verses = 0;
+    let mut aligned = 0;
+    for (path, text) in all_usfm() {
+        let book = Book::parse(&text);
+        for verse in book.verses() {
+            let tokens = tc_usfm::display_tokens(verse.body());
+            let joined: String = tokens.tokens.iter().map(|t| t.text.as_str()).collect();
+            assert_eq!(
+                tc_usfm::text::normalize_whitespace(&joined),
+                tc_usfm::display_text(verse.body()),
+                "{} {}",
+                path.display(),
+                verse.label()
+            );
+            verses += 1;
+            aligned += usize::from(tokens.tokens.iter().any(|t| t.group.is_some()));
+        }
+    }
+    assert!(
+        verses > 1_000 && aligned > 100,
+        "{verses} verses, {aligned} aligned"
+    );
 }

@@ -1,0 +1,151 @@
+{
+  "about": "Calibration of the tC4 view-state gallery (APP-DESIGN §7.4): each recorded state of states.json drawn by the gallery with no patch, the sha256 of its PNG and of its DOM digest (lib.mjs domDigestInput), and whether both equal what real tC4 showed when the state was recorded (`real` in states.json). Every state must be equal, which shows the stub adds nothing: a case differs from tC4 only by its patch and steps.",
+  "machine": {
+    "platform": "linux-x64",
+    "chromium": "141.0.7390.37",
+    "fonts": {
+      "count": 535,
+      "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+    }
+  },
+  "states": [
+    {
+      "name": "home",
+      "png": "32893eee72bafcd3fb29915193f83a3e2bab1c56102c470587744f47e9197793",
+      "dom": "d9448ce20f1c38fdf88854c6f2e7fedfb32b5fad8c91df2e89cd91926e919820",
+      "equal": true
+    },
+    {
+      "name": "check-picker",
+      "png": "692ff5ca2aa65e5924045a7e8f9bb64ee1b534d3a99a2e8c29a3e53bcc177ebc",
+      "dom": "262c7f772afac27108275842d2aabe82c20682149ad011a64471a34c59312f3a",
+      "equal": true
+    },
+    {
+      "name": "check-tn",
+      "png": "07ad4e490db11161a113349fba1d84b62518c3a451286bb51b31b22f1f02a191",
+      "dom": "3c046819730ca12be0519bba7dd32439feb02ba105635a97527f18ea82eefa64",
+      "equal": true
+    },
+    {
+      "name": "align",
+      "png": "4806f0b5818dfca6f5ff87043f71475e88fe43d4816564aafab68d96f8d610b0",
+      "dom": "c283ea26cf9b44c486ce97c6c1b4bcc658a7aa182c7fcea521db9d2933e612bc",
+      "equal": true
+    },
+    {
+      "name": "cc-obs",
+      "png": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
+      "dom": "9b4add0f176ed6b323cc8b6687fd212703c3b0132fd80fa285ce1a8bdc154159",
+      "equal": true
+    },
+    {
+      "name": "review",
+      "png": "4090f3c11bbb70bb1da30c8e218deef7b7833129ec66ad9bc4017695ccd208d8",
+      "dom": "f924356f683d6ffd0b0e271d2b2347205895d2d491d41a058f2acaa0cd0a4113",
+      "equal": true
+    },
+    {
+      "name": "review-mine",
+      "png": "3e9c18c848b1b2064acc593631ff8952832eb718fe58cd7e99226c440f2f82b4",
+      "dom": "213716a580d72803641c2ef79868fea4e61d42a8225ce6fd0f04318ee48442cc",
+      "equal": true
+    },
+    {
+      "name": "gateway",
+      "png": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
+      "dom": "cf1b75a21f3051ae56a46f8526d987a743068d4b12843a31f9c54defaba0dea3",
+      "equal": true
+    },
+    {
+      "name": "sources",
+      "png": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+      "dom": "f97d5bb0ce9eea6a2b59aec84f783db1d5c411a06cb1dffe315e2625e21627f7",
+      "equal": true
+    },
+    {
+      "name": "guided-fix",
+      "png": "496ab122c8706c18616e009bb96e8c106c52bf6e7fede22279bf6227d74afec2",
+      "dom": "4f3a9e5625d9a6f1b13a9f3187b22668b3196ab3961713a2231098aeffc60b4a",
+      "equal": true
+    },
+    {
+      "name": "section-editor",
+      "png": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
+      "dom": "a4d62cef82b362cb9f1a522707790277b9e6428fdb34a7d5718c717694d230f9",
+      "equal": true
+    },
+    {
+      "name": "feedback-ask",
+      "png": "3c38a48c608cf14adca13929a049cb424bddff103bd632cd6c4a7f9e742ce8a4",
+      "dom": "4e59378987f5659ce54d5cce3c86bbb20cdee97e64d930537023817dda89f74b",
+      "equal": true
+    },
+    {
+      "name": "signin-error",
+      "png": "e8f27e27c26ec3c7c381d498179cb5fdcd9114289c97da0d3e40ce5f0676a393",
+      "dom": "b73ad3e7fc24c4dab039909951020a73a67d13fe003663be38e3e45533bb8d47",
+      "equal": true
+    },
+    {
+      "name": "share-check",
+      "png": "47134d59f40f981739da209fcfb95bd56f6499cd8cbda1dbf49c7d061630ae32",
+      "dom": "9c3cb1bbdc17a8ac8a9f5f181d38e782b01595ef3a8c1afa93c19c0a52eb8606",
+      "equal": true
+    },
+    {
+      "name": "import-files",
+      "png": "e8ca2bfae9565dc502eddcddbc32609dc565286832a1eef0455010d211d6aef1",
+      "dom": "24ddaf9be93ff64b9195c2730495325fad358a7538a70c206acbf8c935ad0102",
+      "equal": true
+    },
+    {
+      "name": "import-review-usfm",
+      "png": "08f5729ea4bed78555d5f7d8d73ffb8a7d5e3fadb973092f683fb2ce972752b6",
+      "dom": "33d4a4d4fdf171f53e89682e4da865dafb360c237273522368b9da582677e117",
+      "equal": true
+    },
+    {
+      "name": "import-review-tc3",
+      "png": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
+      "dom": "f6f2a7f39bcce79fab0b158202cbd0272972e8c13c4614bba1768e938ed89a58",
+      "equal": true
+    },
+    {
+      "name": "add-book-pick",
+      "png": "1ffb2352f50c09d4669d64e9b2ee2b221c7bdb84783b11ed3efea1f92fb51495",
+      "dom": "2fe04528488c164291439b33345e698ed5f8e967075a503d7762ddceaec58c81",
+      "equal": true
+    },
+    {
+      "name": "add-book-pick-multi",
+      "png": "6aeda2a77ed618dab2cdcdd31cf1188713c7abfb5b9fcd8ad6d524ad0eab0d37",
+      "dom": "b728f3d57e26549f9c42904d584f76d1b552ac25547520951f0dba934dd4f3fb",
+      "equal": true
+    },
+    {
+      "name": "add-book-usfm",
+      "png": "6582ae7a035549d0e96ac1b1b07ca76b814df81e295e71238b3a1ec68059fa7f",
+      "dom": "01ed39d3b38954f668e12ca2b3414d90a5ca0dcff06386c64a2c5540a6e7252b",
+      "equal": true
+    },
+    {
+      "name": "add-book-usfm-files",
+      "png": "61d2576fef3b1d7b2c2b59e9595a4cf3f579292918bbc8a81f05e1515bab04f4",
+      "dom": "da4af995ce649fabf51220eae0db8dff259db45c22cbe22fd35d29d7f5096e2d",
+      "equal": true
+    },
+    {
+      "name": "resume",
+      "png": "11b853096cdc40caef04764544faf31dcc34202a078d8f9b3d63bfcb902e1262",
+      "dom": "a6d148c709ad28c86794b66fad41545689d115a2352546d9b425e9136ca0a778",
+      "equal": true
+    },
+    {
+      "name": "home-open-error",
+      "png": "4893cc88e387e04187eca84920deabb6c8d722629dd4509d08bf098acaf0080a",
+      "dom": "3b912139d78218746f79beafbaeda330c0d4eb5386c8abada7275c73dbc3fde0",
+      "equal": true
+    }
+  ]
+}

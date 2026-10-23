@@ -1,0 +1,31 @@
+{
+  "path": "align/flush",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "04040404040404040404040404040404"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "type": "failed",
+      "value": {
+        "type": "disk",
+        "value": "The disk is full."
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

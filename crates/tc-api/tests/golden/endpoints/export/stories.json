@@ -1,0 +1,78 @@
+{
+  "path": "export/stories",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "items": [
+        {
+          "type": "story",
+          "value": {
+            "story": 1,
+            "title": "La Creación",
+            "frames": [
+              {
+                "type": "drafted",
+                "value": {
+                  "frame": 1,
+                  "text": "Así fue como Dios hizo todo.",
+                  "picture": "/media/obs/git.door43.org~uW~obs_images_360~7146d5b504f6b63b9e11f7dc0b18c594d0ae179d/360px/obs-en-01-01.jpg"
+                }
+              },
+              {
+                "type": "gap",
+                "value": {
+                  "from": 2,
+                  "to": 16
+                }
+              }
+            ],
+            "reference": "Una historia bíblica de: Génesis 1-2"
+          }
+        },
+        {
+          "type": "gap",
+          "value": {
+            "from": 2,
+            "to": 3
+          }
+        },
+        {
+          "type": "story",
+          "value": {
+            "story": 4,
+            "title": "",
+            "frames": [
+              {
+                "type": "drafted",
+                "value": {
+                  "frame": 1,
+                  "text": "Dios dijo",
+                  "picture": null
+                }
+              }
+            ],
+            "reference": null
+          }
+        }
+      ],
+      "undrafted": true
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

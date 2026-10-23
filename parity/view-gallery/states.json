@@ -1,0 +1,410 @@
+{
+  "about": "The recorded states of the tC4 view-state gallery (APP-DESIGN §7.4): the whole state of real tC4, read from its React tree after record-states.mjs drove it against the baseline's mock along each route of states.mjs. `real` is the sha256 of the PNG and of the DOM digest (lib.mjs domDigestInput) that real tC4 showed at that moment, which calibration.json compares the gallery's render with. A state that is a baseline screen (`baseline`) photographed exactly as the committed screen.",
+  "tc4": {
+    "commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e"
+  },
+  "machine": {
+    "platform": "linux-x64",
+    "chromium": "141.0.7390.37",
+    "fonts": {
+      "count": 535,
+      "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+    }
+  },
+  "states": [
+    {
+      "name": "home",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": "home",
+      "portable": true,
+      "calls": [],
+      "notes": "Home of the sample scenario: the baseline screen home.",
+      "file": "states/home.json",
+      "sha256": "e8280d15622d28a7afdd407533f0994e4b67b0964cb415c899db958948009112",
+      "parts": [],
+      "real": {
+        "png": "32893eee72bafcd3fb29915193f83a3e2bab1c56102c470587744f47e9197793",
+        "dom": "d9448ce20f1c38fdf88854c6f2e7fedfb32b5fad8c91df2e89cd91926e919820"
+      }
+    },
+    {
+      "name": "check-picker",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": "check-picker",
+      "portable": true,
+      "calls": [],
+      "notes": "The Check tool picker for Titus: the baseline screen check-picker.",
+      "file": "states/check-picker.json",
+      "sha256": "58ac9a83a6a6aaa59cdf37494dc04799658a42f076206fff5dbf244de2cc5c38",
+      "parts": [
+        "2f9408587db2aa01",
+        "904e45d094447cd8"
+      ],
+      "real": {
+        "png": "692ff5ca2aa65e5924045a7e8f9bb64ee1b534d3a99a2e8c29a3e53bcc177ebc",
+        "dom": "262c7f772afac27108275842d2aabe82c20682149ad011a64471a34c59312f3a"
+      }
+    },
+    {
+      "name": "check-tn",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": "check-tn-session",
+      "portable": true,
+      "calls": [],
+      "notes": "The Translation Notes session at item 2: the baseline screen check-tn-session.",
+      "file": "states/check-tn.json",
+      "sha256": "1f32d94de9c8da0ae42063eb56b35fff5d054a43102ba67b5f54225a79376660",
+      "parts": [
+        "d6e9ce6e231f0a1b",
+        "904e45d094447cd8",
+        "8c6f8ecf41441553"
+      ],
+      "real": {
+        "png": "07ad4e490db11161a113349fba1d84b62518c3a451286bb51b31b22f1f02a191",
+        "dom": "3c046819730ca12be0519bba7dd32439feb02ba105635a97527f18ea82eefa64"
+      }
+    },
+    {
+      "name": "align",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": "align-workspace",
+      "portable": true,
+      "calls": [],
+      "notes": "Align at Titus 1:1: the baseline screen align-workspace.",
+      "file": "states/align.json",
+      "sha256": "9ee35fe28e40ad8cc9150bdf6ac01f4bffd9dfc149360ffd0163b6d866d5203d",
+      "parts": [
+        "f2f032fe56084e8f",
+        "904e45d094447cd8"
+      ],
+      "real": {
+        "png": "4806f0b5818dfca6f5ff87043f71475e88fe43d4816564aafab68d96f8d610b0",
+        "dom": "c283ea26cf9b44c486ce97c6c1b4bcc658a7aa182c7fcea521db9d2933e612bc"
+      }
+    },
+    {
+      "name": "cc-obs",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": true,
+      "calls": [
+        "readPrintStories"
+      ],
+      "notes": "OBS Community Checking of the sample story project. The view draws the reply of readPrintStories, which is recorded.",
+      "file": "states/cc-obs.json",
+      "sha256": "21af5c1d6485ab59e025a8052c54e40da8b147d203c3c994d63528f6dfe5cbef",
+      "parts": [],
+      "real": {
+        "png": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
+        "dom": "9b4add0f176ed6b323cc8b6687fd212703c3b0132fd80fa285ce1a8bdc154159"
+      }
+    },
+    {
+      "name": "review",
+      "scenario": "shared",
+      "locale": "en",
+      "baseline": null,
+      "portable": false,
+      "calls": [],
+      "notes": "The verse conflict review after the sync of sync-ok-teammates: two teammates changed Titus 1:1 from one version. Not portable: the teammates write through the tC4 environment.",
+      "file": "states/review.json",
+      "sha256": "00b34dc49e21a3e9f5b2b5f0439fd886c276d4e7fa1110d96b76b93b885eef83",
+      "parts": [
+        "d6e9ce6e231f0a1b",
+        "3d7a69553ef8b81e"
+      ],
+      "real": {
+        "png": "4090f3c11bbb70bb1da30c8e218deef7b7833129ec66ad9bc4017695ccd208d8",
+        "dom": "f924356f683d6ffd0b0e271d2b2347205895d2d491d41a058f2acaa0cd0a4113"
+      }
+    },
+    {
+      "name": "review-mine",
+      "scenario": "shared",
+      "locale": "en",
+      "baseline": null,
+      "portable": false,
+      "calls": [],
+      "notes": "The conflict review with a version of mine: I saved Titus 1:1 while two teammates changed it on Door43, then synced.",
+      "file": "states/review-mine.json",
+      "sha256": "b3d7ea28ed9f24d18a43da948aba13679b1be7d7b585a5ac501dba24cf557a8f",
+      "parts": [
+        "d6e9ce6e231f0a1b",
+        "3d7a69553ef8b81e"
+      ],
+      "real": {
+        "png": "3e9c18c848b1b2064acc593631ff8952832eb718fe58cd7e99226c440f2f82b4",
+        "dom": "213716a580d72803641c2ef79868fea4e61d42a8225ce6fd0f04318ee48442cc"
+      }
+    },
+    {
+      "name": "gateway",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": true,
+      "calls": [],
+      "notes": "The gateway change dialog from Project settings: the English row of the checking language (it opens the project to compute what changes).",
+      "file": "states/gateway.json",
+      "sha256": "24708ed66a516e18ce18730e1265de0c6b6ef087ea65976258c22bbedb962a20",
+      "parts": [],
+      "real": {
+        "png": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
+        "dom": "cf1b75a21f3051ae56a46f8526d987a743068d4b12843a31f9c54defaba0dea3"
+      }
+    },
+    {
+      "name": "sources",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": "source-texts",
+      "portable": true,
+      "calls": [],
+      "notes": "Get source texts over Project settings: the baseline screen source-texts.",
+      "file": "states/sources.json",
+      "sha256": "7c8d447f1f71a7db9e36f9ab0f3e096a0ae9ba2c9fe6ea0fde0c21074445bce0",
+      "parts": [],
+      "real": {
+        "png": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+        "dom": "f97d5bb0ce9eea6a2b59aec84f783db1d5c411a06cb1dffe315e2625e21627f7"
+      }
+    },
+    {
+      "name": "guided-fix",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": "guided-fix",
+      "portable": true,
+      "calls": [],
+      "notes": "The guided fix of Translation Words: the baseline screen guided-fix.",
+      "file": "states/guided-fix.json",
+      "sha256": "d6279ae2ada466104defd077cfa71bfb52a69d529212e0b3c5936af61850e875",
+      "parts": [
+        "2f9408587db2aa01",
+        "904e45d094447cd8"
+      ],
+      "real": {
+        "png": "496ab122c8706c18616e009bb96e8c106c52bf6e7fede22279bf6227d74afec2",
+        "dom": "4f3a9e5625d9a6f1b13a9f3187b22668b3196ab3961713a2231098aeffc60b4a"
+      }
+    },
+    {
+      "name": "section-editor",
+      "scenario": "en-pins",
+      "locale": "en",
+      "baseline": "en-translate-section-editor",
+      "portable": true,
+      "calls": [],
+      "notes": "The section editor of Titus 1:1-3: the baseline screen en-translate-section-editor.",
+      "file": "states/section-editor.json",
+      "sha256": "87acc844a3578023616ba8e0af7144fd4005aaf62199f6b7e9c8643ea4db85c0",
+      "parts": [
+        "d6e9ce6e231f0a1b",
+        "895c3bafa9389231"
+      ],
+      "real": {
+        "png": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
+        "dom": "a4d62cef82b362cb9f1a522707790277b9e6428fdb34a7d5718c717694d230f9"
+      }
+    },
+    {
+      "name": "feedback-ask",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": false,
+      "calls": [],
+      "notes": "Feedback opened by \"Ask for help\" on Home's open error: tC4 fills a bug report with the refusal (state.jsx askForHelp). Not portable: the route writes a file into the project.",
+      "file": "states/feedback-ask.json",
+      "sha256": "81599e08eb2dcc7aabd3e4c7e460ff2542579ddc813d5aa60a1e506569ba7915",
+      "parts": [],
+      "real": {
+        "png": "3c38a48c608cf14adca13929a049cb424bddff103bd632cd6c4a7f9e742ce8a4",
+        "dom": "4e59378987f5659ce54d5cce3c86bbb20cdee97e64d930537023817dda89f74b"
+      }
+    },
+    {
+      "name": "signin-error",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": true,
+      "calls": [],
+      "notes": "The sign-in step after Door43 refused a wrong password.",
+      "file": "states/signin-error.json",
+      "sha256": "c5fd9dc8f73714a75a106af74cd000e35ad0040a4f42f79e2f45e32225f3e622",
+      "parts": [],
+      "real": {
+        "png": "e8f27e27c26ec3c7c381d498179cb5fdcd9114289c97da0d3e40ce5f0676a393",
+        "dom": "b73ad3e7fc24c4dab039909951020a73a67d13fe003663be38e3e45533bb8d47"
+      }
+    },
+    {
+      "name": "share-check",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": "share-dialog-check",
+      "portable": true,
+      "calls": [],
+      "notes": "Share on Door43 at \"Check what will be shared\": the baseline screen share-dialog-check.",
+      "file": "states/share-check.json",
+      "sha256": "1140f7a10426db2fa3e7cd409b4affce8ad5caaca406e08cf7be7717098d1749",
+      "parts": [],
+      "real": {
+        "png": "47134d59f40f981739da209fcfb95bd56f6499cd8cbda1dbf49c7d061630ae32",
+        "dom": "9c3cb1bbdc17a8ac8a9f5f181d38e782b01595ef3a8c1afa93c19c0a52eb8606"
+      }
+    },
+    {
+      "name": "import-files",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": false,
+      "calls": [],
+      "notes": "Import a project, USFM files, with 57-TIT.usfm chosen. Not portable: a file upload.",
+      "file": "states/import-files.json",
+      "sha256": "4246d4638f733c9ccc09d49e81b2a39b71e2e3e6fcb02a55a045a2093cbf0094",
+      "parts": [],
+      "real": {
+        "png": "e8ca2bfae9565dc502eddcddbc32609dc565286832a1eef0455010d211d6aef1",
+        "dom": "24ddaf9be93ff64b9195c2730495325fad358a7538a70c206acbf8c935ad0102"
+      }
+    },
+    {
+      "name": "import-review-usfm",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": false,
+      "calls": [],
+      "notes": "The import review of 57-TIT.usfm.",
+      "file": "states/import-review-usfm.json",
+      "sha256": "4b4943b6dc4b7411f58122f1fa04db05734ff0d7b6b1619a741dfe967e6d9f99",
+      "parts": [],
+      "real": {
+        "png": "08f5729ea4bed78555d5f7d8d73ffb8a7d5e3fadb973092f683fb2ce972752b6",
+        "dom": "33d4a4d4fdf171f53e89682e4da865dafb360c237273522368b9da582677e117"
+      }
+    },
+    {
+      "name": "import-review-tc3",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": false,
+      "calls": [],
+      "notes": "The import review of the tC3 project cfm_fbt_tit_book.zip.",
+      "file": "states/import-review-tc3.json",
+      "sha256": "3178ca13bd48c676c6518e1e74d4e2fe5fda1e1c47237883be48849554adc229",
+      "parts": [
+        "95d2dd922c31b392"
+      ],
+      "real": {
+        "png": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
+        "dom": "f6f2a7f39bcce79fab0b158202cbd0272972e8c13c4614bba1768e938ed89a58"
+      }
+    },
+    {
+      "name": "add-book-pick",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": true,
+      "calls": [],
+      "notes": "Add a book, \"Start a blank book\": the book picker.",
+      "file": "states/add-book-pick.json",
+      "sha256": "7ff0c447eda6e8b65a534d6a66cd3ca599af74c34ab8c224b135682c7d256596",
+      "parts": [],
+      "real": {
+        "png": "1ffb2352f50c09d4669d64e9b2ee2b221c7bdb84783b11ed3efea1f92fb51495",
+        "dom": "2fe04528488c164291439b33345e698ed5f8e967075a503d7762ddceaec58c81"
+      }
+    },
+    {
+      "name": "add-book-pick-multi",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": true,
+      "calls": [],
+      "notes": "Add a book, several at once, with Philemon and Hebrews chosen.",
+      "file": "states/add-book-pick-multi.json",
+      "sha256": "4ed6c745d8d80b968da1d9242e675b12c319724cdb7587fbba1b7a91f253d3c6",
+      "parts": [],
+      "real": {
+        "png": "6aeda2a77ed618dab2cdcdd31cf1188713c7abfb5b9fcd8ad6d524ad0eab0d37",
+        "dom": "b728f3d57e26549f9c42904d584f76d1b552ac25547520951f0dba934dd4f3fb"
+      }
+    },
+    {
+      "name": "add-book-usfm",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": true,
+      "calls": [],
+      "notes": "Add a book from USFM files, no file chosen yet.",
+      "file": "states/add-book-usfm.json",
+      "sha256": "3b254803cadfaa78f3d73add32ac7ecdee598f56c687241c806464ca0d5c9424",
+      "parts": [],
+      "real": {
+        "png": "6582ae7a035549d0e96ac1b1b07ca76b814df81e295e71238b3a1ec68059fa7f",
+        "dom": "01ed39d3b38954f668e12ca2b3414d90a5ca0dcff06386c64a2c5540a6e7252b"
+      }
+    },
+    {
+      "name": "add-book-usfm-files",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": false,
+      "calls": [],
+      "notes": "Add a book from USFM files with 57-TIT.usfm (refused: Titus is in the project) and 58-PHM.txt (valid) chosen. Not portable: a file upload.",
+      "file": "states/add-book-usfm-files.json",
+      "sha256": "96ed1cf83a81106d92943c234708e6ee2b4aeec22ef834e41ccd6b6c71068994",
+      "parts": [],
+      "real": {
+        "png": "61d2576fef3b1d7b2c2b59e9595a4cf3f579292918bbc8a81f05e1515bab04f4",
+        "dom": "da4af995ce649fabf51220eae0db8dff259db45c22cbe22fd35d29d7f5096e2d"
+      }
+    },
+    {
+      "name": "resume",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": true,
+      "calls": [],
+      "notes": "Home with the Resume card, after a section of Titus 1 was saved and the project left.",
+      "file": "states/resume.json",
+      "sha256": "a08b72e7dac22870ca17185dff00bfc1d47eb2ff7e8d119eb974b08b648fc2b6",
+      "parts": [],
+      "real": {
+        "png": "11b853096cdc40caef04764544faf31dcc34202a078d8f9b3d63bfcb902e1262",
+        "dom": "a6d148c709ad28c86794b66fad41545689d115a2352546d9b425e9136ca0a778"
+      }
+    },
+    {
+      "name": "home-open-error",
+      "scenario": "sample",
+      "locale": "en",
+      "baseline": null,
+      "portable": false,
+      "calls": [],
+      "notes": "Home after an open refused a file written outside the app into the Bible sample. Not portable: the route writes into the project.",
+      "file": "states/home-open-error.json",
+      "sha256": "f1f6377603ee0f404d8a0f4dca0bcaa0e8ece90c52f440a8ca47223a18f78c5b",
+      "parts": [],
+      "real": {
+        "png": "4893cc88e387e04187eca84920deabb6c8d722629dd4509d08bf098acaf0080a",
+        "dom": "3b912139d78218746f79beafbaeda330c0d4eb5386c8abada7275c73dbc3fde0"
+      }
+    }
+  ]
+}

@@ -63,6 +63,166 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 - One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
 - Every other question in that §5 follows its recommendation.
 
+Under AGENTS.md "Matching tC4" (2026-10-19):
+
+- Words inside nested alignments show in Translate, Check, Align and print, such as Genesis
+  1:1 "the heavens" and a Psalm's "Selah" aligned inside `\qs` (tC4 #782, on tC4 main at
+  9ad4d5c). The reference d310bf3 drops them (Q32 of `docs/TC4-DELTA-2026-10-19.md`).
+- A footnote, cross reference, figure or any other marker the shown text leaves out (`\va`,
+  `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …) between two words keeps the space after it, so the
+  words never join and can be checked, aligned and exported. tC4's open PR #800 does this for
+  notes, cross references and figures only (C46). Where the marker is followed by a letter
+  with no space (`siervo\f + \ft o esclavo\f*de`), the shown text puts a space between the
+  two words, as the export splits them; tC4 shows "siervode". So it does where a letter
+  follows the start or end of a character span or a paragraph marker directly:
+  `the \add Lord\add*s house` shows "the Lord s house", `Yahweh\q2 que` "Yahweh que" and
+  adjacent ruby `\rb 神|かみ\rb*\rb 愛|あい\rb*` "神 愛", where tC4 joins "Lords",
+  "Yahwehque" and "神愛", which the export cannot weave.
+- The words of a character span after a span nested in it show in Translate, Check, Align and
+  print: `\wj Worship the \+nd Lord\+nd* your God\wj*` shows "Worship the Lord your God",
+  where tC4 shows "Worship the " and hides from Check and the Align bank words the export
+  counts (#796).
+- The words after a character span that holds a footnote, cross reference or figure show:
+  `\wj Blessed are the poor\f + \ft Or humble\f* in spirit\wj* and he went on` shows "… in
+  spirit and he went on", where tC4 hides "and he went on" (usfm-js keeps it as the `content`
+  of the span's end marker), so Check and the Align bank miss it, a woven alignment for the
+  verse cannot be made, and the store's verse save drops the links to it. So does the text
+  after a stray end marker (`a\nd* b`). The note's own words stay hidden.
+- Align, across a verse edit, moves each link with its own word, by position: deleting or
+  adding an earlier copy of a repeated word leaves the link on the word it was on. A link
+  whose word cannot be followed for sure goes back to the word bank and is listed, and the
+  verse is not marked for review (#789, Q30 (a)). tC4 4.0 moves the link to another copy of
+  the word, unannounced (#789 is open in tC4).
+- Align opens a verse with a card for every word of the pinned original-language verse,
+  comparing words in NFC; a link to a word the pin lacks goes back to the word bank and is
+  listed, and the verse needs review on the rail and when it opens (#790). tC4 shows the stored cards as they are, so the sample's TIT 1:1 offers 11
+  of UGNT's 17 Greek words. Suggestions compare original-language words in NFC (#793), so
+  Hebrew alignments imported from tC4 4.0, which stores them in NFC, train suggestions for
+  the pinned UHB.
+- Align's "The draft changed" notice and the rail's Invalid follow one rule: the text, the
+  words, the span or the original-language text changed, or the alignment is marked for
+  re-review (#787, #796). tC4 shows the notice only for a changed text or changed words, and
+  its rail calls an alignment valid when only its words are wrong.
+- A carry-over that loses no link is saved when the translator leaves the verse
+  (APP-DESIGN AD19); tC4 writes nothing at open (#787).
+- Align's cards are a Tab stop while words are chosen, and Enter or Space places them, so a
+  person who cannot drag or point can align (#568); tC4 4.0 has no key for it. Every card also
+  shows the pinned verse's words (#790, above).
+- A verse that still holds the alignment markup of the file it was added from does not
+  open in Align, and no verse save writes an alignment over it (#794). This is tC4's open
+  PR #799.
+- The items of a `\li1` list, a `\qm1` line, a table cell and the text of a marker usfm-js
+  does not know (a typo such as `\pp`, a custom `\zx`) show, where tC4 hides them (usfm-js
+  keeps their text as `content`) while the export counts their words: UST EXO 15:21
+  keeps the 28 words the import placed at open and at the next verse save, where tC4's text
+  drops 11.
+
+These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
+owner is told of each:
+
+- Urdu in Devanagari script (`ur-deva`) reads left to right and is named उर्दू (#701). tC4 4.0's
+  registry says right to left and names it اردو in Arabic script, so its helps would read
+  backwards. The Source texts screen draws that row in Devanagari; B9a explains it with a residual
+  of `source-texts` that cites `#701` (APP-DESIGN §7.5): the row lies below the dialog's visible
+  part, where no mask can cover it.
+- A story project's own pictures are found by their path below `ingredients/`, outside
+  `checking/`, `tc/` and `content/` (#549). tC4 4.0 takes only an ingredient with the role
+  `x-obsimages`, which the rebuild's `metadata.json` does not write for a carried file and
+  Pankosmia's rescan drops, so a project's own pictures would never show.
+- A Select that turns disabled while its list is open closes the list, and a choice made then
+  changes nothing (#552). tC4 4.0 keeps the list open, and a row click still changes the value.
+  The gallery's three `Select/disabled-while-open` cases differ from tC4 on purpose
+  (`parity/ds-gallery/residuals.json`); the `-script` one chooses the row in the same task as the
+  switch-off, before the list can close.
+
+The owner's answers of 2026-10-19 (`docs/TC4-DELTA-2026-10-19.md` §5) and the rebuild's own
+rule that no one's work disappears without a word add these (unit B2):
+
+- Home lists every folder that holds a project's files but cannot be opened, with its name
+  and the reason, and offers nothing to press. tC4 4.0 leaves such a folder off Home.
+- Choosing a language whose Door43 code a Scripture Burrito cannot hold (such as
+  `acm-x-lebarabic`) fills the Code box with a code it can hold that keeps every letter
+  (`acm-x-lebarabi-c`), and one sentence says so. tC4 4.0 stores "Undetermined" (#582, Q35).
+- A book tile counts a verse as drafted when it has words, whatever line they are on. tC4 4.0
+  reads a verse only up to its first paragraph marker, so a poem verse whose words are on
+  `\q` lines counts as not drafted there (#572).
+
+And these (unit B10):
+
+- After a sync, the result names the verses that teammates aligned differently ("1 verse has
+  two alignments to review."), and Review opens them. tC4 4.0 keeps the newest alignment and
+  counts it among the conflicts that kept the newest version, so a teammate's alignment can
+  disappear unannounced (#791).
+- A sync that stops for a reason no sentence names says so in one fixed sentence. Door43's
+  words and the reason, which can name a file on the translator's computer, stay in the
+  problem report. tC4 4.0 shows "The sync stopped: {reason}" (#724, Q36).
+
+And these (unit C6):
+
+- A book is added from a USFM file in one batch, whole or not at all, and the alignments of an
+  aligned file are kept (#767, #553). tC4 4.0 writes the stub book first and the verses after, so a
+  stop between leaves a stub book that every retry refuses, and the app never refuses a book for
+  its size.
+- Add a book does not warn that creating a book the project holds again "will replace the
+  existing book and its drafts". Adding never replaces a book, in tC4 as here.
+- A new project's language is named by what the person typed, else by the shipped Door43 list,
+  else by its code. tC4 4.0 took the name from the platform's own table. The Door43 code a
+  person was offered another for is kept in the project's settings (`door43Language`), since a
+  Scripture Burrito has no field for it (Q35).
+- A project whose projects folder cannot keep a copy safe is copied to this computer's local
+  projects folder, and Home lists it there (Q-30). tC4 has no such copy.
+
+And these (unit B4b):
+
+- While a section card holds text it has not saved, the save indicator reads "Unsaved
+  changes". tC4 4.0's indicator follows only its verse saves and reads "Saved" then, even
+  when every word of the section has just been deleted and nothing is stored. The M18 case
+  `section-empty-confirm` shows it, with a residual.
+- A paragraph or poetry line before a verse with no words stays before that verse when the
+  section is saved: the format typed on that verse's line, or the line it had when the text
+  gives it none. tC4 4.0 gives that line to the next verse with words, so a section save that
+  left a seeded book's verses undrafted moved or removed the lines the book took from its
+  source. An explicitly typed number-only line keeps its requested format through Place
+  mode and pin moves too; omitting that line keeps the stored format, while an explicitly
+  unindented line removes it. tC4's serializer omits number-only lines.
+- When a section's first verse has no words, the text a Place session writes keeps the format
+  of its first line, so a save from Place keeps it. tC4 4.0's `serializeDraft` drops it (its
+  own Save reads the session, not the text).
+- A typed span followed by an empty pin inside it keeps every other pin through Place and
+  back to Type. For `1-4 0` followed by bare `2`, pins 1, 3 and 4 stay on the word and pin 2
+  stays in the bank. tC4's serializer drops pin 1. The rebuild writes the covering span and
+  then its empty interior override, preserving verse boundaries as well as words and formats.
+
+And this (unit C2):
+
+- Section Cancel waits until the server durably removes that card's current draft. A failed
+  Cancel keeps the card and text and offers Retry, so a cancelled draft cannot return as a
+  recovery offer after a crash. tC4 4.0 closes the local card immediately and has no equivalent
+  durable draft removal.
+
+And this (unit C3):
+
+- A story text the story file cannot hold, once tC4's own clean-up has run (blank frame lines,
+  carriage returns and a title's or reference's outer spaces go, as in tC4), is not saved, and
+  the save indicator says why beside Retry while the card keeps the text: an emptied reference
+  line ("The reference needs text."), or a frame line that would read back as the picture,
+  title or reference line. tC4 4.0 puts the saved reference back into an emptied box without
+  a word, and shows only "Save failed — retry" for the others, whose retry can never succeed.
+
+And this (unit B11):
+
+- The conflict review lists, besides tC4's verses whose text two people changed, everything
+  else a project can hold in two versions (alignments, checks and comments, settings, sources
+  and books), the records that lost their place and the notices, each in a tab of its own,
+  read only until unit C7b. The tabs show only while one of them holds something, so a
+  project with verse conflicts alone shows tC4's review. tC4 4.0 keeps the newest version of
+  those records and only counts them on the sync result, so the person cannot see what was
+  set aside.
+- An aligned verse and a check decision that hold two versions show "2 versions · Review" on
+  the Align and Check screens (#791); tC4 4.0 shows nothing there.
+- A version dated more than a day after this computer's clock says the clock it was made on
+  may be wrong, and the review has a History of the verse (#78). tC4 4.0 has neither.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can
@@ -128,6 +288,16 @@ check in CI that can fail.
     it in tC4 once, so tC4 can finish its sync (Q23);
   - a torn `metadata.json`;
   - the stamps that the platform writes into `metadata.json`.
+
+- **P10. Old projects keep working.** Every format version, once frozen, leaves a set of
+  sample projects written by that version, which nobody may change afterwards. CI opens every
+  one with the current build and shows that every verse, alignment, check decision, comment,
+  conflict and history entry is still there and unchanged, that the project still validates,
+  and that it can still be edited, saved and exchanged. CI also has the last frozen version
+  open projects the current build wrote: it edits them, opens them read-only with a clear
+  message, or refuses a newer major before writing, and never calls them damaged. A test that
+  pins the format's bytes fails when the format changes without a new version and new sample
+  projects (owner request, 2026-10-18; STORAGE §12, storage unit V).
 
 ## Scope
 

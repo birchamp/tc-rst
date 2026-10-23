@@ -10,7 +10,7 @@
 //!     receipt.json                                 what this is, and every file's size and SHA-256
 //!     checked.json                                 the SHA-256 of the receipt every file was last checked against
 //!     content/…                                    the resource's files
-//!   .partial/                                      installs in progress
+//!   .partial/                                      installs and downloads in progress
 //! ```
 //!
 //! Owner and repository folders are lower-cased, because Door43 and GitHub resolve names
@@ -26,9 +26,10 @@
 //! An install writes every file and then the receipt into a new folder under
 //! `.partial/`, fsyncing each file and folder, then renames that folder to its key and
 //! fsyncs the parent. A crash at any point leaves either no install or the complete one;
-//! [`ResourceStore::open`] removes what a crash left in `.partial/`. An existing install's
-//! content and receipt are never written again: a second install of the same identity
-//! finds it and stops.
+//! [`ResourceStore::open`] removes what a crash left in `.partial/`. On Windows, a leftover
+//! that another program (a virus scanner, the search indexer) still holds open stays for
+//! the next open. An existing install's content and receipt are never written again: a
+//! second install of the same identity finds it and stops.
 //!
 //! # Checked once
 //!
@@ -47,15 +48,18 @@
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
+use tc_door43::check_names;
 
 use crate::error::{InstallError, Refusal, StoreError};
+use crate::held;
+use crate::layout;
 use crate::pin::{AquiferPin, BookCoverage, ResourcePin, Sha256};
 use crate::resolve::LocalCoverage;
 
@@ -182,6 +186,7 @@ struct CheckRecord {
 
 thread_local! {
     static CONTENT_FILES_OPENED: Cell<u64> = const { Cell::new(0) };
+    static CONTENT_FILES_WRITTEN: Cell<u64> = const { Cell::new(0) };
 }
 
 /// How many installed content files this thread has opened since it started, in any
@@ -189,6 +194,13 @@ thread_local! {
 /// Receipts and check records are not content files.
 pub fn content_files_opened() -> u64 {
     CONTENT_FILES_OPENED.with(Cell::get)
+}
+
+/// How many content files this thread has written into any store since it started: with
+/// [`content_files_opened`], the counts the start-up tests assert (docs/PERFORMANCE.md
+/// "Start-up"). Receipts and check records are not content files.
+pub fn content_files_written() -> u64 {
+    CONTENT_FILES_WRITTEN.with(Cell::get)
 }
 
 fn read_content(path: &Path) -> std::io::Result<Vec<u8>> {
@@ -244,6 +256,17 @@ impl Installed {
             }
             _ => None,
         }
+    }
+
+    /// The path of `book`'s table (`TIT.tsv`, or `19-PSA.tsv` in a release that numbers its
+    /// books), wherever the release filed it; `None` when the install holds none.
+    pub fn book_table(&self, book: BookId) -> Option<&str> {
+        layout::book_file(self.files(), book, "tsv")
+    }
+
+    /// The Open Bible Stories table (`OBS.tsv`, or `<prefix>_OBS.tsv`).
+    pub fn stories_table(&self) -> Option<&str> {
+        layout::obs_table(self.files())
     }
 
     /// Every file, sorted by path.
@@ -303,10 +326,25 @@ impl Installed {
     /// (`scripts/desktop-bootstrap.cjs:164-176`) checks only its inventory's files, so a
     /// file manager's leftover such as `.DS_Store` never stops a start.
     fn check_listed(&self) -> Result<(), StoreError> {
+        self.check_listed_watched(&NoWatch, &mut 0).map(|_| ())
+    }
+
+    /// [`Installed::check_listed`] that counts each file into `done` and tells `watch`, and
+    /// stops with `Ok(false)` when `watch` asks, before the next file.
+    fn check_listed_watched(
+        &self,
+        watch: &dyn SeedWatch,
+        done: &mut u64,
+    ) -> Result<bool, StoreError> {
         for record in &self.receipt.files {
+            if watch.cancelled() {
+                return Ok(false);
+            }
             self.read_checked(record)?;
+            *done += 1;
+            watch.done(*done);
         }
-        Ok(())
+        Ok(true)
     }
 
     /// The bytes of every file the receipt lists, checked as [`Installed::check_listed`]
@@ -349,6 +387,14 @@ impl Installed {
             path: self.dir.clone(),
             file: file.to_owned(),
             problem,
+        }
+    }
+
+    /// How a seeding reports this bundled install when copying it was refused.
+    fn refused(&self, why: InstallError) -> StoreError {
+        StoreError::BadReceipt {
+            path: self.dir.clone(),
+            problem: why.to_string(),
         }
     }
 
@@ -417,6 +463,81 @@ pub struct SeedReport {
     pub refused: Vec<(String, StoreError)>,
 }
 
+/// Who watches a seeding (APP-DESIGN §4.6): hears how many content files are done, and is
+/// asked whether to stop.
+pub trait SeedWatch {
+    /// After each content file is checked or written: the files done so far. It only
+    /// grows, and reaches [`SeedPlan::files`] when the seeding finishes.
+    fn done(&self, files: u64);
+
+    /// Whether to stop. Asked before each install is copied and before each of the files
+    /// of a copy or of a check, once per file. Never asked between the last file of a copy
+    /// and its receipt: a copy whose files are all written is finished.
+    fn cancelled(&self) -> bool;
+}
+
+/// What seeding must do, found from receipts and check records alone.
+#[derive(Debug, Default)]
+pub struct SeedPlan {
+    steps: Vec<SeedStep>,
+    files: u64,
+    /// The copies already checked and the unreadable bundled folders are known now.
+    report: SeedReport,
+}
+
+#[derive(Debug)]
+enum SeedStep {
+    /// The store lacks this bundled install: read it from the bundle, check it, copy it.
+    Copy { install: Installed, name: String },
+    /// The store's copy was not checked against its present receipt: check it again.
+    Check { copy: Installed, name: String },
+}
+
+impl SeedPlan {
+    /// The content files seeding will open: each file of every install to copy and of
+    /// every copy to check again.
+    pub fn files(&self) -> u64 {
+        self.files
+    }
+
+    /// Nothing to copy or check. The report may still list refused bundled folders.
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
+    }
+
+    /// What is known before anything is done: the copies already trusted
+    /// (`already_installed`), and in `refused` the bundled folders that could not be read
+    /// and the bundled installs whose receipt names a path an install refuses.
+    pub fn report(&self) -> &SeedReport {
+        &self.report
+    }
+}
+
+/// How a seeding ended.
+#[derive(Debug)]
+pub enum Seeding {
+    Finished(SeedReport),
+    /// The watch asked to stop. Every install in `added` is whole and checked. The copy
+    /// being made is not in the store; its files stay under `.partial/`, and the next
+    /// [`ResourceStore::open`] removes them, waiting while a scanner holds one. What a
+    /// scanner still holds after the waits stays until a later open:
+    /// [`ResourceStore::open`] keeps it, and [`ResourceStore::open_keeping_leftovers`],
+    /// which the app uses, also returns it to be reported. A leftover never reaches an
+    /// install. Seeding again copies what is missing.
+    Cancelled(SeedReport),
+}
+
+/// The watch of [`ResourceStore::seed_from`]: it hears nothing and never stops.
+struct NoWatch;
+
+impl SeedWatch for NoWatch {
+    fn done(&self, _: u64) {}
+
+    fn cancelled(&self) -> bool {
+        false
+    }
+}
+
 /// Points an install can stop at, for crash tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Step {
@@ -443,15 +564,38 @@ pub struct ResourceStore {
 
 impl ResourceStore {
     /// Opens the store at `root`, creating it when missing, and removes whatever an
-    /// interrupted install left behind.
+    /// interrupted install left behind. On Windows, a leftover that another program still
+    /// holds open stays for the next open: staging names are unique, so it never meets a
+    /// new install.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, StoreError> {
+        match Self::open_keeping_leftovers(root)? {
+            (store, None) => Ok(store),
+            // A scanner still holds the leftover after the waits: it stays for the next open.
+            (store, Some(StoreError::Io { source, .. })) if held::is_held(&source) => Ok(store),
+            (_, Some(left)) => Err(left),
+        }
+    }
+
+    /// [`ResourceStore::open`] for the app, which must start although something an
+    /// interrupted install left in `.partial/` cannot be removed (on Windows a scanner may
+    /// hold one of its files). An install lands only by renaming a staging folder with a
+    /// name of its own, so the leftovers cannot reach an install; they come back as the
+    /// second value for the caller to report, and the next open tries again. Only a store
+    /// folder that cannot be made is an error.
+    pub fn open_keeping_leftovers(
+        root: impl Into<PathBuf>,
+    ) -> Result<(Self, Option<StoreError>), StoreError> {
         let store = Self { root: root.into() };
         fs::create_dir_all(&store.root).map_err(|e| StoreError::io("create", &store.root, e))?;
         let partial = store.root.join(PARTIAL);
-        if partial.exists() {
-            fs::remove_dir_all(&partial).map_err(|e| StoreError::io("clear", &partial, e))?;
-        }
-        Ok(store)
+        let left = if partial.exists() {
+            held::remove_dir_all(&partial)
+                .err()
+                .map(|e| StoreError::io("clear", &partial, e))
+        } else {
+            None
+        };
+        Ok((store, left))
     }
 
     /// Opens a store only to read it, such as the bundled store an installer ships in a
@@ -470,6 +614,13 @@ impl ResourceStore {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Where downloads are written before they are checked and installed: `.partial/`,
+    /// which [`ResourceStore::open`] empties, so a download a crash cut short is removed at
+    /// the next start.
+    pub(crate) fn download_folder(&self) -> PathBuf {
+        self.root.join(PARTIAL)
     }
 
     fn dcs_dir(&self, pin: &ResourcePin) -> PathBuf {
@@ -584,50 +735,126 @@ impl ResourceStore {
     /// as tC4 stops its start (`scripts/desktop-resources.test.cjs:453-463, 586-589`): a
     /// copy whose files fail that check, or whose receipt cannot be read or names another
     /// resource. The copy is left as it is, never overwritten from the bundle.
+    ///
+    /// [`ResourceStore::seed_plan`] and [`ResourceStore::seed`] are the same seeding in two
+    /// steps, with progress and a stop.
     pub fn seed_from(&self, bundled: &ResourceStore) -> Result<SeedReport, StoreError> {
+        match self.seed(self.seed_plan(bundled)?, &NoWatch)? {
+            Seeding::Finished(report) | Seeding::Cancelled(report) => Ok(report),
+        }
+    }
+
+    /// What [`ResourceStore::seed`] would do, found without opening a content file: a
+    /// repeat start reads receipts and check records only (tC4 #740). An install this
+    /// store holds whose receipt cannot be read or names another resource stops the plan
+    /// with its error, before anything is copied. A bundled install to copy whose receipt
+    /// names a path an install refuses is refused here, as the install would refuse it,
+    /// before any of its files is opened: on Windows a device name would open the device,
+    /// and a `../` path would read a file outside the bundle.
+    pub fn seed_plan(&self, bundled: &ResourceStore) -> Result<SeedPlan, StoreError> {
         let inventory = bundled.installed()?;
-        let mut report = SeedReport::default();
+        let mut plan = SeedPlan::default();
         for e in inventory.unreadable {
-            report
+            plan.report
                 .refused
                 .push(("an unreadable bundled install".to_owned(), e));
         }
         for install in inventory.installs {
             let name = install.origin().describe();
-            if let Some(copy) = self.find(install.origin())? {
-                if !copy.is_checked() {
-                    copy.check_listed()?;
-                    copy.record_check()?;
-                    report.checked_again.push(name.clone());
+            match self.find(install.origin())? {
+                Some(copy) if copy.is_checked() => plan.report.already_installed.push(name),
+                Some(copy) => {
+                    plan.files += copy.receipt.files.len() as u64;
+                    plan.steps.push(SeedStep::Check { copy, name });
                 }
-                report.already_installed.push(name);
-                continue;
-            }
-            let files = match install.read_all_checked() {
-                Ok(files) => files,
-                Err(e) => {
-                    report.refused.push((name, e));
-                    continue;
-                }
-            };
-            let staged = Staged {
-                origin: install.receipt.origin.clone(),
-                books: install.receipt.books.clone(),
-                files,
-            };
-            match self.install(staged) {
-                Ok(_) => report.added.push(name),
-                Err(InstallError::Store(e)) => return Err(e),
-                Err(other) => report.refused.push((
-                    name,
-                    StoreError::BadReceipt {
-                        path: install.dir.clone(),
-                        problem: other.to_string(),
-                    },
-                )),
+                None => match check_paths(install.files()) {
+                    Ok(()) => {
+                        plan.files += install.receipt.files.len() as u64;
+                        plan.steps.push(SeedStep::Copy { install, name });
+                    }
+                    Err(refusal) => {
+                        let refused = install.refused(InstallError::Refused {
+                            what: name.clone(),
+                            refusal,
+                        });
+                        plan.report.refused.push((name, refused));
+                    }
+                },
             }
         }
-        Ok(report)
+        Ok(plan)
+    }
+
+    /// Does what `plan` says, telling `watch` after each content file and stopping when it
+    /// asks. Errors as [`ResourceStore::seed_from`] errs: a copy that cannot be trusted
+    /// stops the seeding with its error, and a bundled install that fails its own check is
+    /// left out and named in the report's `refused`. Install by install, a copy is in the
+    /// store whole and checked or not at all, so a stop at any point leaves only whole
+    /// installs.
+    pub fn seed(&self, plan: SeedPlan, watch: &dyn SeedWatch) -> Result<Seeding, StoreError> {
+        let SeedPlan {
+            steps, mut report, ..
+        } = plan;
+        let mut done = 0u64;
+        for step in steps {
+            match step {
+                SeedStep::Check { copy, name } => {
+                    if !copy.check_listed_watched(watch, &mut done)? {
+                        return Ok(Seeding::Cancelled(report));
+                    }
+                    copy.record_check()?;
+                    report.checked_again.push(name.clone());
+                    report.already_installed.push(name);
+                }
+                SeedStep::Copy { install, name } => {
+                    if watch.cancelled() {
+                        return Ok(Seeding::Cancelled(report));
+                    }
+                    let count = install.receipt.files.len() as u64;
+                    let base = done;
+                    done = base + count;
+                    let files = match install.read_all_checked() {
+                        Ok(files) => files,
+                        Err(e) => {
+                            report.refused.push((name, e));
+                            watch.done(done);
+                            continue;
+                        }
+                    };
+                    let staged = Staged {
+                        origin: install.receipt.origin.clone(),
+                        books: install.receipt.books.clone(),
+                        files,
+                    };
+                    let mut reported = base;
+                    let mut stopped = false;
+                    let installed = self.install_until(staged, &mut |step| {
+                        let Step::FileWritten(n) = step else {
+                            return false;
+                        };
+                        reported = base + n as u64;
+                        watch.done(reported);
+                        // The last file is never a place to stop: a copy with all its
+                        // files written is finished.
+                        stopped = reported < done && watch.cancelled();
+                        stopped
+                    });
+                    if stopped {
+                        return Ok(Seeding::Cancelled(report));
+                    }
+                    if reported < done {
+                        // Nothing was written: the copy was refused, or landed already.
+                        watch.done(done);
+                    }
+                    match installed {
+                        Ok(_) => report.added.push(name),
+                        Err(InstallError::Store(e)) => return Err(e),
+                        Err(other) => report.refused.push((name, install.refused(other))),
+                    }
+                }
+            }
+        }
+        Ok(Seeding::Finished(report))
     }
 
     pub(crate) fn install(&self, staged: Staged) -> Result<Installed, InstallError> {
@@ -641,15 +868,28 @@ impl ResourceStore {
         staged: Staged,
         crash: &mut dyn FnMut(Step) -> bool,
     ) -> Result<Installed, InstallError> {
+        self.install_in(staged, &staging_name(), crash)
+    }
+
+    /// [`ResourceStore::install_until`] writing into the staging folder `staging_name`,
+    /// which must be new.
+    fn install_in(
+        &self,
+        staged: Staged,
+        staging_name: &str,
+        crash: &mut dyn FnMut(Step) -> bool,
+    ) -> Result<Installed, InstallError> {
         let target = self.dir_of(&staged.origin);
         if let Some(existing) = self.find(&staged.origin)? {
             return Ok(existing);
         }
         let mut files = staged.files;
         files.sort_by(|a, b| a.0.cmp(&b.0));
-        check_paths(&files).map_err(|refusal| InstallError::Refused {
-            what: staged.origin.describe(),
-            refusal,
+        check_paths(files.iter().map(|(path, _)| path.as_str())).map_err(|refusal| {
+            InstallError::Refused {
+                what: staged.origin.describe(),
+                refusal,
+            }
         })?;
         let receipt = Receipt {
             receipt_version: RECEIPT_VERSION,
@@ -667,7 +907,10 @@ impl ResourceStore {
 
         let partial = self.root.join(PARTIAL);
         create_dirs(&partial)?;
-        let staging = partial.join(staging_name());
+        let staging = partial.join(staging_name);
+        // Not `create_dirs`: a staging name already taken must fail here, before any file
+        // is written into the other install's folder.
+        fs::create_dir(&staging).map_err(|e| StoreError::io("create", &staging, e))?;
         create_dirs(&staging.join(CONTENT))?;
         let mut folders = BTreeSet::new();
         for (written, (path, bytes)) in files.iter().enumerate() {
@@ -676,7 +919,19 @@ impl ResourceStore {
                 create_dirs(parent)?;
                 folders.insert(parent.to_path_buf());
             }
-            write_synced(&full, bytes)?;
+            match write_new_synced(&full, bytes) {
+                Err(StoreError::Io { source, .. })
+                    if source.kind() == io::ErrorKind::AlreadyExists =>
+                {
+                    let _ = held::remove_dir_all(&staging);
+                    return Err(InstallError::Refused {
+                        what: receipt.origin.describe(),
+                        refusal: Refusal::DuplicateEntry(path.clone()),
+                    });
+                }
+                result => result?,
+            }
+            CONTENT_FILES_WRITTEN.with(|count| count.set(count.get() + 1));
             if crash(Step::FileWritten(written + 1)) {
                 return Err(InstallError::Interrupted);
             }
@@ -686,11 +941,11 @@ impl ResourceStore {
                 path: staging.clone(),
                 problem: e.to_string(),
             })?;
-        write_synced(&staging.join(RECEIPT), &receipt_bytes)?;
+        write_new_synced(&staging.join(RECEIPT), &receipt_bytes)?;
         // The files were checked before they were staged, and are written from the
         // checked bytes.
         let receipt_sha256 = Sha256::of(&receipt_bytes);
-        write_synced(
+        write_new_synced(
             &staging.join(CHECKED),
             &check_record(&staging, receipt_sha256)?,
         )?;
@@ -706,10 +961,16 @@ impl ResourceStore {
 
         let parent = target.parent().unwrap_or(&self.root);
         create_dirs(parent)?;
-        if let Err(e) = fs::rename(&staging, &target) {
+        let renamed = held::retry_while_held(|| match held::try_rename(&staging, &target) {
+            // Some Windows versions answer a rename onto a folder that exists with "access
+            // denied", which looks like a file held open. Waiting would not help.
+            Err(e) if target.exists() => Err(io::Error::new(io::ErrorKind::AlreadyExists, e)),
+            result => result,
+        });
+        if let Err(e) = renamed {
             // Another install of the same identity may have landed first.
             if let Some(existing) = self.find(&receipt.origin)? {
-                let _ = fs::remove_dir_all(&staging);
+                let _ = held::try_remove_dir_all(&staging);
                 return Ok(existing);
             }
             return Err(StoreError::io("move into place", &target, e).into());
@@ -820,28 +1081,22 @@ fn dirs_at_depth(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> Result<(),
     Ok(())
 }
 
-/// Refuses a path that could leave the content folder or that a case-insensitive file
-/// system would merge with another. Downloads were checked already; this guards every
-/// write, whatever its source.
-fn check_paths(files: &[(String, Vec<u8>)]) -> Result<(), Refusal> {
-    let mut seen = BTreeSet::new();
-    for (path, _) in files {
+/// Refuses a path that could leave the content folder, that Windows would write under
+/// another name, or that a case-insensitive file system would merge with another.
+/// Downloads were checked already; this guards every write, whatever its source.
+fn check_paths<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), Refusal> {
+    let paths: Vec<&str> = paths.into_iter().collect();
+    for path in &paths {
         let bad = path.is_empty()
             || path.contains(['\\', ':', '\0'])
             || path
                 .split('/')
                 .any(|segment| segment.is_empty() || segment.chars().all(|c| c == '.'));
         if bad {
-            return Err(Refusal::EscapesRoot(path.clone()));
-        }
-        if path == RECEIPT {
-            continue;
-        }
-        if !seen.insert(path.to_lowercase()) {
-            return Err(Refusal::DuplicateEntry(path.clone()));
+            return Err(Refusal::EscapesRoot((*path).to_owned()));
         }
     }
-    Ok(())
+    Ok(check_names(paths)?)
 }
 
 fn create_dirs(dir: &Path) -> Result<(), StoreError> {
@@ -854,12 +1109,30 @@ fn replace_synced(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), StoreError
     let temporary = dir.join(format!("{name}.partial"));
     write_synced(&temporary, bytes)?;
     let target = dir.join(name);
-    fs::rename(&temporary, &target).map_err(|e| StoreError::io("replace", &target, e))?;
+    held::rename(&temporary, &target).map_err(|e| StoreError::io("replace", &target, e))?;
     sync_dir(dir)
 }
 
+/// Writes `path` anew or over what is there: a crash can leave the temporary of
+/// [`replace_synced`] behind.
 fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
-    let mut file = fs::File::create(path).map_err(|e| StoreError::io("create", path, e))?;
+    let file = fs::File::create(path).map_err(|e| StoreError::io("create", path, e))?;
+    write_all_synced(file, path, bytes)
+}
+
+/// Writes a file that must not exist yet. A name the volume folds into one already written
+/// (an 8.3 alias, a stripped trailing dot, macOS normalization) fails with `AlreadyExists`
+/// instead of overwriting that file.
+fn write_new_synced(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| StoreError::io("create", path, e))?;
+    write_all_synced(file, path, bytes)
+}
+
+fn write_all_synced(mut file: fs::File, path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
     file.write_all(bytes)
         .map_err(|e| StoreError::io("write", path, e))?;
     file.sync_all().map_err(|e| StoreError::io("sync", path, e))
@@ -882,6 +1155,7 @@ fn sync_dir(_: &Path) -> Result<(), StoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     fn pin(sha: char) -> ResourcePin {
         ResourcePin::new(
@@ -974,9 +1248,19 @@ mod tests {
         }
     }
 
+    /// A name the store accepts. `[a-z]{1,6}` alone makes `prn`, `con`, `aux` and `nul` now
+    /// and then, which are device names on Windows, and the store refuses them.
+    fn portable_name() -> impl proptest::strategy::Strategy<Value = String> {
+        use proptest::prelude::*;
+        "[a-z]{1,6}".prop_filter("a name Windows accepts", |name| {
+            check_names([name.as_str()]).is_ok()
+        })
+    }
+
     fn file_tree() -> impl proptest::strategy::Strategy<Value = Vec<(String, Vec<u8>)>> {
         use proptest::prelude::*;
-        let path = proptest::collection::vec("[a-z]{1,6}", 1..4).prop_map(|parts| parts.join("/"));
+        let path =
+            proptest::collection::vec(portable_name(), 1..4).prop_map(|parts| parts.join("/"));
         proptest::collection::btree_map(path, proptest::collection::vec(any::<u8>(), 0..64), 1..12)
             .prop_map(|tree| {
                 // A file and a folder of one name cannot both exist.
@@ -985,6 +1269,21 @@ mod tests {
                     .filter(|(p, _)| !paths.iter().any(|q| q.starts_with(&format!("{p}/"))))
                     .collect()
             })
+    }
+
+    /// A fixed sequence of trees, drawn as the two properties below draw them. Before the
+    /// names were filtered, about one property run in twenty-five drew a device name and
+    /// failed; this sequence draws one in its 4,933rd tree.
+    #[test]
+    fn the_generated_trees_are_never_refused_for_their_names() {
+        use proptest::strategy::{Strategy, ValueTree};
+        let mut runner = proptest::test_runner::TestRunner::deterministic();
+        let strategy = file_tree();
+        for _ in 0..10_000 {
+            let files = strategy.new_tree(&mut runner).unwrap().current();
+            let names = files.iter().map(|(path, _)| path.as_str());
+            assert_eq!(check_names(names), Ok(()), "{files:?}");
+        }
     }
 
     proptest::proptest! {
@@ -1056,13 +1355,71 @@ mod tests {
                 "{bad:?}"
             );
         }
-        let mut s = staged('a');
-        s.files.push(("METADATA.json".to_owned(), Vec::new()));
-        assert!(matches!(
-            store.install(s),
-            Err(InstallError::Refused { .. })
-        ));
+        for unportable in [
+            "notes./x",
+            "x/a ",
+            "x/a.",
+            "PROGRA~1",
+            "ABCDEF~1.JSN",
+            "x/abcdef~1.tsv",
+            "A~9",
+            "CON.json",
+            "nul.json",
+        ] {
+            let mut s = staged('a');
+            s.files.push((unportable.to_owned(), Vec::new()));
+            assert!(
+                matches!(
+                    store.install(s),
+                    Err(InstallError::Refused {
+                        refusal: Refusal::NotPortable { .. },
+                        ..
+                    })
+                ),
+                "{unportable:?}"
+            );
+        }
+        // Names one volume would store as one file or folder: letter case, `σ` and `ς`
+        // (macOS folds them as it folds case), NFC and NFD, folders that differ in case,
+        // and a file and a folder of one name.
+        for added in [
+            &["METADATA.json"][..],
+            &["σ", "ς"],
+            &["café.md", "cafe\u{301}.md"],
+            &["Notes/a.json", "notes/b.json"],
+            &["A", "a/x"],
+            &["receipt.json", "RECEIPT.json"],
+        ] {
+            let mut s = staged('a');
+            s.files
+                .extend(added.iter().map(|path| ((*path).to_owned(), Vec::new())));
+            assert!(
+                matches!(
+                    store.install(s),
+                    Err(InstallError::Refused {
+                        refusal: Refusal::DuplicateEntry(_),
+                        ..
+                    })
+                ),
+                "{added:?}"
+            );
+        }
         assert!(store.installed().unwrap().installs.is_empty());
+        // `ı` stays apart from `i` on every supported file system, and only the shape of an
+        // 8.3 short name is refused as one.
+        let mut s = staged('a');
+        s.files.extend(
+            [
+                "ı",
+                "i",
+                "notes~1.json",
+                "abcdef~12x",
+                "a~1.tar.gz",
+                "notes~2024-draft.md",
+            ]
+            .map(|path| (path.to_owned(), Vec::new())),
+        );
+        store.install(s).unwrap().verify().unwrap();
     }
 
     #[test]
@@ -1147,6 +1504,589 @@ mod tests {
             installed.verify(),
             Err(StoreError::Damaged { .. })
         ));
+    }
+
+    /// The one staging folder of an install that has started and not finished.
+    fn the_staging_folder(root: &Path) -> PathBuf {
+        let mut stagings = fs::read_dir(root.join(PARTIAL)).unwrap();
+        let staging = stagings.next().unwrap().unwrap().path();
+        assert!(stagings.next().is_none());
+        staging
+    }
+
+    fn no_staging_folder_left(store: &ResourceStore) {
+        let leftovers = fs::read_dir(store.root().join(PARTIAL)).map_or(0, Iterator::count);
+        assert_eq!(leftovers, 0, "no staging folder may remain");
+    }
+
+    /// Bundles an install whose receipt lists `renamed` in place of its `metadata.json`,
+    /// with the file moved to match: what an installer built by another tool could ship.
+    fn bundled_with_file_named(bundled_dir: &Path, renamed: &str) {
+        let bundled = ResourceStore::open(bundled_dir).unwrap();
+        let install = bundled.install(staged('a')).unwrap();
+        let content = install.dir().join(CONTENT);
+        fs::rename(content.join("metadata.json"), content.join(renamed)).unwrap();
+        let mut receipt = install.receipt.clone();
+        for record in &mut receipt.files {
+            if record.path == "metadata.json" {
+                record.path = renamed.to_owned();
+            }
+        }
+        receipt.files.sort_by(|a, b| a.path.cmp(&b.path));
+        fs::write(
+            install.dir().join(RECEIPT),
+            serde_json::to_vec_pretty(&receipt).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn seeding_refuses_a_bundled_file_name_not_every_platform_accepts_and_installs_nothing_of_it() {
+        let bundled_dir = tempfile::tempdir().unwrap();
+        // An 8.3 short name, which every platform stores as a plain file. A device name such
+        // as `aux.json` would be refused too, but on Windows putting it on disk opens the
+        // device.
+        bundled_with_file_named(bundled_dir.path(), "ABCDEF~1.JSN");
+        let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+        let machine_dir = tempfile::tempdir().unwrap();
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+
+        let opened = content_files_opened();
+        let report = machine.seed_from(&bundled).unwrap();
+
+        assert_eq!(
+            content_files_opened() - opened,
+            0,
+            "the names are refused before a file is opened"
+        );
+        assert!(report.added.is_empty(), "{:?}", report.added);
+        assert_eq!(report.refused.len(), 1, "{:?}", report.refused);
+        assert!(
+            report.refused[0].1.to_string().contains("ABCDEF~1.JSN"),
+            "the refusal names the file: {}",
+            report.refused[0].1
+        );
+        assert!(machine.installed().unwrap().installs.is_empty());
+        no_staging_folder_left(&machine);
+    }
+
+    #[test]
+    fn seeding_opens_no_file_of_a_bundled_install_whose_receipt_names_a_path_outside_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let bundled_dir = dir.path().join("bundle");
+        // Six folders up from the content folder (`dcs/<owner>/<repo>/<sha>/content`) is
+        // `dir`, outside the bundle. The file moved there keeps the receipt's size and
+        // SHA-256, so reading it would pass the check of its bytes.
+        let escaping = "../../../../../../outside.json";
+        bundled_with_file_named(&bundled_dir, escaping);
+        assert!(dir.path().join("outside.json").is_file());
+        let bundled = ResourceStore::open_read_only(&bundled_dir).unwrap();
+        let machine_dir = tempfile::tempdir().unwrap();
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+
+        let opened = content_files_opened();
+        let report = machine.seed_from(&bundled).unwrap();
+
+        assert_eq!(
+            content_files_opened() - opened,
+            0,
+            "the path is refused before a file is opened"
+        );
+        assert!(report.added.is_empty(), "{:?}", report.added);
+        assert_eq!(report.refused.len(), 1, "{:?}", report.refused);
+        assert!(
+            report.refused[0].1.to_string().contains(escaping),
+            "the refusal names the path: {}",
+            report.refused[0].1
+        );
+        assert!(machine.installed().unwrap().installs.is_empty());
+        no_staging_folder_left(&machine);
+    }
+
+    #[test]
+    fn seeding_installs_a_bundled_file_name_every_platform_accepts() {
+        let bundled_dir = tempfile::tempdir().unwrap();
+        bundled_with_file_named(bundled_dir.path(), "notes.json");
+        let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+        let machine_dir = tempfile::tempdir().unwrap();
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+
+        let report = machine.seed_from(&bundled).unwrap();
+
+        assert_eq!(report.added.len(), 1);
+        assert!(report.refused.is_empty(), "{:?}", report.refused);
+        machine.dcs(&pin('a')).unwrap().unwrap().verify().unwrap();
+    }
+
+    #[test]
+    fn a_staged_file_never_overwrites_a_name_the_volume_already_holds() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let outside = dir.path().join("planted");
+        // Stands in for a volume that shows an earlier file under this file's name: the
+        // second file's name exists before the install creates it. The staging folder is
+        // removed when the install is refused, so a second name for the planted file's
+        // bytes outside it shows whether they were written over.
+        let result = store.install_until(staged('a'), &mut |step| {
+            if step == Step::FileWritten(1) {
+                let file = the_staging_folder(dir.path())
+                    .join(CONTENT)
+                    .join("ingredients/TIT.tsv");
+                fs::write(&file, b"planted").unwrap();
+                fs::hard_link(&file, &outside).unwrap();
+            }
+            false
+        });
+        assert!(
+            matches!(
+                &result,
+                Err(InstallError::Refused { refusal: Refusal::DuplicateEntry(path), .. })
+                    if path == "ingredients/TIT.tsv"
+            ),
+            "{result:?}"
+        );
+        assert_eq!(fs::read(outside).unwrap(), b"planted");
+        assert!(store.dcs(&pin('a')).unwrap().is_none());
+        assert!(store.installed().unwrap().installs.is_empty());
+        no_staging_folder_left(&store);
+    }
+
+    #[test]
+    fn an_install_that_lost_the_race_returns_the_winner_and_removes_its_staging() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        // The same install lands between this one's last write and its rename.
+        let installed = store
+            .install_until(staged('a'), &mut |step| {
+                if step == Step::ReceiptWritten {
+                    store.install(staged('a')).unwrap();
+                }
+                false
+            })
+            .unwrap();
+        installed.verify().unwrap();
+        assert_eq!(store.installed().unwrap().installs.len(), 1);
+        no_staging_folder_left(&store);
+    }
+
+    #[test]
+    fn opening_fails_when_a_leftover_cannot_be_cleared_for_a_reason_no_scanner_causes() {
+        let dir = tempfile::tempdir().unwrap();
+        // A file where the staging folders go: clearing it as a folder fails with "not a
+        // directory".
+        fs::write(dir.path().join(PARTIAL), b"x").unwrap();
+        let result = ResourceStore::open(dir.path());
+        assert!(
+            matches!(
+                result,
+                Err(StoreError::Io {
+                    action: "clear",
+                    ..
+                })
+            ),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn an_install_never_writes_into_a_staging_folder_that_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let taken = dir.path().join(PARTIAL).join("taken");
+        fs::create_dir_all(&taken).unwrap();
+        fs::write(taken.join("other"), b"another install's file").unwrap();
+        let result = store.install_in(staged('a'), "taken", &mut |_| false);
+        assert!(
+            matches!(
+                &result,
+                Err(InstallError::Store(StoreError::Io { action: "create", source, .. }))
+                    if source.kind() == io::ErrorKind::AlreadyExists
+            ),
+            "{result:?}"
+        );
+        let names: Vec<_> = fs::read_dir(&taken)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(
+            names,
+            ["other"],
+            "nothing was written beside the other file"
+        );
+        assert_eq!(
+            fs::read(taken.join("other")).unwrap(),
+            b"another install's file"
+        );
+        assert!(store.installed().unwrap().installs.is_empty());
+    }
+
+    /// The Windows tests below hold real files. These hold them in a simulated scanner
+    /// (`crate::held::scanner`), so every platform runs the same retries.
+    mod a_scanner_holds_files {
+        use super::*;
+        use crate::held::scanner::Scanner;
+
+        fn ms(waits: &[u64]) -> Vec<Duration> {
+            waits.iter().map(|w| Duration::from_millis(*w)).collect()
+        }
+
+        fn staged_metadata(root: &Path) -> PathBuf {
+            the_staging_folder(root).join(CONTENT).join("metadata.json")
+        }
+
+        /// A leftover of a crashed install, with a file in it.
+        fn leftover_file(root: &Path) -> PathBuf {
+            let content = root.join(PARTIAL).join("1-2-3").join(CONTENT);
+            fs::create_dir_all(&content).unwrap();
+            let file = content.join("metadata.json");
+            fs::write(&file, b"{}").unwrap();
+            file
+        }
+
+        #[test]
+        fn an_install_waits_for_a_scanner_to_let_go_of_a_staged_file() {
+            let dir = tempfile::tempdir().unwrap();
+            let store = ResourceStore::open(dir.path()).unwrap();
+            let scanner = Scanner::new();
+            let installed = store
+                .install_until(staged('a'), &mut |step| {
+                    if step == Step::ReceiptWritten {
+                        scanner.holds_for(&staged_metadata(dir.path()), 3);
+                    }
+                    false
+                })
+                .unwrap();
+            installed.verify().unwrap();
+            assert_eq!(scanner.waited(), ms(&[2, 4, 8]));
+            no_staging_folder_left(&store);
+        }
+
+        #[test]
+        fn an_install_gives_up_after_the_last_wait_and_the_next_open_clears_what_it_left() {
+            let dir = tempfile::tempdir().unwrap();
+            let store = ResourceStore::open(dir.path()).unwrap();
+            let scanner = Scanner::new();
+            let mut held_file = PathBuf::new();
+            let result = store.install_until(staged('a'), &mut |step| {
+                if step == Step::ReceiptWritten {
+                    held_file = staged_metadata(dir.path());
+                    scanner.holds(&held_file);
+                }
+                false
+            });
+            let source = match result {
+                Err(InstallError::Store(StoreError::Io {
+                    action: "move into place",
+                    source,
+                    ..
+                })) => source,
+                other => panic!("{other:?}"),
+            };
+            assert!(held::is_held(&source), "{source:?}");
+            let waited: Duration = scanner.waited().iter().sum();
+            assert_eq!(waited, Duration::from_millis(2_004));
+            assert!(store.dcs(&pin('a')).unwrap().is_none());
+            scanner.lets_go(&held_file);
+            let store = ResourceStore::open(dir.path()).unwrap();
+            assert!(!dir.path().join(PARTIAL).exists());
+            store.install(staged('a')).unwrap().verify().unwrap();
+        }
+
+        #[test]
+        fn an_install_that_lost_the_race_does_not_wait_for_a_scanner() {
+            let dir = tempfile::tempdir().unwrap();
+            let store = ResourceStore::open(dir.path()).unwrap();
+            let scanner = Scanner::new();
+            let mut held_file = PathBuf::new();
+            // The scanner holds a staged file while the same install lands first. Whatever
+            // error the rename reports, the folder it was renamed onto exists, so waiting
+            // for the scanner would not help.
+            let installed = store
+                .install_until(staged('a'), &mut |step| {
+                    if step == Step::ReceiptWritten {
+                        held_file = staged_metadata(dir.path());
+                        scanner.holds(&held_file);
+                        store.install(staged('a')).unwrap();
+                    }
+                    false
+                })
+                .unwrap();
+            installed.verify().unwrap();
+            assert!(scanner.waited().is_empty(), "{:?}", scanner.waited());
+            // The loser's staging folder was held, so it stays until the next open.
+            assert_eq!(fs::read_dir(dir.path().join(PARTIAL)).unwrap().count(), 1);
+            scanner.lets_go(&held_file);
+            ResourceStore::open(dir.path()).unwrap();
+            assert!(!dir.path().join(PARTIAL).exists());
+        }
+
+        #[test]
+        fn opening_waits_for_a_scanner_to_let_go_of_a_leftover() {
+            let dir = tempfile::tempdir().unwrap();
+            let file = leftover_file(dir.path());
+            let scanner = Scanner::new();
+            scanner.holds_for(&file, 3);
+            ResourceStore::open(dir.path()).unwrap();
+            assert!(!dir.path().join(PARTIAL).exists());
+            assert_eq!(scanner.waited(), ms(&[2, 4, 8]));
+        }
+
+        #[test]
+        fn opening_succeeds_when_a_scanner_holds_a_leftover_throughout() {
+            let dir = tempfile::tempdir().unwrap();
+            let file = leftover_file(dir.path());
+            let scanner = Scanner::new();
+            scanner.holds(&file);
+            let store = ResourceStore::open(dir.path()).unwrap();
+            assert!(file.exists(), "a held leftover stays");
+            let waited: Duration = scanner.waited().iter().sum();
+            assert_eq!(waited, Duration::from_millis(2_004));
+            store.install(staged('a')).unwrap().verify().unwrap();
+            scanner.lets_go(&file);
+            ResourceStore::open(dir.path()).unwrap();
+            assert!(!dir.path().join(PARTIAL).exists());
+        }
+
+        #[test]
+        fn seeding_records_a_check_when_a_scanner_briefly_holds_the_old_record() {
+            let bundled_dir = tempfile::tempdir().unwrap();
+            let bundled = ResourceStore::open(bundled_dir.path()).unwrap();
+            bundled.install(staged('a')).unwrap();
+            let read_only = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+            let machine_dir = tempfile::tempdir().unwrap();
+            let machine = ResourceStore::open(machine_dir.path()).unwrap();
+            machine.seed_from(&read_only).unwrap();
+            let record = machine.dcs(&pin('a')).unwrap().unwrap().dir().join(CHECKED);
+            let recorded = fs::read(&record).unwrap();
+            // A record that names no receipt: the copy is checked again and the record
+            // replaced, while the scanner still has the old one open.
+            fs::write(&record, b"stale").unwrap();
+            let scanner = Scanner::new();
+            scanner.holds_for(&record, 3);
+            let report = machine.seed_from(&read_only).unwrap();
+            assert_eq!(report.checked_again.len(), 1);
+            assert_eq!(fs::read(&record).unwrap(), recorded);
+            assert_eq!(scanner.waited(), ms(&[2, 4, 8]));
+            assert!(
+                machine
+                    .seed_from(&read_only)
+                    .unwrap()
+                    .checked_again
+                    .is_empty()
+            );
+        }
+
+        /// Takes the staged metadata file when the last file of a copy is written, as a
+        /// scanner does, before the copy is renamed into place.
+        struct ScannerAtTheLastFile<'a> {
+            scanner: &'a Scanner,
+            root: &'a Path,
+            files: u64,
+        }
+
+        impl SeedWatch for ScannerAtTheLastFile<'_> {
+            fn done(&self, files: u64) {
+                if files == self.files {
+                    self.scanner.holds_for(&staged_metadata(self.root), 3);
+                }
+            }
+
+            fn cancelled(&self) -> bool {
+                false
+            }
+        }
+
+        #[test]
+        fn seeding_waits_for_a_scanner_to_let_go_of_a_staged_file() {
+            let bundled_dir = tempfile::tempdir().unwrap();
+            ResourceStore::open(bundled_dir.path())
+                .unwrap()
+                .install(staged('a'))
+                .unwrap();
+            let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+            let machine_dir = tempfile::tempdir().unwrap();
+            let machine = ResourceStore::open(machine_dir.path()).unwrap();
+            let scanner = Scanner::new();
+            let plan = machine.seed_plan(&bundled).unwrap();
+            let watch = ScannerAtTheLastFile {
+                scanner: &scanner,
+                root: machine_dir.path(),
+                files: plan.files(),
+            };
+
+            let Seeding::Finished(report) = machine.seed(plan, &watch).unwrap() else {
+                panic!("the seeding stopped")
+            };
+
+            assert_eq!(report.added.len(), 1);
+            assert!(report.refused.is_empty(), "{:?}", report.refused);
+            assert_eq!(scanner.waited(), ms(&[2, 4, 8]));
+            machine.dcs(&pin('a')).unwrap().unwrap().verify().unwrap();
+            no_staging_folder_left(&machine);
+        }
+
+        #[test]
+        fn the_app_opens_beside_a_leftover_a_scanner_holds_and_reports_it() {
+            let dir = tempfile::tempdir().unwrap();
+            let file = leftover_file(dir.path());
+            let scanner = Scanner::new();
+            scanner.holds(&file);
+
+            let (store, left) = ResourceStore::open_keeping_leftovers(dir.path()).unwrap();
+
+            let Some(StoreError::Io { action, source, .. }) = left else {
+                panic!("the leftover was not reported: {left:?}")
+            };
+            assert_eq!(action, "clear");
+            assert!(held::is_held(&source), "{source:?}");
+            let waited: Duration = scanner.waited().iter().sum();
+            assert_eq!(waited, Duration::from_millis(2_004));
+            assert!(file.exists(), "a held leftover stays");
+            store.install(staged('a')).unwrap().verify().unwrap();
+            scanner.lets_go(&file);
+            let (_, left) = ResourceStore::open_keeping_leftovers(dir.path()).unwrap();
+            assert!(left.is_none(), "{left:?}");
+            assert!(!dir.path().join(PARTIAL).exists());
+        }
+    }
+
+    #[cfg(windows)]
+    const FILE_SHARE_READ: u32 = 1;
+    #[cfg(windows)]
+    const FILE_SHARE_WRITE: u32 = 2;
+
+    /// Opens `path` as a scanner does: others may still read and write it, but a folder
+    /// that holds it cannot be renamed or deleted.
+    #[cfg(windows)]
+    fn held_like_a_scanner(path: &Path) -> fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .open(path)
+            .unwrap()
+    }
+
+    #[cfg(windows)]
+    fn release_after(file: fs::File, pause: Duration) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            std::thread::sleep(pause);
+            drop(file);
+        })
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_install_succeeds_when_a_scanner_briefly_holds_a_staged_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let mut scanner = None;
+        let installed = store
+            .install_until(staged('a'), &mut |step| {
+                if step == Step::ReceiptWritten {
+                    let held = held_like_a_scanner(
+                        &the_staging_folder(dir.path())
+                            .join(CONTENT)
+                            .join("metadata.json"),
+                    );
+                    scanner = Some(release_after(held, Duration::from_millis(300)));
+                }
+                false
+            })
+            .unwrap();
+        installed.verify().unwrap();
+        scanner.unwrap().join().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn opening_clears_a_leftover_that_a_scanner_releases_soon() {
+        let dir = tempfile::tempdir().unwrap();
+        let leftover = dir.path().join(PARTIAL).join("1-2-3").join(CONTENT);
+        fs::create_dir_all(&leftover).unwrap();
+        let file = leftover.join("metadata.json");
+        fs::write(&file, b"{}").unwrap();
+        let scanner = release_after(held_like_a_scanner(&file), Duration::from_millis(300));
+        ResourceStore::open(dir.path()).unwrap();
+        scanner.join().unwrap();
+        assert!(!dir.path().join(PARTIAL).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn opening_succeeds_when_a_scanner_holds_a_leftover_throughout() {
+        let dir = tempfile::tempdir().unwrap();
+        let leftover = dir.path().join(PARTIAL).join("1-2-3").join(CONTENT);
+        fs::create_dir_all(&leftover).unwrap();
+        let file = leftover.join("metadata.json");
+        fs::write(&file, b"{}").unwrap();
+        let held = held_like_a_scanner(&file);
+        let store = ResourceStore::open(dir.path()).unwrap();
+        store.install(staged('a')).unwrap().verify().unwrap();
+        drop(held);
+        ResourceStore::open(dir.path()).unwrap();
+        assert!(!dir.path().join(PARTIAL).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_install_that_lost_the_race_does_not_wait_for_a_scanner_to_let_go_of_its_staging() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let mut held = None;
+        let started = std::time::Instant::now();
+        // The scanner holds a staged file while the same install lands first. The rename
+        // fails with a held-file error either way; the folder it was renamed onto exists,
+        // so waiting for the scanner would not help.
+        let installed = store
+            .install_until(staged('a'), &mut |step| {
+                if step == Step::ReceiptWritten {
+                    held = Some(held_like_a_scanner(
+                        &the_staging_folder(dir.path())
+                            .join(CONTENT)
+                            .join("metadata.json"),
+                    ));
+                    store.install(staged('a')).unwrap();
+                }
+                false
+            })
+            .unwrap();
+        let waited = started.elapsed();
+        drop(held);
+        assert!(waited < Duration::from_millis(1500), "{waited:?}");
+        installed.verify().unwrap();
+        // The loser's staging folder was held, so it stays until the next open.
+        ResourceStore::open(dir.path()).unwrap();
+        assert!(!dir.path().join(PARTIAL).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn seeding_records_a_check_when_a_scanner_briefly_holds_the_old_record() {
+        let bundled_dir = tempfile::tempdir().unwrap();
+        let bundled = ResourceStore::open(bundled_dir.path()).unwrap();
+        bundled.install(staged('a')).unwrap();
+        let read_only = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+        let machine_dir = tempfile::tempdir().unwrap();
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+        machine.seed_from(&read_only).unwrap();
+        let record = machine.dcs(&pin('a')).unwrap().unwrap().dir().join(CHECKED);
+        let recorded = fs::read(&record).unwrap();
+        // A record that names no receipt: the copy is checked again and the record
+        // replaced, while the scanner still has the old one open.
+        fs::write(&record, b"stale").unwrap();
+        let scanner = release_after(held_like_a_scanner(&record), Duration::from_millis(300));
+        let report = machine.seed_from(&read_only).unwrap();
+        scanner.join().unwrap();
+        assert_eq!(report.checked_again.len(), 1);
+        assert_eq!(fs::read(&record).unwrap(), recorded);
+        assert!(
+            machine
+                .seed_from(&read_only)
+                .unwrap()
+                .checked_again
+                .is_empty()
+        );
     }
 
     #[test]

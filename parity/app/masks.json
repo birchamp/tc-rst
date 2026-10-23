@@ -1,0 +1,204 @@
+{
+  "about": "Declared differences (APP-DESIGN §7.3): each mask names the element that may differ, the screens it applies to, the rectangle it covers in tC4's screenshot of each, and the ruling it cites (`build`, or an owner ruling that docs/PLAN.md lists under \"Where the rebuild differs from tC4 4.0 on purpose\"). `target` is tC4's element; `rust` is the rebuild's when it differs, null meaning the same as `target`; `<OBS>` and `<BIBLE>` stand for the two projects. `meaning` lists the values of what the DOM shows that may differ, as [tC4, rebuild] pairs. Rectangles are measured on tC4 by measure-masks.mjs on the baseline's machine; the gate fails a capture whose masked element lies outside its rectangle. `rustAbsent` says why the rebuild has no such element on these screens yet: the mask then takes tC4's element out alone, the rest of the row's difference is a residual's, and the gate fails once the rebuild draws the element.",
+  "masks": [
+    {
+      "id": "about-build",
+      "ruling": "build",
+      "why": "The line names the program that runs: tC4 4.0.0-rc.1 (d310bf3) there, the rebuild's own version and build here.",
+      "target": {
+        "testid": "about-version"
+      },
+      "rust": null,
+      "rects": {
+        "about": {
+          "x": 482,
+          "y": 314,
+          "width": 124,
+          "height": 17
+        }
+      },
+      "meaning": null
+    },
+    {
+      "id": "feedback-attachment",
+      "ruling": "build",
+      "why": "The attachment names the program and the platform that send the report: tC4's build and Linux x86_64 there, the rebuild's own here.",
+      "target": {
+        "testid": "feedback-attachment"
+      },
+      "rust": null,
+      "rects": {
+        "feedback": {
+          "x": 364,
+          "y": 585,
+          "width": 552,
+          "height": 59
+        },
+        "feedback-sending": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-offline": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-timeout": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-refused": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-not-configured": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-no-desktop": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        }
+      },
+      "meaning": null
+    },
+    {
+      "id": "q2-obs-card",
+      "ruling": "Q2",
+      "why": "The rebuild syncs OBS projects, so the shared OBS card reads \"Sync with Door43\" where tC4 reads \"Upload changes\". The longer label also moves the element: it is 148 px wide and 15 px lower in the Rust page, so the rectangle covers both.",
+      "target": {
+        "testid": "share-card-<OBS>"
+      },
+      "rust": null,
+      "rects": {
+        "shared-home": {
+          "x": 856,
+          "y": 236,
+          "width": 148,
+          "height": 46
+        },
+        "sync-internet-consent": {
+          "x": 856,
+          "y": 236,
+          "width": 148,
+          "height": 46
+        },
+        "sync-failed": {
+          "x": 856,
+          "y": 236,
+          "width": 148,
+          "height": 46
+        },
+        "sync-ok": {
+          "x": 856,
+          "y": 236,
+          "width": 148,
+          "height": 46
+        },
+        "sync-ok-teammates": {
+          "x": 856,
+          "y": 236,
+          "width": 148,
+          "height": 46
+        },
+        "sync-ok-restored": {
+          "x": 856,
+          "y": 236,
+          "width": 148,
+          "height": 46
+        }
+      },
+      "meaning": {
+        "homeCards": {
+          "<OBS>": [
+            "upload",
+            "sync"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q3-where",
+      "ruling": "Q3",
+      "why": "The rebuild opens private repositories after sign-in, so its note has no sentence that only public repositories can be opened; a new key, openDoor43.whereAny, replaces openDoor43.where. tC4's note has no test id; the rebuild's note starts with the same words, so the one text target finds it on both sides (B9b).",
+      "target": {
+        "text": "The project opens from"
+      },
+      "rust": null,
+      "rects": {
+        "open-door43": {
+          "x": 417,
+          "y": 242,
+          "width": 400,
+          "height": 38
+        },
+        "open-door43-internet-consent": {
+          "x": 417,
+          "y": 242,
+          "width": 400,
+          "height": 38
+        },
+        "open-door43-refused": {
+          "x": 417,
+          "y": 185,
+          "width": 400,
+          "height": 39
+        }
+      },
+      "meaning": null
+    },
+    {
+      "id": "q3-refused",
+      "ruling": "Q3",
+      "why": "tC4's refusal says to make sure that the repository is public; the rebuild opens private repositories, so its sentence must not say this (Q-21: openDoor43.refused.notOpened). The rectangle covers the sentence on both sides: the rebuild's dialog sits half a line higher, by Q3's shorter note (B9b).",
+      "target": {
+        "text": "tC4 could not get the project from Door43."
+      },
+      "rust": null,
+      "rects": {
+        "open-door43-refused": {
+          "x": 417,
+          "y": 498,
+          "width": 446,
+          "height": 48
+        }
+      },
+      "meaning": null
+    },
+    {
+      "id": "signin-server",
+      "ruling": "build",
+      "why": "The line names the Door43 server the build signs in to (tC4's dcsServer rule, #120): git.door43.org in tC4's capture, the loopback test Door43 tc4 serve was started with in the rebuild's, so that nothing leaves the machine.",
+      "target": {
+        "testid": "signin-server"
+      },
+      "rust": null,
+      "rects": {
+        "share-signin": {
+          "x": 404,
+          "y": 224,
+          "width": 472,
+          "height": 20
+        },
+        "signin-error": {
+          "x": 404,
+          "y": 192,
+          "width": 472,
+          "height": 21
+        }
+      },
+      "meaning": null
+    }
+  ]
+}

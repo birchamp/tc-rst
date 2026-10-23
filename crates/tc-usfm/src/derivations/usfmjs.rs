@@ -51,7 +51,7 @@ pub(super) struct Props {
     pub usfm3_milestone: bool,
 }
 
-fn props(tag: Option<&[u16]>) -> Option<&'static Props> {
+pub(super) fn props(tag: Option<&[u16]>) -> Option<&'static Props> {
     let tag = tag?;
     PROPERTIES
         .binary_search_by(|(name, _)| cmp_ascii(tag, name).reverse())
@@ -243,6 +243,11 @@ impl Heap {
             Some(Val::Str(text)) => Cow::Borrowed(text.as_slice()),
             other => Cow::Owned(self.string_of(other)),
         }
+    }
+
+    /// The number of objects and arrays, each a valid [`Ref`] below it.
+    pub(super) fn len(&self) -> usize {
+        self.items.len()
     }
 
     /// The elements of an array; a non-array has none.
@@ -2601,4 +2606,26 @@ pub(super) fn walks_of_cycles() -> [Result<(), Thrown>; 2] {
             .replace_words_and_milestones(root, false)
             .map(|_| ())
     })
+}
+
+/// One verse whose object holds, in its children, an object whose children hold the first
+/// object again, which no parse makes: the shown text's walk would never end.
+#[cfg(test)]
+pub(super) fn cyclic_verse() -> Parsed {
+    let mut heap = Heap::default();
+    let parent = heap.obj();
+    let child = heap.obj();
+    let (parent_kids, child_kids, verse) = (heap.arr(), heap.arr(), heap.arr());
+    heap.set_s(parent, Key::Tag, js("add"));
+    heap.set(parent, Key::Children, Val::Ref(parent_kids));
+    heap.set_s(child, Key::Tag, js("nd"));
+    heap.set(child, Key::Children, Val::Ref(child_kids));
+    heap.push(parent_kids, child);
+    heap.push(child_kids, parent);
+    heap.push(verse, parent);
+    Parsed {
+        heap,
+        verses: vec![(js("1"), verse)],
+        thrown: false,
+    }
 }

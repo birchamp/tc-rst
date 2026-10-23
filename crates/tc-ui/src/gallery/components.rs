@@ -292,6 +292,8 @@ fn surface(p: Props) -> AnyView {
         on: p.keyword("on"),
         on_click: handler(&p, "onClick"),
         on_pointer_down_capture: handler(&p, "onPointerDownCapture"),
+        on_mouse_enter: handler(&p, "onMouseEnter"),
+        on_mouse_leave: handler(&p, "onMouseLeave"),
         style: p.css_signal("style"),
         children: p.children("children"),
         attrs: p.rest(),
@@ -316,6 +318,7 @@ fn action(p: Props) -> AnyView {
         style: p.css_signal("style"),
         children: p.children("children"),
         attrs: p.rest(),
+        live_attrs: Vec::new(),
     })
     .into_any()
 }
@@ -340,6 +343,7 @@ fn progress(p: Props) -> AnyView {
         height: p.num("height").unwrap_or(d.height),
         size: p.num("size").unwrap_or(d.size),
         label: p.str("label"),
+        min_fill: None,
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -365,9 +369,10 @@ fn choice(p: Props) -> AnyView {
 
 fn field(p: Props) -> AnyView {
     Field(FieldProps {
-        label: p.str("label"),
-        hint: p.str("hint"),
+        label: p.str("label").map(Signal::from),
+        hint: p.str("hint").map(Signal::from),
         error: p.str("error"),
+        live_error: None,
         required: p.flag("required"),
         optional: p.flag("optional"),
         disabled: p.bool("disabled"),
@@ -454,10 +459,12 @@ fn layer(p: Props) -> AnyView {
         navigate: p.keyword("navigate"),
         animate: p.bool("animate").unwrap_or(d.animate),
         scrim_attrs: Attrs::new(),
+        scrim_live: Vec::new(),
         role: p.str("role"),
-        label: p.str("label"),
+        label: p.str("label").map(Signal::from),
         labelled_by: p.str("labelledBy"),
         on_mouse_down: handler(&p, "onMouseDown"),
+        on_key_down: handler(&p, "onKeyDown"),
         style: p.css("style"),
         children,
         attrs: p.rest(),
@@ -608,6 +615,8 @@ fn progress_bar(p: Props) -> AnyView {
         value: num_or(&p, "value", 0.0),
         tone: p.keyword("tone").unwrap_or_default(),
         height: p.num("height").unwrap_or(d.height),
+        label: None,
+        min_fill: None,
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -793,8 +802,9 @@ fn checkbox(p: Props) -> AnyView {
 
 fn drop_zone(p: Props) -> AnyView {
     DropZone(DropZoneProps {
-        title: p.str("title"),
+        title: p.str("title").into(),
         hint: p.str("hint"),
+        disabled: p.flag_signal("disabled"),
         on_click: handler(&p, "onClick"),
         style: p.css("style"),
         attrs: p.rest(),
@@ -808,7 +818,7 @@ fn filter_chip(p: Props) -> AnyView {
         mark: p.str("mark"),
         tone: p.keyword("tone").unwrap_or_default(),
         on_click: handler(&p, "onClick"),
-        style: p.css("style"),
+        style: p.css("style").into(),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
     })
@@ -878,8 +888,8 @@ fn search_field(p: Props) -> AnyView {
         value: controlled(&p, "value"),
         on_change: handler(&p, "onChange"),
         on_clear: handler(&p, "onClear"),
-        placeholder: p.str("placeholder"),
-        clear_label: p.str("clearLabel"),
+        placeholder: p.str("placeholder").map(Signal::from),
+        clear_label: p.str("clearLabel").map(Signal::from),
         disabled: MaybeProp::from(p.bool("disabled")),
         style: p.css("style"),
         live_attrs: Vec::new(),
@@ -890,16 +900,17 @@ fn search_field(p: Props) -> AnyView {
 
 fn select(p: Props) -> AnyView {
     Select(SelectProps {
-        label: p.str("label"),
+        label: p.str("label").map(Signal::from),
         options: select_options(&p, "options"),
-        hint: p.str("hint"),
+        hint: p.str("hint").map(Signal::from),
         id: p.str("id"),
         value: p.str_signal("value"),
         on_change: handler(&p, "onChange"),
-        disabled: MaybeProp::from(p.bool("disabled")),
-        search_placeholder: p.str("searchPlaceholder"),
-        no_matches_label: p.str("noMatchesLabel"),
-        clear_label: p.str("clearLabel"),
+        // A screen turns a Select off while it is drawn (tC4 #552), so the prop follows its cell.
+        disabled: p.flag_signal("disabled").into(),
+        search_placeholder: p.str("searchPlaceholder").map(Signal::from),
+        no_matches_label: p.str("noMatchesLabel").map(Signal::from),
+        clear_label: p.str("clearLabel").map(Signal::from),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -925,7 +936,7 @@ fn suggest_field(p: Props) -> AnyView {
 fn text_area(p: Props) -> AnyView {
     let d = TextAreaProps::default();
     TextArea(TextAreaProps {
-        label: p.str("label"),
+        label: p.str("label").map(Signal::from),
         variant: p.keyword("variant").unwrap_or_default(),
         dir: p.str("dir"),
         rows: p.num("rows").map_or(d.rows, |n| n as u32),
@@ -946,8 +957,8 @@ fn text_area(p: Props) -> AnyView {
 
 fn text_field(p: Props) -> AnyView {
     TextField(TextFieldProps {
-        label: p.str("label"),
-        hint: p.str("hint"),
+        label: p.str("label").map(Signal::from),
+        hint: p.str("hint").map(Signal::from),
         invalid: MaybeProp::from(p.bool("invalid")),
         id: p.str("id"),
         size: p.keyword("size"),
@@ -1059,9 +1070,9 @@ fn menu(p: Props) -> AnyView {
 
 fn book_tile(p: Props) -> AnyView {
     BookTile(BookTileProps {
-        name: p.str("name").unwrap_or_default(),
+        name: p.str("name").unwrap_or_default().into(),
         percent: num_or(&p, "percent", 0.0),
-        meta: p.str("meta"),
+        meta: p.str("meta").into(),
         meta_title: p.str("metaTitle"),
         layout: p.keyword("layout").unwrap_or_default(),
         active: p.flag_signal("active"),
@@ -1106,7 +1117,7 @@ fn drawer(p: Props) -> AnyView {
         title_dir: p.str("titleDir"),
         width: css_value(p.value("width")),
         on_close: handler(&p, "onClose"),
-        close_label: p.str("closeLabel"),
+        close_label: p.str("closeLabel").map(Signal::from),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
     })
@@ -1123,6 +1134,8 @@ fn help_card(p: Props) -> AnyView {
         action_label: p.str("actionLabel"),
         on_action: handler(&p, "onAction"),
         on_click: handler(&p, "onClick"),
+        on_mouse_enter: handler(&p, "onMouseEnter"),
+        on_mouse_leave: handler(&p, "onMouseLeave"),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -1137,12 +1150,14 @@ fn modal(p: Props) -> AnyView {
         title: p.content("title"),
         subtitle: p.content("subtitle"),
         width: css_value(p.value("width")),
-        close_label: p.str("closeLabel"),
+        close_label: p.str("closeLabel").map(Signal::from),
         on_close: p.screen_handler("onClose"),
         closable: p.handler_on("onClose"),
         footer: children_fn(&p, "footer"),
+        footer_shown: None,
         children: children_fn(&p, "children"),
         attrs: p.rest(),
+        live_attrs: Vec::new(),
     })
     .into_any()
 }
@@ -1179,6 +1194,7 @@ fn verse_marker(p: Props) -> AnyView {
         size: p.num("size").unwrap_or(d.size),
         state: p.keyword("state").unwrap_or_default(),
         on_pick_up: handler(&p, "onPickUp"),
+        on_pointer_up: None,
         label: p.str("label"),
         style: p.css("style"),
         attrs: p.rest(),

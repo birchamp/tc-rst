@@ -1,6 +1,7 @@
 use crate::git_tree::ObjectId;
 use crate::names::GitOid;
 use std::fmt;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Why a Door43 call failed. `route` is the method and path, such as
@@ -18,12 +19,39 @@ pub enum Door43Error {
         route: String,
         cause: UnreachableCause,
     },
-    /// 401 or 403: the password or token was refused, or the token lacks a scope.
+    /// 401 or 403 from the REST API: the password or token was refused, or the token lacks
+    /// a scope. Door43 refuses a git push from an account that may read the repository but
+    /// not write to it inside an HTTP 200, by its pre-receive hook (`NoWriteAccess`).
+    /// STORAGE.md §9.5 says what an HTTP 403 on a push means.
     #[error("{route}: Door43 refused the sign-in ({status}): {message}")]
     AuthFailed {
         route: String,
         status: AuthStatus,
         message: String,
+    },
+    /// A push refused because the account may not write to the repository. Door43 says so
+    /// with HTTP 200 and a ref its pre-receive hook declined; `server_message` is the hook's
+    /// text. See [`crate::refused_push`].
+    #[error("{route}: this account may not write to the repository: {server_message}")]
+    NoWriteAccess {
+        route: String,
+        server_message: String,
+    },
+    /// A push whose ref Door43 refused for another reason, such as a protected branch or
+    /// another server hook. `server_message` is Door43's text and the ref's status.
+    #[error("{route}: Door43 refused the push: {server_message}")]
+    RefRejected {
+        route: String,
+        server_message: String,
+    },
+    /// A push whose ref Door43 could not move because another push moved, created, deleted or
+    /// held the branch after this push read it; [`crate::refused_push`] lists the statuses.
+    /// Fetch again and retry, as for a push that is not a fast-forward (STORAGE.md §9.5).
+    /// `server_message` is Door43's text and the ref's status.
+    #[error("{route}: another push moved the branch first: {server_message}")]
+    RefMoved {
+        route: String,
+        server_message: String,
     },
     #[error("{route}: not found: {message}")]
     NotFound { route: String, message: String },
@@ -63,6 +91,18 @@ pub enum Door43Error {
         route: String,
         #[source]
         source: VerificationError,
+    },
+    /// The download's watch asked it to stop. Nothing of it was kept.
+    #[error("{route}: the download was cancelled")]
+    Cancelled { route: String },
+    /// A download could not be written to its file, or read back for its check. Nothing of
+    /// it was kept.
+    #[error("{route}: the download could not be kept in {path}: {source}")]
+    Disk {
+        route: String,
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
     },
     /// The HTTP client could not be built (for example, no TLS backend).
     #[error("the Door43 client could not start: {reason}")]
@@ -121,8 +161,8 @@ pub enum VerificationError {
     #[error("two entries unpack to {0:?}")]
     DuplicateEntry(String),
     /// The names differ, but a case-insensitive or normalization-insensitive file system
-    /// (the Windows and macOS defaults), or Windows' removal of trailing dots and spaces,
-    /// would make them one file or folder, and writing both would lose one.
+    /// (the Windows and macOS defaults) would make them one file or folder, and writing
+    /// both would lose one.
     #[error("entries {first:?} and {second:?} would be one file on Windows or macOS")]
     CollidingNames { first: String, second: String },
     #[error("entry {path:?} cannot be written on every platform: {reason}")]

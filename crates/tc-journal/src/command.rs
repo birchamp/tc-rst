@@ -4,7 +4,7 @@
 
 use crate::change::Cause;
 use crate::fold::ConflictId;
-use crate::ids::{BatchId, ChangeId, DeviceId, RepoPath};
+use crate::ids::{BatchId, ChangeId, DeviceId, RepoPath, WallTime};
 use crate::json::{Json, JsonMap};
 use crate::keys::CheckKey;
 use crate::record::{
@@ -70,6 +70,15 @@ pub enum Command {
         book: BookId,
         scope: Scope,
         seed: SeedSource,
+    },
+    /// A book added with its own text, in one batch (tC4 `addUsfmBooks`, #767): the presence,
+    /// the book's records and the alignments of its aligned verses, all or none. The cause is
+    /// an import of `file_name`.
+    AddBookText {
+        book: BookId,
+        scope: Scope,
+        usfm: String,
+        file_name: String,
     },
     RemoveBook {
         book: BookId,
@@ -157,8 +166,13 @@ pub enum Command {
     Dismiss {
         shown: ShownToken,
     },
-    /// §5.14: kept in `.tc/drafts.json`, beside the actor; writes no change.
-    Draft(Draft),
+    /// §5.14: kept in `.tc/drafts.json`, beside the actor; writes no change. `at` is the
+    /// page's clock at the text's last keystroke, the clock of the page's buffer entries, so
+    /// the open compares the two (APP-DESIGN §6.6).
+    Draft {
+        draft: Draft,
+        at: WallTime,
+    },
     /// *Keep* a draft offered at open (§5.14): the draft saved with its tokens, as the save of
     /// its field would be. A token this installation can no longer verify (a new
     /// installation secret, APP-DESIGN R20) is no base: the draft's value is written with no

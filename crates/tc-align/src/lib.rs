@@ -17,8 +17,8 @@
 //!   selects, for placing several on one card in one edit.
 //! - [`usfm`]: cards to and from aligned USFM through `tc-usfm`, for the aligned USFM
 //!   export in en_ult's layout.
-//! - [`reflow`]: carrying an alignment over an edit of its verse text, reporting every
-//!   link it drops.
+//! - [`reflow`]: carrying an alignment over an edit of its verse text, each link following
+//!   its own word, reporting every link it drops.
 //! - [`record`]: reading tC3's and tC4's §5.1 record JSON, for imports. The derived
 //!   sidecar is the journal's projection (STORAGE.md §7.7).
 //! - [`frame`]: which original-language verse stands behind a project verse.
@@ -26,8 +26,8 @@
 //!   (wordMAP 0.6.2 and uw-wordmapbooster 1.0.5's `MorphJLBoostWordMap`).
 //! - [`aligner`]: one open verse in the Align workspace: edits, Mark valid, and
 //!   suggestions that stay proposals until the translator accepts them (D72, D93), and
-//!   the selected bank words. A verse with no original-language words or no target words
-//!   does not open.
+//!   the selected bank words. A verse whose text holds alignment markup, or with no
+//!   original-language words or no target words, does not open.
 //!
 //! Everything here is pure: no file or network access. A value is written by `tc-store`
 //! as one `Alignment` change (STORAGE.md §5.3). The value, its validity and its verse
@@ -46,13 +46,15 @@ pub mod words;
 
 pub use aligner::{Aligner, MarkValidRefused, Unavailable};
 pub use edit::{Alignment, EditError, bootstrap};
-pub use reflow::{DroppedLink, NoReflow, Reflowed, reflow};
+pub use reflow::{DroppedLink, NoReflow, Reflowed, reflow, reflow_edit};
 pub use selection::Click;
 pub use tc_core::{GitOid, Md5};
 pub use tc_journal::alignment::{AlignedRun, Stale};
 pub use tc_journal::record::{AlignmentGroup, AlignmentValue, ResourceRef, SourceWord, TargetWord};
-pub use value::{Basis, Malformed, VerseState, VerseStatus, verse_status};
-pub use words::{Occurrence, SourceVerse, TargetVerse, WordId};
+pub use value::{
+    Basis, Malformed, VerseState, VerseStatus, holds_the_words_of, needs_review, verse_status,
+};
+pub use words::{Occurrence, SourceBook, SourceVerse, TargetVerse, WordId};
 
 /// Errors reading external data into alignment values.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

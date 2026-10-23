@@ -237,6 +237,13 @@ pub fn words(handle: &ProjectHandle, c: u16, v: u16) -> Option<String> {
     }
 }
 
+/// Whether `path` lies inside a folder whose last components are `folder`, compared by
+/// component so that Windows' separator matches too.
+pub fn is_inside(path: &Path, folder: &[&str]) -> bool {
+    let folder: PathBuf = folder.iter().collect();
+    path.ancestors().skip(1).any(|dir| dir.ends_with(&folder))
+}
+
 /// Every file under `folder`, by its path relative to it.
 pub fn files(fs: &FaultFs, folder: &Path) -> BTreeMap<String, Vec<u8>> {
     fs.files_under(folder)

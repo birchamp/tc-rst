@@ -130,6 +130,20 @@ impl FoldState {
         self.keys_listed(keys)
     }
 
+    /// Every comment record attached to `story` (R1): on its frames and on its frame checks.
+    /// It costs the story's own comments, never the other stories'.
+    pub fn story_comments_of(&self, story: crate::ids::StoryNo) -> Vec<RecordKey> {
+        let keys: Vec<KeyIdx> = self
+            .story_attached
+            .get(&story)
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|k| matches!(self.entry(*k).key, RecordKey::Comment(_)))
+            .collect();
+        self.keys_listed(keys)
+    }
+
     /// Every record of `book` (§7.6): its text, layout, alignments, checks and comments.
     pub fn book_keys(&self, book: BookId) -> Vec<RecordKey> {
         self.books

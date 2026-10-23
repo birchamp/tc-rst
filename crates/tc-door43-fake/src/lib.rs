@@ -15,7 +15,8 @@
 //!   `GET /api/v1/user`, `GET /api/v1/user/orgs`, `POST /api/v1/user/repos`,
 //!   `POST /api/v1/orgs/{org}/repos`, `GET|POST /api/v1/users/{user}/tokens`,
 //!   `DELETE /api/v1/users/{user}/tokens/{id-or-name}`,
-//!   `GET /api/v1/users/{user}/orgs/{org}/permissions`, `GET /api/v1/repos/{owner}/{repo}`,
+//!   `GET /api/v1/users/{user}/orgs/{org}/permissions`, `GET /api/v1/repos/search` (by
+//!   `owner` and `lang`, the count in `X-Total-Count`), `GET /api/v1/repos/{owner}/{repo}`,
 //!   `.../tags`, `.../tags/{tag}`, `.../releases`, `.../releases/latest`,
 //!   `.../git/commits/{ref}`, `.../archive/{ref}.zip|.tar.gz`.
 //! - Web: `GET /{owner}/{repo}/archive/{ref}.zip`, `GET /{owner}/{repo}/sb/{tag}.zip` (the
@@ -23,15 +24,29 @@
 //!   not convert Resource Containers).
 //! - Git smart HTTP for clone, fetch and push: `/{owner}/{repo}.git/info/refs`,
 //!   `.../git-upload-pack`, `.../git-receive-pack`, served by `git http-backend` as CGI.
-//!   Push needs Basic auth with the password or a token with `write:repository`. A private
-//!   repository is cloned or fetched only by its owner or an organization member, with the
-//!   password or a token with `read:repository`; anyone else gets 404, as from Gitea.
+//!   Push needs Basic auth with the password or a token with `write:repository` (else 401, or
+//!   403 for a token without the scope). As on Door43, an account that may read the
+//!   repository but not write to it gets the advertisement and an HTTP 200 whose report
+//!   declines every ref, from a pre-receive hook that prints what Gitea's prints
+//!   (docs/evidence/door43-live-2026-10-17.md, step 6). A private repository is cloned,
+//!   fetched or pushed to only by its owner or an organization member, with the password or
+//!   a token with the scope; anyone else gets 404, as from Gitea.
 //!
 //! Auth works as Gitea's does: `Authorization: token <t>` or `Bearer <t>`, or Basic with a
 //! password or a token as the password, plus `X-GITEA-OTP` for an account with a one-time
 //! code. A `token` or `access_token` query parameter is refused with 400, so a client that
 //! puts a token in a URL fails loudly. Every request is recorded (method, path, query and
 //! the kind of credential, never its value) for tests to inspect.
+//!
+//! [`FakeProxy`] is a proxy that refuses every request and records its first line, for
+//! tests of which proxy a client uses.
+//!
+//! The binary `tc-door43-fake` runs one as a process, seeded with the parity account of
+//! [`seeded::parity_account`], for the browser tests of the app. It prints one line,
+//! `{"url": …, "control": …}`, and serves until its stdin closes or reads `{"quit":true}`.
+//! `control` is a second loopback server the tests call: `GET /requests`,
+//! `POST /requests/clear`, `POST /faults`, `POST /release`, `POST /tokens`,
+//! `GET /tokens/{login}` and `GET /secret/{login}/{name}` (see the binary's source).
 //!
 //! The fake needs `git` in `PATH`, with `git http-backend` (part of git's core tools).
 
@@ -41,14 +56,16 @@
 mod api;
 mod git;
 mod json;
+pub mod proxy;
 pub mod seeded;
 mod smart_http;
 mod zipping;
 
 pub use git::SeedMode;
+pub use proxy::{FakePacScript, FakeProxy};
 
 use git::Git;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -201,6 +218,22 @@ pub enum Fault {
     /// The burrito export holds altered bytes for this path (relative to the burrito
     /// root), so it no longer matches its metadata.
     SbCorruptFile { path: String },
+    /// A download (an archive or a burrito export) sends its first `after` bytes, then
+    /// nothing more until the test calls [`FakeDoor43::release_held`], then the rest. A
+    /// test can act between two chunks of a download and know which bytes arrived. Each
+    /// held download waits for a release of its own: see [`FakeDoor43::release_held`].
+    HoldBody { after: usize },
+    /// A download sends its first `after` bytes and then the connection breaks, though its
+    /// `Content-Length` promised more.
+    BreakOff { after: usize },
+    /// A download comes without `Content-Length`, as an answer built while it is sent
+    /// does.
+    NoContentLength,
+    /// The request waits until the test calls [`FakeDoor43::release_held`], then is answered
+    /// normally (with the next fault that applies, if any). A test can act while a client
+    /// waits for Door43's answer. Each held request waits for a release of its own, as a held
+    /// download does.
+    Hold,
 }
 
 impl Fault {
@@ -211,6 +244,9 @@ impl Fault {
                 | Fault::ArchiveExtraFile { .. }
                 | Fault::SbRevision(_)
                 | Fault::SbCorruptFile { .. }
+                | Fault::HoldBody { .. }
+                | Fault::BreakOff { .. }
+                | Fault::NoContentLength
         )
     }
 }
@@ -413,6 +449,10 @@ pub(crate) struct Shared {
     state: Mutex<State>,
     pub git: Git,
     pub url: String,
+    /// The releases of the requests [`Fault::Hold`] holds and the downloads
+    /// [`Fault::HoldBody`] holds, oldest first: one per request, so a release can never pass
+    /// to one that has not started yet.
+    held: Mutex<VecDeque<oneshot::Sender<()>>>,
 }
 
 impl Shared {
@@ -420,6 +460,17 @@ impl Shared {
         // A test that panicked while holding the lock must not hide the state from the
         // assertions that follow.
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// A new held download's release, which ends its wait when it fires or is dropped.
+    pub fn hold(&self) -> oneshot::Receiver<()> {
+        let (release, released) = oneshot::channel();
+        self.held().push_back(release);
+        released
+    }
+
+    fn held(&self) -> MutexGuard<'_, VecDeque<oneshot::Sender<()>>> {
+        self.held.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// The faults that apply to this request, consuming one use of each.
@@ -467,6 +518,7 @@ impl FakeDoor43 {
             state: Mutex::new(State::new()),
             git,
             url,
+            held: Mutex::new(VecDeque::new()),
         });
         let app = api::router(shared.clone());
         let (shutdown, stopped) = oneshot::channel::<()>();
@@ -610,6 +662,18 @@ impl FakeDoor43 {
             .ok_or_else(|| FakeError::Invalid(format!("no user {login}")))
     }
 
+    /// The secret of `login`'s token named `name`, for tests that search files and replies
+    /// for it. `None` when there is no such token.
+    pub fn token_secret(&self, login: &str, name: &str) -> Option<String> {
+        self.shared
+            .state()
+            .user(login)?
+            .tokens
+            .iter()
+            .find(|t| t.name == name)
+            .map(|t| t.sha1.clone())
+    }
+
     /// The tokens `login` holds, without their secrets.
     pub fn tokens_of(&self, login: &str) -> Vec<FakeToken> {
         self.shared
@@ -630,6 +694,21 @@ impl FakeDoor43 {
 
     pub fn inject(&self, rule: FaultRule) {
         self.shared.state().faults.push(rule);
+    }
+
+    /// Lets the oldest request that [`Fault::Hold`] holds, or download that
+    /// [`Fault::HoldBody`] holds, and that no release has freed yet, go on. A release that comes after the fake began to
+    /// answer, but before the download reaches its hold, is kept for that download. A
+    /// release with no such download does nothing; it is never kept for a later download.
+    /// A download the client dropped counts until the server notices, so a release after
+    /// an abort frees that download or nothing.
+    pub fn release_held(&self) {
+        let mut held = self.shared.held();
+        while let Some(release) = held.pop_front() {
+            if release.send(()).is_ok() {
+                return;
+            }
+        }
     }
 
     pub fn requests(&self) -> Vec<RecordedRequest> {

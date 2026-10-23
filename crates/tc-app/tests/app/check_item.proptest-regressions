@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3b3a526031609bf1797ad94e653c892dac0ed1e77dd149ef2a9b431e00cce262 # shrinks to acts = [Verse { notes: false, pick: 182, keep: false }]

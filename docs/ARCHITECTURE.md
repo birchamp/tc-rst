@@ -76,7 +76,7 @@ Every crate lives in `crates/`. Arrows read "is used by".
 | `tc-obs` | Open Bible Stories: stories and frames. |
 | `tc-sync` | Door43 send and receive, and USB exchange. |
 | `tc-import` | tC4 4.0, tC3, raw USFM and Scripture Burrito import. |
-| `tc-export` | Aligned and plain USFM, Burrito zip, OBS Markdown, print HTML for PDF. |
+| `tc-export` | The print model of a book or an OBS project, with its page setup; aligned and plain USFM, Burrito zip, OBS Markdown, print HTML for PDF. |
 | `tc-api` | Request and response types shared by the server and the UI. Builds for wasm32. |
 | `tc-app` | Application services: the operations behind every screen. |
 | `tc-server` | The axum HTTP server: routes, token check, events to the UI. |
@@ -88,7 +88,7 @@ Dependency rules:
 - `tc-ui` depends only on `tc-api` and `tc-core`, so the UI cannot touch storage directly.
 - Only `tc-store` writes project files, and only `tc-door43` opens network connections.
 - Pure logic (`tc-usfm`, `tc-versification`, `tc-helps`, `tc-journal`'s fold, `tc-check`,
-  `tc-align`, `tc-obs`) does no I/O and is tested with plain values.
+  `tc-align`, `tc-obs`, `tc-export`) does no I/O and is tested with plain values.
 
 ## UI
 

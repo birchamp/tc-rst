@@ -71,13 +71,26 @@ function selectText(page, from, to) {
   }, [from, to]);
 }
 
+/** A click dispatched by script: `click()` runs every listener inside this one script, so no
+ * microtask runs between them, and whatever an earlier listener changes is not yet drawn when
+ * the target's own listener runs. A mouse click lets the page settle between listeners. */
+function clickByScript(page, target) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector('[data-case]').querySelector(sel);
+    if (!el) throw new Error(`click: nothing matches ${sel}`);
+    el.click();
+  }, target);
+}
+
 async function runStep(page, step) {
   const target = step.target && page.locator(`[data-case] ${step.target}`).first();
   switch (step.do) {
     case 'focus': return focusByKeyboard(page, step.target);
     case 'hover': return target.hover();
     case 'press': await target.hover(); return page.mouse.down();
-    case 'click': return target.click();
+    /* `force` skips Playwright's wait for the target to be enabled, which for a label waits
+       on the label's control: a press on the label of a field that is off. */
+    case 'click': return step.script ? clickByScript(page, step.target) : target.click(step.force ? { force: true } : undefined);
     case 'key': return page.keyboard.press(step.key);
     case 'type': return page.keyboard.type(step.text);
     case 'select': return selectText(page, step.target, step.to ?? step.target);

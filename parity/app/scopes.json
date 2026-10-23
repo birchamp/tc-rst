@@ -1,0 +1,35 @@
+{
+  "about": "The part of the DOM a DOM-first capture compares (APP-DESIGN §7.3 layer 2, §7.6): until a screen's pixels unit captures it whole, the Home behind its dialog is not the port's yet. A capture that claims pixels compares the whole page.",
+  "scopes": {
+    "account-menu": {
+      "attr": "data-testid",
+      "value": "account-menu-panel",
+      "which": "first"
+    },
+    "app-language": {
+      "attr": "role",
+      "value": "dialog",
+      "which": "first"
+    },
+    "help": {
+      "attr": "role",
+      "value": "dialog",
+      "which": "first"
+    },
+    "about": {
+      "attr": "role",
+      "value": "dialog",
+      "which": "first"
+    },
+    "feedback": {
+      "attr": "role",
+      "value": "dialog",
+      "which": "first"
+    },
+    "share-signin": {
+      "attr": "role",
+      "value": "dialog",
+      "which": "last"
+    }
+  }
+}

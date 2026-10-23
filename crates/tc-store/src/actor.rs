@@ -157,15 +157,22 @@ impl Actor {
                     reply.resolve(Err(CommandError::ReadOnly(reason)));
                     return;
                 }
-                let cleared = cleared_by(&command, &self.project.fold);
                 let result = commands::plan(&self.project.ctx(), &command)
                     .and_then(|plan| self.project.commit(plan));
                 if result.is_ok() {
-                    self.drafts.saved(cleared);
+                    let cleared = cleared_by(&command, &self.project.fold);
+                    self.drafts.saved(cleared, sent);
+                    if let tc_journal::command::Command::KeepDraft { draft, .. } = &*command {
+                        self.drafts.kept(draft);
+                    }
                     if !self.project.dirty.is_empty() {
                         self.due = Some(Instant::now() + MATERIALIZE_AFTER);
                     }
                 }
+                self.project
+                    .shared
+                    .hooks
+                    .wait(crate::hooks::Point::BeforeCommandReply);
                 reply.resolve(result);
             }
             Msg::Materialize { reply } => self.materialize(Origin::Leave, reply),

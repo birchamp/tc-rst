@@ -37,10 +37,6 @@ git2.workspace = true
 # The watcher of the folders another program writes into (§11.1).
 notify.workspace = true
 
-[target.'cfg(target_os = "linux")'.dependencies]
-# libgit2's TLS on Linux is OpenSSL, built from source so the app needs none installed.
-git2 = { workspace = true, features = ["vendored-openssl"] }
-
 [target.'cfg(unix)'.dependencies]
 # renameat2(RENAME_NOREPLACE) and its macOS twin, through a safe wrapper: a staging folder
 # never replaces a folder that appeared at its name (docs/TC4-DELTA-2026-10-16.md §3.10).

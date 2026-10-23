@@ -1,0 +1,3639 @@
+{
+  "about": "What the four layers of APP-DESIGN §7.3 find for every baseline screen (manifest order) and then every case of the tC4 view-state gallery (cases.json order, APP-DESIGN §7.4): pixels, the DOM, what the DOM shows (meaning) and behaviour, between tC4's record (parity/tc4-baseline for a screen, parity/view-gallery for a case) and the Rust app's captures (captures.json). A case has no meaning layer. crates/tc-ui/tests/screen_record.rs computes it from the committed files and fails when this file differs; UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record rewrites it. Status: same, declared (every difference inside a mask of masks.json), differs (explained in residuals.json), unported (`missing` names the unit that captures each layer), failed (nothing excuses it).",
+  "baseline": {
+    "tc4Commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e",
+    "machine": {
+      "platform": "linux-x64",
+      "chromium": "141.0.7390.37",
+      "fonts": {
+        "count": 535,
+        "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+      }
+    }
+  },
+  "rust": {
+    "machine": {
+      "platform": "linux-x64",
+      "chromium": "141.0.7390.37",
+      "fonts": {
+        "count": 535,
+        "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+      }
+    },
+    "build": {
+      "ui": "8a97c92765d47ed3",
+      "commit": "dev",
+      "api": 1
+    }
+  },
+  "totals": {
+    "rows": 130,
+    "same": 33,
+    "declared": 0,
+    "differs": 79,
+    "unported": 18,
+    "failed": 0
+  },
+  "rows": [
+    {
+      "name": "home",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "32893eee72bafcd3fb29915193f83a3e2bab1c56102c470587744f47e9197793",
+        "rustSha256": "deda26b7ff171e96d22310f0930a97ee15873a7fbf41dd30cdd54dda82bfadcc",
+        "mismatched": 391,
+        "outsideMasks": 391,
+        "masks": [],
+        "diff": "diffs/home.png"
+      },
+      "dom": {
+        "tc4Sha256": "1b8b22ea71720d5d2db4fc8d6494a724105d22449aa37d324845adb8924ce341",
+        "rustSha256": "6c71bdc8cc52365691e8a9d72da74fb885da0da33f2b93f806ab296cf41fd1da",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "understand-tit1",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "C3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "4b0909eb72838734562c4b54c3fd259bc738f6c19a3ec4541bd68ea89974ac5e",
+        "rustSha256": "4b0909eb72838734562c4b54c3fd259bc738f6c19a3ec4541bd68ea89974ac5e",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "fa61fa956cbdeb41197a29f0f0a631084b6ec52a98c5ba2a54a8a4c343cf22ee",
+        "rustSha256": "1ee839c7de9312082fdf836d4f1a85faa51016f1e32c2860acdd99a73fe976b6",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "translate-tit1",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C2",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
+        "rustSha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "3e27eb9e669b3cf153ed6418ca4a7e7ddb19bc88bbec2d03b415730c91075a7e",
+        "rustSha256": "20a18c41ccd54d9894d4dd2629caf56eee90d06a24c1b11ac6dfd8f78b219ae1",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 1351: tC4               \"“It is necessary to stop them … they should”\" | rust               \"“It is necessary to stop them”\"",
+          "line 1378: tC4               \"“It is necessary … teaching what they should not”\" | rust               \"“teaching what they should not”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "check-picker",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C4",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "692ff5ca2aa65e5924045a7e8f9bb64ee1b534d3a99a2e8c29a3e53bcc177ebc",
+        "rustSha256": "d3cf8e15f05c4a594a26cc568da140760e00b158a3c01aedca0d6667f533a180",
+        "mismatched": 32,
+        "outsideMasks": 32,
+        "masks": [],
+        "diff": "diffs/check-picker.png"
+      },
+      "dom": {
+        "tc4Sha256": "87f8929b4d1c3ea2dcabb9fa8997e66eb0ff338393bce03844b95fbaa0119e49",
+        "rustSha256": "cf2bc10f135ac369372dff4c480dd4a72cb4088b0dd44d6ca981e22c118fd049",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 70: tC4               <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backg… | rust               <div aria-label=\"1 of 112 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-…",
+          "line 71: tC4                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r… | rust                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r…"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "check-tn-session",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C4",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "07ad4e490db11161a113349fba1d84b62518c3a451286bb51b31b22f1f02a191",
+        "rustSha256": "7583b8fffa79b360f867d08e0a6b40134b768fcfae38d3873d728d76f3f03fd9",
+        "mismatched": 420926,
+        "outsideMasks": 420926,
+        "masks": [],
+        "diff": "diffs/check-tn-session.png"
+      },
+      "dom": {
+        "tc4Sha256": "5bca731316468791d28941e6aa84ef2287c2824d7af61dc2555a51dc4f5f86ec",
+        "rustSha256": "bcd13ef42f0c776f004eca084f879375913d3736598811105aec0364d1e09d89",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"1 of 112 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 512: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "align-workspace",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "4806f0b5818dfca6f5ff87043f71475e88fe43d4816564aafab68d96f8d610b0",
+        "rustSha256": "8f01c125790516aa98b1f9353809943bb3f415c6580e9ccfebdfb67a1be755d7",
+        "mismatched": 45720,
+        "outsideMasks": 45720,
+        "masks": [],
+        "diff": "diffs/align-workspace.png"
+      },
+      "dom": {
+        "tc4Sha256": "9fe56c2fe5e44a7ad57d244c225371aabab9eb0f33f050611c5210fdd35a6a0d",
+        "rustSha256": "109dd9ea70c25aab2a985cb98666ba5b785525e1a53683143b1064e8d6de415d",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "align-original",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e0019b625ec7e70a1209de728765e61535a565c4b69c3145d8151066e7e7da47",
+        "rustSha256": "bcf419a1de1cb357faad85eb9fcff3aa1d0a8aa9f96e70e137bc0c2a54b58faa",
+        "mismatched": 24682,
+        "outsideMasks": 24682,
+        "masks": [],
+        "diff": "diffs/align-original.png"
+      },
+      "dom": {
+        "tc4Sha256": "650ef40cba639e131f6168814af2cf15ebb962a56f305b58085d31afc04448fb",
+        "rustSha256": "f1132d1d543953d3cde863ed167f95c09700ab941c202f48c44a6a14a8cc2f51",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 459: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 467: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 479: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 487: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "align-workspace-row",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "d0314087f33005433c559588d7124bd0e3e2eb59a2207db0ac94a3090749c775",
+        "rustSha256": "a35887ec546ae6317d1e49a0b49d3c61d1a40dd34088d3c9260408be15abd9bd",
+        "mismatched": 284817,
+        "outsideMasks": 284817,
+        "masks": [],
+        "diff": "diffs/align-workspace-row.png"
+      },
+      "dom": {
+        "tc4Sha256": "943124b6d160acc80a041b3d7218fa1db6e08a873779f8f0a541194197577eee",
+        "rustSha256": "e5d574347ffa10f9fb1c46ade5bdf416fdbc628fe413d7bf8776e14089d0d19d",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "ar-align-workspace-row",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "ar",
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "cef41294a8f07aec9867b55e62a85ce919c06a2fda5f4d1b6158fbb7526fa62d",
+        "rustSha256": "2ee6ebe7fa173d70677fdca270aa087c141701fa053accd6e562adfabea9942a",
+        "mismatched": 272950,
+        "outsideMasks": 272950,
+        "masks": [],
+        "diff": "diffs/ar-align-workspace-row.png"
+      },
+      "dom": {
+        "tc4Sha256": "bf307f76c2299caf949e2c89772c14de1f7a614d3fca5299a3d8117fd95d2422",
+        "rustSha256": "63556541631acd2ff1f2a425852fd71047a64dd7642b8e368a892f0188fedcb5",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "align-workspace-620",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "dee7d41db6dddba12e2dbc9ca5d74ec38b443d0ee5e64e4b938abb8d9fadc7a6",
+        "rustSha256": "3cff17ef41f02301cc24afa9787b3710144418a6d9703fd570ba0f69356c565a",
+        "mismatched": 40058,
+        "outsideMasks": 40058,
+        "masks": [],
+        "diff": "diffs/align-workspace-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "0c8312f3eea1c8bf9368fce860b7502d96100264bb2a049295651e94080d0a9e",
+        "rustSha256": "3e54aadfca39f4016f25fbc0b4ad527fe70f0192e780fd0f66df8318256f08e9",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "ar-align-workspace-620",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "ar",
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f0ad20d4b4a5876cedfe24dfb89f57d917aed5593130a4a934ca69970b7ebd6e",
+        "rustSha256": "0f628469ef0539643546ae72570b5e47ffc1d162942ba2b510e43e77028d83dc",
+        "mismatched": 39874,
+        "outsideMasks": 39874,
+        "masks": [],
+        "diff": "diffs/ar-align-workspace-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "969b26d67e6a1dc4d86337f5737e83dcd7dbf35c6bfceaf66a5377c51f721437",
+        "rustSha256": "bb7aca993f77708a204901b2ef6dbf999bf2cbd8ec1dcd51271ba707205cf3cd",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 451: tC4                 <div data-count=\"1\" data-testid=\"align-card-0\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-0\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 461: tC4                 <div data-count=\"1\" data-testid=\"align-card-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-1\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 471: tC4                 <div data-count=\"1\" data-testid=\"align-card-2\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-2\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 485: tC4                 <div data-count=\"1\" data-testid=\"align-card-3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"1\" data-testid=\"align-card-3\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …",
+          "line 495: tC4                 <div data-count=\"0\" data-testid=\"align-card-4\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-botto… | rust                 <div data-count=\"0\" data-testid=\"align-card-4\" tabindex=\"-1\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: …"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "project-settings",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "892d98da3c6522ccbb882bd30263c0ef006d4437a257d048e1ec31e87ef0583c",
+        "rustSha256": "8596565decf123d6e886598e2b5c2cd482a3f2af120f99ec96e9a24823d634cf",
+        "mismatched": 69,
+        "outsideMasks": 69,
+        "masks": [],
+        "diff": "diffs/project-settings.png"
+      },
+      "dom": {
+        "tc4Sha256": "378f418fa179da485b3181c2e1cc7da46bebc56843e380f234566aa8576b7d58",
+        "rustSha256": "c2678d76d27935dc7aa14f782d5783db8fc90ad533a9000f173617f58d5dbfff",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "add-project",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "13eb313397adb2535a15accd4b94259377e88516879c63d580c8e0a32eddeafb",
+        "rustSha256": "eb9609dea209f0d876a5a2cec6e92de03dbd71020a723f438b38d3662261f29f",
+        "mismatched": 69,
+        "outsideMasks": 69,
+        "masks": [],
+        "diff": "diffs/add-project.png"
+      },
+      "dom": {
+        "tc4Sha256": "94e798799f28b17d23dffaf76b70e351002ac220a41254f6edb241e88d15399f",
+        "rustSha256": "669cda9cf131741c5ddd9eca98db27bee889536a109d61177a75d16830efda20",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "new-bible",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "ba14b01111c3045ea55f89ddb65369431b1a9600097ac594f449ea859a6c42d7",
+        "rustSha256": "38d1f79bdaa914c790c13d38f8bcfa1005b943d2cc36b92449196101e1eddee3",
+        "mismatched": 69,
+        "outsideMasks": 69,
+        "masks": [],
+        "diff": "diffs/new-bible.png"
+      },
+      "dom": {
+        "tc4Sha256": "c5b5e763f34d9cff9d31a4669b00a717130de2a667eacce6cfbbca8782631c7f",
+        "rustSha256": "86ec01ab30f5f2af235184e24b5090b62be8821e8244a4ae5da82b993ce42379",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "import",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "c67132b97754b830b89ed475df02d82cd1a571064febe97bf4520d191b4943c7",
+        "rustSha256": "8e72d50d821f0ff9bab7761d2d5aba3f0386db6b4c5b0c0ae85699e7ffd4a355",
+        "mismatched": 58,
+        "outsideMasks": 58,
+        "masks": [],
+        "diff": "diffs/import.png"
+      },
+      "dom": {
+        "tc4Sha256": "ce5360f4eac51efe619470873177b1ef8e4f3a756ee725c3f9de583d099e97ae",
+        "rustSha256": "4cb0d77b93bfd247755724d281cef73bbcf297ed1dfa926aeb1f18703776bf6a",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "share-internet-consent",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "8e93917981fec334d52421d983b1cbe1fe856617230b50fdf9f833af3951381d",
+        "rustSha256": "508ba093b5e2198d6f3445eccf71a9a5592cb873d1866202bf30c5666184fe3f",
+        "mismatched": 211,
+        "outsideMasks": 211,
+        "masks": [],
+        "diff": "diffs/share-internet-consent.png"
+      },
+      "dom": {
+        "tc4Sha256": "3ff17019d92c2f01201e24a5a5933ce8a85cb4e40c9549127650e8d92b32d39b",
+        "rustSha256": "bc16976385490fe74e0928811e43a30ca67638a1f998bcbcde075200eae25f2f",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "share-signin",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "64054d2ff8d9e82c0dbe5082d98757d7455747f57dbd535d3276280667b87ff3",
+        "rustSha256": "46530a67d7dcf78dc1111345553bf098a78684c8f725985300c36e6a7897eb52",
+        "mismatched": 690,
+        "outsideMasks": 69,
+        "masks": [
+          "signin-server"
+        ],
+        "diff": "diffs/share-signin.png"
+      },
+      "dom": {
+        "tc4Sha256": "50ce0b62fdbbba09090d0cd2a1723dd2279a4be58558ac618f686ca847fa25c5",
+        "rustSha256": "739a6be6e158fafeb637191a0f86b28a5f96b92d17a6922a3c29fa21fc666515",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "signin-server"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "share-dialog",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "6ba06b02b5c5f13a0cc1a645aa328d749d8f6178aa8c27be86b45162d2bc4e45",
+        "rustSha256": "14f519d2439311d08e2abd0b78e9609081b72e8e3106cdbc6d27c0947d537764",
+        "mismatched": 69,
+        "outsideMasks": 69,
+        "masks": [],
+        "diff": "diffs/share-dialog.png"
+      },
+      "dom": {
+        "tc4Sha256": "58ad2209f14abb71c19a8aecf655590088bc0d9f630c47875083084b8da589ab",
+        "rustSha256": "09442d92884df4b0dde2a3b833229d0620ec9522eb502ce33551a22fd186ca59",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "share-dialog-check",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "47134d59f40f981739da209fcfb95bd56f6499cd8cbda1dbf49c7d061630ae32",
+        "rustSha256": "46d5ed3a511040a4766dfb6ea04f134fa59e60203a191e23c5257e668daf4b0c",
+        "mismatched": 69,
+        "outsideMasks": 69,
+        "masks": [],
+        "diff": "diffs/share-dialog-check.png"
+      },
+      "dom": {
+        "tc4Sha256": "05d3b8913a0389c3a198127ed7fa26b48c2e0cddacb2835adaefb7c6c4bcff2a",
+        "rustSha256": "94a9bd29b3d6cc32ed5728f10dca0c686b9221e5080b9bf03fad034b629f9b2b",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 152: tC4                     <input aria-describedby=\"sh-name-hint\" data-testid=\"share-name\" id=\"sh-name\" value=\"sample_burrito\" style=\"appearance: none; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background-… | rust                     <input aria-describedby=\"sh-name-hint\" data-testid=\"share-name\" id=\"sh-name\" value=\"_local_/_local_/sample_burrito\" style=\"appearance: none; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: init…"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "account-menu",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "c4c368d76cf9b1f1dfaea68a5a5bfde89b55d5f681faa448af970c5175211699",
+        "rustSha256": "7f6e777bfa5f68831e6697e876a49b04f5f5526d34421b1b1b3efe942e186105",
+        "mismatched": 391,
+        "outsideMasks": 391,
+        "masks": [],
+        "diff": "diffs/account-menu.png"
+      },
+      "dom": {
+        "tc4Sha256": "4100164bf99c99ea1c5c5e261cacef98d26a8fc198dad8351b783aa41643080f",
+        "rustSha256": "3f18a73475f0d0767c1ad5647d08da43fc30569346b8fe24bf06129480758ad5",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      },
+      "behaviour": [
+        {
+          "sequence": "account-menu-keyboard",
+          "steps": 11,
+          "same": false,
+          "firstDiff": "step 0 (start): line 68: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…"
+        }
+      ]
+    },
+    {
+      "name": "app-language",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "81622a506fdd40cb265927abe2a1b1de390e49ea4184888b06c152589679cc69",
+        "rustSha256": "aa0c2d6393e914ed5a7668ca6d10c08e4ffa31ea9a91c1e3feedc6b54cce7d6d",
+        "mismatched": 249,
+        "outsideMasks": 249,
+        "masks": [],
+        "diff": "diffs/app-language.png"
+      },
+      "dom": {
+        "tc4Sha256": "7523ea5a6320acccf059e220730146e28d3f4b58081cdc47403d233f43b22d6a",
+        "rustSha256": "9ad61183b767b2cb784dbd6a560aa72cc72ae56922bab3589a8a1235fe5b3c91",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      },
+      "behaviour": [
+        {
+          "sequence": "app-language-preview",
+          "steps": 21,
+          "same": false,
+          "firstDiff": "step 0 (start): line 60: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…"
+        }
+      ]
+    },
+    {
+      "name": "help",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
+        "rustSha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "70cbde356b4399aa75d1e10c76ba6a789330f0de89438413045c6f4c97496751",
+        "rustSha256": "452318303bc8e667f8c113b815399cba622278e9e81fe9ddcce6327391552cd5",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "about",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "5c89cf6c07230a4fa45d799b65ca0289c1111c3a6c0adc618e32024c1040ca50",
+        "rustSha256": "b7a4270f938945e16f17fb03a1fa34b58a2c334f264432faf4c5a1e4bb9046fe",
+        "mismatched": 894,
+        "outsideMasks": 69,
+        "masks": [
+          "about-build"
+        ],
+        "diff": "diffs/about.png"
+      },
+      "dom": {
+        "tc4Sha256": "bdb34c05fd77d1f129490346b90f5003a6a97eb81aa58c06e5208b3117d0768b",
+        "rustSha256": "e92527089424c43603e9bd95536419715f990907f0b51932b775d459807c27ee",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "about-build"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "feedback",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "dba64f1bc9ad562113b1a63f16fd01635ba67831e98afe6eeb7f13f6edecc318",
+        "rustSha256": "d9bfcf2078fddbbff53fe453e72f0f2d7abbf56243f0b8d5e6bd0a41541db76e",
+        "mismatched": 1238,
+        "outsideMasks": 41,
+        "masks": [
+          "feedback-attachment"
+        ],
+        "diff": "diffs/feedback.png"
+      },
+      "dom": {
+        "tc4Sha256": "cde6f3aacb3ae32801aaa5594a359e29b68b51ba39957506142d26270cf8582f",
+        "rustSha256": "7bb50be4b77d2ac18b397f4c25dd6062014004a9e4d266426408f238cc44f1a7",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "feedback-attachment"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      },
+      "behaviour": [
+        {
+          "sequence": "feedback-typing",
+          "steps": 12,
+          "same": false,
+          "firstDiff": "step 0 (start): line 32: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…"
+        }
+      ]
+    },
+    {
+      "name": "new-obs",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "c2a46c3fa775c7bda99152a21dbcec6ea793b7358c7d4aa4dbd3e75f91876065",
+        "rustSha256": "4ef81c4f5a24ed9a5744fb9dc29fcb6ae0998d20ac8a16517241540be55d7ff0",
+        "mismatched": 69,
+        "outsideMasks": 69,
+        "masks": [],
+        "diff": "diffs/new-obs.png"
+      },
+      "dom": {
+        "tc4Sha256": "0f61298f0df998e2563954fc1487912632ab2859315d5dfbc533ec3175b8ed28",
+        "rustSha256": "523676158aeedcc2812fa5fcef9621e1814a1410ed917499afce360c3fc696ca",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "add-book",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "2953a757c65fa799441b59b81345b78da9e7604f23df61f974ef1eed5364d59e",
+        "rustSha256": "171d4a33b301c208666db25998d1d0aad9526758b1e97dc1ebc745bd4c099ae6",
+        "mismatched": 41,
+        "outsideMasks": 41,
+        "masks": [],
+        "diff": "diffs/add-book.png"
+      },
+      "dom": {
+        "tc4Sha256": "6b1cb42fcde976264c558753a00e143d1927aaee41b7d4abdf6ae01ff7405854",
+        "rustSha256": "34992dfdb25e92f5e92cb93aeaac89b87e446f89a4ea657839daa2d3b0acb8ce",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "source-texts",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B9a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+        "rustSha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "80291d855a07f2ae56032bd02c847e4b9d5a6ea08e8d4b4f3f4a9b9e1b5e726b",
+        "rustSha256": "b18f63877e6a443863539bbf94a6550cf822e72df163332659734f5c9a19a349",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 360: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 361: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "guided-fix",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "496ab122c8706c18616e009bb96e8c106c52bf6e7fede22279bf6227d74afec2",
+        "rustSha256": "496ab122c8706c18616e009bb96e8c106c52bf6e7fede22279bf6227d74afec2",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "62f3d06f979463ec74b8f5d74e53d3bc60182c1865c03ff489905cfc2ec96ad3",
+        "rustSha256": "519747de0c3ff727ba31951acd35b29b0504040b82fb7368cace8a6c8b735aec",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 70: tC4               <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backg… | rust               <div aria-label=\"1 of 112 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-…",
+          "line 71: tC4                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r… | rust                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r…"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "obs-understand",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "C3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee",
+        "rustSha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "7c41a81c882c24b395fe013375d7e648d974db0a07cc68ab24e22628d3c1b642",
+        "rustSha256": "5c29e89c5113ce1befa1ee6e8e465e754d06b4cf21db1c6aebc0c5a4d2313596",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "obs-translate",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "6784d065c0768d6f0c65d827d74f7dca2f6e06ad02a2c92bad23d63223daf5b2",
+        "rustSha256": "c3c00c0de4ee21e8054db619df6b15cee04a972b5e10594af4378230fe6c7d06",
+        "mismatched": 45612,
+        "outsideMasks": 45612,
+        "masks": [],
+        "diff": "diffs/obs-translate.png"
+      },
+      "dom": {
+        "tc4Sha256": "6ec6f45963a5bc0d19c0de3ee2d8baf0347aaa48e3be593c709e1a115a4d58c4",
+        "rustSha256": "1b89cab055a3a77f92217be582d63aba26fb136d2b8cd09d2b1d6d6eb4b6c537",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 554: tC4               \"No picture on this machine matched the 16 image lines of this story: git.door43.org/uW/obs_images_360@7146d5b504f6 is not installed; git.door43.org/uW/obs_images_360@7146d5b504f6 at _local_/_sideloaded_/uw--obs_images_360--7146d5b504f6 lists 0 image files (paths)\" | rust               \"No picture on this machine matched the 16 image lines of this story: git.door43.org/uW/obs_images_360@7146d5b504f6 is not installed; git.door43.org/uW/obs_images_360@7146d5b504f6 is not installed\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "obs-check-picker",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "165976fe5621165d4c2265af2165c1af46dd58747622b4761fec41f605d5d414",
+        "rustSha256": "165976fe5621165d4c2265af2165c1af46dd58747622b4761fec41f605d5d414",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "1d69259b1f1c9d83e821d03302c77cf5148b0db17713a6feeecab056477ff58a",
+        "rustSha256": "f31fc1227566a6e71e357dcf5624f7e44df9998fb853a23d39f22d90e187444d",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "open-door43",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "1421eac5e9fd29f49483be96419df6f283cc1d3c9096faae1b11d21a5d6a9f0a",
+        "rustSha256": "36011111f350af971b58a055b37d1c2d6fd7f16f24e1c0b8edb80c82c0a1f182",
+        "mismatched": 153005,
+        "outsideMasks": 149943,
+        "masks": [
+          "q3-where"
+        ],
+        "diff": "diffs/open-door43.png"
+      },
+      "dom": {
+        "tc4Sha256": "278e06ceb1bc8ca07d678bce8808a04af3880ecdb9be575d8f5222a88922e327",
+        "rustSha256": "645fc42ca529356055d992e63f6ac9f702450f3aaa0d2462b275357af6384b82",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q3-where"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "open-door43-internet-consent",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "46d3c864d5315b453fb3a6e6059ca9582a46eea96789f41c06e7555b0486ef56",
+        "rustSha256": "48017ae17c8080e3834959007395d3fd46c2af005f3c0dd759dc058d94898c51",
+        "mismatched": 120679,
+        "outsideMasks": 117617,
+        "masks": [
+          "q3-where"
+        ],
+        "diff": "diffs/open-door43-internet-consent.png"
+      },
+      "dom": {
+        "tc4Sha256": "f793cb83a00d4bb75a4c19ea1daa158225584ed4ad00100d895130e6b6f58bb1",
+        "rustSha256": "f7956f48f50e5ad85ef650630419b093537e85716c986a1798400cee26af5e20",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q3-where"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "open-door43-refused",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b0b464938b644360ba68430e8b13eb2e3936b49e0b834597769798ff818738f2",
+        "rustSha256": "b9564fcadcc9863d99268247061c1cc0d91965a01daefb1d1a34071408a764c2",
+        "mismatched": 175193,
+        "outsideMasks": 164851,
+        "masks": [
+          "q3-where",
+          "q3-refused"
+        ],
+        "diff": "diffs/open-door43-refused.png"
+      },
+      "dom": {
+        "tc4Sha256": "853b8faa7d58888cae07d6249ebb77041f73a811e52eacf92a68f7180a05f882",
+        "rustSha256": "06de8264e27a37ea0e444a28948ad42fc60c12fec555741a0dafc5f46683fa2a",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q3-where",
+          "q3-refused"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-understand-tit1",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "same",
+      "by": "C3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
+        "rustSha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "318827605f6f48208421dd272fb87561ec9e34ea8ae7e637ee0e2fcdaf7225a8",
+        "rustSha256": "9bb872debc627407f4899b8b1bbc594e5a0eadc676274c56bb0618904fbf44c1",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-understand-tw-article",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "same",
+      "by": "C3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
+        "rustSha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "25e035f09f11dae2548cc040e5d5c2f07df0d39b8f54024c9e15d1662bcc900e",
+        "rustSha256": "8d85625afb03725d4a1ea2f4a846e4b4da6bcb67471c04c7f8d16129178f2109",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-understand-questions",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "same",
+      "by": "C3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
+        "rustSha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "e864d513658ebc23c4a97a67a7fedaca20110f8bd17ef5d390b081ce978ce569",
+        "rustSha256": "e6fb8ab6105ceba735b9e4e99ebf7d58ae9cb38cf64183cc6d08757d6840325b",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-translate-tit1",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "C2",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
+        "rustSha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "8252bdeb4bb17728b64be6834f74ddc0db7492dc1bb26e3466a73db46b105f9e",
+        "rustSha256": "24a6c502778a2d18194b0709b75c9acfd92d79aae1c6bf49588380fb8ecbce91",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 1346: tC4               \"“It is necessary to stop them … they should”\" | rust               \"“It is necessary to stop them”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-translate-section-editor",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "same",
+      "by": "C2",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
+        "rustSha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "b4da7276d8343c2e3f25179752d5720d9e486c342f9656216701443371fc1e2b",
+        "rustSha256": "c7928a9cf0d9873e75bc4db903dc47075a61e0c9124219567490351b9873de61",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-translate-verse-editor",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "same",
+      "by": "C2",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
+        "rustSha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "4eadd4501bc0afaf5835272e9a343f38c7273091f49c825608fdc22187d5db82",
+        "rustSha256": "282152c41b6ff8d383f767c2a92ffb965d185900fdf17d73bb5b5eb553478b40",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-check-picker",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "C4",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "9395146f7af942dd33e3c7b0329cf6e220bd55fea8a44289fe3c2c2dd42e6439",
+        "rustSha256": "ef6b1feeb9fcba1923604c5ee4f28a81600dd978e75fd462316c1e839298786c",
+        "mismatched": 29,
+        "outsideMasks": 29,
+        "masks": [],
+        "diff": "diffs/en-check-picker.png"
+      },
+      "dom": {
+        "tc4Sha256": "e63dee6ef5db074ad19fc1259180bfbf30ee88fa2fbfe09a86bbbda473d38563",
+        "rustSha256": "7aef7ff053274f4b8fe5a750d7954bae9564b88a1791f3bae72ebc70b79d9e2f",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 58: tC4               <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backg… | rust               <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-…",
+          "line 59: tC4                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r… | rust                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r…",
+          "line 73: tC4               <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backg… | rust               <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-…"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-check-tw-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "C4",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "278a4f03c5814c009d70db396de28cecaa7040a9faf161ad4a00879e8713fa3e",
+        "rustSha256": "6d43e30102ddd6fd92a59320aa52f5fe8912260d5ae8f80b889648c7babd5189",
+        "mismatched": 314401,
+        "outsideMasks": 314401,
+        "masks": [],
+        "diff": "diffs/en-check-tw-session.png"
+      },
+      "dom": {
+        "tc4Sha256": "42722932a2449308f770f2601b28c0619ede8136cd072b4fbc70e05f6cb59ed7",
+        "rustSha256": "418f46836e3d485ae2206148f9eb3355111852ea29f77aec84e3569c44391404",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-check-tw-article",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "3a9da9304caea4441a70665ea5a3e9ffc35e037a6b50a16df7d351c09b536d7b",
+        "rustSha256": "4318772b0143dcc636f96e4536e1f34abf7fb6b5fd09932c17c33aaa5c45c8dd",
+        "mismatched": 178750,
+        "outsideMasks": 178750,
+        "masks": [],
+        "diff": "diffs/en-check-tw-article.png"
+      },
+      "dom": {
+        "tc4Sha256": "b4d49169a9a0a6d40226ab420d409fb597085e7d11af5e5d24ce1c5f14f9e0ce",
+        "rustSha256": "14403065e85edf76765bae40e5b81a91872de1505f814f2b1ed4f5106f6595ab",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-check-tn-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "C4",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e55099cf15f3f2dbc441e511aa4ffec480c0556040aed9a45e86009abd3ce5d8",
+        "rustSha256": "eb95e50736c2af5a70956b37daff71e00c8acf13da9e1eb184c5719d4567083b",
+        "mismatched": 387707,
+        "outsideMasks": 387707,
+        "masks": [],
+        "diff": "diffs/en-check-tn-session.png"
+      },
+      "dom": {
+        "tc4Sha256": "5f4b3bfdca2e9687025a74e8582134971aeea09a376513f0c96285d5f7a500ce",
+        "rustSha256": "d6560579697d0039dd1a717957a043ce90c2d6ce0aa5cfedd79be197713980f4",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-check-ta-drawer",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0aba39a0233cfbf39d367d087ddb04b2f3273372e9a605b2a1533f00a7e8b3b6",
+        "rustSha256": "f5eabe1fd9ddd495b5c719ab836b198dba66c42a414c6baadfdd1d61fbc64247",
+        "mismatched": 212429,
+        "outsideMasks": 212429,
+        "masks": [],
+        "diff": "diffs/en-check-ta-drawer.png"
+      },
+      "dom": {
+        "tc4Sha256": "599addd7dd4e404cbe3fcaf7c4f4fae03d61b290d60a670ad368d88cbd7b9087",
+        "rustSha256": "1c7567d82e2beeedcdac73493de1ed78607cd052cee68baa8b516e6af4aa5be0",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-community-checking",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "same",
+      "by": "B8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
+        "rustSha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "141e41e06def03a80fbab1ad4f720700a57846192ef8736c093aa8a00841ac5d",
+        "rustSha256": "869ceff1d8968c4065e8d98dc66141225ea11944f88c5d1652d1ee3aab0dbe0e",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-obs-understand",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "same",
+      "by": "C3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346",
+        "rustSha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "baa40c8df8cb08d84f0004fa1e03d48a5d4ed34c3c595ede8c20659de3b7e5fa",
+        "rustSha256": "af8a6c264443ea7d20f24299751f0c9b4012a91ae943c96c3dd5e947d869c067",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-obs-translate",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "C3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "c26e72b482a96237b495cd889ce89b992b635706c16104ebd74dad2f79445fff",
+        "rustSha256": "a3d3512ef295e0fc1ac908efcf463e13b6b7e88377bfa80e918e6e7e23a99570",
+        "mismatched": 80656,
+        "outsideMasks": 80656,
+        "masks": [],
+        "diff": "diffs/en-obs-translate.png"
+      },
+      "dom": {
+        "tc4Sha256": "d5e57147b904caf2c5373f9ea7245f64c3d0117e1b3edfb7c262685334432a64",
+        "rustSha256": "f1145a2978bbee0a9b75d71089d6fed7914d65931169d0078b7e56ab7557b8c5",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 548: tC4               \"No picture on this machine matched the 16 image lines of this story: git.door43.org/uW/obs_images_360@7146d5b504f6 is not installed; git.door43.org/uW/obs_images_360@7146d5b504f6 at _local_/_sideloaded_/uw--obs_images_360--7146d5b504f6 lists 0 image files (paths)\" | rust               \"No picture on this machine matched the 16 image lines of this story: git.door43.org/uW/obs_images_360@7146d5b504f6 is not installed; git.door43.org/uW/obs_images_360@7146d5b504f6 is not installed\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-obs-check-tn-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "C4",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "493e46a7b85805ed7e9e53c4572d98a26d6a0e21eac2b40466df606ab31b1908",
+        "rustSha256": "493e46a7b85805ed7e9e53c4572d98a26d6a0e21eac2b40466df606ab31b1908",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "f273aad7f66d88cd953a16040cb275be9c4115964eee2da901d4a20ac335fdd6",
+        "rustSha256": "a419d0851bf0ed14a2859c5518b27f1cae7aab88f66a7f51195fd2afaa3dbf81",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 91 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; …",
+          "line 661: tC4               <p aria-label=\"Your translation, word by word\" data-drafted=\"1\" data-testid=\"check-target\" data-words=\"target\" role=\"group\" style=\"color: var(--text-scripture); direction: ltr; font-family: var(--font-scripture); font-size: var(--fs-title-lg); line-height: 1.9; margin-bottom: 0px; marg… | rust               <p aria-label=\"Your translation, word by word\" data-drafted=\"1\" data-testid=\"check-target\" data-words=\"target\" role=\"group\" style=\"color: var(--text-scripture); direction: ltr; font-family: var(--font-scripture); font-size: var(--fs-title-lg); line-height: 1.9; margin-bottom: 0px; marg…"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "ar-check-tw-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "ar",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "5c7b8d085a48e1f4c93b20ab28626d68f5d3637172be5223cef948a408b1cfaa",
+        "rustSha256": "f3d317dbfa24176d6e4fd19756d3d8bbea503e364b4b458db65ac68b528805fe",
+        "mismatched": 323670,
+        "outsideMasks": 323670,
+        "masks": [],
+        "diff": "diffs/ar-check-tw-session.png"
+      },
+      "dom": {
+        "tc4Sha256": "5335857c6c9d47166c5ddb2036690bb1067a96f4599da2ef32aceb946f31b216",
+        "rustSha256": "53801e68d1830c03fd8a4d1d7178971a4e02235f7419a85afe9e4d67a617f205",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 2 من أصل 182\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-check-tw-session-620",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f19896cc9ea4649a4b9ce3071eac92a048991f0fd615928660040607f011755f",
+        "rustSha256": "e7c0f7d87417b14e5e496a49a5af0515887e8b9eb5496e12977d332516fcfabd",
+        "mismatched": 106138,
+        "outsideMasks": 106138,
+        "masks": [],
+        "diff": "diffs/en-check-tw-session-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "9873f927c42a7cee097216deb8b414e00dbf466b2a43d8278612382c20c30971",
+        "rustSha256": "b940b9bb532ddde10cc10b60e34dd810a7c70fe4356576d2a999ce58c20a7f1d",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "ar-check-tw-session-620",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "ar",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "ee47a0f3f72874972a0a4a9977a945f71d6d9b76823bcae06ed99c371346d9b0",
+        "rustSha256": "6c2e22ab942e61ffd2c1c024afa2981649c49502b0d0b613a80d6f624f95a89d",
+        "mismatched": 94439,
+        "outsideMasks": 94439,
+        "masks": [],
+        "diff": "diffs/ar-check-tw-session-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "76e62fefed2aa0fb22a309bb984ac0ad5abdb5375b5cee8dd0fba5e7d45d38cf",
+        "rustSha256": "fb043601edad25ac2a65ee36f945f53953e69b5fa20057b7d8cb58b968147c73",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 2 من أصل 182\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
+          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
+          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-check-tn-session-row",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0f5e62bcd951a4092b25f47a1ad32a0396eefe2d8915cd69684aa86e0c383a3a",
+        "rustSha256": "eb95e50736c2af5a70956b37daff71e00c8acf13da9e1eb184c5719d4567083b",
+        "mismatched": 509333,
+        "outsideMasks": 509333,
+        "masks": [],
+        "diff": "diffs/en-check-tn-session-row.png"
+      },
+      "dom": {
+        "tc4Sha256": "0784e877e880d7087ca29abc7ccb5711ddb03aca0ce96c26edbe32a4ce98ef88",
+        "rustSha256": "bfea66b683fe8e247de50250ceca2235642a94f1c31248516b62469439e3ccb0",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "ar-check-tn-session-row",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "ar",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "91c56b63b44a56edc174cb4a3c28f69abb7a71c4e1d8467bcaee646699ad7402",
+        "rustSha256": "618e227d4fb645f821483a6f0bec96a3999a9474092b93bdc0cbb8aa602686fa",
+        "mismatched": 477516,
+        "outsideMasks": 477516,
+        "masks": [],
+        "diff": "diffs/ar-check-tn-session-row.png"
+      },
+      "dom": {
+        "tc4Sha256": "a80aa7b5dd6443598f909aa04811988149616f367494cf8cadd9bb4ee3892de3",
+        "rustSha256": "994e4ca286fe6b124f8a7f02563595adfc6ad3948d0413230276029746c04b2f",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 0 من أصل 157\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"غير صالح · 0\" | rust               \"غير صالح · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "en-check-tn-session-620",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "22f577c2692653fb04ab53ebc54d96bfa39c385878c6312ed14fb13f3a952b64",
+        "rustSha256": "cbeb678f7c28c82dc13e6b0f61d5ddcc059bc2334697d48509848fe848243449",
+        "mismatched": 105888,
+        "outsideMasks": 105888,
+        "masks": [],
+        "diff": "diffs/en-check-tn-session-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "06e81cf07db937d02e57869547cd86b9a4b5733c2867ee76cd5a6db676524647",
+        "rustSha256": "7e8538ee1cc4c87b144976496a56eee2cd9ce37601ff7e577ffd5173de31b237",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "ar-check-tn-session-620",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "ar",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "7cd38212ff8871f115033e457c3634f0fcdc8d34ae788054bad80c8499ba5959",
+        "rustSha256": "254eb5cbaba546dc291d3e9086eea974a348e14544c649f55575c7f50574769a",
+        "mismatched": 94467,
+        "outsideMasks": 94467,
+        "masks": [],
+        "diff": "diffs/ar-check-tn-session-620.png"
+      },
+      "dom": {
+        "tc4Sha256": "e0475064415c34699c39081b338ee882e94fd7af16308595cfdb86bd9fe70b4d",
+        "rustSha256": "118bd4b4a485af0814decf3eebd3ecaa351f55feae4e1d164bfbb0a4043756ed",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 0 من أصل 157\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"غير صالح · 0\" | rust               \"غير صالح · 1\"",
+          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
+          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+        ]
+      },
+      "meaning": {
+        "same": true,
+        "declared": [],
+        "diffs": []
+      }
+    },
+    {
+      "name": "shared-home",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "c78f2bacdab899a9c7ff2810a42b788a3ff458a24c158cef32693dd1952bd00d",
+        "rustSha256": "45bbca1b2b1fc4c277f0f6a55f26f8d7b1bcf36ed8312671030e7dbd7390ff64",
+        "mismatched": 192091,
+        "outsideMasks": 190229,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/shared-home.png"
+      },
+      "dom": {
+        "tc4Sha256": "68fada25af73568dd6dcd2396f409970e002f12d12b559bf08701e9e9659b64f",
+        "rustSha256": "ddfbac367b7b998a0a7846ddc0a12ea24e506f9e17ceab4b56272e42f0d4710d",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "diffs": []
+      }
+    },
+    {
+      "name": "sync-internet-consent",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b5fa1c58f7192dc0bcf87fd68684f66b005f9ca2c0372d4643d9ec461ce862a1",
+        "rustSha256": "99bdda008eb485689e07931019f249b7b4492858ea59a1f4f8bc5ad8a0d4708b",
+        "mismatched": 125640,
+        "outsideMasks": 123874,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-internet-consent.png"
+      },
+      "dom": {
+        "tc4Sha256": "db3fd86171d31f6bb125af94b71d35fac6b59fd350f986d7ba26899a58ba0f87",
+        "rustSha256": "6ed3268e42bb09eb437a62637ecaae7ea9f928726e06d2a9857662f01f000abe",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "diffs": []
+      }
+    },
+    {
+      "name": "sync-failed",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "6f2438fd358bb7cd386b615e62c4ee22b3ae91f08d0cff3cfe6feb1b90136b68",
+        "rustSha256": "c4274730368f8db20227bb5a6efb221e97f998ef3a837f1e9c679fd60cb9430c",
+        "mismatched": 192091,
+        "outsideMasks": 190229,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-failed.png"
+      },
+      "dom": {
+        "tc4Sha256": "aa5bed6dff1d4c21266ca6260597407c50a870452b14333abe6bce3c36477a54",
+        "rustSha256": "adb4b7a9a9ac14bc537bd2fc8e1d80c36b95d6a431b76ef0ae0472ae691a10d8",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "diffs": []
+      }
+    },
+    {
+      "name": "sync-ok",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "a18ee79d4176c0a2240fb882329d82e973acb160ff2ceddb0c6f6987c20d3fd0",
+        "rustSha256": "3fb87c1ef96a0dd6e614abe20c6c93a6add0865635081486ef0f417390d56489",
+        "mismatched": 192091,
+        "outsideMasks": 190229,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-ok.png"
+      },
+      "dom": {
+        "tc4Sha256": "9bb43af701a303f5c82c6100319ca7eee7fc0b41fda0c7d1f499e60622409b4b",
+        "rustSha256": "cd755596a0533b224191eb31153e94bacfd707c6e44b0da54e012031f62fa254",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "diffs": []
+      }
+    },
+    {
+      "name": "sync-ok-teammates",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0910d21244995a259b69876e04c6ade16a8296414b04e46fe299471a58b563a6",
+        "rustSha256": "d12bd6efc87fe3f9d0ea778c09b473be428ae59acf0a25ef59ae41fa15c2fb77",
+        "mismatched": 199120,
+        "outsideMasks": 197258,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-ok-teammates.png"
+      },
+      "dom": {
+        "tc4Sha256": "a01069bc139151d47812a1d8b0706c14687eb6d5ac41e375521ea33ffff000e1",
+        "rustSha256": "d13c9878983b300c4015867425a8297c93c98071bf75d718a35df887c1b6fd55",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "diffs": []
+      }
+    },
+    {
+      "name": "sync-ok-restored",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "79183c1b8105b97bec2b3ff79071306cbd292a923a453220759c28a5ca0c0d39",
+        "rustSha256": "4a6907173cab2edbdbff4b6e689618385ff11000557fe80bc3461467b4c84c5e",
+        "mismatched": 199120,
+        "outsideMasks": 197258,
+        "masks": [
+          "q2-obs-card"
+        ],
+        "diff": "diffs/sync-ok-restored.png"
+      },
+      "dom": {
+        "tc4Sha256": "35e4ede29d07ee4426b6e7e78385e8ff8d960a9153b455ef8a5a5b2baca173fe",
+        "rustSha256": "5313c93c2263cdade4dd8e7d4655a32118470e64c0c2a891dedbc5a889821405",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "firstDiffs": []
+      },
+      "meaning": {
+        "same": false,
+        "declared": [
+          "q2-obs-card"
+        ],
+        "diffs": []
+      }
+    },
+    {
+      "name": "conflict-review",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "pixels": {
+        "tc4Sha256": "4090f3c11bbb70bb1da30c8e218deef7b7833129ec66ad9bc4017695ccd208d8",
+        "rustSha256": "0af3170dceffe7f4761c13910d1e45788326f2401f55f97e3a617c45c5d4b396",
+        "mismatched": 1817,
+        "outsideMasks": 1817,
+        "masks": [],
+        "diff": "diffs/conflict-review.png"
+      },
+      "dom": {
+        "tc4Sha256": "e00e36967ea6c51dd3c39eeb3d7441d301170feeb3e6ed4ea2b5e7fe9ebb6058",
+        "rustSha256": "e1c397d64277d0fd09dbbbb3e551569481a06b8f61dffec431232ebdde6db96f",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:59.763Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 92: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
+          "line 95: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:58.763Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 103: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:01 AM\"",
+          "line 106: tC4       <div  style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-top-color: ; border-top-style: ; border-top-width: ; box-s… | rust           <button data-i=\"text\" data-testid=\"conflict-history\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; align-self: flex-start; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: i…"
+        ]
+      }
+    },
+    {
+      "name": "conflict-review-selected",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "pixels": {
+        "tc4Sha256": "cd7d90f37f7380113b84a00f5ab0670813341b9f9ed0f25610484e5c38b3ed40",
+        "rustSha256": "249ff1e8faed5b7d690d3c01ddbcc6f046846e03030fe68252261099d304dcb4",
+        "mismatched": 1817,
+        "outsideMasks": 1817,
+        "masks": [],
+        "diff": "diffs/conflict-review-selected.png"
+      },
+      "dom": {
+        "tc4Sha256": "e427e20c7d67eb5bc41f6e2e9029225be95e34db0061437973216981ef9f3d1b",
+        "rustSha256": "055f8025d09d49e5f0ab7c82c2f074cb0670450d7bb3dcd17859a73de5ad265e",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"true\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:59.763Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background-… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"true\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-cl…",
+          "line 94: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
+          "line 97: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:58.763Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 105: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:01 AM\"",
+          "line 108: tC4       <div  style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-top-color: ; border-top-style: ; border-top-width: ; box-s… | rust           <button data-i=\"text\" data-testid=\"conflict-history\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; align-self: flex-start; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: i…"
+        ]
+      }
+    },
+    {
+      "name": "conflict-review-mine",
+      "kind": "case",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "differs",
+      "by": "B11",
+      "backend": "memory+scripted",
+      "pixels": {
+        "tc4Sha256": "3e9c18c848b1b2064acc593631ff8952832eb718fe58cd7e99226c440f2f82b4",
+        "rustSha256": "3d2bda1598562b1445ec0a1853000fda5a276636a17a0c34ecc81a4a27060251",
+        "mismatched": 2054,
+        "outsideMasks": 2054,
+        "masks": [],
+        "diff": "diffs/conflict-review-mine.png"
+      },
+      "dom": {
+        "tc4Sha256": "0642a9bc4f9a274c698b81754ab739c7dc5750a2b4bae05786cd53f35347e4e6",
+        "rustSha256": "fc3f367f0dbf8d6854b92861a08214189eedecf9fbe1a593dfec02c29a8ea92e",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 84: tC4             <button aria-label=\"Mine, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"mine\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:29.535Z|0000|a4bbd43216f529e5\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background-color: ; … | rust             <button aria-label=\"Mine, Oct 21, 2026 · 05:27 AM\" aria-pressed=\"false\" data-owner=\"mine\" data-testid=\"conflict-version\" data-ts=\"bda2505ed83df634b4b90c6a16a45df41ab696d89eab3e3a4247264bdcc246ab\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; ba…",
+          "line 92: tC4                     \"Oct 19, 2026 · 02:52 AM\" | rust                     \"Oct 21, 2026 · 05:27 AM\"",
+          "line 95: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:27.905Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 103: tC4                     \"Oct 19, 2026 · 02:52 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
+          "line 106: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:26.905Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…"
+        ]
+      }
+    },
+    {
+      "name": "cc-obs",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
+        "rustSha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "37081e4b2346559c3464e3ff390105063d5bcfa69a72f992797775c296941f32",
+        "rustSha256": "c153aaee7f221cd5a4533e01a820e99152aa89485944d87ccdf40b4b0b0c5d26",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "cc-obs-wrapped",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
+        "rustSha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "890550050f4e3be2838f4edf7d8ee0b4379e0a99b6e7015e10890a4572161a79",
+        "rustSha256": "582a1debea99f706ad4ee8d074c61d83c1c24028207356ce02c0f8f923e2705b",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 78: tC4                 <button aria-pressed=\"false\" data-i=\"choice\" data-tone=\"accent\" type=\"button\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backgrou… | rust                 <button aria-pressed=\"false\" data-i=\"choice\" data-tone=\"accent\" type=\"button\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; backgrou…",
+          "line 81: tC4                 <button aria-pressed=\"true\" data-i=\"choice\" data-selected=\"true\" data-tone=\"accent\" type=\"button\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-po… | rust                 <button aria-pressed=\"true\" data-i=\"choice\" data-selected=\"true\" data-tone=\"accent\" type=\"button\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-po…"
+        ]
+      }
+    },
+    {
+      "name": "open-progress-journal",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "c49931c11c49b76119b805b613032f06325ae2c382aa37bc0c8830b149b98a5e",
+        "rustSha256": "1e9cae2af3d2a12b4b5edc4733941a1b90060940b257507f3ac561aaff4c8099",
+        "mismatched": 814,
+        "outsideMasks": 814,
+        "masks": [],
+        "diff": "diffs/open-progress-journal.png"
+      },
+      "dom": {
+        "tc4Sha256": "1d0ce687f3ef2d2f6ed1159b9e054472f44477de0b624257f7d3fd0d0d70e464",
+        "rustSha256": "3210e05285bd6529ca6f0aae7b30f53981ae28f902a0b5c7c01b897b7ec7c172",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 136: tC4                 \"Reading the journal · 120 of 480 saved actions\" | rust                 \"Reading the journal · 120 of 480 files\""
+        ]
+      }
+    },
+    {
+      "name": "open-progress-state",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "18b38df795925a11fddfef948446ba9a95e144cfd7b9c40cfa67a8b26de0ba77",
+        "rustSha256": "01db6eebea570151f399e3aaecf6b85a01bc1fb8f16f1d6f982e7335e703ab82",
+        "mismatched": 384,
+        "outsideMasks": 384,
+        "masks": [],
+        "diff": "diffs/open-progress-state.png"
+      },
+      "dom": {
+        "tc4Sha256": "ba3a412ec330cfa9937945ea7d96939a82f1c41740fb2edc5066fd7e14a1ac65",
+        "rustSha256": "166945703752d2f5c2f9647e05845d63fb991d7f2d006f58b95fdef84ad3051d",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "open-progress-prepare",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b2a28bd216184179d584b324a48605cfc9209c0fe064424be2493044159f94a0",
+        "rustSha256": "4bcea915d9bbbe396a6f21e73d27d9c96c3babca68851eebbe8fbe5ea28a193b",
+        "mismatched": 384,
+        "outsideMasks": 384,
+        "masks": [],
+        "diff": "diffs/open-progress-prepare.png"
+      },
+      "dom": {
+        "tc4Sha256": "fdbe6e519ec795b2ee1515aff1b89c3fea5b6165bb23f73a2a51dcaa83a96b4e",
+        "rustSha256": "23b84e5c7d3bae673bbfba11205770018e34e58170c0626596a4112159a784c3",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "upgrade-set",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "4c19305741884f5670bd92668c545db23c677e56b1ab69c03aca18b55ac8679a",
+        "rustSha256": "4c19305741884f5670bd92668c545db23c677e56b1ab69c03aca18b55ac8679a",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "a574a6d2d41e972c69838729770cf35b90ed54c4a3dd623539e3eda212859718",
+        "rustSha256": "95822d8d8c7e7ee1da659b002d779f074c8bfdd1ef73594806754123f4e44c31",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 383: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 384: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
+      }
+    },
+    {
+      "name": "upgrade-set-harmless",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "ba1ad5b83071b0dbd651ea6487af98bf3b5f08ac0f923cc18950f27d9340b138",
+        "rustSha256": "ba1ad5b83071b0dbd651ea6487af98bf3b5f08ac0f923cc18950f27d9340b138",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "e73b60c709a8658227d64099cae8542286d004baecfe2267945ad3bcfd22fed5",
+        "rustSha256": "e0a32a2447ae16d3348b459b75f405c190b66ba1b523342312853b17efc0a655",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 381: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 382: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
+      }
+    },
+    {
+      "name": "upgrade-set-blocked",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "3fbc8120a721c1e840095eda0f0f8bc5ead80cca02e16d776b2a5e0a86823698",
+        "rustSha256": "3fbc8120a721c1e840095eda0f0f8bc5ead80cca02e16d776b2a5e0a86823698",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "0000d5e4ae3302fe621539135ec912d597f8f28f6d36a7f3630d6324b7a67c90",
+        "rustSha256": "726a1ce19ccdbefaa0a280c606f98254c8e3f7e2b0eb045cc6289bc5e6ee8284",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 383: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 384: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
+      }
+    },
+    {
+      "name": "upgrade-set-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "05ffc6c2fa9a0b1a483c80d314c11d1fbf34c9377d29bb9e5d81f7a56f75238d",
+        "rustSha256": "05ffc6c2fa9a0b1a483c80d314c11d1fbf34c9377d29bb9e5d81f7a56f75238d",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "e9cf88b7b4ecc21b846e59e2fb62dfa7bc643cce8eb4ecbe5bc9fdecd45a9d06",
+        "rustSha256": "12ee68df901015b8d367ad2c0d39f255f6640898d6ca2a5ae8536a751aa7d450",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 386: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 387: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
+      }
+    },
+    {
+      "name": "upgrade-text",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "29bf10cfe6015871b7344d34ba28912e5ccd012bf0e50b54976683fcfc5f5487",
+        "rustSha256": "29bf10cfe6015871b7344d34ba28912e5ccd012bf0e50b54976683fcfc5f5487",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "8391c6a4e1ded09be09a99335bc52e9daee1028f1884f53c660bd7c86afeecfe",
+        "rustSha256": "301987dd0987b54929e7b117a5ab5037f37f3a3fc11c3cab1734f11b49df91c8",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 371: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
+          "line 372: tC4                               \"اردو\" | rust                               \"उर्दू\""
+        ]
+      }
+    },
+    {
+      "name": "upgrade-repin",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "338b91b071570d3b481519f5c13e892568ba93b249c66bf5694a9795e6252135",
+        "rustSha256": "338b91b071570d3b481519f5c13e892568ba93b249c66bf5694a9795e6252135",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "431a203119f84da37ac7d5581127db692d50ae3b20defe608a7a9acb01424ef3",
+        "rustSha256": "b4b563e4faa1c631ef065388b0fdef970e4d7cbbfd8d4f9dd7a3a1c33782812e",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 70: tC4               <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backg… | rust               <div aria-label=\"1 of 112 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-…",
+          "line 71: tC4                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r… | rust                 <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-r…"
+        ]
+      }
+    },
+    {
+      "name": "gateway-change",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
+        "rustSha256": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "40e2b5d497d427db76e6ad24bb7d4bb44639e1031418ea2e65c42047908dceac",
+        "rustSha256": "8baa5062b18d7076a5f02a3d86ff983c724b007639e3f01322a28abd4d2db83c",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "gateway-change-busy",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "89858eb16f35e15f338130051bcae33dddd2384da20cfa0465daf07612406e22",
+        "rustSha256": "89858eb16f35e15f338130051bcae33dddd2384da20cfa0465daf07612406e22",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "e6ec6edc5cf7aadaf7e1c074b9c57e5090d476459bbc5abcdb17190cc9bc9102",
+        "rustSha256": "9f254792060ba210732bd18c166f960d32a10d38a7d34206b4f2f6f0f9d58b66",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "gateway-change-blocked",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "d1d397c64baf4f0174a287b5c03224aaaed93658c74435503ee8cc396d48f74b",
+        "rustSha256": "d1d397c64baf4f0174a287b5c03224aaaed93658c74435503ee8cc396d48f74b",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "0ce5e9514d6780aecbcfa809775f2651701f196f7f853dc6091fb8aad65e9398",
+        "rustSha256": "62e7e9495889a6b80aab1e4afd08e8024f70d0f1416b24fb7889ef28d9e1f587",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "gateway-change-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "fb822d6702c7c5765302149053bbed325d7eaf894395aa81308508d71fe07644",
+        "rustSha256": "039ac001029c92a87923547da9f12159bba8cdd6a5f18e5eff7b0656ce5a9e3a",
+        "mismatched": 157305,
+        "outsideMasks": 157305,
+        "masks": [],
+        "diff": "diffs/gateway-change-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "307c6512c12e141bd324b7473ab25b7e2dfbea047ef88127c732a741c1048a42",
+        "rustSha256": "d2b6ada2baf4392222f16861dd4cb1bc72164aeebe1d20643121d50668958cd1",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 152: tC4                     \" Another project is open now. Open this project and choose the language again.\" | rust                     \" There is no room left on the disk.\""
+        ]
+      }
+    },
+    {
+      "name": "gateway-change-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "C8",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "007ac25fcc03a358d7ac30b4261514267c972c418ba2b94f85fdd33f8e10f619",
+        "rustSha256": "007ac25fcc03a358d7ac30b4261514267c972c418ba2b94f85fdd33f8e10f619",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "0d8e0376fcf837052d4e3014c2951307222fbd450aa9173ff58b2cd73cfdbe43",
+        "rustSha256": "07f06f137c27edc7f6aff3028dcb9b209b29f067d458cfd9ef49e34826da9f60",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "section-empty-confirm",
+      "kind": "case",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "differs",
+      "by": "B4b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "029c5c03d7e11bd1dbb6d2a0b6859f9efc8056e38e601932e2d510b82063f2a3",
+        "rustSha256": "7d898acb713d79d9e135a5a4654abba7aab6df2e2398c09487bf8c5360147fb7",
+        "mismatched": 738,
+        "outsideMasks": 738,
+        "masks": [],
+        "diff": "diffs/section-empty-confirm.png"
+      },
+      "dom": {
+        "tc4Sha256": "c0335ad3407c7c23a41602f13db4f97fd06c1e84d3fda079523e832ea99f46aa",
+        "rustSha256": "c74eb6f42db086e07f5c84262bda6f409ac576851f3cd9b00f42c49b906fa4ef",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 34: tC4           <div data-state=\"saved\" data-testid=\"save-indicator\" style=\"align-items: center; color: rgba(255, 255, 255, 0.66); column-gap: 6px; display: flex; font-size: var(--fs-caption); font-weight: var(--fw-heavy); letter-spacing: var(--track-12); row-gap: 6px\"> | rust           <div data-state=\"dirty\" data-testid=\"save-indicator\" style=\"align-items: center; color: rgba(255, 255, 255, 0.66); column-gap: 6px; display: flex; font-size: var(--fs-caption); font-weight: var(--fw-heavy); letter-spacing: var(--track-12); row-gap: 6px\">",
+          "line 35: tC4             <span data-tone=\"valid\" style=\"display: inline-flex\"> | rust             <span data-tone=\"warn\" style=\"display: inline-flex\">",
+          "line 37: tC4             \"Saved\" | rust             \"Unsaved changes\"",
+          "line 138: tC4                 <div data-layer-placement=\"center\" data-testid=\"section-empty-confirm\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust                   \"1 Pablo, siervo de Dios y apóstol de Jesucristo, según la fe de los escogidos de Dios y el conocimiento de la verdad que va con la piedad,\n2 con la esperanza de la vida eterna, la cual Dios, que no miente, prometió desde antes del principio de los siglos,\n3 y a su debido tiempo ma…",
+          "line 139: tC4                   <div  style=\"display: flex; max-height: 100%; max-width: 100%; pointer-events: auto\"> | rust                 <div  style=\"align-items: center; column-gap: 10px; display: flex; margin-top: 8px; row-gap: 10px\">"
+        ]
+      }
+    },
+    {
+      "name": "license",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e39a73040e1a2c7ec324c19765f47a1e8a35733e85d0074d5a509c34bf6d9c66",
+        "rustSha256": "317fc72d8fa092b4c0ee4fd90d460166aff4a6d10c53aaa85dadd8af48271d72",
+        "mismatched": 41,
+        "outsideMasks": 41,
+        "masks": [],
+        "diff": "diffs/license.png"
+      },
+      "dom": {
+        "tc4Sha256": "72a64f4130c5e29edf7a05a147b1ac44a825d61fe1150836d73807b406a85dff",
+        "rustSha256": "c50dfedb668af1f7624a68729264ec91c1218bbdba6298099b7b7c7a05bf47f0",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "net-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b4b9821412d7c75e6622806dc761b7a3fc8e5d080198460f880994df511378f4",
+        "rustSha256": "cbc98e3c28f3205ae97c4f637be8ac30a319dacd0457c28bff45fede1fb4e97f",
+        "mismatched": 229,
+        "outsideMasks": 229,
+        "masks": [],
+        "diff": "diffs/net-failed.png"
+      },
+      "dom": {
+        "tc4Sha256": "d6c89f7dea144f3e136cd1ea30f4ac4e35865a6c3bfbf51520fa9db7519ae643",
+        "rustSha256": "46fdc2438e40086a214f8e3bd1e8d74e93017bbe03d19be89377f65992dd7804",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "share-progress-preparing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "E1b",
+        "dom": "E1b"
+      }
+    },
+    {
+      "name": "share-progress-create",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "E1b",
+        "dom": "E1b"
+      }
+    },
+    {
+      "name": "share-progress-push",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "E1b",
+        "dom": "E1b"
+      }
+    },
+    {
+      "name": "share-done",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "E1b",
+        "dom": "E1b"
+      }
+    },
+    {
+      "name": "import-files",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "import-review-usfm",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "import-review-tc3",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "import-working",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "import-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    },
+    {
+      "name": "add-book-pick",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "1ffb2352f50c09d4669d64e9b2ee2b221c7bdb84783b11ed3efea1f92fb51495",
+        "rustSha256": "b34ad0d0e14d84ae032af76bb4ba09bf03c7526d009be04689b3fcb0c8762b33",
+        "mismatched": 41,
+        "outsideMasks": 41,
+        "masks": [],
+        "diff": "diffs/add-book-pick.png"
+      },
+      "dom": {
+        "tc4Sha256": "04e374938f7d2155f447d6a5e77e9af88a734b432f6d91a9f65763db107631cc",
+        "rustSha256": "4d08eb494ba92edcd9a77dad95b87a0c98d9db013a98c540100d84c436acb34c",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "add-book-pick-multi",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "6aeda2a77ed618dab2cdcdd31cf1188713c7abfb5b9fcd8ad6d524ad0eab0d37",
+        "rustSha256": "08ff279b71992909876a957e778e9efd5adf57c3d3356442366b8232e28c76da",
+        "mismatched": 41,
+        "outsideMasks": 41,
+        "masks": [],
+        "diff": "diffs/add-book-pick-multi.png"
+      },
+      "dom": {
+        "tc4Sha256": "7bcd87758ec1760922dce9e47d44847a972648da15b8037eb4a20352e6356e29",
+        "rustSha256": "43fdd3e9537587f04e427bb6300eb0ea7679b6a5ba2071328ea3f29b7131d0ac",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "add-book-usfm",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "6582ae7a035549d0e96ac1b1b07ca76b814df81e295e71238b3a1ec68059fa7f",
+        "rustSha256": "5cb9d3f66b082e5694c97314c556fa2325bed80958d0f44ee8e432f8954afeca",
+        "mismatched": 41,
+        "outsideMasks": 41,
+        "masks": [],
+        "diff": "diffs/add-book-usfm.png"
+      },
+      "dom": {
+        "tc4Sha256": "43ab21cd6c87a9a6db48a5cdc39226c90c493ea2863ca11ccab8f6b861a1ef98",
+        "rustSha256": "f5a9b1edecb9ce3edbedde0eff8398bb7b399d1e252e14b7c893bc1dbe7190ac",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "add-book-usfm-files",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "61d2576fef3b1d7b2c2b59e9595a4cf3f579292918bbc8a81f05e1515bab04f4",
+        "rustSha256": "c39d8a9636a7c51b9e3758e9965e6e0f0b0e0aa472533d366abe4b5960bad00d",
+        "mismatched": 41,
+        "outsideMasks": 41,
+        "masks": [],
+        "diff": "diffs/add-book-usfm-files.png"
+      },
+      "dom": {
+        "tc4Sha256": "eaabf6fb5824b5476f13b2e10b7f808cdb2ef06a3bb57e8ffff54de5dec684b5",
+        "rustSha256": "8d1de63899414e44715caebe847dab9c391c4529e3456e2b70c9699dc955ba88",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "feedback-sending",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-sent",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-offline",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-timeout",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-refused",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-not-configured",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "feedback-not-sent-no-desktop",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "G1",
+        "dom": "G1"
+      }
+    },
+    {
+      "name": "signin-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e8f27e27c26ec3c7c381d498179cb5fdcd9114289c97da0d3e40ce5f0676a393",
+        "rustSha256": "218ff5ebf42d96dc88ce6ad6d3c6df2935386a7edf03a4ba3ad86ab50c9ffd76",
+        "mismatched": 718,
+        "outsideMasks": 69,
+        "masks": [
+          "signin-server"
+        ],
+        "diff": "diffs/signin-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "5bfbedea38b54a0cbd8081d83700fb43b98be3d6310fff7f20485d1c23b7b55f",
+        "rustSha256": "c5eaf6c1fb421c781deaf737fed8fb825b7e0d6f22b91dc6d0ad3e42c4eeb21c",
+        "scope": null,
+        "same": false,
+        "declared": [
+          "signin-server"
+        ],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "check-empty-none",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "c80ef91193ef183ea56a4d52f283c242f1cf1ef613af174989595620f7a6f30e",
+        "rustSha256": "c80ef91193ef183ea56a4d52f283c242f1cf1ef613af174989595620f7a6f30e",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "bf348e6f4cf1812879070bc2ce4a9b46bfdb8ba6c33183f515ec3abf55951234",
+        "rustSha256": "305d1f6c2617172b9e025bb584e66926c0c32557d56fdaafa5fc5b4b060cd7d6",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "check-empty-all-dropped",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "6be9f22d8aec5034a7ac3b627b01c92de698279b24c252a0c56926692c2680b9",
+        "rustSha256": "6be9f22d8aec5034a7ac3b627b01c92de698279b24c252a0c56926692c2680b9",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "39f1686ca1ed56e252a106d16cff27db109294767ad0d05dc456cebe57c7b8e2",
+        "rustSha256": "250e4784ad0865c0dc8f11fb6df8e7f7cb20f129c5b08c7500d5f2d3bd179192",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "check-empty-missing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "7bfa790a1d4443376e397700790d0967004366647fca7c143c797cdc36ddcf18",
+        "rustSha256": "7bfa790a1d4443376e397700790d0967004366647fca7c143c797cdc36ddcf18",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "0e326419c9cd4f25b43cdb3ed928da68db8ba90e626565f21a78e519e585a970",
+        "rustSha256": "9ae0212179f649de697883c1fb1795cb4fa6efd1d359f0cb5db7435b26fc265c",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "check-empty-versification-unavailable",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b4bbb65af7eadb605b7d71ea1466edb4aa2f8de6e19d00291260d16e89286585",
+        "rustSha256": "b4bbb65af7eadb605b7d71ea1466edb4aa2f8de6e19d00291260d16e89286585",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "f0775cf26bc629b888681ffb66269a967ce841a612928daab0b4d8f95b4683dc",
+        "rustSha256": "c8c88f9e85d9554eeaf2d9ab756b1c2eceb9bb6294f98ae2cc9102083c9ba5d9",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "check-empty-versification-unknown",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "152e562d3e6834cbef6f268ef0a1e662ad29e65c2a028bb4dc626887e26f63a7",
+        "rustSha256": "152e562d3e6834cbef6f268ef0a1e662ad29e65c2a028bb4dc626887e26f63a7",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "e9e3dabda0d37d08257b281706126aa364b847af9d98974cabfe8f5aff5d655f",
+        "rustSha256": "66a055137c827ce07ef61f502d8e573bec0c62cf8323a8aefeddde91dc78fa0e",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "check-deriving",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e10c95f6efbf2d55f2f391ff57a439bb5de03511c8309f5d62a4eafe2388165c",
+        "rustSha256": "e10c95f6efbf2d55f2f391ff57a439bb5de03511c8309f5d62a4eafe2388165c",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "a74a9ecd7c6ca4e15f9b757035432e5df5b06b549963fce59158dec418b6275f",
+        "rustSha256": "58fa84a91bf28ecf40f1f03b1ee07be1ed5dbbc2efd8820996813d45bc777bbd",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "check-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "d2bb3f29eba2f932225ee7fd81f562f5d6a327ae6085268f4b64b6d261431f2f",
+        "rustSha256": "a0c30ab7badfca84aaef06fb64182445f6a096564dfc67572f428fd06a0fd708",
+        "mismatched": 609,
+        "outsideMasks": 609,
+        "masks": [],
+        "diff": "diffs/check-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "211dd37a6fe6872aa8e878a0ff26783c3c6864389fccc02688961dc04c2fa038",
+        "rustSha256": "018a8b8f670bbbde9daed6534995c7af58d94db0710242649b58317ba1d362e8",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 46: tC4           \"Failed to fetch\" | rust           \"internal error\""
+        ]
+      }
+    },
+    {
+      "name": "check-rail-empty",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B5b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "ffd98654007b6601bfcb2914279ca95367a4a8087a08510f12e242d8cfc7773e",
+        "rustSha256": "823adda095f059620b972189232f70051bc4e5be8454f8d909b4a27aad95be04",
+        "mismatched": 424215,
+        "outsideMasks": 424215,
+        "masks": [],
+        "diff": "diffs/check-rail-empty.png"
+      },
+      "dom": {
+        "tc4Sha256": "ea55ef943049fd5b96cbb0175f3170bbc6a7bd59d4aa3833c5620c5e11ff4d22",
+        "rustSha256": "26c7f034b998a2108a11fd0d3498d2bc1c7f8a77f975a78417b017bda2c0a95c",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"1 of 112 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
+          "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
+          "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
+          "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
+          "line 63: tC4             <button data-count=\"0\" data-testid=\"filter-bookmarked\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; b… | rust             <button data-count=\"0\" data-testid=\"filter-bookmarked\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; b…"
+        ]
+      }
+    },
+    {
+      "name": "check-picker-no-items",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B5a",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "4ba83a16d9b6ed700220d3a94b1e5b2c16f75a85c43e738f2d7ccc7f1a98baff",
+        "rustSha256": "4ba83a16d9b6ed700220d3a94b1e5b2c16f75a85c43e738f2d7ccc7f1a98baff",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "1b6640708fd0885a8b3df3f15f47b6a474e2ceba7592789a2bb9e7b835915694",
+        "rustSha256": "0f4a14d379e7c1672454dd824a44f924716fdd00e99d979afef7e9188b01bbc7",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-unavailable-undrafted",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "7b32a9733ce94fadc8f2c20353ec550a549ca65dc808f2d03a4954ff28e071bf",
+        "rustSha256": "7b32a9733ce94fadc8f2c20353ec550a549ca65dc808f2d03a4954ff28e071bf",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "1a34b4c733e831678fefee3be3cdced75a85d7cb8989572ff91327787ae0a059",
+        "rustSha256": "aeda098ed3889c8183382b5ea909a84aeace0889980599fe2399771e80a16069",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-unavailable-unpinned",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "57e36d77db065168b33876562baa3244d26a47ee6a14f6e15a40d29219050077",
+        "rustSha256": "57e36d77db065168b33876562baa3244d26a47ee6a14f6e15a40d29219050077",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "50c6682e789a014862673acd0d3139bc2f8b9cc05a137b3a4bb8d5b6ca9ac7fe",
+        "rustSha256": "aef89a97ad60c5028deb14643ab267f038beb989a681c280aa3858801c98642f",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-unavailable-missing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "94d6f33197e4ac5eb315f15589a1366ac5a9dd1b049105a79808feb424dbf2d0",
+        "rustSha256": "94d6f33197e4ac5eb315f15589a1366ac5a9dd1b049105a79808feb424dbf2d0",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "17cac7fea9e1b6303d3be755e641fe5f7a773f384f30fba73b57843007739a01",
+        "rustSha256": "345e95f9e4ed5516dcd5d96b1d16e9c91c59f13bc9422862a84e4f6e4fcf8890",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-unavailable-versification-unavailable",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "ddd3162b714410c34a00954ca686307d35036adb6ec3bf750e3a8bba2c7fc284",
+        "rustSha256": "ddd3162b714410c34a00954ca686307d35036adb6ec3bf750e3a8bba2c7fc284",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "16b5b88a6cdea18997a28339c1cdf224596143d705c81f81cf5f66b1f56941ce",
+        "rustSha256": "45b2ba3878e363f03615116da174c145de520ca4f0cf8fba639d536508c6a0c8",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-unavailable-no-counterpart",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "346db33ffc8dd535451bb3af362dacd3c09832c41843c6cd176c5a454ed55605",
+        "rustSha256": "346db33ffc8dd535451bb3af362dacd3c09832c41843c6cd176c5a454ed55605",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "5b4ccf406acabffc9010a76dd6faeb255a93e8fe15078f1bbf174481e2034b5c",
+        "rustSha256": "b932cda9ad7f8c0c18c0807d01eef6d841635a431b0aad2f460394db29cc6803",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-unavailable-versification-unknown",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b85b2dffcb96f675dbd79c23997d2d83ae417b6537dce58ca7d18018012a3c5f",
+        "rustSha256": "b85b2dffcb96f675dbd79c23997d2d83ae417b6537dce58ca7d18018012a3c5f",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "b087bd6fd12ff699bf26cf73e5586f59e34a4ac9c7e9fa6f0911560332e48ae6",
+        "rustSha256": "b6094980e8f93742af0f7544256c308a7b089145693f0eba5bc4261b895485f9",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-unavailable-unreadable",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e0f59409d7a644ab0f88fc341c8ef874847f26812abf28d66a83aa271097fd05",
+        "rustSha256": "e0f59409d7a644ab0f88fc341c8ef874847f26812abf28d66a83aa271097fd05",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "51b139806bf143033ed4bab2fd9d20577de339697147e44a07988d29e405499f",
+        "rustSha256": "16fb60270ea336f5c24d258d96911bf085be38a177bfd69eacbd6b91eae6a4e5",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-loading",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "244997f250d1f4d23b6333229091e8811915f4f90e7a94c9fb57a911c2798aaf",
+        "rustSha256": "244997f250d1f4d23b6333229091e8811915f4f90e7a94c9fb57a911c2798aaf",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "4d65f84c8f682f57e023729d9bfc4011d2c0f5ee687aeae4415e1cec1da71dbc",
+        "rustSha256": "22a59b8eec05b950471ea5ae6fb12be277da0a8c1dafd6efa1fcb1ac9e1e4ae6",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "align-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B6",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "d33ab980d03ede0a8931f1e7c7e37e604d27bbcd3173aa43be939a2d0346810e",
+        "rustSha256": "83cced400641a08cb6a31d240893babe9f249006b46048f5bbfcc128f25316eb",
+        "mismatched": 597,
+        "outsideMasks": 597,
+        "masks": [],
+        "diff": "diffs/align-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "44381ce33f455721bdc0ab187418ba218b04acb570ae0c49ae498e5aba293c83",
+        "rustSha256": "fcbee7ddf14ad5e2f2ae0f5ee5af37d273195a9f96e3cb7a6de78a364e799b2f",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 351: tC4                 \"Failed to fetch\" | rust                 \"internal error\""
+        ]
+      }
+    },
+    {
+      "name": "home-loading",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B3",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e8e117be3c5743d2a8fca02a9ad64369634b15213f4416edf653c009ceb0f3e2",
+        "rustSha256": "e8e117be3c5743d2a8fca02a9ad64369634b15213f4416edf653c009ceb0f3e2",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "8c027b627a66278061a8521635d7ae2f083cb92fd5cd74f01232ff3f1a176691",
+        "rustSha256": "cb2c32e22325134b0a20360e083b12a9f01a424a965249f0f27823499936fb38",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "home-empty",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "same",
+      "by": "B2",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "f1e26c0784e1a9e26504707a0e5542d30ab0f08e35023123d6340e3376b0e0f7",
+        "rustSha256": "f1e26c0784e1a9e26504707a0e5542d30ab0f08e35023123d6340e3376b0e0f7",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "51a7eba2e0fbdaecd4e08539abd54d27ef5a881223f805f64dc5ed6e5d1faae2",
+        "rustSha256": "3a6bf7e0e1f560dfdc58c88ebfff317303c84b5360d190c4f602f00fe7dfd96b",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "home-list-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B2",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "054b0a01c3422dbcae63d5df0c69529c1f64edea6350c7ed014ac1114e3d8e4c",
+        "rustSha256": "85218517891b73f5f5c900e50a65c3fc33bab3042a44f38c223ef7dad5ee298d",
+        "mismatched": 4381,
+        "outsideMasks": 4381,
+        "masks": [],
+        "diff": "diffs/home-list-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "f00c1f71cd958342d52e1cc961628f4f91dc31a8b73edf4ce2a422e6e5a8533b",
+        "rustSha256": "a18adbe7b458a76c7a6cb6e5c3b53fc43462d98f05c653a2121a1640a5072e90",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 35: tC4             \" TypeError: Failed to fetch \" | rust             \" internal error \""
+        ]
+      }
+    },
+    {
+      "name": "home-open-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "4893cc88e387e04187eca84920deabb6c8d722629dd4509d08bf098acaf0080a",
+        "rustSha256": "6edf81fe6c2dc8a4add50933cb616eb47a446c74a123a33e98533b871618e7a4",
+        "mismatched": 357830,
+        "outsideMasks": 357830,
+        "masks": [],
+        "diff": "diffs/home-open-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "ab6d6047fc809622d5d945e827ff8b1e969c82b4f6acc83c73ee339964b783f9",
+        "rustSha256": "66db4791a058fa0ba2a3a65abd9d061daa8e848d7b4fa523fbe2a4f5847b40bf",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 31: tC4         <div data-testid=\"home-checkpoint-error\" data-tone=\"warn\" role=\"alert\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color… | rust         <div data-testid=\"home-open-error\" data-tone=\"warn\" role=\"alert\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bo…",
+          "line 33: tC4             \"Checkpoint not saved: checkpoint refused: derived state diverges out-of-band at checking/custom/notes.json (on disk, not derived by the fold) — never silently repaired (R-8.7.5); reopen the project to reconcile (§8.8) A file changed outside the app. Your work is saved. Open the project … | rust             <strong >",
+          "line 34: tC4         <div data-testid=\"home-open-error\" data-tone=\"warn\" role=\"alert\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bo… | rust               \"The project could not be opened.\"",
+          "line 35: tC4           <div  style=\"color: var(--tone-text); display: contents; font-family: var(--font-ui); font-size: var(--fs-caption-lg); font-weight: var(--fw-regular); letter-spacing: var(--track-12-5); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px\"> | rust             \" ingredients/tc/project.json is not valid JSON \"",
+          "line 36: tC4             <strong > | rust             <button data-code=\"open\" data-i=\"outline\" data-testid=\"ask-for-help\" data-tone=\"ocean\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-po…"
+        ]
+      }
+    },
+    {
+      "name": "home-checkpoint-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "D1",
+        "dom": "D1"
+      }
+    },
+    {
+      "name": "home-resume",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "differs",
+      "by": "B7",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "11b853096cdc40caef04764544faf31dcc34202a078d8f9b3d63bfcb902e1262",
+        "rustSha256": "d58143645c7db683c68a935c28fa89e9b63a9dc8490578aa889467a4328965cb",
+        "mismatched": 391,
+        "outsideMasks": 391,
+        "masks": [],
+        "diff": "diffs/home-resume.png"
+      },
+      "dom": {
+        "tc4Sha256": "4821def3aeeaa7b2a52d1fd0714cc795ef52eb2d79e1df1099b448665a3b63a1",
+        "rustSha256": "12f7e0b3c9cd547a5f05d92e2e92452545b5b99ff33a8ea5c3dd5666c1dc0f8f",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
+      }
+    },
+    {
+      "name": "import-toast",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "F1",
+        "dom": "F1"
+      }
+    }
+  ]
+}

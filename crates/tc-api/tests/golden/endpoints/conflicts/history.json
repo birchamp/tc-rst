@@ -1,0 +1,66 @@
+{
+  "path": "conflicts/history",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "record": "{\"book\":\"TIT\",\"chapter\":1,\"kind\":\"verse\",\"verse\":1}"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "versions": [
+        {
+          "version": {
+            "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "by": {
+              "type": "person",
+              "value": {
+                "who": {
+                  "type": "mine"
+                },
+                "computer": null
+              }
+            },
+            "at": 1790812920000,
+            "clockAhead": false,
+            "shown": true,
+            "value": {
+              "type": "text",
+              "value": "Pablo, siervo de Dios."
+            }
+          },
+          "cause": "kept"
+        },
+        {
+          "version": {
+            "change": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "by": {
+              "type": "import"
+            },
+            "at": 1790000000000,
+            "clockAhead": false,
+            "shown": false,
+            "value": {
+              "type": "text",
+              "value": "Pablo, siervo"
+            }
+          },
+          "cause": "imported"
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -7,14 +7,18 @@
 //!
 //! The server defaults to `https://git.door43.org`. The client's log of each request and the
 //! status of each answer goes to stderr. Each check prints its result and how long it took
-//! to stdout. The exit code is non-zero when a check fails.
+//! to stdout; a download also prints how many chunks its bytes came in and whether Door43
+//! announced their size. The exit code is non-zero when a check fails.
 
 use std::error::Error;
 use std::process::ExitCode;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use tc_door43::{
-    CatalogQuery, Door43Client, GitOid, InternetSwitch, Limits, RepoRef, ServerUrl, TagName,
+    CatalogQuery, Door43Client, DownloadTo, DownloadWatch, GitOid, InternetSwitch, Limits, RepoRef,
+    ServerUrl, TagName,
 };
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::layer::SubscriberExt;
@@ -28,6 +32,40 @@ const UGL: &str = "uW/en_ugl";
 const UGL_COMMIT: &str = "d9d29e2d589258ce27f92b59f753a3af03ab7a72";
 
 type Outcome = Result<String, Box<dyn Error>>;
+
+/// Counts a download's chunks and keeps its last report.
+#[derive(Default)]
+struct Counted {
+    chunks: AtomicU64,
+    last: Mutex<(u64, Option<u64>)>,
+}
+
+impl DownloadWatch for Counted {
+    fn received(&self, received: u64, announced: Option<u64>) {
+        self.chunks.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut last) = self.last.lock() {
+            *last = (received, announced);
+        }
+    }
+
+    fn cancelled(&self) -> bool {
+        false
+    }
+}
+
+impl Counted {
+    fn summary(&self) -> String {
+        let (received, announced) = self.last.lock().map(|l| *l).unwrap_or_default();
+        let announced = announced.map_or_else(
+            || "no size announced".to_owned(),
+            |n| format!("{n} bytes announced"),
+        );
+        format!(
+            "{received} bytes in {} chunks, {announced}",
+            self.chunks.load(Ordering::Relaxed)
+        )
+    }
+}
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -102,11 +140,15 @@ async fn tag_commit(client: &Door43Client) -> Outcome {
 
 async fn export(client: &Door43Client) -> Outcome {
     let expected: GitOid = TWL_V91.parse()?;
+    let folder = tempfile::tempdir()?;
+    let counted = Counted::default();
+    let to = DownloadTo::folder(folder.path()).watched_by(&counted);
     let export = client
-        .download_sb_export(&TWL.parse()?, &"v91".parse()?, &expected)
+        .download_sb_export(&TWL.parse()?, &"v91".parse()?, &expected, to)
         .await?;
     Ok(format!(
-        "revision {}, {} verified files, {} unlisted, {} listed but missing",
+        "{}; revision {}, {} verified files, {} unlisted, {} listed but missing",
+        counted.summary(),
         export.revision,
         export.files.len(),
         export.unlisted.len(),
@@ -116,10 +158,16 @@ async fn export(client: &Door43Client) -> Outcome {
 
 async fn archive(client: &Door43Client) -> Outcome {
     let repo: RepoRef = UGL.parse()?;
-    let archive = client.download_archive(&repo, &UGL_COMMIT.parse()?).await?;
+    let folder = tempfile::tempdir()?;
+    let counted = Counted::default();
+    let to = DownloadTo::folder(folder.path()).watched_by(&counted);
+    let archive = client
+        .download_archive(&repo, &UGL_COMMIT.parse()?, to)
+        .await?;
     let bytes: usize = archive.files.iter().map(|f| f.bytes.len()).sum();
     Ok(format!(
-        "commit {} has tree {}: {} files, {bytes} bytes unpacked (limit {})",
+        "{}; commit {} has tree {}: {} files, {bytes} bytes unpacked (limit {})",
+        counted.summary(),
         archive.commit,
         archive.tree,
         archive.files.len(),

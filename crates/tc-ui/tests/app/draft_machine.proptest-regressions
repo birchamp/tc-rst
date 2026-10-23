@@ -1,0 +1,34 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc fc94293a14467e8ca57cadc5f98ea450f97d4ecd7ee08590674ec42177d537a6 # shrinks to (shell, ops) = (false, [Type(1, 1), Send(1), Land(1), Teammate(1, 0)])
+cc c7d16bc350a5e0d893be45f27548513e00f7a219bbf04d756833319b1152e97a # shrinks to (shell, ops) = (false, [SecondWriter, Unsafe, Copy])
+cc 4034f052ba22a196fd4e7612dc2fd5a85c21bc7c8f5250cccdfbd106dce100c3 # shrinks to (shell, ops) = (false, [Type(0, 0), Type(0, 0), Teammate(0, 0), Teammate(0, 1), Safe])
+cc 31958f658721d1bc300a1a54200a87cb6c3d487d7214a7a143c8cc5035974241 # shrinks to (shell, ops) = (false, [OtherComputer, Crash, Unsafe, ThatComputerClosed])
+cc cbca4d8ddb32cbf5c049550b29fed4550d5dfadb6c2989c845c4783550ec6348 # shrinks to (shell, ops) = (false, [Type(0, 0), SecondWriter, Copy, Offer, Type(0, 1), Safe])
+cc 753a065450f6ae29bc71308b58e2196028803e7e00c8871251eeb96e3f1309b4 # shrinks to (shell, ops) = (false, [Type(0, 0), SecondWriter, Copy, Type(0, 1)])
+cc 3378aed732482ea93a901e1fb4721c530f1a982dc9997a4804f85856c962094c # shrinks to (shell, ops) = (false, [Type(1, 1), SecondWriter, Copy, Type(1, 0), DraftTick(1), Type(1, 1), Flush])
+cc faacf2b3cb509a09ae64c32d91168e9b3fdb0023e228cffdf97e5ca36f7fc96b # shrinks to (shell, ops) = (false, [Type(1, 1), DraftTick(1), Flush, Type(1, 0), SecondWriter, Copy, Safe])
+cc bc69caf692f90c555cc97144d5371787ebf109787ecc7c0e9703659b6de17bc2 # shrinks to (shell, ops) = (false, [Type(0, 2), Teammate(0, 2), Crash, Offer, Type(0, 0), Send(0), Land(0), Settle])
+cc ee375356989f9788069ca8dffaa5feb7da17f0b28b73edde4e3d7d5d1fc591c2 # shrinks to (shell, ops) = (false, [Type(0, 1), Offer, Copy, Send(0), Land(0), Teammate(0, 2), Type(0, 1)])
+cc 7d394f3a5f71bb425ff5ce62ad18e00d543cb74bd9eed83c579eb3472eb330df # shrinks to (shell, ops) = (false, [Type(0, 1), Crash, Type(0, 0), Send(0), SecondWriter, Copy])
+cc 0699f1081196557bb6f9066aee8c3ba5e83aa0bbd9163f06d7298261f8fd10ce # shrinks to (shell, ops) = (false, [Type(1, 0), Crash, Offer, Settle, Type(1, 0), Discard(1, 0)])
+cc 312d9e970307c756be3b05f50fc5cf90e4aeb5c22221728f3f99f87b6b668d69 # shrinks to (shell, ops) = (false, [Type(1, 0), Crash, Type(1, 1), DraftTick(1), Type(1, 0), Flush, Teammate(1, 0)])
+cc c1bc878eeed429190e6bb60c4bfad7ff6faef642e1793ae636112197dab54951 # shrinks to (shell, ops) = (false, [Teammate(0, 0), Type(0, 0), Teammate(0, 1), Type(0, 1), Send(0), Type(0, 0)])
+cc ffccbbd6aabfe6d702423687224cfd3bb5113d7ff643f0fcb3d192fa30dcbaec # shrinks to (shell, ops) = (false, [Type(0, 1), Send(0), Land(0), Ack(0), Type(0, 2), Send(0), Type(0, 1), Land(0)])
+cc 09f6724df0af98a8a2883902e571f9d7d08bbbf68bad930f4ea0d3a37842a86f # shrinks to (shell, ops) = (false, [Type(0, 0), StorageFull, OtherComputer, Crash, Copy])
+cc a8f4f8389c0508016a4377adc5a54e4c956f22490e320e8e3368ae4fcc5ea5ed # shrinks to (shell, ops) = (true, [Type(0, 0), StorageFull, Type(0, 1), Crash, Offer, Settle, Safe])
+cc 30fd4b1322e0017d3644c71dc8487bc7585b44485f645095a3b8cf6bd0bcd1a6 # shrinks to (shell, ops) = (true, [Type(1, 2), Send(1), Type(1, 0), Land(1), Ack(1), Type(1, 1), Send(1), Type(1, 2), Land(1), Teammate(1, 0), Crash, Offer, Settle, DraftTick(0)])
+cc 9d0e70dea6226dd657c449cfb40fcd676bbba76e87110ab19c5f7b8978ad5053 # shrinks to (shell, ops) = (false, [Type(1, 0), DraftTick(1), Flush, SecondWriter, Copy, Type(1, 1), Send(1), Land(1), Ack(1), Safe])
+cc 3ecc9a6355fc62da5cc7f0dabe29fe7f13dba4cc2847d838e9289fb265d8d7ef # shrinks to (shell, ops) = (false, [Type(1, 1), Send(1), Type(1, 0), Land(1), Ack(1), DraftTick(0), Flush, SecondWriter, Copy, Type(1, 2), Send(1), Type(1, 0), Land(1), Type(1, 2), SecondWriter, Copy, Ack(1)])
+cc a1faee222c376dbde064ebd21b11ae40b486699412023edb709efa65eb5eb8e9 # shrinks to (shell, ops) = (false, [Type(0, 0), StorageFull, Type(0, 0), DraftTick(0), Flush, Type(0, 1), Send(0), Land(0), Ack(0), Offer, Type(0, 0), Send(0), Type(0, 0), Land(0), Offer, Settle])
+cc 307d831942a0e5749f00e6bc30f341130070667be706d30cde6d69a01cc8c655 # shrinks to (shell, ops) = (false, [Type(1, 1), Send(1), Type(1, 2), Land(1), Teammate(1, 2), Ack(1), Type(1, 2), Send(1), Type(1, 1), Land(1)])
+cc aff9f66abcb3b2420d544e6e1a63aa03b602df9eea59b20c64d07698bb1f544f # shrinks to (shell, ops) = (true, [Type(1, 2), Send(1), Type(1, 0), Land(1), Crash, Offer, Type(1, 1), Send(1), Type(1, 2), Land(1), Crash, Offer, Settle, Keep(1, 1)])
+cc eb6336c6c77a13911428d5a48fb5b7760ad037ccd80918df517db56b65c265a0 # shrinks to (shell, ops) = (false, [Type(0, 2), Send(0), Type(0, 0), Land(0), Type(1, 0), StorageFull, Type(0, 0), Crash, Type(0, 0), Crash, StorageFull, Type(1, 0), DraftTick(1), Flush, Offer, Settle, Type(0, 0), Keep(0, 0), SecondWriter, Copy, StorageFull, Type(0, 1), DraftTick(0), Flush])
+cc 50e24d0cc460ab4d35874c83f8ce29a091d06c7615b6aed9ad114cca4a4129fe # shrinks to (shell, ops) = (true, [Type(1, 0), Crash, Type(1, 2), Crash, Type(1, 0), Send(1), Type(1, 0), Land(1), Offer, Settle, Type(1, 0), Send(1), Type(1, 2), Land(1), Keep(1, 0), Ack(1), Crash, Type(1, 0), Send(1), Type(1, 0), Land(1)])
+cc f0b29ba01fd26f2a666c720cdec5149a423d72012de0663b8ad09336488fcecc # shrinks to (shell, ops) = (false, [StorageFull, Type(1, 2), DraftTick(1), Flush, Type(1, 0), Send(1), Land(1), Ack(1), Type(0, 0), Crash, Type(0, 0), Crash, StorageFull, Type(1, 2), DraftTick(1), Flush, Offer, Settle, Keep(1, 0), Crash, Teammate(1, 0)])
+cc be9dfa04f5ad729854cc89726218ca82b68d40cfae6aac97f266e643cdc86611 # shrinks to (shell, ops) = (false, [Type(0, 2), StorageFull, Type(0, 0), Send(0), Land(0), Ack(0), Offer, Settle, Type(0, 0), Keep(0, 0), StorageFull, Type(0, 2), DraftTick(0), Flush, Crash, Type(0, 0), Send(0), Type(0, 0), Land(0)])
+cc 92cb5b23c909c4df0594c9e92b2721d2b3a7760bbc9c3dc31697fe9b4f80511b # shrinks to (shell, ops) = (true, [Type(0, 0), DraftTick(0), Flush, PowerCut(3), StorageFull, Type(0, 1), DraftTick(0), Flush, Keep(0, 0), PowerCut(1)])

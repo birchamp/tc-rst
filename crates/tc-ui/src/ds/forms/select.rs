@@ -198,16 +198,18 @@ fn html(el: Option<web_sys::EventTarget>) -> Option<web_sys::HtmlElement> {
 /// options open with a search field; `on_change` receives the chosen option's value.
 #[component]
 pub fn Select(
-    #[prop(optional, into)] label: Option<String>,
+    #[prop(optional, into)] label: Option<Signal<String>>,
     #[prop(optional)] options: Vec<SelectOption>,
-    #[prop(optional, into)] hint: Option<String>,
+    #[prop(optional, into)] hint: Option<Signal<String>>,
     #[prop(optional, into)] id: Option<String>,
     #[prop(optional, into)] value: Signal<Option<String>>,
     #[prop(optional)] on_change: Option<Callback<String>>,
     #[prop(optional, into)] disabled: MaybeProp<bool>,
-    #[prop(optional, into)] search_placeholder: Option<String>,
-    #[prop(optional, into)] no_matches_label: Option<String>,
-    #[prop(optional, into)] clear_label: Option<String>,
+    /// The texts of the list follow the shown language, as the label does.
+    #[prop(optional, into)]
+    search_placeholder: Option<Signal<String>>,
+    #[prop(optional, into)] no_matches_label: Option<Signal<String>>,
+    #[prop(optional, into)] clear_label: Option<Signal<String>>,
     /// The Field's style.
     #[prop(optional)]
     style: Css,
@@ -245,9 +247,9 @@ fn Dropdown(
     value: Signal<Option<String>>,
     on_change: Option<Callback<String>>,
     disabled: MaybeProp<bool>,
-    search_placeholder: Option<String>,
-    no_matches_label: Option<String>,
-    clear_label: Option<String>,
+    search_placeholder: Option<Signal<String>>,
+    no_matches_label: Option<Signal<String>>,
+    clear_label: Option<Signal<String>>,
     attrs: Attrs,
 ) -> impl IntoView {
     let f = use_field();
@@ -332,6 +334,11 @@ fn Dropdown(
         close();
     };
     let choose = move |i: usize| {
+        // A Select turned off while its list is open must not change (tC4 #552), even for a
+        // choice that arrives before the list has closed.
+        if disabled() {
+            return;
+        }
         let Some(o) = opts.with_value(|o| o.get(i).cloned()) else {
             return;
         };
@@ -343,6 +350,13 @@ fn Dropdown(
         }
         close();
     };
+    // A Select that turns off closes its list: nothing in it may be chosen (tC4 #552, where the
+    // list stayed and took a row click). The focus is not sent back to the field, which is off.
+    Effect::new(move |_| {
+        if disabled() && open.get_untracked() {
+            open.set(false);
+        }
+    });
     let move_hi = move |delta: i64| {
         let n = visible.with_untracked(Vec::len) as i64;
         hi.update(|i| *i = (*i as i64 + delta).clamp(0, (n - 1).max(0)) as usize);
@@ -531,11 +545,7 @@ fn Dropdown(
             .to_style();
 
     let anchor: Anchor = Callback::new(move |_| button.get_untracked().map(Into::into));
-    let no_matches = no_matches_label.unwrap_or_else(|| "No matches".into());
-    let (search_placeholder, clear_label) = (
-        StoredValue::new(search_placeholder),
-        StoredValue::new(clear_label),
-    );
+    let no_matches = no_matches_label.unwrap_or_else(|| Signal::from("No matches"));
     let (list_id_panel, list_id_button) = (list_id.clone(), list_id.clone());
     let opt_id = StoredValue::new(opt_id);
 
@@ -652,10 +662,9 @@ fn Dropdown(
     let empty = Memo::new(move |_| visible.with(Vec::is_empty));
     let listbox = move || {
         if empty.get() {
-            let no_matches = no_matches.clone();
             return view! {
                 <div style="padding: 12px 10px;">
-                    <Text role=TextRole::Caption tone=TextTone::Muted>{no_matches}</Text>
+                    <Text role=TextRole::Caption tone=TextTone::Muted>{move || no_matches.get()}</Text>
                 </div>
             }
             .into_any();
@@ -672,12 +681,9 @@ fn Dropdown(
             s
         };
         let search = searchable.then(|| {
-            let placeholder = search_placeholder.get_value();
             let mut a = Attrs::new();
-            if let Some(p) = &placeholder {
-                a.set("aria-label", p.clone());
-            }
             a.set("aria-controls", list_id_panel.clone());
+            let label = Signal::derive(move || search_placeholder.map(|p| p.get()));
             let field = provide(None::<FieldContext>, move || {
                 crate::ds::SearchField(crate::ds::SearchFieldProps {
                     value: Some(query.into()),
@@ -704,10 +710,10 @@ fn Dropdown(
                             let _ = input.focus();
                         }
                     })),
-                    placeholder,
-                    clear_label: clear_label.get_value(),
+                    placeholder: search_placeholder,
+                    clear_label,
                     attrs: a,
-                    live_attrs: vec![("aria-activedescendant", active)],
+                    live_attrs: vec![("aria-activedescendant", active), ("aria-label", label)],
                     ..Default::default()
                 })
             });

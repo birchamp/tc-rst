@@ -1,8 +1,9 @@
 # Working in this repository
 
 This repository is a Rust rebuild of translationCore 4 (tC4), a desktop app for Bible
-translation. Read `docs/PLAN.md` first. Read `docs/STORAGE.md` before you touch anything
-that writes project data.
+translation. Read `docs/PLAN.md` first. Plan and live state: `.audit/roadmap/README.md`; record
+your work as `.audit/roadmap/TRACKING.md` says. Read `docs/STORAGE.md` before you touch
+anything that writes project data.
 
 ## The rules that protect translators' work
 
@@ -43,12 +44,9 @@ that writes project data.
   fail if the behavior it names breaks.
 - Parsers get round-trip property tests (`proptest`). Merge and storage code gets
   property tests for convergence and no-loss, plus crash-injection tests.
-- Before you commit, run `cargo fmt --all`, then
-  `cargo clippy --workspace --all-targets -- -D warnings`, then `cargo test --workspace`.
-  All three must pass. `tc-ui`'s components compile for `wasm32` only, so a change to
-  `crates/tc-ui` must also pass
-  `cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings`, with
-  and without `--features gallery`. CI runs all of these.
+- Before you commit, run `scripts/gates.sh` (`--list` prints its steps). It is the list CI
+  runs; every step must pass, and main moves only to a commit `scripts/gates.sh --check-receipt`
+  accepts.
 
 ## Performance
 

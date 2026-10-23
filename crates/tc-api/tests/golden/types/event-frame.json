@@ -1,0 +1,28 @@
+{
+  "seq": 1001,
+  "instance": "abababababababababababababababab",
+  "event": {
+    "type": "session",
+    "value": {
+      "at": {
+        "project": "kr_ulb",
+        "epoch": 3
+      },
+      "event": {
+        "type": "changed",
+        "value": {
+          "view": 44,
+          "scope": {
+            "type": "everything"
+          },
+          "cause": {
+            "type": "localSave",
+            "value": {
+              "request": "01010101010101010101010101010101"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "path": "account/signIn",
+  "kind": "command",
+  "net": "signIn",
+  "request": {
+    "request": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+    "login": "jdoe",
+    "password": "correct horse",
+    "stay": true
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "user": "jdoe",
+      "kept": "kept",
+      "notice": null,
+      "server": "git.door43.org",
+      "keychain": "works"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "signIn"
+    }
+  }
+}

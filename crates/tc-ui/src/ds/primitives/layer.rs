@@ -16,8 +16,8 @@ use wasm_bindgen::prelude::Closure;
 
 use crate::css::js_number;
 use crate::ds::{
-    Attrs, Css, LayerAlign, LayerPlacement, Level, Navigate, Scrim, ScrimToken, Side, provide,
-    spread,
+    Attrs, Css, LayerAlign, LayerPlacement, Level, Navigate, Scrim, ScrimToken, Side, live,
+    provide, spread,
 };
 use crate::geometry::{Rect, place};
 
@@ -209,12 +209,22 @@ pub fn Layer(
     /// Extra attributes of the scrim (React's `scrimProps`).
     #[prop(optional)]
     scrim_attrs: Attrs,
+    /// Attributes of the scrim whose values follow signals; `None` removes one.
+    #[prop(optional)]
+    scrim_live: Vec<(&'static str, Signal<Option<String>>)>,
     #[prop(optional, into)] role: Option<String>,
-    #[prop(optional, into)] label: Option<String>,
+    /// The panel's accessible name, which follows the shown language while the layer is on
+    /// screen (React draws `label` again on every render).
+    #[prop(optional, into)]
+    label: Option<Signal<String>>,
     #[prop(optional, into)] labelled_by: Option<String>,
     /// A press on the panel (React passes `onMouseDown` through `...rest`).
     #[prop(optional)]
     on_mouse_down: Option<Callback<MouseEvent>>,
+    /// A key on the panel (React passes `onKeyDown` through `...rest`; the open overlay keeps
+    /// Tab on its panel, B3).
+    #[prop(optional)]
+    on_key_down: Option<Callback<web_sys::KeyboardEvent>>,
     #[prop(optional)] style: Css,
     /// Extra attributes of the panel.
     #[prop(optional)]
@@ -593,13 +603,18 @@ pub fn Layer(
                 role=role.clone()
                 tabindex="-1"
                 aria-modal=modal.then_some("true")
-                aria-label=label.clone()
+                aria-label=move || label.map(|l| l.get())
                 aria-labelledby=labelled_by.clone()
                 data-layer-placement=anchored.then_some(placement.as_str())
                 data-side=move || if anchored { pos().map(|p| p.side.as_str()) } else { None }
                 on:click=|e: MouseEvent| e.stop_propagation()
                 on:mousedown=move |e: MouseEvent| {
                     if let Some(cb) = on_mouse_down {
+                        cb.run(e);
+                    }
+                }
+                on:keydown=move |e: web_sys::KeyboardEvent| {
+                    if let Some(cb) = on_key_down {
                         cb.run(e);
                     }
                 }
@@ -651,11 +666,13 @@ pub fn Layer(
         s.to_style()
     };
     let scrim_attrs = StoredValue::new(scrim_attrs);
+    let scrim_live = StoredValue::new(scrim_live);
     (move || {
         mounted.get().then(|| {
             view! {
                 <div
                     {..scrim_attrs.with_value(spread)}
+                    {..scrim_live.with_value(|l| live(l.clone()))}
                     data-layer-placement=placement.as_str()
                     on:mousedown=move |e: MouseEvent| {
                         // A press inside the panel is not a press on the scrim.

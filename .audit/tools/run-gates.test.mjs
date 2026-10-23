@@ -36,24 +36,8 @@ async function fixture(t) {
   return { cwd, git, command, options, counter, count, receipts };
 }
 
-test('default gate suite retains host, release and every wasm feature check in order', () => {
-  const steps = defaultSteps();
-  assert.deepEqual(steps.slice(0, 3), [
-    ['cargo', 'fmt', '--all', '--check'],
-    ['cargo', 'clippy', '--workspace', '--all-targets', '--', '-D', 'warnings'],
-    ['cargo', 'test', '--workspace'],
-  ]);
-  assert.deepEqual(steps[3], ['cargo', 'clippy', '-p', 'tc-app', '--lib', '--', '-D', 'warnings']);
-  assert.deepEqual(steps[4], ['cargo', 'clippy', '-p', 'tc-server', '-p', 'tc4', '--lib', '--bins', '--', '-D', 'warnings']);
-  assert.equal(steps.length, 10);
-  assert.deepEqual(steps.slice(5, 9).map(args => args.includes('--features') ? args[args.indexOf('--features') + 1] : 'none'),
-    ['none', 'gallery', 'app', 'test-hooks']);
-  for (const args of steps.slice(5)) {
-    assert.ok(args.includes('wasm32-unknown-unknown'));
-    assert.ok(args.includes('--all-targets'));
-    assert.deepEqual(args.slice(-3), ['--', '-D', 'warnings']);
-  }
-  assert.equal(steps.at(-1)[3], 'tc-api');
+test('the default gate suite is the one list CI runs (INV-LOCAL-PASS-MEANS-CI-PASS)', () => {
+  assert.deepEqual(defaultSteps(), [['scripts/gates.sh']]);
 });
 
 test('clean successes cache and fresh runs preserve separate complete logs', async t => {

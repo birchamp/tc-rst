@@ -20,6 +20,10 @@ pub fn Progress(
     #[prop(default = 18.0)]
     size: f64,
     #[prop(optional, into)] label: Option<String>,
+    /// The bar's smallest fill in px once its value is above 0, so a small share still shows
+    /// (tC4 #764, the Check bars). None draws the share as it is.
+    #[prop(default = None)]
+    min_fill: Option<f64>,
     #[prop(optional)] style: Css,
     #[prop(optional)] attrs: Attrs,
 ) -> impl IntoView {
@@ -135,6 +139,12 @@ pub fn Progress(
         s.set_opt(
             "transition",
             p.map(|_| "width var(--dur-enter) var(--ease-standard)"),
+        );
+        s.set_opt(
+            "min-width",
+            min_fill
+                .filter(|_| p.is_some_and(|p| p > 0.0))
+                .map(|px| format!("{}px", js_number(px))),
         );
         s.to_style()
     };

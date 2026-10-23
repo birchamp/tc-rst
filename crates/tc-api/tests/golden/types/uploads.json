@@ -1,0 +1,15 @@
+{
+  "flows": [
+    "exchange",
+    "import",
+    "usfm",
+    "guidedFix"
+  ],
+  "view": [
+    {
+      "id": "00112233445566778899aabbccddeeff",
+      "name": "Tito – 1.usfm",
+      "size": 53248
+    }
+  ]
+}

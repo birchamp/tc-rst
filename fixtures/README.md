@@ -5,7 +5,12 @@ Tests read these files read-only. Do not edit them.
 ## `tc4/`
 
 Copied from translationCore 4 at commit `d494a9d6ba9f4cdcc09faff9038c93159106045b`
-(https://github.com/unfoldingWord/translationCore4), on 2026-10-14.
+(https://github.com/unfoldingWord/translationCore4), on 2026-10-14. Five files and the README
+of `tc4/test-fixtures/` come from tC4 commit `9ad4d5c506466819e5b10f255bbb4a36d394e498`
+(2026-10-19), byte for byte, for tC4 #782, #768 and #773: `en_ult/GEN-1-1.usfm`,
+`en_ult/GEN-1.usfm`, `en_ult/GEN-773.usfm`, `en_ult/PSA-3.usfm`, `hbo_uhb/GEN-1-1.usfm` and
+`README.md`; everything else is still from `d494a9d`. tc-helps' `tests/highlight.rs` reads
+`en_ult/GEN-1.usfm` and `en_ult/GEN-773.usfm`, as tC4's `test/sourceHighlight.test.ts` does.
 
 | Path here | Path in tC4 | Provenance |
 |---|---|---|
@@ -34,3 +39,12 @@ checksums.
 
 An excerpt of the bundled Hebrew lexicon as a `git archive` with its `fetched.lock`, and the
 Strong's vectors computed by tC4's rule. Read `lexicon/README.md`.
+
+## `export/`
+
+What tC4's own print code answers, for `tc-export`'s print model. Read `export/README.md`.
+
+## `parity-state/`
+
+The files that make the parity scenarios' projects differ from the samples above, so cargo
+tests read the exact bytes of `.state/<scenario>` without node. Read `parity-state/README.md`.

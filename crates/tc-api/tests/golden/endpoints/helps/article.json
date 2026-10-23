@@ -1,0 +1,128 @@
+{
+  "path": "helps/article",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT",
+    "link": {
+      "type": "words",
+      "value": {
+        "category": "kt",
+        "slug": "god"
+      }
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "type": "found",
+      "value": {
+        "title": "God",
+        "path": "payload/kt/god.md",
+        "blocks": [
+          {
+            "kind": "h",
+            "quote": 0,
+            "spans": [
+              {
+                "text": "Definition:",
+                "bold": true
+              },
+              {
+                "text": ""
+              }
+            ],
+            "depth": 0,
+            "number": null,
+            "cells": [],
+            "header": false
+          },
+          {
+            "kind": "li",
+            "quote": 1,
+            "spans": [
+              {
+                "text": "God",
+                "bold": true
+              },
+              {
+                "text": " created the universe."
+              }
+            ],
+            "depth": 1,
+            "number": null,
+            "cells": [],
+            "header": false
+          },
+          {
+            "kind": "ol",
+            "quote": 0,
+            "spans": [
+              {
+                "text": "God",
+                "bold": true
+              },
+              {
+                "text": " is one."
+              }
+            ],
+            "depth": 0,
+            "number": "1",
+            "cells": [],
+            "header": false
+          },
+          {
+            "kind": "tr",
+            "quote": 0,
+            "spans": [
+              {
+                "text": "Word",
+                "bold": true
+              },
+              {
+                "text": " Meaning"
+              }
+            ],
+            "depth": 0,
+            "number": null,
+            "cells": [
+              [
+                {
+                  "text": "Word",
+                  "bold": true
+                },
+                {
+                  "text": ""
+                }
+              ],
+              [
+                {
+                  "text": "Meaning",
+                  "bold": true
+                },
+                {
+                  "text": ""
+                }
+              ]
+            ],
+            "header": true
+          }
+        ],
+        "dir": "ltr"
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

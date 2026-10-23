@@ -1,0 +1,2131 @@
+{
+  "name": "cc-obs",
+  "s": {
+    "view": "publish",
+    "projects": [
+      {
+        "id": "_local_/_local_/sample_burrito_obs",
+        "name": "Equipo Ejemplo — Historias Bíblicas Abiertas",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textStories",
+        "bookCodes": [],
+        "timestamp": 1789473600000
+      },
+      {
+        "id": "_local_/_local_/sample_burrito",
+        "name": "Equipo Ejemplo — Tito y Jonás",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textTranslation",
+        "bookCodes": [
+          "JON",
+          "TIT"
+        ],
+        "timestamp": 1782993600000
+      }
+    ],
+    "project": {
+      "id": "_local_/_local_/sample_burrito_obs",
+      "name": "Equipo Ejemplo — Historias Bíblicas Abiertas",
+      "languageTag": "es-419",
+      "scriptDirection": "ltr",
+      "flavor": "textStories",
+      "bookCodes": [],
+      "timestamp": 1789473600000,
+      "textFont": null,
+      "repoPath": "_local_/_local_/sample_burrito_obs"
+    },
+    "opening": null,
+    "book": null,
+    "chapter": 1,
+    "bookRaw": null,
+    "bookError": null,
+    "bookErrorHelp": null,
+    "storyNumbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50
+    ],
+    "storyNumber": 1,
+    "story": {
+      "number": 1,
+      "title": "La Creación",
+      "frames": [
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)",
+          "text": "Así fue como Dios hizo todo en el principio. Creó el universo y todo lo que hay en él en seis días.\nDespués de que Dios creó la tierra, estaba oscura y vacía, porque él aún no había formado nada en ella. Pero el Espíritu de Dios estaba allí sobre el agua."
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg)",
+          "text": "Entonces Dios dijo: «Que haya luz». Y hubo luz. Dios vio que la luz era buena y la llamó «día». La separó de la oscuridad, a la que llamó «noche». Dios creó la luz en el primer día de la creación."
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-03.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-04.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-05.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-06.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-07.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-08.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-09.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-10.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-11.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-12.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-13.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-14.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-15.jpg)",
+          "text": ""
+        },
+        {
+          "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-16.jpg)",
+          "text": ""
+        }
+      ],
+      "ref": "Una historia bíblica de: Génesis 1-2"
+    },
+    "sourceStory": null,
+    "storyImages": {
+      "1": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-01.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "2": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-02.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "3": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-03.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "4": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-04.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "5": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-05.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "6": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-06.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "7": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-07.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "8": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-08.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "9": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-09.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "10": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-10.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "11": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-11.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "12": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-12.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "13": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-13.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "14": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-14.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "15": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-15.jpg",
+        "pin": null,
+        "rung": null
+      },
+      "16": {
+        "source": "missing",
+        "uri": null,
+        "fileName": "obs-en-01-16.jpg",
+        "pin": null,
+        "rung": null
+      }
+    },
+    "storyImageNote": {
+      "wanted": 16,
+      "packs": [
+        {
+          "pin": {
+            "repoPath": "git.door43.org/uW/obs_images_360",
+            "sha": "7146d5b504f6b63b9e11f7dc0b18c594d0ae179d",
+            "flavor": "peripheral/x-obsimages"
+          },
+          "localPath": null,
+          "via": null,
+          "files": 0,
+          "error": "not installed"
+        },
+        {
+          "pin": {
+            "repoPath": "git.door43.org/uW/obs_images_360",
+            "sha": "7146d5b504f6b63b9e11f7dc0b18c594d0ae179d",
+            "flavor": "peripheral/x-obsimages"
+          },
+          "localPath": "_local_/_sideloaded_/uw--obs_images_360--7146d5b504f6",
+          "via": "paths",
+          "files": 0,
+          "error": null
+        }
+      ]
+    },
+    "storyLoading": false,
+    "storyError": null,
+    "storySource": {
+      "kind": "not-installed",
+      "pin": {
+        "repoPath": "git.door43.org/es-419_gl/es-419_obs",
+        "version": "v2",
+        "sha": "4a239590d543df59f77d5ee624d475a7488b5fc3",
+        "flavor": "gloss/textStories"
+      }
+    },
+    "sources": {},
+    "sourceTab": "ult",
+    "editing": null,
+    "saveState": "saved",
+    "rail": true,
+    "helps": true,
+    "helpsWidth": null,
+    "helpsTab": "notes",
+    "helpsHover": null,
+    "helpsActive": null,
+    "academy": null,
+    "understand": {
+      "loading": false,
+      "book": "OBS",
+      "story": 1,
+      "notes": {
+        "state": "fetch",
+        "pin": {
+          "repoPath": "git.door43.org/es-419_gl/es-419_obs-tn",
+          "version": "v2",
+          "sha": "eaa18de94dcb7df1406cc5b20deb87053c0478ca",
+          "flavor": "peripheral/x-obsnotes"
+        },
+        "rung": "primary"
+      },
+      "words": {
+        "state": "fetch",
+        "pin": {
+          "repoPath": "git.door43.org/es-419_gl/es-419_obs-twl",
+          "version": "v2",
+          "sha": "eb5ecd974b19a123e1fe3ee9da21c89c2555d18d",
+          "flavor": "parascriptural/x-bcvarticles"
+        },
+        "rung": "primary"
+      },
+      "questions": {
+        "state": "ready",
+        "items": [
+          {
+            "contextId": {
+              "checkId": "es4e",
+              "occurrenceNote": "God created everything.",
+              "reference": {
+                "story": 1,
+                "frame": 1
+              },
+              "tool": "translationQuestions",
+              "groupId": "es4e",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "Where did everything in the universe come from?",
+            "response": "God created everything.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "pefq",
+              "occurrenceNote": "He took six days.",
+              "reference": {
+                "story": 1,
+                "frame": 1
+              },
+              "tool": "translationQuestions",
+              "groupId": "pefq",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "How long did it take God to create everything?",
+            "response": "He took six days.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "rp6v",
+              "occurrenceNote": "He said they were good.",
+              "reference": {
+                "story": 1,
+                "frame": 2
+              },
+              "tool": "translationQuestions",
+              "groupId": "rp6v",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What was God’s response to the day and night he created on the first day?",
+            "response": "He said they were good.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "n707",
+              "occurrenceNote": "He said they were good.",
+              "reference": {
+                "story": 1,
+                "frame": 4
+              },
+              "tool": "translationQuestions",
+              "groupId": "n707",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What was God’s response to the earth and the seas he created on the third day?",
+            "response": "He said they were good.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "kldz",
+              "occurrenceNote": "He said they were good.",
+              "reference": {
+                "story": 1,
+                "frame": 5
+              },
+              "tool": "translationQuestions",
+              "groupId": "kldz",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What was God’s response to the trees and plants he created on the third day?",
+            "response": "He said they were good.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "fz5b",
+              "occurrenceNote": "He said they were good.",
+              "reference": {
+                "story": 1,
+                "frame": 6
+              },
+              "tool": "translationQuestions",
+              "groupId": "fz5b",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What was God’s response to the sun, moon, and stars he created on the fourth day?",
+            "response": "He said they were good.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "n7xs",
+              "occurrenceNote": "He said they were good.",
+              "reference": {
+                "story": 1,
+                "frame": 7
+              },
+              "tool": "translationQuestions",
+              "groupId": "n7xs",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What was God’s response to the things in the seas and the birds he created on the fifth day?",
+            "response": "He said they were good.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "v4vv",
+              "occurrenceNote": "He said they were good.",
+              "reference": {
+                "story": 1,
+                "frame": 8
+              },
+              "tool": "translationQuestions",
+              "groupId": "v4vv",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What was God’s response to the land animals he created on the sixth day?",
+            "response": "He said they were good.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "p9xl",
+              "occurrenceNote": "He made man in his image and in his likeness.",
+              "reference": {
+                "story": 1,
+                "frame": 9
+              },
+              "tool": "translationQuestions",
+              "groupId": "p9xl",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "In what way did God make man different than the animals?",
+            "response": "He made man in his image and in his likeness.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "y6x9",
+              "occurrenceNote": "They would have authority over the earth and over the animals, and would care for them.",
+              "reference": {
+                "story": 1,
+                "frame": 9
+              },
+              "tool": "translationQuestions",
+              "groupId": "y6x9",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What did God say would be the responsibility of the human beings?",
+            "response": "They would have authority over the earth and over the animals, and would care for them.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "uxai",
+              "occurrenceNote": "God formed him from the soil.",
+              "reference": {
+                "story": 1,
+                "frame": 10
+              },
+              "tool": "translationQuestions",
+              "groupId": "uxai",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "How did God make the first man?",
+            "response": "God formed him from the soil.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "jzca",
+              "occurrenceNote": "God breathed life into him.",
+              "reference": {
+                "story": 1,
+                "frame": 10
+              },
+              "tool": "translationQuestions",
+              "groupId": "jzca",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "How did the man become alive?",
+            "response": "God breathed life into him.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "dd8r",
+              "occurrenceNote": "His name was Adam.",
+              "reference": {
+                "story": 1,
+                "frame": 10
+              },
+              "tool": "translationQuestions",
+              "groupId": "dd8r",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What was the name of the man?",
+            "response": "His name was Adam.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "bc1e",
+              "occurrenceNote": "He put Adam in a garden that God planted.",
+              "reference": {
+                "story": 1,
+                "frame": 10
+              },
+              "tool": "translationQuestions",
+              "groupId": "bc1e",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "Where did God put Adam?",
+            "response": "He put Adam in a garden that God planted.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "qmgu",
+              "occurrenceNote": "He could not eat from the tree of the knowledge of good and evil.",
+              "reference": {
+                "story": 1,
+                "frame": 11
+              },
+              "tool": "translationQuestions",
+              "groupId": "qmgu",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "From which special tree was Adam not allowed to eat?",
+            "response": "He could not eat from the tree of the knowledge of good and evil.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "f4wp",
+              "occurrenceNote": "He would die.",
+              "reference": {
+                "story": 1,
+                "frame": 11
+              },
+              "tool": "translationQuestions",
+              "groupId": "f4wp",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What would happen if Adam ate from the tree of the knowledge of good and evil?",
+            "response": "He would die.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "gy7x",
+              "occurrenceNote": "The animals were not able to be a **helper** for Adam.",
+              "reference": {
+                "story": 1,
+                "frame": 12
+              },
+              "tool": "translationQuestions",
+              "groupId": "gy7x",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "Why was Adam **alone** when there were all kinds of animals?",
+            "response": "The animals were not able to be a **helper** for Adam.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "oxyv",
+              "occurrenceNote": "He formed her from Adam’s rib.",
+              "reference": {
+                "story": 1,
+                "frame": 13
+              },
+              "tool": "translationQuestions",
+              "groupId": "oxyv",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "How did God make the woman?",
+            "response": "He formed her from Adam’s rib.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "pwvm",
+              "occurrenceNote": "It meant that she was made from man.",
+              "reference": {
+                "story": 1,
+                "frame": 14
+              },
+              "tool": "translationQuestions",
+              "groupId": "pwvm",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What did the name **woman** mean to Adam?",
+            "response": "It meant that she was made from man.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "z8br",
+              "occurrenceNote": "They are to become one.",
+              "reference": {
+                "story": 1,
+                "frame": 14
+              },
+              "tool": "translationQuestions",
+              "groupId": "z8br",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What is the purpose of a man having a wife?",
+            "response": "They are to become one.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "qu2t",
+              "occurrenceNote": "He said it was very good.",
+              "reference": {
+                "story": 1,
+                "frame": 15
+              },
+              "tool": "translationQuestions",
+              "groupId": "qu2t",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What did God say about his creation when he finished it?",
+            "response": "He said it was very good.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          },
+          {
+            "contextId": {
+              "checkId": "w6pr",
+              "occurrenceNote": "He finished all his work and blessed the seventh day and made it holy.",
+              "reference": {
+                "story": 1,
+                "frame": 16
+              },
+              "tool": "translationQuestions",
+              "groupId": "w6pr",
+              "quote": [],
+              "quoteString": "",
+              "occurrence": 0
+            },
+            "category": "questions",
+            "question": "What did God do on the seventh day?",
+            "response": "He finished all his work and blessed the seventh day and made it holy.",
+            "selections": false,
+            "comments": false,
+            "reminders": false,
+            "nothingToSelect": false,
+            "verseEdits": false,
+            "invalidated": false
+          }
+        ],
+        "pin": {
+          "repoPath": "git.door43.org/unfoldingWord/en_obs-tq",
+          "version": "v10",
+          "sha": "01b92fe8793d62cff3a2221f5174c768cbad3dc1",
+          "flavor": "peripheral/x-obsquestions"
+        },
+        "rung": "fallback",
+        "unavailablePrimary": null,
+        "dropped": null
+      },
+      "comprehension": {}
+    },
+    "noteSaveState": "saved",
+    "alignSaveState": "saved",
+    "checkSaveState": "saved",
+    "storySaveState": "saved",
+    "storySaveError": null,
+    "commitError": null,
+    "commitErrorHelp": null,
+    "commitErrorRepo": null,
+    "modal": null,
+    "fb": null,
+    "np": null,
+    "ab": null,
+    "st": null,
+    "im": null,
+    "si": null,
+    "door43User": null,
+    "door43Kept": false,
+    "door43NotKept": false,
+    "sh": null,
+    "remoteByProject": {
+      "_local_/_local_/sample_burrito_obs": null,
+      "_local_/_local_/sample_burrito": null
+    },
+    "importToast": null,
+    "importedRepo": null,
+    "od": null,
+    "fix": null,
+    "src": {
+      "gateway": null,
+      "book": "TIT",
+      "rows": [],
+      "loading": false,
+      "error": null,
+      "dl": null,
+      "exclude": {}
+    },
+    "installedSrc": [],
+    "installEpoch": 0,
+    "checkable": [],
+    "checkableError": null,
+    "preflightError": null,
+    "gatewayError": null,
+    "internetOn": false,
+    "netAsk": null,
+    "netFailed": false,
+    "accountError": null,
+    "appLocale": "en",
+    "projectPins": {
+      "schemaVersion": 2,
+      "languageSets": {
+        "primary": {
+          "gatewayLanguage": {
+            "languageId": "es-419",
+            "owner": "es-419_gl"
+          },
+          "translationWords": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_tw",
+            "version": "v37",
+            "sha": "7586f4ff1f0483ea40a4a68e5e1f33158e08c208",
+            "flavor": "parascriptural/x-bcvarticles"
+          },
+          "translationAcademy": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_ta",
+            "version": "v4",
+            "sha": "26606b578c37cc2c0ee09bb7b9a291860ff59444",
+            "flavor": "peripheral/x-peripheralArticles"
+          },
+          "obs": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_obs",
+            "version": "v2",
+            "sha": "4a239590d543df59f77d5ee624d475a7488b5fc3",
+            "flavor": "gloss/textStories"
+          },
+          "obs-tn": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_obs-tn",
+            "version": "v2",
+            "sha": "eaa18de94dcb7df1406cc5b20deb87053c0478ca",
+            "flavor": "peripheral/x-obsnotes"
+          },
+          "obs-twl": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_obs-twl",
+            "version": "v2",
+            "sha": "eb5ecd974b19a123e1fe3ee9da21c89c2555d18d",
+            "flavor": "parascriptural/x-bcvarticles"
+          }
+        },
+        "fallback": {
+          "gatewayLanguage": {
+            "languageId": "en",
+            "owner": "unfoldingWord"
+          },
+          "translationNotes": {
+            "repoPath": "git.door43.org/unfoldingWord/en_tn",
+            "version": "v91",
+            "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a",
+            "flavor": "parascriptural/x-bcvnotes",
+            "books": [
+              "1CO",
+              "1JN",
+              "1KI",
+              "1PE",
+              "1SA",
+              "1TH",
+              "1TI",
+              "2CO",
+              "2JN",
+              "2KI",
+              "2PE",
+              "2SA",
+              "2TH",
+              "2TI",
+              "3JN",
+              "ACT",
+              "AMO",
+              "COL",
+              "DAN",
+              "DEU",
+              "EPH",
+              "EST",
+              "EXO",
+              "EZR",
+              "GAL",
+              "GEN",
+              "HAB",
+              "HAG",
+              "HEB",
+              "HOS",
+              "JAS",
+              "JDG",
+              "JHN",
+              "JOB",
+              "JOL",
+              "JON",
+              "JOS",
+              "JUD",
+              "LAM",
+              "LEV",
+              "LUK",
+              "MAL",
+              "MAT",
+              "MIC",
+              "MRK",
+              "NAM",
+              "NEH",
+              "OBA",
+              "PHM",
+              "PHP",
+              "PRO",
+              "PSA",
+              "REV",
+              "ROM",
+              "RUT",
+              "SNG",
+              "TIT",
+              "ZEC",
+              "ZEP"
+            ]
+          },
+          "translationWordsLinks": {
+            "repoPath": "git.door43.org/unfoldingWord/en_twl",
+            "version": "v91",
+            "sha": "7cbb3419f79780ce84b92ad7d42bd476cc5d8a64",
+            "flavor": "parascriptural/x-bcvarticles",
+            "books": [
+              "1CO",
+              "1JN",
+              "1KI",
+              "1PE",
+              "1SA",
+              "1TH",
+              "1TI",
+              "2CO",
+              "2JN",
+              "2KI",
+              "2PE",
+              "2SA",
+              "2TH",
+              "2TI",
+              "3JN",
+              "ACT",
+              "AMO",
+              "COL",
+              "DAN",
+              "DEU",
+              "EPH",
+              "EST",
+              "EXO",
+              "EZR",
+              "GAL",
+              "GEN",
+              "HAB",
+              "HAG",
+              "HEB",
+              "HOS",
+              "JAS",
+              "JDG",
+              "JHN",
+              "JOB",
+              "JOL",
+              "JON",
+              "JOS",
+              "JUD",
+              "LAM",
+              "LEV",
+              "LUK",
+              "MAL",
+              "MAT",
+              "MIC",
+              "MRK",
+              "NAM",
+              "NEH",
+              "OBA",
+              "PHM",
+              "PHP",
+              "PRO",
+              "PSA",
+              "REV",
+              "ROM",
+              "RUT",
+              "SNG",
+              "TIT",
+              "ZEC",
+              "ZEP"
+            ]
+          },
+          "translationWords": {
+            "repoPath": "git.door43.org/unfoldingWord/en_tw",
+            "version": "v91",
+            "sha": "ff5b3852c27c3a0d01b109e482eb26047dcd20e2",
+            "flavor": "parascriptural/x-bcvarticles",
+            "books": [
+              "1CH",
+              "1CO",
+              "1JN",
+              "1KI",
+              "1PE",
+              "1SA",
+              "1TH",
+              "1TI",
+              "2CH",
+              "2CO",
+              "2JN",
+              "2KI",
+              "2PE",
+              "2SA",
+              "2TH",
+              "2TI",
+              "3JN",
+              "ACT",
+              "AMO",
+              "COL",
+              "DAN",
+              "DEU",
+              "ECC",
+              "EPH",
+              "EST",
+              "EXO",
+              "EZK",
+              "EZR",
+              "GAL",
+              "GEN",
+              "HAB",
+              "HAG",
+              "HEB",
+              "HOS",
+              "ISA",
+              "JAS",
+              "JDG",
+              "JER",
+              "JHN",
+              "JOB",
+              "JOL",
+              "JON",
+              "JOS",
+              "JUD",
+              "LAM",
+              "LEV",
+              "LUK",
+              "MAL",
+              "MAT",
+              "MIC",
+              "MRK",
+              "NAM",
+              "NEH",
+              "NUM",
+              "OBA",
+              "PHM",
+              "PHP",
+              "PRO",
+              "PSA",
+              "REV",
+              "ROM",
+              "RUT",
+              "SNG",
+              "TIT",
+              "ZEC",
+              "ZEP"
+            ]
+          },
+          "translationAcademy": {
+            "repoPath": "git.door43.org/unfoldingWord/en_ta",
+            "version": "v91",
+            "sha": "ce9a1bb9431317ca888e8c1f9620caa7f5fe45fd",
+            "flavor": "peripheral/x-peripheralArticles"
+          },
+          "obs": {
+            "repoPath": "git.door43.org/unfoldingWord/en_obs",
+            "version": "v9",
+            "sha": "d39a1dc7a7557ac54e4a8fecc3462147fe7eec3b",
+            "flavor": "gloss/textStories"
+          },
+          "obs-tn": {
+            "repoPath": "git.door43.org/unfoldingWord/en_obs-tn",
+            "version": "v13",
+            "sha": "e86138ea13f619f09f7a6dcaa60592716d407fe4",
+            "flavor": "peripheral/x-obsnotes"
+          },
+          "obs-twl": {
+            "repoPath": "git.door43.org/unfoldingWord/en_obs-twl",
+            "version": "v3",
+            "sha": "44ebc9fafe8101665f985007d566f5036a2be85b",
+            "flavor": "parascriptural/x-bcvarticles"
+          },
+          "obs-tq": {
+            "repoPath": "git.door43.org/unfoldingWord/en_obs-tq",
+            "version": "v10",
+            "sha": "01b92fe8793d62cff3a2221f5174c768cbad3dc1",
+            "flavor": "peripheral/x-obsquestions"
+          },
+          "obs-images": {
+            "repoPath": "git.door43.org/uW/obs_images_360",
+            "sha": "7146d5b504f6b63b9e11f7dc0b18c594d0ae179d",
+            "flavor": "peripheral/x-obsimages"
+          },
+          "simplifiedText": {
+            "repoPath": "git.door43.org/unfoldingWord/en_ust",
+            "version": "v91",
+            "sha": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+            "flavor": "scripture/textTranslation",
+            "books": [
+              "TIT"
+            ]
+          }
+        }
+      }
+    },
+    "projectPinsSeq": 0,
+    "projectPinsLoaded": true,
+    "projectPinsError": null,
+    "sourcePanes": null,
+    "preflight": {
+      "translationWords": {
+        "tool": "translationWords",
+        "slot": "obs-twl",
+        "state": "fetch",
+        "resolution": {
+          "rung": "primary",
+          "pin": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_obs-twl",
+            "version": "v2",
+            "sha": "eb5ecd974b19a123e1fe3ee9da21c89c2555d18d",
+            "flavor": "parascriptural/x-bcvarticles"
+          },
+          "usedFallback": false
+        },
+        "needs": {
+          "repoPath": "git.door43.org/es-419_gl/es-419_obs-twl",
+          "version": "v2",
+          "sha": "eb5ecd974b19a123e1fe3ee9da21c89c2555d18d",
+          "flavor": "parascriptural/x-bcvarticles"
+        },
+        "sourceLanguage": "es-419"
+      },
+      "translationNotes": {
+        "tool": "translationNotes",
+        "slot": "obs-tn",
+        "state": "fetch",
+        "resolution": {
+          "rung": "primary",
+          "pin": {
+            "repoPath": "git.door43.org/es-419_gl/es-419_obs-tn",
+            "version": "v2",
+            "sha": "eaa18de94dcb7df1406cc5b20deb87053c0478ca",
+            "flavor": "peripheral/x-obsnotes"
+          },
+          "usedFallback": false
+        },
+        "needs": {
+          "repoPath": "git.door43.org/es-419_gl/es-419_obs-tn",
+          "version": "v2",
+          "sha": "eaa18de94dcb7df1406cc5b20deb87053c0478ca",
+          "flavor": "peripheral/x-obsnotes"
+        },
+        "sourceLanguage": "es-419"
+      }
+    },
+    "gatewayPreview": null,
+    "gatewayBusy": false,
+    "upgrade": {
+      "checking": false,
+      "offers": null,
+      "textOffers": null,
+      "offersFor": null,
+      "error": null,
+      "installing": null,
+      "progress": null,
+      "preview": null
+    },
+    "ops": {
+      "entries": [
+        {
+          "id": "2026-10-19T02:49:44.987Z#1",
+          "op": "open",
+          "startedAt": "2026-10-19T02:49:44.987Z",
+          "facts": {
+            "repoPath": "_local_/_local_/sample_burrito_obs"
+          },
+          "report": {
+            "op": "open",
+            "ok": true,
+            "facts": {
+              "replayed": [],
+              "seeded": true,
+              "classification": "seeded",
+              "regeneratedPaths": [],
+              "reconciledBooks": [],
+              "forks": [],
+              "retained": [],
+              "pendingStructural": [],
+              "phases": [
+                {
+                  "op": "seed",
+                  "ok": true,
+                  "facts": {
+                    "seeded": true,
+                    "regeneratedPaths": []
+                  },
+                  "startedAt": "2026-10-19T02:49:45.218Z",
+                  "endedAt": "2026-10-19T02:49:47.868Z"
+                }
+              ]
+            },
+            "startedAt": "2026-10-19T02:49:45.068Z",
+            "endedAt": "2026-10-19T02:49:47.869Z"
+          }
+        },
+        {
+          "id": "2026-10-19T02:49:48.869Z#2",
+          "op": "checkpoint",
+          "startedAt": "2026-10-19T02:49:48.869Z",
+          "facts": {
+            "repoPath": "_local_/_local_/sample_burrito_obs",
+            "message": "Checkpoint, leaving Understand: sources (tC4)"
+          },
+          "report": {
+            "op": "checkpoint",
+            "ok": true,
+            "facts": {
+              "message": "Checkpoint, leaving Understand: sources (tC4)",
+              "written": []
+            },
+            "startedAt": "2026-10-19T02:49:48.834Z",
+            "endedAt": "2026-10-19T02:49:50.502Z"
+          }
+        }
+      ],
+      "errors": []
+    },
+    "aligning": false,
+    "alignIndex": null,
+    "alignVerse": null,
+    "alignSession": null,
+    "checkTool": null,
+    "checkSession": null,
+    "pickerProgress": {
+      "seq": 2
+    },
+    "toolPos": {},
+    "progressByProject": {
+      "_local_/_local_/sample_burrito": {
+        "JON": 4,
+        "TIT": 11
+      },
+      "_local_/_local_/sample_burrito_obs": {
+        "OBS": 1,
+        "stories": [
+          {
+            "number": 1,
+            "title": "La Creación",
+            "pct": 13,
+            "frames": 16,
+            "drafted": 2
+          },
+          {
+            "number": 2,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 3,
+            "title": "",
+            "pct": 0,
+            "frames": 16,
+            "drafted": 0
+          },
+          {
+            "number": 4,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 5,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 6,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 7,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 8,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 9,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 10,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 11,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 12,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 13,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 14,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 15,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 16,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 17,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 18,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 19,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 20,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 21,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 22,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 23,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 24,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 25,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 26,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 27,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 28,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 29,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 30,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 31,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 32,
+            "title": "",
+            "pct": 0,
+            "frames": 16,
+            "drafted": 0
+          },
+          {
+            "number": 33,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 34,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 35,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 36,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 37,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 38,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 39,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 40,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 41,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 42,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 43,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 44,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 45,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 46,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 47,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 48,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 49,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 50,
+            "title": "",
+            "pct": 0,
+            "frames": 17,
+            "drafted": 0
+          }
+        ]
+      }
+    },
+    "conflictsByProject": {
+      "_local_/_local_/sample_burrito": {},
+      "_local_/_local_/sample_burrito_obs": {}
+    },
+    "teamByProject": {
+      "_local_/_local_/sample_burrito": {
+        "names": {},
+        "actors": []
+      },
+      "_local_/_local_/sample_burrito_obs": {
+        "names": {},
+        "actors": [
+          "a3b0a80329ec6f51"
+        ]
+      }
+    },
+    "syncing": null,
+    "syncResult": null,
+    "verseConflicts": [],
+    "team": {
+      "me": "a3b0a80329ec6f51",
+      "names": {},
+      "actors": [
+        "a3b0a80329ec6f51"
+      ]
+    },
+    "conflictReview": null,
+    "obsStoryByProject": {
+      "_local_/_local_/sample_burrito_obs": 1
+    },
+    "obsRecentByProject": {},
+    "placeByProject": {
+      "_local_/_local_/sample_burrito_obs": {
+        "story:1": {
+          "mode": "check",
+          "chapter": 1,
+          "verse": 1,
+          "at": 1792378189177
+        }
+      }
+    },
+    "storyFrame": 1,
+    "draftUnits": {},
+    "alignSuggestions": {},
+    "alignSuggest": {
+      "status": "off",
+      "testament": null,
+      "verses": 0,
+      "boosted": false,
+      "error": null
+    },
+    "lastEdit": null,
+    "tick": 0,
+    "projectScope": {
+      "GEN": [
+        "1-2",
+        "3",
+        "6-8",
+        "11-15",
+        "16-22",
+        "24:1-25:26",
+        "25:27-35:29",
+        "37-50",
+        "3:15",
+        "12:1-3",
+        "1-3",
+        "6",
+        "14",
+        "22"
+      ],
+      "EXO": [
+        "1-4",
+        "5-10",
+        "11:1-12:32",
+        "12:33-15:21",
+        "19-34",
+        "16-17",
+        "12",
+        "20"
+      ],
+      "NUM": [
+        "10-14",
+        "20",
+        "27"
+      ],
+      "DEU": [
+        "34",
+        "18:15"
+      ],
+      "JOS": [
+        "1-24"
+      ],
+      "JDG": [
+        "1-3",
+        "6-8"
+      ],
+      "1SA": [
+        "1-10",
+        "10",
+        "15-19",
+        "24",
+        "31"
+      ],
+      "2SA": [
+        "5",
+        "7",
+        "11-12"
+      ],
+      "1KI": [
+        "1-6",
+        "11-12",
+        "16-18"
+      ],
+      "2KI": [
+        "5",
+        "17",
+        "24-25"
+      ],
+      "JER": [
+        "38",
+        "31"
+      ],
+      "2CH": [
+        "36"
+      ],
+      "EZR": [
+        "1-10"
+      ],
+      "NEH": [
+        "1-13"
+      ],
+      "ISA": [
+        "59:16",
+        "7:14",
+        "9:1-7",
+        "35:3-5",
+        "61",
+        "53",
+        "50:6"
+      ],
+      "DAN": [
+        "7"
+      ],
+      "MAL": [
+        "4:5"
+      ],
+      "MIC": [
+        "5:2"
+      ],
+      "PSA": [
+        "22:18",
+        "35:19",
+        "69:4",
+        "41:9",
+        "16:10-11"
+      ],
+      "ZEC": [
+        "11:12-13"
+      ],
+      "LUK": [
+        "1",
+        "2",
+        "3:1-23",
+        "4:1-13",
+        "4:14-30",
+        "38-44",
+        "10:25-37",
+        "18:18-30",
+        "9:10-17",
+        "8:26-39",
+        "8:42-48",
+        "8:4-15",
+        "13:18-21",
+        "18:9-14",
+        "15:11-32",
+        "9:28-36",
+        "22:1-53",
+        "22:54-23:25",
+        "23:26-56",
+        "24:1-12",
+        "24:13-53"
+      ],
+      "MAT": [
+        "1",
+        "3",
+        "4:1-11",
+        "4:12-25",
+        "19:16-30",
+        "18:21-35",
+        "14:13-21",
+        "14:22-33",
+        "8:28-34",
+        "9:20-22",
+        "13:1-8",
+        "18-23",
+        "13:31-33",
+        "44-46",
+        "17:1-9",
+        "26:14-56",
+        "26:57-27:26",
+        "27:27-61",
+        "27:62-28:15",
+        "28:16-20",
+        "24:14",
+        "28:18",
+        "13:24-30",
+        "13:36-42",
+        "22:13"
+      ],
+      "MRK": [
+        "1:9-11",
+        "1:12-13",
+        "1:14-15",
+        "35-39",
+        "3:13-21",
+        "10:17-31",
+        "6:31-44",
+        "6:45-52",
+        "5:1-20",
+        "5:24-34",
+        "4:1-8",
+        "13-20",
+        "4:30-32",
+        "9:2-8",
+        "14:10-50",
+        "14:53-15:15",
+        "15:16-47",
+        "16:1-11",
+        "16:12-20",
+        "16:16"
+      ],
+      "JHN": [
+        "6:5-15",
+        "6:16-21",
+        "11:1-46",
+        "12:6",
+        "18:1-11",
+        "18:12-19:16",
+        "19:17-42",
+        "20:1-18",
+        "20:19-23",
+        "3:16",
+        "15:20",
+        "16:33"
+      ],
+      "ACT": [
+        "1:1-11",
+        "2",
+        "3:1-4:22",
+        "6:8-8:5",
+        "8:26-40",
+        "8:3",
+        "9:1-31",
+        "11:19-26",
+        "13:1-3",
+        "16:11-40"
+      ],
+      "HEB": [
+        "3:1-6",
+        "4:14-5:10",
+        "7:1-8:13",
+        "9:11-10:18"
+      ],
+      "REV": [
+        "21",
+        "2:10",
+        "20:10",
+        "21:1-22:21"
+      ],
+      "ROM": [
+        "3:21-26",
+        "5:1-11"
+      ],
+      "COL": [
+        "1:13-14"
+      ],
+      "2CO": [
+        "5:17-21"
+      ],
+      "1JN": [
+        "1:5-10"
+      ],
+      "1TH": [
+        "4:13-5:11"
+      ],
+      "JAS": [
+        "1:12"
+      ]
+    }
+  },
+  "returns": {
+    "readPrintStories": {
+      "resolves": {
+        "items": [
+          {
+            "story": {
+              "number": 1,
+              "title": "La Creación",
+              "frames": [
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)",
+                  "text": "Así fue como Dios hizo todo en el principio. Creó el universo y todo lo que hay en él en seis días.\nDespués de que Dios creó la tierra, estaba oscura y vacía, porque él aún no había formado nada en ella. Pero el Espíritu de Dios estaba allí sobre el agua."
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg)",
+                  "text": "Entonces Dios dijo: «Que haya luz». Y hubo luz. Dios vio que la luz era buena y la llamó «día». La separó de la oscuridad, a la que llamó «noche». Dios creó la luz en el primer día de la creación."
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-03.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-04.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-05.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-06.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-07.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-08.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-09.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-10.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-11.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-12.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-13.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-14.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-15.jpg)",
+                  "text": ""
+                },
+                {
+                  "image": "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-16.jpg)",
+                  "text": ""
+                }
+              ],
+              "ref": "Una historia bíblica de: Génesis 1-2"
+            },
+            "frames": [
+              {
+                "n": 1,
+                "text": "Así fue como Dios hizo todo en el principio. Creó el universo y todo lo que hay en él en seis días.\nDespués de que Dios creó la tierra, estaba oscura y vacía, porque él aún no había formado nada en ella. Pero el Espíritu de Dios estaba allí sobre el agua."
+              },
+              {
+                "n": 2,
+                "text": "Entonces Dios dijo: «Que haya luz». Y hubo luz. Dios vio que la luz era buena y la llamó «día». La separó de la oscuridad, a la que llamó «noche». Dios creó la luz en el primer día de la creación."
+              },
+              {
+                "gap": [
+                  3,
+                  16
+                ]
+              }
+            ]
+          }
+        ],
+        "pictures": {
+          "1": {}
+        },
+        "undrafted": true
+      }
+    }
+  }
+}

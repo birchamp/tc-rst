@@ -1,0 +1,15 @@
+{
+  "case": "check-rail-empty",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "runPreflight",
+      "args": []
+    },
+    {
+      "at": "mount",
+      "name": "refreshCheckDraft",
+      "args": []
+    }
+  ]
+}

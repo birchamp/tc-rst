@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 4e43ffecea6ae597b38d01d96f40f50f0de4a2c0992f4afa907298985c12a604 # shrinks to shown = [(1, Text { marker: MarkerWs { lead: " ", term: Space }, words: "___", layout: "\n\\p\n", last: VerseNo(1), from: None }), (2, Text { marker: MarkerWs { lead: " ", term: Space }, words: "___", layout: "\n", last: VerseNo(2), from: None }), (3, Text { marker: MarkerWs { lead: " ", term: Space }, words: "___", layout: "\n", last: VerseNo(3), from: None })], typed = "3 a"
+cc 6c466aa112e45af413ffb4a58928b4b990feead58647509869d6aeba3660ea42 # shrinks to shown = [(1, Text { marker: MarkerWs { lead: " ", term: Space }, words: "___", layout: "\n", last: VerseNo(1), from: None }), (2, Text { marker: MarkerWs { lead: " ", term: Space }, words: "___", layout: "\n", last: VerseNo(3), from: None }), (3, Covered { by: VerseNo(2) }), (4, Text { marker: MarkerWs { lead: " ", term: Space }, words: "___", layout: "\n", last: VerseNo(4), from: None }), (5, Text { marker: MarkerWs { lead: " ", term: Space }, words: "___", layout: "\n", last: VerseNo(5), from: None })], typed = "\n2-4 a\n3"

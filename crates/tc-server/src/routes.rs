@@ -1,0 +1,219 @@
+//! The API route: `POST /api/v1/{service}/{name}` for exactly the rows of tc-api's tables
+//! (APP-DESIGN §3.3, §5.3).
+
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+
+use axum::body::{Body, BodyDataStream, Bytes};
+use axum::extract::{Path, Request, State};
+use axum::http::{HeaderValue, StatusCode, header};
+use axum::response::{IntoResponse, Response};
+use futures_util::StreamExt as _;
+use tc_api::{ApiError, Reply};
+
+use crate::backend::{Answer, Backend, Then};
+use crate::lifecycle::InFlight;
+use crate::log::warn;
+use crate::state::{AppState, Phase};
+
+macro_rules! paths {
+    ($( $kind:ident $([$net:ident])? $path:literal : $req:path => $ok:ty; )*) => {
+        &[$($path),*]
+    };
+}
+
+/// The product endpoints, in table order.
+pub fn product_paths() -> &'static [&'static str] {
+    tc_api::endpoint_table!(paths)
+}
+
+/// The `test` endpoints, in table order.
+#[cfg(feature = "test-hooks")]
+pub fn test_paths() -> &'static [&'static str] {
+    tc_api::test_hook_table!(paths)
+}
+
+/// Which paths the server hands to the backend.
+pub(crate) struct RouteTable {
+    product: HashSet<&'static str>,
+    #[cfg(feature = "test-hooks")]
+    test: HashSet<&'static str>,
+}
+
+impl RouteTable {
+    pub(crate) fn new() -> Self {
+        Self {
+            product: product_paths().iter().copied().collect(),
+            #[cfg(feature = "test-hooks")]
+            test: test_paths().iter().copied().collect(),
+        }
+    }
+
+    /// The table's own copy of `path`, which the backend takes as `&'static str`.
+    pub(crate) fn find(&self, path: &str, test_hooks: bool) -> Option<&'static str> {
+        if let Some(found) = self.product.get(path) {
+            return Some(*found);
+        }
+        #[cfg(feature = "test-hooks")]
+        if test_hooks {
+            return self.test.get(path).copied();
+        }
+        #[cfg(not(feature = "test-hooks"))]
+        let _ = test_hooks;
+        None
+    }
+}
+
+pub(crate) fn json_response(status: StatusCode, body: Vec<u8>) -> Response {
+    let mut response = (status, Body::from(body)).into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+/// A reply that carries an error and no value, in the wire form of any endpoint's reply.
+pub(crate) fn error_reply(status: StatusCode, error: ApiError) -> Response {
+    let body = serde_json::to_vec(&Reply::<()>::Err(error)).unwrap_or_default();
+    json_response(status, body)
+}
+
+/// What reading a request body can end with.
+pub(crate) enum BodyError {
+    /// More than the cap, by the declared length or by the bytes that came. It holds the rest
+    /// of the body, for [`too_large`].
+    TooLarge(BodyDataStream),
+    /// The client went away or sent a broken body.
+    Broken,
+}
+
+/// Reads a whole body of at most `limit` bytes. A body over the cap is refused whole, never
+/// cut and passed on.
+pub(crate) async fn read_body(
+    body: Body,
+    declared: Option<u64>,
+    limit: usize,
+) -> Result<Bytes, BodyError> {
+    let mut stream = body.into_data_stream();
+    if declared.is_some_and(|length| length > limit as u64) {
+        return Err(BodyError::TooLarge(stream));
+    }
+    let mut collected = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|_| BodyError::Broken)?;
+        if collected.len() + chunk.len() > limit {
+            return Err(BodyError::TooLarge(stream));
+        }
+        collected.extend_from_slice(&chunk);
+    }
+    Ok(Bytes::from(collected))
+}
+
+pub(crate) fn declared_length(request: &Request) -> Option<u64> {
+    request
+        .headers()
+        .get(header::CONTENT_LENGTH)?
+        .to_str()
+        .ok()?
+        .parse()
+        .ok()
+}
+
+/// The most bytes of a refused body that are read and dropped after its 413.
+const DRAIN_LIMIT: usize = 64 * 1024 * 1024;
+
+/// 413 for a body over its cap. It goes out at once, and `rest` is read and dropped, up to
+/// [`DRAIN_LIMIT`] bytes, before the connection closes: a socket closed on unread bytes resets
+/// the connection, and the reset can destroy the 413 before a client that is still sending
+/// reads it (Windows does: os error 10053), so a browser would report a connection error
+/// instead of "too large".
+pub(crate) fn too_large(mut rest: BodyDataStream) -> Response {
+    tokio::spawn(async move {
+        let mut dropped = 0;
+        while let Some(Ok(chunk)) = rest.next().await {
+            dropped += chunk.len();
+            if dropped > DRAIN_LIMIT {
+                break;
+            }
+        }
+    });
+    let mut response = (StatusCode::PAYLOAD_TOO_LARGE, "request body too large").into_response();
+    let headers = response.headers_mut();
+    headers.insert(header::CONNECTION, HeaderValue::from_static("close"));
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+/// `POST /api/v1/{service}/{name}`.
+pub(crate) async fn api<B: Backend>(
+    State(state): State<AppState<B>>,
+    Path((service, name)): Path<(String, String)>,
+    request: Request,
+) -> Response {
+    let joined = format!("{service}/{name}");
+    let Some(path) = state
+        .shared
+        .routes
+        .find(&joined, state.shared.test_hooks.load(Ordering::Relaxed))
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let declared = declared_length(&request);
+    let body = match read_body(request.into_body(), declared, state.shared.limits.api_body).await {
+        Ok(body) => body,
+        Err(BodyError::TooLarge(rest)) => return too_large(rest),
+        Err(BodyError::Broken) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    // The gate accepted this request before the quit began, so a body read during the drain
+    // still runs: the backend is open and the drain waits for it. A body that outlasted the
+    // drain must not run against a backend that is closing, so the UI keeps its text dirty.
+    // The gate still counts this request, so the drain cannot end on an empty count between
+    // this check and the call's own count below.
+    if state.shared.phase.get() == Phase::Closing {
+        return crate::lifecycle::closing_response();
+    }
+    // hyper drops this future when the connection dies (a reload, a closed window). The call
+    // runs on a task of its own, which holds the in-flight count, so a save is never cut half
+    // way and the quit waits for it. A panic ends only that task: it is an internal error.
+    let backend = Arc::clone(&state.backend);
+    let in_flight = InFlight::enter(Arc::clone(&state.shared));
+    let call = tokio::spawn(async move {
+        let _in_flight = in_flight;
+        backend.call(path, body).await
+    });
+    match call.await {
+        Ok(answer) => answer_response(&state, answer),
+        Err(error) => {
+            if error.is_panic() {
+                warn(format_args!("a request to {path} panicked"));
+            }
+            (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+        }
+    }
+}
+
+fn answer_response<B>(state: &AppState<B>, answer: Answer) -> Response {
+    #[cfg(not(feature = "test-hooks"))]
+    let _ = state;
+    match answer {
+        Answer::Reply { body, then } => match then {
+            Then::Continue => json_response(StatusCode::OK, body),
+            #[cfg(feature = "test-hooks")]
+            Then::EndProcess => {
+                let (parts, body) = json_response(StatusCode::OK, body).into_parts();
+                let ender = Arc::clone(&state.shared.ender);
+                Response::from_parts(
+                    parts,
+                    Body::new(crate::hooks::EndAfterBody::new(body, ender)),
+                )
+            }
+        },
+        Answer::NotFound => StatusCode::NOT_FOUND.into_response(),
+        #[cfg(feature = "test-hooks")]
+        Answer::Ended => crate::lifecycle::closing_response(),
+    }
+}

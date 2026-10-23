@@ -4,6 +4,13 @@ For a Claude Code session on the owner's Windows 10 computer. The cloud session 
 on Linux; this computer does what Linux cannot: build, test and measure on Windows, and reach
 Door43. Written 2026-10-17.
 
+> **Roles from 2026-10-19:** the owner set up a Windows 11 VM on the Linux PC, and the Linux
+> session runs every Windows build and test there (MSVC), on each new main. This laptop only
+> measures what needs the reference hardware: memory and startup (tC4, Paratext, Word, Edge, and
+> later the rebuild), the cold start after a reboot, and the rebuild's budgets. Task 7's hazard 6
+> (the proxy lookup) moved to the Linux session and the VM. Do not run builds or test suites here
+> unless the Linux session asks.
+
 ## Rules
 
 - Read `AGENTS.md`, `docs/PLAN.md` and `docs/PERFORMANCE.md` first. They apply here too.
@@ -149,6 +156,30 @@ fails without the fix, on Windows where the hazard is Windows-only (mark such te
 
 Hazard 2 (a save's rename blocked by a scanner) belongs to `tc-store` on the `storage` branch;
 the storage team handles it.
+
+## Task 7: finish hazard 6, and rerun on Windows (added 2026-10-18)
+
+`windows-hazards` is merged into `claude/focused-ride-5uzj7p` (125dd41) after a review on Linux.
+The review rebased your commits onto main and fixed two things in the shared client: it keeps the
+system's own proxy for an origin a finder names none for, and it checks the internet switch
+again after a proxy lookup. Two parts are still open.
+
+Branch: `windows-proxy`, from `origin/claude/focused-ride-5uzj7p`.
+
+1. Rerun the full steps of task 1 on Windows at the merge, and record the result in your build
+   report. The branch was rebased after your last Windows run.
+2. Hazard 6, the lookup itself: `system_proxy_finder()` returns `None` everywhere, so a
+   translator on a network that sets its proxy by PAC or WPAD cannot reach Door43. Fill it on
+   Windows with a dependency that asks WinHTTP (`WinHttpGetIEProxyConfigForCurrentUser`, then
+   `WinHttpGetProxyForUrl` with auto-detect and the PAC URL), never with `unsafe` in our crates
+   (AGENTS.md; the Linux session decided this on 2026-10-18). Pick a maintained crate, or a
+   thin crate of Microsoft's (`windows` or `windows-sys`) wrapped in the smallest safe API you
+   can, and say in the commit why you picked it; if every choice needs `unsafe` in our own
+   code, stop and write that in your notes for the owner instead. Keep the lookup off the
+   async runtime's threads (it can take seconds), cache each origin's answer for the session,
+   and keep it behind the internet switch. Test it against a local PAC file and a local proxy,
+   never the network.
+3. Push `windows-proxy` and tell the owner it is ready.
 
 ## When everything is done
 

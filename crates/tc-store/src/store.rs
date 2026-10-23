@@ -312,6 +312,7 @@ impl Store {
     pub fn create(&self, new: &NewProject) -> Result<PathBuf, CreateError> {
         self.cleanup.wait();
         valid_name(&new.name)?;
+        check_details(new)?;
         let target = self.projects.join(&new.name);
         if self.env.vfs.metadata(&target).is_ok() {
             return Err(CreateError::NameExists(new.name.clone()));
@@ -418,6 +419,33 @@ impl Store {
         }
         self.place(&staging, name)
     }
+}
+
+/// Refuses a project detail a Scripture Burrito cannot hold before any folder exists (tC4
+/// #582): a language tag with a part over eight letters would otherwise be stored as
+/// "Undetermined", and the name and script direction with it.
+fn check_details(new: &NewProject) -> Result<(), CreateError> {
+    let kind = match new.kind {
+        ProjectKind::Bible => tc_burrito::ProjectKind::BibleText,
+        ProjectKind::Stories => tc_burrito::ProjectKind::OpenBibleStories,
+    };
+    for record in &new.records {
+        let Record::ProjectMeta {
+            field,
+            value: Some(json),
+        } = record
+        else {
+            continue;
+        };
+        let value: serde_json::Value =
+            serde_json::from_slice(&json.to_canonical()).unwrap_or(serde_json::Value::Null);
+        tc_burrito::check_field(kind, &field.path(), &value).map_err(|why| {
+            CreateError::Refused(CommandError::Refused(
+                crate::reply::Refusal::NotValidInBurrito(why),
+            ))
+        })?;
+    }
+    Ok(())
 }
 
 /// The last component of a path.

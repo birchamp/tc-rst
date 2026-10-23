@@ -68,11 +68,20 @@ pub(crate) fn required_mark() -> impl IntoView {
 
 /// One control's label, hint and error, wired through context. `placement` puts the label
 /// above the control or beside it at its start or end.
+///
+/// The label and the hint follow the shown language while the field is on screen (the App
+/// language preview rewrites them in place, as React re-renders them); whether each is drawn
+/// is decided by its text when the field is drawn.
 #[component]
 pub fn Field(
-    #[prop(optional, into)] label: Option<String>,
-    #[prop(optional, into)] hint: Option<String>,
+    #[prop(optional, into)] label: Option<Signal<String>>,
+    #[prop(optional, into)] hint: Option<Signal<String>>,
     #[prop(optional, into)] error: Option<String>,
+    /// An error that comes and goes while the field is on screen, under the control, which keeps
+    /// its node (and its focus) meanwhile, as React's re-render keeps it. The control takes
+    /// `invalid` from its own prop then, and its described-by list names the hint only.
+    #[prop(optional, into)]
+    live_error: Option<Signal<Option<String>>>,
     #[prop(optional)] required: bool,
     #[prop(optional)] optional: bool,
     #[prop(optional)] disabled: Option<bool>,
@@ -87,8 +96,8 @@ pub fn Field(
     // React's useId: the sequence advances once per Field, given id or not.
     let generated = crate::ds::next_id("tc-f");
     let id = id.unwrap_or(generated);
-    let label = label.filter(|s| !s.is_empty());
-    let hint = hint.filter(|s| !s.is_empty());
+    let label = label.filter(|s| s.with_untracked(|s| !s.is_empty()));
+    let hint = hint.filter(|s| s.with_untracked(|s| !s.is_empty()));
     let error = error.filter(|s| !s.is_empty());
     let hint_id = hint.as_ref().map(|_| format!("{id}-hint"));
     let err_id = error.as_ref().map(|_| format!("{id}-err"));
@@ -119,7 +128,7 @@ pub fn Field(
                 tone=if off { TextTone::Faint } else if above { TextTone::Muted } else { TextTone::Default }
                 style=label_style
             >
-                {label}
+                {move || label.get()}
                 {required.then(required_mark)}
                 {optional.then(|| view! { <span style=opt_style>"optional"</span> })}
             </Text>
@@ -127,9 +136,22 @@ pub fn Field(
     });
     let hint_node = hint.map(|hint| {
         let hid = hint_id.clone().unwrap_or_default();
-        view! { <Text attrs=Attrs::from([("id", hid.as_str())]) role=TextRole::Caption tone=TextTone::Muted>{hint}</Text> }
+        view! { <Text attrs=Attrs::from([("id", hid.as_str())]) role=TextRole::Caption tone=TextTone::Muted>{move || hint.get()}</Text> }
     });
-    let err_node = error.map(|e| error_line(err_id.clone().unwrap_or_default(), e));
+    let err_node = match live_error {
+        Some(live) => {
+            let live_id = format!("{id}-err");
+            (move || {
+                live.get()
+                    .filter(|e| !e.is_empty())
+                    .map(|e| error_line(live_id.clone(), e))
+            })
+            .into_any()
+        }
+        None => error
+            .map(|e| error_line(err_id.clone().unwrap_or_default(), e))
+            .into_any(),
+    };
     let body = provide(Some(ctx), move || children.map(|c| c()));
 
     match placement {

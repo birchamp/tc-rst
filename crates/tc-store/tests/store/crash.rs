@@ -303,11 +303,14 @@ fn crash_draft_write_never_affects_saves() {
     let action = |handle: &ProjectHandle| {
         let shown = handle.mint(&verse(1, 5), None).unwrap();
         handle
-            .submit(Command::Draft(Draft {
-                field: DraftField::Words,
-                shown: vec![shown],
-                text: "draft text".into(),
-            }))
+            .submit(Command::Draft {
+                draft: Draft {
+                    field: DraftField::Words,
+                    shown: vec![shown],
+                    text: "draft text".into(),
+                },
+                at: tc_journal::WallTime(0),
+            })
             .wait()
             .unwrap();
         handle.wait_idle();
@@ -392,7 +395,7 @@ fn crash_checkpoint_into_a_months_folder_that_does_not_exist_yet() {
             .iter()
             .filter(|op| {
                 op.kind == tc_store::fault::OpKind::CreateDir
-                    && slashed(&op.path).contains("/ingredients/tc/changes/")
+                    && is_inside(&op.path, &["ingredients", "tc", "changes"])
             })
             .count();
         assert!(

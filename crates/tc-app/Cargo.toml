@@ -1,0 +1,86 @@
+[package]
+name = "tc-app"
+description = "The application services of the tC4 rebuild: the operations behind every screen, background jobs and their progress, events, one-at-a-time flows, this computer's preferences, the operation reports and the reply cache."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+# The `test` service of APP-DESIGN §5.8 (AD35): test/fieldStore, crash points, holds.
+# Release builds never enable it.
+test-hooks = ["tc-api/test-hooks", "tc-store/test-hooks"]
+# The fixture backend and its seed (APP-DESIGN AD6, AD7, AD35): STORAGE §13.2's state seed of
+# the parity projects, checked against their files, the memory backend that holds them, and the
+# loader of a parity scenario, which zips each sideloaded resource to install it. Release builds
+# never enable it.
+fixture-backend = ["dep:zip"]
+
+[dependencies]
+tc-api = { path = "../tc-api", features = ["server"] }
+# The Check screen's lists, preflight and rail, and the Align card's verse states (B5a).
+tc-align = { path = "../tc-align" }
+# The checks a change of pins carries over (C8).
+tc-check = { path = "../tc-check" }
+tc-core = { path = "../tc-core" }
+tc-burrito = { path = "../tc-burrito" }
+tc-door43 = { path = "../tc-door43" }
+# What the Community Checking preview prints of a book (B8); the exports come with D2.
+tc-export = { path = "../tc-export" }
+# The helps the Understand screen shows: blocks and highlights (B3).
+tc-helps = { path = "../tc-helps" }
+tc-journal = { path = "../tc-journal" }
+tc-obs = { path = "../tc-obs" }
+tc-resources = { path = "../tc-resources" }
+# The project store behind the storage seam (APP-DESIGN §4.2, unit C0).
+tc-store = { path = "../tc-store" }
+tc-usfm = { path = "../tc-usfm" }
+# The versifications New Bible offers (B2).
+tc-versification = { path = "../tc-versification" }
+base64.workspace = true
+ring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+unicode-general-category.workspace = true
+unicode-normalization.workspace = true
+zip = { workspace = true, optional = true }
+
+[dev-dependencies]
+# The integration tests use the test hooks and the fixture backend's seed, as tc-api's own
+# tests enable its features.
+tc-app = { path = ".", features = ["test-hooks", "fixture-backend"] }
+tc-api = { path = "../tc-api", features = ["server", "test-hooks", "proptest"] }
+# The scale corpus of docs/PERFORMANCE.md for the operation-count tests (§8.1, AD32).
+tc-corpus = { path = "../tc-corpus" }
+# The Door43 account's tests sign in to a fake Door43 on loopback (A8); tests never touch the
+# network.
+tc-door43-fake = { path = "../tc-door43-fake" }
+proptest.workspace = true
+# The git blob id of the vendored language list (assets/README.md).
+sha1.workspace = true
+tempfile.workspace = true
+# The UI's save machine and draft buffer, played against the real test/fieldStore (A4b). tc-ui's
+# host build is its pure modules only.
+tc-ui = { path = "../tc-ui" }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "sync", "time", "test-util"] }
+
+[[example]]
+name = "state_seed_bench"
+required-features = ["fixture-backend"]
+
+[[example]]
+name = "memory_bench"
+required-features = ["fixture-backend"]
+
+[[example]]
+name = "home_bench"
+required-features = ["fixture-backend"]
+
+[[example]]
+name = "store_adapter_bench"
+required-features = ["test-hooks"]
+
+[lints]
+workspace = true

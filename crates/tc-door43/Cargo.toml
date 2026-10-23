@@ -10,18 +10,29 @@ rust-version.workspace = true
 tc-core = { path = "../tc-core" }
 base64.workspace = true
 httpdate = "1.0.3"
+hyper-util = { workspace = true, features = ["client-proxy", "client-proxy-system"] }
 icu_normalizer = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
 md-5.workspace = true
-reqwest = { workspace = true, features = ["rustls", "system-proxy"] }
+# `socks`: a PAC script can name a SOCKS proxy. It adds no crate (reqwest 0.13 uses hyper-util's).
+reqwest = { workspace = true, features = ["rustls", "socks", "system-proxy"] }
 serde.workspace = true
 serde_json.workspace = true
 sha1.workspace = true
 thiserror.workspace = true
+# Already built for reqwest: the download's stop checks wait with `time`, and its zip is
+# checked on the blocking pool (`rt`).
+tokio = { workspace = true, features = ["rt", "time"] }
 tracing = "0.1.44"
 url.workspace = true
 zip.workspace = true
 
+# Windows' own proxy lookup (WPAD and PAC through WinHTTP): see src/winproxy.rs.
+[target.'cfg(windows)'.dependencies]
+proxy-watch = { workspace = true, features = ["pac-windows-native"] }
+
 [dev-dependencies]
+# The libgit2 that STORAGE.md §9 names for the sync's push.
+git2.workspace = true
 proptest.workspace = true
 tc-door43-fake = { path = "../tc-door43-fake" }
 tempfile.workspace = true

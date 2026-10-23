@@ -800,11 +800,14 @@ fn nothing_is_written_into_the_folder_after_the_lock_is_released() {
     hooks.hold(Point::BeforeDraftWrite);
     let shown = handle.mint(&verse(1, 5), None).unwrap();
     handle
-        .submit(Command::Draft(Draft {
-            field: DraftField::Words,
-            shown: vec![shown],
-            text: "unsaved text".into(),
-        }))
+        .submit(Command::Draft {
+            draft: Draft {
+                field: DraftField::Words,
+                shown: vec![shown],
+                text: "unsaved text".into(),
+            },
+            at: tc_journal::WallTime(0),
+        })
         .wait()
         .unwrap();
     hooks.wait_reached(Point::BeforeDraftWrite, 1);
@@ -897,11 +900,14 @@ fn an_unverified_section_draft_that_holds_a_span_can_be_kept() {
     // The draft is written over those three verses, and the installation secret is lost.
     let keys = [verse(1, 4), verse(1, 5), verse(1, 6)];
     handle
-        .submit(Command::Draft(Draft {
-            field: DraftField::Section { book: TIT },
-            shown: keys.iter().map(|k| handle.mint(k, None).unwrap()).collect(),
-            text: "\\v 4-5 four and five, typed \\v 6 six".into(),
-        }))
+        .submit(Command::Draft {
+            draft: Draft {
+                field: DraftField::Section { book: TIT },
+                shown: keys.iter().map(|k| handle.mint(k, None).unwrap()).collect(),
+                text: "\\v 4-5 four and five, typed \\v 6 six".into(),
+            },
+            at: tc_journal::WallTime(0),
+        })
         .wait()
         .unwrap();
     handle.wait_idle();

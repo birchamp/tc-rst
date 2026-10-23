@@ -95,6 +95,9 @@ pub enum ImportSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemReason {
     PinCoverageBackfill,
+    /// The pins a new project gets, written at the first open of a project that holds none
+    /// (tC4 #766), so History never says the translator chose them.
+    CreationPins,
 }
 
 /// One immutable version of one record. Never edited, never deleted. Every `Change` value

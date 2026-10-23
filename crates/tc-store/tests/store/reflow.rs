@@ -1,6 +1,7 @@
 //! A verse save writes its verse's reflowed alignment in the same batch (APP-DESIGN R25,
-//! `docs/STORAGE.md` §5.1): `tc_align::reflow` on the alignment the actor holds, with its
-//! heads as parents, so the aligner never shows words the verse no longer has.
+//! `docs/STORAGE.md` §5.1): `tc_align::reflow_edit` from the old text on the alignment the
+//! actor holds, with its heads as parents, so the aligner never shows words the verse no
+//! longer has.
 
 use crate::common::*;
 use crate::crash::{Outcome, kill_everywhere, outcome_of};
@@ -204,6 +205,31 @@ fn repeated_words_keep_their_occurrences() {
         4,
         "every word of the verse is on a card or in the bank once"
     );
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_link_follows_its_own_copy_of_a_repeated_word() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    aligned(
+        &handle,
+        "servant of God and of God",
+        &[
+            ("Θεοῦ", vec![target("God", 1, 2)]),
+            ("Κυρίου", vec![target("God", 2, 2)]),
+        ],
+    );
+    // The first "God" deleted and another typed earlier: the verse still holds two.
+    save_verse(&handle, 1, 1, "God, servant of and of God").unwrap();
+    let after = alignment(&handle);
+    assert_eq!(
+        placed(&after),
+        ["God#2"],
+        "Θεοῦ's link does not move to the new God"
+    );
+    assert_eq!(after.alignments[1].bottom_words[0].occurrences, 2);
+    assert!(bank(&after).contains(&"God".to_owned()));
     handle.close().unwrap();
 }
 

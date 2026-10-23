@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 10b627dbb3f4ff6c02d65295b1a209f4c00cd59f20f9e5f8abed76c4a15a792b # shrinks to steps = [Advance(252), Advance(1578), Deliver(true), Type(1), Blur, Type(6), Advance(1277), Advance(1725), Advance(1459), Crash(AfterReply), Type(2), Blur, Blur, Crash(BeforeReply), Advance(852), Crash(BeforeReply)]
+cc fcd0f8f625a09efd5aa205d9ca590e1df0043202855bcdeb8f7085aff21a389d # shrinks to kind = Comment, mut steps = [Type(0), Reload]
+cc 5b22aca925aadc075378ef7687ce8bedfa3924531164e38a35cdc0f44f8f5502 # shrinks to kind = Reference, mut steps = [Type(0)]
+cc c2223623597c34180daa2a83db09ebdde1731a831f931ab32db25fe5af8ad380 # shrinks to kind = Reference, steps = [Type(0), Blur, Type(1)]

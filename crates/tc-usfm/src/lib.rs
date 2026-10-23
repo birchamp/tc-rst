@@ -10,7 +10,8 @@
 //! - [`display_text`] gives the readable text of a verse with the normalization documented
 //!   in [`text`], the text tC4's source panes show. The Check screen and the aligner show
 //!   [`shown_text_v1`], tC4's `verseText` of its book model. Neither is hashed:
-//!   [`plain_text_v1`] is the text a hash is of.
+//!   [`plain_text_v1`] is the text a hash is of, and neither decides which words a verse has:
+//!   [`target_words`] does, for the aligner's bank, the import's split and the export.
 //! - [`words`] splits text into words exactly as tC4 does, with occurrence numbers.
 //! - [`align`] reads, strips and weaves `\zaln` word alignment the way en_ult and tC4's
 //!   export write it.
@@ -41,7 +42,9 @@ pub use derivations::{
     SelectionCount, SelectionText, plain_text_v1, selections_v1, shown_text_v1, tokenize_v1,
 };
 pub use doc::{Document, Marker, Milestone, Node, Span};
-pub use text::display_text;
+pub use text::{
+    DisplaySource, DisplayToken, DisplayVerse, display_text, display_tokens, edge_markers,
+};
 
 use tc_core::VerseSpan;
 

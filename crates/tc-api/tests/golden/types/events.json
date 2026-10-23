@@ -1,0 +1,231 @@
+[
+  {
+    "type": "resync"
+  },
+  {
+    "type": "internet",
+    "value": {
+      "on": true
+    }
+  },
+  {
+    "type": "account",
+    "value": {
+      "user": "jdoe",
+      "kept": "kept",
+      "notice": null,
+      "server": "git.door43.org",
+      "keychain": "works"
+    }
+  },
+  {
+    "type": "job",
+    "value": {
+      "id": 9,
+      "kind": "seed",
+      "project": null,
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "finished"
+        }
+      }
+    }
+  },
+  {
+    "type": "job",
+    "value": {
+      "id": 10,
+      "kind": "open",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "opened",
+          "value": {
+            "session": {
+              "at": {
+                "project": "sample_burrito",
+                "epoch": 4
+              },
+              "id": "0a1b2c3d-0000-4000-8000-000000000001",
+              "mode": {
+                "type": "writable"
+              },
+              "role": "screen"
+            },
+            "name": "Equipo Ejemplo — Tito y Jonás",
+            "tag": "es-419",
+            "dir": "ltr",
+            "kind": "bible",
+            "books": [
+              "JON",
+              "TIT"
+            ],
+            "draftUnit": "section",
+            "place": {
+              "mode": "check",
+              "chapter": 2,
+              "tool": "translationNotes"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "job",
+    "value": {
+      "id": 11,
+      "kind": "sync",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "synced",
+          "value": {
+            "received": 2,
+            "from": [
+              {
+                "who": {
+                  "type": "teammate",
+                  "value": 1
+                },
+                "computer": null
+              },
+              {
+                "who": {
+                  "type": "username",
+                  "value": "maria"
+                },
+                "computer": null
+              }
+            ],
+            "keptNewest": 0,
+            "verseConflicts": 1,
+            "alignments": 0,
+            "restored": 0,
+            "missingPins": 5
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "job",
+    "value": {
+      "id": 12,
+      "kind": "gatewayPlan",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "planReady",
+          "value": {
+            "plan": 4,
+            "what": {
+              "type": "gateway",
+              "value": {
+                "from": {
+                  "gateway": {
+                    "language": "es-419",
+                    "owner": "es-419_gl"
+                  },
+                  "name": "Latin American Spanish",
+                  "autonym": "Español (Latinoamérica)",
+                  "direction": "ltr",
+                  "seen": {
+                    "tn": "v66",
+                    "tw": "v66",
+                    "ta": "v66"
+                  }
+                },
+                "to": {
+                  "gateway": {
+                    "language": "en",
+                    "owner": "unfoldingWord"
+                  },
+                  "name": "English",
+                  "autonym": "English",
+                  "direction": "ltr",
+                  "seen": {
+                    "tn": "v89",
+                    "tw": "v89",
+                    "ta": "v89"
+                  }
+                },
+                "images": {
+                  "from": null,
+                  "to": "en_obs-images"
+                }
+              }
+            },
+            "decisionsAtRisk": 4,
+            "rows": [
+              {
+                "tool": "translationWords",
+                "unit": {
+                  "type": "book",
+                  "value": "TIT"
+                },
+                "decisions": 2,
+                "against": "es-419_twl",
+                "carry": {
+                  "carried": 2,
+                  "checkAgain": 0
+                }
+              },
+              {
+                "tool": "translationNotes",
+                "unit": {
+                  "type": "book",
+                  "value": "TIT"
+                },
+                "decisions": 2,
+                "against": "es-419_tn",
+                "carry": null
+              }
+            ],
+            "blocked": [
+              {
+                "tool": "translationNotes",
+                "unit": {
+                  "type": "stories"
+                },
+                "reason": "versificationUnknown"
+              }
+            ],
+            "alignments": 12
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "projectsChanged"
+  },
+  {
+    "type": "homeCard",
+    "value": {
+      "project": "kr_ulb"
+    }
+  },
+  {
+    "type": "session",
+    "value": {
+      "at": {
+        "project": "kr_ulb",
+        "epoch": 3
+      },
+      "event": {
+        "type": "opened"
+      }
+    }
+  },
+  {
+    "type": "startup",
+    "value": {
+      "type": "ready"
+    }
+  }
+]

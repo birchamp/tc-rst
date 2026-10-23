@@ -1,0 +1,88 @@
+[
+  {
+    "type": "clickBank",
+    "value": {
+      "word": {
+        "word": "Dios",
+        "occurrence": 1,
+        "occurrences": 1
+      },
+      "click": "range"
+    }
+  },
+  {
+    "type": "placeSelection",
+    "value": {
+      "card": 1
+    }
+  },
+  {
+    "type": "placeWords",
+    "value": {
+      "card": 1,
+      "words": [
+        {
+          "word": "de",
+          "occurrence": 2,
+          "occurrences": 2
+        }
+      ]
+    }
+  },
+  {
+    "type": "unplace",
+    "value": {
+      "card": 0,
+      "word": {
+        "word": "Pablo",
+        "occurrence": 1,
+        "occurrences": 1
+      }
+    }
+  },
+  {
+    "type": "move",
+    "value": {
+      "from": 0,
+      "to": 1,
+      "word": {
+        "word": "Pablo",
+        "occurrence": 1,
+        "occurrences": 1
+      }
+    }
+  },
+  {
+    "type": "merge",
+    "value": {
+      "from": 0,
+      "to": 1
+    }
+  },
+  {
+    "type": "split",
+    "value": {
+      "card": 1
+    }
+  },
+  {
+    "type": "markValid"
+  },
+  {
+    "type": "accept",
+    "value": {
+      "card": 1,
+      "word": {
+        "word": "siervo",
+        "occurrence": 1,
+        "occurrences": 1
+      }
+    }
+  },
+  {
+    "type": "acceptAll"
+  },
+  {
+    "type": "rejectAll"
+  }
+]

@@ -11,11 +11,13 @@ use common::*;
 use tc_align::suggest::{self, Model, RawLink};
 use tc_align::{Aligner, AlignmentValue, MarkValidRefused, TargetVerse, TargetWord};
 use tc_core::Testament;
+use tc_journal::json::Json;
 
 /// TIT 1:1 of en_ult as a draft, against UGNT TIT 1:1.
 fn open(stored: Option<&AlignmentValue>, text: &str) -> Aligner {
     Aligner::open(
         stored,
+        None,
         TargetVerse::new(text),
         &source_verse(UGNT, "1:1"),
         basis(1),
@@ -116,6 +118,31 @@ fn suggestions_write_nothing_block_mark_valid_and_vanish_on_reject() {
 }
 
 #[test]
+fn clear_discards_standing_suggestions() {
+    let mut aligner = open(None, TEXT);
+    proposal_for(&mut aligner, 0, "Paul");
+    assert_eq!(aligner.proposals().len(), 1);
+    aligner.clear();
+    assert!(aligner.proposals().is_empty());
+    assert_eq!(aligner.shown_bank().len(), aligner.value().word_bank.len());
+}
+
+#[test]
+fn a_saved_value_is_not_saved_again_until_it_changes() {
+    let mut aligner = open(None, TEXT);
+    aligner.place(0, &banked(&aligner, "Paul")).unwrap();
+    assert!(aligner.is_changed());
+    aligner.mark_saved();
+    assert!(!aligner.is_changed());
+    aligner.unplace(0, &banked_on_card(&aligner, 0)).unwrap();
+    assert!(aligner.is_changed());
+}
+
+fn banked_on_card(aligner: &Aligner, card: usize) -> TargetWord {
+    aligner.value().alignments[card].bottom_words[0].clone()
+}
+
+#[test]
 fn an_accepted_suggestion_is_the_same_as_placing_the_word_by_hand() {
     let mut by_hand = open(None, TEXT);
     by_hand.place(0, &banked(&by_hand, "Paul")).unwrap();
@@ -163,7 +190,10 @@ fn a_stored_alignment_made_for_other_text_opens_reflowed_and_says_what_it_droppe
     let stored = paul_and_servant();
     let edited = "Paul, a slave of God and an apostle of Jesus Christ";
     let mut aligner = open(Some(&stored), edited);
-    assert!(!aligner.is_stale());
+    assert!(
+        aligner.is_stale(),
+        "the draft changed since the alignment was made"
+    );
     assert_eq!(aligner.value().placed(), 1);
     assert_eq!(aligner.dropped().len(), 1);
     assert_eq!(aligner.dropped()[0].word.word, "servant");
@@ -177,6 +207,7 @@ fn a_stored_alignment_made_for_other_text_opens_reflowed_and_says_what_it_droppe
     assert!(stored.is_stale_against(&TargetVerse::new(edited)));
     aligner.keep_reflow();
     assert!(aligner.is_changed());
+    assert!(!aligner.is_stale(), "kept: the notice clears");
 
     let mut edited_after = open(Some(&stored), edited);
     edited_after
@@ -196,7 +227,7 @@ fn a_carry_over_that_drops_nothing_is_saved_as_tc4_saves_it() {
     assert!(aligner.dropped().is_empty());
     assert!(aligner.is_changed());
     assert_eq!(aligner.value().placed(), 2);
-    assert!(!aligner.is_stale());
+    assert!(aligner.is_stale(), "saved on leaving, and shown as changed");
 }
 
 #[test]
@@ -276,7 +307,7 @@ fn suggestions_from_a_model_trained_on_titus_are_proposals_for_bank_words_only()
 fn a_verse_with_no_original_words_or_no_target_words_does_not_open() {
     use tc_align::{SourceVerse, Unavailable};
     let refused = |verse: &str, source: &SourceVerse| {
-        Aligner::open(None, TargetVerse::new(verse), source, basis(1)).unwrap_err()
+        Aligner::open(None, None, TargetVerse::new(verse), source, basis(1)).unwrap_err()
     };
     // tC4 shows its "missing" notice: no cards to place on, and no Mark valid that
     // vouches for a verse nothing could be aligned in.
@@ -296,6 +327,7 @@ fn a_verse_with_no_original_words_or_no_target_words_does_not_open() {
     assert_eq!(
         Aligner::open(
             Some(&stored),
+            None,
             TargetVerse::new(TEXT),
             &SourceVerse::default(),
             basis(1)
@@ -446,4 +478,100 @@ fn a_shown_word_the_hash_leaves_out_is_carried_over_when_it_changes() {
     assert_eq!(reopened.dropped().len(), 1);
     assert_eq!(reopened.dropped()[0].word, selah);
     assert!(!reopened.is_changed(), "leaving keeps the stored value");
+}
+
+#[test]
+fn a_source_book_gives_every_verse_the_words_from_book_gives() {
+    let text = read(UGNT);
+    let book = tc_usfm::Book::parse(&text);
+    let cut = tc_align::SourceBook::parse(&text);
+    let mut seen = 0;
+    for segment in book.segments() {
+        let Some(unit) = segment.as_verse() else {
+            continue;
+        };
+        let (Some(chapter), Some(verses)) = (unit.chapter(), unit.verses()) else {
+            continue;
+        };
+        assert_eq!(
+            cut.verse(chapter, verses).unwrap(),
+            tc_align::SourceVerse::from_book(&book, chapter, verses).unwrap(),
+            "{chapter}:{verses:?}"
+        );
+        assert!(cut.has(chapter, verses));
+        seen += 1;
+    }
+    assert!(seen > 40, "{seen} verses of Titus");
+    let span = tc_core::VerseSpan::range(1, 2).unwrap();
+    assert_eq!(
+        cut.verse(1, span).unwrap().words().len(),
+        source_verse(UGNT, "1:1").words().len() + source_verse(UGNT, "1:2").words().len()
+    );
+    assert!(!cut.display_text(1, span).is_empty());
+    assert!(!cut.has(9, span));
+}
+
+/// tC4 #409: a span aligned verse by verse numbers each source word within its own verse and
+/// names that verse in `x-ref`. Such a value, from a file added as a book, opens with every link
+/// where it was: the pin fit (#790) numbers words across the span, and would read 1:3's "Θεοῦ"
+/// (the first of its verse, the third of the span) as 1:1's.
+#[test]
+fn an_imported_span_with_x_ref_opens_with_every_link() {
+    let source = source_verse(UGNT, "1:1-3");
+    let text = "Paul, a servant of God, revealed his word at the right time by the command of God";
+    let open_span = |stored: Option<&AlignmentValue>| {
+        Aligner::open(stored, None, TargetVerse::new(text), &source, basis(3)).unwrap()
+    };
+    let card_of = |aligner: &Aligner, word: &str, occurrence: u32| {
+        aligner
+            .value()
+            .alignments
+            .iter()
+            .position(|g| {
+                g.top_words
+                    .iter()
+                    .any(|w| w.word == word && w.occurrence == occurrence)
+            })
+            .unwrap()
+    };
+    let mut aligner = open_span(None);
+    for (on, at, said, n) in [
+        ("Παῦλος", 1, "Paul", 1),
+        ("Θεοῦ", 1, "God", 1),
+        ("Θεοῦ", 3, "God", 2),
+    ] {
+        let card = card_of(&aligner, on, at);
+        let word = aligner
+            .value()
+            .word_bank
+            .iter()
+            .find(|w| w.word == said && w.occurrence == n)
+            .cloned()
+            .unwrap();
+        aligner.place(card, &word).unwrap();
+    }
+    let mut stored = aligner.into_value();
+    // 1:3's words as a verse-by-verse aligner writes them.
+    let before_1_3 =
+        source_verse(UGNT, "1:1").words().len() + source_verse(UGNT, "1:2").words().len();
+    let own = source_verse(UGNT, "1:3");
+    for group in &mut stored.alignments {
+        for word in &mut group.top_words {
+            let at = source
+                .words()
+                .iter()
+                .position(|s| s.word == word.word && s.occurrence == word.occurrence)
+                .unwrap();
+            if let Some(mine) = at.checked_sub(before_1_3).map(|i| &own.words()[i]) {
+                word.occurrence = mine.occurrence;
+                word.occurrences = mine.occurrences;
+                word.extra.insert("x-ref".to_owned(), Json::from("1:3"));
+            }
+        }
+    }
+    let reopened = open_span(Some(&stored));
+    assert!(reopened.dropped().is_empty(), "{:?}", reopened.dropped());
+    assert_eq!(reopened.value().alignments, stored.alignments);
+    assert_eq!(reopened.value().placed(), 3);
+    assert!(!reopened.is_changed(), "nothing to save");
 }

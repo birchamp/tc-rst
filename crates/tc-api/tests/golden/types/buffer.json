@@ -1,0 +1,147 @@
+{
+  "itemKeys": [
+    "tc4.drafts.v2:{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}}",
+    "tc4.drafts.v2:{\"project\":\"en_ult | draft \\\"2\\\"\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"checkComment\",\"place\":\"tn TIT 1:4 abc1\"}}"
+  ],
+  "keys": [
+    {
+      "project": "en_ult | draft \"2\"",
+      "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+      "field": {
+        "kind": "verse",
+        "place": "TIT 1:4"
+      }
+    },
+    {
+      "project": "en_ult | draft \"2\"",
+      "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+      "field": {
+        "kind": "checkComment",
+        "place": "tn TIT 1:4 abc1"
+      }
+    }
+  ],
+  "entries": [
+    {
+      "api": 1,
+      "instance": "abababababababababababababababab",
+      "base": [
+        "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+      ],
+      "text": "Paul, a servant of God and",
+      "sent": {
+        "request": "14141414141414141414141414141414",
+        "text": "Paul, a servant of God",
+        "scope": {
+          "project": "en_ult | draft \"2\"",
+          "epoch": 3
+        }
+      },
+      "at": 1760000000123,
+      "draft": {
+        "path": "test/fieldDraft",
+        "body": "{\"field\":\"verse-1\",\"shown\":\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"}"
+      }
+    },
+    {
+      "api": 1,
+      "instance": "abababababababababababababababab",
+      "base": [
+        "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+      ],
+      "text": "בְּ",
+      "sent": null,
+      "at": 1760000000123,
+      "draft": null
+    }
+  ],
+  "lines": [
+    {
+      "type": "changed",
+      "value": {
+        "key": {
+          "project": "en_ult | draft \"2\"",
+          "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+          "field": {
+            "kind": "verse",
+            "place": "TIT 1:4"
+          }
+        },
+        "entry": {
+          "api": 1,
+          "instance": "abababababababababababababababab",
+          "base": [
+            "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+          ],
+          "text": "Paul, a servant of God and",
+          "sent": {
+            "request": "14141414141414141414141414141414",
+            "text": "Paul, a servant of God",
+            "scope": {
+              "project": "en_ult | draft \"2\"",
+              "epoch": 3
+            }
+          },
+          "at": 1760000000123,
+          "draft": {
+            "path": "test/fieldDraft",
+            "body": "{\"field\":\"verse-1\",\"shown\":\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"}"
+          }
+        }
+      }
+    },
+    {
+      "type": "changed",
+      "value": {
+        "key": {
+          "project": "en_ult | draft \"2\"",
+          "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+          "field": {
+            "kind": "checkComment",
+            "place": "tn TIT 1:4 abc1"
+          }
+        },
+        "entry": {
+          "api": 1,
+          "instance": "abababababababababababababababab",
+          "base": [
+            "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+          ],
+          "text": "בְּ",
+          "sent": null,
+          "at": 1760000000123,
+          "draft": null
+        }
+      }
+    },
+    {
+      "type": "removed",
+      "value": {
+        "key": {
+          "project": "en_ult | draft \"2\"",
+          "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+          "field": {
+            "kind": "verse",
+            "place": "TIT 1:4"
+          }
+        },
+        "instance": "abababababababababababababababab"
+      }
+    },
+    {
+      "type": "removed",
+      "value": {
+        "key": {
+          "project": "en_ult | draft \"2\"",
+          "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+          "field": {
+            "kind": "verse",
+            "place": "TIT 1:4"
+          }
+        },
+        "instance": "abababababababababababababababab",
+        "text": "Paul, a servant"
+      }
+    }
+  ]
+}

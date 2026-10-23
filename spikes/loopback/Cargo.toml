@@ -1,0 +1,39 @@
+# A throwaway client for unit A2's loopback spike (docs/APP-DESIGN.md §8.3, AD18, A-14): a wasm
+# `fetch` that clicks `test/echo` on `tc4 serve` and times the round trip. It is never shipped
+# and is not a member of the rebuild's workspace: the empty [workspace] table below makes this
+# directory its own workspace, and the root Cargo.toml excludes `spikes`.
+[package]
+name = "loopback-spike"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+license = "GPL-2.0-or-later"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# The wire types the UI parses, so the client pays what the product's client pays to read a reply.
+tc-api = { path = "../../crates/tc-api", features = ["test-hooks"] }
+serde_json = "1"
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4.79"
+js-sys = "0.3.106"
+web-sys = { version = "0.3.106", features = [
+    "Window", "Location", "Performance", "Request", "RequestInit", "Headers", "Response",
+    "ReadableStream", "ReadableStreamDefaultReader",
+] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+# The product's wasm is built with these settings (the workspace's `wasm-release` profile).
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

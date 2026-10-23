@@ -1,0 +1,638 @@
+{
+  "about": "Differences that are listed and explained rather than fixed (PLAN P7: a human reviews the differences, and the differences are listed). `rows` explains a report row whose status is `differs`, naming exactly the layers it differs in (`pixels`, `dom`, `meaning`, `behaviour`), so a difference on another layer still fails; `general` lists differences no single row shows. A failed row is never a residual.",
+  "general": [
+    {
+      "id": "engine",
+      "why": "P7 compares screenshots taken in Chromium 141 (Playwright 1.56.1, build 1194). The product ships in Electronite v37, whose Chromium is 138, so the comparison engine is not the shipped one. G2 adds one capture run of the Rust app inside Electronite, compared with the Chromium 141 run of the same build (Q-28).",
+      "cites": "RT-34, Q-28",
+      "until": "G2"
+    },
+    {
+      "id": "fontconfig-rules",
+      "why": "The machine fingerprint lists every font face and its version, so a font added, removed or upgraded stops pixel comparisons until both sides are captured again on one machine. A fontconfig rule that changes which face draws a fallback glyph without changing the list is not caught.",
+      "cites": "APP-DESIGN §7.3 layer 1",
+      "until": null
+    },
+    {
+      "id": "astral-initials",
+      "why": "The project chip's initials take each word's first character. tC4's `w[0]` takes the first UTF-16 unit, so a word that starts outside the Basic Multilingual Plane (a mathematical letter, many CJK extension characters) gives half of a surrogate pair, a broken glyph; the rebuild gives the whole character (`tc_ui::app::shell::project_initials`, test `astral_initial_is_whole`). Every other name gives tC4's initials, JavaScript's `\\s` and full upper-casing included.",
+      "cites": "AGENTS.md \"Matching tC4\"; A5",
+      "until": null
+    },
+    {
+      "id": "feedback-waits-for-attachment",
+      "why": "tC4 composes the Feedback attachment in the page at once, so its Send never waits. The rebuild's server composes it (`feedback/compose`, A5 D8), and Send stays off until the attachment is shown, so nothing is sent that the dialog did not show (`tc_ui::app::feedback::can_send`). A compose that fails says so in the attachment box in the shown language (`feedback.attachmentFailed`), and opening the report again keeps the typed text and composes again (journey `a compose that fails keeps Send off and says so; the next opening keeps the text and composes again`; test `a_kept_report_whose_compose_failed_composes_again_with_its_text`). No baseline screen shows it: tC4 has no compose to wait for or to fail.",
+      "cites": "AGENTS.md \"Matching tC4\"; A5 D8",
+      "until": null
+    },
+    {
+      "id": "poem-verse-drafted",
+      "why": "A book tile's drafted percentage counts a verse as drafted when its words, trimmed, are neither empty nor ___ (tc_app::drafted, tC4 #572's span rule). tC4 reads a verse's body only up to its first paragraph marker, so a poem verse whose words are on \\q lines is undrafted there and drafted here (test a_poem_verse_with_words_counts_as_drafted). No baseline verse is such a verse.",
+      "cites": "AGENTS.md \"Matching tC4\"; B2 D3",
+      "until": null
+    },
+    {
+      "id": "unusable-folders",
+      "why": "Home lists every folder that holds a project's files but cannot be opened, by name, with the reason in words and no button (B2 D9; APP-DESIGN §4.5), where tC4's listing leaves it off; while one shows, \"No projects yet\" is not drawn. No scenario holds such a folder, so no row shows it (journey an_unusable_folder_shows_its_name_and_reason_and_opens_nothing; test unusable_folders_are_listed_with_their_reason).",
+      "cites": "AGENTS.md \"Matching tC4\"; APP-DESIGN §4.5, Q-9; B2 D9",
+      "until": null
+    },
+    {
+      "id": "language-code-offer",
+      "why": "Choosing a language whose Door43 code a Scripture Burrito cannot hold (about 470, such as acm-x-lebarabic) fills the Code box with a code it can hold that keeps every letter (acm-x-lebarabi-c) and says so in one sentence; when none can be made the box stays empty and the sentence says why. tC4 fills the Door43 code and stores \"Undetermined\" (#582). No baseline screen chooses a language.",
+      "cites": "owner's answer to Q35 (TC4-DELTA-2026-10-19 §5); B2 step 1",
+      "until": null
+    },
+    {
+      "id": "sync-alignments",
+      "why": "The sync result names the verses with two alignments to review under its line (\"1 verse has two alignments to review.\") and offers Review for them, where tC4 4.0 keeps the newest alignment and counts it among the conflicts that kept the newest version (#791; tc_ui test a_verse_with_two_alignments_is_named_and_offers_review). No baseline sync brings an alignment conflict, so no row shows it.",
+      "cites": "AGENTS.md \"Matching tC4\"; docs/PLAN.md (B10); #791",
+      "until": null
+    },
+    {
+      "id": "sync-fixed-sentence",
+      "why": "A sync that stops for a reason no other sentence names shows one fixed sentence, before and after the teammates' work was received, where tC4 4.0 shows \"The sync stopped: {reason}\" with Door43's words or an I/O reason that can name a file (tc_api test io_reason_renders_without_the_path; journey sync-button). No baseline sync stops so.",
+      "cites": "Q36 (TC4-DELTA-2026-10-19 §5); #724 item 6",
+      "until": null
+    },
+    {
+      "id": "check-comment-saved-on-leaving",
+      "why": "A check comment still being typed when the checker moves to another check, goes Home or leaves Check is saved with the check it was typed on, as its Done does (the editor leaving saves its text, and a draft of it stays in the buffer until then); tC4 drops it (`tC4:src/views/Check.jsx`, the editor's reset on a new item). Nothing a translator types is lost. No baseline screen has an editor open (journey `check_comment_saved_on_leaving_the_item`; tc-ui test `check_comment_saves_on_done_and_on_the_gate`).",
+      "cites": "AGENTS.md \"Matching tC4\"; APP-DESIGN §6.5, RT-10, Q-25; B5b D5",
+      "until": null
+    }
+  ],
+  "rows": {
+    "about": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The build line (`about-build`) is masked.",
+      "until": null
+    },
+    "account-menu": {
+      "layers": [
+        "pixels",
+        "behaviour"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "add-book": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "add-project": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "app-language": {
+      "layers": [
+        "pixels",
+        "behaviour"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "feedback": {
+      "layers": [
+        "pixels",
+        "behaviour"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The attachment lines (`feedback-attachment`) are masked.",
+      "until": null
+    },
+    "home": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "home-list-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The banner's diagnosis after \"The project could not be opened.\": tC4 prints its fetch's error (`TypeError: Failed to fetch`, the gallery's patch), and the capture makes the rebuild's server answer the listing with an error, which the banner prints as the rebuild's error text (`internal error`). The banner, its Retry and the absence of \"No projects yet\" are tC4's; the pixels differ only along the shorter text.",
+      "until": null
+    },
+    "home-open-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 reaches this state by writing a file outside the app and opening again: its store refuses the open, and the checkpoint of the project just left fails too, so tC4's Home shows both banners. The rebuild reads a file written outside the app as an outside edit and opens (STORAGE §11.1), so the Rust route answers `session/open` with a refusal it does give, a project file it cannot read (`replies/home-open-error.json`): the banner is tC4's, `The project could not be opened.` with the store's reason and Ask for help, and there is no checkpoint banner. Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out).",
+      "until": null
+    },
+    "home-resume": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "import": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "license": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "net-failed": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "new-bible": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "new-obs": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "open-door43": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's (the masked server line aside). Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The pixels differ inside the dialog as well, by ruling Q3: the note without tC4's \"Only public repositories can be opened.\" (masked, q3-where) is one line where tC4's is two, so the centred dialog is one line shorter and each of its lines is drawn half a line lower; the DOM of the dialog is tC4's line for line once the masked note is taken out.",
+      "until": null
+    },
+    "open-door43-internet-consent": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's (the masked server line aside). Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The pixels differ inside the dialog as well, by ruling Q3: the note without tC4's \"Only public repositories can be opened.\" (masked, q3-where) is one line where tC4's is two, so the centred dialog is one line shorter and each of its lines is drawn half a line lower; the DOM of the dialog is tC4's line for line once the masked note is taken out.",
+      "until": null
+    },
+    "open-door43-refused": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's apart from the two masked lines of ruling Q3 (q3-where, and q3-refused: Q-21's openDoor43.refused.notOpened), with the refusal's code sync.clone-failed, \"No project was added.\" and Ask for help, and the Home behind it is B2's. Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The pixels differ inside the dialog as well, by Q3: the note is one line where tC4's is two, so the centred dialog sits half a line higher (B9b's open-door43). The open's refusal is scripted (`test/script`, the environment's door43Lacks) until E1b.",
+      "until": null
+    },
+    "open-progress-journal": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). While the changes are read, the count names files (`open.changeFiles`, \"{done} of {total} files\", a rebuild key pending in nine languages, Q-10), where tC4's names saved actions: the store reads the project's change files, not tC4's journal segments, so tC4's words would misname what is counted (Q-7, a declared difference). Behind the overlay, both projects load and the Rust Home lists both cards, as tC4's does: B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out, so nothing is missing from the Home. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "open-progress-prepare": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's. Behind it, both projects load and the Rust Home lists both cards, as tC4's does: B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out, so nothing is missing from the Home. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "open-progress-state": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's. Behind it, both projects load and the Rust Home lists both cards, as tC4's does: B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out, so nothing is missing from the Home. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "share-dialog": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's (the masked server line aside). Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "share-dialog-check": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's (the masked server line aside). Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "share-internet-consent": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's (the masked server line aside). Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "share-signin": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's (the masked server line aside). Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "shared-home": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's, the region above the cards is pixel for pixel tC4's, and the shared Bible card reads \"On Door43\", \"Shared at facilitator-zq/sample_burrito\" and \"Sync with Door43\" as tC4's does. The shared OBS card reads \"Sync with Door43\" where tC4's reads \"Upload changes\" (the masked element q2-obs-card, ruling Q2). The pixels differ by ruling Q2: the shared OBS card's longer label \"Sync with Door43\" (masked, q2-obs-card) leaves less room beside the title, which wraps onto a second line, and \"On Door43\" wraps too, so that card is one line (31 px) taller and everything under it sits 31 px lower. The Bible card and the rest of the page are tC4's drawn at that offset.",
+      "until": null
+    },
+    "signin-error": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's (the masked server line aside). Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "sync-failed": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the refusal's sentence and its code sync.clone-failed) is tC4's field by field. The sync's outcome is scripted (`test/script`, the environment's dropNextClone) until E1a recaptures it on a dropped connection. The shared OBS card reads \"Sync with Door43\" where tC4's reads \"Upload changes\" (the masked element q2-obs-card, ruling Q2). The pixels differ by ruling Q2: the shared OBS card's longer label \"Sync with Door43\" (masked, q2-obs-card) leaves less room beside the title, which wraps onto a second line, and \"On Door43\" wraps too, so that card is one line (31 px) taller and everything under it sits 31 px lower. The Bible card and the rest of the page are tC4's drawn at that offset.",
+      "until": null
+    },
+    "sync-internet-consent": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The question's DOM with every computed style is line for line tC4's (kind `sync`), and the Home behind the scrim is shared-home's. The shared OBS card reads \"Sync with Door43\" where tC4's reads \"Upload changes\" (the masked element q2-obs-card, ruling Q2). The pixels differ by ruling Q2: the shared OBS card's longer label \"Sync with Door43\" (masked, q2-obs-card) leaves less room beside the title, which wraps onto a second line, and \"On Door43\" wraps too, so that card is one line (31 px) taller and everything under it sits 31 px lower. The Bible card and the rest of the page are tC4's drawn at that offset.",
+      "until": null
+    },
+    "sync-ok": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the counts, the names, the notes, the links, the 5 missing versions by tC4's rule) is tC4's field by field. The sync's outcome is scripted (`test/script`) until E1a. The shared OBS card reads \"Sync with Door43\" where tC4's reads \"Upload changes\" (the masked element q2-obs-card, ruling Q2). The pixels differ by ruling Q2: the shared OBS card's longer label \"Sync with Door43\" (masked, q2-obs-card) leaves less room beside the title, which wraps onto a second line, and \"On Door43\" wraps too, so that card is one line (31 px) taller and everything under it sits 31 px lower. The Bible card and the rest of the page are tC4's drawn at that offset.",
+      "until": null
+    },
+    "sync-ok-restored": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the counts, the names, the notes, the links, the 5 missing versions by tC4's rule) is tC4's field by field. The second sync's outcome is scripted (one change sent again) until E1a; the verse conflict it names is the fold's, from the first sync. The shared OBS card reads \"Sync with Door43\" where tC4's reads \"Upload changes\" (the masked element q2-obs-card, ruling Q2). The pixels differ by ruling Q2: the shared OBS card's longer label \"Sync with Door43\" (masked, q2-obs-card) leaves less room beside the title, which wraps onto a second line, and \"On Door43\" wraps too, so that card is one line (31 px) taller and everything under it sits 31 px lower. The Bible card and the rest of the page are tC4's drawn at that offset.",
+      "until": null
+    },
+    "sync-ok-teammates": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the counts, the names, the notes, the links, the 5 missing versions by tC4's rule) is tC4's field by field. The two teammates' versions of Titus 1:1 are written into the project by the scripted sync and folded, so the card's chip \"1 conflict · Review\" and the Titus tile's \"1 conflict\" come from the fold's own conflict, as tC4's do. The shared OBS card reads \"Sync with Door43\" where tC4's reads \"Upload changes\" (the masked element q2-obs-card, ruling Q2). The pixels differ by ruling Q2: the shared OBS card's longer label \"Sync with Door43\" (masked, q2-obs-card) leaves less room beside the title, which wraps onto a second line, and \"On Door43\" wraps too, so that card is one line (31 px) taller and everything under it sits 31 px lower. The Bible card and the rest of the page are tC4's drawn at that offset.",
+      "until": null
+    },
+    "check-picker": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #764, a declared difference (TC4-ISSUES, B5a): a Check bar fills at least 6 px once one check is resolved (`min-width` on its fill), so 1 of 112 shows as done where tC4's 0.9% sliver reads as nothing, and the bar names its count for screen readers (`aria-label`, \"1 of 112 resolved\"). The Align and Community Checking bars are tC4's. Every other line of the DOM, every computed style included, is tC4's; the pixels differ only at the bars' fills."
+    },
+    "en-check-picker": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #764, a declared difference (TC4-ISSUES, B5a): a Check bar fills at least 6 px once one check is resolved (`min-width` on its fill), so 1 of 112 shows as done where tC4's 0.9% sliver reads as nothing, and the bar names its count for screen readers (`aria-label`, \"1 of 112 resolved\"). The Align and Community Checking bars are tC4's. Every other line of the DOM, every computed style included, is tC4's; the pixels differ only at the bars' fills."
+    },
+    "guided-fix": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The guided fix's dialog is tC4's, line for line and pixel for pixel. Behind it, the picker's Translation Notes bar carries tC4 #764's declared difference (a 6 px least fill once one check is resolved and its count for screen readers, see check-picker); the dialog hides that bar, so only the DOM shows it."
+    },
+    "check-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The reason under the failed open: tC4 prints its fetch's error (`Failed to fetch`, the gallery's patch); the Rust route answers `check/open` with an error the server does give, a bug's report, which the screen prints as the rebuild's error text (`internal error`). The centred message, its colour and its place are tC4's."
+    },
+    "check-rail-empty": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The item detail beside the rail is B5b's (captured again with its session screens): its compare card is tC4 9ad4d5c's (C40, #762), not the d310bf3 baseline's stacked card, as the session screens' residuals say, and the sample's Learn more link reads \"Translation Academy\" in both. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid. The rail header's bar carries tC4 #764's declared difference (see check-picker)."
+    },
+    "project-settings": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's, from its scrim to its last button. Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "source-texts": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Urdu in Devanagari script (ur-deva) reads left to right and is named उर्दू (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), where tC4 4.0's registry names it اردو in Arabic script, right to left: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style and Understand behind the dialog included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it (a mask's rectangle must lie in the window).",
+      "until": null
+    },
+    "obs-translate": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's mock lists the default picture pack (obs_images_360, sideloaded) as installed with no pictures, so its note on the missing pictures reads \"... lists 0 image files (paths)\" where the Rust scenario has not installed that pack and its note says \"... is not installed\"; the Rust note is one line shorter, so the table under it sits one line higher and the pixels below the note differ. That is the one line of the DOM that differs, apart from the masked logo address; every other line, every computed style included, is tC4's. The Rust app reads the same pack list tC4 does (`pack_sentence`, the three clauses of tC4's `describePack`), so installing the pack in the scenario gives tC4's line.",
+      "until": null
+    },
+    "en-obs-translate": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's mock lists the default picture pack (obs_images_360, sideloaded) as installed with no pictures, so its note on the missing pictures reads \"... lists 0 image files (paths)\" where the Rust scenario has not installed that pack and its note says \"... is not installed\"; the Rust note is one line shorter, so the table under it sits one line higher and the pixels below the note differ. That is the one line of the DOM that differs, apart from the masked logo address; every other line, every computed style included, is tC4's. The Rust app reads the same pack list tC4 does (`pack_sentence`, the three clauses of tC4's `describePack`), so installing the pack in the scenario gives tC4's line.",
+      "until": null
+    },
+    "en-obs-check-tn-session": {
+      "layers": [
+        "dom"
+      ],
+      "why": "A story's check card is B5b's detail since C4 (C4 D3): Learn more, the words to tap with their hint, the marking row, the bookmark and the comment are tC4's, and the pixels are tC4's exactly. The DOM differs in two attributes, each a declared difference of the Bible sessions. The progress bars carry B5a's `aria-label` (tC4 #764, see check-picker). \"Your translation\" stops at 80ch (`max-width`), as tC4 9ad4d5c's `Check.jsx` draws it for every check (#762 / C40, TC4-DELTA-2026-10-19 §3.12.1, see en-check-tn-session); in the 760 px story column the line is narrower than that, so nothing moves. Every other element, every computed style included, is tC4's."
+    },
+    "add-book-pick": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home behind the dialog lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out; B7 captured C6's rows again on the merged build). The dialog's DOM with every computed style, from its scrim to its last button, and the Home behind it are line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the Bible card's summary line (41 pixels, all outside the masks), where a line of text is drawn at another fractional offset, as on `add-book` (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "add-book-pick-multi": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home behind the dialog lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out; B7 captured C6's rows again on the merged build). The dialog's DOM with every computed style, from its scrim to its last button, and the Home behind it are line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the Bible card's summary line (41 pixels, all outside the masks), where a line of text is drawn at another fractional offset, as on `add-book` (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "add-book-usfm": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home behind the dialog lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out; B7 captured C6's rows again on the merged build). The dialog's DOM with every computed style, from its scrim to its last button, and the Home behind it are line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the Bible card's summary line (41 pixels, all outside the masks), where a line of text is drawn at another fractional offset, as on `add-book` (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "add-book-usfm-files": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "Both projects load and the Rust Home behind the dialog lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out; B7 captured C6's rows again on the merged build). The dialog's DOM with every computed style, from its scrim to its last button, and the Home behind it are line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the Bible card's summary line (41 pixels, all outside the masks), where a line of text is drawn at another fractional offset, as on `add-book` (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "translate-tit1": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The titles of two Titus 1 note cards in the helps panel are tC4 9ad4d5c's, “It is necessary to stop them” and “teaching what they should not”, where the d310bf3 capture shows “It is necessary to stop them … they should” and “It is necessary … teaching what they should not”: FIX-helps adopted tC4's later rendering of a note's quote early (C39, docs/TC4-DELTA-2026-10-19.md §3.11; tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code by `every_gateway_title_of_genesis_psalms_and_titus_is_tc4s`). Both cards are below the fold, so the screenshot is tC4's pixel for pixel, and every other line of the DOM, every computed style included, is tC4's. The difference goes when the reference moves to v4.0.0 and the screens are captured again (DELTA §3.11 item 1).",
+      "until": null
+    },
+    "en-translate-tit1": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The title of a Titus 1 note card in the helps panel is tC4 9ad4d5c's, “It is necessary to stop them”, where the d310bf3 capture shows “It is necessary to stop them … they should”: FIX-helps adopted tC4's later rendering of a note's quote early (C39, docs/TC4-DELTA-2026-10-19.md §3.11; tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code by `every_gateway_title_of_genesis_psalms_and_titus_is_tc4s`). The card is below the fold, so the screenshot is tC4's pixel for pixel, and every other line of the DOM, every computed style included, is tC4's. The difference goes when the reference moves to v4.0.0 and the screens are captured again (DELTA §3.11 item 1).",
+      "until": null
+    },
+    "upgrade-set": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-harmless": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-blocked": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-set-error": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "upgrade-text": {
+      "layers": [
+        "dom"
+      ],
+      "why": "Get source texts behind the confirmation names Urdu in Devanagari script (ur-deva) in left-to-right उर्दू where tC4 4.0 names it اردو, right to left (#701; docs/PLAN.md, \"Where the rebuild differs from tC4 4.0 on purpose\"), as `source-texts` explains: the eighteenth package's title is `<span dir=\"ltr\">उर्दू` where tC4's is `<span dir=\"rtl\">اردو`. Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel: the row lies below the dialog's visible part, so no mask can cover it. The confirmation's own words, rows and buttons are tC4's, with the offers and counts the case's `why` says tC4's mock borrows, scripted for the Rust server (`test/script`).",
+      "until": null
+    },
+    "gateway-change-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's case draws the error of a confirm made while another project is open (`gateway.otherProject`: \"Another project is open now. Open this project and choose the language again.\"), which a Rust confirmation cannot meet: a plan belongs to the open it was made for and a confirm for another open is refused as stale before anything is written (APP-DESIGN 4.8). The reachable failure is a save the disk refuses, and the dialog states its reason in the same callout after \"The change was not applied.\": the capture answers the confirm with a disk with no room, \"There is no room left on the disk.\", so the one text line differs and every other line, style and pixel outside that line is tC4's.",
+      "until": null
+    },
+    "align-workspace": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "align-original": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "align-workspace-row": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "ar-align-workspace-row": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "align-workspace-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "ar-align-workspace-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "Everything above the cards (the header, the rail, the lens bar, the reference text, the suggestions row, the word bank with its occurrence numbers) is tC4's DOM and pixels. The cards differ on purpose: the aligner shows a card for every word of the pinned original-language verse (tC4 #790, FIX-align), so Titus 1:1 has 17 Greek words on 16 cards where tC4 4.0's sample record, which holds ten cards for 11 of them, shows ten; the six Greek words it lacks get empty cards, in verse order. Every card is also focusable (tabindex -1, 0 while words are chosen) so a person who cannot drag or point can place the chosen words with Enter (tC4 #568, a declared difference), and a card's header is draggable with its merge hint as tC4's is. What follows the cards (the marking row) moves down by the extra cards, so the scrolled and narrow captures differ in pixels from the first extra card on.",
+      "until": null
+    },
+    "align-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The failed open's text. tC4 shows the message of the exception it caught (\"Failed to fetch\"); the rebuild says that the server reported a bug (\"internal error\"), because a request the page cannot complete is a refusal or a report with its own words (APP-DESIGN 3.5), not a browser's. Everything else, the box, its title and Retry, is tC4's, and the rail beside it too.",
+      "until": null
+    },
+    "ar-check-tn-session-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. 620 px wide and right to left: the source texts stack."
+    },
+    "ar-check-tn-session-row": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. Right to left, scrolled to the marking row."
+    },
+    "ar-check-tw-session": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). Right to left."
+    },
+    "ar-check-tw-session-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide and right to left: the source texts stack."
+    },
+    "check-tn-session": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. The sample's Learn more link reads \"Translation Academy\" in both (es-419_ta v4 is vendored on neither side)."
+    },
+    "en-check-ta-drawer": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. The Translation Academy drawer over the session; the drawer is tC4's (DS Drawer, 751 of 751 gallery DOM)."
+    },
+    "en-check-tn-session": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree."
+    },
+    "en-check-tn-session-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. 620 px wide: the source texts stack, since two do not fit in a row."
+    },
+    "en-check-tn-session-row": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). tC4 #773 / C39 (DELTA §3.11): the rail's Notes titles name the shortest run of ULT words that renders the quote (\"It is necessary to stop them\"), where the d310bf3 baseline shows the words from elsewhere in the verse (\"It is necessary to stop them … they should\"); seven Titus notes, in the rebuild's tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code. The Invalid chip counts 1 where the baseline counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. Scrolled to the marking row: the compare card above it is the taller C40 card."
+    },
+    "en-check-tw-article": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The article drawer over the session; the article's blocks, its title and its path line are tC4's."
+    },
+    "en-check-tw-session": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`)."
+    },
+    "en-check-tw-session-620": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 #762 / C40 (reference change, TC4-DELTA-2026-10-19 §3.12.1): the compare card is tC4 9ad4d5c's, not the baseline's d310bf3 (B5b builds `CompareCard.jsx` and `Check.jsx`'s widths): the detail column fills the window, lines stop at 80ch, the original-language and gateway texts are two cards side by side in a row that wraps (the first at the right in a right-to-left interface), \"Your translation\" is a card of its own 24 px below with a 3 px accent rule, and the note box is `calc(80ch + 36px)` wide. The baseline shows one stacked card in a 760 px column. A6a recaptures the check session screens when the reference moves (C54). Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide: the source texts stack."
+    },
+    "upgrade-repin": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The re-pin confirmation is tC4's pixel for pixel, with the counts tC4's case borrows from the recorded gateway change, scripted for the Rust server (`test/script`); the sample holds no other copy of es-419 TWL, so the route adds one installed version to the server's `resources/fixState` reply, as the case writes the release name. Behind it, the picker's Translation Notes bar carries tC4 #764's declared difference (its count for screen readers, `aria-label` \"1 of 112 resolved\", see check-picker); the scrim hides the bar's fill, so only the DOM shows it. Every other line of the DOM, every computed style included, is tC4's.",
+      "until": null
+    },
+    "section-empty-confirm": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The save indicator reads “Unsaved changes” (`data-state=\"dirty\"`, tone `warn`) where tC4 reads “Saved”: tC4's indicator mirrors only its verse scheduler, and a section card's text is not in it until Save, so tC4 says “Saved” while every word of the section has just been deleted and nothing is stored. The rebuild's section card is a field of the save machine (APP-DESIGN §6.5, `SaveRule::OnSaveOnly`), so the indicator says what is true: there are unsaved changes (a declared difference, docs/PLAN.md, unit B4b). Those are the only pixels that differ. In the DOM, besides the indicator's three lines, the textarea keeps the text it opened with as its child text node, where React writes each new value there too (`defaultValue`); the field's value, which is what the person sees and what is saved, is empty on both sides. Every other line of the DOM, every computed style included, is tC4's, and the question, its words, buttons and focus are tC4's.",
+      "until": null
+    },
+    "conflict-review": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The review of Titus 1:1 after two teammates changed it on Door43, no version selected. Every pixel and every line of the DOM, computed styles included, is tC4's but for two things. The dates of the versions: each date is when its version was made, so tC4's are its capture's time and the rebuild's are its own run's (the scripted teammates' versions carry the environment's fixed time, 1 October 2026), and the card's `data-ts` is tC4's §8.2 ts there and the rebuild's change id here. The History button under the versions (#78, read only until C7a's Restore): a rebuild-only control (Q-9) that lists every version of the verse with how it came to be. The sync that brings the teammates' versions is scripted (`test/script`, the environment's teammatesChangeOneVerse) until X; the teammates edit Door43's copy of the project, so a version this computer has not synced stays a version of its own.",
+      "until": null
+    },
+    "conflict-review-selected": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The same review with the first version selected: it is outlined and the other fades, and the footer says that Teammate 2's version replaces the other. Every pixel and every line of the DOM, computed styles included, is tC4's but for two things. The dates of the versions: each date is when its version was made, so tC4's are its capture's time and the rebuild's are its own run's (the scripted teammates' versions carry the environment's fixed time, 1 October 2026), and the card's `data-ts` is tC4's §8.2 ts there and the rebuild's change id here. The History button under the versions (#78, read only until C7a's Restore): a rebuild-only control (Q-9) that lists every version of the verse with how it came to be. The sync that brings the teammates' versions is scripted (`test/script`, the environment's teammatesChangeOneVerse) until X; the teammates edit Door43's copy of the project, so a version this computer has not synced stays a version of its own.",
+      "until": null
+    },
+    "conflict-review-mine": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The review with three versions: Titus 1:1 saved on this computer before the sync, then two teammates' versions; Mine is light blue and each teammate's cream (#679). Every pixel and every line of the DOM, computed styles included, is tC4's but for two things. The dates of the versions: each date is when its version was made, so tC4's are its capture's time and the rebuild's are its own run's (the scripted teammates' versions carry the environment's fixed time, 1 October 2026), and the card's `data-ts` is tC4's §8.2 ts there and the rebuild's change id here. The History button under the versions (#78, read only until C7a's Restore): a rebuild-only control (Q-9) that lists every version of the verse with how it came to be. The sync that brings the teammates' versions is scripted (`test/script`, the environment's teammatesChangeOneVerse) until X; the teammates edit Door43's copy of the project, so a version this computer has not synced stays a version of its own.",
+      "until": null
+    },
+    "cc-obs-wrapped": {
+      "layers": [
+        "dom"
+      ],
+      "why": "After the click on “Pictures wrapped”, React updates each layout chip's style in place, one changed property at a time: it sets the chip's new `border` shorthand, whose value holds a `var()`, and does not set the unchanged `borderWidth: 1` again after it, so tC4's DOM reads the four `border-*-width` longhands as pending (empty). The rebuild writes each chip's whole style again, so they read `1px`, as both DOMs do before the click (`cc-obs` is the same). `--stroke` is 1px, so every pixel is the same (0 differ). Unit B8."
+    }
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "type": "refused",
+    "value": "incoherentView"
+  },
+  {
+    "type": "refused",
+    "value": {
+      "invalidText": {
+        "reason": "a comment needs text"
+      }
+    }
+  },
+  {
+    "type": "disk",
+    "value": "The disk is full."
+  },
+  {
+    "type": "readOnly",
+    "value": "secondWriter"
+  },
+  {
+    "type": "lookAgain"
+  },
+  {
+    "type": "planStale"
+  },
+  {
+    "type": "staleScope"
+  },
+  {
+    "type": "badToken"
+  }
+]

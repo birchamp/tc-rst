@@ -1,0 +1,28 @@
+{
+  "path": "account/resume",
+  "kind": "command",
+  "net": "checkSignIn",
+  "request": {
+    "request": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "outcome": "refused",
+      "account": {
+        "user": null,
+        "kept": "notKept",
+        "notice": "savedRefused",
+        "server": "git.door43.org",
+        "keychain": "works"
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "checkSignIn"
+    }
+  }
+}

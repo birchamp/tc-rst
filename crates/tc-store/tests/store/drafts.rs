@@ -4,20 +4,25 @@
 //! carried by a copy of a read-only project (R7).
 
 use crate::common::*;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tc_journal::command::{AlignmentEdit, Command, Draft, DraftField, SectionValue};
 use tc_journal::record::{AlignmentGroup, CommentTarget, SourceWord, TargetWord, VerseValue};
 use tc_journal::{ChapterNo, Record, RecordKey, VerseNo};
 use tc_store::fault::FaultFs;
-use tc_store::{OpenOptions, ProjectHandle};
+use tc_store::{Hooks, OpenOptions, Point, ProjectHandle};
 
 fn draft(handle: &ProjectHandle, field: DraftField, keys: &[RecordKey], text: &str) {
     let shown = keys.iter().map(|k| handle.mint(k, None).unwrap()).collect();
     handle
-        .submit(Command::Draft(Draft {
-            field,
-            shown,
-            text: text.into(),
-        }))
+        .submit(Command::Draft {
+            draft: Draft {
+                field,
+                shown,
+                text: text.into(),
+            },
+            at: tc_journal::WallTime(0),
+        })
         .wait()
         .unwrap();
 }
@@ -498,4 +503,396 @@ fn dismissing_an_older_copy_never_deletes_its_unseen_replacement() {
     handle.dismiss_notice(notice.id).wait().unwrap();
     assert!(rig.fs.peek(&copy).is_none());
     handle.close().unwrap();
+}
+fn texts_offered(handle: &ProjectHandle) -> Vec<String> {
+    let mut texts: Vec<String> = handle
+        .offered_drafts()
+        .into_iter()
+        .map(|o| o.draft.text)
+        .collect();
+    texts.sort();
+    texts
+}
+
+/// APP-DESIGN §6.6 (C1b, finding 1): one field can hold two offered texts, the last session's
+/// draft and a text taken in from the page's buffer. *Keep* of one leaves the other offered,
+/// at a reload and after a crash, until the person answers it.
+#[test]
+fn keeping_one_of_two_offered_texts_of_a_field_leaves_the_other() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 4)],
+        "from drafts.json",
+    );
+    let fs = crashed_after_drafts(&rig, handle);
+    let (rig, handle) = reopen(fs, &folder);
+    let buffered = Draft {
+        field: DraftField::Words,
+        shown: vec![handle.mint(&verse(1, 4), None).unwrap()],
+        text: "from the buffer".into(),
+    };
+    let id = handle
+        .offer_draft(buffered.clone(), true, tc_journal::WallTime(1))
+        .unwrap();
+    assert_eq!(
+        handle.offer_draft(buffered.clone(), true, tc_journal::WallTime(2)),
+        Some(id),
+        "one text, one entry"
+    );
+    assert_eq!(
+        texts_offered(&handle),
+        ["from drafts.json", "from the buffer"]
+    );
+    handle
+        .submit(Command::KeepDraft {
+            draft: buffered,
+            section: Vec::new(),
+        })
+        .wait()
+        .unwrap();
+    assert_eq!(words(&handle, 1, 4).as_deref(), Some("from the buffer"));
+    assert_eq!(texts_offered(&handle), ["from drafts.json"]);
+    let fs = crashed_after_drafts(&rig, handle);
+    let (_rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["from drafts.json"]);
+    handle.close().unwrap();
+}
+
+/// Finding 9: *Discard* of an offered text removes that entry, written before it returns,
+/// and never the field's draft typed after the offer.
+#[test]
+fn discard_leaves_the_fields_draft_typed_since() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 5)],
+        "offered, discarded",
+    );
+    let fs = crashed_after_drafts(&rig, handle);
+    let (rig, handle) = reopen(fs, &folder);
+    let offered = handle.offered_drafts();
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 5)],
+        "typed after the offer",
+    );
+    handle.wait_idle();
+    assert!(handle.discard_draft(offered[0].id));
+    // No flush: the discard was written before it returned.
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let (_rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["typed after the offer"]);
+    handle.close().unwrap();
+}
+
+/// APP-DESIGN §6.6: a draft records the app's run that typed it, so the app can tell whether
+/// that run's page kept newer typing (finding 5 is judged there, with the shell's mirror); an
+/// open of a later run offers it, and an open of the same run keeps it as that page's own.
+#[test]
+fn a_draft_records_its_run_and_only_a_later_run_is_offered_it() {
+    let (rig, folder) = titus();
+    let run = |name: &str| OpenOptions {
+        run: Some(name.to_owned()),
+        ..OpenOptions::default()
+    };
+    let handle = rig.store.open(&folder, &run("run-1")).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 6)], "typed in run 1");
+    let fs = crashed_after_drafts(&rig, handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = rig.store.open(&folder, &run("run-1")).unwrap();
+    assert!(
+        handle.offered_drafts().is_empty(),
+        "the same run's own typing"
+    );
+    let fs = crashed_after_drafts(&rig, handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = rig.store.open(&folder, &run("run-2")).unwrap();
+    let offered = handle.offered_drafts();
+    assert_eq!(offered.len(), 1, "{offered:?}");
+    assert_eq!(offered[0].run.as_deref(), Some("run-1"));
+    handle.close().unwrap();
+}
+
+/// An offered text is marked so in the file at the open that offers it: a save of the field
+/// in that session, which the person made without seeing it, never supersedes it.
+#[test]
+fn an_offered_draft_outlives_the_next_sessions_save_of_its_field() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 7)], "never answered");
+    let fs = crashed_after_drafts(&rig, handle);
+    let (rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["never answered"]);
+    save_verse(&handle, 1, 7, "typed without answering").unwrap();
+    let fs = crashed_after_drafts(&rig, handle);
+    let (_rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["never answered"]);
+    handle.close().unwrap();
+}
+
+/// A completed write is the barrier, so the crash does not depend on the writer's throttle.
+fn wait_for_draft_write(handle: &ProjectHandle, previous: u64) {
+    let until = Instant::now() + Duration::from_secs(10);
+    while handle.counters().drafts_written <= previous {
+        assert!(Instant::now() < until, "the draft writer did not finish");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+fn link_group(source: &str, target: &str) -> AlignmentGroup {
+    AlignmentGroup {
+        top_words: vec![SourceWord {
+            word: source.into(),
+            strong: None,
+            lemma: None,
+            morph: None,
+            occurrence: 1,
+            occurrences: 1,
+            extra: Default::default(),
+        }],
+        bottom_words: vec![TargetWord {
+            word: target.into(),
+            occurrence: 1,
+            occurrences: 1,
+            extra: Default::default(),
+        }],
+        extra: Default::default(),
+    }
+}
+
+/// R26: the record and writer complete before Ack; no align actor can refresh the draft.
+#[test]
+fn a_newer_alignment_draft_survives_a_crash_before_the_saves_ack() {
+    let hooks = Arc::new(Hooks::default());
+    let rig = rig_with_hooks(FaultFs::new(), hooks.clone());
+    let folder = create_titus(&rig, "Titus");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    handle.wait_idle();
+    let key = alignment_key();
+    let shown = handle.mint(&key, None).unwrap();
+    let verse_shown = handle.mint(&verse(1, 1), None).unwrap();
+    let first = AlignmentEdit {
+        alignments: vec![link_group("Παῦλος", "Paul")],
+        word_bank: Vec::new(),
+        done: false,
+    };
+    let mut newer = first.clone();
+    newer.alignments.push(link_group("δοῦλος", "servant"));
+    hooks.hold(Point::BeforeDurablePending);
+    hooks.hold(Point::BeforeCommandReply);
+    let saving = handle.submit(Command::SaveAlignment {
+        shown: shown.clone(),
+        verse_shown: verse_shown.clone(),
+        value: first.clone(),
+    });
+    hooks.wait_reached(Point::BeforeDurablePending, 1);
+    let writes = handle.counters().drafts_written;
+    handle
+        .submit(Command::Draft {
+            draft: Draft {
+                field: DraftField::Alignment,
+                shown: vec![shown.clone(), verse_shown.clone()],
+                text: newer.to_json(),
+            },
+            // Equal wall clocks must not make a newer draft look older than the save.
+            at: tc_journal::WallTime(0),
+        })
+        .wait()
+        .unwrap();
+    wait_for_draft_write(&handle, writes);
+    hooks.release(Point::BeforeDurablePending);
+    hooks.wait_reached(Point::BeforeCommandReply, 1);
+
+    // This other field forces the writer past the save notification and into a durable
+    // write while Ack is held. It cannot recreate the alignment draft if the save erased it.
+    let writes = handle.counters().drafts_written;
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 2)],
+        "another unsaved verse",
+    );
+    wait_for_draft_write(&handle, writes);
+    let after = rig.fs.crash(true);
+    hooks.release(Point::BeforeCommandReply);
+    saving.wait().unwrap();
+    handle.close().unwrap();
+
+    let (rig, handle) = reopen(after, &folder);
+    let saved = handle.snapshot().fold().projected(&key).unwrap();
+    assert!(
+        matches!(saved, Record::Alignment { value, .. } if value.alignments == first.alignments)
+    );
+    let offers = handle.offered_drafts();
+    let offered = offers
+        .iter()
+        .find(|offer| offer.draft.field == DraftField::Alignment)
+        .expect("the newer durable links must be offered before any actor Ack");
+    assert_eq!(offered.draft.shown, vec![shown, verse_shown]);
+    assert_eq!(
+        AlignmentEdit::from_json(&offered.draft.text),
+        Some(newer.clone())
+    );
+    let kept = handle
+        .submit(Command::KeepDraft {
+            draft: offered.draft.clone(),
+            section: Vec::new(),
+        })
+        .wait()
+        .unwrap();
+    assert!(
+        !kept.new_conflicts.is_empty(),
+        "the intervening save stays a conflict"
+    );
+    let snapshot = handle.snapshot();
+    let heads = snapshot.fold().heads(&key);
+    assert!(heads.iter().any(|head| {
+        matches!(snapshot.fold().body(head).map(|body| body.record),
+            Some(Record::Alignment { value, .. }) if value.alignments == newer.alignments)
+    }));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// Both permitted removals are observable on disk, rather than hidden by the open's filter.
+#[test]
+fn a_save_clears_an_older_different_draft_and_a_newer_equal_draft() {
+    let hooks = Arc::new(Hooks::default());
+    let rig = rig_with_hooks(FaultFs::new(), hooks.clone());
+    let folder = create_titus(&rig, "Titus");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 3)], "older draft");
+    save_verse(&handle, 1, 3, "later saved text").unwrap();
+    handle.wait_idle();
+
+    hooks.hold(Point::BeforeDurablePending);
+    let saving = handle.submit(Command::SaveVerse {
+        shown: handle.mint(&verse(1, 4), None).unwrap(),
+        words: "saved café".into(),
+    });
+    hooks.wait_reached(Point::BeforeDurablePending, 1);
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 4)],
+        "saved cafe\u{301}",
+    );
+    hooks.release(Point::BeforeDurablePending);
+    saving.wait().unwrap();
+    handle.wait_idle();
+    let bytes = rig.fs.peek(&folder.join(".tc/drafts.json")).unwrap();
+    let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+    assert!(entries.is_empty(), "{entries:#?}");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+#[test]
+fn cancelling_a_current_section_draft_is_durable_and_preserves_its_offer() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let cancelled = Draft {
+        field: DraftField::Section { book: TIT },
+        shown: vec![handle.mint(&verse(1, 3), None).unwrap()],
+        text: "3 a cancelled section".into(),
+    };
+    let at = tc_journal::WallTime(123);
+    let offered = handle.offer_draft(cancelled.clone(), true, at).unwrap();
+    handle
+        .submit(Command::Draft {
+            draft: cancelled.clone(),
+            at,
+        })
+        .wait()
+        .unwrap();
+    assert!(handle.discard_current_draft(cancelled, at));
+    assert_eq!(handle.offered_drafts()[0].id, offered);
+    let fs = rig.fs.crash(true);
+    drop(handle);
+    let (rig, handle) = reopen(fs, &folder);
+    let drafts = handle.offered_drafts();
+    assert_eq!(drafts.len(), 1, "only the independent offer remains");
+    assert_eq!(drafts[0].draft.text, "3 a cancelled section");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+#[test]
+fn a_failed_current_draft_cancel_reports_failure_and_can_be_retried() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let cancelled = Draft {
+        field: DraftField::Section { book: TIT },
+        shown: vec![handle.mint(&verse(1, 3), None).unwrap()],
+        text: "3 cancel after the disk recovers".into(),
+    };
+    let at = tc_journal::WallTime(321);
+    handle
+        .submit(Command::Draft {
+            draft: cancelled.clone(),
+            at,
+        })
+        .wait()
+        .unwrap();
+    handle.wait_idle();
+    rig.fs
+        .fail_writes(Some(std::io::ErrorKind::PermissionDenied));
+    assert!(!handle.discard_current_draft(cancelled.clone(), at));
+    let bytes = rig.fs.peek(&folder.join(".tc/drafts.json")).unwrap();
+    let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(entries[0]["text"], cancelled.text);
+    rig.fs.fail_writes(None);
+    assert!(handle.discard_current_draft(cancelled, at));
+    let fs = rig.fs.crash(true);
+    drop(handle);
+    let (rig, handle) = reopen(fs, &folder);
+    assert!(handle.offered_drafts().is_empty());
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::test_runner::Config::with_cases(32))]
+    #[test]
+    fn stale_cancel_never_discards_newer_or_different_current_text(
+        ops in proptest::collection::vec((proptest::bool::ANY, 0u8..4), 1..24),
+    ) {
+        let (rig, folder) = titus();
+        let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+        let shown = vec![handle.mint(&verse(1, 3), None).unwrap()];
+        let mut current: Option<(String, i64)> = None;
+        for (put, version) in ops {
+            let text = format!("3 typed version {version}");
+            let at = i64::from(version);
+            let draft = Draft {
+                field: DraftField::Section { book: TIT },
+                shown: shown.clone(),
+                text: text.clone(),
+            };
+            if put {
+                handle.submit(Command::Draft { draft, at: tc_journal::WallTime(at) }).wait().unwrap();
+                current = Some((text, at));
+            } else {
+                proptest::prop_assert!(handle.discard_current_draft(draft, tc_journal::WallTime(at)));
+                if current.as_ref() == Some(&(text, at)) {
+                    current = None;
+                }
+            }
+        }
+        let fs = crashed_after_drafts(&rig, handle);
+        let (rig, handle) = reopen(fs, &folder);
+        let offered: Vec<_> = handle.offered_drafts().into_iter()
+            .map(|d| (d.draft.text, d.at.0)).collect();
+        proptest::prop_assert_eq!(offered, current.into_iter().collect::<Vec<_>>());
+        handle.close().unwrap();
+        assert_valid_burrito(&rig.fs, &folder);
+    }
 }

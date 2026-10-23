@@ -1,0 +1,83 @@
+{
+  "path": "editor/saveVerse",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "12121212121212121212121212121212",
+    "shown": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+    "words": "Paul, a servant of God"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "view": 42,
+      "stored": "written",
+      "tokens": [
+        {
+          "record": "{\"book\":\"TIT\",\"chapter\":1,\"kind\":\"verse\",\"verse\":4}",
+          "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "newConflicts": [
+        {
+          "conflict": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "record": "{\"book\":\"TIT\",\"chapter\":1,\"kind\":\"verse\",\"verse\":4}",
+          "by": {
+            "who": {
+              "type": "username",
+              "value": "juan"
+            },
+            "computer": null
+          }
+        }
+      ],
+      "saved": [
+        {
+          "record": "{\"book\":\"TIT\",\"chapter\":1,\"kind\":\"verse\",\"verse\":4}",
+          "text": "Paul, a servant of God"
+        }
+      ],
+      "rows": [
+        {
+          "row": {
+            "index": 7,
+            "checkId": "abcd",
+            "place": "TIT 1:4",
+            "title": "faith",
+            "flags": {
+              "dot": "valid",
+              "decided": true,
+              "invalidated": false,
+              "invalid": false,
+              "bookmarked": false,
+              "commented": true
+            },
+            "term": 2,
+            "category": {
+              "type": "note",
+              "value": "figures"
+            },
+            "marker": {
+              "conflict": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "versions": 2
+            }
+          }
+        }
+      ],
+      "diskWarning": null
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

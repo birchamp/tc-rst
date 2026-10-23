@@ -16,6 +16,9 @@
 //!   goes stale the day an owner publishes.
 //! - `literal`: the literal Bible's name when it is not `<lang>_ult` or `<lang>_glt`
 //!   (BSOJ publishes `ar_avd`).
+//!
+//! One entry differs from tC4 on purpose: ur-deva reads left to right and is named in
+//! Devanagari (tC4 #701).
 
 use std::fmt;
 
@@ -42,6 +45,9 @@ pub struct Gateway {
     pub name: &'static str,
     /// The language's own name, which every screen shows first (D94).
     pub autonym: &'static str,
+    /// The direction of the language's script, which its helps read in. Where the installed
+    /// helps' own manifest states a direction, a helps pane prefers it
+    /// (`tc_helps::metadata::ResourceIdentity::direction`; unit B3, tC4 #701).
     pub direction: Direction,
     pub has_twl: bool,
     pub has_bible: bool,
@@ -49,6 +55,17 @@ pub struct Gateway {
     pub has_simplified: bool,
     /// The literal Bible's repository when it is not `<lang>_ult` or `<lang>_glt`.
     pub literal: Option<&'static str>,
+    /// The releases of the owner's notes, words and academy that tC4 saw when it built the
+    /// list, which Get source texts shows under each package (`seen`).
+    pub seen: Seen,
+}
+
+/// The releases of a package's notes, words and academy, as tC4's registry records them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Seen {
+    pub tn: &'static str,
+    pub tw: &'static str,
+    pub ta: &'static str,
 }
 
 const fn gl(
@@ -57,6 +74,7 @@ const fn gl(
     name: &'static str,
     autonym: &'static str,
     direction: Direction,
+    (tn, tw, ta): (&'static str, &'static str, &'static str),
 ) -> Gateway {
     Gateway {
         language,
@@ -69,6 +87,7 @@ const fn gl(
         has_tq: true,
         has_simplified: true,
         literal: None,
+        seen: Seen { tn, tw, ta },
     }
 }
 
@@ -76,28 +95,71 @@ const BCS: &str = "translationCore-Create-BCS";
 
 /// tC4's registry (`gateways.ts`), in its order.
 pub const GATEWAYS: [Gateway; 18] = [
-    gl("en", "unfoldingWord", "English", "English", Direction::Ltr),
+    gl(
+        "en",
+        "unfoldingWord",
+        "English",
+        "English",
+        Direction::Ltr,
+        ("v89", "v89", "v89"),
+    ),
     gl(
         "es-419",
         "es-419_gl",
         "Spanish (Latin American)",
         "Español (Latinoamérica)",
         Direction::Ltr,
+        ("v66", "v37", "v4"),
     ),
     Gateway {
         has_bible: false,
         has_simplified: false,
-        ..gl("fr", "Xenizo", "French", "Français", Direction::Ltr)
+        ..gl(
+            "fr",
+            "Xenizo",
+            "French",
+            "Français",
+            Direction::Ltr,
+            ("v2.0", "v2.0", "v2.0"),
+        )
     },
-    gl("fr", "MVHS", "French", "Français", Direction::Ltr),
+    gl(
+        "fr",
+        "MVHS",
+        "French",
+        "Français",
+        Direction::Ltr,
+        ("v0.0.2", "v0.0.1", "v0.0.2"),
+    ),
     Gateway {
         has_simplified: false,
-        ..gl("ru", "ru_gl", "Russian", "Русский", Direction::Ltr)
+        ..gl(
+            "ru",
+            "ru_gl",
+            "Russian",
+            "Русский",
+            Direction::Ltr,
+            ("v60.1", "v14.2", "v13.3"),
+        )
     },
-    gl("fa", "fa_gl", "Persian", "فارسی", Direction::Rtl),
+    gl(
+        "fa",
+        "fa_gl",
+        "Persian",
+        "فارسی",
+        Direction::Rtl,
+        ("v9", "v9", "v7.8"),
+    ),
     Gateway {
         literal: Some("ar_avd"),
-        ..gl("ar", "BSOJ", "Arabic", "العربية", Direction::Rtl)
+        ..gl(
+            "ar",
+            "BSOJ",
+            "Arabic",
+            "العربية",
+            Direction::Rtl,
+            ("v6.1", "v5", "v3"),
+        )
     },
     gl(
         "id",
@@ -105,20 +167,79 @@ pub const GATEWAYS: [Gateway; 18] = [
         "Indonesian",
         "Bahasa Indonesia",
         Direction::Ltr,
+        ("v25", "v26", "v30"),
     ),
-    gl("hi", BCS, "Hindi", "हिन्दी", Direction::Ltr),
-    gl("bn", BCS, "Bengali", "বাংলা", Direction::Ltr),
-    gl("gu", BCS, "Gujarati", "ગુજરાતી", Direction::Ltr),
-    gl("kn", BCS, "Kannada", "ಕನ್ನಡ", Direction::Ltr),
-    gl("mr", BCS, "Marathi", "मराठी", Direction::Ltr),
-    gl("ne", BCS, "Nepali", "नेपाली", Direction::Ltr),
-    gl("or", BCS, "Odia", "ଓଡ଼ିଆ", Direction::Ltr),
-    gl("te", BCS, "Telugu", "తెలుగు", Direction::Ltr),
+    gl(
+        "hi",
+        BCS,
+        "Hindi",
+        "हिन्दी",
+        Direction::Ltr,
+        ("v9", "v8", "v7"),
+    ),
+    gl(
+        "bn",
+        BCS,
+        "Bengali",
+        "বাংলা",
+        Direction::Ltr,
+        ("v6", "v4", "v5.0"),
+    ),
+    gl(
+        "gu",
+        BCS,
+        "Gujarati",
+        "ગુજરાતી",
+        Direction::Ltr,
+        ("v6", "v4", "v4"),
+    ),
+    gl(
+        "kn",
+        BCS,
+        "Kannada",
+        "ಕನ್ನಡ",
+        Direction::Ltr,
+        ("v6", "v4", "v4"),
+    ),
+    gl(
+        "mr",
+        BCS,
+        "Marathi",
+        "मराठी",
+        Direction::Ltr,
+        ("v6", "v4", "v4"),
+    ),
+    gl(
+        "ne",
+        BCS,
+        "Nepali",
+        "नेपाली",
+        Direction::Ltr,
+        ("v7", "v5", "v5"),
+    ),
+    gl("or", BCS, "Odia", "ଓଡ଼ିଆ", Direction::Ltr, ("v5", "v4", "v4")),
+    gl(
+        "te",
+        BCS,
+        "Telugu",
+        "తెలుగు",
+        Direction::Ltr,
+        ("v6", "v4", "v4"),
+    ),
     Gateway {
         has_twl: false,
         has_simplified: false,
-        ..gl("ml", "Door43-Catalog", "Malayalam", "മലയാളം", Direction::Ltr)
+        ..gl(
+            "ml",
+            "Door43-Catalog",
+            "Malayalam",
+            "മലയാളം",
+            Direction::Ltr,
+            ("v14.2", "v8.2", "v10.3"),
+        )
     },
+    // tC4 lists ur-deva as right to left and names it اردو, in Arabic script. Devanagari reads
+    // left to right, and the language's name in it is उर्दू (tC4 #701; docs/PLAN.md).
     Gateway {
         has_twl: false,
         has_simplified: false,
@@ -126,8 +247,9 @@ pub const GATEWAYS: [Gateway; 18] = [
             "ur-deva",
             "Door43-Catalog",
             "Urdu (Devanagari)",
-            "اردو",
-            Direction::Rtl,
+            "उर्दू",
+            Direction::Ltr,
+            ("v14.1", "v8.3", "v10.1"),
         )
     },
 ];
@@ -212,7 +334,7 @@ impl Gateway {
     }
 }
 
-fn account(name: &str) -> AccountName {
+pub(crate) fn account(name: &str) -> AccountName {
     match name.parse() {
         Ok(owner) => owner,
         // Every owner in GATEWAYS is a valid Door43 account name; the unit test
@@ -276,7 +398,10 @@ pub fn owner_for_repo_name(name: &RepoName) -> Option<&'static str> {
 /// A pin among `installed` whose repository is `repo`, preferring the bundled suite's
 /// identity when several commits are installed (tC4 `preferredNamedPin`), else the first.
 /// A pin with no flavor is never taken: tC4 pins only what its metadata identifies.
-fn preferred<'a>(installed: &'a [ResourcePin], repo: &RepoRef) -> Option<&'a ResourcePin> {
+pub(crate) fn preferred<'a>(
+    installed: &'a [ResourcePin],
+    repo: &RepoRef,
+) -> Option<&'a ResourcePin> {
     let mut matches = installed
         .iter()
         .filter(|p| p.flavor.is_some() && p.is_repo(repo));
@@ -416,6 +541,95 @@ mod tests {
         );
         assert_eq!(display_name("es-419"), "Español (Latinoamérica)");
         assert_eq!(display_name("xx"), "xx");
+    }
+
+    /// A letter of a right-to-left script: Hebrew, Arabic, Syriac, Thaana, N'Ko and the
+    /// supplements and presentation forms of these (Unicode bidi classes R and AL).
+    fn is_rtl_letter(c: char) -> bool {
+        matches!(
+            c as u32,
+            0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF | 0x10800..=0x10FFF | 0x1E800..=0x1EFFF
+        )
+    }
+
+    /// The BCP 47 script subtag of a tag (`deva` in `ur-deva`), when it names one.
+    fn script_subtag(tag: &str) -> Option<&str> {
+        tag.split('-')
+            .skip(1)
+            .find(|s| s.len() == 4 && s.chars().all(|c| c.is_ascii_alphabetic()))
+    }
+
+    /// Whether `c` belongs to `script`; `None` for a script this table does not know, so an
+    /// entry with a new script subtag must add its script here.
+    fn in_script(script: &str, c: char) -> Option<bool> {
+        let cp = c as u32;
+        Some(match script.to_ascii_lowercase().as_str() {
+            "deva" => matches!(cp, 0x0900..=0x097F | 0xA8E0..=0xA8FF),
+            "arab" => matches!(
+                cp,
+                0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF
+            ),
+            "latn" => c.is_ascii_alphabetic() || matches!(cp, 0x00C0..=0x024F),
+            _ => return None,
+        })
+    }
+
+    #[test]
+    fn ur_deva_helps_read_left_to_right_and_are_named_in_devanagari() {
+        let ur = find("ur-deva", "Door43-Catalog").unwrap();
+        assert_eq!(ur.direction, Direction::Ltr);
+        assert_eq!(ur.autonym, "\u{909}\u{930}\u{94d}\u{926}\u{942}");
+        assert_eq!(ur.autonym, "उर्दू");
+        assert_eq!(display_name("ur-deva"), "उर्दू");
+    }
+
+    #[test]
+    fn every_gateway_reads_in_the_direction_of_its_script() {
+        for g in &GATEWAYS {
+            let letters: Vec<char> = g.autonym.chars().filter(|c| c.is_alphabetic()).collect();
+            assert!(
+                !letters.is_empty(),
+                "{}: no letters in {}",
+                g.key(),
+                g.autonym
+            );
+            let rtl = letters.iter().filter(|c| is_rtl_letter(**c)).count();
+            assert!(
+                rtl == 0 || rtl == letters.len(),
+                "{}: {} mixes directions",
+                g.key(),
+                g.autonym
+            );
+            let script = if rtl > 0 {
+                Direction::Rtl
+            } else {
+                Direction::Ltr
+            };
+            assert_eq!(
+                g.direction,
+                script,
+                "{}: {} is written in a {script:?} script",
+                g.key(),
+                g.autonym
+            );
+            if let Some(tag) = script_subtag(g.language) {
+                for c in &letters {
+                    assert_eq!(
+                        in_script(tag, *c),
+                        Some(true),
+                        "{}: the tag names {tag}, the autonym {} has {c}",
+                        g.key(),
+                        g.autonym
+                    );
+                }
+            }
+        }
+        let rtl: Vec<String> = GATEWAYS
+            .iter()
+            .filter(|g| g.direction == Direction::Rtl)
+            .map(|g| g.key().to_string())
+            .collect();
+        assert_eq!(rtl, ["fa::fa_gl", "ar::BSOJ"]);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 export const meta = {
   name: 'build-lane',
-  description: 'A bounded lane with saved stage reports, shared validation, independent read-only review, isolated mutation proof, and one serialized full gate before main',
+  description: 'One fast lane for the remaining app and fix units: build straight from main, one verification pass (three lenses only for no-loss units), fix only blockers and majors, log minors, and merge each unit straight into main with one full gate run',
   phases: [
     { title: 'Build', detail: 'one builder per unit, from main, as soon as its dependencies are on main' },
     { title: 'Verify', detail: 'one pass; minors go to the backlog' },
@@ -10,9 +10,7 @@ export const meta = {
 
 // args: { root, tc4, done: [unit and storage-unit keys already on main], cont: { key: branch } for units
 // whose builder continues a branch, notes: { key: text }, refs: [{ key, ref, label, context, deps }]
-// for work already built and approved elsewhere, which goes straight to the merge lane;
-// maxActiveUnits defaults to 2; external: { S2: { status, branch, next } } describes external
-// prerequisites for the handoff only. It never marks them done or starts storage work.
+// for work already built and approved elsewhere, which goes straight to the merge lane }
 const A = args
 const MAIN = A.root
 const TC4 = A.tc4
@@ -20,21 +18,12 @@ const MAINBR = 'claude/focused-ride-5uzj7p'
 const LANE = `${MAIN}/.claude/worktrees/lane-merge`
 const ENV = "In every shell command that runs cargo, rustc, node or npx, source ~/.tc-env first ('. ~/.tc-env && ...'); use cargo -j 6."
 const ATTR = "End every commit message with the line 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'."
-const STATE = `${MAIN}/.audit/tools/lane-state.mjs`
-const GATES = `node ${MAIN}/.audit/tools/run-gates.mjs --cwd ${LANE}`
+const GATES = 'scripts/gates.sh, from the worktree root with CARGO_BUILD_JOBS=6 exported; it prints "gates: all N steps passed" only when every step passed'
 const REACH = `Only what a translator can reach counts (owner, 2026-10-19: testing what cannot happen in the app wastes tokens). A scenario is reachable when it is made of steps through the app's own screens and API as docs/APP-DESIGN.md and tC4's docs/JOURNEYS.md describe, plus these outside events and nothing else: the app or the computer stopping at any moment (crash, kill, power cut), another program editing or holding a file the app wrote in a project, a teammate's work arriving by Door43 sync or a USB exchange file, a full disk, and the network dropping. A translator never picks where a project goes (every way in uses the one projects folder), never edits the app's own data files by hand, and runs one instance per computer. A finding whose preconditions need anything else is not a finding: drop it, do not log it as a minor, and do not write tests or property-test steps for it.`
-const COMMON = `You work on the Rust rebuild of translationCore 4 (tC4), a Bible translation desktop app; losing, hiding or silently rewriting a translator's work is unacceptable. AGENTS.md is the rule book ("Matching tC4": where tC4 works against what a feature is for, follow what the translator needs and record the difference). docs/APP-DESIGN.md is the design: read "Owner's answers", your unit's row in §10 and the sections it cites. docs/TC4-ISSUES.md and docs/TC4-DELTA-2026-10-19.md (owner's answers in §5) list tC4 issues and changes per unit: the items naming your unit are part of your task. tC4's source is at ${TC4} (d310bf3, read-only). ${ENV} The machine has 20 CPUs shared by several builds. Work only in your assigned checkout; only the mutation executor creates its explicitly assigned isolated checkout. Never touch other worktrees, the storage branch or refs/wip/*. Tests never touch the network. Speed matters: reuse code and tests that exist, prefer the simplest change, delete before adding, and prove behavior with deterministic tests rather than long reading. ${REACH} ${ATTR}`
+const COMMON = `You work on the Rust rebuild of translationCore 4 (tC4), a Bible translation desktop app; losing, hiding or silently rewriting a translator's work is unacceptable. AGENTS.md is the rule book ("Matching tC4": where tC4 works against what a feature is for, follow what the translator needs and record the difference). docs/APP-DESIGN.md is the design: read "Owner's answers", your unit's row in §10 and the sections it cites. docs/TC4-ISSUES.md and docs/TC4-DELTA-2026-10-19.md (owner's answers in §5) list tC4 issues and changes per unit: the items naming your unit are part of your task. tC4's source is at ${TC4} (d310bf3, read-only). ${ENV} The machine has 20 CPUs shared by several builds. Never touch other worktrees, the storage branch or refs/wip/*. Tests never touch the network. Speed matters (owner, 2026-10-19: hours, not days): reuse code and tests that exist, prefer the simplest change, delete before adding, and prove behavior with deterministic tests rather than long reading. ${REACH} ${ATTR}`
 
 const ISSUE = { type: 'object', properties: { title: { type: 'string' }, severity: { type: 'string', enum: ['blocker', 'major', 'minor'] }, harm: { type: 'string', enum: ['data', 'user', 'internal'] }, evidence: { type: 'string' }, fix: { type: 'string' } }, required: ['title', 'severity', 'harm', 'evidence', 'fix'] }
-const SHA = { type: 'string', pattern: '^[a-f0-9]{40}$' }
-const BUILT = { type: 'object', properties: { sha: SHA, summary: { type: 'string' } }, required: ['sha', 'summary'] }
-const VALIDATED = { type: 'object', properties: { sha: SHA, green: { type: 'boolean' }, commands: { type: 'array', items: { type: 'string' }, minItems: 1 }, summary: { type: 'string' } }, required: ['sha', 'green', 'commands', 'summary'] }
-const VERDICT = { type: 'object', properties: { sha: SHA, problems: { type: 'array', items: ISSUE }, summary: { type: 'string' } }, required: ['sha', 'problems', 'summary'] }
-const PROOF = { ...VERDICT, properties: { ...VERDICT.properties, complete: { type: 'boolean' }, proofs: { type: 'array', items: { type: 'string' }, minItems: 1 } }, required: [...VERDICT.required, 'complete', 'proofs'] }
-const PREFIX = { type: 'object', properties: { built: BUILT, validation: VALIDATED, reviews: { type: 'array', items: VERDICT }, proof: PROOF, fixes: { type: 'array', items: { type: 'object' } } }, required: ['built', 'validation', 'reviews', 'proof', 'fixes'] }
-const FIXED = { ...BUILT, properties: { ...BUILT.properties, prior: PREFIX }, required: [...BUILT.required, 'prior'] }
-const VERIFIED = { ...BUILT, properties: { ...BUILT.properties, evidence: PREFIX }, required: [...BUILT.required, 'evidence'] }
-const RESUMED = { type: 'object', properties: { kind: { type: 'string', enum: ['fresh', 'build', 'fix', 'verified', 'blocked'] }, report: { type: 'object' }, summary: { type: 'string' } }, required: ['kind', 'summary'] }
+const VERDICT = { type: 'object', properties: { problems: { type: 'array', items: ISSUE }, summary: { type: 'string' } }, required: ['problems', 'summary'] }
 const MERGED = { type: 'object', properties: { merged: { type: 'boolean' }, pushed: { type: 'boolean' }, sha: { type: 'string' }, summary: { type: 'string' } }, required: ['merged', 'pushed', 'summary'] }
 
 const DESIGN_UNITS = [
@@ -91,122 +80,37 @@ const byKey = Object.fromEntries([...UNITS, ...REFS].map(u => [u.key, u]))
 const branchOf = (u) => CONT[u.key] || `lane-${u.key}`
 const wtOf = (u) => `${MAIN}/.claude/worktrees/${branchOf(u)}`
 const minors = []
-const missingExternal = new Set()
-const maxActive = A.maxActiveUnits ?? 2
-if (!Number.isInteger(maxActive) || maxActive < 1) throw new Error('maxActiveUnits must be a positive integer')
-let active = 0
-const waiting = []
-async function withUnitSlot(fn) {
-  if (active >= maxActive) await new Promise(resolve => waiting.push(resolve))
-  else active++
-  try { return await fn() } finally {
-    // Transfer the slot directly: a newly ready unit cannot jump the queue.
-    if (waiting.length) waiting.shift()()
-    else active--
-  }
-}
-
-const quote = value => "'" + String(value).replaceAll("'", "'\\''") + "'"
-const readReceipt = (u, stage, wt = wtOf(u)) => `node ${quote(STATE)} read ${quote(wt)} ${quote(u.key)} ${quote(stage)}`
-const beginReceipt = (u, stage, wt = wtOf(u)) => `node ${quote(STATE)} begin ${quote(wt)} ${quote(u.key)} ${quote(stage)}`
-const saveReceipt = (u, stage, wt = wtOf(u)) => `node ${quote(STATE)} save ${quote(wt)} ${quote(u.key)} ${quote(stage)} <report-file>`
-function receipt(u, stage, wt = wtOf(u)) {
-  return `Before any stage work, run ${readReceipt(u, stage, wt)} first, including on a missing checkout. Reuse its report only when the CLI returns reusable=true, the report satisfies this stage's schema and requirements, and its SHA is the clean current HEAD requested below. Never use a report when reusable=false; its reason explains what must run again. If reusable, return that report after any stage-specific current execution-evidence checks; independent reviews and completed mutation proof need no repeated work. Validation, terminal verified checkpoints and merges must still check their actual current gate receipts as their stage requires. Otherwise create its assigned checkout if missing, then run ${beginReceipt(u, stage, wt)} immediately before work, perform this stage, check its result, and save its successful JSON report from a temporary file outside the worktree with ${saveReceipt(u, stage, wt)}. Do not save failed, incomplete or dirty-tree work as successful. A failed begin or save command fails this stage: never ignore the failure or return success. A stage receipt is a restart hint; only the actual gate/test evidence proves validation. Every report names the full 40-character SHA it actually checked. Receipt writes through this helper are allowed; they never authorize source edits.`
-}
-const nonempty = value => typeof value === 'string' && value.trim().length > 0
-const validBuild = r => !!r && /^[a-f0-9]{40}$/.test(r.sha) && nonempty(r.summary)
-const validVerdict = (r, sha) => validBuild(r) && r.sha === sha && Array.isArray(r.problems) && r.problems.every(p => p && ['blocker', 'major', 'minor'].includes(p.severity) && ['data', 'user', 'internal'].includes(p.harm) && ['title', 'evidence', 'fix'].every(k => typeof p[k] === 'string'))
-const validProof = (r, sha) => validVerdict(r, sha) && r.complete === true && Array.isArray(r.proofs) && r.proofs.length > 0 && r.proofs.every(nonempty)
-const validValidation = (r, sha) => validBuild(r) && r.sha === sha && r.green === true && Array.isArray(r.commands) && r.commands.length > 0 && r.commands.every(nonempty)
-const validMerge = r => !!r && r.merged === true && r.pushed === true && /^[a-f0-9]{40}$/.test(r.sha)
-function prefixState(u, evidence) {
-  if (!evidence || !validBuild(evidence.built) || !validValidation(evidence.validation, evidence.built.sha) || !Array.isArray(evidence.reviews) || evidence.reviews.length !== (u.critical ? 3 : 1) || evidence.reviews.some(r => !validVerdict(r, evidence.built.sha)) || !validProof(evidence.proof, evidence.built.sha) || !Array.isArray(evidence.fixes) || evidence.fixes.length > 2) return { valid: false }
-  let serious = [...evidence.reviews, evidence.proof].flatMap(r => r.problems).filter(fixable)
-  let sha = evidence.built.sha
-  for (const fix of evidence.fixes) {
-    if (!serious.length || !fix || !validBuild(fix.built) || !validValidation(fix.validation, fix.built.sha) || !validProof(fix.proof, fix.built.sha)) return { valid: false }
-    serious = fix.proof.problems.filter(fixable)
-    sha = fix.built.sha
-  }
-  return { valid: true, serious, sha }
-}
-const validVerified = (u, report) => {
-  const state = prefixState(u, report?.evidence)
-  return validBuild(report) && state.valid && !state.serious.length && report.sha === state.sha
-}
-const validFix = (u, report) => {
-  const state = prefixState(u, report?.prior)
-  return validBuild(report) && state.valid && state.serious.length > 0 && report.prior.fixes.length < 2
-}
-const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value
-const sameEvidence = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b))
-const addMinors = (u, problems) => minors.push(...problems.filter(p => !fixable(p)).map(p => ({ unit: u.id, finding: p.title, evidence: p.evidence })))
-
-function resume(u) {
-  return agent(`${COMMON}\n\nYou only LOOK UP reusable checkpoints for unit ${u.id} in ${wtOf(u)}; do not create a checkout, edit, merge, run new review/proof, or save a new stage. The only execution allowed in this lookup is the gate-evidence check below. Run ${readReceipt(u, 'verified')} first. If reusable=true, inspect its complete evidence chain (all ${u.critical ? 3 : 1} independent lenses, original exact-SHA validation and isolated proof, every later fixed-SHA validation/check, and no remaining fixable findings) and replay every command of the final validation report through node ${quote(`${MAIN}/.audit/tools/run-gates.mjs`)} --cwd ${quote(wtOf(u))} -- <command> <args> before returning kind=verified with that entire report. Valid exact-SHA execution receipts skip actual work; missing logs, changed runner inputs or stale receipts rerun only the affected commands. Any failure returns kind=blocked, never verified or fresh. Old reviews in that chain concern their original SHA, never the later fixed SHA. If no terminal checkpoint is reusable, read ${readReceipt(u, 'fix-2')}, then ${readReceipt(u, 'fix-1')}. A reusable fixer report with a complete prior evidence chain and outstanding findings is a cursor: return kind=fix with that entire report; next work is its round's targeted validation and isolated check, not another builder or broad review. Otherwise read ${readReceipt(u, 'build')} and return kind=build with its reusable built report; else kind=fresh. Reuse no report unless its CLI result says reusable=true for current clean HEAD and its schema and complete provenance are valid. Unknown, incomplete, missing or stale checkpoints fall back to fresh work, never to ready. Return the selected kind, report when reusable, and summary.`, { label: `resume:${u.id}`, phase: 'Build', schema: RESUMED })
-}
 
 let laneChain = Promise.resolve()
 function laneMerge(fn) { const p = laneChain.then(fn); laneChain = p.catch(() => null); return p }
 
-function mergeAgent(u, ref, context, unitMinors, reviewedSha) {
-  return agent(`${COMMON}\n\nYou MERGE ${ref} (${u.id || u.label}) into ${MAINBR} and push it, using only ${LANE}. ${receipt(u, 'merge', LANE)} A merge receipt alone NEVER proves this ref is on main: even for reusable=true, fetch origin, resolve the source ref and recorded merge SHA, verify both are ancestors of origin/${MAINBR}, require a clean checkout and a successful full-gate receipt for the recorded merged SHA, and verify main's fast-forward. If any check fails, complete the pending merge/gates/push; never return merged=true or pushed=true merely because a saved report says so.\n${reviewedSha ? `Resolve ${ref} and require it is exactly the independently reviewed source SHA ${reviewedSha} before merging; a moved source requires validation and review again.` : ''} If the merge worktree is missing, create it detached from ${MAINBR}, with its own target directory as existing lane worktrees use. If it holds an interrupted merge, inspect and finish that merge only when it is this source and base; otherwise stop and report the pending state without discarding work. For a new merge use git merge --no-ff ${ref}, message 'Merge ${u.id || u.label}: <what it brings, in plain words>' plus attribution. Resolve conflicts keeping both sides' behavior (Cargo.lock: keep the current side and let cargo add what is missing; every tc-api write declares whether it belongs to an open project).${unitMinors.length ? ` Append these findings to .audit/minors.tsv and commit them with the merge: ${JSON.stringify(unitMinors)}.` : ''} Run the full gates once, with the runner's exact-SHA receipts: ${GATES}. A failed gate blocks the push. Fix only what the merge broke, in its own commit, then rerun invalidated gates. Do not edit .audit/rebuild.tsv or .audit/PROGRESS.md. Fetch origin again before pushing; if it gained commits, integrate them and rerun invalidated gates for the resulting SHA. When every gate is green push only HEAD:${MAINBR}, never force; fast-forward ${MAIN} if clean local state allows it, else leave its edits and report that. Save the merge stage only after verified push success. Report merged, pushed, the full SHA and test counts.\n\nContext:\n${context || ''}`, { label: `merge:${u.id || u.label}`, phase: 'Merge', schema: MERGED })
+function mergeAgent(label, ref, context, unitMinors) {
+  return agent(`${COMMON}\n\nYou MERGE ${ref} (${label}) into ${MAINBR} and push it. Use the worktree ${LANE}: if it does not exist, run git -C ${MAIN} worktree add --detach ${LANE} ${MAINBR}, then mkdir -p /var/tmp/tc-rst-target/lane-merge and ln -s /var/tmp/tc-rst-target/lane-merge ${LANE}/target (build folders live on the root drive). Otherwise cd there, make sure git status is clean, and git checkout --detach ${MAINBR}. Then git merge --no-ff ${ref} with the message 'Merge ${label}: <what it brings, in plain words>' and the attribution line. Resolve conflicts keeping both sides' behavior (Cargo.lock: keep the current side and let cargo add what is missing; every tc-api write declares whether it belongs to an open project). Run the full gates once: ${GATES}. Known flake until FIX-quit lands: tc-server's tests/lifecycle.rs quit tests may fail under load; if only they fail, rerun that binary alone and count it green if it passes. Fix only what the merge broke, in its own commit, with the simplest change.${unitMinors.length ? ` Append these minor findings to .audit/minors.tsv (create it with the header 'unit\\tfinding\\tevidence' if missing), one line each, and commit that with the merge: ${JSON.stringify(unitMinors)}.` : ''} Do not edit .audit/rebuild.tsv or .audit/PROGRESS.md. The owner authorized this standing step (2026-10-18: merge into main in a separate worktree, run the full gates there, then push main; push only claude/focused-ride-5uzj7p): when every gate is green you push without asking again. git fetch origin; if origin/${MAINBR} is not an ancestor of HEAD, git merge origin/${MAINBR} and rerun the gates only if the new commits touch Rust or Cargo files; then git push origin HEAD:${MAINBR} (never force), and in ${MAIN} run git merge --ff-only origin/${MAINBR} (if local edits there block it, leave them and say so). Report merged, pushed, the sha, and test counts.${context ? '\n\nContext:\n' + context : ''}`, { label: `merge:${label}`, phase: 'Merge', schema: MERGED })
 }
 
 // Owner, 2026-10-20: fix every blocker, and a major only when it harms a translator's data or what they see; log the rest.
 const HARM = `Give each finding its harm: data when a translator's text, alignment, check decision or comment could be lost, hidden or saved as something else; user when a translator would see a wrong result, a crash, a dead end or a screen that differs from tC4 without a declared reason; internal for anything a translator would not notice (a missing or weak test, a design text, a timing not recorded, code shape). Only blockers, and majors whose harm is data or user, are fixed; everything else is logged as a minor.`
 const fixable = (p) => p.severity === 'blocker' || (p.severity === 'major' && p.harm !== 'internal')
-const SAFETY = `Before implementing a no-loss unit, write its small typed state/event transition table and a bounded reference-model scenario list. Start the behavior test against existing code: include every known bug in this unit, reachable crash/restart points, retries and races, and how each saved text, alignment, check decision and comment remains available. Reuse an existing machine and model where they fit. Demonstrate at least one deliberately seeded bug is caught before extending the implementation; preserve the complete known-bug mutation proof for the independent executor. Keep the scope to this unit and the reachable scenarios. Do not defer the model until review or weaken its no-loss invariant to fit the implementation.`
 
-async function validate(u, built, stage = 'validate') {
-  return agent(`${COMMON}\n\n${receipt(u, stage)}\nBefore reusing any saved validation report, replay every recorded command through run-gates; require valid execution receipts and logs under the current runner inputs, rerun missing or stale executions, and fail this stage if any command fails. A generic stage receipt alone never proves these checks. You are the single VALIDATION runner for unit ${u.id}, SHA ${built.sha}, in ${wtOf(u)}. Require clean HEAD exactly ${built.sha} before and after; no source edits or commits. Builder/fixer report:\n${JSON.stringify(built)}\nDetermine touched crates from the diff against main. Run their tests and clippy, every property, crash, browser and operation-count check this unit's row names, and its done-when checks; include wasm feature variants and no-test-hook checks when the touched code requires them. Use node ${quote(`${MAIN}/.audit/tools/run-gates.mjs`)} --cwd ${quote(wtOf(u))} -- <command> <args> for each focused check so its exact-SHA evidence can be reused. Full workspace gates run only in the merge lane. Report green only when every required focused check passed, the full SHA, exact commands, results and any unavailable proof. The independent lenses will share this report; do not ask them to repeat these commands.\nUnit task:\n${u.task}`, { label: `${stage}:${u.id}`, phase: 'Verify', schema: VALIDATED })
-}
-
-async function prove(u, sha, reviews, validation, stage = 'prove') {
-  const isolated = `${MAIN}/.claude/worktrees/prove-${u.key}`
-  return agent(`${COMMON}\n\n${receipt(u, stage)}\nYou are the sole MUTATION EXECUTOR for unit ${u.id}, immutable source SHA ${sha}. The source checkout ${wtOf(u)} stays read-only; all mutations, temporary tests, builds and browser processes belong to the separate isolated checkout ${isolated}. Create it with git worktree add --detach at exactly ${sha} and give it its own target directory. If it exists require a clean tree with no other work running before checking out ${sha}; never discard unknown edits or reset the source checkout. No other agent edits this proof checkout.\nShared successful validation for exactly this SHA:\n${JSON.stringify(validation)}\nIndependent findings and requested scenarios:\n${JSON.stringify(reviews)}\nRevert the core of each claimed fix one at a time, seed every known no-loss bug for this unit into its model test, and run the targeted regression/property tests to prove they fail; restore the exact SHA and prove they pass. Run the riskiest targeted temporary scenarios requested by reviewers and remove them. Do not repeat the unmodified validation suite. Preserve all required mutation, property and crash proof. A missing required proof blocks the stage. No commits. End with source and isolated checkouts clean and at ${sha}; save the receipt against the unchanged source checkout only after checking this. Report complete=true only when every required proof ran, nonempty proofs listing each mutant/scenario and test outcome, problems, and SHA ${sha}. Incomplete proof must report complete=false. ${HARM}`, { label: `${stage}:${u.id}`, phase: 'Verify', schema: PROOF })
-}
-
-async function verify(u, built, pendingFix) {
-  let evidence
-  if (pendingFix) evidence = pendingFix.prior
-  else {
-  const validation = await validate(u, built)
-  if (!validValidation(validation, built.sha)) return { ok: false, why: 'validation missing, failed or for another SHA' }
-  const lenses = u.critical ? [
-    "Lens: can a translator's text, alignment, check decision or comment be lost, hidden or saved as something else (crashes, reloads, retries, races)?",
-    'Lens: races and protocol: duplicate, reordered and stale requests, event gaps, every state the types allow.',
-    'Lens: the browser and tC4 parity: inspect the Chromium evidence and tC4 source, and make sure every difference is declared.',
-  ] : ['Lens: the unit task, its reachable behavior and done-when checks.']
-  const vs = await parallel(lenses.map((lens, i) => () => agent(`${COMMON}\n\n${receipt(u, `verify-${i + 1}`)}\nYou independently VERIFY unit ${u.id} at clean HEAD ${built.sha} in ${wtOf(u)}. This is READ-ONLY review: do not edit source, revert changes, add/remove temporary tests, commit, launch builds or browser processes, or rerun the shared test suite. All mutation and additional scenario execution goes through the sole isolated executor after every lens returns. Inspect code, tests, tC4 source and the exact-SHA validation evidence, including its browser captures; verify the row's done-when and identify missing evidence. Propose precise executable targeted scenarios and mutants in your summary for the executor. Do not accept another lens's conclusions as your own review.\n${lens}\nTask:\n${u.task}\nBuilder report:\n${JSON.stringify(built)}\nShared validation report:\n${JSON.stringify(validation)}\nReport problems with concrete evidence, and SHA ${built.sha}. ${HARM}`, { label: `verify:${u.id}${u.critical ? '.' + (i + 1) : ''}`, phase: 'Verify', schema: VERDICT })))
-  // Every lens is required: a partial result is not independent review.
-  if (vs.length !== lenses.length || vs.some(v => !validVerdict(v, built.sha))) return { ok: false, why: 'a required verifier is missing or reviewed another SHA' }
-  const proof = await prove(u, built.sha, vs, validation)
-  if (!validProof(proof, built.sha)) return { ok: false, why: 'required mutation proof missing or for another SHA' }
-  evidence = { built, validation, reviews: vs, proof, fixes: [] }
-  }
-  addMinors(u, [...evidence.reviews, evidence.proof, ...evidence.fixes.map(f => f.proof)].flatMap(r => r.problems))
-  let state = prefixState(u, evidence)
-  if (!state.valid) return { ok: false, why: 'incomplete verification provenance' }
-  for (let round = evidence.fixes.length + 1; state.serious.length && round <= 2; round++) {
-    const serious = state.serious
+async function verify(u, report) {
+  const base = `${COMMON}\n\nYou VERIFY unit ${u.id} in the worktree ${wtOf(u)} (branch ${branchOf(u)}; do not commit, leave it clean). The task:\n<<<\n${u.task}\n>>>\nThe builder reported:\n<<<\n${report}\n>>>\nWork from deterministic evidence: run the unit's tests and clippy for the crates it touches, the property, crash and browser tests it names, and check its "done when". Revert the core of each claimed fix and confirm a test fails. Write a few targeted throwaway tests only for the riskiest claims, then remove them. Report a blocker for any loss, hiding or silent rewrite of a translator's work, a major for a wrong result or a broken invariant, and a minor for anything else; minors are logged, not fixed, so keep them to one line each. ${HARM}`
+  const lenses = u.critical ? ['Lens: can a translator\'s text, alignment, check decision or comment be lost, hidden or saved as something else (crashes, reloads, retries, races)?', 'Lens: races and protocol: duplicate, reordered and stale requests, event gaps, every state the types allow.', 'Lens: the browser and tC4 parity: drive it in Chromium where it has UI, and make sure every difference from tC4 is declared.'] : ['']
+  const vs = (await parallel(lenses.map((l, i) => () => agent(`${base}\n\n${l}`, { label: `verify:${u.id}${u.critical ? '.' + (i + 1) : ''}`, phase: 'Verify', schema: VERDICT })))).filter(Boolean)
+  if (!vs.length) return { ok: false, why: 'verifiers died' }
+  let problems = vs.flatMap(v => v.problems)
+  minors.push(...problems.filter(p => !fixable(p)).map(p => ({ unit: u.id, finding: p.title, evidence: p.evidence })))
+  let serious = problems.filter(fixable)
+  for (let round = 1; serious.length && round <= 2; round++) {
     log(`${u.id}: ${serious.length} blocker/major, fixing (round ${round})`)
-    const fx = pendingFix || await agent(`${COMMON}\n\n${receipt(u, `fix-${round}`)}\nYou FIX unit ${u.id} in ${wtOf(u)} (branch ${branchOf(u)}). Fix only these, at the root, with the smallest and simplest change, each with a regression/model test:\n${JSON.stringify(serious)}\nIgnore minors. Run focused checks while editing; gather a coherent change. Before EACH commit run the full required fmt, workspace clippy and workspace tests, plus applicable wasm and no-test-hook checks, through node ${quote(`${MAIN}/.audit/tools/run-gates.mjs`)} --cwd ${quote(wtOf(u))}; AGENTS.md's pre-commit checks remain mandatory. Commit only after they pass. The isolated executor will prove each regression fails without its fix. Require clean HEAD when finished, report its full SHA and each finding addressed.\nIMPORTANT restart cursor: copy the following complete prior evidence unchanged into the prior field of your JSON report. It records original reviews at their original SHA, not a review of your new SHA. Save this fixer-stage report immediately after the clean committed fix, before any later validation/check, so a restart can go directly to validate-${round} and check-${round}. Prior evidence:\n${JSON.stringify(evidence)}`, { label: `fix:${u.id}#${round}`, phase: 'Verify', schema: FIXED })
-    pendingFix = null
-    if (!validFix(u, fx) || !sameEvidence(fx.prior, evidence)) return { ok: false, why: 'fixer missing or incomplete restart provenance' }
-    const validation = await validate(u, fx, `validate-${round}`)
-    if (!validValidation(validation, fx.sha)) return { ok: false, why: 'fixed SHA validation missing or failed' }
-    const checked = await prove(u, fx.sha, [{ problems: serious, summary: fx.summary }], validation, `check-${round}`)
-    if (!validProof(checked, fx.sha)) return { ok: false, why: 'required fix check missing or for another SHA' }
-    evidence.fixes.push({ built: { sha: fx.sha, summary: fx.summary }, validation, proof: checked })
-    addMinors(u, checked.problems)
-    state = prefixState(u, evidence)
+    const fx = await agent(`${COMMON}\n\nYou FIX unit ${u.id} in ${wtOf(u)} (branch ${branchOf(u)}). Fix only these, at the root, with the smallest and simplest change (delete before you add; no new abstraction unless it removes code), each with a regression test that fails without the fix:\n${JSON.stringify(serious, null, 1)}\nIgnore minors. Run the tests and clippy of the crates you touch; commit each fix. Final answer: each finding and what you did.`, { label: `fix:${u.id}#${round}`, phase: 'Verify' })
+    if (!fx) return { ok: false, why: 'fixer died' }
+    const c = await agent(`${COMMON}\n\nYou CHECK the fixes on unit ${u.id} in ${wtOf(u)} (do not commit, leave it clean). These were found:\n${JSON.stringify(serious, null, 1)}\nThe fixer reported:\n<<<\n${fx}\n>>>\nFor each, run its regression test, revert the fix and confirm the test fails, then restore; run the touched crates' tests. Report only blockers and majors that remain or that the fixes introduced; do not review anything else. ${HARM}`, { label: `check:${u.id}#${round}`, phase: 'Verify', schema: VERDICT })
+    if (!c) return { ok: false, why: 'checker died' }
+    serious = c.problems.filter(fixable)
+    minors.push(...c.problems.filter(p => !fixable(p)).map(p => ({ unit: u.id, finding: p.title, evidence: p.evidence })))
   }
-  if (!state.valid || state.serious.length) return { ok: false, why: 'blockers or majors remain after two fix rounds', remaining: state.serious }
-  const completed = { sha: state.sha, summary: 'Required independent review, mutation proof and all fix checks completed', evidence }
-  const saved = await agent(`${COMMON}\n\n${receipt(u, 'verified')}\nYou SAVE the consolidated verification checkpoint for unit ${u.id} at clean current HEAD ${completed.sha}. No source edits, commits or repeated tests. Replay its final validation commands through run-gates to confirm current execution receipts/logs; valid receipts skip execution, stale or missing executions rerun only those commands, and a failed command blocks the stage. Check the complete report below: all required independent lenses and original proof refer to their original SHA; each later fix has its own successful exact-SHA validation and isolated check. This lineage ends at ${completed.sha} with no remaining fixable findings. Save this report unchanged only after confirming that clean HEAD, the complete evidence and every required stage succeeded. A failed save blocks the unit. Return the same complete report.\n${JSON.stringify(completed)}`, { label: `ready:${u.id}`, phase: 'Verify', schema: VERIFIED })
-  if (!validVerified(u, saved) || !sameEvidence(saved, completed)) return { ok: false, why: 'consolidated verification checkpoint missing or incomplete' }
-  return { ok: true, sha: saved.sha }
+  if (serious.length) return { ok: false, why: 'blockers or majors remain after two fix rounds', remaining: serious }
+  return { ok: true }
 }
 
 const done = {}
@@ -214,47 +118,29 @@ function run(u) {
   if (done[u.key]) return done[u.key]
   if (DONE.has(u.key)) return (done[u.key] = Promise.resolve({ key: u.key, merged: true }))
   done[u.key] = (async () => {
-    // Dependencies must finish without occupying a scarce active-unit slot.
     const deps = await Promise.all(u.deps.map(k => byKey[k] && !DONE.has(k) ? run(byKey[k]) : Promise.resolve({ merged: DONE.has(k) })))
     const unmet = u.deps.filter((k, i) => !deps[i] || !deps[i].merged)
-    if (unmet.length) {
-      for (const key of unmet) if (!byKey[key] && !DONE.has(key)) missingExternal.add(key)
-      log(`${u.id || u.label}: waits for ${unmet.join(', ')}`)
-      return { key: u.key, merged: false, waits: unmet }
+    if (unmet.length) { log(`${u.id || u.label}: waits for ${unmet.join(', ')}`); return { key: u.key, merged: false, waits: unmet } }
+    if (u.ref) {
+      const m = await laneMerge(() => mergeAgent(u.label, u.ref, u.context, []))
+      log(`${u.label}: ${m && m.pushed ? 'on main at ' + m.sha : 'NOT merged'}`)
+      return { key: u.key, merged: !!(m && m.merged && m.pushed), sha: m && m.sha }
     }
-    return withUnitSlot(async () => {
-      if (u.ref) {
-        const m = await laneMerge(() => mergeAgent(u, u.ref, u.context, []))
-        return { key: u.key, merged: validMerge(m), sha: m && m.sha }
-      }
-      const checkpoint = await resume(u)
-      if (!checkpoint || !['fresh', 'build', 'fix', 'verified'].includes(checkpoint.kind)) return { key: u.key, merged: false, why: 'checkpoint lookup failed' }
-      if (checkpoint.kind === 'verified' && !validVerified(u, checkpoint.report)) checkpoint.kind = 'fresh'
-      if (checkpoint.kind === 'fix' && !validFix(u, checkpoint.report)) checkpoint.kind = 'fresh'
-      if (checkpoint.kind === 'build' && !validBuild(checkpoint.report)) checkpoint.kind = 'fresh'
-      const cont = !!CONT[u.key]
-      const note = NOTES[u.key] ? `\n\nNotes from the orchestrating session:\n${NOTES[u.key]}` : ''
-      const report = checkpoint.kind === 'verified' ? checkpoint.report.evidence.built : checkpoint.kind === 'fix' ? checkpoint.report.prior.built : checkpoint.kind === 'build' ? checkpoint.report : await agent(`${COMMON}\n\n${receipt(u, 'build')}\n${cont
-        ? `This unit continues on branch ${branchOf(u)} in ${wtOf(u)}. Inspect its log and state and keep sound work. Check receipts before any merge or edit; avoid invalidating completed work just to refresh main. If main changes an interface this unit needs, merge it, then rebuild only what that changes.`
-        : `Create the unit's worktree from ${MAINBR} if missing: branch ${branchOf(u)}, directory ${wtOf(u)}. Give it its own target directory. If it exists inspect it and continue; never discard edits. Write a short plan to .audit/plans/${u.id}.md first.`}\n\nYOUR UNIT (${u.id}):\n${u.task}${note}\n${u.critical ? SAFETY : ''}\nRun focused checks while editing and gather one coherent change. Before EACH commit run the full required fmt, workspace clippy and workspace tests, plus applicable wasm and no-test-hook checks through node ${quote(`${MAIN}/.audit/tools/run-gates.mjs`)} --cwd ${quote(wtOf(u))}; commit only after they pass as AGENTS.md requires. The integration merge still runs its full gate suite. Reuse exact-SHA evidence, never waive a required pre-commit check. Final report: full clean HEAD SHA, what you built, how it meets done-when, test counts, model/scenarios and known-bug proof where required, design changes and anything left open.`, { label: `build:${u.id}`, phase: 'Build', schema: BUILT })
-      if (!validBuild(report)) return { key: u.key, merged: false, why: 'builder missing or incomplete' }
-      const v = checkpoint.kind === 'verified' ? { ok: true, sha: checkpoint.report.sha } : await verify(u, report, checkpoint.kind === 'fix' ? checkpoint.report : null)
-      if (!v.ok) return { key: u.key, merged: false, ...v }
-      if (checkpoint.kind === 'verified') addMinors(u, [...checkpoint.report.evidence.reviews, checkpoint.report.evidence.proof, ...checkpoint.report.evidence.fixes.map(f => f.proof)].flatMap(r => r.problems))
-      const unitMinors = minors.filter(m => m.unit === u.id)
-      const m = await laneMerge(() => mergeAgent(u, branchOf(u), `Unit ${u.id} was built and independently verified on ${branchOf(u)} at ${v.sha}.`, unitMinors, v.sha))
-      log(`${u.id}: ${m && m.pushed ? 'on main at ' + m.sha : 'NOT merged'}`)
-      return { key: u.key, merged: validMerge(m), sha: m && m.sha }
-    })
+    const cont = !!CONT[u.key]
+    const note = NOTES[u.key] ? `\n\nNotes from the orchestrating session:\n${NOTES[u.key]}` : ''
+    const report = await agent(`${COMMON}\n\n${cont
+      ? `This unit is in progress on branch ${branchOf(u)} in ${wtOf(u)} (create the worktree from that branch if it is missing). cd there, read git log, git status and any plan in .audit/plans/, keep what is sound, check any WIP commit before building on it, merge ${MAINBR} into the branch so you build on what is on main, and finish the unit.`
+      : `Create your worktree from main: git -C ${MAIN} worktree add -b ${branchOf(u)} ${wtOf(u)} ${MAINBR} (if it exists, cd there and continue), then mkdir -p /var/tmp/tc-rst-target/${branchOf(u)} and ln -s /var/tmp/tc-rst-target/${branchOf(u)} ${wtOf(u)}/target before your first build. Work only there. Write a short plan to .audit/plans/${u.id}.md first, then build.`}\n\nYOUR UNIT (${u.id}):\n${u.task}${note}\n\nCommit each coherent step once it builds and its tests pass. Run the tests and clippy of the crates you touch as you go; the merge lane runs the full workspace gates, so do not run the whole workspace repeatedly. Final answer: what you built, how it meets the row's "done when", test counts, design text you changed and why, and anything left open.`, { label: `build:${u.id}`, phase: 'Build' })
+    if (!report) { log(`${u.id}: builder died`); return { key: u.key, merged: false } }
+    const v = await verify(u, report)
+    if (!v.ok) { log(`${u.id}: not merged: ${v.why}`); return { key: u.key, merged: false, ...v } }
+    const unitMinors = minors.filter(m => m.unit === u.id)
+    const m = await laneMerge(() => mergeAgent(u.id, branchOf(u), `Unit ${u.id} was built and verified on ${branchOf(u)}.`, unitMinors))
+    log(`${u.id}: ${m && m.pushed ? 'on main at ' + m.sha : 'NOT merged: ' + (m ? m.summary.slice(0, 200) : 'merge agent died')}`)
+    return { key: u.key, merged: !!(m && m.merged && m.pushed), sha: m && m.sha }
   })()
   return done[u.key]
 }
 
 const results = await Promise.all([...REFS, ...UNITS].filter(u => !DONE.has(u.key)).map(u => run(u)))
-const prerequisites = [...missingExternal].sort((a, b) => a === 'S2' ? -1 : b === 'S2' ? 1 : a.localeCompare(b)).map(key => ({
-  key,
-  ...(A.external?.[key] || {}),
-  merged: false,
-  next: A.external?.[key]?.next || (key === 'S2' ? 'Prioritize the separate S2 state-machine proof and merge handoff; only add S2 to done after its reviewed commit is on main. The app lane does not build storage.' : 'Resume its owning workflow; only mark done after its required reviewed commit is on main.'),
-}))
-return { results: results.map(r => r && { key: r.key, merged: r.merged, waits: r.waits || null, why: r.why || null, sha: r.sha || null }), minors, prerequisites }
+return { results: results.map(r => r && { key: r.key, merged: r.merged, waits: r.waits || null, why: r.why || null, sha: r.sha || null }), minors }

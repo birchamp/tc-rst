@@ -1,0 +1,22 @@
+{
+  "path": "prefs/setLocale",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "03030303030303030303030303030303",
+    "locale": "pt-BR"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

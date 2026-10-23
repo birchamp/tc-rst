@@ -1,0 +1,89 @@
+{
+  "path": "editor/chapters",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "view": 42,
+      "chapters": [
+        {
+          "chapter": 3,
+          "sections": [
+            1,
+            4
+          ],
+          "verses": [
+            {
+              "key": "1",
+              "record": "{\"book\":\"TIT\",\"chapter\":3,\"kind\":\"verse\",\"verse\":1}",
+              "drafted": true,
+              "text": "Recuérdales que se sujeten",
+              "lead": null,
+              "before": 0,
+              "words": {
+                "value": "Recuérdales que se sujeten",
+                "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                "marker": null
+              },
+              "format": null,
+              "covered": []
+            },
+            {
+              "key": "2-3",
+              "record": "{\"book\":\"TIT\",\"chapter\":3,\"kind\":\"verse\",\"verse\":2}",
+              "drafted": true,
+              "text": "que no hablen mal de nadie, que sean amables",
+              "lead": 1,
+              "before": null,
+              "words": {
+                "value": "\\q1 que no hablen mal de nadie,\n\\q2 que sean amables",
+                "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                "marker": {
+                  "conflict": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "versions": 2
+                }
+              },
+              "format": "q1",
+              "covered": [
+                "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
+              ]
+            },
+            {
+              "key": "4",
+              "record": "{\"book\":\"TIT\",\"chapter\":3,\"kind\":\"verse\",\"verse\":4}",
+              "drafted": false,
+              "text": "",
+              "lead": null,
+              "before": null,
+              "words": {
+                "value": "___",
+                "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                "marker": null
+              },
+              "format": null,
+              "covered": []
+            }
+          ]
+        }
+      ],
+      "conflicts": 1
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -104,6 +104,82 @@ impl SourceVerse {
     }
 }
 
+/// An original-language book cut into its verses once, so that opening a verse costs that
+/// verse: [`SourceVerse::from_book`] looks the verse up in the whole book each time, and a
+/// session opens many verses of one book. Each verse holds the text tC4 reads for it: from
+/// after its `\v` marker to the next `\v` or `\c` marker, with the headings that lead into
+/// the next unit.
+#[derive(Debug, Clone, Default)]
+pub struct SourceBook {
+    units: Vec<SourceUnit>,
+    /// `(chapter, verse)` to the unit of that single verse.
+    at: HashMap<(u16, u16), usize>,
+}
+
+#[derive(Debug, Clone)]
+struct SourceUnit {
+    text: String,
+}
+
+impl SourceBook {
+    pub fn parse(usfm: &str) -> Self {
+        let book = Book::parse(usfm);
+        let segments = book.segments();
+        let mut out = Self::default();
+        for (at, segment) in segments.iter().enumerate() {
+            let Some(unit) = segment.as_verse() else {
+                continue;
+            };
+            let (Some(chapter), Some(verses)) = (unit.chapter(), unit.verses()) else {
+                continue;
+            };
+            if verses.start() != verses.end() {
+                continue;
+            }
+            let mut text = unit.body().to_owned();
+            if let Some(next) = segments.get(at + 1) {
+                push_leading(next, &mut text);
+            }
+            // The first unit of a verse is the one `from_book` finds.
+            out.at
+                .entry((chapter, verses.start()))
+                .or_insert(out.units.len());
+            out.units.push(SourceUnit { text });
+        }
+        out
+    }
+
+    /// The original-language words of a verse or span: its member verses in order. A member
+    /// verse the book does not have adds no words, as in [`SourceVerse::from_book`].
+    pub fn verse(&self, chapter: u16, verses: VerseSpan) -> Result<SourceVerse, Error> {
+        let mut parts = Vec::new();
+        for verse in verses.verses() {
+            if let Some(&at) = self.at.get(&(chapter, verse)) {
+                parts.push(SourceVerse::from_usfm(&self.units[at].text)?);
+            }
+        }
+        Ok(SourceVerse::span(parts))
+    }
+
+    /// The readable text of a verse or span, member verses joined by a space (tC4's
+    /// `verseText`).
+    pub fn display_text(&self, chapter: u16, verses: VerseSpan) -> String {
+        verses
+            .verses()
+            .filter_map(|verse| self.at.get(&(chapter, verse)))
+            .map(|&at| tc_usfm::display_text(&self.units[at].text))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// Whether the book has any verse of the span.
+    pub fn has(&self, chapter: u16, verses: VerseSpan) -> bool {
+        verses
+            .verses()
+            .any(|verse| self.at.contains_key(&(chapter, verse)))
+    }
+}
+
 /// Append what `segment` holds before its `\v` or `\c` marker: the headings, paragraph
 /// markers and milestones `tc-usfm` gives to the verse or chapter they lead into.
 fn push_leading(segment: &Segment<'_>, out: &mut String) {
@@ -326,15 +402,17 @@ fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
 /// words numbered by occurrence, and the hash an alignment records of it.
 ///
 /// It is made from the verse's content (`words + layout` of its verse record, the USFM
-/// after `\v N `). The words are the words of the text tC4's aligner shows and banks
-/// ([`TargetText::shown`], `tc_usfm::shown_text_v1`: tC4's `verseText` of
-/// `src/data/bookModel.js:15` through `verseTextIndex`, `src/state.jsx:1183` at d310bf3), so a
-/// Psalm's superscription and its `\qs` Selah are words to align, and a `\li` list item is
-/// not, as in tC4. The hash is the journal's ([`TargetText::md5`], md5 of `plain_text_v1`), the one the
-/// fold checks an alignment with (§7.7), so an alignment the aligner saves is valid in the
-/// alignment files. (tC4's aligner stamps the md5 of its shown text instead, which its own
-/// fold and export reject on every verse where the two texts differ, such as a verse with a
-/// poetry line break.)
+/// after `\v N `). The words are `tc_usfm::target_words` of the content, the words the export
+/// weaves, so a value that places every word the aligner banks weaves (tC4 #796): a word
+/// never joins the next across a footnote or other marker (#795), and every word of a nested
+/// alignment, such as Genesis 1:1 "the heavens", a Psalm's superscription and its `\qs` Selah
+/// are words to align (#782). The text is the one tC4's aligner shows ([`TargetText::shown`],
+/// `tc_usfm::shown_text_v1`), for display only: it decides no word. The hash is the
+/// journal's ([`TargetText::md5`], md5 of `plain_text_v1`), the one the fold checks an
+/// alignment with (§7.7), so an alignment the aligner saves is valid in the alignment files.
+/// (tC4's aligner stamps the md5 of its shown text instead, which its own fold and export
+/// reject on every verse where the two texts differ, such as a verse with a poetry line
+/// break.)
 #[derive(Clone, PartialEq, Eq)]
 pub struct TargetVerse {
     text: String,
@@ -343,17 +421,17 @@ pub struct TargetVerse {
     /// Each word text's places in the verse, by occurrence, so that a word's place is
     /// found without a scan: the verse-order sort runs after every edit.
     places: HashMap<String, Vec<usize>>,
+    aligned_in_text: bool,
 }
 
 impl TargetVerse {
     /// The verse whose content is `content`.
     pub fn new(content: &str) -> Self {
         let derived = TargetText::new(content.to_owned());
-        let text = derived.shown().to_owned();
-        let words: Vec<TargetWord> = tc_usfm::words::words(&text)
+        let words: Vec<TargetWord> = tc_usfm::target_words(content)
             .into_iter()
             .map(|w| TargetWord {
-                word: w.text.to_owned(),
+                word: w.text,
                 occurrence: w.occurrence,
                 occurrences: w.occurrences,
                 extra: JsonMap::new(),
@@ -365,13 +443,21 @@ impl TargetVerse {
         }
         Self {
             md5: derived.md5(),
-            text,
+            text: derived.shown().to_owned(),
             words,
             places,
+            aligned_in_text: holds_zaln(content),
         }
     }
 
-    /// The shown text: what the aligner shows and splits into words.
+    /// The verse still holds the `\zaln` markup of an aligned file it was added from (tC4
+    /// #794): that markup is its alignment, so it does not open in the aligner and no
+    /// reflow writes over it.
+    pub fn holds_alignment_markup(&self) -> bool {
+        self.aligned_in_text
+    }
+
+    /// The shown text: what the aligner shows. It decides no word ([`TargetVerse::words`]).
     pub fn text(&self) -> &str {
         &self.text
     }
@@ -429,6 +515,17 @@ impl fmt::Debug for TargetVerse {
             .field("words", &self.words)
             .finish_non_exhaustive()
     }
+}
+
+/// tC4's `holdsInlineAlignment` (PR #799): `\zaln-s` followed by anything but a letter,
+/// digit or `_`.
+fn holds_zaln(content: &str) -> bool {
+    content.match_indices("\\zaln-s").any(|(at, m)| {
+        content[at + m.len()..]
+            .chars()
+            .next()
+            .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'))
+    })
 }
 
 /// Identity of a target word inside one verse: its text plus its occurrence.

@@ -14,18 +14,7 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const executableDigests = new Map();
 
 export function defaultSteps() {
-  return [
-    ['cargo', 'fmt', '--all', '--check'],
-    ['cargo', 'clippy', '--workspace', '--all-targets', '--', '-D', 'warnings'],
-    ['cargo', 'test', '--workspace'],
-    ['cargo', 'clippy', '-p', 'tc-app', '--lib', '--', '-D', 'warnings'],
-    ['cargo', 'clippy', '-p', 'tc-server', '-p', 'tc4', '--lib', '--bins', '--', '-D', 'warnings'],
-    ...[null, 'gallery', 'app', 'test-hooks'].map(feature => [
-      'cargo', 'clippy', '-p', 'tc-ui', '--target', 'wasm32-unknown-unknown', '--all-targets',
-      ...(feature ? ['--features', feature] : []), '--', '-D', 'warnings',
-    ]),
-    ['cargo', 'clippy', '-p', 'tc-api', '--target', 'wasm32-unknown-unknown', '--all-targets', '--', '-D', 'warnings'],
-  ];
+  return [['scripts/gates.sh']];
 }
 
 function capture(command, args, cwd, env) {

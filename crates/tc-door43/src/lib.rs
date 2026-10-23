@@ -18,6 +18,7 @@
 //! | Mint a token | `GET /api/v1/user`, `GET`/`DELETE`/`POST /api/v1/users/{login}/tokens` with Basic auth |
 //! | Organizations and permission | `GET /api/v1/user/orgs`, `GET /api/v1/users/{login}/orgs/{org}/permissions` |
 //! | Create a repository | `POST /api/v1/user/repos` or `POST /api/v1/orgs/{org}/repos` |
+//! | Read a refused push | [`refused_push`], from what libgit2 reports of `POST .../git-receive-pack` |
 //!
 //! Request and answer shapes follow the DCS swagger (`1.23.7+dcs`). Where Door43's prose
 //! docs disagree with it, the swagger and tC4's verified behavior win: the new token's
@@ -31,35 +32,51 @@
 //! (catalog search, tags, releases) sets aside an entry it cannot read in
 //! [`Listing::skipped`] instead of failing whole.
 //!
-//! Downloads are verified before they are returned; [`verify`] explains how. An error
-//! message never holds a secret the request carried, whole or in part.
+//! Both network clients (this one and `tc-resources`' `AquiferClient`) are built by
+//! [`Http`]: https only, no proxy for a server on this computer, and the system's proxy
+//! for every other, asked for only while the internet switch is on ([`http`]).
+//!
+//! Downloads stream to a file in a folder the caller names, report their bytes and can be
+//! cancelled between chunks ([`download`]); they are verified before they are returned
+//! ([`verify`]). An error message never holds a secret the request carried, whole or in
+//! part.
 
 mod catalog;
 mod client;
+pub mod download;
 mod error;
 mod git_tree;
+pub mod http;
 mod internet;
 mod listing;
 mod names;
+mod push;
 mod repos;
 mod secret;
 mod unpack;
 pub mod verify;
+#[cfg(windows)]
+mod winproxy;
 
 pub use catalog::{CatalogEntry, CatalogQuery, CatalogRef, Ingredient, Stage};
 pub use client::{Door43Client, Limits};
+pub use download::{DownloadTo, DownloadWatch, DownloadedZip, Unwatched};
 pub use error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 pub use git_tree::ObjectId;
+pub use http::{Http, HttpSpec, ProxyAnswer, ProxyFinder, system_proxy_finder};
 pub use internet::{InternetSwitch, Offline};
 pub use listing::{Listing, Skipped};
 pub use names::{
     AccountName, GitOid, NewRepoName, ParseError, RepoName, RepoRef, ServerUrl, TagName, TokenName,
     TokenScope, Visibility,
 };
+pub use push::refused_push;
 pub use repos::{
     CreatedRepo, NewRepoOwner, Organization, Release, ReleaseState, RepoInfo, StageRelease,
     StageReleases, Tag,
 };
 pub use secret::{Credentials, OneTimeCode, Password, Session, Token};
-pub use unpack::{FileMode, UnpackedFile};
+pub use unpack::{FileMode, NameProblem, UnpackedFile, check_names};
 pub use verify::{VerifiedArchive, VerifiedSbExport, verify_archive, verify_sb_export};
+#[cfg(windows)]
+pub use winproxy::WinHttpFinder;

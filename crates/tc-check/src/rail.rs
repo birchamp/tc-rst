@@ -119,17 +119,7 @@ pub fn groups(
     let mut rows: Vec<usize> = (0..items.len())
         .filter(|&i| states.get(i).is_some_and(|s| filter.matches(s)))
         .collect();
-    // The sort is stable, as JavaScript's is, so the checks of one verse keep the
-    // resource's order.
-    rows.sort_by(|&a, &b| {
-        let (ac, av) = items[a].key.target.parts();
-        let (bc, bv) = items[b].key.target.parts();
-        let by = |x: &str, y: &str| ref_number(x).partial_cmp(&ref_number(y));
-        by(&ac, &bc)
-            .filter(|o| o.is_ne())
-            .or_else(|| by(&av, &bv))
-            .unwrap_or(Ordering::Equal)
-    });
+    sort_by_reference(items, &mut rows);
     match mode {
         SortMode::ByVerse => vec![RailGroup {
             label: GroupLabel::Unit,
@@ -175,6 +165,28 @@ pub fn groups(
                 .collect()
         }
     }
+}
+
+/// Sorts indices into `items` in the rail's reference order (tC4 `railGroupsOf`): by chapter,
+/// then verse, each part by [`ref_number`]. The sort is stable, as JavaScript's is, so the
+/// checks of one verse keep the resource's order.
+pub fn sort_by_reference<I: Copy + TryInto<usize>>(items: &[CheckItem], order: &mut [I]) {
+    let parts = |i: I| {
+        i.try_into()
+            .ok()
+            .and_then(|i| items.get(i))
+            .map(|item| item.key.target.parts())
+    };
+    order.sort_by(|&a, &b| {
+        let (Some((ac, av)), Some((bc, bv))) = (parts(a), parts(b)) else {
+            return Ordering::Equal;
+        };
+        let by = |x: &str, y: &str| ref_number(x).partial_cmp(&ref_number(y));
+        by(&ac, &bc)
+            .filter(|o| o.is_ne())
+            .or_else(|| by(&av, &bv))
+            .unwrap_or(Ordering::Equal)
+    });
 }
 
 /// tC4 `refNum`: a part that is a finite number sorts by it; any other text sorts as -1,

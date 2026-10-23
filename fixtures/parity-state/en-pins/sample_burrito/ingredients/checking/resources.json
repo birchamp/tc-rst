@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 2,
+  "languageSets": {
+    "primary": {
+      "gatewayLanguage": {
+        "languageId": "en",
+        "owner": "unfoldingWord"
+      },
+      "translationNotes": {
+        "repoPath": "git.door43.org/unfoldingWord/en_tn",
+        "version": "v91",
+        "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a",
+        "flavor": "parascriptural/x-bcvnotes"
+      },
+      "translationWordsLinks": {
+        "repoPath": "git.door43.org/unfoldingWord/en_twl",
+        "version": "v91",
+        "sha": "7cbb3419f79780ce84b92ad7d42bd476cc5d8a64",
+        "flavor": "parascriptural/x-bcvarticles"
+      },
+      "translationWords": {
+        "repoPath": "git.door43.org/unfoldingWord/en_tw",
+        "version": "v91",
+        "sha": "ff5b3852c27c3a0d01b109e482eb26047dcd20e2",
+        "flavor": "parascriptural/x-bcvarticles"
+      },
+      "translationAcademy": {
+        "repoPath": "git.door43.org/unfoldingWord/en_ta",
+        "version": "v91",
+        "sha": "ce9a1bb9431317ca888e8c1f9620caa7f5fe45fd",
+        "flavor": "peripheral/x-peripheralArticles"
+      }
+    },
+    "fallback": {
+      "gatewayLanguage": {
+        "languageId": "en",
+        "owner": "unfoldingWord"
+      },
+      "translationNotes": {
+        "repoPath": "git.door43.org/unfoldingWord/en_tn",
+        "version": "v91",
+        "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a",
+        "flavor": "parascriptural/x-bcvnotes"
+      },
+      "translationWordsLinks": {
+        "repoPath": "git.door43.org/unfoldingWord/en_twl",
+        "version": "v91",
+        "sha": "7cbb3419f79780ce84b92ad7d42bd476cc5d8a64",
+        "flavor": "parascriptural/x-bcvarticles"
+      },
+      "translationWords": {
+        "repoPath": "git.door43.org/unfoldingWord/en_tw",
+        "version": "v91",
+        "sha": "ff5b3852c27c3a0d01b109e482eb26047dcd20e2",
+        "flavor": "parascriptural/x-bcvarticles"
+      },
+      "translationAcademy": {
+        "repoPath": "git.door43.org/unfoldingWord/en_ta",
+        "version": "v91",
+        "sha": "ce9a1bb9431317ca888e8c1f9620caa7f5fe45fd",
+        "flavor": "peripheral/x-peripheralArticles"
+      },
+      "translationQuestions": {
+        "repoPath": "git.door43.org/unfoldingWord/en_tq",
+        "version": "v91",
+        "sha": "8be02772584ff5a5fea893a392b4f019e3efcc77",
+        "flavor": "parascriptural/x-bcvquestions"
+      },
+      "simplifiedText": {
+        "repoPath": "git.door43.org/unfoldingWord/en_ust",
+        "version": "v91",
+        "sha": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+        "flavor": "scripture/textTranslation"
+      }
+    }
+  },
+  "resources": {
+    "originalLanguage": {
+      "nt": {
+        "repoPath": "git.door43.org/unfoldingWord/el-x-koine_ugnt",
+        "version": "v0.34",
+        "sha": "fc95b2b8aad08bb65ab54628ab685413a1139e97",
+        "flavor": "scripture/textTranslation"
+      },
+      "ot": {
+        "repoPath": "git.door43.org/unfoldingWord/hbo_uhb",
+        "version": "v3.0.0",
+        "sha": "74022f0fed012a3ef169886f595dd98e7b200543",
+        "flavor": "scripture/textTranslation"
+      }
+    },
+    "lexicon": {
+      "nt": {
+        "repoPath": "git.door43.org/unfoldingWord/en_ugl",
+        "version": "v0.5",
+        "sha": "8fa6eb60c0fe7afa61a80264c7326d63db5f1e70",
+        "flavor": "peripheral/x-lexicon"
+      },
+      "ot": {
+        "repoPath": "git.door43.org/unfoldingWord/en_uhl",
+        "sha": "db0098f3582814066f1a69c0aa2743a3ad0e8c81",
+        "flavor": "peripheral/x-lexicon"
+      }
+    }
+  },
+  "extraScripture": [
+    {
+      "id": "ult",
+      "repoPath": "git.door43.org/unfoldingWord/en_ult",
+      "version": "v91",
+      "sha": "35d215957f3203fd2e2fac5702ce14902d417f9d",
+      "flavor": "scripture/textTranslation"
+    },
+    {
+      "id": "ust",
+      "repoPath": "git.door43.org/unfoldingWord/en_ust",
+      "version": "v91",
+      "sha": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+      "flavor": "scripture/textTranslation"
+    }
+  ]
+}

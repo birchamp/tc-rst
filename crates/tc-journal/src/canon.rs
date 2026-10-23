@@ -618,7 +618,8 @@ wire_names!(
 wire_names!(
     SystemReason,
     "system reason",
-    PinCoverageBackfill = "pinCoverageBackfill"
+    PinCoverageBackfill = "pinCoverageBackfill",
+    CreationPins = "creationPins",
 );
 
 // ---------------------------------------------------------------------------------------

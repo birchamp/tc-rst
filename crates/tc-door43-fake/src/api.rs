@@ -15,6 +15,7 @@ use axum::routing::{delete, get, post};
 use base64::Engine;
 use serde_json::{Value, json};
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
 type AppState = State<Arc<Shared>>;
 
@@ -41,6 +42,7 @@ pub(crate) fn router(shared: Arc<Shared>) -> Router {
             "/api/v1/users/{username}/orgs/{org}/permissions",
             get(org_permissions),
         )
+        .route("/api/v1/repos/search", get(repos_search))
         .route("/api/v1/repos/{owner}/{repo}", get(repo_info))
         .route("/api/v1/repos/{owner}/{repo}/tags", get(list_tags))
         .route("/api/v1/repos/{owner}/{repo}/tags/{*tag}", get(one_tag))
@@ -229,6 +231,11 @@ async fn observe(State(shared): AppState, request: Request, next: Next) -> Respo
                     }
                 }
                 return response;
+            }
+            Fault::Hold => {
+                // A release that is dropped (the fake is going) ends the wait too.
+                let released = shared.hold();
+                let _ = released.await;
             }
             Fault::RedirectTo(location) => {
                 let mut response = StatusCode::FOUND.into_response();
@@ -864,6 +871,57 @@ fn repository_json(shared: &Shared, view: &RepoView, can_push: bool) -> Value {
     )
 }
 
+/// `GET /api/v1/repos/search?owner=&lang=`: the repositories the caller may see, of `owner`
+/// (any case) and in the language `lang`, as `{"ok": true, "data": [...]}` with their number
+/// in `X-Total-Count`, which is all tC4 reads (`countRepositories`, `limit=1`). A token needs
+/// `read:repository`, which `write:repository` holds.
+async fn repos_search(
+    State(shared): AppState,
+    headers: HeaderMap,
+    Query(params): Query<Vec<(String, String)>>,
+) -> ApiResult {
+    let params = Params(params);
+    let caller = authenticate(&shared, &headers, &params)?;
+    if !matches!(caller, Caller::Anonymous) {
+        require(&caller, "read:repository")?;
+    }
+    let owner = params.get("owner");
+    let lang = params.get("lang");
+    let found: Vec<RepoRec> = {
+        let state = shared.state();
+        state
+            .repos
+            .iter()
+            .filter(|r| owner.is_none_or(|o| r.owner.eq_ignore_ascii_case(o)))
+            .filter(|r| lang.is_none_or(|l| r.language == l))
+            .filter(|r| {
+                !r.private || caller_login(&caller).is_some_and(|l| state.is_member(l, &r.owner))
+            })
+            .cloned()
+            .collect()
+    };
+    let total = found.len();
+    let max = shared.state().max_page_size;
+    let data: Vec<Value> = page(&found, &params, max)
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "owner": owner_json(&shared, &r.owner),
+                "name": r.name,
+                "full_name": format!("{}/{}", r.owner, r.name),
+                "private": r.private,
+                "language": r.language,
+            })
+        })
+        .collect();
+    let mut response = json_response(StatusCode::OK, json!({ "ok": true, "data": data }));
+    if let Ok(value) = HeaderValue::from_str(&total.to_string()) {
+        response.headers_mut().insert("x-total-count", value);
+    }
+    Ok(response)
+}
+
 /// The repository, when the caller may see it; private ones only to members.
 fn visible_repo(
     shared: &Shared,
@@ -1068,21 +1126,50 @@ async fn archive(
         .await
         .map_err(|_| ApiError::not_found())?;
     let mut bytes = shared.git.archive(&dir, &commit, format, &rec.name).await?;
-    for fault in shared.take_faults(method.as_str(), uri.path(), false) {
+    let faults = shared.take_faults(method.as_str(), uri.path(), false);
+    for fault in &faults {
         match fault {
-            Fault::ArchiveComment(comment) => bytes = zipping::with_comment(bytes, &comment)?,
+            Fault::ArchiveComment(comment) => bytes = zipping::with_comment(bytes, comment)?,
             Fault::ArchiveExtraFile { path, bytes: extra } => {
-                bytes = zipping::with_extra_file(bytes, &format!("{}/{path}", rec.name), &extra)?;
+                bytes = zipping::with_extra_file(bytes, &format!("{}/{path}", rec.name), extra)?;
             }
             _ => {}
         }
     }
-    Ok(download(bytes, content_type, &file))
+    Ok(download(&shared, bytes, content_type, &file, &faults))
 }
 
-fn download(bytes: Vec<u8>, content_type: &str, file: &str) -> Response {
-    let mut response = Response::new(Body::from(bytes));
+/// A download answer, its body sent as the faults among `faults` shape it.
+fn download(
+    shared: &Arc<Shared>,
+    bytes: Vec<u8>,
+    content_type: &str,
+    file: &str,
+    faults: &[Fault],
+) -> Response {
+    let mut hold = None;
+    let mut cut = None;
+    let mut announce = true;
+    for fault in faults {
+        match fault {
+            Fault::HoldBody { after } => hold = Some(*after),
+            Fault::BreakOff { after } => cut = Some(*after),
+            Fault::NoContentLength => announce = false,
+            _ => {}
+        }
+    }
+    let length = bytes.len();
+    let body = if hold.is_none() && cut.is_none() && announce {
+        Body::from(bytes)
+    } else {
+        let hold = hold.map(|after| (after, shared.hold()));
+        shaped_body(Bytes::from(bytes), hold, cut)
+    };
+    let mut response = Response::new(body);
     let headers = response.headers_mut();
+    if announce {
+        headers.insert(header::CONTENT_LENGTH, HeaderValue::from(length));
+    }
     headers.insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/octet-stream"),
@@ -1118,10 +1205,11 @@ async fn sb_export(
     let archive = shared.git.archive(&dir, &commit, "zip", &rec.name).await?;
     let mut revision = commit.clone();
     let mut corrupt = Vec::new();
-    for fault in shared.take_faults(method.as_str(), uri.path(), false) {
+    let faults = shared.take_faults(method.as_str(), uri.path(), false);
+    for fault in &faults {
         match fault {
-            Fault::SbRevision(r) => revision = r,
-            Fault::SbCorruptFile { path } => corrupt.push(path),
+            Fault::SbRevision(r) => revision = r.clone(),
+            Fault::SbCorruptFile { path } => corrupt.push(path.clone()),
             _ => {}
         }
     }
@@ -1139,7 +1227,60 @@ async fn sb_export(
             "the fake exports only repositories that hold a metadata.json",
         )
     })?;
-    Ok(download(bytes, "application/zip", &file))
+    Ok(download(&shared, bytes, "application/zip", &file, &faults))
+}
+
+/// How long a [`Fault::HoldBody`] waits for its release before it sends the rest anyway,
+/// so a test that never releases cannot keep the server's task alive.
+const HOLD_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// `bytes` sent in pieces: up to `hold`'s count, then a wait for its release, then the
+/// rest; or, with `cut`, up to `cut` and then a broken connection.
+fn shaped_body(
+    bytes: Bytes,
+    hold: Option<(usize, oneshot::Receiver<()>)>,
+    cut: Option<usize>,
+) -> Body {
+    enum Step {
+        Send(Bytes),
+        Wait(oneshot::Receiver<()>),
+        /// A moment in which nothing is ready, so the server sends what it holds.
+        Flush,
+        Break,
+    }
+    let end = cut.map_or(bytes.len(), |c| c.min(bytes.len()));
+    let mut steps = Vec::new();
+    let mut at = 0;
+    if let Some((after, released)) = hold.filter(|(after, _)| *after < end) {
+        steps.push(Step::Send(bytes.slice(..after)));
+        steps.push(Step::Wait(released));
+        at = after;
+    }
+    steps.push(Step::Send(bytes.slice(at..end)));
+    if cut.is_some() {
+        steps.push(Step::Flush);
+        steps.push(Step::Break);
+    }
+    let pieces = futures_util::stream::unfold(steps.into_iter(), |mut steps| async move {
+        loop {
+            match steps.next()? {
+                Step::Send(piece) if piece.is_empty() => {}
+                Step::Send(piece) => return Some((Ok(piece), steps)),
+                Step::Wait(released) => {
+                    let _ = tokio::time::timeout(HOLD_LIMIT, released).await;
+                }
+                Step::Flush => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
+                Step::Break => {
+                    let broken = std::io::Error::new(
+                        std::io::ErrorKind::ConnectionAborted,
+                        "the fake broke the transfer off",
+                    );
+                    return Some((Err(broken), steps));
+                }
+            }
+        }
+    });
+    Body::from_stream(pieces)
 }
 
 // ---------------------------------------------------------------- catalog
@@ -1400,10 +1541,13 @@ async fn smart_http_route(
     let remote_user = match (service, &caller) {
         (Service::ReceivePack, Caller::Anonymous) => return challenge(),
         (Service::ReceivePack, caller) => match require(caller, "write:repository") {
-            Ok(login) if shared.state().can_write(&login, &rec.owner) => Some(login),
-            Ok(_) => {
-                return ApiError::new(StatusCode::FORBIDDEN, "no write access").into_response();
+            Ok(login) if rec.private && !shared.state().is_member(&login, &rec.owner) => {
+                return ApiError::not_found().into_response();
             }
+            // As Door43 (docs/evidence/door43-live-2026-10-17.md, step 6): an account that may
+            // read the repository gets the advertisement, and a push without write access is
+            // refused by the pre-receive hook inside git's report, with HTTP 200.
+            Ok(login) => Some(login),
             Err(error) => return error.into_response(),
         },
         (Service::UploadPack, Caller::Anonymous) if rec.private => return challenge(),
@@ -1417,6 +1561,10 @@ async fn smart_http_route(
         },
         (Service::UploadPack, caller) => caller_login(caller).map(str::to_owned),
     };
+    let refuse_writes = service == Service::ReceivePack
+        && remote_user
+            .as_deref()
+            .is_some_and(|login| !shared.state().can_write(login, &rec.owner));
     let dir = shared.git.repo_dir(&rec.owner, &rec.name);
     if !smart_http::exists(&dir) {
         return ApiError::not_found().into_response();
@@ -1434,6 +1582,7 @@ async fn smart_http_route(
             query: &query,
             headers: &headers,
             remote_user: remote_user.as_deref(),
+            refuse_writes,
             body: body.to_vec(),
         },
     )

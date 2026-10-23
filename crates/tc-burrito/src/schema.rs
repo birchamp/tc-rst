@@ -111,6 +111,30 @@ pub fn schema_ready() -> Result<(), SchemaLoadError> {
 }
 
 fn build() -> Result<Validator, SchemaLoadError> {
+    compile(&format!("{BASE}{ROOT}"))
+}
+
+/// The schema's `languageTag` (`common.schema.json`), compiled from the same bundle and
+/// registry as the whole schema, so it judges a tag exactly as a `languages[].tag` is judged.
+static LANGUAGE_TAG: LazyLock<Result<Validator, SchemaLoadError>> = LazyLock::new(|| {
+    compile(&format!(
+        "{BASE}common.schema.json#/definitions/languageTag"
+    ))
+});
+
+/// Whether `tag` is a language tag a Scripture Burrito can hold: the schema's `languageTag`
+/// (BCP 47's form, at least two characters). Door43 lists codes that are not, such as
+/// `acm-x-lebarabic`, whose private part is longer than eight letters (tC4 #582). A schema
+/// that did not compile answers `false`, so a broken schema fails closed.
+pub fn is_language_tag(tag: &str) -> bool {
+    LANGUAGE_TAG
+        .as_ref()
+        .is_ok_and(|validator| validator.is_valid(&Value::String(tag.to_owned())))
+}
+
+/// Compiles the schema at `uri`, a schema of the bundle or a part of one, over a registry of
+/// every bundle file reachable from the root.
+fn compile(uri: &str) -> Result<Validator, SchemaLoadError> {
     let bundle = load_bundle()?;
     let reachable = reachable_from(&bundle, ROOT)?;
     let resources: Vec<(String, Value)> = bundle
@@ -132,7 +156,7 @@ fn build() -> Result<Validator, SchemaLoadError> {
         // A `$ref` outside the registry fails the build instead of reaching for the network.
         .offline()
         .with_registry(&registry)
-        .build(&json!({ "$ref": format!("{BASE}{ROOT}") }))
+        .build(&json!({ "$ref": uri }))
         .map_err(|error| SchemaLoadError::Compile {
             message: error.to_string(),
         })
@@ -272,6 +296,27 @@ mod tests {
             "{\"a\": [1, 2\n ], \"b\": \"x,}\", \"é\": {\"c\": 1} }"
         );
         assert!(serde_json::from_str::<Value>(&stripped).is_ok());
+    }
+
+    #[test]
+    fn a_language_tag_is_the_schemas_language_tag() {
+        // Door43 codes: a region subtag, a private part of at most eight letters, a private
+        // tag alone; and the forms the schema refuses (#582): a private part of nine letters,
+        // an empty first subtag, one letter, an empty private part.
+        for tag in ["en", "es-419", "x-ug", "aac-x-siraul", "hbo", "zh-min-nan"] {
+            assert!(is_language_tag(tag), "{tag} is a tag");
+        }
+        for tag in [
+            "acm-x-lebarabic",
+            "-x-",
+            "e",
+            "iba-x-",
+            "",
+            "en--us",
+            "en us",
+        ] {
+            assert!(!is_language_tag(tag), "{tag} is not a tag");
+        }
     }
 
     #[test]

@@ -179,6 +179,12 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             unchanged_or(ctx, &shown, record, Cause::Edit)?
         }
         Command::AddBook { book, scope, seed } => add_book(ctx, *book, scope, &seed.usfm)?,
+        Command::AddBookText {
+            book,
+            scope,
+            usfm,
+            file_name,
+        } => add_book_text(ctx, *book, scope, usfm, file_name)?,
         Command::RemoveBook {
             book,
             presence_shown,
@@ -233,7 +239,7 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
         Command::ReleaseBatch { batch } => release_batch(ctx, *batch)?,
         Command::Dismiss { shown } => dismiss(ctx, shown)?,
         Command::KeepDraft { draft, section } => keep_draft(ctx, draft, section)?,
-        Command::Draft(_) => Vec::new(),
+        Command::Draft { .. } => Vec::new(),
     };
     Ok(Plan {
         changes,
@@ -305,13 +311,13 @@ fn anchor_of(chapter: ChapterNo, verse: VerseNo, value: &VerseValue) -> ChapterV
 }
 
 /// The reflowed alignment of a verse whose text changed, in the batch of the text (R25,
-/// §5.1): every link whose word the new text still has is kept, its occurrence updated, the
-/// others go back to the bank, and the value is stamped for the new text (tC4 #213,
-/// `tc_align::reflow`). Its parents are the alignment's heads the actor holds, so an
+/// §5.1): every link that follows its own word into the new text is kept, its occurrence
+/// updated, the others go back to the bank, and the value is stamped for the new text (tC4
+/// #213, #789, `tc_align::reflow_edit` from the old text). Its parents are the alignment's heads the actor holds, so an
 /// alignment edit made elsewhere at the same time is a visible conflict with the reflow. No
 /// reflow when the alignment is in conflict, when its span is not the verse's span any more
-/// (a span was made or broken: a person aligns again), or when `tc_align::reflow` leaves the
-/// value as it is.
+/// (a span was made or broken: a person aligns again), or when `tc_align::reflow_edit` leaves
+/// the value as it is.
 fn reflow(
     ctx: &Ctx<'_>,
     book: BookId,
@@ -329,7 +335,13 @@ fn reflow(
     else {
         return None;
     };
-    let VerseValue::Text { last: old_last, .. } = old else {
+    let VerseValue::Text {
+        words: old_words,
+        layout: old_layout,
+        last: old_last,
+        ..
+    } = old
+    else {
         return None;
     };
     if old_last != last {
@@ -351,8 +363,9 @@ fn reflow(
     if value.span_end.get() != span {
         return None;
     }
+    let before = TargetVerse::new(&format!("{old_words}{old_layout}"));
     let target = TargetVerse::new(&format!("{words}{layout}"));
-    let reflowed = tc_align::reflow(&value, &target).ok()?;
+    let reflowed = tc_align::reflow_edit(&value, &before, &target).ok()?;
     Some(change(
         Record::Alignment {
             book,
@@ -773,6 +786,33 @@ fn target_text(check: &CheckKey, verse: &RecordKey, value: Option<&Record>) -> O
     (inside && tc_usfm::codec::is_drafted(marker.term(), &content)).then_some(content)
 }
 
+/// The text a story's decision is judged against: the frame the detail showed. A frame no
+/// record holds shows the story's template text of it, as the fold reads a frame; a frame
+/// record written since was not what the person judged, so the mark is looked at again.
+fn frame_text(
+    ctx: &Ctx<'_>,
+    check: &CheckKey,
+    shown: &ShownToken,
+    value: Option<&Record>,
+) -> R<Option<String>> {
+    let CheckTarget::Frame { story, frame } = &check.target else {
+        return Ok(None);
+    };
+    if *shown.key() != RecordKey::Frame(*story, *frame) {
+        return Ok(None);
+    }
+    match value {
+        Some(Record::Frame { value, .. }) => Ok(Some(value.clone())),
+        Some(_) => Ok(None),
+        None if ctx.fold.key_state(shown.key()).is_some() => Err(CommandError::LookAgain),
+        None => Ok(ctx
+            .fold
+            .check_texts(tc_journal::pins::Collection::Stories)
+            .text(&check.target)
+            .map(|text| text.content().to_owned())),
+    }
+}
+
 fn save_decision(
     ctx: &Ctx<'_>,
     shown: &ShownToken,
@@ -797,7 +837,10 @@ fn save_decision(
         None => None,
     };
     let verse_value = ctx.displayed(&verse_shown)?;
-    let text = target_text(&check, verse_shown.key(), verse_value.as_ref());
+    let text = match &check.target {
+        CheckTarget::Verse { .. } => target_text(&check, verse_shown.key(), verse_value.as_ref()),
+        CheckTarget::Frame { .. } => frame_text(ctx, &check, &verse_shown, verse_value.as_ref())?,
+    };
     let next = edit
         .apply(displayed.as_ref(), text.as_deref())
         .map_err(|e| refused(Refusal::Text(e.to_string())))?;
@@ -956,6 +999,86 @@ fn add_book(ctx: &Ctx<'_>, book: BookId, scope: &Scope, source: &str) -> R<Vec<P
     )];
     for record in tc_journal::fold::records_from_usfm(book, &parts) {
         out.push(change(record, &[], Cause::Seed));
+    }
+    Ok(out)
+}
+
+/// A book with its text, all in one batch: the presence, the book's records and the
+/// alignments split from the verses that carry them (§13.5). A verse whose markup does not
+/// read apart keeps its text as written. The file is refused before anything is written when
+/// it does not cut into chapters and verses.
+fn add_book_text(
+    ctx: &Ctx<'_>,
+    book: BookId,
+    scope: &Scope,
+    usfm: &str,
+    file_name: &str,
+) -> R<Vec<PlannedChange>> {
+    use tc_journal::alignment::split_aligned;
+    use tc_journal::{ImportSource, VerseNo};
+    use tc_usfm::codec::{self, VersePart};
+
+    ctx.require_kind(ProjectKind::Bible)?;
+    if !ctx.fold.heads(&RecordKey::BookPresence(book)).is_empty() {
+        return Err(refused(Refusal::Book(format!(
+            "{} is already in the project, or was removed: restore it instead",
+            book.english_name()
+        ))));
+    }
+    check_scope(ctx, book, scope)?;
+    let mut parts = codec::decompose(usfm)
+        .map_err(|e| refused(Refusal::Book(format!("the file does not read: {e}"))))?;
+    let cause = Cause::Import(ImportSource::Usfm {
+        file_name: file_name.into(),
+    });
+    if parts.chapters.is_empty() {
+        return Err(refused(Refusal::Book(
+            "the file has no chapters or verses to add".into(),
+        )));
+    }
+    let mut alignments = Vec::new();
+    for (&c, chapter) in parts.chapters.iter_mut() {
+        let Some(chapter_no) = ChapterNo::new(c) else {
+            continue;
+        };
+        for (&v, part) in chapter.verses.iter_mut() {
+            let VersePart::Text(verse) = part else {
+                continue;
+            };
+            let (Some(verse_no), Some(last)) = (VerseNo::new(v), VerseNo::new(verse.last)) else {
+                continue;
+            };
+            let content = codec::join_verse(&verse.words, &verse.layout);
+            let Some((plain, value)) = split_aligned(&content, last) else {
+                continue;
+            };
+            let (words, layout) = codec::split_verse(&plain);
+            verse.words = words.to_owned();
+            verse.layout = layout.to_owned();
+            alignments.push(Record::Alignment {
+                book,
+                chapter: chapter_no,
+                verse: verse_no,
+                value,
+            });
+        }
+    }
+    let mut out = vec![change(
+        Record::BookPresence {
+            book,
+            value: BookPresence::Present {
+                scope: scope.clone(),
+                how: PresentHow::Added,
+            },
+        },
+        &[],
+        cause.clone(),
+    )];
+    for record in tc_journal::fold::records_from_usfm(book, &parts)
+        .into_iter()
+        .chain(alignments)
+    {
+        out.push(change(record, &[], cause.clone()));
     }
     Ok(out)
 }

@@ -272,30 +272,22 @@ fn score_with_context(run: &mut Run<'_>, manual: &[PositionLink], booster: &Boos
             }
         }
     }
-    let scores: Vec<f64> = run
-        .predictions
-        .iter()
-        .map(|p| {
-            let source: Vec<usize> = run.source_tokens(p).iter().map(|t| t.position).collect();
-            let target: Vec<usize> = run.target_tokens(p).iter().map(|t| t.position).collect();
-            // A candidate matched to nothing has no connections to compare.
-            let breaks = !target.is_empty()
-                && (source.iter().any(|s| {
-                    source_to_target
-                        .get(s)
-                        .is_some_and(|placed| placed.iter().any(|t| !target.contains(t)))
-                }) || target.iter().any(|t| {
-                    target_to_source
-                        .get(t)
-                        .is_some_and(|placed| placed.iter().any(|s| !source.contains(s)))
-                }));
-            if breaks {
-                0.0
-            } else {
-                booster.score(&Features::of(run, p))
-            }
-        })
-        .collect();
+    let scores = booster.scores(run.predictions.iter().map(|p| {
+        let source: Vec<usize> = run.source_tokens(p).iter().map(|t| t.position).collect();
+        let target: Vec<usize> = run.target_tokens(p).iter().map(|t| t.position).collect();
+        // A candidate matched to nothing has no connections to compare.
+        let breaks = !target.is_empty()
+            && (source.iter().any(|s| {
+                source_to_target
+                    .get(s)
+                    .is_some_and(|placed| placed.iter().any(|t| !target.contains(t)))
+            }) || target.iter().any(|t| {
+                target_to_source
+                    .get(t)
+                    .is_some_and(|placed| placed.iter().any(|s| !source.contains(s)))
+            }));
+        (!breaks).then(|| Features::of(run, p))
+    }));
     for (p, score) in run.predictions.iter_mut().zip(scores) {
         p.scores.confidence = score;
     }

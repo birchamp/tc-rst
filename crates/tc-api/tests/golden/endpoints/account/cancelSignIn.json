@@ -1,0 +1,22 @@
+{
+  "path": "account/cancelSignIn",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+    "signIn": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

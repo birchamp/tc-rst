@@ -1,6 +1,8 @@
 //! Seeding at every start: a copy is checked once, and a repeat start opens no resource
 //! file (tC4 #740, the verify-once cases of `scripts/desktop-resources.test.cjs:554-605`,
-//! as count tests).
+//! as count tests). A first run can be planned from receipts, watched file by file and
+//! stopped between files, and what a stop leaves is whole installs the next run builds on
+//! (docs/APP-DESIGN.md §4.6, docs/PERFORMANCE.md "Start-up").
 
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
 #![allow(clippy::unwrap_used, clippy::panic)]
@@ -10,11 +12,14 @@ mod common;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
 use common::install_fixture;
 use tc_resources::{
-    Installed, Receipt, ResourcePin, ResourceStore, Sha256, StoreError, content_files_opened,
+    Installed, Origin, Receipt, ResourcePin, ResourceStore, SeedWatch, Seeding, Sha256, StoreError,
+    content_files_opened, content_files_written,
 };
 use tempfile::TempDir;
 
@@ -391,4 +396,560 @@ fn c29_a_bundled_install_with_a_file_no_receipt_lists_is_copied_without_it() {
     tn.verify().unwrap();
     let (opens, _) = opened(|| machine.seed_from(&bundled).unwrap());
     assert_eq!(opens, 0);
+}
+
+/// A watch that records what it hears, and asks to stop once `stop_after` files are done.
+struct Recorder {
+    done: Mutex<Vec<u64>>,
+    stop_after: Option<u64>,
+    asked: AtomicU64,
+}
+
+impl Recorder {
+    fn new(stop_after: Option<u64>) -> Self {
+        Self {
+            done: Mutex::new(Vec::new()),
+            stop_after,
+            asked: AtomicU64::new(0),
+        }
+    }
+
+    fn heard(&self) -> Vec<u64> {
+        self.done.lock().unwrap().clone()
+    }
+}
+
+impl SeedWatch for Recorder {
+    fn done(&self, files: u64) {
+        self.done.lock().unwrap().push(files);
+    }
+
+    fn cancelled(&self) -> bool {
+        self.asked.fetch_add(1, Ordering::Relaxed);
+        let last = self.done.lock().unwrap().last().copied().unwrap_or(0);
+        self.stop_after.is_some_and(|stop| last >= stop)
+    }
+}
+
+/// Runs `action` and returns how many content files it opened and how many it wrote.
+fn counted<T>(action: impl FnOnce() -> T) -> (u64, u64, T) {
+    let (opened, written) = (content_files_opened(), content_files_written());
+    let out = action();
+    (
+        content_files_opened() - opened,
+        content_files_written() - written,
+        out,
+    )
+}
+
+/// The name seeding reports an install by.
+fn name_of(install: &Installed) -> String {
+    match install.origin() {
+        Origin::Dcs { pin, .. } => pin.to_string(),
+        Origin::Aquifer { pin, .. } => pin.to_string(),
+    }
+}
+
+/// The files of every install of `store`.
+fn files_of(store: &ResourceStore) -> u64 {
+    store
+        .installed()
+        .unwrap()
+        .installs
+        .iter()
+        .map(file_count)
+        .sum()
+}
+
+/// Every file under `dir` by its path below `dir`, with its bytes.
+fn contents(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+    tree(dir)
+        .into_iter()
+        .map(|(path, (bytes, _))| (path.strip_prefix(dir).unwrap().to_path_buf(), bytes))
+        .collect()
+}
+
+/// The files of the bundled installs that `machine` does not hold.
+fn files_missing(machine: &ResourceStore, bundled: &ResourceStore) -> u64 {
+    bundled
+        .installed()
+        .unwrap()
+        .installs
+        .iter()
+        .filter(|install| !machine.has_dcs(&install.dcs_pin().unwrap()))
+        .map(file_count)
+        .sum()
+}
+
+fn finished(seeding: Seeding) -> tc_resources::SeedReport {
+    match seeding {
+        Seeding::Finished(report) => report,
+        Seeding::Cancelled(report) => panic!("expected a finished seeding: {report:?}"),
+    }
+}
+
+fn cancelled(seeding: Seeding) -> tc_resources::SeedReport {
+    match seeding {
+        Seeding::Cancelled(report) => report,
+        Seeding::Finished(report) => panic!("expected a stopped seeding: {report:?}"),
+    }
+}
+
+#[test]
+fn c29_a_plan_names_every_bundled_file_and_opens_none() {
+    let (bundled_dir, _) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let machine_dir = tempfile::tempdir().unwrap();
+    let machine = ResourceStore::open(machine_dir.path()).unwrap();
+    let before = tree(machine_dir.path());
+
+    let (opens, written, plan) = counted(|| machine.seed_plan(&bundled).unwrap());
+
+    assert_eq!(plan.files(), files_of(&bundled));
+    assert!(!plan.is_empty());
+    assert!(plan.report().already_installed.is_empty() && plan.report().refused.is_empty());
+    assert_eq!(opens, 0, "a plan reads receipts and check records only");
+    assert_eq!(written, 0);
+    assert_eq!(tree(machine_dir.path()), before, "a plan writes nothing");
+}
+
+#[test]
+fn c29_seeding_reports_each_file_once_up_to_the_plan() {
+    let (bundled_dir, pins) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let machine_dir = tempfile::tempdir().unwrap();
+    let machine = ResourceStore::open(machine_dir.path()).unwrap();
+    let plan = machine.seed_plan(&bundled).unwrap();
+    let files = plan.files();
+    let watch = Recorder::new(None);
+
+    let (opens, written, seeding) = counted(|| machine.seed(plan, &watch).unwrap());
+
+    let report = finished(seeding);
+    assert_eq!(report.added.len(), 3);
+    assert_eq!(
+        watch.heard(),
+        (1..=files).collect::<Vec<_>>(),
+        "each file is reported once, in order, up to the plan's count"
+    );
+    assert_eq!(opens, files, "each bundled file is opened once");
+    assert_eq!(written, files, "each installed file is written once");
+    for pin in &pins {
+        machine.dcs(pin).unwrap().unwrap().verify().unwrap();
+    }
+}
+
+#[test]
+fn c29_a_repeat_plan_is_empty_and_seeding_it_does_nothing() {
+    let s = first_start();
+    let before = tree(s._machine_dir.path());
+
+    let (opens, written, plan) = counted(|| s.machine.seed_plan(&s.bundled).unwrap());
+    assert!(plan.is_empty());
+    assert_eq!(plan.files(), 0);
+    assert_eq!(plan.report().already_installed.len(), 3);
+    assert_eq!((opens, written), (0, 0));
+
+    let watch = Recorder::new(None);
+    let (opens, written, seeding) = counted(|| s.machine.seed(plan, &watch).unwrap());
+    let report = finished(seeding);
+    assert_eq!(report.already_installed.len(), 3);
+    assert!(report.added.is_empty() && report.checked_again.is_empty());
+    assert_eq!((opens, written), (0, 0));
+    assert!(watch.heard().is_empty());
+    assert_eq!(
+        tree(s._machine_dir.path()),
+        before,
+        "bytes and modification times stay"
+    );
+}
+
+#[test]
+fn c29_a_copy_to_check_again_is_in_the_plan() {
+    let s = first_start();
+    let tn = s.machine.dcs(&s.pins[0]).unwrap().unwrap();
+    let tsv = tn.dir().join("content/ingredients/TIT.tsv");
+    let mut drifted = fs::read(&tsv).unwrap();
+    drifted.extend_from_slice(b"TIT 3:16\tdrift\t\tdrift\t1\t\tdrift\n");
+    fs::write(&tsv, &drifted).unwrap();
+    set_receipt_entry(
+        &tn,
+        "ingredients/TIT.tsv",
+        drifted.len() as u64,
+        Sha256::of(&drifted),
+    );
+
+    let plan = s.machine.seed_plan(&s.bundled).unwrap();
+    assert_eq!(plan.files(), file_count(&tn));
+    assert_eq!(plan.report().already_installed.len(), 2);
+    let watch = Recorder::new(None);
+    let (opens, written, seeding) = counted(|| s.machine.seed(plan, &watch).unwrap());
+
+    let report = finished(seeding);
+    assert_eq!(report.checked_again, [s.pins[0].to_string()]);
+    assert_eq!(report.already_installed.len(), 3);
+    assert_eq!(watch.heard(), (1..=file_count(&tn)).collect::<Vec<_>>());
+    assert_eq!((opens, written), (file_count(&tn), 0));
+}
+
+#[test]
+fn c29_a_stop_inside_a_check_records_nothing_and_the_next_seed_checks_again() {
+    let s = first_start();
+    let tn = s.machine.dcs(&s.pins[0]).unwrap().unwrap();
+    let record = tn.dir().join("checked.json");
+    fs::remove_file(&record).unwrap();
+    let watch = Recorder::new(Some(1));
+
+    let plan = s.machine.seed_plan(&s.bundled).unwrap();
+    let (opens, written, seeding) = counted(|| s.machine.seed(plan, &watch).unwrap());
+
+    let report = cancelled(seeding);
+    assert!(report.checked_again.is_empty());
+    assert_eq!(watch.heard(), [1], "the stop comes before the second file");
+    assert_eq!((opens, written), (1, 0));
+    assert!(
+        !record.exists(),
+        "a check that did not finish vouches for nothing"
+    );
+
+    let plan = s.machine.seed_plan(&s.bundled).unwrap();
+    assert_eq!(plan.files(), file_count(&tn));
+    let report = finished(s.machine.seed(plan, &Recorder::new(None)).unwrap());
+    assert_eq!(report.checked_again, [s.pins[0].to_string()]);
+    assert!(record.exists());
+}
+
+#[test]
+fn c29_a_stop_before_the_first_file_opens_and_writes_nothing() {
+    let (bundled_dir, _) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let machine_dir = tempfile::tempdir().unwrap();
+    let machine = ResourceStore::open(machine_dir.path()).unwrap();
+    let plan = machine.seed_plan(&bundled).unwrap();
+    let watch = Recorder::new(Some(0));
+
+    let (opens, written, seeding) = counted(|| machine.seed(plan, &watch).unwrap());
+
+    let report = cancelled(seeding);
+    assert!(report.added.is_empty());
+    assert_eq!((opens, written), (0, 0));
+    assert!(watch.heard().is_empty());
+    assert!(machine.installed().unwrap().installs.is_empty());
+    assert!(
+        tree(machine_dir.path()).is_empty(),
+        "nothing is left behind"
+    );
+}
+
+#[test]
+fn c29_a_stop_inside_a_copy_keeps_whole_installs_and_the_next_seed_finishes() {
+    let (bundled_dir, _) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let in_order: Vec<(String, u64)> = bundled
+        .installed()
+        .unwrap()
+        .installs
+        .iter()
+        .map(|install| (name_of(install), file_count(install)))
+        .collect();
+    let (first, first_files) = in_order[0].clone();
+    let second_files = in_order[1].1;
+    assert!(
+        second_files > 1,
+        "the fixture's second install has several files"
+    );
+    let machine_dir = tempfile::tempdir().unwrap();
+    let machine = ResourceStore::open(machine_dir.path()).unwrap();
+    let plan = machine.seed_plan(&bundled).unwrap();
+    let total = plan.files();
+    // After the first file of the second install, so inside its copy.
+    let watch = Recorder::new(Some(first_files + 1));
+
+    let (_, written, seeding) = counted(|| machine.seed(plan, &watch).unwrap());
+
+    let report = cancelled(seeding);
+    assert_eq!(
+        report.added,
+        std::slice::from_ref(&first),
+        "only the finished copy is added"
+    );
+    assert_eq!(written, first_files + 1);
+    let installs = machine.installed().unwrap().installs;
+    assert_eq!(installs.len(), 1, "the cut copy is not in the store");
+    installs[0].verify().unwrap();
+    let kept = tree(installs[0].dir());
+    let partial = tree(&machine_dir.path().join(".partial"));
+    assert_eq!(
+        partial.len(),
+        1,
+        "the cut copy's one written file is staged"
+    );
+
+    // The next start clears the staging and copies what is missing.
+    let machine = ResourceStore::open(machine_dir.path()).unwrap();
+    assert!(!machine_dir.path().join(".partial").exists());
+    let plan = machine.seed_plan(&bundled).unwrap();
+    assert_eq!(plan.files(), total - first_files);
+    assert_eq!(
+        plan.report().already_installed,
+        std::slice::from_ref(&first)
+    );
+    let (opens, written, seeding) = counted(|| machine.seed(plan, &Recorder::new(None)).unwrap());
+    let report = finished(seeding);
+    assert_eq!(report.added.len(), 2);
+    assert_eq!(
+        opens,
+        total - first_files,
+        "the earlier copy is not read again"
+    );
+    assert_eq!(written, total - first_files);
+    assert_eq!(
+        tree(installs[0].dir()),
+        kept,
+        "the earlier copy keeps its bytes and times"
+    );
+    assert_eq!(machine.installed().unwrap().installs.len(), 3);
+    for install in machine.installed().unwrap().installs {
+        install.verify().unwrap();
+    }
+}
+
+#[test]
+fn c29_a_stop_asked_at_the_last_file_of_a_copy_leaves_that_copy_finished() {
+    let (bundled_dir, _) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let in_order: Vec<(String, u64)> = bundled
+        .installed()
+        .unwrap()
+        .installs
+        .iter()
+        .map(|install| (name_of(install), file_count(install)))
+        .collect();
+    assert_eq!(in_order.len(), 3);
+
+    let mut through = 0;
+    for (index, (_, files)) in in_order.iter().enumerate() {
+        through += files;
+        // The watch asks to stop as soon as this install's last file is done.
+        let machine_dir = tempfile::tempdir().unwrap();
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+        let plan = machine.seed_plan(&bundled).unwrap();
+        let watch = Recorder::new(Some(through));
+
+        let (opens, written, seeding) = counted(|| machine.seed(plan, &watch).unwrap());
+
+        let last = index + 1 == in_order.len();
+        let report = if last {
+            // Nothing is left to stop: the seeding is over.
+            finished(seeding)
+        } else {
+            cancelled(seeding)
+        };
+        let expected: Vec<String> = in_order[..=index]
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        assert_eq!(
+            report.added, expected,
+            "the copy whose last file was written is finished, not thrown away (stop at {through})"
+        );
+        assert_eq!((opens, written), (through, through));
+        let installs = machine.installed().unwrap().installs;
+        assert_eq!(installs.len(), index + 1);
+        for install in &installs {
+            install.verify().unwrap();
+        }
+        assert!(
+            tree(&machine_dir.path().join(".partial")).is_empty(),
+            "no finished copy is left in the staging folder"
+        );
+    }
+}
+
+/// A folder made read-only, which holds its entries in place; its permissions come back when
+/// it is dropped, so the temporary folder can be removed.
+#[cfg(unix)]
+struct Held(PathBuf);
+
+#[cfg(unix)]
+impl Held {
+    fn new(dir: PathBuf) -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+        Self(dir)
+    }
+}
+
+#[cfg(unix)]
+impl Drop for Held {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn c29_a_leftover_that_cannot_be_removed_comes_back_and_stops_neither_the_open_nor_a_seed() {
+    let (bundled_dir, _) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let machine_dir = tempfile::tempdir().unwrap();
+    // What a crash left in `.partial/`, with a folder that cannot be emptied (on Windows a
+    // scanner holding one of the files does the same).
+    let old = machine_dir.path().join(".partial/1-2-3");
+    fs::create_dir_all(old.join("content")).unwrap();
+    fs::write(old.join("content/a.md"), b"half").unwrap();
+    let held = Held::new(old.clone());
+    if fs::write(old.join("probe"), b"").is_ok() {
+        eprintln!("the permission is not enforced here (running as root): nothing to prove");
+        return;
+    }
+
+    assert!(
+        matches!(
+            ResourceStore::open(machine_dir.path()),
+            Err(StoreError::Io {
+                action: "clear",
+                ..
+            })
+        ),
+        "open still refuses, as other callers rely on"
+    );
+    let (machine, left) = ResourceStore::open_keeping_leftovers(machine_dir.path()).unwrap();
+    let Some(StoreError::Io { action, path, .. }) = left else {
+        panic!("the leftover was not reported: {left:?}")
+    };
+    assert_eq!(action, "clear");
+    assert_eq!(path, machine_dir.path().join(".partial"));
+    assert!(old.is_dir(), "the leftover is still there");
+
+    // The store works beside the leftover: a seed lands whole installs by rename.
+    let report = machine.seed_from(&bundled).unwrap();
+    assert_eq!(report.added.len(), 3);
+    for install in machine.installed().unwrap().installs {
+        install.verify().unwrap();
+    }
+    drop(held);
+
+    // Once the leftover can go, the next open removes it and says nothing.
+    let (_, left) = ResourceStore::open_keeping_leftovers(machine_dir.path()).unwrap();
+    assert!(left.is_none(), "{left:?}");
+    assert!(!machine_dir.path().join(".partial").exists());
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(12))]
+
+    #[test]
+    fn c29_any_stops_resume_to_the_store_of_a_seeding_that_never_stopped(
+        stops in proptest::collection::vec(0u64..12, 0..4),
+    ) {
+        let (bundled_dir, _) = bundle();
+        let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+        let reference_dir = tempfile::tempdir().unwrap();
+        ResourceStore::open(reference_dir.path()).unwrap().seed_from(&bundled).unwrap();
+        let machine_dir = tempfile::tempdir().unwrap();
+
+        // Each run is a new start: the store is opened again, which clears what the
+        // earlier stop left in `.partial/`.
+        for stop in stops {
+            let machine = ResourceStore::open(machine_dir.path()).unwrap();
+            let plan = machine.seed_plan(&bundled).unwrap();
+            let planned = plan.files();
+            proptest::prop_assert_eq!(planned, files_missing(&machine, &bundled));
+            let watch = Recorder::new(Some(stop));
+            let (opens, written, seeding) = counted(|| machine.seed(plan, &watch).unwrap());
+            let heard = watch.heard();
+            proptest::prop_assert_eq!(&heard, &(1..=heard.len() as u64).collect::<Vec<_>>());
+            proptest::prop_assert_eq!(written, heard.last().copied().unwrap_or(0));
+            match seeding {
+                Seeding::Finished(_) => proptest::prop_assert_eq!((opens, written), (planned, planned)),
+                Seeding::Cancelled(_) => proptest::prop_assert!(written <= planned && stop <= planned),
+            }
+            for install in machine.installed().unwrap().installs {
+                install.verify().unwrap();
+            }
+        }
+
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+        let plan = machine.seed_plan(&bundled).unwrap();
+        let planned = plan.files();
+        proptest::prop_assert_eq!(planned, files_missing(&machine, &bundled));
+        let (opens, written, seeding) = counted(|| machine.seed(plan, &Recorder::new(None)).unwrap());
+        finished(seeding);
+        proptest::prop_assert_eq!((opens, written), (planned, planned));
+        proptest::prop_assert_eq!(contents(machine_dir.path()), contents(reference_dir.path()));
+    }
+}
+
+#[test]
+fn c29_an_upgraded_bundle_copies_only_its_new_install() {
+    let (bundled_dir, pins) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let machine_dir = tempfile::tempdir().unwrap();
+    let machine = ResourceStore::open(machine_dir.path()).unwrap();
+    machine.seed_from(&bundled).unwrap();
+    let before = tree(machine_dir.path());
+
+    // The next release of the installer ships one more install.
+    let newer = install_fixture(
+        &ResourceStore::open(bundled_dir.path()).unwrap(),
+        "en_tn@v86",
+        "unfoldingWord/en_tn",
+        "v86",
+        &[
+            ("TIT.tsv", "ingredients/TIT.tsv"),
+            ("JON.tsv", "ingredients/JON.tsv"),
+        ],
+    );
+    let new_files = file_count(&bundled.dcs(&newer).unwrap().unwrap());
+
+    let plan = machine.seed_plan(&bundled).unwrap();
+    assert_eq!(plan.files(), new_files);
+    assert_eq!(plan.report().already_installed.len(), 3);
+    let (opens, written, seeding) = counted(|| machine.seed(plan, &Recorder::new(None)).unwrap());
+
+    let report = finished(seeding);
+    assert_eq!(report.added, [newer.to_string()]);
+    assert_eq!((opens, written), (new_files, new_files));
+    for (path, old) in &before {
+        assert_eq!(&tree(machine_dir.path())[path], old, "{}", path.display());
+    }
+    for pin in pins.iter().chain([&newer]) {
+        machine.dcs(pin).unwrap().unwrap().verify().unwrap();
+    }
+}
+
+#[test]
+fn c29_a_damaged_bundled_install_still_counts_toward_the_plan() {
+    let (bundled_dir, pins) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let damaged = bundled.dcs(&pins[1]).unwrap().unwrap();
+    let tsv = damaged.dir().join("content/ingredients/TIT.tsv");
+    let mut flipped = fs::read(&tsv).unwrap();
+    flipped[0] ^= 1;
+    fs::write(&tsv, &flipped).unwrap();
+    let machine_dir = tempfile::tempdir().unwrap();
+    let machine = ResourceStore::open(machine_dir.path()).unwrap();
+    let plan = machine.seed_plan(&bundled).unwrap();
+    let files = plan.files();
+    let watch = Recorder::new(None);
+
+    let report = finished(machine.seed(plan, &watch).unwrap());
+
+    assert_eq!(report.added.len(), 2, "the other installs are copied");
+    assert_eq!(report.refused.len(), 1);
+    assert!(
+        report.refused[0].0.contains("en_tw"),
+        "{:?}",
+        report.refused
+    );
+    let heard = watch.heard();
+    assert_eq!(
+        heard.last(),
+        Some(&files),
+        "the count still reaches the plan's"
+    );
+    assert!(heard.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(machine.dcs(&pins[1]).unwrap().is_none());
 }

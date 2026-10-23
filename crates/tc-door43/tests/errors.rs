@@ -25,14 +25,22 @@ async fn repo_error(fake: &FakeDoor43) -> Door43Error {
         .unwrap_err()
 }
 
+/// A connection that cannot be made is `Connect`, not `Timeout`, on every platform. The
+/// address is loopback port 0, which no program can listen on: the system refuses at once
+/// (Linux) or calls the address invalid (Windows), and sends nothing. A port that was bound
+/// and closed is refused too, but Windows answers that after about two seconds and
+/// sometimes not before the connect timeout, so a test on it fails at random there
+/// (`docs/evidence/windows-build-2026-10-17.md`); the client reports what the system says.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_refused_connection_is_unreachable() {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    drop(listener);
+async fn a_connection_that_cannot_be_made_is_unreachable() {
     let switch = InternetSwitch::new();
     switch.turn_on();
-    let client = Door43Client::new(format!("http://{address}").parse().unwrap(), switch).unwrap();
+    let limits = Limits {
+        connect_timeout: Duration::from_secs(5),
+        ..Limits::default()
+    };
+    let client =
+        Door43Client::with_limits("http://127.0.0.1:0".parse().unwrap(), switch, limits).unwrap();
     let error = client
         .repo(&repo("unfoldingWord/en_tn"), None)
         .await

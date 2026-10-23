@@ -324,6 +324,68 @@ fn an_asset_of_another_resource_or_language_is_refused() {
     nothing_installed(&store);
 }
 
+#[test]
+fn an_asset_with_names_a_file_system_would_rewrite_or_merge_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = tc_resources::ResourceStore::open(dir.path()).unwrap();
+    let install = |extra: &[(&str, &[u8])]| {
+        let bytes = common::aquifer_zip_with("UWTranslationNotes", "por", extra);
+        let pin = aquifer_pin("UWTranslationNotes", "por", &bytes);
+        install_aquifer_zip(&store, &pin, &bytes, MAX)
+    };
+    // Windows would write these under another name, or open another file through them.
+    for name in [
+        "CON.json",
+        "nul.json",
+        "notes/a.",
+        "PROGRA~1",
+        "ABCDEF~1.JSN",
+    ] {
+        let err = install(&[(name, b"x")]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                InstallError::Refused {
+                    refusal: Refusal::NotPortable { .. },
+                    ..
+                }
+            ),
+            "{name}: {err}"
+        );
+    }
+    // Windows and macOS would store each pair as one file or folder.
+    for pair in [
+        ["Notes.json", "notes.json"],
+        ["café.md", "cafe\u{301}.md"],
+        ["Notes/a.json", "notes/b.json"],
+        ["A", "a/x"],
+    ] {
+        let err = install(&[(pair[0], b"x"), (pair[1], b"y")]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                InstallError::Refused {
+                    refusal: Refusal::DuplicateEntry(_),
+                    ..
+                }
+            ),
+            "{pair:?}: {err}"
+        );
+    }
+    nothing_installed(&store);
+    // `ı` is not `i` on any of them, and `notes~1.json` is no 8.3 short name.
+    let installed = install(&[
+        ("ı", b"x"),
+        ("i", b"y"),
+        ("notes~1.json", b"z"),
+        ("a~1.tar.gz", b"z"),
+    ])
+    .unwrap();
+    installed.verify().unwrap();
+    assert_eq!(installed.read("ı").unwrap(), b"x");
+    assert_eq!(installed.read("i").unwrap(), b"y");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_release_without_a_digest_cannot_be_pinned() {
     let rig = aquifer_rig().await;

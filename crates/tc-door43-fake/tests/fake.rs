@@ -340,6 +340,135 @@ async fn git_pushes_with_a_token_and_is_refused_without_one() {
     );
 }
 
+/// As Door43 (docs/evidence/door43-live-2026-10-17.md, step 6): HTTP 200 throughout, and the
+/// refusal inside git's report.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_push_without_write_access_is_declined_by_the_pre_receive_hook() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let token = fake
+        .issue_token(seeded::USER, "push", &["write:repository"])
+        .unwrap();
+    let (status, headers, _) = get(
+        &fake,
+        &format!(
+            "/{}/es-419_tn.git/info/refs?service=git-receive-pack",
+            seeded::READ_ONLY_ORG
+        ),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(
+        headers["content-type"],
+        "application/x-git-receive-pack-advertisement"
+    );
+
+    let work = tempfile::tempdir().unwrap();
+    let repo = work.path().join("project");
+    std::fs::create_dir(&repo).unwrap();
+    run(git(&repo, work.path()).args(["init", "--quiet", "--initial-branch", "main"])).await;
+    std::fs::write(repo.join("README.md"), "hello\n").unwrap();
+    run(git(&repo, work.path()).args(["add", "README.md"])).await;
+    run(git(&repo, work.path()).args(["commit", "--quiet", "-m", "first"])).await;
+    let helper = "!f() { echo username=$FAKE_USER; echo password=$FAKE_TOKEN; }; f";
+    let refused = git(&repo, work.path())
+        .env("FAKE_USER", seeded::USER)
+        .env("FAKE_TOKEN", &token)
+        .args([
+            "-c",
+            "credential.helper=",
+            "-c",
+            &format!("credential.helper={helper}"),
+        ])
+        .args([
+            "push",
+            &fake.clone_url(seeded::READ_ONLY_ORG, "es-419_tn"),
+            "main:refs/heads/tc-probe",
+        ])
+        .output()
+        .await
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(!refused.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("remote: error: User permission denied for writing."),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("[remote rejected] main -> tc-probe (pre-receive hook declined)"),
+        "{stderr}"
+    );
+    assert!(
+        fake.resolve(seeded::READ_ONLY_ORG, "es-419_tn", "refs/heads/tc-probe")
+            .await
+            .is_err()
+    );
+}
+
+/// As Gitea: a private repository does not exist for a push from someone who may not read it,
+/// so its refs are never advertised to them, even with a token that may write repositories.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_private_repository_is_not_found_by_a_non_member_push() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    fake.add_user(tc_door43_fake::FakeUser {
+        login: "outsider".into(),
+        email: "outsider@example.org".into(),
+        password: "outsider-pass".into(),
+        one_time_code: None,
+    });
+    fake.add_repo(tc_door43_fake::RepoSeed {
+        owner: seeded::TEAM_ORG.into(),
+        name: "secret-project".into(),
+        subject: String::new(),
+        language: "en".into(),
+        topics: vec![],
+        private: true,
+        commits: vec![tc_door43_fake::CommitSeed {
+            message: "x".into(),
+            files: vec![tc_door43_fake::SeedFile::regular(
+                "a.txt",
+                b"private".to_vec(),
+            )],
+            tag: None,
+            release: None,
+        }],
+    })
+    .await
+    .unwrap();
+    let token = fake
+        .issue_token("outsider", "push", &["write:repository"])
+        .unwrap();
+    let repo = format!("/{}/secret-project.git", seeded::TEAM_ORG);
+
+    let (status, _, body) = get(
+        &fake,
+        &format!("{repo}/info/refs?service=git-receive-pack"),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(status, 404, "{}", String::from_utf8_lossy(&body));
+    assert!(!String::from_utf8_lossy(&body).contains("refs/heads/"));
+
+    let command = "0000000000000000000000000000000000000000 \
+                   1111111111111111111111111111111111111111 refs/heads/tc-probe\0report-status\n";
+    let mut request = format!("{:04x}{command}0000", command.len() + 4).into_bytes();
+    request.extend(b"PACK\0\0\0\x02\0\0\0\0");
+    let posted = http()
+        .post(format!("{}{repo}/git-receive-pack", fake.url()))
+        .header("Authorization", format!("token {token}"))
+        .header("Content-Type", "application/x-git-receive-pack-request")
+        .body(request)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(posted.status().as_u16(), 404);
+    assert!(
+        fake.resolve(seeded::TEAM_ORG, "secret-project", "refs/heads/tc-probe")
+            .await
+            .is_err()
+    );
+}
+
 /// `git clone` of `owner/name` with `login` and `secret` given by a credential helper.
 async fn clone_as(
     fake: &FakeDoor43,
@@ -479,4 +608,108 @@ async fn raw_and_text_echo_faults_answer_as_given() {
             .starts_with("text/html")
     );
     assert_eq!(body, b"xxxtoken abc");
+}
+
+/// Reads `response` until `bytes` have arrived, and returns how many did.
+async fn read_until(response: &mut reqwest::Response, bytes: usize) -> usize {
+    let mut received = 0;
+    while received < bytes {
+        let chunk = response.chunk().await.unwrap().unwrap();
+        received += chunk.len();
+    }
+    received
+}
+
+/// Whether `response` stays silent for a while, as a held download does.
+async fn holds(response: &mut reqwest::Response) -> bool {
+    tokio::time::timeout(std::time::Duration::from_millis(300), response.chunk())
+        .await
+        .is_err()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn each_held_download_waits_for_a_release_of_its_own() {
+    use tc_door43_fake::{Fault, FaultRule};
+    const AFTER: usize = 1000;
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let url = format!("{}/unfoldingWord/en_tn/sb/v86.zip", fake.url());
+    let (_, _, whole) = get(&fake, "/unfoldingWord/en_tn/sb/v86.zip", None).await;
+    let held = || {
+        FaultRule::once(
+            "GET",
+            "/unfoldingWord/en_tn/sb/",
+            Fault::HoldBody { after: AFTER },
+        )
+    };
+
+    // A release with nothing held, as after a test drops a held download, is not kept for
+    // the next one.
+    fake.release_held();
+    fake.inject(held());
+    let mut first = http().get(&url).send().await.unwrap();
+    assert_eq!(read_until(&mut first, AFTER).await, AFTER);
+    assert!(
+        holds(&mut first).await,
+        "a stray release let the download go on"
+    );
+
+    fake.inject(held());
+    let mut second = http().get(&url).send().await.unwrap();
+    assert_eq!(read_until(&mut second, AFTER).await, AFTER);
+
+    // One release frees the oldest held download only.
+    fake.release_held();
+    let rest = first.bytes().await.unwrap();
+    assert_eq!(AFTER + rest.len(), whole.len());
+    assert!(holds(&mut second).await, "one release freed two downloads");
+    fake.release_held();
+    let rest = second.bytes().await.unwrap();
+    assert_eq!(AFTER + rest.len(), whole.len());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_hold_fault_waits_for_its_release() {
+    use tc_door43_fake::{Fault, FaultRule};
+    let fake = FakeDoor43::start().await.unwrap();
+    seeded::parity_account(&fake).await.unwrap();
+    let secret = fake
+        .issue_token(
+            seeded::PARITY_USER,
+            "translationCore",
+            &["write:repository", "write:user"],
+        )
+        .unwrap();
+    assert_eq!(
+        fake.token_secret(seeded::PARITY_USER, "translationCore"),
+        Some(secret.clone())
+    );
+    fake.inject(FaultRule::once("GET", "/api/v1/user", Fault::Hold));
+    let url = format!("{}/api/v1/user", fake.url());
+    let held = tokio::spawn({
+        let (url, secret) = (url.clone(), secret.clone());
+        async move {
+            http()
+                .get(url)
+                .header("Authorization", format!("token {secret}"))
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        }
+    });
+    for _ in 0..500 {
+        if !fake.requests().is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+    }
+    assert_eq!(fake.requests().len(), 1, "recorded before it is held");
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(!held.is_finished(), "it waits for its release");
+    // The hold was used up: the next request answers at once.
+    let (status, _, _) = get(&fake, "/api/v1/user", Some(&secret)).await;
+    assert_eq!(status, 200);
+    fake.release_held();
+    assert_eq!(held.await.unwrap(), 200);
 }

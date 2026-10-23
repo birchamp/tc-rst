@@ -1,0 +1,10 @@
+{
+  "case": "check-deriving",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "runPreflight",
+      "args": []
+    }
+  ]
+}

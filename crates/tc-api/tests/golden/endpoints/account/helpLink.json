@@ -1,0 +1,21 @@
+{
+  "path": "account/helpLink",
+  "kind": "query",
+  "net": "helpLink",
+  "request": {
+    "url": "https://help.door43.org/en/knowledgebase"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "url": "https://git.door43.org/jdoe"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "helpLink"
+    }
+  }
+}

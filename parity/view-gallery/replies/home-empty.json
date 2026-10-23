@@ -1,0 +1,19 @@
+{
+  "case": "home-empty",
+  "replies": [
+    {
+      "endpoint": "home/list",
+      "source": "hand",
+      "request": {},
+      "reply": {
+        "type": "ok",
+        "value": {
+          "cards": [],
+          "unusable": [],
+          "others": [],
+          "resume": null
+        }
+      }
+    }
+  ]
+}

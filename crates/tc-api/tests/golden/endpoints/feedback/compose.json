@@ -1,0 +1,23 @@
+{
+  "path": "feedback/compose",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "report": 17
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "attachment": "translationCore 0.1.0 · windows\nReport: sync, 2026-10-17T15:00:00Z\n{}\n"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

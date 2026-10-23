@@ -1,0 +1,545 @@
+{
+  "name": "import-files",
+  "s": {
+    "view": "home",
+    "projects": [
+      {
+        "id": "_local_/_local_/sample_burrito_obs",
+        "name": "Equipo Ejemplo — Historias Bíblicas Abiertas",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textStories",
+        "bookCodes": [],
+        "timestamp": 1789473600000
+      },
+      {
+        "id": "_local_/_local_/sample_burrito",
+        "name": "Equipo Ejemplo — Tito y Jonás",
+        "languageTag": "es-419",
+        "scriptDirection": "ltr",
+        "flavor": "textTranslation",
+        "bookCodes": [
+          "JON",
+          "TIT"
+        ],
+        "timestamp": 1782993600000
+      }
+    ],
+    "project": null,
+    "opening": null,
+    "book": null,
+    "chapter": 1,
+    "bookRaw": null,
+    "bookError": null,
+    "bookErrorHelp": null,
+    "storyNumbers": [],
+    "storyNumber": null,
+    "story": null,
+    "sourceStory": null,
+    "storyImages": {},
+    "storyImageNote": null,
+    "storyLoading": false,
+    "storyError": null,
+    "storySource": null,
+    "sources": {},
+    "sourceTab": "ult",
+    "editing": null,
+    "saveState": "saved",
+    "rail": true,
+    "helps": true,
+    "helpsWidth": null,
+    "helpsTab": "notes",
+    "helpsHover": null,
+    "helpsActive": null,
+    "academy": null,
+    "understand": null,
+    "noteSaveState": "saved",
+    "alignSaveState": "saved",
+    "checkSaveState": "saved",
+    "storySaveState": "saved",
+    "storySaveError": null,
+    "commitError": null,
+    "commitErrorHelp": null,
+    "commitErrorRepo": null,
+    "modal": "import",
+    "fb": null,
+    "np": null,
+    "ab": null,
+    "st": null,
+    "im": {
+      "step": "files",
+      "kind": "usfm",
+      "files": [
+        {
+          "name": "57-TIT.usfm",
+          "bytes": {
+            "$u8": "XGlkIFRJVCBlamVtcGxvX3RqClx1c2ZtIDMuMApcaCBUaXRvClx0b2MxIExhIEVww61zdG9sYSBkZSBQYWJsbyBhIFRpdG8KXHRvYzIgVGl0bwpcdG9jMyBUaXQKXG10IFRpdG8KXGMgMQpccApcdiAxIFBhYmxvLCBzaWVydm8gZGUgRGlvcyB5IGFww7NzdG9sIGRlIEplc3VjcmlzdG8sIHNlZ8O6biBsYSBmZSBkZSBsb3MgZXNjb2dpZG9zIGRlIERpb3MgeSBlbCBjb25vY2ltaWVudG8gZGUgbGEgdmVyZGFkIHF1ZSB2YSBjb24gbGEgcGllZGFkLApcdiAyIGNvbiBsYSBlc3BlcmFuemEgZGUgbGEgdmlkYSBldGVybmEsIGxhIGN1YWwgRGlvcywgcXVlIG5vIG1pZW50ZSwgcHJvbWV0acOzIGRlc2RlIGFudGVzIGRlbCBwcmluY2lwaW8gZGUgbG9zIHNpZ2xvcywKXHYgMyB5IGEgc3UgZGViaWRvIHRpZW1wbyBtYW5pZmVzdMOzIHN1IHBhbGFicmEgcG9yIG1lZGlvIGRlIGxhIHByZWRpY2FjacOzbiBxdWUgbWUgZnVlIGVuY29tZW5kYWRhIHBvciBtYW5kYXRvIGRlIERpb3MgbnVlc3RybyBTYWx2YWRvciwKXHYgNCBhIFRpdG8sIHZlcmRhZGVybyBoaWpvIGVuIGxhIGNvbcO6biBmZTogR3JhY2lhIHkgcGF6IGRlIHBhcnRlIGRlIERpb3MgUGFkcmUgeSBkZSBDcmlzdG8gSmVzw7pzIG51ZXN0cm8gU2FsdmFkb3IuClx2IDUgUG9yIGVzdGEgY2F1c2EgdGUgZGVqw6kgZW4gQ3JldGEsIHBhcmEgcXVlIGNvcnJpZ2llcmFzIGxvIGRlZmljaWVudGUgeSBlc3RhYmxlY2llcmFzIGFuY2lhbm9zIGVuIGNhZGEgY2l1ZGFkLCBjb21vIHRlIG1hbmTDqS4KXHYgNiBfX18KXHYgNyBfX18KXHYgOCBfX18KXHYgOSBfX18KXHYgMTAgX19fClx2IDExIF9fXwpcdiAxMiBfX18KXHYgMTMgX19fClx2IDE0IF9fXwpcdiAxNSBfX18KXHYgMTYgX19fClxjIDIKXHAKXHYgMSBfX18KXHYgMiBfX18KXHYgMyBfX18KXHYgNCBfX18KXHYgNSBfX18KXHYgNiBfX18KXHYgNyBfX18KXHYgOCBfX18KXHYgOSBfX18KXHYgMTAgX19fClx2IDExIF9fXwpcdiAxMiBfX18KXHYgMTMgX19fClx2IDE0IF9fXwpcdiAxNSBfX18KXGMgMwpccApcdiAxIF9fXwpcdiAyIF9fXwpcdiAzIF9fXwpcdiA0IF9fXwpcdiA1IF9fXwpcdiA2IF9fXwpcdiA3IF9fXwpcdiA4IF9fXwpcdiA5IF9fXwpcdiAxMCBfX18KXHYgMTEgX19fClx2IDEyIF9fXwpcdiAxMyBfX18KXHYgMTQgX19fClx2IDE1IF9fXwo="
+          }
+        }
+      ],
+      "bundle": null,
+      "existing": null,
+      "name": "",
+      "lang": "",
+      "license": "",
+      "versions": null,
+      "busy": false,
+      "error": null,
+      "report": null
+    },
+    "si": null,
+    "door43User": null,
+    "door43Kept": false,
+    "door43NotKept": false,
+    "sh": null,
+    "remoteByProject": {
+      "_local_/_local_/sample_burrito_obs": null,
+      "_local_/_local_/sample_burrito": null
+    },
+    "importToast": null,
+    "importedRepo": null,
+    "od": null,
+    "fix": null,
+    "src": {
+      "gateway": null,
+      "book": "TIT",
+      "rows": [],
+      "loading": false,
+      "error": null,
+      "dl": null,
+      "exclude": {}
+    },
+    "installedSrc": [],
+    "installEpoch": 0,
+    "checkable": [],
+    "checkableError": null,
+    "preflightError": null,
+    "gatewayError": null,
+    "internetOn": false,
+    "netAsk": null,
+    "netFailed": false,
+    "accountError": null,
+    "appLocale": "en",
+    "projectPins": null,
+    "projectPinsSeq": 0,
+    "projectPinsLoaded": false,
+    "projectPinsError": null,
+    "sourcePanes": null,
+    "preflight": null,
+    "gatewayPreview": null,
+    "gatewayBusy": false,
+    "upgrade": {
+      "checking": false,
+      "offers": null,
+      "textOffers": null,
+      "offersFor": null,
+      "error": null,
+      "installing": null,
+      "progress": null,
+      "preview": null
+    },
+    "ops": {
+      "entries": [],
+      "errors": []
+    },
+    "aligning": false,
+    "alignIndex": null,
+    "alignVerse": null,
+    "alignSession": null,
+    "checkTool": null,
+    "checkSession": null,
+    "pickerProgress": null,
+    "toolPos": {},
+    "progressByProject": {
+      "_local_/_local_/sample_burrito": {
+        "JON": 4,
+        "TIT": 11
+      },
+      "_local_/_local_/sample_burrito_obs": {
+        "OBS": 1,
+        "stories": [
+          {
+            "number": 1,
+            "title": "La Creación",
+            "pct": 13,
+            "frames": 16,
+            "drafted": 2
+          },
+          {
+            "number": 2,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 3,
+            "title": "",
+            "pct": 0,
+            "frames": 16,
+            "drafted": 0
+          },
+          {
+            "number": 4,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 5,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 6,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 7,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 8,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 9,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 10,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 11,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 12,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 13,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 14,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 15,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 16,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 17,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 18,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 19,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 20,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 21,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 22,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 23,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 24,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 25,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 26,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 27,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 28,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 29,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 30,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 31,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 32,
+            "title": "",
+            "pct": 0,
+            "frames": 16,
+            "drafted": 0
+          },
+          {
+            "number": 33,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 34,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 35,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 36,
+            "title": "",
+            "pct": 0,
+            "frames": 7,
+            "drafted": 0
+          },
+          {
+            "number": 37,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 38,
+            "title": "",
+            "pct": 0,
+            "frames": 15,
+            "drafted": 0
+          },
+          {
+            "number": 39,
+            "title": "",
+            "pct": 0,
+            "frames": 12,
+            "drafted": 0
+          },
+          {
+            "number": 40,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 41,
+            "title": "",
+            "pct": 0,
+            "frames": 8,
+            "drafted": 0
+          },
+          {
+            "number": 42,
+            "title": "",
+            "pct": 0,
+            "frames": 11,
+            "drafted": 0
+          },
+          {
+            "number": 43,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 44,
+            "title": "",
+            "pct": 0,
+            "frames": 9,
+            "drafted": 0
+          },
+          {
+            "number": 45,
+            "title": "",
+            "pct": 0,
+            "frames": 13,
+            "drafted": 0
+          },
+          {
+            "number": 46,
+            "title": "",
+            "pct": 0,
+            "frames": 10,
+            "drafted": 0
+          },
+          {
+            "number": 47,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 48,
+            "title": "",
+            "pct": 0,
+            "frames": 14,
+            "drafted": 0
+          },
+          {
+            "number": 49,
+            "title": "",
+            "pct": 0,
+            "frames": 18,
+            "drafted": 0
+          },
+          {
+            "number": 50,
+            "title": "",
+            "pct": 0,
+            "frames": 17,
+            "drafted": 0
+          }
+        ]
+      }
+    },
+    "conflictsByProject": {
+      "_local_/_local_/sample_burrito": {}
+    },
+    "teamByProject": {
+      "_local_/_local_/sample_burrito": {
+        "names": {},
+        "actors": []
+      }
+    },
+    "syncing": null,
+    "syncResult": null,
+    "verseConflicts": [],
+    "team": null,
+    "conflictReview": null,
+    "obsStoryByProject": {},
+    "obsRecentByProject": {},
+    "placeByProject": {},
+    "storyFrame": null,
+    "draftUnits": {},
+    "alignSuggestions": {},
+    "alignSuggest": {
+      "status": "off",
+      "testament": null,
+      "verses": 0,
+      "boosted": false,
+      "error": null
+    },
+    "lastEdit": null,
+    "tick": 0
+  },
+  "returns": {}
+}

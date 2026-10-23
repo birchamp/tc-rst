@@ -1,0 +1,71 @@
+{
+  "path": "check/rows",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "list": {
+      "tool": "translationNotes",
+      "unit": {
+        "type": "book",
+        "value": "TIT"
+      }
+    },
+    "since": {
+      "session": 3,
+      "view": 41
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "type": "changed",
+      "value": {
+        "view": 44,
+        "rows": [
+          {
+            "row": {
+              "index": 7,
+              "checkId": "abcd",
+              "place": "TIT 1:4",
+              "title": "faith",
+              "flags": {
+                "dot": "valid",
+                "decided": true,
+                "invalidated": false,
+                "invalid": false,
+                "bookmarked": false,
+                "commented": true
+              },
+              "term": 2,
+              "category": {
+                "type": "note",
+                "value": "figures"
+              },
+              "marker": {
+                "conflict": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "versions": 2
+              }
+            }
+          }
+        ],
+        "progress": {
+          "decided": 2,
+          "total": 112
+        }
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

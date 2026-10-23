@@ -1,0 +1,32 @@
+{
+  "path": "test/lastEdit",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "13131313131313131313131313131313",
+    "project": "sample_burrito",
+    "place": {
+      "type": "story",
+      "value": {
+        "story": 3,
+        "frame": 2
+      }
+    },
+    "mode": "draft",
+    "snippet": "Pablo,  xapóstol",
+    "at": 1792378282100
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

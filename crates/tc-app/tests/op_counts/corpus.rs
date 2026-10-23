@@ -1,0 +1,194 @@
+//! The scale corpus of PERFORMANCE.md: tc-corpus Psalms and the corpus ten times larger, each
+//! generated and folded once per test binary, as tc-journal's own count tests fold them, and
+//! each written once to tc-store's in-memory file system as tc-store's own count tests write
+//! it (C1a, §8.1: the rows run on the store too).
+
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
+
+use tc_app::backend::memory::MemoryProject;
+use tc_corpus::{Corpus, Spec};
+use tc_journal::BookId;
+use tc_journal::fold::{ChapterKeys, FoldInput, FoldState, ProjectKind, Resolved};
+use tc_journal::format::FormatDoc;
+use tc_store::fault::FaultFs;
+use tc_store::layout::{GITATTRIBUTES_BYTES, GITIGNORE_BYTES};
+use tc_store::{FakePlatform, OpenOptions};
+
+use crate::store_world::{APP, PROJECTS, assert_valid_burrito, backend_over};
+
+/// The corpus project's folder name, on both backends.
+pub const FOLDER: &str = "psalms";
+
+pub const PSALMS: BookId = BookId::Psalms;
+
+pub struct Corpora {
+    pub psalms: MemoryProject,
+    pub larger: MemoryProject,
+    /// A Psalms chapter whose records are the same in both corpora, with no comment and no
+    /// conflict: an action on it touches the same work in both, so only the project's size
+    /// differs.
+    pub chapter: u16,
+}
+
+fn project(spec: &Spec) -> MemoryProject {
+    let corpus = Corpus::generate(spec).expect("the corpus builds");
+    let fold = FoldState::fold(
+        ProjectKind::Bible,
+        corpus
+            .journal
+            .lines()
+            .into_iter()
+            .map(|line| FoldInput::from(line).prepare()),
+    );
+    let mut project = MemoryProject::empty(corpus.journal.project, ProjectKind::Bible);
+    project.fold = fold;
+    project
+}
+
+/// Found with R1's reads alone: the chapter's keys, and each key's state.
+fn quiet(fold: &FoldState, keys: &ChapterKeys) -> bool {
+    keys.comments.is_empty()
+        && keys
+            .front
+            .iter()
+            .chain(&keys.verses)
+            .chain(&keys.alignments)
+            .chain(&keys.checks)
+            .all(|key| {
+                fold.key_state(key).is_none_or(|state| {
+                    state.heads.len() <= 1 && !matches!(state.state, Resolved::Conflict(_))
+                })
+            })
+}
+
+pub fn corpora() -> &'static Corpora {
+    static CORPORA: OnceLock<Corpora> = OnceLock::new();
+    CORPORA.get_or_init(|| {
+        let psalms = project(&Spec::psalms(1));
+        let larger = project(&Spec::scaled(1, 10));
+        let chapter = psalms
+            .fold
+            .chapters_of(PSALMS)
+            .into_iter()
+            .find(|&c| {
+                let small = psalms.fold.chapter_keys(PSALMS, c);
+                let big = larger.fold.chapter_keys(PSALMS, c);
+                small == big
+                    && !small.verses.is_empty()
+                    && quiet(&psalms.fold, &small)
+                    && quiet(&larger.fold, &big)
+            })
+            .expect("a Psalms chapter alike in both corpora");
+        Corpora {
+            psalms,
+            larger,
+            chapter,
+        }
+    })
+}
+
+/// The corpora on disk: each a file system holding the corpus project at
+/// `/projects/psalms`, opened once (which materializes every file), sealed and consolidated by
+/// a checkpoint, and closed. Each scale takes a copy.
+pub struct StoreCorpora {
+    pub psalms: FaultFs,
+    pub larger: FaultFs,
+}
+
+/// tc-store's `put_corpus` (`crates/tc-store/tests/store/corpus.rs`): the corpus's packs and
+/// pending files, the fixed files, and `.tc/device.json`, so the corpus's device 0 is the
+/// folder's device.
+fn put_corpus(store: &tc_store::Store, fs: &FaultFs, folder: &Path, corpus: &Corpus) {
+    let journal = &corpus.journal;
+    let project = serde_json::json!({
+        "schemaVersion": 1,
+        "projectId": journal.project.to_string(),
+        "kind": "bible",
+        "created": "2026-10-17T00:00:00.000Z",
+    });
+    let put = |rel: &str, bytes: &[u8]| {
+        let path = rel
+            .split('/')
+            .fold(folder.to_owned(), |p, part| p.join(part));
+        fs.put(&path, bytes, None);
+    };
+    put(
+        "ingredients/tc/project.json",
+        project.to_string().as_bytes(),
+    );
+    put(
+        "ingredients/tc/format.json",
+        &FormatDoc::current().to_bytes(),
+    );
+    put(".gitignore", GITIGNORE_BYTES);
+    put(".gitattributes", GITATTRIBUTES_BYTES);
+    for pack in &journal.packs {
+        put(&pack.path, &pack.bytes);
+    }
+    for pending in &journal.pending {
+        put(&format!(".tc/pending/{}", pending.name), &pending.bytes);
+    }
+    let print = tc_store::device::fingerprint(
+        store.app_data().secret(),
+        &FakePlatform::default().machine,
+        &folder.to_string_lossy(),
+    );
+    let device = serde_json::json!({
+        "device": journal.devices[0].to_string(),
+        "fingerprint": print.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+        "created": "2026-10-17T00:00:00.000Z",
+    });
+    put(".tc/device.json", device.to_string().as_bytes());
+}
+
+fn on_disk(spec: &Spec) -> FaultFs {
+    let corpus = Corpus::generate(spec).expect("the corpus builds");
+    let fs = FaultFs::new();
+    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let folder = Path::new(PROJECTS).join(FOLDER);
+    put_corpus(backend.store(), &fs, &folder, &corpus);
+    let handle = backend
+        .store()
+        .open(&folder, &OpenOptions::default())
+        .unwrap();
+    assert!(matches!(handle.facts().mode, tc_store::Mode::Writable));
+    handle
+        .checkpoint(tc_store::CheckpointReason::AfterImport)
+        .wait()
+        .unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    assert_valid_burrito(&fs, &folder);
+    fs.crash(false)
+}
+
+pub fn store_corpora() -> &'static StoreCorpora {
+    static CORPORA: OnceLock<StoreCorpora> = OnceLock::new();
+    CORPORA.get_or_init(|| StoreCorpora {
+        psalms: on_disk(&Spec::psalms(1)),
+        larger: on_disk(&Spec::scaled(1, 10)),
+    })
+}
+
+#[allow(dead_code)]
+#[path = "../../examples/bundle_store/build.rs"]
+mod bundle_build;
+
+/// A resource store with the bundle's English notes, words links and words articles and the
+/// Hebrew Bible, the releases the corpus pins, built once per test binary.
+pub fn psalms_resources() -> &'static Path {
+    static STORE: OnceLock<PathBuf> = OnceLock::new();
+    STORE.get_or_init(|| {
+        let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("b5a-psalms-resources");
+        let _ = std::fs::remove_dir_all(&out);
+        let from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bundle/en");
+        let wanted = ["en_tn", "en_twl", "en_tw", "hbo_uhb"];
+        let built = bundle_build::build_bundle(&from, &out, &|pin| {
+            wanted.contains(&pin.repo.name().as_str())
+        })
+        .unwrap_or_else(|e| panic!("the corpus's resources could not be installed: {e}"));
+        assert_eq!(built.installed.len(), 4, "{built:?}");
+        out
+    })
+}

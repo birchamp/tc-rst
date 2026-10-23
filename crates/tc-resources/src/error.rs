@@ -4,7 +4,7 @@
 use std::io;
 use std::path::PathBuf;
 
-use tc_door43::{Door43Error, UnreachableCause, VerificationError};
+use tc_door43::{Door43Error, NameProblem, UnreachableCause, VerificationError};
 
 use crate::pin::{ResourcePin, Sha256};
 use crate::strongs::LexiconId;
@@ -106,12 +106,27 @@ pub enum Refusal {
     Symlink(String),
     #[error("two entries unpack to {0:?}")]
     DuplicateEntry(String),
+    #[error("entry {path:?} cannot be written on every platform: {reason}")]
+    NotPortable { path: String, reason: &'static str },
     #[error("the unpacked files exceed the {limit}-byte limit")]
     TooLargeUnpacked { limit: u64 },
     #[error("the archive is not an Aquifer release: {0}")]
     NotAquifer(String),
     #[error("{0}")]
     Unreadable(String),
+}
+
+impl From<NameProblem> for Refusal {
+    /// Names that differ but fold to one are a duplicate of the later name, as they were
+    /// when this crate compared names itself.
+    fn from(problem: NameProblem) -> Self {
+        match problem {
+            NameProblem::NotPortable { path, reason } => Refusal::NotPortable { path, reason },
+            NameProblem::Duplicate(path) | NameProblem::Colliding { second: path, .. } => {
+                Refusal::DuplicateEntry(path)
+            }
+        }
+    }
 }
 
 /// Why a lexicon archive cannot be repackaged, or a repackaged lexicon file cannot be read.
