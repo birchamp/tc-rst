@@ -626,7 +626,23 @@ fn one_bad_obs_question_row_hides_no_other_question() {
     .unwrap();
     let good = tsv.lines().count() - 1;
     tsv.push_str("1:2\tbad1\t\t\tx\tA bad row?\tStill read.\textra\n");
-    let metadata = fixture(&format!("tc4/test-fixtures/resources/{dir}/metadata.json"));
+    // The export's metadata records each file's size and md5; the edited table gets its own.
+    let mut metadata: serde_json::Value = serde_json::from_slice(&fixture(&format!(
+        "tc4/test-fixtures/resources/{dir}/metadata.json"
+    )))
+    .unwrap();
+    let digest = {
+        use md5::Digest;
+        md5::Md5::digest(tsv.as_bytes())
+    };
+    let record = &mut metadata["ingredients"]["ingredients/OBS.tsv"];
+    record["size"] = tsv.len().into();
+    record["checksum"]["md5"] = digest
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
+        .into();
+    let metadata = serde_json::to_vec(&metadata).unwrap();
     let zip = common::zip(&[
         ("en_obs-tq/metadata.json", &metadata),
         ("en_obs-tq/ingredients/OBS.tsv", tsv.as_bytes()),
