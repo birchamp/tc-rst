@@ -110,6 +110,11 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   #814 (D105, in rc.2) tC4 uses one rule too. Only Mark valid clears "needs review", in tC4 and,
   by the owner's ruling of 2026-10-23 (Q37), in the rebuild; the rebuild still clears it at the
   first edit until FIX-R changes it (`docs/TC4-ISSUES.md` §1 row 23).
+- A note's quote is marked in the original-language text as well as in the gateway text: in
+  Draft's Greek or Hebrew tab and in the original row of the check card, at the note's
+  occurrence; a quote that does not match in full marks nothing. tC4 4.0 marks only the
+  gateway text (#840; owner ruling Q39, 2026-10-23). Understand shows no original-language
+  text, in tC4 or the rebuild, so it has nothing to mark.
 - A carry-over that loses no link is saved when the translator leaves the verse
   (APP-DESIGN AD19); tC4 writes nothing at open (#787).
 - Align's cards are a Tab stop while words are chosen, and Enter or Space places them, so a

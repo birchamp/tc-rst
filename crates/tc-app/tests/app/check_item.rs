@@ -101,7 +101,27 @@ async fn a_note_shows_its_panes_its_article_and_the_draft_words() {
         OriginalView::Ready {
             testament: Testament::Nt,
             verse: Some(verse),
-        } => assert!(verse.starts_with("Παῦλος"), "{verse}"),
+        } => {
+            assert!(verse.tokens.concat().starts_with("Παῦλος"), "{verse:?}");
+            // Owner ruling Q39 (tC4 #840): the Greek row marks the note's quote.
+            let marked: Vec<&str> = verse
+                .lit
+                .iter()
+                .map(|&i| verse.tokens[i as usize].as_str())
+                .collect();
+            assert_eq!(
+                marked,
+                [
+                    "κατὰ",
+                    "πίστιν",
+                    "ἐκλεκτῶν",
+                    "Θεοῦ",
+                    "καὶ",
+                    "ἐπίγνωσιν",
+                    "ἀληθείας"
+                ]
+            );
+        }
         other => panic!("{other:?}"),
     }
     let GatewayView::Pane {

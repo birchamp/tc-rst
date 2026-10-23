@@ -36,9 +36,9 @@ use tc_api::check::{
     CheckEmpty, CheckItemView, CheckListRef, CheckNotice, CheckPlace, CheckProgress,
     CheckSessionView, CheckSources, CheckUnit, Decide, DecideEdit, DecisionStatus, DecisionView,
     Dot, DroppedNote, GatewayText, GatewayView, Item, NextCheck, NoteCategory, Open as CheckOpen,
-    OriginalView, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows,
-    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, TargetWords,
-    Testament as CheckTestament, Tool, ToolCard, ToolState,
+    OriginalVerse, OriginalView, Picker, PickerView, PinCitation, RailProgress, RailRow,
+    RailRowPatch, RailRows, RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung,
+    TargetWords, Testament as CheckTestament, Tool, ToolCard, ToolState,
 };
 use tc_api::create::{
     AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
@@ -2550,7 +2550,16 @@ impl Example for CheckItemView {
             sources: CheckSources::Verse {
                 original: OriginalView::Ready {
                     testament: CheckTestament::Nt,
-                    verse: Some("Παῦλος, δοῦλος Θεοῦ".into()),
+                    verse: Some(OriginalVerse {
+                        tokens: vec![
+                            "Παῦλος".into(),
+                            ", ".into(),
+                            "δοῦλος".into(),
+                            " ".into(),
+                            "Θεοῦ".into(),
+                        ],
+                        lit: vec![4],
+                    }),
                 },
                 gateway: GatewayView::Pane {
                     pane: "ult".into(),

@@ -13,7 +13,9 @@ use std::collections::BTreeMap;
 use tc_api::editor::{PaneChapter, PaneVerse};
 use tc_api::helps::LitVerse;
 use tc_api::ids::RefPart;
-use tc_helps::highlight::{AlignedVerse, SourceWord, gateway_quote, highlight_quote};
+use tc_helps::highlight::{
+    AlignedVerse, SourceWord, TokenKind, gateway_quote, highlight_original, highlight_quote,
+};
 use tc_helps::{Occurrence, Quote};
 use tc_usfm::{Book, DisplayVerse, SegmentKind};
 
@@ -27,6 +29,25 @@ pub struct VerseModel {
     pub view: PaneVerse,
     /// The tokens with their alignments, for tc-helps' highlight.
     pub aligned: AlignedVerse,
+}
+
+impl VerseModel {
+    /// The tokens of this original-language verse that a note's quote names (owner ruling
+    /// Q39, tC4 #840), matched against its `\\w` words.
+    pub fn original_lit(&self, quote: &Quote, occurrence: Occurrence) -> Vec<u32> {
+        let (at, words): (Vec<usize>, Vec<&str>) = self
+            .aligned
+            .tokens()
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| matches!(t.kind, TokenKind::Word(_)))
+            .map(|(i, t)| (i, t.text.as_str()))
+            .unzip();
+        highlight_original(&words, quote, occurrence)
+            .into_iter()
+            .filter_map(|k| u32::try_from(at[k]).ok())
+            .collect()
+    }
 }
 
 /// One chapter of a pane.
@@ -75,6 +96,30 @@ impl ChapterModel {
             }
         }
         (title, lit)
+    }
+
+    /// [`Self::focus`] for the original-language text: the verses at `verse` that hold the
+    /// quote, and its tokens there.
+    pub fn original_focus(
+        &self,
+        verse: &str,
+        quote: &Quote,
+        occurrence: Occurrence,
+    ) -> Vec<LitVerse> {
+        let Some((from, to)) = verse_range(verse) else {
+            return Vec::new();
+        };
+        self.verses
+            .iter()
+            .filter(|m| m.from <= to && from <= m.to)
+            .filter_map(|model| {
+                let tokens = model.original_lit(quote, occurrence);
+                (!tokens.is_empty()).then(|| LitVerse {
+                    verse: model.key.clone(),
+                    tokens,
+                })
+            })
+            .collect()
     }
 }
 
