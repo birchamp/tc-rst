@@ -201,6 +201,9 @@ impl App {
             });
         };
         let (done_hub, done_announce) = (hub.clone(), announce.clone());
+        // Announced before the job starts, for the same reason: a one-verse corpus finished and
+        // said Ready before Reading went out (CI runs 39880970736, 39882291815 and its rerun).
+        announce(SuggestStatus::Reading);
         let job = self.inner.jobs.start_blocking(spec, move |ctx: JobCtx| {
             let verses = match corpus(&read, testament, &ctx.cancel) {
                 Ok(verses) => verses,
@@ -234,7 +237,6 @@ impl App {
             Ok(JobOutcome::Finished)
         });
         hub.attach(testament, job);
-        announce(SuggestStatus::Reading);
     }
 }
 
