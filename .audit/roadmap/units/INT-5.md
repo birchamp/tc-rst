@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d
 merged: none
 updated: 2026-10-23
-next: Step 2: history lines on the three .audit/plans files.
+next: Step 3 item 2: move HANDOFF's owner section into README's rules, then delete it.
 blocked_by: none
 ---
 
@@ -265,3 +265,4 @@ could build it a second time, or skip a step that keeps text safe.
 - 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | note | none | Done early, on main, so a new session finds the roadmap (review T1, T7): step 2 for `.audit/STATUS.md` and `.audit/PROGRESS.md` (the three `.audit/plans/*` files are on `resume-build-lane` only; mark them when INT-4 lands them); step 3 items 1, 4, 5 and 6 and the worktree rows of HANDOFF.md (item 2 stays); step 4; the `board.py` and `board_test.py` rows of `.audit/tools/README.md` (step 6's row change). Steps 1, 5, 6's watcher work and 7 stay | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
 - 2026-10-23 16:43 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-INT-5 from main eaf809d1 while INT-7 waits for its merge turn (the orchestrator's queue); steps 2, 3 (items 1, 4-6) and 4 were done early on main, per the 2026-10-22 note | python3 -I -B .audit/tools/board.py
 - 2026-10-23 16:45 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | union_test.py written; without the lines: `AssertionError: False is not true : INV-LOGS-NEVER-CONFLICT: .audit/minors.tsv conflicted; .gitattributes needs '.audit/minors.tsv merge=union'`; with the two merge=union lines after `* -text`: `OK`; line 4 is still `* -text` | python3 -I .audit/tools/union_test.py
+- 2026-10-23 16:47 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | history line added to the three .audit/plans files (STATUS.md and PROGRESS.md had it from 2026-10-22); head -qn1 prints it five times | head -qn1 .audit/STATUS.md .audit/PROGRESS.md .audit/plans/RESUME-2026-10-20.md .audit/plans/CONTINUE-REBUILD-2026-10-20.md .audit/plans/HANDOFF-resume-lane.md
