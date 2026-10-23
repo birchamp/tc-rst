@@ -4,7 +4,7 @@ title: Conflict choices: text and passage
 track: A
 lane: app
 milestone: M3
-state: blocked
+state: gating
 owner: C7a session (Claude Code 3058c665)
 branch: track-C7a
 worktree: .worktrees/track-C7a
@@ -15,8 +15,8 @@ no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
 merged: none
 updated: 2026-10-23
-next: Wait for INT-4 to land resume-build-lane on main; then merge main into track-C7a, run the full gate list (`.audit/roadmap/units/C7a.md` "Gates before merge"), and merge with `Merge C7a: …` and `Unit: C7a`.
-blocked_by: INT-4 note "resume-build-lane landed on main" (the merge base; this card's code builds on B11, which is only on that branch)
+next: Read .enjoy-logs/c7a-gates.log in the worktree; on a pass, merge C7a into main as TRACKING says.
+blocked_by: none
 ---
 
 # C7a: Conflict choices: text and passage
@@ -308,3 +308,5 @@ Plus:
 - 2026-10-23 03:30 EDT | browser and parity lens (Claude Code subagent of 3058c665) | verify | 3a3dba06 | Code: `choices` has no wildcard, `failure_text` one arm per variant; gaps: a refusal's reason is a free string that can print a record key, and a structure press can be sent with no pick. Checks: 17 tc-ui tests; the journeys press every new button twice. Reach: passage and structure conflicts from a sync, Restore, the bulk keep, read-only. Siblings: refusal-by-words matches `check_item.rs`. No loss: every write carries what the screen showed. Prose and Human: five bullets in PLAN, APP-DESIGN's row; four differences undeclared. Verdict: not a pass until F1 (a passage's version cards do not name their verse) and F2 (a structure press with no pick comes back as key text) are fixed; F3-F10 minors | the lens's report, quoted in this line
 - 2026-10-23 04:20 EDT | C7a session (Claude Code 3058c665) | fix | none | fix 1 (loss blocker): Restore is `KeepChoice::Restore` through `choose` (the fold's `Values` over the entry's tokens, every head a parent); `conflicts/restore`, `HistoryView.shown` and `StoreCommand::restore` removed; `restore_writes_over_every_shown_head` now proves it on a three-version conflict (proof: `Choice::Candidate { head: from }` in its place → `NotSaved(Refused(Choice { reason: "the chosen version is not one of the conflict's versions" }))`, reverted). fix 2 (browser F1, major): `Version.place`; a card names its verse when it is not the conflict's ("Titus 1:5"), the journey asserts it. fix 3 (browser F2, major): the structure footer's buttons are off until a version is clicked, both secondary. fix 4 (races F1, major): `KeepPhase::reply(request, reply)` ignores a reply to another request; a test asserts it. fix 5 (loss F3): the bulk test waits for the closed project's lock; `app::conflicts::` passed 3 runs of 11. fix 6 (browser F3, words): "Your version was kept in {kept} of {sent} conflicts." and "{person}’s version was kept in {kept} of {sent} conflicts."; four more differences declared in PLAN. Count tests: `a_restore_costs_its_record` on a listed conflict, 4 pass. Clippy: native and the four wasm runs pass | cargo test -p tc-app --test app app::conflicts::; cargo test -p tc-ui --test app app::review::
 - 2026-10-23 04:50 EDT | C7a session (Claude Code 3058c665) | block | none | after the fixes the journey passes three runs in a row (`# pass 6 # fail 0 # skipped 0`, target/journey3-run1..3.log; the first rerun failed on my own assertion: both versions of verse 5, the covered one and mine, name "Titus 1:5", as they should). Every step is done and verified; the merge waits for INT-4 to land resume-build-lane on main. Then: merge main into track-C7a, run "Gates before merge", merge. Eleven minors appended to .audit/minors.tsv; a hand-over note is in the shared notes folder (C7a-session-notes.md) | node --test parity/app/journeys/conflict-review.test.mjs
+- 2026-10-23 10:05 EDT | C7a session (Claude Code 3058c665) | unblock | b9491277 | INT-4 landed resume-build-lane on main (d293375a); main merged into track-C7a, the one conflict (.audit/minors.tsv) kept every row of both sides | git log -1 b9491277
+- 2026-10-23 10:06 EDT | C7a session (Claude Code 3058c665) | gate | none | started `. ~/.tc-env && PLAYWRIGHT_MODULE=/home/bot/tc-rst/parity/tc4-baseline/node_modules/playwright scripts/gates.sh --journeys` in .worktrees/track-C7a (second heavy run beside INT-4's gate) | .worktrees/track-C7a/.enjoy-logs/c7a-gates.log
