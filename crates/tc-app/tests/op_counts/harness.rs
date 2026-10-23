@@ -184,7 +184,7 @@ pub async fn scale(
         // Windows allows a symlink only in Developer Mode or as administrator; a copy of the
         // corpus serves the same reads.
         if std::os::windows::fs::symlink_dir(super::corpus::psalms_resources(), &link).is_err() {
-            copy_tree(&super::corpus::psalms_resources(), &link);
+            copy_tree(super::corpus::psalms_resources(), &link);
         }
     }
     let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
