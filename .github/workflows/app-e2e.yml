@@ -55,7 +55,6 @@ jobs:
           TC4_BIN: ${{ github.workspace }}/target/debug/tc4
           TC4_UI: ${{ github.workspace }}/target/tc-ui-app
           TC4_UI_HOOKS: ${{ github.workspace }}/target/tc-ui-app-hooks
-          TC4_DOOR43_FAKE: ${{ github.workspace }}/target/debug/tc-door43-fake
         run: |
           set -o pipefail
           node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee app-e2e.tap
