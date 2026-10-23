@@ -132,8 +132,8 @@ impl Handle<ViewFromHome> for App {
             metadata.and_then(crate::direction::script_direction),
             text_direction.as_deref(),
         );
-        // tC4 shows the metadata's own name of the language when settings.json names none
-        // (#832.2).
+        // tC4 shows an empty field when settings.json names no language (#832.2); the
+        // rebuild shows the metadata's own name of it, a declared difference.
         let language_name = if language_name.is_empty() {
             metadata
                 .and_then(metadata_language_name)
@@ -169,7 +169,6 @@ impl Handle<ViewFromHome> for App {
     }
 }
 
-/// The text of a top-level `settings.json` key as the fold projects it.
 /// The name the metadata gives the project's language: its name in its own tag, else the
 /// first name it lists.
 fn metadata_language_name(meta: &Value) -> Option<String> {
@@ -190,6 +189,7 @@ fn metadata_language_name(meta: &Value) -> Option<String> {
     (!name.is_empty()).then(|| name.to_owned())
 }
 
+/// The text of a top-level `settings.json` key as the fold projects it.
 fn setting_text(read: &crate::counters::CountingSnapshot, key: &str) -> Option<String> {
     let key = RecordKey::Setting(SettingKey::parse(key).ok()?);
     match read.projected(&key) {

@@ -671,11 +671,11 @@ fn check_failure(error: &Door43Error) -> UpdateCheckFailure {
         | Door43Error::NoWriteAccess { .. }
         | Door43Error::RefRejected { .. }
         | Door43Error::RefMoved { .. }
-        | Door43Error::NotFound { .. }
         | Door43Error::NameExists { .. }
         | Door43Error::RateLimited { .. }
         | Door43Error::Rejected { .. } => UpdateCheckFailure::Refused,
         Door43Error::Server { .. }
+        | Door43Error::NotFound { .. }
         | Door43Error::UnexpectedResponse { .. }
         | Door43Error::TooLarge { .. }
         | Door43Error::Verification { .. }

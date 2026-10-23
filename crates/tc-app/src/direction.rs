@@ -1,5 +1,5 @@
 //! The one rule for a project's text direction (INV-TEXT-DIRECTION-HAS-ONE-SOURCE, tC4
-//! `projectPresentation`, `src/state.jsx` 2144-2159): the metadata's
+//! `projectPresentation`, `src/state.jsx` 1815-1831): the metadata's
 //! `languages[0].scriptDirection`, else the settings file's `textDirection`. Settings writes
 //! the field it reads first, so Home, the open project and Align agree after a change.
 
@@ -13,7 +13,9 @@ pub fn project_direction(
     script_direction: Option<&str>,
     text_direction: Option<&str>,
 ) -> Direction {
-    match script_direction.or(text_direction) {
+    // As tC4: the metadata counts only when it says `ltr` or `rtl`.
+    let known = script_direction.filter(|d| matches!(*d, "ltr" | "rtl"));
+    match known.or(text_direction) {
         Some("rtl") => Direction::Rtl,
         _ => Direction::Ltr,
     }

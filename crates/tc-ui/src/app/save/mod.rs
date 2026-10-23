@@ -109,15 +109,12 @@ pub enum FieldSave {
 }
 
 /// Why a field cannot save now.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hold {
     /// Its project has no open in this run: it was closed, or reopened under another id.
     NoOpen,
     /// Its project is open read-only (A-10): the text stays for the offered copy.
     ReadOnly(ReadOnlyReason),
-    /// Refused for a reason no retry in this open can fix (tC4 #801): the text stays for the
-    /// offer at the project's next open, and the gate lets the person go.
-    RefusedForThisOpen(NotSaved),
     /// The server started again under the field, whose editor is still on screen: its text is
     /// buffered and waits for the offer at its project's next open, never saved by this page
     /// (AD4). Closing the editor forgets the field.
@@ -980,16 +977,6 @@ impl SaveMachine {
                     mirror: true,
                 });
             }
-            Answered::Failed(SaveError::NotSaved(reason)) if !classify::retry_can_fix(&reason) => {
-                field.state = FieldSave::Held(Hold::RefusedForThisOpen(reason));
-                field.due = None;
-                field.send_on_open = true;
-                out.push(Command::Write {
-                    key: key.clone(),
-                    entry: entry_of(field),
-                    mirror: true,
-                });
-            }
             Answered::Failed(error) => fail(key, field, error, &ctx, &mut out),
         }
         self.pump(now, &mut out);
@@ -1223,7 +1210,13 @@ impl SaveMachine {
     /// save in flight does.
     pub fn gate(&self) -> GateState {
         let fields = || self.fields.values().filter(|f| f.sendable_by_gate());
-        if fields().any(|f| matches!(f.state, FieldSave::Failed(_)) && f.gate_retried) {
+        // A failure no retry in this open can fix (a newer change arrived under a merged
+        // verse) keeps its text and its reason, and does not keep the person from Home
+        // (INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR, tC4 #801).
+        if fields().any(|f| match &f.state {
+            FieldSave::Failed(error) => f.gate_retried && classify::save_error_can_be_fixed(error),
+            _ => false,
+        }) {
             return GateState::Blocked;
         }
         if self.fields.values().any(Field::is_saving) || fields().any(Field::awaits_open) {

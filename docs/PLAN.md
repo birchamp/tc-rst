@@ -123,7 +123,7 @@ Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-2
   settings file's `textDirection` (tC4's own `projectPresentation` rule). Project settings
   writes both, so a direction changed there shows on Home, in the open project and in Align,
   also after a restart. tC4 writes only the settings file, so the change shows nowhere
-  (#832.1). Settings names the language from the metadata when the settings file names none,
+  (#832.1). As in tC4, a metadata value other than `ltr` or `rtl` does not count. Settings names the language from the metadata when the settings file names none,
   where tC4 shows an empty field for a tC4 project (#832.2).
 - The words placed on an aligner card read in the translation's direction, even on an Old
   Testament verse; tC4 lays them out in the original's direction, so a Hebrew verse's
@@ -137,7 +137,8 @@ Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-2
   "Failed to fetch" (#833.1).
 - Dropbox's own settings folder (`~/.dropbox`) never marks a project as synced, so having
   Dropbox installed on Linux or macOS no longer makes every project read-only.
-- Align lists the links a save or an open sent back to the word bank (owner answer Q30 (a)).
+- Align lists the links its open sent back to the word bank (owner answer Q30 (a)); the list
+  after a verse save in Translate waits for the storage unit S2.
 
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:

@@ -746,9 +746,10 @@ fn questions_tab(
                     // direction, so an English question under an Arabic set is not
                     // laid out backwards (tC4 #836).
                     <p dir="auto" style=q_style.clone()>{q.question.clone()}</p>
-                    <p dir="auto" style=a_style.clone()>
+                    // The interface's "Answer" label must not decide the answer's direction.
+                    <p style=a_style.clone()>
                         <span style=answer.clone()>{t(keys::understand::ANSWER, &[])}" · "</span>
-                        {q.response.clone()}
+                        <span dir="auto">{q.response.clone()}</span>
                     </p>
                 </div>
             }
@@ -980,8 +981,9 @@ pub(crate) fn note_blocks(blocks: &[ArticleBlock]) -> AnyView {
 
 /// A note, cut to a preview with "Show more" when long (tC4's `ExpandableNote`).
 pub(crate) fn expandable_note(blocks: Vec<ArticleBlock>) -> impl IntoView {
+    // A note reads in its own direction, short or long, wherever it shows (tC4 #836).
     if blocks_len(&blocks) <= PREVIEW_CHARS {
-        return note_blocks(&blocks);
+        return view! { <div dir="auto">{note_blocks(&blocks)}</div> }.into_any();
     }
     let expanded = RwSignal::new(false);
     let preview = preview_blocks(&blocks, PREVIEW_CHARS);

@@ -55,6 +55,15 @@ pub fn retry_can_fix(reason: &NotSaved) -> bool {
     }
 }
 
+/// Whether a save error may go away on a retry in this open: every error but a `NotSaved`
+/// reason [`retry_can_fix`] rules out.
+pub fn save_error_can_be_fixed(error: &SaveError) -> bool {
+    match error {
+        SaveError::NotSaved(reason) => retry_can_fix(reason),
+        SaveError::Api(_) | SaveError::Transport(_) | SaveError::BadAck(_) => true,
+    }
+}
+
 /// What the save machine does with an answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Answered {
