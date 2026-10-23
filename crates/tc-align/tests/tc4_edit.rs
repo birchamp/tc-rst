@@ -593,13 +593,21 @@ fn the_rail_reads_valid_from_done_only_and_staleness_outranks_it() {
     assert_eq!((status.placed, status.total), (1, 2));
 }
 
+/// Owner ruling Q37 (tC4 #814, D105 point 5): a verse marked "needs review" stays marked after
+/// an edit of its alignment, until the translator clicks Mark valid.
 #[test]
-fn an_edit_clears_the_re_review_flag_tc3_or_tc4_set() {
+fn an_edit_keeps_the_review_mark_until_mark_valid() {
     let (mut flagged, verse) = half_aligned();
     flagged.marked_invalid = true;
     flagged.link(1, &bank_word(&flagged, "siervo", 1)).unwrap();
     flagged.settle(&verse);
-    assert!(!flagged.marked_invalid);
+    assert!(flagged.marked_invalid, "an edit keeps the mark");
+    assert_eq!(
+        verse_status(Some(&flagged), Some((&current(&verse), &verse)), None).state,
+        VerseState::Invalid
+    );
+    flagged.mark_done(&verse);
+    assert!(!flagged.marked_invalid, "Mark valid clears it");
     assert_eq!(
         verse_status(Some(&flagged), Some((&current(&verse), &verse)), None).state,
         VerseState::Valid
