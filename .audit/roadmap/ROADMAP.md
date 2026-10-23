@@ -45,6 +45,8 @@ runs. If the owner wants more, it is a new H row, not a card.
    starts.
 2. **CI is the gate.** One gate list (INT-3) runs in CI and in every local runner. A red main
    stops every merge until it is green.
+   One merge into main at a time: the orchestrator hands out turns, and main's CI finishes green
+   before the next (owner rule, 2026-10-23; `TRACKING.md` "Checklist: merge an item").
 3. **Build once, then reuse.** Where the remaining units would copy a pattern again, the shared
    structure is built first (M1). This is the Code layer of the funnel, and it gets the most
    effort.
