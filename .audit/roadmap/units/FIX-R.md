@@ -4,7 +4,7 @@ title: Fix the tC4 bugs the rebuild repeats; reconcile TC4-ISSUES
 track: A
 lane: app
 milestone: M1
-state: fixing
+state: gating
 owner: C7a session (Claude Code 3058c665)
 branch: track-FIX-R
 worktree: .worktrees/track-FIX-R
@@ -16,7 +16,7 @@ no_loss: true
 size: 2-3 d
 merged: none
 updated: 2026-10-23
-next: Three review lenses (loss; races and protocol; browser and parity), then fix blockers and data/view majors; then ask the orchestrator for a merge turn. Step 4 waits for H12; step 2's Translate half waits for S2.
+next: On the orchestrator's merge turn: merge main into track-FIX-R, run scripts/gates.sh --journeys on the merge commit, fast-forward main. Step 4 waits for H12; step 2's Translate half waits for S2 (both stay on this card after the merge).
 blocked_by: none
 ---
 
@@ -340,3 +340,4 @@ the log. This item is no-loss: the review uses three lenses (FUNNEL.md §8).
 - 2026-10-23 21:10 EDT | C7a session (Claude Code 3058c665) | fix | none | the held state is gone: a for-good refusal stays `Failed` with its reason, Retry and drafts as before, and only `gate()` changed: after its one retry it blocks only on a failure a retry can fix (`classify::save_error_can_be_fixed`); this answers races 1, loss 2, browser 4, and the draft and resend minors. `a_save_refused_for_good_lets_the_person_go_home_and_keeps_the_text` now uses LookAgain and the gate's retry; with the gate change cut it failed `the gate lets the person go`. The save property test generates LookAgain refusals (loss 3); 3 property tests pass, 388 tc-ui app tests pass
 - 2026-10-23 21:10 EDT | C7a session (Claude Code 3058c665) | fix | none | browser 1 and 2: the answer's `dir="auto"` is on the answer text, not the line with the interface label; both branches of `expandable_note` (short and long, Understand and Check) carry `dir="auto"`. Browser 3: "Door43 turned the request away. Try again later."; a 404 maps to "did not answer properly". An invalid `scriptDirection` no longer counts, as in tC4 (`state.jsx` 1815-1831, the module's citation corrected). The wrong tC4 claim in settings.rs is corrected and PLAN's Q30 (a) bullet says the Translate half waits for S2; the displaced doc comment is back on `setting_text`. Clippy: native and four wasm runs pass
 - 2026-10-23 21:10 EDT | C7a session (Claude Code 3058c665) | note | none | loss major 1 is not FIX-R's to fix: tc-store `displayed()` (commands.rs about 105-118) answers LookAgain to an edit over a merged verse whose heads moved, so that text can never be stored, before and after FIX-R; the no-loss rule wants it kept as a conflict. commands.rs is S2's; the finding is handed to the storage lane (s2-proof) and logged as a minor naming S2 and T. FIX-R now keeps such a text with its reason and lets the person go Home
+- 2026-10-23 22:10 EDT | C7a session (Claude Code 3058c665) | note | 9e9cc08a | after the review fixes, understand, check-detail, check-keyboard, check-picker, check-writes, community-checking and shell journeys: `# tests 55 # pass 55 # fail 0 # skipped 0` (.enjoy-logs/fixr-journeys2.log). Every blocker and data or view major of the three lenses is fixed or handed on (the store's LookAgain to S2/T, logged); FIX-R waits for its merge turn from the orchestrator. Step 4 waits for H12; step 2's Translate half waits for S2 | node --test parity/app/journeys/{understand,check*,shell}.test.mjs
