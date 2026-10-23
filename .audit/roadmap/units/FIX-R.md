@@ -10,7 +10,7 @@ branch: track-FIX-R
 worktree: .worktrees/track-FIX-R
 depends: [INT-4]
 needs_owner: []
-later: ["H12 from step 4"]
+later: ["S2 from step 4"]
 proves: [P1, P8]
 no_loss: true
 size: 2-3 d
@@ -341,3 +341,4 @@ the log. This item is no-loss: the review uses three lenses (FUNNEL.md §8).
 - 2026-10-23 21:10 EDT | C7a session (Claude Code 3058c665) | fix | none | browser 1 and 2: the answer's `dir="auto"` is on the answer text, not the line with the interface label; both branches of `expandable_note` (short and long, Understand and Check) carry `dir="auto"`. Browser 3: "Door43 turned the request away. Try again later."; a 404 maps to "did not answer properly". An invalid `scriptDirection` no longer counts, as in tC4 (`state.jsx` 1815-1831, the module's citation corrected). The wrong tC4 claim in settings.rs is corrected and PLAN's Q30 (a) bullet says the Translate half waits for S2; the displaced doc comment is back on `setting_text`. Clippy: native and four wasm runs pass
 - 2026-10-23 21:10 EDT | C7a session (Claude Code 3058c665) | note | none | loss major 1 is not FIX-R's to fix: tc-store `displayed()` (commands.rs about 105-118) answers LookAgain to an edit over a merged verse whose heads moved, so that text can never be stored, before and after FIX-R; the no-loss rule wants it kept as a conflict. commands.rs is S2's; the finding is handed to the storage lane (s2-proof) and logged as a minor naming S2 and T. FIX-R now keeps such a text with its reason and lets the person go Home
 - 2026-10-23 22:10 EDT | C7a session (Claude Code 3058c665) | note | 9e9cc08a | after the review fixes, understand, check-detail, check-keyboard, check-picker, check-writes, community-checking and shell journeys: `# tests 55 # pass 55 # fail 0 # skipped 0` (.enjoy-logs/fixr-journeys2.log). Every blocker and data or view major of the three lenses is fixed or handed on (the store's LookAgain to S2/T, logged); FIX-R waits for its merge turn from the orchestrator. Step 4 waits for H12; step 2's Translate half waits for S2 | node --test parity/app/journeys/{understand,check*,shell}.test.mjs
+- 2026-10-24 00:20 EDT | C7a session (Claude Code 3058c665) | ruling | none | H12 answered "poetry - yes, everywhere" (rulings/2026-10-23-H12.md). Step 4 must change the Check reader, the store (commands.rs about 767) and the fold (project.rs about 288) together: Check alone would offer a check whose decision the store refuses. S2 holds commands.rs (and changes it heavily) until it merges, so step 4 follows S2 as its own small merge; `later` now names S2 from step 4 | .audit/roadmap/rulings/2026-10-23-H12.md
