@@ -32,6 +32,14 @@ disallowed-methods = [
   { path = "tc_journal::fold::FoldState::render", reason = "renders a file: a book's text projects the whole book and conflicts.json walks every conflict; go through CountingSnapshot::render, which counts it" },
   { path = "tc_journal::fold::FoldState::scope_digest", reason = "digests a file's scope, every conflict for conflicts.json: the store's manifest" },
   { path = "tc_journal::fold::FoldState::scope_digests", reason = "digests files' scopes, every conflict for conflicts.json: the store's manifest" },
+  # S2's readers of a whole book or file: the store's materialize and its outside-edit work.
+  { path = "tc_journal::fold::FoldState::book_parts", reason = "projects a whole book into its parts: the store's compare of a file with its projection" },
+  { path = "tc_journal::fold::FoldState::render_book_with_digests", reason = "renders every file of a book with its digests: the store's heads files" },
+  { path = "tc_journal::fold::FoldState::render_with_digests", reason = "renders a file with its digests: the store's heads files" },
+  { path = "tc_journal::fold::FoldState::carried_versions", reason = "walks every carried version: the store's repack" },
+  { path = "tc_journal::fold::FoldState::metadata_heads", reason = "walks every metadata record's heads: the store's heads file" },
+  { path = "tc_journal::fold::FoldState::plan_outside_edit", reason = "decodes a whole file against the project: the store's import" },
+  { path = "tc_journal::fold::FoldState::undo_outside", reason = "walks an outside batch's changes: the store's" },
   # The store adapter (unit C0) puts tc-store behind the seam; these three of tc-store's own
   # handle are never called in tc-app.
   { path = "tc_store::handle::ProjectHandle::mint", reason = "mints from the newest snapshot, which lists heads a screen that read an older one never saw (I4): mint from the Snapshot the screen read" },
