@@ -4,7 +4,7 @@ title: CI runs are the gate receipt
 track: A
 lane: checks
 milestone: M0
-state: claimed
+state: gating
 owner: checks lane (Claude Code 2198ee19)
 branch: track-INT-8
 worktree: .worktrees/track-INT-8
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: INT-3's receipt code and tests, which this extends)
 merged: none
 updated: 2026-10-23
-next: step 1
+next: merge by the CI route once G5 is done: push the merge commit to gate/INT-8, --wait-ci INT-8, fast-forward main, push, tell the lanes
 blocked_by: none
 ---
 
@@ -109,3 +109,5 @@ tests pass.
 
 - 2026-10-23 14:03 EDT | checks lane (Claude Code 2198ee19) | created | none | the owner's request of 2026-10-23, relayed by the audit session, quoted in "Before you start" | .audit/roadmap/units/INT-8.md
 - 2026-10-23 14:03 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-8 in .worktrees/track-INT-8, branched from track-G5-gate (36666b59, which holds main d293375a) so the gates.sh edits do not conflict with G5's; note at the claim: G5 is not done yet, so the merge waits for it | python3 -I .audit/tools/board.py
+- 2026-10-23 14:05 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | scripts/gates.sh: check_receipt takes the local receipt (journeys yes) or ci_receipt, which asks gh for the runs of HEAD's sha, keeps completed successful ci and app-e2e runs whose commit has HEAD's tree, and prints `gates: CI receipt: ci run <id>, app-e2e run <id> on <sha>`; --wait-ci <card> refuses a dirty tree, pushes HEAD to gate/<card>, polls every 60 s up to 90 min for completed runs of both workflows, then runs check_receipt. gates-script.test.mjs: a fake gh on PATH; green ci+app-e2e on HEAD is accepted, ci alone refused, both on another tree refused; node tests 10 pass | node --test .audit/tools/*.test.mjs
+- 2026-10-23 14:05 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | README.md push rule: gate/<card> branches; TRACKING.md merge checklist step 1: the CI route, no local full run needed; ROADMAP.md M0 row; DONE depends on INT-8 | python3 -I .audit/tools/board.py --check
