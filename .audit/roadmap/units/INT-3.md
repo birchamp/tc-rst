@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5-1 d
 merged: none
 updated: 2026-10-22
-next: step 2
+next: step 3
 blocked_by: none
 ---
 
@@ -315,3 +315,4 @@ exactly these, so on the merge commit it is this card's gate. Plus:
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
 - 2026-10-22 23:07 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-INT-3 in .worktrees/int-3. INT-2 is done (78eeec19) but main's CI run 39893217059 started no job (GitHub Actions billing, INT-2's last note), so "Before you start" is met except the green run; steps 1-6 are local and go ahead, step 7's merge waits for a green main | python3 -I .audit/tools/board.py
 - 2026-10-22 23:08 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | scripts/gates.sh (mode 100755): 12 steps, --list prints 12 lines, `UPDATE_REPORT= scripts/gates.sh --list` prints the refusal and exits 2, --step fmt exits 0, --check-receipt refuses with the INV-NO-UNGATED-MERGE line | scripts/gates.sh --list
+- 2026-10-22 23:10 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | gates-sync and gates-script tests written; red where expected: (a) "step fmt has no scripts/gates.sh --step fmt line", (b) the node --test line only, (c) gates.ps1 fmt differs, (d) build-lane.js GATES does not run scripts/gates.sh; the script tests pass. Mutation 1 (ci.yml gets `cargo test --workspace --release`): `gate drift: ci.yml runs "cargo test --workspace --release" but scripts/gates.sh does not`. Mutation 2 (refusal loop deleted): `not ok 1 - INV-GATES-NEVER-BLESS: the gate script refuses a blessing environment ... UPDATE_REPORT set: exit 0`. Both restored. Decided: the receipt test's scratch repo ignores /target as the real repo does, else the receipt folder itself dirties the tree | node --test .audit/tools/gates-sync.test.mjs .audit/tools/gates-script.test.mjs
