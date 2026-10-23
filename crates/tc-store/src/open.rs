@@ -223,7 +223,7 @@ pub(crate) fn open_project(
 
 /// The `project.json` of HEAD's tree, when the repository has a commit whose copy reads
 /// (§3.5).
-fn head_project_json(
+pub(crate) fn head_project_json(
     env: &Env,
     vfs: &dyn Vfs,
     path: &Path,

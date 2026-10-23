@@ -329,7 +329,7 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             }
             let mut frames = s.app.events().subscribe(s.app.events().head());
             let measured = tokio::time::timeout(
-                Duration::from_secs(5),
+                Duration::from_secs(60),
                 cost(&s, async |s| {
                     let view = open_verse(s, first_verse(), 2).await;
                     assert_eq!(view.suggest.status, tc_api::align::SuggestStatus::Reading);

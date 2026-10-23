@@ -23,7 +23,7 @@ use crate::layout::{
     LOCK, PACKS, PENDING, PROJECT_JSON,
 };
 use crate::load::{JournalKind, list};
-use crate::open::{Env, OpenError, OpenOptions, ProjectJson, open_project};
+use crate::open::{Env, OpenError, OpenOptions, ProjectJson, head_project_json, open_project};
 use crate::platform::Platform;
 use crate::reply::CommandError;
 use crate::vfs::{EntryKind, Vfs, is_not_found};
@@ -219,6 +219,17 @@ impl Store {
 
     pub fn app_data(&self) -> &AppData {
         &self.env.app
+    }
+
+    /// The `project.json` an open of `folder` would repair a damaged one from: HEAD's, when
+    /// this app reads it (§3.5). A listing asks this before it calls a folder unusable.
+    pub fn repaired_project_json(&self, folder: &Path) -> Option<Vec<u8>> {
+        head_project_json(
+            &self.env,
+            &*self.env.vfs,
+            folder,
+            &Arc::new(crate::counters::Counters::default()),
+        )
     }
 
     pub fn hooks(&self) -> &Arc<Hooks> {

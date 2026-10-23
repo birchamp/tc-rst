@@ -438,14 +438,29 @@ impl StoreBackend {
         let Ok(folder) = ProjectRef::parse(name) else {
             return unusable(UnusableReason::NameNotAllowed);
         };
+        // The open writes a missing or damaged project.json back from the project's history
+        // (§3.5); the listing reads what the open would.
+        let repaired = || {
+            self.store
+                .repaired_project_json(&path)
+                .and_then(|b| project_json(&b).ok())
+        };
         let bytes = match read {
             Ok(bytes) => bytes,
-            Err(e) if absent(&e) => return unusable(UnusableReason::NoProjectFile),
+            Err(e) if absent(&e) => {
+                return match repaired() {
+                    Some((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
+                    None => unusable(UnusableReason::NoProjectFile),
+                };
+            }
             Err(e) => return unusable(UnusableReason::ProjectFileUnreadable(e.to_string())),
         };
         match project_json(&bytes) {
             Ok((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
-            Err(reason) => unusable(UnusableReason::ProjectFileDamaged(reason)),
+            Err(reason) => match repaired() {
+                Some((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
+                None => unusable(UnusableReason::ProjectFileDamaged(reason)),
+            },
         }
     }
 
