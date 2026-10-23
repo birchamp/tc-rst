@@ -4,7 +4,7 @@ title: One gate list for CI and every local runner; merge only with a passing ga
 track: A
 lane: checks
 milestone: M0
-state: building
+state: gating
 owner: checks lane (Claude Code 2198ee19)
 branch: track-INT-3
 worktree: .worktrees/int-3
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5-1 d
 merged: none
 updated: 2026-10-22
-next: step 5: the full run, then the TRACKING.md edit
+next: step 7: merge with a receipt once main is green (GitHub Actions billing, INT-2 log)
 blocked_by: none
 ---
 
@@ -319,3 +319,8 @@ exactly these, so on the merge commit it is this card's gate. Plus:
 - 2026-10-22 23:10 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | ci.yml runs every cargo and node line as `scripts/gates.sh --step <name>`: 13 such lines, not 12, because nightly-windows runs `--step test` as well (the card's step 4 of INT-2 said INT-3 would replace that line); no cargo or node --test line is left; tests (a) and (b) pass | grep -c 'scripts/gates.sh --step' .github/workflows/ci.yml
 - 2026-10-22 23:10 EDT | checks lane (Claude Code 2198ee19) | step 4 | none | gates.ps1 holds the four entries the card gives (fmt, clippy with --keep-going, test with --no-fail-fast, wasm-ui); build-lane.js and merge-main.js GATES run scripts/gates.sh; merge-main.js's gate prompt requires scripts/gates.sh --check-receipt to exit 0 for green; `node --test .audit/tools/*.test.mjs`: 7 pass, 0 fail | node --test .audit/tools/*.test.mjs
 - 2026-10-22 23:10 EDT | checks lane (Claude Code 2198ee19) | gate | none | started scripts/gates.sh in .worktrees/int-3 (no other heavy run alive), log .enjoy-logs/int3-gates.log | .enjoy-logs/int3-gates.log
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | gate | 0e95a4ee | scripts/gates.sh on 0e95a4ee: 11 of 12 steps passed (cargo test 3040 passed, 0 failed, 7 ignored), step node failed on `CI loads every journey file over this environment` (parity/app/env-rust.test.mjs), which read the node line from ci.yml; no receipt | .enjoy-logs/int3-gates.log
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | fix | none | env-rust.test.mjs now reads the `node` entry of scripts/gates.sh, the one list, and still checks that its glob covers every journey file; `node --test parity/app/env-rust.test.mjs .audit/tools/*.test.mjs`: 15 pass | node --test parity/app/env-rust.test.mjs
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | step 5 | none | TRACKING.md "Checklist: merge an item" step 1 now requires the merge commit in a separate worktree, scripts/gates.sh there, and --check-receipt exit 0 before main moves; the full run is repeated on this tree (steps 5 and 6 edits included, so the receipt covers the final tree) | .audit/roadmap/TRACKING.md
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | AGENTS.md "Tests" points at scripts/gates.sh; `grep -c 'cargo clippy' AGENTS.md` prints 0 | AGENTS.md
+- 2026-10-22 23:30 EDT | checks lane (Claude Code 2198ee19) | gate | none | started scripts/gates.sh again in .worktrees/int-3, log .enjoy-logs/int3-gates-2.log | .enjoy-logs/int3-gates-2.log
