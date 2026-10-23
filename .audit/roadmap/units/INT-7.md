@@ -4,7 +4,7 @@ title: Prepare the Track B hand-off: freeze the shell contract
 track: A
 lane: integration
 milestone: M0
-state: building
+state: gating
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-INT-7
 worktree: .worktrees/track-INT-7
@@ -15,7 +15,7 @@ no_loss: true
 size: 1 d (basis: two contract files, two small tests, an APP-DESIGN edit)
 merged: none
 updated: 2026-10-23
-next: Step 6: three verification lenses, then the merge.
+next: Step 6: run scripts/gates.sh on the merge commit in .worktrees/int-7-merge, then move main to it if --check-receipt passes.
 blocked_by: none
 ---
 
@@ -308,3 +308,7 @@ step 1's mutations and step 2's name edits are quoted in the log.
 - 2026-10-23 14:05 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | docs/contracts/SHELL.md v1 written with all eleven items of TRACK-B.md §4 (the card's table shows nine; items 10, the test harness, and 11, the help-desk key, were added to §4 later and are frozen too), the reduction rules in words and the §6 freeze list. Every path it names exists except docs/RELEASE.md, marked "G3, to create" | git ls-files on each path
 - 2026-10-23 14:20 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | APP-DESIGN §5.3 and A9 D10 say the window shows on every launch within 1 s (ruling 2026-10-18, #743); G1 row is ◆, drops D2 and says printPdf is in the contract; G1 joins the no-loss list; G2 loses the app-e2e job; rows G3, G4, G5 added. Sibling: §7's "Later (G2)" app-e2e bullet now names G5 for the journeys. TC4-ISSUES #743 action trimmed, the docs list item marked done by INT-7. All five done-when greps print as the card says | grep -cE '^\| G[345] ' docs/APP-DESIGN.md
 - 2026-10-23 14:20 EDT | integration lane (Claude Code 3d07d5f8) | step 5 | none | step 5 skipped: H2 is B (rulings/2026-10-22-H2.md: Elias takes Track B) | rulings/2026-10-22-H2.md
+- 2026-10-23 14:40 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | lens 1 (vectors), by a fresh read-only reviewer agent: each keep traced through current_lines and correct; NFC bytes checked; sets are sound because merge's order dependence needs two lines of one slot, which "the last change of a field wins" rules out. Code: no type binds a JS shell, card says why. Checks: both tests exist, mutations logged, run in cargo test. Reach: torn lines, restarts, settled offers are reachable. Siblings: no-loss.mjs's stub still deletes on any removal (minor). No blocker, no major; minors: no vector kept two runs of one field, none for a text removal across runs (both added now), NFC one direction only, no invariant-named tests | fixtures/shell/buffer-vectors.json
+- 2026-10-23 14:40 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | lens 2 (pointers): every path, symbol, test and constant in SHELL.md exists and says what SHELL.md says, except docs/RELEASE.md (marked G3, to create). No blocker, no major; minors: item 5 said the page calls seven (it calls six and checks printPdf exists; fixed now), item 9's g0-windows pointer (fixed now), some §4 references dropped (logged) | docs/contracts/SHELL.md
+- 2026-10-23 14:40 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | lens 3 (no loss): the §5.3 and D10 edits change only whether a window shows; the page choice and everything about the buffer, the offer and unsaved text are unchanged; G1 becomes ◆, which is stricter. No blocker, no major; minor: the G5 row read as unbuilt (now marked built). Six §8 questions answered in the reviewer's report above | docs/APP-DESIGN.md §5.3, §10
+- 2026-10-23 14:45 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | minors fixed in passing: two vectors added ("two runs of one field are both kept", "a removal naming a text ends only its own run's entry"), SHELL.md item 5 and item 9 wording, G5 row marked built; four other minors appended to .audit/minors.tsv | cargo test -p tc-ui --test app shell_contract
