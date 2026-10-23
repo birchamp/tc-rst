@@ -4,10 +4,10 @@ title: Fix the tC4 bugs the rebuild repeats; reconcile TC4-ISSUES
 track: A
 lane: app
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: C7a session (Claude Code 3058c665)
+branch: track-FIX-R
+worktree: .worktrees/track-FIX-R
 depends: [INT-4]
 needs_owner: []
 later: ["H12 from step 4"]
@@ -15,8 +15,8 @@ proves: [P1, P8]
 no_loss: true
 size: 2-3 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: Do step 1 (one direction source) on track-FIX-R.
 blocked_by: none
 ---
 
@@ -324,3 +324,4 @@ the log. This item is no-loss: the review uses three lenses (FUNNEL.md §8).
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-bugs.md
+- 2026-10-23 10:40 EDT | C7a session (Claude Code 3058c665) | claim | none | claimed on track-FIX-R from main d293375a (INT-4 landed) while C7a's gate waits for a heavy slot; every "Before you start" line prints as the card says, except that `word_card` takes `rtl_orig: bool`, not a direction | .worktrees/track-FIX-R
