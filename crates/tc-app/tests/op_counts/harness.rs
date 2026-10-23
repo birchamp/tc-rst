@@ -124,11 +124,21 @@ impl Scale {
         Some(self.app.read(at).ok()?.handle().clone())
     }
 
-    /// Waits until the store's queue and background work are done, so the open's storage
-    /// check never counts into an action (the fold's counters are shared with it).
+    /// Waits until the store's queue, its background work and the app's jobs are done, so no
+    /// background read counts into an action (the counters are shared with them). On a loaded
+    /// machine a job outlived the store's idle and added a record read to a save's count.
     fn settle(&self) {
         if let Some(handle) = self.store_handle() {
             tokio::task::block_in_place(|| handle.wait_idle());
+        }
+        let started = std::time::Instant::now();
+        while self.app.jobs().live() > 0 {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(60),
+                "hung: {} app job(s) still live after 60 s",
+                self.app.jobs().live()
+            );
+            tokio::task::block_in_place(|| std::thread::sleep(std::time::Duration::from_millis(10)));
         }
     }
 

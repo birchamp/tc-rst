@@ -68,12 +68,12 @@ async fn home_card(app: &App, name: &str) -> HomeCard {
     .await
 }
 
-/// Waits for `HomeCard` of `name`; panics after five seconds.
+/// Waits for `HomeCard` of `name`; panics after a minute, which only a hang reaches.
 async fn card_event(events: &mut Subscription, name: &str) {
     let wanted = Event::HomeCard {
         project: folder(name),
     };
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             match events.next().await {
                 Next::Frame(frame) if frame.event == wanted => return,
@@ -83,7 +83,7 @@ async fn card_event(events: &mut Subscription, name: &str) {
         }
     })
     .await
-    .unwrap_or_else(|_| panic!("no HomeCard event for {name}"));
+    .unwrap_or_else(|_| panic!("hung: no HomeCard event for {name} in 60 s"));
 }
 
 /// Whether a `HomeCard` event came by now.
