@@ -4,7 +4,7 @@ title: Prepare the Track B hand-off: freeze the shell contract
 track: A
 lane: integration
 milestone: M0
-state: gating
+state: parked
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-INT-7
 worktree: .worktrees/track-INT-7
@@ -15,7 +15,7 @@ no_loss: true
 size: 1 d (basis: two contract files, two small tests, an APP-DESIGN edit)
 merged: none
 updated: 2026-10-23
-next: Step 6: redo the merge commit in .worktrees/int-7-merge and gate it again when the load is lower.
+next: Redo the merge commit in .worktrees/int-7-merge (git checkout --detach claude/focused-ride-5uzj7p; git merge --no-ff --no-commit track-INT-7; card done edit) and run scripts/gates.sh there; move main only when --check-receipt passes.
 blocked_by: none
 ---
 
@@ -313,3 +313,5 @@ step 1's mutations and step 2's name edits are quoted in the log.
 - 2026-10-23 13:40 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | lens 3 (no loss): the §5.3 and D10 edits change only whether a window shows; the page choice and everything about the buffer, the offer and unsaved text are unchanged; G1 becomes ◆, which is stricter. No blocker, no major; minor: the G5 row read as unbuilt (now marked built). Six §8 questions answered in the reviewer's report above | docs/APP-DESIGN.md §5.3, §10
 - 2026-10-23 13:40 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | minors fixed in passing: two vectors added ("two runs of one field are both kept", "a removal naming a text ends only its own run's entry"), SHELL.md item 5 and item 9 wording, G5 row marked built; four other minors appended to .audit/minors.tsv | cargo test -p tc-ui --test app shell_contract
 - 2026-10-23 14:11 EDT | integration lane (Claude Code 3d07d5f8) | gate | 973191d6 | failed at step test: op_counts::comments::adding_a_comment_touches_one_target ("app records_read: 1 on Psalms, 3 ten times larger") under load average about 18; it passes alone (3 passed, 118 s), and the checks lane's gate on int-1-done failed the same way on other op_counts tests (section_save…, save_verse…), so it is load, not this card. Times of the step lines before this were corrected to the commit times (the merge was not on main yet) | .worktrees/int-7-merge/.enjoy-logs/gates.log
+- 2026-10-23 14:45 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | gate on 7534a0bc failed at step test: screen_record.rs section_7_6_names_every_baseline_screen_with_its_units pins §10's unit count at 48; step 4 added G3, G4 and G5, so it is now 51; the pin is raised. Not yet run again | .worktrees/int-7-merge/.enjoy-logs/gates.log
+- 2026-10-23 14:45 EDT | integration lane (Claude Code 3d07d5f8) | park | none | usage limit reached; the fix is committed but not gated. Next: redo the merge commit and gate it (see next) | none
