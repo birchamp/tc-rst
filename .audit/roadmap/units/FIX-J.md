@@ -4,18 +4,18 @@ title: Finish the partial P1 journeys J3, J12 and J13
 track: A
 lane: app
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: C7a session (Claude Code 3058c665)
+branch: track-FIX-J
+worktree: .worktrees/track-FIX-J
 depends: [INT-4]
 needs_owner: []
 proves: [P1]
 no_loss: false
 size: 1-1.5 d (basis: C8 wrote the upgrades and source-texts journeys in one session; each item here is one test over code that exists)
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: Do step 1 (seed ULT Jonah under the fake's parity account) on track-FIX-J.
 blocked_by: none
 ---
 
@@ -160,3 +160,4 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 ## Log
 
 - 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | created | none | the review (goal-coverage R3) found J3, J12 and J13 assigned to a card that did not exist | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
+- 2026-10-23 22:40 EDT | C7a session (Claude Code 3058c665) | claim | none | claimed on track-FIX-J from main eaf809d1 (INT-4 done); the preconditions print as the card says. Decision: there is no `test/read` endpoint; the journeys read the pin files from the run's projects folder (`env.projectsDir`, the store scenario's folder on disk), which needs no new test hook | .worktrees/track-FIX-J
