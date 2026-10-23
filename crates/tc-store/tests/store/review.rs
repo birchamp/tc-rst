@@ -63,6 +63,8 @@ fn usfm_path(folder: &Path) -> PathBuf {
 
 /// Records a carried file the way an import would: its bytes are in the folder, a record
 /// says so. Its identity names a real backup, so removal proves preservation of its History.
+/// The bytes are put unseen: told of them, the watcher records the file itself (N11) and the
+/// plan here is stale.
 fn record_carried(rig: &Rig, folder: &Path, handle: &ProjectHandle, bytes: &[u8]) {
     let repo = repo_of(&rig.fs, folder);
     let oid = GitOid::parse(&repo.blob(bytes).unwrap().to_string()).unwrap();
@@ -173,7 +175,7 @@ fn a_removed_carried_file_leaves_the_folder_and_the_burrito_stays_valid() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     let bytes = b"audio bytes".to_vec();
-    rig.fs.put(&folder.join(AUDIO), &bytes, None);
+    rig.fs.put_unseen(&folder.join(AUDIO), &bytes, None);
     record_carried(&rig, &folder, &handle, &bytes);
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
@@ -207,7 +209,7 @@ fn a_removed_carried_file_that_was_edited_outside_is_not_deleted() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     let bytes = b"audio bytes".to_vec();
-    rig.fs.put(&folder.join(AUDIO), &bytes, None);
+    rig.fs.put_unseen(&folder.join(AUDIO), &bytes, None);
     record_carried(&rig, &folder, &handle, &bytes);
     leave(&handle);
     // The writer's jobs are over, and so is the rig's look at the folder after each: the edit
@@ -240,7 +242,7 @@ fn a_carried_file_edited_outside_is_recorded_and_listed_as_it_is() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     let bytes = b"mp3".to_vec();
-    rig.fs.put(&folder.join(AUDIO), &bytes, None);
+    rig.fs.put_unseen(&folder.join(AUDIO), &bytes, None);
     record_carried(&rig, &folder, &handle, &bytes);
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
