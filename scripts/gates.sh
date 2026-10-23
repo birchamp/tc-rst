@@ -87,13 +87,14 @@ check_receipt() {
 }
 
 # A green run of both workflows on a commit with this tree is a receipt too (INT-8): GitHub runs
-# the same list in parallel, so lanes need not queue for this PC.
+# the same list in parallel, so lanes need not queue for this PC. Only push runs count: a
+# pull_request run tests the pull request's merge ref, not the commit's own tree.
 ci_receipt() {
   local tree sha runs ci_run e2e_run
   tree="$(tree_now)"; sha="$(git rev-parse HEAD)"
   command -v gh > /dev/null || return 1
   runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
-    --jq '.workflow_runs[] | select(.status == "completed" and .conclusion == "success") | "\(.name) \(.id) \(.head_sha)"' 2> /dev/null)" || return 1
+    --jq '.workflow_runs[] | select(.event == "push" and .status == "completed" and .conclusion == "success") | "\(.name) \(.id) \(.head_sha)"' 2> /dev/null)" || return 1
   ci_run="$(green_run_for ci "$runs" "$tree")"
   e2e_run="$(green_run_for app-e2e "$runs" "$tree")"
   [[ -n "$ci_run" && -n "$e2e_run" ]] || return 1
@@ -112,13 +113,14 @@ green_run_for() {
 wait_ci() {
   local card="$1" sha deadline done_runs
   [[ -z "$(git status --porcelain)" ]] || { echo "gates: --wait-ci needs a clean tree" >&2; return 1; }
+  command -v gh > /dev/null || { echo "gates: --wait-ci needs gh on PATH" >&2; return 1; }
   sha="$(git rev-parse HEAD)"
   git push origin "+$sha:refs/heads/gate/$card"
   echo "gates: pushed ${sha:0:8} to gate/$card; waiting for the ci and app-e2e runs"
   deadline=$((SECONDS + 5400))
   while (( SECONDS < deadline )); do
     done_runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
-      --jq '[.workflow_runs[] | select(.status == "completed") | .name] | unique | join(" ")' 2> /dev/null || true)"
+      --jq '[.workflow_runs[] | select(.event == "push" and .status == "completed") | .name] | unique | join(" ")' 2> /dev/null || true)"
     if [[ " $done_runs " == *" ci "* && " $done_runs " == *" app-e2e "* ]]; then
       check_receipt
       return
