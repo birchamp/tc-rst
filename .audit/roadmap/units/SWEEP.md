@@ -4,7 +4,7 @@ title: Sweep tC4 again, then every week
 track: A
 lane: integration
 milestone: M1
-state: claimed
+state: building
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-SWEEP
 worktree: .worktrees/track-SWEEP
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d, then about 1 h a week
 merged: none
 updated: 2026-10-23
-next: Step 1: clone ~/unfoldingword/tc4-sweep (no checkout) and fetch tags.
+next: Step 3: sweep 9ad4d5c to origin/main 24188928 and release/4.0 d25b7871, issues updated since 2026-10-19, into scratch notes.
 blocked_by: none
 ---
 
@@ -244,3 +244,5 @@ it), and CHK-3's TC4-ISSUES test if CHK-3 has landed.
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-coverage.md
 - 2026-10-23 16:45 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-SWEEP from main eaf809d1 while INT-7 and INT-5 wait for merge turns (the orchestrator's queue) | python3 -I -B .audit/tools/board.py
+- 2026-10-23 16:46 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | ~/unfoldingword/tc4-sweep cloned with no checkout, tags fetched: v4.0.0-rc.2 is a5ce0307; 19 first-parent merges 9ad4d5c..origin/main; tips origin/main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, origin/release/4.0 d25b7871904228a342c0d80280136d8636833653; no v4.0.0 tag; the reference clone still at d310bf3 | git -C ~/unfoldingword/tc4-sweep rev-parse origin/main origin/release/4.0
+- 2026-10-23 16:46 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | tc4-issue-sweep.js takes base, releaseBase, since and date (range, release log, issue search, delta name); storage context points at docs/STORAGE.md on main or s2-proof-executor; the unit list is board.py; the sweep clone is never checked out and the reference clone never touched; README row lists the arguments. The fixed-value grep prints nothing; node --check passes | grep -n "2026-10-19\|2026-10-01\|d310bf3\.\.\|'storage'" .audit/workflows/tc4-issue-sweep.js
