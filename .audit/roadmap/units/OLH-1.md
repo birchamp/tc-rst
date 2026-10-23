@@ -4,7 +4,7 @@ title: Highlight a note's words in the original-language pane
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: C7a session (Claude Code 3058c665)
 branch: track-OLH-1
 worktree: .worktrees/track-OLH-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 2-3 sessions (basis: tC4 #840's scope; the gateway highlighter exists in tc-helps)
 merged: none
 updated: 2026-10-24
-next: Step 1: the matcher tests, then the function in tc-helps.
+next: Step 2: call highlight_original from the original tab of Draft and Understand and the check card's original row; journey steps; captures; PLAN and TC4-ISSUES.
 blocked_by: none
 ---
 
@@ -119,3 +119,4 @@ moves to.
 
 - 2026-10-23 | integration lane (Claude Code 3d07d5f8) | created | none | from the owner's Q39 answer of 2026-10-23 | rulings/2026-10-23-Q39-original-language-highlight.md
 - 2026-10-24 | C7a session (Claude Code 3058c665) | claimed | none | on a branch cut from track-SWEEP (a7199102), as the orchestrator offered, while SWEEP waits for its merge turn | none
+- 2026-10-24 | C7a session (Claude Code 3058c665) | step 1 | none | `highlight_original` in tc-helps: the verse's `\w` words, the quote's `&` spans matched as `highlight_plain` matches them (one shared `quote_matches`), then the note's occurrence; `-1` or unrecorded marks every match; not tied, a partial match or a missing occurrence marks nothing. Tests on UGNT TIT 1:1 and 1:9 and UHB JON 1:3 and 1:5 (a maqaf compound): `the_original_pane_marks_the_quote_at_its_occurrence`, `a_quote_the_verse_lacks_marks_nothing_in_the_original_pane`. Red first (no function); with the first match taken instead of the note's occurrence both fail (highlight.rs:813, :859). tc-helps passes, clippy clean | cargo test -p tc-helps --test highlight
