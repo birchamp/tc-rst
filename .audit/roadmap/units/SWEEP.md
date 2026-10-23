@@ -4,18 +4,18 @@ title: Sweep tC4 again, then every week
 track: A
 lane: integration
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: integration lane (Claude Code 3d07d5f8)
+branch: track-SWEEP
+worktree: .worktrees/track-SWEEP
 depends: [INT-4]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d, then about 1 h a week
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: Step 1: clone ~/unfoldingword/tc4-sweep (no checkout) and fetch tags.
 blocked_by: none
 ---
 
@@ -243,3 +243,4 @@ it), and CHK-3's TC4-ISSUES test if CHK-3 has landed.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-coverage.md
+- 2026-10-23 16:45 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-SWEEP from main eaf809d1 while INT-7 and INT-5 wait for merge turns (the orchestrator's queue) | python3 -I -B .audit/tools/board.py
