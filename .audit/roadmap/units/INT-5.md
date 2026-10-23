@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d
 merged: none
 updated: 2026-10-23
-next: Step 5: add the board step to scripts/gates.sh and ci.yml (fetch-depth 0).
+next: Step 6: delete status_tick and STATUS_SEEN in .audit/tools/watch-runs.py; update .audit/tools/README.md.
 blocked_by: none
 ---
 
@@ -268,3 +268,4 @@ could build it a second time, or skip a step that keeps text safe.
 - 2026-10-23 16:47 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | history line added to the three .audit/plans files (STATUS.md and PROGRESS.md had it from 2026-10-22); head -qn1 prints it five times | head -qn1 .audit/STATUS.md .audit/PROGRESS.md .audit/plans/RESUME-2026-10-20.md .audit/plans/CONTINUE-REBUILD-2026-10-20.md .audit/plans/HANDOFF-resume-lane.md
 - 2026-10-23 16:49 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | item 2 done (items 1, 3-6 were done on 2026-10-22): HANDOFF's owner section deleted. Checked against README's rules: the fix rule, typed state machines, default models and the workflow-message rule were there; short plain questions are README "When to stop and ask". Moved to README as rules: "Speed is judged against tC4 … on the reference laptop" and "Hours, not days: one verification pass, the simplest change, reuse tested work, deterministic tests over reading code". The push bullet is gone; 49 lines | grep -nE 'Runs and how to resume|STATUS\.md|PROGRESS\.md|standing authorization|Push only main' .audit/HANDOFF.md
 - 2026-10-23 16:49 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | already on main since 2026-10-22: AGENTS.md's PLAN paragraph holds the roadmap sentence | grep -c 'roadmap/TRACKING.md' AGENTS.md
+- 2026-10-23 16:53 EDT | integration lane (Claude Code 3d07d5f8) | step 5 | none | `board` step added after `node` in scripts/gates.sh, with `-B` on each python3 (without it board_test.py leaves .audit/tools/__pycache__, an untracked folder, and the gate then writes no receipt); ci.yml parity-baseline runs `--step board` with fetch-depth 0. `scripts/gates.sh --step board` exits 0; node --test .audit/tools/*.test.mjs: 7 pass, 0 fail (the drift test). With S3 set to building and owner none (not committed): exit 1, `[('error', 'S3', 'INV-TRACKER-TRUE: state is building but owner is none')]`; undone | scripts/gates.sh --step board
