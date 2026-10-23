@@ -119,30 +119,6 @@ def windows_gate_tick():
                    capture_output=True, text=True, timeout=60)
     json.dump({"unit": unit, "sha": sha}, open(WIN_RUN, "w"))
 
-STATUS_SEEN = {"sha": None}
-
-def status_tick():
-    """Regenerate .audit/STATUS.md on each new main and push it, from a worktree of its own."""
-    try:
-        subprocess.run(["git", "-C", REPO, "fetch", "-q", "origin"], timeout=120)
-        sha = subprocess.run(["git", "-C", REPO, "rev-parse", "origin/claude/focused-ride-5uzj7p"], capture_output=True, text=True, timeout=30).stdout.strip()
-        if not sha or sha == STATUS_SEEN["sha"]: return
-        wt = REPO + "/.claude/worktrees/status"
-        if not os.path.isdir(wt):
-            subprocess.run(["git", "-C", REPO, "worktree", "add", "-q", "--detach", wt, sha], timeout=120, check=True)
-        g = lambda *a: subprocess.run(["git", "-C", wt, *a], capture_output=True, text=True, timeout=120)
-        g("checkout", "-q", "--force", "--detach", sha)
-        out = subprocess.run(["python3", "-I", wt + "/.audit/tools/status.py", sha], capture_output=True, text=True, timeout=120).stdout.strip()
-        if out == "changed":
-            g("add", ".audit/STATUS.md")
-            g("-c", "user.name=Claude", "-c", "user.email=noreply@anthropic.com", "commit", "-q", "-m",
-              "Regenerate the status list\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>")
-            r = g("push", "-q", "origin", "HEAD:claude/focused-ride-5uzj7p")
-            if r.returncode != 0: return  # main moved meanwhile; the next tick tries again
-        STATUS_SEEN["sha"] = sha
-    except Exception as e:
-        print(f"STATUS error: {e}", flush=True)
-
 rseen = remote_windows() or {}
 last_prune = 0
 i = 0
@@ -186,7 +162,6 @@ while True:
     save()
     if i % 15 == 0:
         windows_gate_tick()
-        status_tick()
         r = remote_windows()
         if r is not None:
             for ref, sha in r.items():

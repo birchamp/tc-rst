@@ -4,7 +4,7 @@ title: Converge the trackers onto the roadmap
 track: A
 lane: integration
 milestone: M0
-state: building
+state: verifying
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-INT-5
 worktree: .worktrees/track-INT-5
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d
 merged: none
 updated: 2026-10-23
-next: Step 6: delete status_tick and STATUS_SEEN in .audit/tools/watch-runs.py; update .audit/tools/README.md.
+next: Step 7: one verify pass, then wait for a merge turn from the orchestrator; S2 is not merged, so merge parked with next pointing at step 8.
 blocked_by: none
 ---
 
@@ -269,3 +269,4 @@ could build it a second time, or skip a step that keeps text safe.
 - 2026-10-23 16:49 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | item 2 done (items 1, 3-6 were done on 2026-10-22): HANDOFF's owner section deleted. Checked against README's rules: the fix rule, typed state machines, default models and the workflow-message rule were there; short plain questions are README "When to stop and ask". Moved to README as rules: "Speed is judged against tC4 … on the reference laptop" and "Hours, not days: one verification pass, the simplest change, reuse tested work, deterministic tests over reading code". The push bullet is gone; 49 lines | grep -nE 'Runs and how to resume|STATUS\.md|PROGRESS\.md|standing authorization|Push only main' .audit/HANDOFF.md
 - 2026-10-23 16:49 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | already on main since 2026-10-22: AGENTS.md's PLAN paragraph holds the roadmap sentence | grep -c 'roadmap/TRACKING.md' AGENTS.md
 - 2026-10-23 16:53 EDT | integration lane (Claude Code 3d07d5f8) | step 5 | none | `board` step added after `node` in scripts/gates.sh, with `-B` on each python3 (without it board_test.py leaves .audit/tools/__pycache__, an untracked folder, and the gate then writes no receipt); ci.yml parity-baseline runs `--step board` with fetch-depth 0. `scripts/gates.sh --step board` exits 0; node --test .audit/tools/*.test.mjs: 7 pass, 0 fail (the drift test). With S3 set to building and owner none (not committed): exit 1, `[('error', 'S3', 'INV-TRACKER-TRUE: state is building but owner is none')]`; undone | scripts/gates.sh --step board
+- 2026-10-23 16:56 EDT | integration lane (Claude Code 3d07d5f8) | step 6 | none | status_tick, STATUS_SEEN and the call deleted from watch-runs.py (windows_gate_tick and the disk checks kept; it parses); tools README: union_test.py row added, status.py row says do not run it, watch-runs.py row no longer regenerates or pushes STATUS.md | grep -nE 'status_tick|STATUS' .audit/tools/watch-runs.py
