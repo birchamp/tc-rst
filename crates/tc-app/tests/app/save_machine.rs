@@ -1290,9 +1290,11 @@ proptest! {
             .build()
             .unwrap()
             .block_on(async {
-                tokio::time::timeout(Duration::from_secs(30), async {
+                // A hang limit, not a speed limit (rulings/2026-10-23-tests-prove-behavior-not-speed.md):
+                // 48 cases on a loaded Windows runner took over 30 s each.
+                tokio::time::timeout(Duration::from_secs(120), async {
                     play_world(World::verse().await, steps).await;
-                }).await.expect("the production save/reload scenario finishes");
+                }).await.expect("the production save/reload scenario hung");
             });
     }
 }
