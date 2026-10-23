@@ -1,0 +1,72 @@
+# Every browser journey in parity/app/journeys/ against a real tc4, the real UI builds, the fake
+# Door43 and Chromium (card G5). A skipped journey fails the job: kit.mjs skips when a build is
+# missing, and that must never read as green. Pixels are not compared here: a pixel baseline
+# gates only on the machine that captured it (docs/APP-DESIGN.md §7.9).
+name: app-e2e
+permissions:
+  contents: read
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  # The event name too, so a dispatched run never cancels a push run on the same branch.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+jobs:
+  journeys:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_JOBS: 4
+    steps:
+      - uses: actions/checkout@v4
+      # The runner image leaves too little disk for this workspace ("No space left on device",
+      # runs 39305042134 and 39317068070); these three trees are not needed here.
+      - run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      # With no name, rustup installs the toolchain rust-toolchain.toml names, wasm32 included.
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - id: bindgen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-bindgen
+          key: wasm-bindgen-cli-0.2.129-${{ runner.os }}
+      - if: steps.bindgen.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: parity/tc4-baseline
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.56.1-${{ runner.os }}
+      # --with-deps also installs Chromium's system libraries, which the cache does not hold.
+      - run: npx playwright install --with-deps chromium
+        working-directory: parity/tc4-baseline
+      - run: cargo build --locked -p tc4 --features test-hooks,fixture-backend
+      - run: cargo build --locked -p tc-door43-fake
+      - run: crates/tc-ui/build-app.sh
+      - run: crates/tc-ui/build-app.sh --test-hooks --out target/tc-ui-app-hooks
+      # A journey that leaves a browser or a tc4 running keeps node from ending (run 39956490017
+      # hung 38 minutes); the full run takes about 5 minutes on this runner.
+      - name: journeys
+        timeout-minutes: 15
+        env:
+          TC4_BIN: ${{ github.workspace }}/target/debug/tc4
+          TC4_UI: ${{ github.workspace }}/target/tc-ui-app
+          TC4_UI_HOOKS: ${{ github.workspace }}/target/tc-ui-app-hooks
+          TC4_DOOR43_FAKE: ${{ github.workspace }}/target/debug/tc-door43-fake
+        run: |
+          set -o pipefail
+          node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee app-e2e.tap
+      - name: no skips
+        if: always()
+        run: node parity/app/journeys/no-skips.mjs app-e2e.tap
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-e2e-tap
+          path: app-e2e.tap
