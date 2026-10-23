@@ -87,3 +87,5 @@ B5b	The `drag_range` differential test compares the function with a copy of its 
 INT-6	quick-timing holds uncommitted work nobody has judged (55 files, the untracked crates/tc-timing/ among them)	refs/wip/quick-timing/2026-10-23
 INT-6	lane-b7 holds uncommitted work nobody has judged (3 files)	refs/wip/lane-b7/2026-10-23
 INT-6	lane-merge holds uncommitted work nobody has judged (2 files)	refs/wip/lane-merge/2026-10-23
+A8	fixed: a cancel after Door43 deleted the old token	2dfa188c
+A8	fixed: FlowRequest::SignIn had no product caller	f5c38d12

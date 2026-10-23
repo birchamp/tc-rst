@@ -4,7 +4,7 @@ title: Rescue stray work and free the disk
 track: A
 lane: integration
 milestone: M0
-state: building
+state: verifying
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-INT-6
 worktree: .worktrees/track-INT-6
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d
 merged: none
 updated: 2026-10-23
-next: Step 2: cherry-pick -x 58aa8a9 599e516, append the two A8 rows, run the account test, the three sign-in journeys and screen_record.
+next: One verify pass (steps 1-5), then ask the orchestrator (local_d49edca7) for a merge turn; the merge gate is scripts/gates.sh --journeys.
 blocked_by: none
 ---
 
@@ -298,3 +298,4 @@ files.
 - 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | the list (run from the main checkout, with card worktrees read from main and every track-* branch): REMOVE .claude/worktrees/lane-b4b (182 MB; build folder /var/tmp/tc-rst-target/lane-b4b 30 GB) and lane-b5b (186 MB; /var/tmp/tc-rst-target/lane-b5b 43 GB); KEEP-UNMERGED lane-a8, lane-c1a, storage; KEEP-DIRTY lane-b7, lane-merge, quick-timing; KEEP-SESSION s2-verify; no orphan build folders (lane-fproxy-gnu and merge-main-windows-gnu are gone). Total about 73 GB. Asked through the orchestrator session | rulings/2026-10-23-disk-cleanup.md
 - 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner: "yes delete" | rulings/2026-10-23-disk-cleanup.md
 - 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | probe: `git worktree remove` refused the changed probe (`contains modified or untracked files`, exit 128), then removed it clean. Removed lane-b4b and lane-b5b with `git worktree remove` and their /var/tmp build folders; both branches still listed. df before: `/ 905G 295G 565G 35%`, `/home 916G 654G 217G 76%`; after: `/ 905G 222G 637G 26%`, `/home 916G 655G 215G 76%` | git worktree list; git branch --list lane-b4b lane-b5b
+- 2026-10-23 17:38 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | f5c38d12 | cherry-picked with -x, no conflict: 58aa8a9 as 2dfa188c, 599e516 as f5c38d12; two A8 rows appended. The account test passes; with 2dfa188c's account.rs reverted it fails (`panicked at crates/tc-app/tests/app/account.rs:687:5: assertion left == right failed`), restored; screen_record 48 passed; account-menu, j11-sign-in and share-open journeys: # pass 16, # fail 0, # skipped 0 | cargo test -p tc-app --test app a_cancel_once_the_token_calls_started_forgets_the_token_an_earlier_session_kept
