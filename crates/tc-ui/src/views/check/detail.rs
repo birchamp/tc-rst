@@ -2,9 +2,8 @@
 //! `UltPane`, `StoryPane`, `TargetWords`, `CheckMarks`, `CheckSessionNotices`, `AcademyDrawer`;
 //! units B5b and C4): the check's place and counter, its quote, "What to check", the Academy
 //! link, the compare card, the marking row with Previous and Next (#726), the bookmark and the
-//! check comment. A book's compare card is tC4 9ad4d5c's (#762: the source texts as cards in a
-//! wrapping row and "Your translation" a card of its own); a story's is the stacked card of the
-//! gateway frame and the person's own text, in tC4's 760 px column, as B7 drew it.
+//! check comment. The compare card is tC4's (#762: the source texts as cards in a wrapping row and
+//! "Your translation" a card of its own), for a book and a story alike since tC4 rc.2.
 //!
 //! The detail is built once for a check and then follows its reads in place, so the focus on a
 //! word, a button or the comment box survives the read that a mark makes. The words are the one
@@ -97,7 +96,7 @@ fn pane_absent(text: String) -> AnyView {
 
 /// tC4's `sourceCardStyle` (#762): one source text of the compare card. Its `40ch` resolves in
 /// the scripture font the row sets, so every card of a row is as wide as the others.
-fn source_card() -> Css {
+pub(super) fn source_card() -> Css {
     crate::css! {
         "flex": "1 1 calc(40ch + 40px)",
         "min-width": 0,
@@ -642,37 +641,24 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
         view! { <h1 data-testid="check-quote" style=style.to_style()>"“"{view.title.clone()}"”"</h1> }
     };
     let note = (!view.note.is_empty()).then(|| {
-        let boxed = if story {
-            crate::css! {
-                "max-width": "62ch",
-                "margin-bottom": 8,
-                "border-radius": "var(--radius-lg)",
-                "padding": "16px 18px",
-                "background": "var(--surface-warm)",
-                "border": "var(--stroke) solid var(--tc-warn-border)",
-            }
-        } else {
-            crate::css! {
-                "font-size": "var(--fs-title-sm)",
-                "max-width": "calc(80ch + 36px)",
-                "margin-bottom": 8,
-                "border-radius": "var(--radius-lg)",
-                "padding": "16px 18px",
-                "background": "var(--surface-warm)",
-                "border": "var(--stroke) solid var(--tc-warn-border)",
-            }
+        let boxed = crate::css! {
+            "font-size": "var(--fs-title-sm)",
+            "max-width": "calc(80ch + 36px)",
+            "margin-bottom": 8,
+            "border-radius": "var(--radius-lg)",
+            "padding": "16px 18px",
+            "background": "var(--surface-warm)",
+            "border": "var(--stroke) solid var(--tc-warn-border)",
         };
-        let mut text = crate::css! {
+        let text = crate::css! {
             "font-size": "var(--fs-title-sm)",
             "letter-spacing": "var(--track-16)",
             "line-height": "var(--lh-body)",
             "font-weight": "var(--fw-medium)",
             "color": "var(--uw-ink)",
             "margin": "7px 0 0",
+            "max-width": "80ch",
         };
-        if !story {
-            text.set("max-width", "80ch");
-        }
         let overline = crate::css! { "color": "var(--tc-warn-text-2)" };
         view! {
             <div data-testid="check-note" style=boxed.to_style()>
@@ -817,26 +803,7 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
             .into_any()
         }
     };
-    let compare = if story {
-        let card = crate::css! {
-            "background": "var(--surface-card)",
-            "border": "var(--stroke) solid var(--border)",
-            "border-radius": "var(--radius-xl)",
-            "overflow": "hidden",
-            "box-shadow": "var(--shadow-card)",
-        };
-        let yours = crate::css! { "padding": "16px 20px" };
-        view! {
-            <div style=card.to_style()>
-                {sources}
-                <div style=yours.to_style()>
-                    <Overline tone=OverlineTone::Accent>{t(keys::check::YOUR_TRANSLATION, &[])}</Overline>
-                    {translation}
-                </div>
-            </div>
-        }
-        .into_any()
-    } else {
+    let compare = {
         let column = crate::css! { "display": "flex", "flex-direction": "column", "gap": 24 };
         let row = crate::css! {
             "display": "flex",
@@ -854,15 +821,15 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
             "box-shadow": "var(--shadow-card)",
         };
         view! {
-            <div data-testid="compare-card" style=column.to_style()>
-                <div data-testid="compare-sources" style=row.to_style()>{sources}</div>
-                <div data-testid="compare-translation" style=yours.to_style()>
-                    <Overline tone=OverlineTone::Accent>{t(keys::check::YOUR_TRANSLATION, &[])}</Overline>
-                    {translation}
-                </div>
+        <div data-testid="compare-card" style=column.to_style()>
+            <div data-testid="compare-sources" style=row.to_style()>{sources}</div>
+            <div data-testid="compare-translation" style=yours.to_style()>
+                <Overline tone=OverlineTone::Accent>{t(keys::check::YOUR_TRANSLATION, &[])}</Overline>
+                {translation}
             </div>
-        }
-        .into_any()
+        </div>
+    }
+    .into_any()
     };
 
     // ---- the marking row (#726)
@@ -924,11 +891,7 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
     // ---- the bookmark and the comment
     let marks = check_marks(s, actions, tool);
 
-    let page = if story {
-        crate::css! { "max-width": 760, "margin": "0 auto", "padding": "28px 32px 60px" }
-    } else {
-        crate::css! { "padding": "28px 32px 60px" }
-    };
+    let page = crate::css! { "padding": "28px 32px 60px" };
     view! {
         <div style=page.to_style()>
             {header}

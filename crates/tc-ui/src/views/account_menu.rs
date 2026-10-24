@@ -763,8 +763,8 @@ fn AboutDialog(focus_read: bool, on_read: Callback<()>, on_close: Callback<()>) 
     })
 }
 
-/// The LICENSE notice, then the whole GNU GPL version 2, in one region the keyboard can reach
-/// and scroll (#520). Closing it returns to About.
+/// The LICENSE text (the MIT license since tC4 #838), in one region the keyboard can reach and
+/// scroll (#520). Closing it returns to About.
 #[component]
 fn LicenseDialog(on_close: Callback<()>) -> impl IntoView {
     let footer: ChildrenFn = Arc::new(move || {
@@ -799,7 +799,7 @@ fn LicenseDialog(on_close: Callback<()>) -> impl IntoView {
     });
     crate::ds::Modal(crate::ds::ModalProps {
         title: Some((move || move || t(keys::about::LICENSE, &[])).into()),
-        width: Some(640.into()),
+        width: Some(720.into()),
         close_label: Some(close_label()),
         on_close: Some(on_close),
         footer: Some(footer),

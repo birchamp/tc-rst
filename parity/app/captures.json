@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "14e1c1a8b1d13ac2",
+    "ui": "13c176632f3754b6",
     "commit": "dev",
     "api": 1
   },
@@ -1249,9 +1249,9 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/en-obs-check-tn-session.png",
-      "sha256": "493e46a7b85805ed7e9e53c4572d98a26d6a0e21eac2b40466df606ab31b1908",
+      "sha256": "2f2ecf8613aae093aeac0f8868c5a1818fabfae98f32afadda5a54d3724797a4",
       "dom": "dom/en-obs-check-tn-session.json",
-      "domSha256": "c025ef21326c7bf7ddb87946012c1fe8e26b061d9044946d20d1e3920b96b0c5"
+      "domSha256": "31936e9398ca8d2629e53cac1d9c4d97a8f53564fcc6246bd157420b92afdd1e"
     },
     {
       "name": "ar-check-tw-session",
@@ -1814,15 +1814,15 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
-        "sample_burrito": "share",
-        "sample_burrito_obs": "share"
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
       },
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-state.png",
-      "sha256": "066607e8923c15a8d8d51bbbe4c1f0add0c08fdc6ea52917ff98fb9390966ff8",
+      "sha256": "01db6eebea570151f399e3aaecf6b85a01bc1fb8f16f1d6f982e7335e703ab82",
       "dom": "dom/open-progress-state.json",
-      "domSha256": "44b99ceacb7f580cecd0900166909c422f930f91d6a8cae02d1e17a56a95dc3a"
+      "domSha256": "e373bf3e4d1e6a2bb2ae6176893c66fce49b1e35cb2a262aaee8f2b2c1d69427"
     },
     {
       "name": "open-progress-prepare",
@@ -2131,9 +2131,9 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/license.png",
-      "sha256": "1cf6230ec868da018af3e4e23f35466aaea3eeadf2bf61c28adac9ccb8b37c72",
+      "sha256": "27aeb8e2ed89b9d1ef92466a7cf4c71d046382eb21557a5313914d222d2c7782",
       "dom": "dom/license.json",
-      "domSha256": "f01bf43f3ef783a68763d9f11874f2771e4527fef409c0bf2ab8dcc0fe54496b"
+      "domSha256": "7018b82f7d557a3cca19362d05c7daa6adf0f40a4023ecd72497271e76533c80"
     },
     {
       "name": "net-failed",
