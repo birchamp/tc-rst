@@ -4,7 +4,8 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 listed="$(grep -v '^#' scripts/ignored-tests.txt | grep -v '^$' | cut -f1 | sort -u)"
-found="$(cargo test --locked --workspace -- --list --ignored 2> /dev/null | sed -n 's/: test$//p' | sort -u)"
+# cargo's own errors stay on stderr, so a build that fails says why.
+found="$(cargo test --locked --workspace -- --list --ignored | sed -n 's/: test$//p' | sort -u)"
 status=0
 while read -r name; do
   [[ -z "$name" ]] && continue

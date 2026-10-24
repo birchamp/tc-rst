@@ -73,6 +73,7 @@ pub enum FieldKind {
     /// unifies tc-api's features across the workspace, so a crate built without its own test
     /// hooks may still see it and must match it. Only a test build reads it off the wire.
     #[cfg_attr(not(feature = "test-hooks"), serde(skip))]
+    #[cfg_attr(all(feature = "proptest", not(feature = "test-hooks")), proptest(skip))]
     Test,
 }
 

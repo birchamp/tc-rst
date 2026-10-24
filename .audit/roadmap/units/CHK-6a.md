@@ -4,7 +4,7 @@ title: Release builds without the test server, every ignored test named, PLAN's 
 track: A
 lane: checks
 milestone: M1
-state: verifying
+state: gating
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-6
 worktree: .worktrees/track-CHK-6
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (steps 1, 4 and 6 of CHK-6, already built)
 merged: none
 updated: 2026-10-24
-next: the review's verify line, then the merge on the orchestrator's turn: merge main in once, scripts/gates.sh --wait-ci CHK-6a, fast-forward main, push
+next: the merge on the orchestrator's turn: merge main in once, scripts/gates.sh --wait-ci CHK-6a, fast-forward main, push, report
 blocked_by: none
 ---
 
@@ -85,3 +85,5 @@ the screenshots that stand for "looks like tC4" are tied to the tC4 commit PLAN 
 ## Log
 
 - 2026-10-24 00:30 EDT | checks lane (Claude Code 2198ee19) | created | 019f3889 | Split from CHK-6 on the orchestrator's yes of 2026-10-24: CHK-6 steps 1, 4 and 6 (done, CI green on 95d6badd except one flake) and the C3 reload scenario's bound (019f3889) reach main now; steps 2, 3 and 5 stay in CHK-6 | .audit/roadmap/units/CHK-6.md
+- 2026-10-24 00:35 EDT | checks lane (Claude Code 2198ee19) | verify | 9f2cea4c | Independent review (a fresh general-purpose agent, read only, ran the node tests: 9 and 12 pass). 1 Code: FieldKind::Test is in every build; without test-hooks serde refuses it, and every reader parses entry by entry (tc-ui buffer.rs parse_item_key, current_lines, merge; tc-app drafts.rs offer), so an old stored entry loses only itself; stub is used only by tc-server's own tests. 2 Checks: the ignored step lists exactly the ignored tests, sits after test in CI's test job; PLAN's regex matches line 40. 3 Reach: a release build reading an old stored test entry: that entry is skipped. 4 Siblings: no other link to stub. 5 No loss: nothing can lose or rewrite a translator's data. 6 Prose: comments give reasons. No blockers, no majors; minors: proptest-derive ignores serde(skip), so cargo test -p tc-ui alone generated Test and failed; check-ignored.sh hid cargo's errors; bare test names; PLAN's wrap | .audit/minors.tsv
+- 2026-10-24 00:35 EDT | checks lane (Claude Code 2198ee19) | fix | none | FieldKind::Test also carries proptest(skip) without test-hooks: item_keys_are_unambiguous_for_any_folder_name passes with cargo test -p tc-ui alone; check-ignored.sh lets cargo's errors through. clippy, clippy-release-app, wasm-ui, wasm-ui-hooks and the ignored step pass; the other two minors are in minors.tsv | crates/tc-api/src/buffer.rs
