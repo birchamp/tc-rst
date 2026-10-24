@@ -8,7 +8,7 @@ state: parked
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-6
 worktree: .worktrees/track-CHK-6
-depends: [INT-4]
+depends: [INT-4, CHK-6a]
 needs_owner: []
 proves: [P7]
 no_loss: false
@@ -271,3 +271,4 @@ Plus: the gate step `ignored`; the recapture of step 5 on this PC; every journey
 - 2026-10-24 00:05 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | baseline.test.mjs "PLAN's reference commit is the baseline's": PLAN's "the reference is tC4 `main` at commit `<sha>`" is a prefix of manifest.json tc4.commit. Plant: PLAN's d310bf3 as a5ce030: "P7/INV-CAPTURES-FRESH: PLAN names reference a5ce030; the baseline was captured at d310bf304cfee784f4ca45dee474a3faf0d5616e"; reverted | node --test parity/tc4-baseline/baseline.test.mjs
 - 2026-10-24 00:05 EDT | checks lane (Claude Code 2198ee19) | park | none | Parked: steps 2, 3 and 5 wait (see next) | python3 -I .audit/tools/board.py
 - 2026-10-24 00:29 EDT | checks lane (Claude Code 2198ee19) | fix | none | CI on 95d6badd (run 40060957519) failed app::save_machine::c3_reload_anywhere_keeps_each_saved_field_once: "Elapsed" at the scenario's 30 s wall-clock bound (a Reference field, not the test field step 1 touched). Raised to 120 s with a "hung" message, as S2's branch already does for the verse scenario two hunks above (so the edits merge); ruling 2026-10-23 | gh run view 40060957519 --log-failed
+- 2026-10-24 00:30 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1, 4 and 6 and the C3 bound are card CHK-6a, merged on its own; this card keeps steps 2, 3 and 5 and depends on CHK-6a | .audit/roadmap/units/CHK-6a.md
