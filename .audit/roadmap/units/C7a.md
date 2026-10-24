@@ -4,7 +4,7 @@ title: Conflict choices: text and passage
 track: A
 lane: app
 milestone: M3
-state: gating
+state: done
 owner: C7a session (Claude Code 3058c665)
 branch: track-C7a
 worktree: .worktrees/track-C7a
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1, P2, P3]
 no_loss: true
 size: 3-4 sessions (basis: B11 and C4)
-merged: none
-updated: 2026-10-23
-next: Find why `op_counts::home::home_costs_projects_not_history` (crates/tc-app/tests/op_counts/home.rs:170) saw 11 summaries for 10 cards in the gate run (log .enjoy-logs/c7a-gates.log); C7a touches no Home code, so first rerun it alone on this tree; fix or log, then rerun scripts/gates.sh --journeys on the merge commit and fast-forward main; then tell s2-proof the main commit.
+merged: d07d6612
+updated: 2026-10-24
+next: none
 blocked_by: none
 ---
 
@@ -313,3 +313,4 @@ Plus:
 - 2026-10-23 10:20 EDT | C7a session (Claude Code 3058c665) | gate | none | the run started at 10:06 was stopped: the checklist gates the merge commit itself, so it runs on this commit instead; two other gate runs were alive (INT-4, G5), so it waits for a free slot | .enjoy-logs/c7a-gates.log
 - 2026-10-23 10:20 EDT | C7a session (Claude Code 3058c665) | merge | none | this commit is the merge commit (main b9491277 merged in, the work's tip 9edb6891); main moves to it by fast-forward once scripts/gates.sh --journeys passes here and --check-receipt exits 0, then the push under the push rule | scripts/gates.sh --check-receipt
 - 2026-10-23 15:40 EDT | C7a session (Claude Code 3058c665) | gate | 01388952 | failed at step 6/13 test: `op_counts::home::home_costs_projects_not_history` left 11 right 10 (summaries_computed for 10 cards); steps 1-5 passed; the card returns to gating, main did not move | .enjoy-logs/c7a-gates.log
+- 2026-10-24 14:54 EDT | integration lane (Claude Code 3d07d5f8) | merge | d07d6612 | merged into main in batch 1 (with fix-book-removal-unseen, DOM-2, C7a, G1, PLAN-FAST and FIX-R's partial merge ec916216), gated by scripts/gates.sh --wait-ci batch-1 on the batch's merge commit. | scripts/gates.sh --wait-ci batch-1
