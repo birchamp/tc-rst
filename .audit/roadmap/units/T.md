@@ -4,7 +4,7 @@ title: The storage side of the tC4 issue sweep (what is left)
 track: A
 lane: storage
 milestone: M2
-state: claimed
+state: building
 owner: S2 session (Claude Code add49644)
 branch: track-T
 worktree: /home/bot/tc-rst/.worktrees/track-T
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5-1 d (basis: 3ecdcae did two T items in one commit, +395 lines)
 merged: none
 updated: 2026-10-24
-next: Step 1: red first in crates/tc-journal/tests/screens_and_fold.rs (expect 0 where it says 168), then one review rule (AlignmentValue::needs_review).
+next: do step 2 (red first: an_empty_frame_is_spliced_as_tc4_writes_it in crates/tc-journal/tests/projection.rs).
 blocked_by: none
 ---
 
@@ -258,3 +258,4 @@ Plus `cargo test -p tc-align --release --test suggestion_budget -- --ignored --n
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
 - 2026-10-24 17:55 EDT | S2 session (Claude Code add49644) | claim | none | claimed on track-T from main 33d2378d (S2 on main), as the integration lane asked: the storage lane carries on with T, P, S3, DOM-1, DOM-2 in that order; also to decide here: C7a's finding that a save of a merged verse whose heads moved can never be stored (S2 card log, 2026-10-24 09:30) | .audit/roadmap/units/S2.md
+- 2026-10-24 19:40 EDT | S2 session (Claude Code add49644) | step 1 | none | the fold's `invalid` and the Align rail now share AlignmentValue::needs_review (staleness, or a held word the verse lacks or holds twice); tc_align::needs_review adds only the pin check; verse_words and all_target_words moved to tc-journal. Red first: the corpus test failed `words_not_the_verse: 168`, and with project.rs calling is_valid again both the corpus test and the_alignment_files_and_the_rail_agree_on_invalid fail. The loss-test fixture `alignment()` banked the whole phrase as one word; it now banks the verse's own words. screens_and_fold, tc-journal, tc-align, operation_counts (release) and workspace clippy pass | crates/tc-journal/src/alignment.rs

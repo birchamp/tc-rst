@@ -905,13 +905,17 @@ impl FoldState {
                     // The alignment covers as many verses as it did where it was made: a
                     // text that moved keeps its alignment valid at its new number.
                     let label_end = value.moved_span_end(v, rv).unwrap_or(rv);
-                    let valid = value.is_valid(&AlignedRun {
-                        anchor: v,
-                        run_start: rv,
-                        run_end: end,
-                        text_md5: text.facts(content).md5(),
-                        source_sha: ol_sha,
-                    });
+                    let words = crate::alignment::verse_words(&content);
+                    let valid = !value.needs_review(
+                        &AlignedRun {
+                            anchor: v,
+                            run_start: rv,
+                            run_end: end,
+                            text_md5: text.facts(content).md5(),
+                            source_sha: ol_sha,
+                        },
+                        &words,
+                    );
                     taken.insert((rc, rv));
                     plan.push((
                         value,
