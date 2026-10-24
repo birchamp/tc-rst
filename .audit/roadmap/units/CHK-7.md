@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: three workflow conditions, one script step, one stub script)
 merged: none
 updated: 2026-10-24
-next: Step 2: fast checks in wait_ci.
+next: Step 3: scripts/nightly-stub.sh and the nightly jobs' failure step.
 blocked_by: none
 ---
 
@@ -116,3 +116,4 @@ reach translators sooner, and no nightly failure goes unread.
 - 2026-10-24 | integration lane (Claude Code 3d07d5f8) | created | none | from the owner's test-process ruling, assigned by the orchestrator | rulings/2026-10-24-test-process.md
 - 2026-10-24 19:26 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-CHK-7, cut from batch/3 (UI-3a's cancel rule and PROCESS-6 are there); merges in the batch after 3 | python3 -I -B .audit/tools/board.py
 - 2026-10-24 19:28 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | ci.yml's test, alignment-budget and parity-baseline run only on main, gate/* and on request; app-e2e pushes only on main and gate/** (pull_request dropped); the cancel rule from UI-3a stays. gates-sync: INV-JOURNEYS-RUN checks the branches, new INV-FULL-TESTS-GATE-MERGES case; 39 pass. With the test job's condition removed: `INV-FULL-TESTS-GATE-MERGES: ci.yml job test runs on every push` | node --test .audit/tools/*.test.mjs
+- 2026-10-24 19:28 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | wait_ci runs board.py --check, claims.test.mjs and coverage.test.mjs before it pushes. With C7b set to building and owner none (scratch commit, undone): `gates: --wait-ci stops before pushing: board.py --check or the claims and coverage checks fail; run them to see why`, exit 1, and no gate/probe-chk7 branch was pushed | scripts/gates.sh --wait-ci probe-chk7
