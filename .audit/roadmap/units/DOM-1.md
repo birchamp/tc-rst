@@ -4,18 +4,18 @@ title: One network gate: all network code behind tc-door43
 track: A
 lane: domain
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: domain lane (Claude Code 9f599c21)
+branch: track-DOM-1
+worktree: .worktrees/track-DOM-1
 depends: [S2]
 needs_owner: []
 proves: []
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after S2 merges, then do step 1.
+updated: 2026-10-24
+next: Step 1, write crates/tc-door43/tests/http_get.rs red, then Http::get.
 blocked_by: none
 ---
 
@@ -295,3 +295,4 @@ no-network job exists (it proves no test reaches past the fakes).
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-domain.md
+- 2026-10-24 07:21 EDT | domain lane (Claude Code 9f599c21) | claim | none | Claimed in .worktrees/track-DOM-1 from main 29048562. Before-you-start: S2 done; reqwest only in aquifer.rs (21,22,209,281,303,429); git2 has no https anywhere (workspace line vendored-libgit2 only); tc-door43 has git2 in dev-deps only; proxy_auto at STORAGE.md 3716 and 3864; crates/tc-arch absent; S3 not active | python3 -I .audit/tools/board.py
