@@ -24,7 +24,7 @@
 use std::collections::HashSet;
 
 use serde::Deserialize;
-use tc_door43::{GitOid, ObjectId, RepoRef, VerifiedArchive, verify_archive};
+use tc_door43::{GitOid, RepoRef, VerifiedArchive, verify_archive};
 
 use crate::error::{ParseError, Refusal};
 use crate::pin::Sha256;
@@ -43,7 +43,7 @@ pub struct LockEntry {
     pub repo: RepoRef,
     pub commit: GitOid,
     /// The commit's git tree id, as Door43 reported it.
-    pub tree: ObjectId,
+    pub tree: GitOid,
     /// The archive's file name in the lock's folder. `None` for an archive the packaging
     /// step downloads.
     pub file: Option<String>,
@@ -185,10 +185,8 @@ impl RawEntry {
             // The lock is written by hand; a commit pasted in upper case is the same commit.
             commit: GitOid::parse_any_case(&self.commit)
                 .ok_or_else(|| format!("commit: {:?} is not a 40-digit commit sha", self.commit))?,
-            tree: self
-                .tree
-                .parse()
-                .map_err(|()| format!("tree {:?} is not a git object id", self.tree))?,
+            tree: GitOid::parse_any_case(&self.tree)
+                .ok_or_else(|| format!("tree {:?} is not a git object id", self.tree))?,
             file: self.file,
             sha256: self.sha256.parse().map_err(|e| format!("sha256: {e}"))?,
             size: self.size,

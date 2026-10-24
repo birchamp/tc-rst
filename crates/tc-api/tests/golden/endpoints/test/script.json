@@ -20,6 +20,12 @@
                 "Pablo, esclavo"
               ]
             },
+            "joined": {
+              "book": "TIT",
+              "chapter": 1,
+              "first": 4,
+              "last": 5
+            },
             "restored": 0
           }
         }

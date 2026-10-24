@@ -1,73 +1,32 @@
 //! Story and frame numbers, and the paths of an OBS project.
 
-use std::fmt;
-
 use serde_json::Value;
 use tc_helps::ObsRef;
 
+pub use tc_core::{FrameNo, StoryNo};
+
 /// The number of stories in Open Bible Stories (tC4 `journal/story.mjs:22`).
-pub const STORY_COUNT: u8 = 50;
+pub const STORY_COUNT: u8 = StoryNo::COUNT;
 
-/// A story, 1 to 50 (tC4 `storyNumberError`, `journal/story.mjs:28-31`). The same shape as
-/// STORAGE §2.2's `StoryNo`, so the journal can key its records by it.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct StoryNo(u8);
-
-impl StoryNo {
-    pub fn new(n: u8) -> Option<Self> {
-        (1..=STORY_COUNT).contains(&n).then_some(Self(n))
-    }
-
-    pub fn get(self) -> u8 {
-        self.0
-    }
-
-    /// Every story, in order.
-    pub fn all() -> impl Iterator<Item = StoryNo> {
-        (1..=STORY_COUNT).map(StoryNo)
-    }
-
-    /// The tc-helps and tc-check address of one frame of this story.
-    pub fn frame(self, frame: FrameNo) -> ObsRef {
-        // The story is 1 to 50 by construction, which is all `ObsRef::new` asks.
-        ObsRef::new(self.0, frame.0).unwrap_or_else(|| unreachable!("story {} is 1 to 50", self.0))
-    }
-}
-
-impl fmt::Display for StoryNo {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// A frame of a story. Frame 0 is the story's title, frames 1 and up are its paragraphs
-/// (tC4 `frameNumberError`, `journal/story.mjs:32-35`; STORAGE §2.2 `FrameNo`).
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct FrameNo(pub u16);
-
-impl FrameNo {
-    pub const TITLE: FrameNo = FrameNo(0);
-
-    pub fn is_title(self) -> bool {
-        self.0 == 0
-    }
-}
-
-impl fmt::Display for FrameNo {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
+/// The tc-helps and tc-check address of one frame of a story.
+pub fn obs_ref(story: StoryNo, frame: FrameNo) -> ObsRef {
+    // The story is 1 to 50 by construction, which is all `ObsRef::new` asks.
+    ObsRef::new(story.get(), frame.get())
+        .unwrap_or_else(|| unreachable!("story {story} is 1 to 50"))
 }
 
 /// The story and frame of a tc-helps address.
 pub fn story_frame(at: ObsRef) -> (StoryNo, FrameNo) {
-    (StoryNo(at.story()), FrameNo(at.frame()))
+    // An `ObsRef`'s story is 1 to 50 by construction.
+    let story = StoryNo::new(at.story())
+        .unwrap_or_else(|| unreachable!("an ObsRef's story {} is 1 to 50", at.story()));
+    (story, FrameNo::new(at.frame()))
 }
 
 /// `content/NN.md`, the story's path below `ingredients/` (tC4 `storyIpath`,
 /// `journal/story.mjs:37`; BURRITO-SPEC R-10.2.2).
 pub fn story_ipath(story: StoryNo) -> String {
-    format!("content/{:02}.md", story.0)
+    format!("content/{:02}.md", story.get())
 }
 
 /// The two-digit number of a `content/NN.md` path, else `None` (tC4 `storyNumberOf`,
@@ -113,7 +72,7 @@ mod tests {
         for story in StoryNo::all() {
             assert_eq!(story_number_of(&story_ipath(story)), Some(story.get()));
         }
-        assert_eq!(story_ipath(StoryNo(7)), "content/07.md");
+        assert_eq!(story_ipath(StoryNo::new(7).unwrap()), "content/07.md");
         assert_eq!(story_number_of("content/00.md"), Some(0));
         assert_eq!(story_number_of("content/99.md"), Some(99));
         for other in [

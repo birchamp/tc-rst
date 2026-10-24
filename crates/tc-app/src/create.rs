@@ -137,23 +137,6 @@ pub fn project_records(
     Ok(records)
 }
 
-/// A blank book with no text to take its shape from: every chapter of the versification and
-/// every verse of the chapter as the stub `___`, which is what tC4's platform wrote for a
-/// book (`add_cv`).
-pub fn skeleton(book: BookId, versification: &Versification) -> String {
-    let counts = BookCode::new(book.code())
-        .ok()
-        .and_then(|code| versification.verse_counts(code));
-    let mut out = format!("\\id {}\n", book.code());
-    for (index, verses) in counts.unwrap_or_default().iter().enumerate() {
-        out.push_str(&format!("\\c {}\n\\p\n", index + 1));
-        for verse in 1..=*verses {
-            out.push_str(&format!("\\v {verse} ___\n"));
-        }
-    }
-    out
-}
-
 /// What a request for a project's books names, apart from the books.
 fn quiet() -> ProgressSink {
     ProgressSink::new(Phase::Open(OpenPhase::ReadingChanges))
@@ -277,7 +260,13 @@ impl App {
                 };
                 let versification = versification
                     .unwrap_or_else(|| StandardScheme::DEFAULT.scheme().versification().clone());
-                Ok(skeleton(book, &versification))
+                Ok(tc_usfm::seed::skeleton(
+                    book,
+                    BookCode::new(book.code())
+                        .ok()
+                        .and_then(|code| versification.verse_counts(code))
+                        .unwrap_or_default(),
+                ))
             }
         }
     }
@@ -330,20 +319,6 @@ impl App {
     }
 }
 
-/// The book a USFM file's `\id` line names (tC4's parser reads the code of the line).
-fn id_book(header: &str) -> Option<BookId> {
-    header.lines().find_map(|line| {
-        let rest = line
-            .trim_start_matches('\u{feff}')
-            .trim_start()
-            .strip_prefix("\\id")?;
-        if !rest.starts_with(char::is_whitespace) {
-            return None;
-        }
-        rest.split_whitespace().next()?.parse().ok()
-    })
-}
-
 /// What an uploaded file is (tC4 `classifyUsfmFiles`' damage checks). The text comes back with
 /// the book, so the caller reads the file once.
 pub fn classify_usfm(bytes: Vec<u8>) -> (UsfmVerdict, Option<String>) {
@@ -359,7 +334,7 @@ pub fn classify_usfm(bytes: Vec<u8>) -> (UsfmVerdict, Option<String>) {
             });
         }
     };
-    let Some(book) = id_book(&parts.header) else {
+    let Some(book) = tc_usfm::seed::id_book(&parts.header) else {
         return refused(UsfmProblem::NoId);
     };
     if parts.chapters.is_empty() {

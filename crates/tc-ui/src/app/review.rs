@@ -8,12 +8,16 @@
 //! person here and on the sync result (#680, [`crate::app::sync::person_label`]).
 
 use tc_api::conflicts::{
-    ConflictEntry, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount, Version, VersionCause,
+    ConflictEntry, ConflictKind, KeepChoice, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount,
+    Version, VersionCause,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, RecordRef, RequestId};
-use tc_api::shown::Who;
+use tc_api::shown::{PersonLabel, Who};
+use tc_api::write::SaveRefusal;
+use tc_api::{ApiError, NotSaved};
 use tc_core::BookId;
 
+use crate::app::client::CallError;
 use crate::app::sync::person_label;
 use crate::i18n::{keys, t};
 
@@ -28,29 +32,323 @@ pub struct ReviewState {
     pub position: usize,
     /// The version clicked: the others fade.
     pub selected: Option<ChangeRef>,
-    /// A keep is in flight: Back, Previous, Next and Keep are off.
-    pub busy: bool,
-    /// What the last keep left to say, shown with or without a conflict left.
-    pub outcome: Option<KeepOutcome>,
-    /// The request of the last keep, with what it kept: a second press of the same choice
-    /// sends the same request, which the server answers with its first reply (A-27).
-    pub sent: Option<SentKeep>,
+    /// Where the last press stands.
+    pub keep: KeepPhase,
     /// The record whose History shows.
     pub history: Option<RecordRef>,
 }
 
+/// Where the last choice stands: tC4's `busy`, `keepOutcome` and the request it sent as one
+/// state, so a choice is never both in flight and answered. The first network-reply state of
+/// the UI; UI-3 generalises it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SentKeep {
-    pub conflict: ConflictRef,
-    pub change: ChangeRef,
+pub enum KeepPhase {
+    /// Nothing sent since the conflict showed.
+    Idle,
+    /// Sent and not answered: Back, Previous, Next and every choice are off.
+    InFlight(Sent),
+    /// Sent, and no usable answer came (the server did not answer, or the project was closed
+    /// under the review). The same press sends the same request again, and the server gives
+    /// its first reply if the choice was made (A-27); `error` says why it stopped.
+    ReplyLost { sent: Sent, error: String },
+    /// The server answered, with an `Ack` or a refusal: the next press is a new choice and a
+    /// new request, since the same one would get the same refusal again.
+    Answered { outcome: Option<KeepOutcome> },
+}
+
+/// A press on its way: what was pressed, under which request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sent {
+    pub press: Press,
     pub request: RequestId,
 }
 
-/// The outcome of the last keep: an error to show, and whether the version was kept anyway.
+/// What a press of the review asks for. Two presses are the same press when they ask for
+/// the same thing, so a lost reply's request goes again only for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeepOutcome {
-    pub kept: bool,
-    pub error: String,
+pub enum Press {
+    /// A choice on one conflict.
+    Keep {
+        conflict: ConflictRef,
+        choice: KeepChoice,
+    },
+    /// *Keep all of Maria's* over every conflict of the tab.
+    KeepAll { person: Who },
+}
+
+/// What the server's reply to a press came to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeepReply {
+    /// The choice was made; the disk may have complained afterwards.
+    Kept { disk_warning: Option<String> },
+    /// A bulk keep was made: `kept` of `sent` conflicts, the rest for a choice of their own.
+    KeptAll {
+        person: PersonLabel,
+        kept: u32,
+        sent: u32,
+        disk_warning: Option<String>,
+    },
+    /// The server refused, in these words.
+    Refused(String),
+    /// No usable answer, for this reason.
+    Lost(String),
+}
+
+/// What the last press left to say, shown with or without a conflict left.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeepOutcome {
+    /// "The version was not kept." and why.
+    NotKept(String),
+    /// Kept; the disk reported an error afterwards.
+    DiskWarning(String),
+    /// A bulk keep: whose version, in how many of the conflicts sent.
+    KeptAll {
+        person: PersonLabel,
+        kept: u32,
+        sent: u32,
+        disk_warning: Option<String>,
+    },
+}
+
+impl KeepPhase {
+    /// A press: the request to send, or `None` while one is in flight. After a lost reply the
+    /// same press sends the same request; any other press, and any press after an answer, is
+    /// a new request from `mint`.
+    pub fn press(&mut self, press: &Press, mint: impl FnOnce() -> RequestId) -> Option<RequestId> {
+        let sent = match self {
+            Self::InFlight(_) => return None,
+            Self::ReplyLost { sent, .. } if &sent.press == press => sent.clone(),
+            Self::Idle | Self::ReplyLost { .. } | Self::Answered { .. } => Sent {
+                press: press.clone(),
+                request: mint(),
+            },
+        };
+        let request = sent.request;
+        *self = Self::InFlight(sent);
+        Some(request)
+    }
+
+    /// The reply to `request`, the press in flight. A reply to another request (a press made
+    /// before the review was left and opened again) answers nothing here, and in any other
+    /// state there is nothing it answers.
+    pub fn reply(&mut self, request: RequestId, reply: KeepReply) {
+        let Self::InFlight(sent) = self else {
+            return;
+        };
+        if sent.request != request {
+            return;
+        }
+        let sent = sent.clone();
+        *self = match reply {
+            KeepReply::Kept { disk_warning } => Self::Answered {
+                outcome: disk_warning.map(KeepOutcome::DiskWarning),
+            },
+            KeepReply::KeptAll {
+                person,
+                kept,
+                sent,
+                disk_warning,
+            } => Self::Answered {
+                outcome: Some(KeepOutcome::KeptAll {
+                    person,
+                    kept,
+                    sent,
+                    disk_warning,
+                }),
+            },
+            KeepReply::Refused(error) => Self::Answered {
+                outcome: Some(KeepOutcome::NotKept(error)),
+            },
+            KeepReply::Lost(error) => Self::ReplyLost { sent, error },
+        };
+    }
+
+    /// Another conflict shows: an answer is no longer about it. A lost reply stays, so the
+    /// same press on the same conflict still sends the same request.
+    pub fn dismiss(&mut self) {
+        if let Self::Answered { .. } = self {
+            *self = Self::Idle;
+        }
+    }
+
+    /// A press is in flight: Back, Previous, Next and every choice are off.
+    pub fn busy(&self) -> bool {
+        matches!(self, Self::InFlight(_))
+    }
+
+    /// What the last press left to say.
+    pub fn outcome(&self) -> Option<KeepOutcome> {
+        match self {
+            Self::Idle | Self::InFlight(_) => None,
+            Self::ReplyLost { error, .. } => Some(KeepOutcome::NotKept(error.clone())),
+            Self::Answered { outcome } => outcome.clone(),
+        }
+    }
+}
+
+/// What a choice that was not made says after "The version was not kept.": a refusal in the
+/// API's words, else what stopped the call. One arm per variant, so a new kind of answer does
+/// not reach the screen as its debug text.
+pub fn failure_text(error: &CallError) -> String {
+    match error {
+        CallError::Api(ApiError::NotSaved(NotSaved::LookAgain)) => {
+            t(keys::conflicts::OTHER_KEPT, &[])
+        }
+        CallError::Api(ApiError::NotSaved(NotSaved::Refused(
+            SaveRefusal::Choice { reason } | SaveRefusal::InvalidText { reason },
+        ))) => reason.clone(),
+        CallError::Api(ApiError::NotSaved(NotSaved::Refused(SaveRefusal::IncoherentView))) => {
+            t(keys::review::refused::INCOHERENT, &[])
+        }
+        CallError::Api(ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook))) => {
+            t(keys::review::refused::LAST_BOOK, &[])
+        }
+        CallError::Api(ApiError::NotSaved(NotSaved::Disk(reason))) => {
+            t(keys::review::refused::DISK, &[("reason", reason)])
+        }
+        CallError::Api(ApiError::NotSaved(NotSaved::ReadOnly(reason))) => {
+            t(crate::app::offer::banner(*reason).sentence, &[])
+        }
+        CallError::Api(ApiError::NotSaved(
+            NotSaved::PlanStale | NotSaved::StaleScope | NotSaved::BadToken,
+        )) => t(keys::review::refused::LOOK_AGAIN, &[]),
+        CallError::Api(
+            api @ (ApiError::Version { .. }
+            | ApiError::BadRequest { .. }
+            | ApiError::StaleScope { .. }
+            | ApiError::StaleSession
+            | ApiError::ToolNotReady
+            | ApiError::RequestReused
+            | ApiError::Refused(_)
+            | ApiError::NeedsInternet(_)
+            | ApiError::NeedsSignIn(_)
+            | ApiError::Busy(_)
+            | ApiError::Unavailable(_)
+            | ApiError::Internal { .. }),
+        ) => api.to_string(),
+        CallError::Dropped => error.to_string(),
+        CallError::Transport(transport) => transport.to_string(),
+    }
+}
+
+/// What the server's reply came to: an answer, or no usable one. Only a reply from the API
+/// is an answer; a failed connection or a closed project may hide a choice that was made.
+pub fn keep_reply<T>(reply: Result<T, CallError>, kept: impl FnOnce(T) -> KeepReply) -> KeepReply {
+    match reply {
+        Ok(value) => kept(value),
+        Err(error @ CallError::Api(_)) => KeepReply::Refused(failure_text(&error)),
+        Err(error @ (CallError::Dropped | CallError::Transport(_))) => {
+            KeepReply::Lost(failure_text(&error))
+        }
+    }
+}
+
+/// What the footer offers for a conflict of the Text tab (STORAGE §8.3): one match on every
+/// kind, no wildcard, so a kind added later must say what it offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Choices {
+    /// *Keep this version* on the version clicked.
+    Candidate,
+    /// *Keep Maria's passage*: one button per person with a version.
+    PassageSides,
+    /// *Keep the joined verses* or *Keep the verses separate*, with the version clicked as
+    /// the pick where a verse holds several.
+    JoinedOrSeparate,
+    /// No choice in this version of translationCore (C7b): every version is kept.
+    Later,
+}
+
+pub fn choices(kind: ConflictKind) -> Choices {
+    match kind {
+        ConflictKind::VerseText
+        | ConflictKind::StructureIssue
+        | ConflictKind::BookHeader
+        | ConflictKind::ChapterFront
+        | ConflictKind::StoryBase
+        | ConflictKind::Frame
+        | ConflictKind::StoryRef => Choices::Candidate,
+        ConflictKind::Passage => Choices::PassageSides,
+        ConflictKind::VerseStructure => Choices::JoinedOrSeparate,
+        ConflictKind::BookPresence
+        | ConflictKind::BookRemovedWhileEdited
+        | ConflictKind::LastBookRemoved
+        | ConflictKind::BookLayout
+        | ConflictKind::Alignment
+        | ConflictKind::Check
+        | ConflictKind::CheckMoved
+        | ConflictKind::Comment
+        | ConflictKind::Pins
+        | ConflictKind::Setting
+        | ConflictKind::ProjectMeta
+        | ConflictKind::Versification
+        | ConflictKind::CarriedFile
+        | ConflictKind::PathCase
+        | ConflictKind::DeviceProfile
+        | ConflictKind::Unknown => Choices::Later,
+    }
+}
+
+/// The persons with a version in `entry`, each once in the order their versions are listed:
+/// the sides a passage choice and a bulk keep are offered for. A change no person made here
+/// (Door43, a file, an import) is no side.
+pub fn persons(entry: &ConflictEntry) -> Vec<PersonLabel> {
+    let mut out: Vec<PersonLabel> = Vec::new();
+    for version in &entry.versions {
+        if let MadeBy::Person(label) = &version.by
+            && !out.contains(label)
+        {
+            out.push(label.clone());
+        }
+    }
+    out
+}
+
+/// The changes of `person`'s versions in `entry`: a passage choice's picks.
+pub fn picks_of(entry: &ConflictEntry, person: &PersonLabel) -> Vec<ChangeRef> {
+    entry
+        .versions
+        .iter()
+        .filter(|v| matches!(&v.by, MadeBy::Person(label) if label == person))
+        .map(|v| v.change.clone())
+        .collect()
+}
+
+/// "Keep my passage" or "Keep Teammate 2’s passage".
+pub fn keep_passage_label(person: &PersonLabel) -> String {
+    match person.who {
+        Who::Mine if person.computer.is_none() => t(keys::review::KEEP_MY_PASSAGE, &[]),
+        _ => t(
+            keys::review::KEEP_PASSAGE,
+            &[("person", &person_label(person))],
+        ),
+    }
+}
+
+/// "Keep all of mine" or "Keep all of Teammate 2’s".
+pub fn keep_all_label(person: &PersonLabel) -> String {
+    match person.who {
+        Who::Mine if person.computer.is_none() => t(keys::review::KEEP_ALL_MINE, &[]),
+        _ => t(keys::review::KEEP_ALL, &[("person", &person_label(person))]),
+    }
+}
+
+/// What a bulk keep says: whose version was kept in how many of the conflicts sent; the
+/// rest are left for a choice of their own.
+pub fn kept_all_text(person: &PersonLabel, kept: u32, sent: u32) -> String {
+    match person.who {
+        Who::Mine if person.computer.is_none() => t(
+            keys::review::KEPT_ALL_MINE,
+            &[("kept", &kept), ("sent", &sent)],
+        ),
+        _ => t(
+            keys::review::KEPT_ALL,
+            &[
+                ("person", &person_label(person)),
+                ("kept", &kept),
+                ("sent", &sent),
+            ],
+        ),
+    }
 }
 
 impl ReviewState {
@@ -61,9 +359,7 @@ impl ReviewState {
             conflict,
             position: 0,
             selected: None,
-            busy: false,
-            outcome: None,
-            sent: None,
+            keep: KeepPhase::Idle,
             history: None,
         }
     }
@@ -91,42 +387,10 @@ impl ReviewState {
         self.position = position;
     }
 
-    /// The request a keep of `change` in `conflict` sends: the one sent for the same choice,
-    /// else a new one from `mint`.
-    pub fn request_for(
-        &mut self,
-        conflict: &ConflictRef,
-        change: &ChangeRef,
-        mint: impl FnOnce() -> RequestId,
-    ) -> RequestId {
-        match &self.sent {
-            Some(sent) if &sent.conflict == conflict && &sent.change == change => sent.request,
-            _ => {
-                let request = mint();
-                self.sent = Some(SentKeep {
-                    conflict: conflict.clone(),
-                    change: change.clone(),
-                    request,
-                });
-                request
-            }
-        }
-    }
-
-    /// The server answered the last keep, with an `Ack` or a refusal: the next press is a new
-    /// choice and sends a new request. With no answer (a lost reply) the next press sends the
-    /// same request, and the server gives its first reply if the keep was made (A-27).
-    pub fn answered(&mut self) {
-        self.sent = None;
-    }
-
     /// Another tab: its first entry shows.
     pub fn choose_tab(&mut self, tab: ReviewTab) {
         if self.tab != tab {
-            *self = Self {
-                outcome: None,
-                ..Self::at(tab, None)
-            };
+            *self = Self::at(tab, None);
         }
     }
 }

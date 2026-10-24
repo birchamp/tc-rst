@@ -74,21 +74,33 @@ Every crate lives in `crates/`. Arrows read "is used by".
 | `tc-check` | Building tN and tW checks, selections, decisions, invalidation. |
 | `tc-align` | Alignment editing, keeping alignments across edits, suggestions. |
 | `tc-obs` | Open Bible Stories: stories and frames. |
-| `tc-sync` | Door43 send and receive, and USB exchange. |
-| `tc-import` | tC4 4.0, tC3, raw USFM and Scripture Burrito import. |
+| `tc-sync` | Door43 send and receive, and USB exchange. (Unit X; not built yet.) |
+| `tc-import` | tC4 4.0, tC3, raw USFM and Scripture Burrito import. (Unit I; not built yet.) |
 | `tc-export` | The print model of a book or an OBS project, with its page setup; aligned and plain USFM, Burrito zip, OBS Markdown, print HTML for PDF. |
 | `tc-api` | Request and response types shared by the server and the UI. Builds for wasm32. |
 | `tc-app` | Application services: the operations behind every screen. |
 | `tc-server` | The axum HTTP server: routes, token check, events to the UI. |
 | `tc-ui` | The Leptos UI: tC4's screens and design system, with tC4's CSS, fonts and catalogs. |
 | `tc4` | The program: starts the server and the shell. |
+| `tc-corpus` | The deterministic scale corpus of `PERFORMANCE.md`, for tests and benchmarks only. |
+| `tc-arch` | Tests of the rules below; no product code. |
 
 Dependency rules:
 
 - `tc-ui` depends only on `tc-api` and `tc-core`, so the UI cannot touch storage directly.
-- Only `tc-store` writes project files, and only `tc-door43` opens network connections.
+- Only `tc-store` writes project files. Only `tc-door43` opens network connections, HTTP
+  through `tc_door43::Http` and sync's git through `tc_door43::git`, and only behind its
+  internet switch; `tc-resources`' Aquifer client sends through `Http`.
 - Pure logic (`tc-usfm`, `tc-versification`, `tc-helps`, `tc-journal`'s fold, `tc-check`,
   `tc-align`, `tc-obs`, `tc-export`) does no I/O and is tested with plain values.
+
+`crates/tc-arch` tests these rules on every `cargo test`: the crate edges, the network and I/O
+libraries, the workspace edition, lints and shared versions, I/O in pure crates, the files
+allowed to write (`crates/tc-arch/allow/fs_writes.txt`), the internals that stay in their owning
+crate (`crates/tc-arch/allow/imports.txt`), and the local server's guard. Each failure names its
+rule. Typed capabilities (a `ProjectWriter` only `tc-store` can build, a `Net` only `tc-door43`
+can build) make the write and network rules compile-time: see card DOM-3; `tc-arch`'s scans are
+the stopgap and the catch-all.
 
 ## UI
 

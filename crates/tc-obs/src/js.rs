@@ -2,27 +2,7 @@
 
 use std::cmp::Ordering;
 
-/// `WhiteSpace` and `LineTerminator` of ECMAScript: what `String.prototype.trim` removes
-/// and what `\s` matches. Rust's `char::is_whitespace` differs: it treats U+0085 as
-/// whitespace and U+FEFF as not.
-pub(crate) fn is_space(c: char) -> bool {
-    matches!(
-        c,
-        '\u{9}' | '\u{a}' | '\u{b}' | '\u{c}' | '\u{d}' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200a}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202f}'
-                | '\u{205f}'
-                | '\u{3000}'
-                | '\u{feff}'
-    )
-}
-
-/// `String.prototype.trim`.
-pub(crate) fn trim(text: &str) -> &str {
-    text.trim_matches(is_space)
-}
+pub(crate) use tc_core::js::{is_space, trim};
 
 /// tC4's one blank-line predicate (`journal/story.mjs:46`): the line trims to nothing.
 pub(crate) fn is_blank(line: &str) -> bool {

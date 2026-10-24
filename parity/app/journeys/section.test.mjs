@@ -138,12 +138,14 @@ browserTest('a_failed_cancel_keeps_the_card_buffer_and_draft_until_retry', async
     assert.equal(await typing(page, '9–10').inputValue(), wanted);
     assert.ok((await storageDump(page)).includes(NINE));
     const draftFile = path.join(env.projectsDir, BIBLE, '.tc', 'drafts.json');
-    assert.ok(JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted));
+    // The draft writer writes on a timer, so the file is read until it holds the card.
+    const drafted = () => fs.existsSync(draftFile) && JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted);
+    await until('the card is drafted on the server', drafted);
     assert.equal((await verseOf(env, '9')).words.value, '___');
     await card(page).getByRole('button', { name: 'Retry', exact: true }).click();
     await card(page).waitFor({ state: 'detached' });
     assert.ok(!(await storageDump(page)).includes(NINE));
-    assert.ok(!JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted));
+    await until('the draft is gone after the retried Cancel', () => !drafted());
   });
 });
 

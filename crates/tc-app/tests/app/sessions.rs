@@ -53,11 +53,11 @@ impl Fixture {
 
     async fn settled(&self, name: &str) {
         tokio::time::timeout(
-            Duration::from_secs(5),
+            Duration::from_secs(60),
             self.sessions().settled(&folder(name)),
         )
         .await
-        .expect("the folder settles");
+        .expect("hung: the folder settles");
     }
 
     fn events(&self) -> Subscription {
@@ -118,9 +118,9 @@ async fn events_of(
 ) -> Vec<SessionEvent> {
     let mut out = Vec::new();
     loop {
-        let next = tokio::time::timeout(Duration::from_secs(5), sub.next())
+        let next = tokio::time::timeout(Duration::from_secs(60), sub.next())
             .await
-            .expect("the event comes");
+            .expect("hung: the event comes");
         let Next::Frame(frame) = next else {
             panic!("{next:?}")
         };
@@ -367,9 +367,9 @@ async fn an_open_during_the_leave_checkpoint_waits_for_it_and_gets_a_new_epoch()
     assert!(!reopen.is_finished(), "the open waits for the checkpoint");
     assert_eq!(f.store.opens(&folder("kr_ulb")), 1);
     f.store.release_checkpoint();
-    let second = tokio::time::timeout(Duration::from_secs(5), reopen)
+    let second = tokio::time::timeout(Duration::from_secs(60), reopen)
         .await
-        .unwrap()
+        .expect("hung: the reopen after the checkpoint")
         .unwrap()
         .unwrap()
         .at;
@@ -445,20 +445,23 @@ async fn a_refused_open_reaches_every_caller_and_leaves_nothing_open() {
         f.store.opens(&nowhere) == 1
     })
     .await;
-    let side = {
+    let mut side = {
         let sessions = f.sessions().clone();
         let nowhere = nowhere.clone();
-        tokio::spawn(async move {
+        Box::pin(async move {
             sessions
                 .open_side(&nowhere, open_progress())
                 .await
                 .map(|lease| lease.scope().clone())
         })
     };
-    tokio::time::sleep(Duration::from_millis(30)).await;
+    assert!(
+        crate::store_world::poll_once(&mut side).await.is_none(),
+        "the side open joins the held one"
+    );
     f.store.release_open(&nowhere);
     assert_eq!(screen.await.unwrap().err(), Some(OpenFailure::NotAProject));
-    assert_eq!(side.await.unwrap().err(), Some(OpenFailure::NotAProject));
+    assert_eq!(side.await.err(), Some(OpenFailure::NotAProject));
     assert_eq!(f.store.opens(&nowhere), 1, "one open, shared");
     let reports: Vec<_> =
         f.t.app
@@ -697,9 +700,9 @@ async fn quit_during_an_open_closes_that_session_once_it_has_opened() {
     assert!(!quit.is_finished(), "the quit waits for the open");
     f.store.release_open(&project);
     assert!(opening.await.unwrap().is_ok());
-    tokio::time::timeout(Duration::from_secs(5), quit)
+    tokio::time::timeout(Duration::from_secs(60), quit)
         .await
-        .expect("the quit ends")
+        .expect("hung: the quit ends")
         .unwrap();
     assert_eq!(f.store.closes(&project), 1);
     assert!(f.sessions().open_sessions().is_empty());

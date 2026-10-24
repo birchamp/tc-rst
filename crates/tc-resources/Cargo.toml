@@ -12,7 +12,6 @@ tc-door43 = { path = "../tc-door43" }
 tc-helps = { path = "../tc-helps" }
 # The pin model and the D30 ladder, shared with the fold and the Check screens.
 tc-journal = { path = "../tc-journal" }
-reqwest = { workspace = true, features = ["rustls", "system-proxy"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -24,6 +23,9 @@ zip.workspace = true
 axum = { workspace = true, features = ["http1", "tokio"] }
 md-5.workspace = true
 proptest.workspace = true
+# Two tests read the fake directly (tests/dcs_install.rs, tests/updates.rs); the crate
+# itself sends through tc_door43::Http.
+reqwest = { workspace = true, features = ["rustls", "system-proxy"] }
 tempfile.workspace = true
 tc-door43-fake = { path = "../tc-door43-fake" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time"] }

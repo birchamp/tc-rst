@@ -82,13 +82,16 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 
 | ID | Item | Lane | Depends on | Size |
 |---|---|---|---|---|
-| CHK-1 | Architecture and I/O boundary checks | checks | INT-4 | 0.5-1 d |
+| CHK-1 | Architecture and I/O boundary checks | checks | INT-4, CHK-1a | 0.5-1 d |
+| CHK-1a | Architecture, I/O and network checks in tc-arch, and ARCHITECTURE.md matching the code | checks | INT-4 | 0.5 d |
 | CHK-2 | Every written project is validated (P5) | checks | S2 | 1-2 d |
-| CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4 | 1 d |
+| CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4, CHK-3a | 1 d |
+| CHK-3a | Claimed tests must exist: TC4-ISSUES, the done cards, the P-ledger and the tC4 journey map | checks | INT-4 | 0.5 d |
 | CHK-4 | Deterministic and fast tests | checks | INT-4 | 2-3 d |
 | CHK-5 | Nightly, Windows and no-network jobs; the mutation executor runs nightly | checks | S2, INT-3 | 1-2 d |
 | CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4, CHK-6a | 1 d |
 | CHK-6a | Release builds without the test server, every ignored test named, PLAN's reference checked | checks | INT-4 | 0.5 d |
+| CHK-4b | tc-app's tests wait for events, never for a short clock | checks | CHK-4 | 0.5 d |
 | UI-1 | Typed jobs and one job follower | app | INT-4, C7a | 1 d |
 | UI-2 | Ports for sync, share, exchange and import | app | UI-1 | 1-2 d |
 | UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced | app | UI-1 | 2 d |
@@ -138,7 +141,7 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 |---|---|---|---|
 | G5 | Browser journeys in CI, with no skips allowed | INT-2 | 2 d |
 | G1 | The Electronite shell | INT-7 | 20-30 commits |
-| G3 | Release pipeline and installers | G1, owner H3, H4 | 1-2 weeks |
+| G3 | Release pipeline and installers | G1 | 1-2 weeks |
 | G4 | The P8 Graphite probe and right-to-left project journeys | G1 | 2-3 d |
 
 G5 is the most valuable check the project lacks. If Track B has not started it by the end of M0,
@@ -153,6 +156,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path
@@ -233,7 +237,7 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 | H9 | Freeze project format 1.0 | Freeze when T, X and I have landed and V's sample projects pass. If not frozen: no public release. A build may go to named testers only, with "preview" in About and the capsule set named 1.0-draft; a preview project is kept readable by 1.0 through V's older-reader job, or the tester is told it will be imported. DONE waits | V (step 8) |
 | H10 | Who translates the 155 interface strings the rebuild added, in nine languages? | Answered: the owner does the translations himself, soon; the release workflow builds no tagged installer while a rebuild key is untranslated; no English allowlist: `rulings/2026-10-22-H10.md` | G2 (step 4, before the Arabic captures), G3 (the `publish` job and its "Receive the translations" step), DONE |
 | H11 | Fetch the `keyring` crate for "Stay signed in", or let the shell keep the token? | Fetch `keyring` | E1a |
-| H12 | In Check, does a Psalm verse whose words sit on poetry lines count as drafted? Home already says yes; Check says no | Yes, everywhere | FIX-R |
+| H12 | In Check, does a Psalm verse whose words sit on poetry lines count as drafted? Home already says yes; Check says no | Answered: `rulings/2026-10-23-H12.md` ("poetry - yes, everywhere") | FIX-R |
 | H13 | A project imported with no versification file: guess the scheme from its contents and say so, or use English as tC4 does? | Guess, and say which scheme was chosen | I |
 | H14 | Opening a Door43 project under a new name: change only the card, or the project's own name too (#837)? | Only the card, as tC4 does today | E1b |
 | H15 | The help-desk key for "Report a problem" (tC4 sends it through SendGrid) | Use the same service; the owner provides the key to the release pipeline | G1 |

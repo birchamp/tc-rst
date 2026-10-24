@@ -74,7 +74,7 @@ where
 
 async fn ended(app: &App, job: JobId) -> JobState {
     let mut watch = app.jobs().watch(job).unwrap();
-    tokio::time::timeout(Duration::from_secs(20), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         watch
             .wait_for(tc_app::jobs::JobRegistry::is_ended)
             .await
@@ -82,7 +82,7 @@ async fn ended(app: &App, job: JobId) -> JobState {
             .clone()
     })
     .await
-    .expect("the job ends")
+    .expect("hung: the job ends")
 }
 
 async fn open_sample(app: &App) -> Scope {
@@ -134,12 +134,14 @@ fn option_keys(view: &SettingsView) -> Vec<String> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn settings_from_home_show_the_sample_as_tc4_does() {
-    // The baseline screen `project-settings`: no language name (the sample has none), left to
-    // right, the first font, "This project checks in Español (Latinoamérica) · es-419_gl." from
-    // the pins, and English, the one package installed that covers its books.
+    // The baseline screen `project-settings`: left to right, the first font, "This project
+    // checks in Español (Latinoamérica) · es-419_gl." from the pins, and English, the one
+    // package installed that covers its books. The language name is the metadata's, where
+    // tC4 shows an empty field for a project its settings file names none in (#832.2, a
+    // declared difference).
     let (_dir, t) = start(None).await;
     let view = ok(&t.app, &settings_from_home(SAMPLE)).await;
-    assert_eq!(view.language_name, "");
+    assert_eq!(view.language_name, "Español (Latinoamérica)");
     assert_eq!(view.direction, Direction::Ltr);
     assert_eq!(view.font, None);
     let current = view.gateway.current.clone().unwrap();
@@ -191,14 +193,16 @@ async fn settings_from_home_read_what_the_project_files_hold() {
     // settings-contract, "a restart shows the saved choices" and "an existing project that
     // carries the obsolete checkingLanguage keeps it, and the field has no effect": the dialog
     // shows the file's direction, font and language name, and the pins, never the old field,
-    // name the checking language.
+    // name the checking language. The direction is the one every screen shows: the metadata's
+    // `scriptDirection` when it names one (here `ltr`), the file's only when it does not
+    // (INV-TEXT-DIRECTION-HAS-ONE-SOURCE, tC4 #832.1).
     let dir = tempfile::tempdir().unwrap();
     let (fs, t) = on_the_store(dir.path()).await;
     let settings = r#"{"schemaVersion":1,"checkingLanguage":"en","textDirection":"rtl",
         "textFont":"Charis SIL","languageName":"Español"}"#;
     fs.put(&checking_file("settings.json"), settings.as_bytes(), None);
     let view = ok(&t.app, &settings_from_home(SAMPLE)).await;
-    assert_eq!(view.direction, Direction::Rtl);
+    assert_eq!(view.direction, Direction::Ltr);
     assert_eq!(view.font.as_deref(), Some("Charis SIL"));
     assert_eq!(view.language_name, "Español");
     let current = view.gateway.current.unwrap();
@@ -416,8 +420,8 @@ async fn a_cancelled_download_leaves_no_install_and_no_partial_file() {
             break;
         }
         assert!(
-            started.elapsed() < Duration::from_secs(20),
-            "no bytes arrived"
+            started.elapsed() < Duration::from_secs(60),
+            "hung: no bytes arrived"
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }

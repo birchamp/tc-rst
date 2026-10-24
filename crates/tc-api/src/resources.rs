@@ -251,7 +251,7 @@ pub struct UpdatesView {
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub texts: Vec<TextOffer>,
     /// Why the texts could not be asked about, said beside the set offers, which stand.
-    pub texts_error: Option<String>,
+    pub texts_error: Option<crate::refusal::UpdateCheckFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -55,7 +55,6 @@ mod repack;
 pub mod reply;
 mod scan;
 pub mod seal;
-pub mod seed;
 pub mod source;
 pub mod store;
 mod temps;

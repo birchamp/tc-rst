@@ -172,6 +172,8 @@ macro_rules! endpoint_table {
             query "conflicts/history": $crate::conflicts::History
                 => $crate::conflicts::HistoryView;
             command "conflicts/resolve": $crate::conflicts::Resolve => $crate::write::Ack;
+            command "conflicts/resolveBulk": $crate::conflicts::ResolveBulk
+                => $crate::conflicts::BulkKept;
 
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;

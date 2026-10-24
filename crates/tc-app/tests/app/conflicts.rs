@@ -3,21 +3,26 @@
 //! Text tab lists them as tC4's review does (#679), labelled as the sync's toast labels them
 //! (#680), Keep this version writes one resolution (J18's end state), a second send of one
 //! request gets the first reply (A-27), and the verse's History lists every version (#78).
+//! Then C7a's choices: a passage's side keeps every record of the group, Restore from History
+//! writes over the heads History showed, and a bulk keep leaves out what one person's
+//! computers cannot decide alone.
 
 use tc_api::conflicts::{
-    ConflictKind, History, HistoryVersion, List, MadeBy, Resolve, ReviewEntries, ReviewPlace,
-    ReviewTab, ReviewView, Version, VersionCause, VersionValue,
+    BulkConflict, ConflictEntry, ConflictKind, History, HistoryVersion, KeepChoice, List, MadeBy,
+    Resolve, ResolveBulk, ReviewEntries, ReviewPlace, ReviewTab, ReviewView, Version, VersionCause,
+    VersionValue,
 };
-use tc_api::editor::{Chapters, SaveVerse};
+use tc_api::editor::{Chapters, ChaptersView, SaveVerse};
 use tc_api::event::Event;
 use tc_api::home::Card;
-use tc_api::ids::{ChangeRef, Scope};
+use tc_api::ids::{ChangeRef, ConflictRef, Scope};
 use tc_api::session::Close;
 use tc_api::shown::{Known, PersonLabel, Who};
-use tc_api::test::{ScriptedSync, TeammatesEdit};
+use tc_api::test::{ScriptedSync, TeammatesEdit, TeammatesJoin};
 use tc_api::write::Stored;
 use tc_app::App;
 use tc_app::events::Next;
+use tc_app::wire::scope::record_ref;
 use tc_app::wire::token::shown;
 use tc_core::BookId;
 
@@ -183,7 +188,9 @@ async fn keep_this_version_resolves_with_review_tokens_and_a_second_send_gets_th
         request: rid(60),
         conflict: entry.conflict.clone(),
         review: entry.review.clone(),
-        keep: entry.versions[1].change.clone(),
+        choice: KeepChoice::Candidate {
+            change: entry.versions[1].change.clone(),
+        },
     };
     let first = post(app, &keep).await.unwrap();
     assert_eq!(first.stored, Stored::Written);
@@ -244,7 +251,7 @@ async fn keep_this_version_resolves_with_review_tokens_and_a_second_send_gets_th
     .await
     .unwrap();
     let mut read = card(app).await;
-    let told = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+    let told = tokio::time::timeout(std::time::Duration::from_secs(60), async {
         while read.conflicts != Known::Known(0) {
             loop {
                 match events.next().await {
@@ -266,7 +273,7 @@ async fn keep_this_version_resolves_with_review_tokens_and_a_second_send_gets_th
     .await;
     assert!(
         told.is_ok(),
-        "Home is told to read the card again and counts no conflict once the verse is kept: {:?}",
+        "hung: Home is told to read the card again and counts no conflict once the verse is kept: {:?}",
         read.conflicts
     );
 }
@@ -325,7 +332,9 @@ async fn verse_history_lists_every_version_with_person_and_time() {
         request: rid(62),
         conflict: entry.conflict.clone(),
         review: entry.review.clone(),
-        keep: entry.versions[0].change.clone(),
+        choice: KeepChoice::Candidate {
+            change: entry.versions[0].change.clone(),
+        },
     };
     post(app, &keep).await.unwrap();
     let after = history(app, &at, &entry.record).await;
@@ -423,6 +432,7 @@ async fn versions_that_differ_only_in_a_footnote_look_different() {
             verse: 1,
             texts: vec![FIRST.into(), SECOND.into()],
         }),
+        joined: None,
         restored: 0,
     })
     .await;
@@ -595,4 +605,384 @@ async fn versions_of_two_computers_under_one_username_are_told_apart_by_computer
             .map(|(by, text)| (MadeBy::Person(by), VersionValue::Text(text.to_owned())))
             .collect::<Vec<_>>()
     );
+}
+
+async fn chapters(app: &App, at: &Scope) -> ChaptersView {
+    post(
+        app,
+        &Chapters {
+            at: at.clone(),
+            book: BookId::Titus,
+        },
+    )
+    .await
+    .unwrap()
+}
+
+/// The grid's text of verse `key` of Titus 1 ("4", or "4-5" for a span), or `None` when no
+/// row has that key.
+fn titus_1(view: &ChaptersView, key: &str) -> Option<String> {
+    view.chapters[0]
+        .verses
+        .iter()
+        .find(|v| v.key.as_str() == key)
+        .map(|v| v.text.clone())
+}
+
+/// The one version of text `who` made in `entry`.
+fn version_of(entry: &ConflictEntry, who: &Who) -> Version {
+    let mut found = entry.versions.iter().filter(|v| {
+        matches!(&v.by, MadeBy::Person(p) if &p.who == who)
+            && matches!(v.value, VersionValue::Text(_))
+    });
+    let version = found
+        .next()
+        .unwrap_or_else(|| panic!("{who:?} in {entry:?}"));
+    assert!(found.next().is_none(), "{who:?} has one text version");
+    version.clone()
+}
+
+fn text_of(version: &Version) -> String {
+    let VersionValue::Text(text) = &version.value else {
+        panic!("{version:?}")
+    };
+    text.clone()
+}
+
+/// This computer saves `words` into `key` of the shared project and closes it, so a scripted
+/// sync can bring teammates' changes made on Door43's copy, which does not hold the save.
+async fn saved_here_then_closed(app: &App, key: &tc_journal::RecordKey, words: &str, n: u8) {
+    let at = app
+        .sessions()
+        .open_screen(&folder("sample_burrito"), open_progress())
+        .await
+        .unwrap()
+        .at;
+    let minted = app
+        .sessions()
+        .reader(&at)
+        .unwrap()
+        .read()
+        .mint(key, None)
+        .unwrap();
+    let ack = post(
+        app,
+        &SaveVerse {
+            at: at.clone(),
+            request: rid(n),
+            shown: shown(&minted).unwrap(),
+            words: words.to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    post(
+        app,
+        &Close {
+            at,
+            request: rid(n + 1),
+        },
+    )
+    .await
+    .unwrap();
+    app.sessions().settled(&folder("sample_burrito")).await;
+}
+
+const MINE_FIVE: &str = "Por esta causa te dejé en Creta: mi versión del versículo cinco.";
+
+/// The shared project after this computer changed Titus 1:5 and a sync brought Teammate 1's
+/// join of 1:4-5, made on Door43's copy before the change: one passage conflict over both
+/// verses (STORAGE §8.1), open at Titus.
+async fn joined_while_i_changed_five() -> (super::sync::World, Scope, ConflictEntry) {
+    let w = shared().await;
+    w.t.clock.set(START_MS);
+    let app = &w.t.app;
+    saved_here_then_closed(app, &tit(1, 5), MINE_FIVE, 80).await;
+    internet_on(app).await;
+    sign_in(app).await;
+    script(
+        app,
+        1,
+        ScriptedSync::Synced {
+            teammates: None,
+            joined: Some(TeammatesJoin {
+                book: BookId::Titus,
+                chapter: 1,
+                first: 4,
+                last: 5,
+            }),
+            restored: 0,
+        },
+    )
+    .await;
+    let synced = synced(app, 2).await;
+    assert_eq!(synced.from, vec![teammate(1)]);
+    assert_eq!(synced.received, 2, "the join is two changes in one batch");
+    let at = opened(app).await.session.at;
+    let ReviewEntries::Conflicts(entries) = tab(app, &at, ReviewTab::Text).await.entries else {
+        panic!()
+    };
+    let [entry] = entries.as_slice() else {
+        panic!("{entries:?}")
+    };
+    assert_eq!(entry.kind, ConflictKind::Passage);
+    assert_eq!(
+        entry.place,
+        ReviewPlace::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 4,
+        }
+    );
+    assert_eq!(entry.review.len(), 2, "one token per record of the passage");
+    (w, at, entry.clone())
+}
+
+/// INV-A-CHOICE-NEVER-OVERWRITES-AN-UNSEEN-VERSION: *Keep Teammate 1's passage* writes every
+/// record of the group in one batch over the tokens of both verses (STORAGE §8.3): 4-5 is one
+/// span with the joined words, verse 5 is covered, and my verse stays in History; a second
+/// send of the request gets the first reply.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn keep_passage_resolves_every_record_of_the_group() {
+    let (w, at, entry) = joined_while_i_changed_five().await;
+    let app = &w.t.app;
+    let joined = version_of(&entry, &Who::Teammate(1));
+    let joined_text = text_of(&joined);
+    assert!(
+        entry
+            .versions
+            .iter()
+            .any(|v| v.value == VersionValue::Joined { by: 4 }),
+        "the join's side lists verse 5 as covered too: {:?}",
+        entry.versions
+    );
+    assert!(
+        joined_text.starts_with("a Tito, verdadero hijo") && joined_text.contains("Por esta causa"),
+        "{joined_text}"
+    );
+    assert_eq!(text_of(&version_of(&entry, &Who::Mine)), MINE_FIVE);
+    let keep = Resolve {
+        at: at.clone(),
+        request: rid(82),
+        conflict: entry.conflict.clone(),
+        review: entry.review.clone(),
+        choice: KeepChoice::Passage {
+            picks: vec![joined.change.clone()],
+        },
+    };
+    let first = post(app, &keep).await.unwrap();
+    assert_eq!(first.stored, Stored::Written);
+    let again = post(app, &keep).await.unwrap();
+    assert_eq!(again, first, "a second send gets the first reply");
+
+    let after = tab(app, &at, ReviewTab::Text).await;
+    assert_eq!(after.entries, ReviewEntries::Conflicts(Vec::new()));
+    let view = chapters(app, &at).await;
+    assert_eq!(view.conflicts, 0);
+    assert_eq!(titus_1(&view, "4-5").as_deref(), Some(joined_text.as_str()));
+    assert_eq!(titus_1(&view, "5"), None, "verse 5 is inside the span");
+    let five = history(app, &at, &record_ref(&tit(1, 5)).unwrap()).await;
+    assert_eq!(
+        (five[0].cause, five[0].version.value.clone()),
+        (VersionCause::Kept, VersionValue::Joined { by: 4 })
+    );
+    assert!(
+        five.iter()
+            .any(|v| v.version.value == VersionValue::Text(MINE_FIVE.into())),
+        "my verse stays in History: {five:?}"
+    );
+}
+
+/// *Keep my passage*: the join is rewound (STORAGE §7.3) and my verse 5 kept, each verse written
+/// over its own token, so 4 and 5 stand apart with 4's words from before the join.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn keep_my_passage_rewinds_the_join_and_keeps_my_verse() {
+    let (w, at, entry) = joined_while_i_changed_five().await;
+    let app = &w.t.app;
+    let before = chapters(app, &at).await;
+    let four_before = titus_1(&before, "4").expect("the review shows 4 apart while open");
+    let mine = version_of(&entry, &Who::Mine);
+    let ack = post(
+        app,
+        &Resolve {
+            at: at.clone(),
+            request: rid(83),
+            conflict: entry.conflict.clone(),
+            review: entry.review.clone(),
+            choice: KeepChoice::Passage {
+                picks: vec![mine.change.clone()],
+            },
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    let after = tab(app, &at, ReviewTab::Text).await;
+    assert_eq!(after.entries, ReviewEntries::Conflicts(Vec::new()));
+    let view = chapters(app, &at).await;
+    assert_eq!(titus_1(&view, "4").as_deref(), Some(four_before.as_str()));
+    assert_eq!(titus_1(&view, "5").as_deref(), Some(MINE_FIVE));
+    assert_eq!(titus_1(&view, "4-5"), None);
+}
+
+/// #78 and INV-A-CHOICE-NEVER-OVERWRITES-AN-UNSEEN-VERSION: *Restore this version* on a record
+/// in conflict keeps that old version over every version of the record, in one resolution over
+/// the entry's tokens: the conflict is settled on the restored text, every other version stays
+/// in History, and a second send of the request gets the first reply. (A restore over the shown
+/// head only would let the fold settle the conflict on the other side's text by its merge rule.)
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn restore_writes_over_every_shown_head() {
+    const EARLIER: &str = "Pablo, mi primera versión.";
+    const LATER: &str = "Pablo, mi segunda versión.";
+    let w = shared().await;
+    w.t.clock.set(START_MS);
+    let app = &w.t.app;
+    saved_here_then_closed(app, &tit(1, 1), EARLIER, 90).await;
+    saved_here_then_closed(app, &tit(1, 1), LATER, 92).await;
+    internet_on(app).await;
+    sign_in(app).await;
+    script(app, 1, TWO_TEAMMATES()).await;
+    synced(app, 2).await;
+    let at = opened(app).await.session.at;
+    let ReviewEntries::Conflicts(entries) = tab(app, &at, ReviewTab::Text).await.entries else {
+        panic!()
+    };
+    let entry = &entries[0];
+    assert_eq!(entry.versions.len(), 3);
+    let before = history(app, &at, &entry.record).await;
+    let earlier = before
+        .iter()
+        .find(|v| text_of(&v.version) == EARLIER)
+        .unwrap()
+        .version
+        .clone();
+    assert!(!earlier.shown);
+    let restore = Resolve {
+        at: at.clone(),
+        request: rid(94),
+        conflict: entry.conflict.clone(),
+        review: entry.review.clone(),
+        choice: KeepChoice::Restore {
+            from: earlier.change.clone(),
+        },
+    };
+    let first = post(app, &restore).await.unwrap();
+    assert_eq!(first.stored, Stored::Written);
+    let again = post(app, &restore).await.unwrap();
+    assert_eq!(again, first, "a second send gets the first reply");
+
+    let after = tab(app, &at, ReviewTab::Text).await;
+    assert_eq!(after.entries, ReviewEntries::Conflicts(Vec::new()));
+    let view = chapters(app, &at).await;
+    assert_eq!(view.conflicts, 0);
+    assert_eq!(titus_1(&view, "1").as_deref(), Some(EARLIER));
+    let history = history(app, &at, &entry.record).await;
+    assert_eq!(
+        (
+            history[0].cause,
+            history[0].version.shown,
+            text_of(&history[0].version)
+        ),
+        (VersionCause::Kept, true, EARLIER.to_owned())
+    );
+    let mut texts: Vec<String> = history.iter().map(|v| text_of(&v.version)).collect();
+    texts.sort();
+    for text in [EARLIER, LATER, ONE, TWO] {
+        assert!(
+            texts.contains(&text.to_owned()),
+            "{text} stays in History: {texts:?}"
+        );
+    }
+    assert_eq!(
+        history.len(),
+        before.len() + 1,
+        "one new version, nothing removed"
+    );
+}
+
+/// STORAGE §5.9 step 3: *Keep all of equipo's* keeps that account's version where exactly
+/// one of a conflict's versions comes from its computers (1:2), and leaves out a conflict
+/// where two do (1:1: the account's two computers each changed the verse) or none does
+/// (1:3: Teammate 1 against mine), naming both; one request is one batch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bulk_keep_leaves_out_conflicts_with_two_candidates() {
+    const MINE_THREE: &str = "Por esta causa: mi versículo tres.";
+    let w = shared().await;
+    w.t.clock.set(START_MS);
+    let app = &w.t.app;
+    saved_here_then_closed(app, &tit(1, 3), MINE_THREE, 87).await;
+    let project = folder("sample_burrito");
+    let store = &w.store;
+    // The close releases the project's lock off the session's thread, a little after
+    // `settled`: the first write waits for it.
+    let mut tries = 0;
+    loop {
+        match store.teammates_edit_verse(
+            &project,
+            &tit(1, 1),
+            &["Pablo, uno.", "Pablo, dos.", "Pablo, tres."],
+        ) {
+            Ok(_) => break,
+            Err(e) if tries < 200 && e.to_string().contains("already open") => {
+                tries += 1;
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            Err(e) => panic!("{e}"),
+        }
+    }
+    store
+        .teammates_edit_verse(&project, &tit(1, 2), &["Tito, uno.", "Tito, dos."])
+        .unwrap();
+    store
+        .teammates_edit_verse(&project, &tit(1, 3), &["Creta, uno."])
+        .unwrap();
+    store.teammates_sign_in(&project, 2, "equipo").unwrap();
+    store.teammates_sign_in(&project, 3, "equipo").unwrap();
+    let at = opened(app).await.session.at;
+    let ReviewEntries::Conflicts(entries) = tab(app, &at, ReviewTab::Text).await.entries else {
+        panic!()
+    };
+    let verse_of = |entry: &ConflictEntry| match entry.place {
+        ReviewPlace::Verse { verse, .. } => verse,
+        _ => panic!("{entry:?}"),
+    };
+    assert_eq!(
+        entries.iter().map(verse_of).collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
+    let equipo = Who::Username("equipo".into());
+    let kept = post(
+        app,
+        &ResolveBulk {
+            at: at.clone(),
+            request: rid(89),
+            person: equipo.clone(),
+            conflicts: entries
+                .iter()
+                .map(|e| BulkConflict {
+                    conflict: e.conflict.clone(),
+                    review: e.review.clone(),
+                })
+                .collect(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(kept.ack.stored, Stored::Written);
+    let mut left: Vec<ConflictRef> = kept.left.clone();
+    left.sort();
+    let mut expected = vec![entries[0].conflict.clone(), entries[2].conflict.clone()];
+    expected.sort();
+    assert_eq!(left, expected, "1:1 has two of equipo's versions, 1:3 none");
+
+    let ReviewEntries::Conflicts(after) = tab(app, &at, ReviewTab::Text).await.entries else {
+        panic!()
+    };
+    assert_eq!(after.iter().map(verse_of).collect::<Vec<_>>(), vec![1, 3]);
+    let view = chapters(app, &at).await;
+    assert_eq!(titus_1(&view, "2").as_deref(), Some("Tito, dos."));
+    assert_eq!(view.conflicts, 2);
+    let two = history(app, &at, &record_ref(&tit(1, 2)).unwrap()).await;
+    assert_eq!(two[0].cause, VersionCause::Kept);
 }

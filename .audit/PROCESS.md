@@ -1,3 +1,5 @@
+History: superseded by .audit/roadmap/ on 2026-10-21; do not update.
+
 # Building the rebuild
 
 This is the operating policy for the next completed-stage boundary. It changes how work is

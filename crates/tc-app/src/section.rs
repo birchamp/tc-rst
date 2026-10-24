@@ -317,8 +317,16 @@ impl Handle<SaveSection> for App {
         .requested_by(req.request);
         match handle.submit(command).await {
             Ok(reply) => {
+                // The card names the section's first verse, with that verse's own text (#831).
                 if let Some(first) = tokens.first() {
-                    self.record_translate_edit(&session, first, &req.text, self.inner.clock.now());
+                    let words = match session.read().projected(first.key()) {
+                        Some(tc_journal::Record::Verse {
+                            value: tc_journal::record::VerseValue::Text { words, .. },
+                            ..
+                        }) => words,
+                        _ => String::new(),
+                    };
+                    self.record_translate_edit(&session, first, &words, self.inner.clock.now());
                 }
                 wire::write::section_ack(&reply, &session.read(), &tokens, &req.text, me).map_err(
                     |e| {
