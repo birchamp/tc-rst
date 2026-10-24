@@ -4,7 +4,7 @@ title: CI runs the full tests only on gates and main; fast checks before a gate;
 track: A
 lane: integration
 milestone: M1
-state: verifying
+state: gating
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-CHK-7
 worktree: .worktrees/track-CHK-7
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: three workflow conditions, one script step, one stub script)
 merged: none
 updated: 2026-10-24
-next: One verify pass, then the batch after batch 3. Item 4 (the daily trial merge) is a standing duty of the integration lane, not code; item 5 is answered in the log.
+next: Merge in the batch after batch 3.
 blocked_by: none
 ---
 
@@ -119,3 +119,5 @@ reach translators sooner, and no nightly failure goes unread.
 - 2026-10-24 19:28 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | wait_ci runs board.py --check, claims.test.mjs and coverage.test.mjs before it pushes. With C7b set to building and owner none (scratch commit, undone): `gates: --wait-ci stops before pushing: board.py --check or the claims and coverage checks fail; run them to see why`, exit 1, and no gate/probe-chk7 branch was pushed | scripts/gates.sh --wait-ci probe-chk7
 - 2026-10-24 19:32 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | scripts/nightly-stub.sh writes units/NIGHTLY-<date>-<job>.md (state todo, the run URL, the log lines naming a seed or a failure), adds it to DONE's depends, commits on nightly/<date>-<job> and pushes; the two nightly jobs tee their log (bash with pipefail) and call it on a scheduled failure, with contents: write for that job only. In a scratch clone with a fake log and --no-push: the card is written with the seed and panic lines, and board.py --check shows 0 errors | scripts/nightly-stub.sh model-long <log> --no-push
 - 2026-10-24 19:32 EDT | integration lane (Claude Code 3d07d5f8) | note | none | item 5 of the orchestrator's brief: op_counts::align::align_save_costs_one_verse and its _while_model_training_is_held variant pass in every main and gate ci run since batch 1 (40127991235, 40133930168, 40136425572, 40139145271: 2 ok each); fix-book-removal-unseen's hold of draft writes fixed it | gh run view <id> --log
+- 2026-10-24 19:37 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | one pass by a fresh read-only reviewer agent: the if: expressions are valid; track pushes run only the three lint jobs; nightly conditions and cancel rules intact; nothing relies on app-e2e PR runs; the fast checks run from the repo root and stop before the push; nightly-stub works in a shallow detached clone; gates-sync cases fail when they should. §8: code: the receipt needed a branch filter; checks: none tested the receipt against a lint-only run; reach fine; siblings: the receipt and the wait loop were missed; no-loss N/A; prose fine. One blocker: ci_receipt and wait_ci accepted any green push run of the sha, so a lint-only track run of the same commit could stand as the receipt. One major: python3 may be missing on windows-latest. Minors: a same-day rerun hits an existing branch; two failing jobs conflict on DONE; PRs now get lint only, unstated | reviewer report in this session
+- 2026-10-24 19:37 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | blocker: the receipt's runs carry their head_branch and green_run_for accepts only gate/* and main; wait_ci waits only for runs on gate/<card>; gates-script.test.mjs adds "a track run is no receipt" (it fails with the branch check removed). Major: the stub uses python3 or python. Minors: the branch is nightly/<date>-<job>-<run id>; ci.yml says PRs run the lints only; the DONE conflict is logged as a minor | node --test .audit/tools/*.test.mjs

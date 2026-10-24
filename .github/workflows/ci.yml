@@ -3,6 +3,7 @@ permissions:
   contents: read
 on:
   push:
+  # A pull request runs the lints only: the full tests run where they gate a merge (main, gate/*).
   pull_request:
   # The Windows test run, once a night; workflow_dispatch lets anyone run it on a branch.
   schedule:
