@@ -4,7 +4,7 @@ title: Import tC3 projects and update a book from USFM (tc-import)
 track: A
 lane: storage
 milestone: M2
-state: fixing
+state: gating
 owner: domain lane (Claude Code 9f599c21)
 branch: track-I
 worktree: .worktrees/track-I
@@ -16,7 +16,7 @@ no_loss: true
 size: 4-7 d (basis: B1a's seed took about 2 h; §13.1 is the bulk; +1 to +2 d for Update a book, docs/STORAGE-DELTA-2026-10-21.md §6)
 merged: none
 updated: 2026-10-24
-next: Hand track-I to the integration lane for a batch after DOM-2's.
+next: The integration lane merges it in a batch after DOM-2's; in the merge commit set state done and merged to this branch's tip.
 blocked_by: none
 ---
 
