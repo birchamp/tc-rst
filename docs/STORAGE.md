@@ -3690,9 +3690,14 @@ everything else.
 
 Crate: `git2 = { version = "=0.21.0", default-features = false, features =
 ["vendored-libgit2"] }` in `tc-store` (libgit2 1.9.7, probed in the research). TLS comes with
-`tc-door43`'s fetch and push (unit X), not with `tc-store`. Network calls (fetch, push, list)
-live in `tc-door43` behind the internet switch; they receive the `git2::Repository` that
-`tc-store` opened. `tc-sync` orchestrates. The app never
+`tc-door43`, the only crate that turns on git2's `https` (OpenSSL built from source on Linux),
+not with `tc-store`. Network calls (`tc_door43::git::{fetch, push, ls_remote}`) live in
+`tc-door43` behind the internet switch; they receive the `git2::Repository` that `tc-store`
+opened and the `tc_door43::Http` of the session's Door43 client. Each call is refused before
+any request while the switch is off, checks it again in libgit2's callbacks (credentials,
+transfer progress, push negotiation, side band), and goes through the proxy that
+`Http::proxy_for` names, the same PAC/WPAD finder every HTTP request uses, never libgit2's own
+lookup. A pack already being pushed cannot be stopped; the last check is push negotiation. `tc-sync` orchestrates. The app never
 calls `checkout`, `merge`, `rebase` or `stash` on a project, and git's content merge never runs.
 
 ### 9.1 Steps
@@ -3713,7 +3718,7 @@ S3  Fetch:
       cb.credentials(|_url, _user, _allowed| Cred::userpass_plaintext(&username, token.expose()));
       cb.transfer_progress(|p| { progress(p.received_objects(), p.total_objects()); true });
       let mut fo = FetchOptions::new();
-      fo.remote_callbacks(cb).download_tags(AutotagOption::None).proxy_options(proxy_auto());
+      fo.remote_callbacks(cb).download_tags(AutotagOption::None).proxy_options(/* Http::proxy_for */);
       origin.fetch(&[format!("+refs/heads/{b}:refs/remotes/origin/{b}")], Some(&mut fo), None)?;
     Errors: ErrorCode::Auth or HTTP 401 → `sync.auth-failed`; 404 → `sync.remote-missing`;
     a network error → `sync.unreachable`. Nothing local has changed. Fetch sends credentials,
@@ -3861,7 +3866,7 @@ let remote_text = RefCell::new(String::new());
 cb.sideband_progress(|text| { remote_text.borrow_mut().push_str(&String::from_utf8_lossy(text)); true });
 cb.push_transfer_progress(|cur, total, bytes| progress_push(cur, total, bytes));
 let mut po = PushOptions::new();
-po.remote_callbacks(cb).proxy_options(proxy_auto());
+po.remote_callbacks(cb).proxy_options(/* Http::proxy_for */);
 let res = origin.push(&[format!("refs/heads/{b}:refs/heads/{b}")], Some(&mut po));
 ```
 
@@ -5382,7 +5387,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule, the draft test `is_drafted`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1` and the shown text `shown_text_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
 | `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking (edit and review kinds), the command types, the scope digests and heads lists of derived files (§6.2), the per-chapter range reads the screens and the store use (`chapters_of`, `chapter_keys`, `decisions_of`, `alignments_of`, `comments_of`, `book_keys`, APP-DESIGN R1), each costing what it returns. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
-| `tc-store` | `Vfs`, `StdFs`, `FaultFs`, `atomic_write`, the project lock, the device identity and the ledger, `Store` (open, create in a staging folder renamed without replacing, the start cleanup, a copy of a read-only project), the project actor and its commands, the `ProjectHandle` surface (§5.0), the draft writer, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, the detection of changed files, their kept copies and the import of a kept copy (§11.1, §13.6), drafts, identity, local git (tree build, commit, index, repack, object database access; no TLS: it comes with `tc-door43`'s fetch and push, unit X) |
+| `tc-store` | `Vfs`, `StdFs`, `FaultFs`, `atomic_write`, the project lock, the device identity and the ledger, `Store` (open, create in a staging folder renamed without replacing, the start cleanup, a copy of a read-only project), the project actor and its commands, the `ProjectHandle` surface (§5.0), the draft writer, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, the detection of changed files, their kept copies and the import of a kept copy (§11.1, §13.6), drafts, identity, local git (tree build, commit, index, repack, object database access; no TLS: it comes with `tc-door43`'s fetch and push) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the notice of a file changed on Door43 or in an exchange file by another tool (§11.2, §11.3), `ExchangeReport` |
 | `tc-import` | the tC4 4.0 converter and oracle check, the tC4 seed, tC3, raw USFM, foreign burritos |
@@ -5390,8 +5395,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-resources` | installing, verifying, loading and upgrading resources; its pins read and write `tc-journal`'s `Pins` and `ResourcesExtra` values (`ProjectPins::group_value`, `resources_extra`), its rungs, slots and groups are `tc-journal`'s, and it resolves with `tc-journal`'s ladder (`impl Ladder for ProjectPins`; installed coverage only when it opens a tool on this computer). It counts no decision: the cost of a gateway change is `tc-check`'s |
 | `tc-corpus` | the deterministic scale corpus of `docs/PERFORMANCE.md` (Psalms, ten times Psalms, the whole Bible of §14) as journal packs and pending files and as plain domain inputs, every part labelled; for tests and benchmarks only (`publish = false`) |
 
-Dependencies: `git2 =0.21.0` (default features off; `vendored-libgit2` in `tc-store`; TLS
-comes with `tc-door43`'s fetch and push, unit X, not with `tc-store`), `jsonschema =0.58.6` (default features off), `sha2`, `md-5`,
+Dependencies: `git2 =0.21.0` (default features off; `vendored-libgit2` in `tc-store`; `https`,
+and `vendored-openssl` on Linux, only in `tc-door43`, for its fetch and push), `jsonschema =0.58.6` (default features off), `sha2`, `md-5`,
 `hmac`, `im`, `smallvec`, `rayon`, `postcard`, `zip`, `getrandom`, `notify`, `machine-uid`,
 `sysinfo`, `uuid`, `unicode-normalization`, `caseless` or an equivalent default case folding
 (path collisions, §3.3), `rustix` (cache-bypassing reads, §10.1 E5), `similar` (display-only

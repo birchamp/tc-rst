@@ -1,8 +1,8 @@
 //! Door43 (DCS, a Gitea fork) HTTP client, and the app's session internet switch.
 //!
-//! This is one of the two crates allowed to use the network (the other is
-//! `tc-resources`). Everything it sends goes through [`Door43Client`], which refuses
-//! every request while the [`InternetSwitch`] is off. The switch starts off in each
+//! This is the only crate that uses the network. Every request leaves through [`Http`]
+//! (Door43's REST client, [`Door43Client`], and `tc-resources`' Aquifer client) or through
+//! [`git`] (sync's fetch and push), and each is refused while the [`InternetSwitch`] is off. The switch starts off in each
 //! session and is never stored (decision D95).
 //!
 //! What the client does, and the Door43 routes it uses:
