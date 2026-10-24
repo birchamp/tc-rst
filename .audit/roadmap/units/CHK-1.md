@@ -8,13 +8,13 @@ state: parked
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-1
 worktree: .worktrees/track-CHK-1
-depends: [INT-4]
+depends: [INT-4, CHK-1a]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5-1 d
 merged: none
-updated: 2026-10-23
+updated: 2026-10-24
 next: do step 5 after S2 merges (crates/tc-store and crates/tc-journal clippy.toml), then the review, then ask the orchestrator for a merge turn; branch track-CHK-1, worktree .worktrees/track-CHK-1
 blocked_by: none
 ---
@@ -319,3 +319,4 @@ Plus: `cargo test -p tc-arch` passes, and each planted violation of steps 1, 3 a
 - 2026-10-23 23:06 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | ARCHITECTURE.md: rows for tc-corpus and tc-arch; tc-sync and tc-import marked not built yet; the network rule names tc-resources until DOM-1 and the internet switch; a paragraph names crates/tc-arch, its two allow files, and DOM-3's typed capabilities as the compile-time fix | docs/ARCHITECTURE.md
 - 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | step 4 | 6c23dfbe | The gate list ran in CI on the pushed branch (INT-8: GitHub runs are the gate): ci 40056985489 and app-e2e 40056985483 both success, so tc-arch's tests pass on Linux and its code passes the Windows clippy | gh run view 40056985489
 - 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | park | 6c23dfbe | Parked as the card says: step 5 edits crates/tc-store while S2 is merging, not done | python3 -I .audit/tools/board.py
+- 2026-10-24 00:31 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1-4 and 6 are card CHK-1a, merged on its own; this card keeps the rest and depends on CHK-1a | .audit/roadmap/units/CHK-1a.md

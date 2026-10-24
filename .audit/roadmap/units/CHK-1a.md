@@ -1,0 +1,71 @@
+---
+id: CHK-1a
+title: Architecture, I/O and network checks in tc-arch, and ARCHITECTURE.md matching the code
+track: A
+lane: checks
+milestone: M1
+state: verifying
+owner: checks lane (Claude Code 2198ee19)
+branch: track-CHK-1
+worktree: .worktrees/track-CHK-1
+depends: [INT-4]
+needs_owner: []
+proves: []
+no_loss: false
+size: 0.5 d (steps 1-4 and 6 of CHK-1, already built)
+merged: none
+updated: 2026-10-24
+next: the review's verify line, then the merge on the orchestrator's turn: merge main in once, scripts/gates.sh --wait-ci CHK-1a, fast-forward main, push
+blocked_by: none
+---
+
+# CHK-1a: Architecture, I/O and network checks in tc-arch, and ARCHITECTURE.md matching the code
+
+## Goal
+
+The parts of CHK-1 that need no other card, split off so they reach main now (the
+orchestrator's yes of 2026-10-24): CHK-1 steps 1-4 and 6. Step 5 (clippy.toml in tc-store and tc-journal) stays in CHK-1 until S2 merges.
+
+## Why it matters to a translator
+
+A translator's project is written only through the crash-safe path and the network only behind the internet switch; tc-arch fails a change that breaks either, naming the rule.
+
+## Before you start
+
+- `units/CHK-1.md`: its steps 1-4 and 6 and their log lines are this card's work.
+
+## Funnel card
+
+- **Invariants**:
+  - INV-ARCHITECTURE, INV-PURE-CRATES-DO-NO-IO, INV-ATOMIC-WRITES (the source scan), INV-ONE-PARSER-OWNER, INV-LOCAL-SERVER-IS-CLOSED: as `units/CHK-1.md` states them.
+- **Wrong states**:
+  - A new crate edge, an I/O call in a pure crate, an unlisted file write, a parser internal used outside its crate, or a route outside the server's guard.
+- **Code**:
+  - See `units/CHK-1.md` "Code"; this card holds the parts its steps 1-4 and 6 built.
+- **Checks**:
+  - `crates/tc-arch/tests/architecture.rs` (six tests) and `crates/tc-arch/tests/io_boundaries.rs` (four tests); kind: architecture; runs in: CI job `test`.
+  - `request_without_token_is_401` in `crates/tc-server/tests/security.rs`, now over every registered path.
+  - Proof it can fail: CHK-1's log, the planted failures of its steps 1-4 and 6.
+- **Prose**: none beyond CHK-1's.
+- **Human**: none.
+
+## Steps
+
+### Step 1: Done on track-CHK-1
+
+- Do: CHK-1 steps 1-4 and 6 (`units/CHK-1.md`).
+- Done when: CI is green on the branch; the review's verify line is written.
+- Record: CHK-1's log holds each step; this card's log holds the split, the review and the merge.
+
+## Gates before merge
+
+`scripts/gates.sh --wait-ci CHK-1a` on the merge commit (INT-8), and the review gate of
+`FUNNEL.md` §8: a `verify` log line before `done`.
+
+## Stop and ask when
+
+- A gate fails twice in a row and you cannot tell why.
+
+## Log
+
+- 2026-10-24 00:31 EDT | checks lane (Claude Code 2198ee19) | created | 98eca717 | Split from CHK-1 on the orchestrator's yes of 2026-10-24: CHK-1 steps 1-4 and 6 (done, CI green) reach main now; Step 5 (clippy.toml in tc-store and tc-journal) stays in CHK-1 until S2 merges. | .audit/roadmap/units/CHK-1.md
