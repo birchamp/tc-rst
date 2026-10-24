@@ -4,18 +4,18 @@ title: Door43 sync and USB exchange (tc-sync)
 track: A
 lane: storage
 milestone: M2
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: S2 session (Claude Code add49644)
+branch: track-X
+worktree: /home/bot/tc-rst/.worktrees/track-X
 depends: [S2, DOM-1, T]
 needs_owner: []
 proves: [P2, P3, P4, P5]
 no_loss: true
 size: 4-6 d (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; H18 unsupported removes the Door43 intake walk, docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d)
 merged: none
-updated: 2026-10-24
-next: Claim this card after S2, DOM-1 and T merge, then do step 1. Steps 1 to 3 run beside S3; steps 4 to 8 wait for S3's "core merged" note.
+updated: 2026-10-25
+next: do step 1 (sweep), then step 2 (crates/tc-sync, the state machine).
 blocked_by: none
 later: ["S3 from step 4"]
 ---
@@ -464,3 +464,5 @@ features and with each of `--features gallery`, `--features app`, `--features te
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | note | none | step 5 item 2b: a Door43 repository with no main refuses (gap-tc4-straggler state 3b); `later: S3 from step 4` so the board shows the step-4 wait | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
 - 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: your rows in docs/TC4-ISSUES.md and docs/P-LEDGER.md are (pending: X); when you write a test, replace the marker with its name in the same commit. .audit/tools/claims.test.mjs fails once this card is done while a marker remains | node --test .audit/tools/claims.test.mjs
 - 2026-10-24 00:37 EDT | checks lane (Claude Code 2198ee19) | note | none | Correction to CHK-3's note above: X's only marker is in docs/P-LEDGER.md (P2); docs/TC4-ISSUES.md names X in unit cells, not in (pending: X) markers | grep -n 'pending: X' docs/P-LEDGER.md docs/TC4-ISSUES.md
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
+- 2026-10-25 11:30 EDT | S2 session (Claude Code add49644) | claim | none | claimed on track-X, cut from track-T (e1ffc583) with main 0189cee4 merged in (DOM-1 is on main; T rides in batch 2), as the orchestrator asked under the fast-release ruling (rulings/2026-10-24-H3-H4-H7-fast-release.md): S3 parked, steps 4-8 build on the current store; one review for the card; first report when the sync half works against tc-door43-fake (E1a waits on it) | .audit/roadmap/units/X.md
