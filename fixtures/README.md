@@ -22,7 +22,7 @@ of `tc4/test-fixtures/` come from tC4 commit `9ad4d5c506466819e5b10f255bbb4a36d3
 
 Licenses: the content licenses are in `tc4/LICENSE-CONTENT.md`. unfoldingWord resources
 (ULT, UST, UHB, UGNT, tN, tW, tA, tQ, TWL, OBS) are CC BY-SA 4.0, © unfoldingWord. The
-`.mjs` generator scripts are tC4 code under GPL-2.0-or-later, kept for provenance.
+`.mjs` generator scripts are tC4 code, MIT since tC4 #838, kept for provenance.
 
 ## `obs/`
 
