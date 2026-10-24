@@ -4,18 +4,18 @@ title: Every written project is validated (P5)
 track: A
 lane: checks
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: checks lane (Claude Code 2198ee19)
+branch: track-CHK-2
+worktree: .worktrees/track-CHK-2
 depends: [S2]
 needs_owner: []
 proves: [P5]
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after S2 merges, then do step 1.
+updated: 2026-10-24
+next: step 1
 blocked_by: none
 ---
 
@@ -242,3 +242,4 @@ G5's `app-e2e` job green if G5 has merged.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
+- 2026-10-24 06:11 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-2 from main 33d2378d (S2 done). Overlap noted: C7a's branch edits tc-api's test.rs and lib.rs and tc-app tests/app/sync.rs; FIX-R's edits sources.rs, align_store.rs, upgrades.rs and create.rs among the store builders; whichever merges second resolves the small conflicts | python3 -I .audit/tools/board.py
