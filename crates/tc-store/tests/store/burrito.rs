@@ -1,4 +1,4 @@
-//! Burrito validity everywhere (`docs/STORAGE.md` §16.6, I7): every state the store finishes
+//! INV-VALID-BURRITO: burrito validity everywhere (`docs/STORAGE.md` §16.6, I7): every state the store finishes
 //! writing is a valid Scripture Burrito, and no value a person, a teammate or a program puts
 //! into a project's details can stop `metadata.json` or a commit.
 //!

@@ -91,6 +91,7 @@ async fn a_request_goes_through_the_proxy_the_finder_names() {
     assert_eq!(finder.asked(), ["https://door43.test/"]);
 }
 
+/// INV-ONE-PROXY-FINDER: git goes through the proxy the finder names, as every request does.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_git_fetch_goes_through_the_proxy_the_finder_names() {
     let proxy = FakeProxy::start().await.unwrap();

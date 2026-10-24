@@ -144,6 +144,7 @@ async fn a_refused_push_reads_as_door43s_refusal() {
     );
 }
 
+/// INV-NO-REQUEST-WHILE-SWITCH-OFF: a switch turned off during a fetch stops it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_fetch_stops_when_the_switch_goes_off() {
     let fake = FakeDoor43::start_seeded().await.unwrap();

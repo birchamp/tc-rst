@@ -14,7 +14,7 @@ proves: []
 no_loss: true
 size: 1 d (basis: two contract files, two small tests, an APP-DESIGN edit)
 merged: a0c4d089
-updated: 2026-10-23
+updated: 2026-10-24
 next: none
 blocked_by: none
 ---
@@ -318,3 +318,4 @@ step 1's mutations and step 2's name edits are quoted in the log.
 - 2026-10-24 00:20 EDT | integration lane (Claude Code 3d07d5f8) | gate | 1206ecf3 | --wait-ci INT-7: ci passed; app-e2e failed: align_placement_paints_within_30_ms_on_a_psalms_sized_rail timed out after 600000 ms (run 40059315030); main's run 40059206811 and three branch runs passed it | gh run view 40059315030 -R birchamp/tc-rst --log-failed
 - 2026-10-24 00:20 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | under the ruling of 2026-10-23 (waits catch a hang only): the journey's page code slept a fixed 80 ms after arming a word and then waited with no limit for the progress line; on a loaded runner the click could land before the arm and the wait never ended. It now waits for the word to be armed and gives each wait 60 s, failing with "<test>: <what>: the step hung". Local run: pass 1, p95 21.4 ms | parity/app/journeys/align.test.mjs
 - 2026-10-24 00:20 EDT | integration lane (Claude Code 3d07d5f8) | merge | a0c4d089 | track-INT-7 merged into main; gated by scripts/gates.sh --wait-ci INT-7 on this exact commit; main moves only when --check-receipt passes | scripts/gates.sh --wait-ci INT-7
+- 2026-10-24 06:53 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3a (claims check): shell_contract.rs names the rule each buffer vector proves: a removal vector fails with INV-BUFFER-REMOVAL-NAMES-TEXT, a skipped-line vector with INV-TORN-LINE-SKIPPED, the rest with INV-SHELL-CONTRACT-PINNED; nothing printed the first two before | crates/tc-ui/tests/app/shell_contract.rs

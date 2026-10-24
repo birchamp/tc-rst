@@ -10,6 +10,8 @@ use tc_door43::{
 };
 use tc_door43_fake::{FakeDoor43, Fault, FaultRule};
 
+/// INV-NO-REQUEST-WHILE-SWITCH-OFF: every call, HTTP and git, sends nothing while the switch is
+/// off.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off() {
     let dl = tempfile::tempdir().unwrap();

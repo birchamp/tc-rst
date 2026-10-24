@@ -1,6 +1,8 @@
 //! PERFORMANCE's suggestion budget on ULT v91's NT, Genesis and Psalms alignments.
 //! Run the release probe with `cargo test -p tc-align --release --test suggestion_budget
-//! -- --ignored --nocapture`. The fixture and training are outside the prediction timing.
+//! -- --ignored --nocapture`; with `TC_ALIGN_BUDGET_ENFORCE` set (the reference laptop) the timing
+//! fails the test, without it only the behavior does. The fixture and training are outside the
+//! prediction timing.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
@@ -121,9 +123,18 @@ fn suggestions_meet_the_full_training_corpus_budget() {
             median.as_secs_f64() * 1000.0,
             p95.as_secs_f64() * 1000.0
         );
-        assert!(
-            p95 <= Duration::from_millis(150),
-            "CI threshold is three times the 50 ms budget: {p95:?}"
-        );
+        // Speed is enforced on the reference laptop (cards P and G2), which sets
+        // TC_ALIGN_BUDGET_ENFORCE; in CI the number is reported, never a failure (ruling of
+        // 2026-10-23, tests prove behavior, not speed).
+        if std::env::var_os("TC_ALIGN_BUDGET_ENFORCE").is_some() {
+            assert!(
+                p95 <= Duration::from_millis(150),
+                "three times the 50 ms budget: {p95:?}"
+            );
+        } else if p95 > Duration::from_millis(150) {
+            println!(
+                "{testament:?}: p95 {p95:?} is over three times the 50 ms budget (reported, not enforced here)"
+            );
+        }
     }
 }
