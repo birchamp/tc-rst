@@ -43,6 +43,7 @@ use crate::app::open_door43::OpenForm;
 use crate::app::save::indicator::Retry;
 use crate::app::share::{ShareForm, ShareProject, ShareStep, Target};
 use crate::app::shell::{CurrentProject, Editing, View};
+use crate::app::submit::Submit;
 use crate::app::sync::{SyncEnd, SyncToast};
 use crate::i18n::show_locale;
 
@@ -247,6 +248,9 @@ struct Inner {
     /// Counts the share flows (tC4's `startShareFlow`): a new Share or a closed dialog ends the
     /// one before, whose late answers then do nothing.
     share_flows: Latest,
+    /// Each project's last Sync attempt (UI-3): a press after a lost reply sends the same
+    /// request, which the server's reply cache answers.
+    sync_attempts: std::cell::RefCell<Vec<(ProjectRef, Submit)>>,
 }
 
 /// tC4's `actions`, the ones the shell owns. Cheap to clone. The wrapper lets views capture
@@ -265,6 +269,7 @@ impl Actions {
             switch: Cell::new(SwitchRequests::default()),
             sign_in_flows: Cell::new(0),
             share_flows: Latest::new(),
+            sync_attempts: std::cell::RefCell::default(),
         })))
     }
 
@@ -480,11 +485,7 @@ impl Actions {
             }
             // Not now: nothing was sent, and the dialog can be changed again.
             Pending::OpenDoor43 => {
-                self.s().od.try_update(|od| {
-                    if let Some(od) = od {
-                        od.busy = false;
-                    }
-                });
+                self.patch_od(|od| od.submit.not_sent());
             }
             Pending::Catalog => self.catalog_dropped(),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
@@ -795,7 +796,7 @@ impl Actions {
     /// Import, at its kind step (tC4 `openImport`).
     pub fn open_import(&self) {
         let s = self.s();
-        s.im.try_set(Some(ImportForm::open()));
+        s.im.try_set(Some(ImportForm::open(js::random_request_id())));
         s.layers.dialog.try_set(Some(Dialog::Import));
     }
 
@@ -878,7 +879,7 @@ impl Actions {
     /// "Open a project from Door43", the fourth card of Add a project (tC4 `openDoor43Dialog`).
     pub fn open_door43_dialog(&self) {
         let s = self.s();
-        s.od.try_set(Some(OpenForm::default()));
+        s.od.try_set(Some(OpenForm::new(js::random_request_id())));
         s.layers.dialog.try_set(Some(Dialog::OpenDoor43));
     }
 
@@ -895,10 +896,7 @@ impl Actions {
     pub fn open_door43_run(&self) {
         let ready = self.s().od.try_update(|od| {
             let od = od.as_mut()?;
-            if od.busy {
-                return None;
-            }
-            od.busy = true;
+            od.submit.press()?;
             od.error = None;
             Some(())
         });
@@ -911,36 +909,47 @@ impl Actions {
     /// in the dialog, and no project was added; a project opened goes to the top of Home.
     fn open_door43_now(&self) {
         let host = self.s().server.account.with_untracked(|a| a.server.clone());
-        let Some(Some((repo, name))) = self.s().od.with_untracked(|od| {
+        // After a sign-in step took its place, the dialog shows again for the open's end, as
+        // the same attempt.
+        self.patch_od(|od| {
+            od.submit.press();
+        });
+        let Some(Some((repo, name, attempt))) = self.s().od.with_untracked(|od| {
             od.as_ref().map(|od| {
                 Some((
                     od.source(&host)?,
                     tc_api::door43::ProjectName::parse(&od.name).ok()?,
+                    od.submit.request(),
                 ))
             })
         }) else {
             self.drop_pending(Pending::OpenDoor43);
             return;
         };
-        // After a sign-in step took its place, the dialog shows again for the open's end.
-        self.patch_od(|od| od.busy = true);
         self.s().layers.dialog.try_set(Some(Dialog::OpenDoor43));
         let this = self.clone();
         spawn_local(async move {
             let request = OpenDoor43 {
-                request: js::random_request_id(),
+                request: attempt,
                 repo,
                 name: name.clone(),
             };
             let ended = match this.run_net(Pending::OpenDoor43, &request).await {
                 NetEnd::Ok(job) => this.follow::<OpenDoor43>(job, |_| {}, || true).await,
-                NetEnd::Asked | NetEnd::Dropped => {
-                    this.patch_od(|od| od.busy = false);
+                // The question or the sign-in step took over: the open after it is a new attempt.
+                NetEnd::Asked => {
+                    this.patch_od(|od| od.submit.next(js::random_request_id()));
+                    return;
+                }
+                NetEnd::Dropped => {
+                    this.patch_od(|od| od.submit.not_sent());
                     return;
                 }
                 NetEnd::Failed(error) => JobEnd::Failed(error),
+                // No usable answer: the next press sends the same request, which the server's
+                // reply cache answers if the open was started (A-27).
                 NetEnd::Transport(error) => {
-                    this.open_refused(None, error.to_string());
+                    this.patch_od(|od| od.lost(error.to_string()));
                     return;
                 }
             };
@@ -959,18 +968,13 @@ impl Actions {
                 // The open ended without a word on how (cancelled, or the server restarted):
                 // no failure is shown; the project list says whether it took effect.
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
-                    this.patch_od(|od| od.busy = false);
+                    this.patch_od(|od| od.submit.next(js::random_request_id()));
                     this.refresh_projects();
                 }
                 JobEnd::Failed(error) => match this.net_refusal(Pending::OpenDoor43, error) {
-                    None => this.patch_od(|od| od.busy = false),
+                    None => this.patch_od(|od| od.submit.next(js::random_request_id())),
                     Some(ApiError::Refused(refusal)) => {
-                        let reason = refusal
-                            .vars()
-                            .into_iter()
-                            .map(|(_, v)| v)
-                            .collect::<Vec<_>>()
-                            .join(" ");
+                        let reason = crate::i18n::refusal_text(&refusal);
                         this.open_refused(refusal.code(), reason);
                     }
                     Some(other) => this.open_refused(None, other.to_string()),
@@ -980,7 +984,7 @@ impl Actions {
     }
 
     fn open_refused(&self, code: Option<&str>, reason: String) {
-        self.patch_od(|od| od.refused(code, reason));
+        self.patch_od(|od| od.refused(code, reason, js::random_request_id()));
     }
 
     pub fn dismiss_import_toast(&self) {
@@ -998,21 +1002,36 @@ impl Actions {
         }
         s.syncing.try_set(Some(project.clone()));
         s.sync_result.try_set(None);
+        let Some(attempt) = self
+            .sync_attempt(&project, |submit| submit.press())
+            .flatten()
+        else {
+            s.syncing.try_set(None);
+            return;
+        };
         let this = self.clone();
         spawn_local(async move {
             let request = SyncProject {
-                request: js::random_request_id(),
+                request: attempt,
                 project: project.clone(),
             };
             let started = this.run_net(Pending::Sync(project.clone()), &request).await;
             let ended = match started {
                 NetEnd::Ok(job) => this.follow::<SyncProject>(job, |_| {}, || true).await,
                 NetEnd::Failed(error) => JobEnd::Failed(error),
-                NetEnd::Asked | NetEnd::Dropped => {
+                NetEnd::Asked => {
+                    this.sync_attempt(&project, |submit| submit.next(js::random_request_id()));
                     this.s().syncing.try_set(None);
                     return;
                 }
-                NetEnd::Transport(_) => {
+                NetEnd::Dropped => {
+                    this.sync_attempt(&project, Submit::not_sent);
+                    this.s().syncing.try_set(None);
+                    return;
+                }
+                // No usable answer: the next press sends the same request (A-27).
+                NetEnd::Transport(error) => {
+                    this.sync_attempt(&project, |submit| submit.lost(error.to_string()));
                     this.s().syncing.try_set(None);
                     let end = SyncEnd::Unreached;
                     this.s()
@@ -1021,8 +1040,9 @@ impl Actions {
                     return;
                 }
             };
-            // The button comes back whatever the sync did.
+            // The button comes back whatever the sync did, and the next press is a new attempt.
             this.s().syncing.try_set(None);
+            this.sync_attempt(&project, |submit| submit.next(js::random_request_id()));
             let end = match ended {
                 JobEnd::Failed(error) => {
                     match this.net_refusal(Pending::Sync(project.clone()), error) {
@@ -1041,6 +1061,16 @@ impl Actions {
                 .sync_result
                 .try_set(Some(SyncToast { project, end }));
         });
+    }
+
+    /// `f` on `project`'s Sync attempt, made with a fresh request the first time.
+    fn sync_attempt<R>(&self, project: &ProjectRef, f: impl FnOnce(&mut Submit) -> R) -> Option<R> {
+        let mut attempts = self.0.sync_attempts.try_borrow_mut().ok()?;
+        if !attempts.iter().any(|(p, _)| p == project) {
+            attempts.push((project.clone(), Submit::new(js::random_request_id())));
+        }
+        let submit = attempts.iter_mut().find(|(p, _)| p == project)?;
+        Some(f(&mut submit.1))
     }
 
     pub fn dismiss_sync_result(&self) {
@@ -1349,7 +1379,7 @@ fn console_error(message: &str) {
 /// Why the organizations could not be read, in the shown language.
 fn share_problem(error: &CallError) -> String {
     match error {
-        CallError::Api(ApiError::Refused(refusal)) => crate::i18n::t_dyn(refusal.key(), &[], None),
+        CallError::Api(ApiError::Refused(refusal)) => crate::i18n::refusal_text(refusal),
         other => other.to_string(),
     }
 }

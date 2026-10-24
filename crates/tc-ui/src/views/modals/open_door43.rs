@@ -46,7 +46,7 @@ pub fn OpenFromDoor43() -> impl IntoView {
     let host = Memo::new(move |_| account.with(|a| a.server.clone()));
     let busy = {
         let od = od.clone();
-        Signal::derive(move || od.with(|od| od.as_ref().is_some_and(|od| od.busy)))
+        Signal::derive(move || od.with(|od| od.as_ref().is_some_and(OpenForm::busy)))
     };
     let cant_open = {
         let od = od.clone();

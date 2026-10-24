@@ -34,6 +34,7 @@ mod app {
     mod sources;
     mod sse;
     mod story;
+    mod submit;
     mod sync;
     mod translate;
     mod understand;

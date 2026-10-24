@@ -28,7 +28,6 @@ use crate::app::jobs::JobEnd;
 use crate::app::latest::Latest;
 use crate::app::shell::{CurrentProject, Editing, ProjectFlavor, View};
 use crate::app::understand::{HelpFocus, HelpsTab, Opening, UnitMode};
-use crate::i18n::t_dyn;
 
 /// An article the pane shows: loading, read, or failed (tC4's `understand.article`).
 #[derive(Debug, Clone, PartialEq)]
@@ -123,16 +122,11 @@ fn view_of(mode: PlaceMode) -> View {
 fn refused_banner(error: &CallError) -> HomeBanner {
     let (code, text, report) = match error {
         CallError::Api(ApiError::Refused(refusal)) => {
-            let owned = refusal.vars();
-            let vars: Vec<(&str, &dyn std::fmt::Display)> = owned
-                .iter()
-                .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
-                .collect();
             // Home's banner leads with "The project could not be opened.", so a refusal that
             // carries the store's reason shows the reason, as tC4 shows its store's message.
             let text = match refusal.detail() {
                 Some(detail) => detail.to_owned(),
-                None => t_dyn(refusal.key(), &vars, None),
+                None => crate::i18n::refusal_text(refusal),
             };
             (refusal.code().unwrap_or("open").to_owned(), text, None)
         }

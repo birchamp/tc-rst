@@ -20,21 +20,13 @@ use crate::app::client::CallError;
 use crate::app::internet::Pending;
 use crate::app::jobs::JobEnd;
 use crate::app::sources::{Dl, SettingsForm, SourcesForm};
-use crate::i18n::t_dyn;
 
 /// What a refusal says, in tC4's words; any other error as the server gave it.
 pub(super) fn said(error: &ApiError) -> String {
     match error {
         ApiError::Refused(refusal) => match refusal.detail() {
             Some(detail) => detail.to_owned(),
-            None => {
-                let owned = refusal.vars();
-                let vars: Vec<(&str, &dyn std::fmt::Display)> = owned
-                    .iter()
-                    .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
-                    .collect();
-                t_dyn(refusal.key(), &vars, None)
-            }
+            None => crate::i18n::refusal_text(refusal),
         },
         other => other.to_string(),
     }

@@ -172,3 +172,14 @@ fn only_run_net_handles_net_refusals() {
         "INV-NET-REFUSALS-HANDLED-ONCE: a network refusal is handled outside Actions::net_refusal: {handlers:#?}"
     );
 }
+
+/// INV-EVERY-REFUSAL-RENDERS (UI-3): a refusal is put into words by `i18n::refusal_text` alone,
+/// which fills every placeholder; no screen reads a refusal's values itself.
+#[test]
+fn only_refusal_text_reads_vars() {
+    let readers = found(&[".vars()"], |file, _, _| file == "i18n.rs");
+    assert!(
+        readers.is_empty(),
+        "INV-EVERY-REFUSAL-RENDERS: a refusal's values are read outside i18n::refusal_text: {readers:#?}"
+    );
+}

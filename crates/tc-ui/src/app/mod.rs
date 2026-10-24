@@ -47,6 +47,7 @@ pub mod share;
 pub mod shell;
 pub mod sources;
 pub mod story;
+pub mod submit;
 pub mod sync;
 pub mod translate;
 pub mod understand;

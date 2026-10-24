@@ -193,12 +193,7 @@ pub fn failure_text(error: &ApiError) -> String {
     let ApiError::Refused(Refusal::Sync(failure)) = error else {
         return t(keys::sync_result::error::UNEXPECTED, &[]);
     };
-    let vars = failure.vars();
-    let vars: Vec<(&str, &dyn std::fmt::Display)> = vars
-        .iter()
-        .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
-        .collect();
-    let sentence = t_dyn(failure.key(), &vars, None);
+    let sentence = crate::i18n::refusal_text(failure);
     match failure.kept_note() {
         Some(note) => format!("{sentence} {}", t_dyn(note, &[], None)),
         None => sentence,
