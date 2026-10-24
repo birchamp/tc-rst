@@ -56,10 +56,16 @@ h.shellTest('ending_tc4_restarts_it_and_reloads_home', async () => {
     h.hardKill(first.data.pid);
     // Typed while tc4 is gone, on the page of the old port: the mirror must still take it.
     await h.until('tc4 ended', () => h.logOf(dir).some((l) => l.ev === 'tc4 ended'));
-    const from = await page.evaluate((line) => {
-      window.tc4Shell.bufferChanged(line);
-      return location.port;
-    }, line);
+    const send = () =>
+      page.evaluate((line) => {
+        window.tc4Shell.bufferChanged(line);
+        return location.port;
+      }, line);
+    // On a fast machine Home may already be reloading: then the new page sends it.
+    const from = await send().catch(async () => {
+      await page.waitForLoadState();
+      return send();
+    });
     console.log(`# a line sent from port ${from} while tc4 was gone (the old port: ${first.data.port})`);
     await h.until('a new tc4', () => h.started(dir).length === 2);
     const second = h.started(dir)[1];
@@ -85,7 +91,9 @@ h.shellTest('ending_the_shell_ends_tc4_within_5s', async () => {
     await h.home(app);
     [pid] = h.tc4Pids(dir);
     const killed = Date.now();
-    h.hardKill(app.pid);
+    const shell = app.shellPid;
+    h.hardKill(shell);
+    await h.until('the shell to end', () => !h.alive(shell), 30000);
     // tc4 sees its stdin close (SHELL.md item 3). The bound catches a hang only.
     try {
       await h.until('tc4 to end', () => !h.alive(pid), 60000);

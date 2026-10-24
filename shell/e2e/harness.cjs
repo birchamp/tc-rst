@@ -132,8 +132,12 @@ function processTree() {
 }
 
 function hardKill(pid) {
-  if (process.platform === 'win32') execFileSync('taskkill', ['/F', '/PID', String(pid)], { stdio: 'ignore' });
-  else process.kill(pid, 'SIGKILL');
+  try {
+    if (process.platform === 'win32') execFileSync('taskkill', ['/F', '/PID', String(pid)], { stdio: 'ignore' });
+    else process.kill(pid, 'SIGKILL');
+  } catch (_) {
+    // Already gone.
+  }
 }
 
 // A shell launched by Playwright; `app.window` is its page.
@@ -144,9 +148,11 @@ async function launch(dir, opts = {}) {
     cwd: REPO,
   });
   app.dir = dir;
-  // Kept: Playwright's app.process() throws once the app has gone.
+  // Kept: Playwright's app.process() throws once the app has gone. On Windows its pid is a
+  // launcher's, not the shell's: the shell's own pid is the one in its log.
   app.proc = app.process();
   app.pid = app.proc.pid;
+  Object.defineProperty(app, 'shellPid', { get: () => (logOf(dir)[0] || {}).pid });
   app.exited = new Promise((resolve) => app.proc.once('exit', (code, signal) => resolve({ code, signal })));
   return app;
 }
@@ -175,6 +181,8 @@ async function finish(app) {
     }
   } finally {
     if (app.proc.exitCode === null && app.proc.signalCode === null) hardKill(app.pid);
+    const shell = app.shellPid;
+    if (shell && alive(shell)) hardKill(shell);
     for (const pid of tc4Pids(app.dir)) hardKill(pid);
     // Playwright's connection would keep the test process alive.
     await app.close().catch(() => {});

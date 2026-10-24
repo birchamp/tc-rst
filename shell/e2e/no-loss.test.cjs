@@ -49,8 +49,9 @@ h.shellTest(
       const log = path.join(dir, 'appdata', 'drafts-buffer.log');
       await h.until('the typed text in drafts-buffer.log', () => fs.existsSync(log) && fs.readFileSync(log, 'utf8').includes(text));
       for (const pid of h.tc4Pids(dir)) h.hardKill(pid);
-      h.hardKill(app.pid);
-      await app.exited;
+      const shell = app.shellPid;
+      h.hardKill(shell);
+      await h.until('the shell to end', () => !h.alive(shell), 30000);
     } finally {
       await h.finish(app);
     }
