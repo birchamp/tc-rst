@@ -34,7 +34,7 @@
 //!
 //! Both network clients (this one and `tc-resources`' `AquiferClient`) are built by
 //! [`Http`]: https only, no proxy for a server on this computer, and the system's proxy
-//! for every other, asked for only while the internet switch is on ([`http`]).
+//! for every other, asked for only while the internet switch is on ([`Http`]).
 //!
 //! Downloads stream to a file in a folder the caller names, report their bytes and can be
 //! cancelled between chunks ([`download`]); they are verified before they are returned
@@ -46,7 +46,7 @@ mod client;
 pub mod download;
 mod error;
 mod git_tree;
-pub mod http;
+mod http;
 mod internet;
 mod listing;
 mod names;
@@ -63,7 +63,10 @@ pub use client::{Door43Client, Limits};
 pub use download::{DownloadTo, DownloadWatch, DownloadedZip, Unwatched};
 pub use error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 pub use git_tree::ObjectId;
-pub use http::{Http, HttpSpec, ProxyAnswer, ProxyFinder, system_proxy_finder};
+pub use http::{
+    Http, HttpError, HttpResponse, HttpSpec, ProxyAnswer, ProxyFinder, RedirectRule,
+    system_proxy_finder,
+};
 pub use internet::{InternetSwitch, Offline};
 pub use listing::{Listing, Skipped};
 pub use names::{

@@ -4,7 +4,7 @@ title: One network gate: all network code behind tc-door43
 track: A
 lane: domain
 milestone: M1
-state: claimed
+state: building
 owner: domain lane (Claude Code 9f599c21)
 branch: track-DOM-1
 worktree: .worktrees/track-DOM-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 1-2 d
 merged: none
 updated: 2026-10-24
-next: Step 1, write crates/tc-door43/tests/http_get.rs red, then Http::get.
+next: Step 3, turn on git2's https in tc-door43 only.
 blocked_by: none
 ---
 
@@ -296,3 +296,5 @@ no-network job exists (it proves no test reaches past the fakes).
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-domain.md
 - 2026-10-24 07:21 EDT | domain lane (Claude Code 9f599c21) | claim | none | Claimed in .worktrees/track-DOM-1 from main 29048562. Before-you-start: S2 done; reqwest only in aquifer.rs (21,22,209,281,303,429); git2 has no https anywhere (workspace line vendored-libgit2 only); tc-door43 has git2 in dev-deps only; proxy_auto at STORAGE.md 3716 and 3864; crates/tc-arch absent; S3 not active | python3 -I .audit/tools/board.py
+- 2026-10-24 07:40 EDT | domain lane (Claude Code 9f599c21) | step 1 | none | Http::get, HttpResponse (status, header, body(limit) with the per-chunk switch check), RedirectRule and HttpError in tc-door43; HttpSpec.redirects is a RedirectRule; with_finder returns HttpError; client() and the http module are crate-private; reqwest errors are classified once (From<reqwest::Error> for HttpError, used by Door43Client too). Before: `cargo test -p tc-door43 --test http_get` failed to compile (E0432 HttpError, RedirectRule; E0599 no method get). After: 3 passed, `cargo test -p tc-door43` all pass. Deviation: HttpError has TooLarge and HttpResponse has body(limit) instead of a public chunk(), so the switch check per chunk lives in tc-door43 | crates/tc-door43/tests/http_get.rs
+- 2026-10-24 07:45 EDT | domain lane (Claude Code 9f599c21) | step 2 | none | aquifer.rs sends through Http::get with a RedirectRule (API and web origins; asset hosts unless loopback; MAX_REDIRECTS); reqwest moved to tc-resources' dev-dependencies. `cargo tree -p tc-resources -e normal --depth 1 | grep -c reqwest` prints 0; `cargo test -p tc-resources` passes with no test file changed | cargo test -p tc-resources
