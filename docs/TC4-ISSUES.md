@@ -41,12 +41,12 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 | USFM, Translate and helps | 0 | 6 | 1 | 38 | 0 | 9 | 54 |
 | Check and resources | 0 | 2 | 2 | 37 | 1 | 22 | 64 |
 | Sync, storage and import | 0 | 20 | 3 | 27 | 2 | 13 | 65 |
-| Shell, startup, languages and help | 0 | 21 | 1 | 35 | 0 | 19 | 76 |
-| All area rows | 1 | 54 | 8 | 165 | 3 | 64 | 295 |
+| Shell, startup, languages and help | 0 | 14 | 1 | 42 | 0 | 19 | 76 |
+| All area rows | 1 | 47 | 8 | 172 | 3 | 64 | 295 |
 
-Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep and T. A row counts once
-per area table. All area rows: 295; 1 rebuild bug, 54 unit todo, 8 reference
-change, 165 covered, 3 owner question and 64 not applicable. The 2026-10-23 sweep
+Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep, T and G1. A row counts once
+per area table. All area rows: 295; 1 rebuild bug, 47 unit todo, 8 reference
+change, 172 covered, 3 owner question and 64 not applicable. The 2026-10-23 sweep
 added 24 area rows (271 before) and changed 31, and its commit range holds 59 items
 (`TC4-DELTA-2026-10-23.md`; 25 covered, 7 unit todo, 8 reference change, 19 not applicable).
 Earlier: the 2026-10-19 range added 22 items (`TC4-DELTA-2026-10-19.md` §2). §1 lists the
@@ -232,7 +232,7 @@ the rebuild fixed it or does as tC4 does:
 | #650 | An Arabic gateway package end to end | covered | B3 | journey `arabic_helps_panes_are_rtl_in_an_english_interface` | Done by B3: each helps slot carries its gateway's direction (`rung_dir`), and the cards, questions, simplified text and article read in it. |
 | #29 | Right-to-left and complex scripts end to end | unit todo | G2 (B4a's case, B5b and B6's case done) | J10 `rtl_project_drafts_checks_and_aligns`; B4a `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`; B6 `a_right_to_left_project_aligns_with_its_bank_right_to_left` | Each journey adds the Arabic case; G2 captures the `ar` screens. B4a: Arabic typed through an IME composition into the verse card while a teammate's change arrives keeps every keystroke and saves as a second version. B6: a project created right to left with Titus added from an Arabic file opens Titus 1:1 with its bank right to left and the Greek cards left to right, a repeated Arabic word numbered in verse order, and a placement saved to the store; the Arabic interface's Align screens are captured (`ar-align-workspace-row`, `ar-align-workspace-620`). |
 | #614 | Four English literals in design-system props | covered | A5 (C6, B4b and B5b done) | port of tC4's ds-labels a–d; `ds_labels_d_a_verse_numbers_name_follows_the_app_language`; `academy_drawer_close_label_is_in_the_shown_language` | C6 passes catalog strings to Add a book; B4b passes `draft.moveVerse` to each `VerseMarker`; B5b passes the Check drawer eyebrow, title and close label from the catalog. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B6, G1 (B4a's IME case and B5b done) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe | Use logical properties where tC4's physical ones break right to left, and record it. |
+| #29 | Right-to-left and complex scripts end to end | unit todo | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` (pending: G4) | Use logical properties where tC4's physical ones break right to left, and record it. |
 | #614 | Four English literals in design-system props | covered | B4b, C6, A5 (B5b done) | `ds_labels_d_a_verse_numbers_name_follows_the_app_language`; `academy_drawer_close_label_is_in_the_shown_language` | As in §3. |
 | #702 | Text zoom sliders | not applicable | — | — | tC4 4.1.0. |
 | #719 | Add source Bibles to a project | not applicable | later B9a | — | tC4 4.1.0. |
@@ -295,7 +295,7 @@ the rebuild fixed it or does as tC4 does:
 | #619 | Quotes and bold in helps | covered | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | As in §3, with #628's differences. Done by B5b for the Check drawer. |
 | #601 | Sticky article header | covered | B3 | `article_close_button_visible_after_scroll` | Done by B3 (§3). |
 | #602 | Resize the helps panel | covered | B3, B4a | `helps_panel_width_follows_the_divider_drag` | As in §3. |
-| #606 | Third-party licenses in About, offline | unit todo | A5, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). B9a: nothing in the app installs an Aquifer resource yet (APP-DESIGN §4.6), so the attribution goes with the unit that first installs one. |
+| #606 | Third-party licenses in About, offline | unit todo | AQ1 (A5 and G1 done; Aquifer waits for after the first release, ruling 2026-10-24) | `about_lists_aquifer_attribution_offline` (pending: AQ1) | Also list each installed Aquifer resource's attribution (CC BY-SA). B9a: nothing in the app installs an Aquifer resource yet (APP-DESIGN §4.6), so the attribution goes with the unit that first installs one. |
 | #532 | Show a verse's new draft on return to the check | covered | B5b (C4 for the writes) | journey `check_shows_new_draft_after_switching_back`; `check_shows_new_draft_after_switching_back` (tc-ui, the selection rule) | Done by B5b: a change that names the open list reads the active check again, so a verse drafted while the checker was in another mode shows on return, with its words as the new tappable ones and the stored selection for them. The journey changes the verse through `test/saveVerse` where Translate's save will. |
 | #42 | Keyboard pass on the Check pages | covered | B5b (B5a done) | journeys `check_keyboard_picker_guided_fix_and_rail`, `check_keyboard_on_a_psalms_sized_rail`, `check_keyboard_detail_drawer_words_marks_and_comment`; `rail_keys_are_tc4s_roving_pattern` and the WordNav cases (tc-ui) | B5a: the picker's stops with the ring, the guided fix holding and returning the focus, the rail taking the focus once and being one Tab stop with tC4's keys, Tab out of the list, Back to the card, also on a virtual rail of Psalms' size. B5b: Tab from the rail into the detail, Learn more, the Academy drawer holding the focus and returning it, the target words as one stop with Shift+arrow selection, the marking row in order, the comment and Done returning the focus to its button. #769's heading stops wait for the reference move. |
 | #513 | Resuming into tN stalls | covered | B5a | journey `resume_and_tab_click_open_the_tool_once` | Done by B5a: one `check/open` per resume, which settles. |
@@ -387,7 +387,7 @@ the rebuild fixed it or does as tC4 does:
 
 | Issue | Title | Status | Unit or crate | Regression test | Action |
 |---|---|---|---|---|---|
-| #743 | A window from the click until the main window opens | unit todo | G1; APP-DESIGN §5.3, A9 D10 | `window_is_painted_within_1_s_of_the_click`; `closing_the_window_while_preparing_leaves_no_tc4_process` | Create the window at Electron `ready`; §5.3 picks the page, not whether a window shows. Fix the §5.3 and D10 wording now. |
+| #743 | A window from the click until the main window opens | covered | G1; APP-DESIGN §5.3, A9 D10 | `window_is_painted_within_1_s_of_the_click`; `closing_the_window_while_preparing_leaves_no_tc4_process` | Create the window at Electron `ready`; §5.3 picks the page, not whether a window shows. Fix the §5.3 and D10 wording now. |
 | #741 | Help page wordmark | covered | A5 | `every_help_page_has_the_bytes_tc_website_has_at_the_pin` (help sha-list check) | Vendor the help pages byte for byte; vendor again when tc-website ships the fix. |
 | #731 | Is the Report a problem attachment translated? | covered | A5; FIX-R | `the_attachment_is_english_in_every_app_language`; `platform_line_names_the_os_and_the_architecture` | Compose it in English, as tC4 does. An optional translated line explaining why is a declared difference. The platform line comes from Rust's OS and architecture constants. |
 | #751 | Duplicate work in Windows install and start | unit todo | G1, G2 | G2 budget row `first_launch_under_60_s` (five runs) | Install from archives; measure on the reference laptop with Defender. |
@@ -398,16 +398,16 @@ the rebuild fixed it or does as tC4 does:
 | #763 | The rc.2 help pages | reference change | REF1 | help case b; `help_home_shows_no_rc1_build_text_offline` (Q31) | Q31 for the banner and install sentences. Also triage #476 (§7). |
 | #686 | Bundle Noto Sans Arabic | covered | tc-ui; A5 | port tC4 app-language case j, with a check that the font file answers 200 | None in tc-ui. |
 | #657 | Mirror the interface for a right-to-left language | covered | A5, B3, C6 (B4a's half done) | tC4 app-language cases h and i; B4a `app_language_i_scripture_follows_the_project_under_an_arabic_interface` | Window-control room stays on the physical side. B4a: under Arabic the page reads right to left and a left-to-right project's source, translation and verse card read left to right; a right-to-left project under English needs C6's create. |
-| #642 | Remove the Linux native title bar | unit todo | G1 | `linux_window_keeps_native_frame` | Match 4.0. |
-| #613 | Bundle a Devanagari interface font | unit todo | G1 | `hindi_label_renders_in_the_bundled_face_offline` | No Devanagari face is vendored yet. Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
-| #606 | Third-party licenses in About | unit todo | G1 (A5 if tC4 ships it) | release check: every crate in `Cargo.lock` has a notice | Generate notices from `Cargo.lock`, fonts, vendored tC4 assets, Electronite and resources. Include the crates' own `NOTICE` files: `crates/tc-align/NOTICE`, and `crates/tc-door43/NOTICE` (proxy-watch's MIT notice, Windows builds). |
+| #642 | Remove the Linux native title bar | covered | G1 | `linux_window_keeps_native_frame` | Match 4.0. |
+| #613 | Bundle a Devanagari interface font | unit todo | G4 | `hindi_label_renders_in_the_bundled_face_offline` | No Devanagari face is vendored yet (G1 bundles none; moved to G4, the complex-script probe, in batch 2b). Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
+| #606 | Third-party licenses in About | unit todo | G3 (A5 if tC4 ships it) | release check: every crate in `Cargo.lock` has a notice (pending: G3) | Generate notices from `Cargo.lock`, fonts, vendored tC4 assets, Electronite and resources. Include the crates' own `NOTICE` files: `crates/tc-align/NOTICE`, and `crates/tc-door43/NOTICE` (proxy-watch's MIT notice, Windows builds). |
 | #569 | Keyboard shortcuts for Understand, Translate and Check | unit todo | A5; FIX-R reconciles | the Switcher key port | Match 4.0 (no shortcuts). Port tC4's if it adds them. |
 | #525 | Choose the app language automatically | covered | tc-app | `hello_answers_real_state` | C1a adds a relaunch test that the saved language survives. |
 | #523 | Collect translation corrections in Weblate | not applicable | tc-ui | — | They arrive with the next vendoring. |
-| #278 | Show the build in the app | unit todo | G3 | `about_commit_matches_the_release_record` | G1 sets `TC4_BUILD_COMMIT` for server and wasm. |
+| #278 | Show the build in the app | unit todo | G3 (A5 and G1 done: G1 passes the build to both builds) | `about_commit_matches_the_release_record` (pending: G3) | G1 sets `TC4_BUILD_COMMIT` for server and wasm. |
 | #167 | Which interface languages | covered | tc-ui | `the_registry_names_the_ten_decided_locales_each_with_a_catalog` | None. |
 | #37 | Unused catalog keys | not applicable | tc-ui | — | Optional: check that each rebuild key is used. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B6, G1 (B4a's IME case and B5b done) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe | Use logical properties where tC4's physical ones break right to left, and record it. |
+| #29 | Right-to-left and complex scripts end to end | unit todo | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` (pending: G4) | Use logical properties where tC4's physical ones break right to left, and record it. |
 | #701 | Urdu (Devanagari) direction | covered | tc-resources | `ur_deva_helps_read_left_to_right_and_are_named_in_devanagari` | See §1 row 12. |
 | #548 | Dropdown follow-ups | covered | tc-ui | `a_book_matches_by_name_or_code_prefix`; gallery `select-search` | None. |
 | #552 | Move the dropdown onto a library | covered | tc-ui | ds-gallery case Select/disabled-while-open in `parity/ds-gallery/diff-report.json` | See §1 row 13. |
@@ -425,29 +425,29 @@ the rebuild fixed it or does as tC4 does:
 | #559 | One internet switch per session | covered | A8, A5 | journey `internet-consent` cases a to h | The server half is covered. |
 | #519 | Help and guides, offline first | covered | A5 | journey `help` cases a, b, e and f | Same-origin frame; links to other sites go through the internet question. |
 | #520 | About: version and license, offline | covered | A5 | journey `about` case i (About and License) | Ask the owner for the rebuild's copyright line and LICENSE notice. |
-| #378 | Ask for help from a refusal | unit todo | A5, G1 | `feedback_report_is_never_written_to_disk` (journey `feedback`) | The help-desk token stays in the shell's main process. |
+| #378 | Ask for help from a refusal | covered | A5, G1 | `feedback_send_without_a_key_answers_not_configured`; `feedback_send_with_a_key_sends_from_the_main_process`; journey `feedback` | The help-desk token stays in the shell's main process. |
 | #521 | Report a problem in the account menu | covered | A5 | journey `feedback` cases c to i | Kept-report rules as tC4. |
 | #522 | Choose the app language | covered | A5 | journey `app-language` cases a, b, c, d and f (e is B3's and B4a's) | Preview, Apply, Cancel; a typed verse survives the switch. |
 | #622 | Add five interface languages | covered | tc-ui | `the_registry_names_the_ten_decided_locales_each_with_a_catalog` | None. |
 | #649 | Add Arabic | covered | tc-ui | catalog and tracking tests | A5 ports app-language b2 and g. |
 | #612 | Hindi labels keep letter spacing | covered | tc-ui | `vendored_assets`; journey `hindi_home_and_top_bar_keep_normal_letter_spacing` | B11 uses a tracking token where tC4 has a literal value. |
 | #614 | Four English literals in design-system props | covered | B4b, C6, A5 (B5b done) | `ds_labels_d_a_verse_numbers_name_follows_the_app_language`; `academy_drawer_close_label_is_in_the_shown_language` | As in §3. |
-| #632 | Help links stay in the panel on modified clicks | unit todo | A5, G1 | tC4 help case f | G1's `openExternal` refuses same-origin addresses. |
+| #632 | Help links stay in the panel on modified clicks | covered | A5, G1 | `same_origin_help_link_stays_in_app`; `open_external_refuses_the_app_origin` | G1's `openExternal` refuses same-origin addresses. |
 | #634 | The Message box has no accessible name | covered | A5 | journey `feedback` case i (#634) | Give the TextArea an id. |
-| #639 | Remove the Windows native title bar | unit todo | G1 | `windows_window_has_no_native_bar_and_keeps_zoom_and_reload` | Keep an application menu for reload and zoom keys. |
-| #214 | Hide the macOS window frame | unit todo | G1 | macOS smoke: traffic lights centred in the header | |
+| #639 | Remove the Windows native title bar | covered | G1 | `windows_window_has_no_native_bar_and_keeps_zoom_and_reload` | Keep an application menu for reload and zoom keys. |
+| #214 | Hide the macOS window frame | covered | G1 | `macos_window_hides_the_frame_and_centres_the_traffic_lights` | |
 | #206 | The server does not stop on quit (macOS) | covered | tc4; G1 | `closed_stdin_quits_within_5_s` and the other lifecycle tests | Fix the SIGTERM race that makes `sigterm_quits_like_the_quit_message` flaky. |
-| #284 | Ship or verify the Windows C runtime | unit todo | G1 | `tc4_exe_imports_no_vcruntime` | Build with `+crt-static`, or ship the DLLs next to the program. |
-| #456 | Sign the Windows installer and app | unit todo | G1 | `Get-AuthenticodeSignature` reports Valid for each file | Sign before hashing. |
-| #44 | Installers for Windows, macOS and Linux | unit todo | G1 | clean-machine smoke per installer | Uninstall keeps projects and app data. |
-| #554 | Third-party notices and the GPL text | unit todo | G1 | as #606 | Ship COPYING beside the notices. |
+| #284 | Ship or verify the Windows C runtime | unit todo | G3 | `tc4_exe_imports_no_vcruntime` (pending: G3) | Build with `+crt-static`, or ship the DLLs next to the program. |
+| #456 | Sign the Windows installer and app | unit todo | G3 | `Get-AuthenticodeSignature` reports Valid for each file (pending: G3) | Sign before hashing. |
+| #44 | Installers for Windows, macOS and Linux | unit todo | G3 | clean-machine smoke per installer (pending: G3) | Uninstall keeps projects and app data. |
+| #554 | Third-party notices and the GPL text | unit todo | G3 | as #606 (pending: G3) | Ship COPYING beside the notices. |
 | #640 | Start after an upgrade when a copy differs | covered | tc-resources | as §4 | None. |
 | #528 | Each release in its own folder | covered | tc-resources | as §4 | None. |
 | #707 | Import during start-up recovery | covered | tc-store | as §5 | None. |
 | #746 | Startup recovery before opens | covered | tc-store | `the_start_cleanup_reports_a_join_it_removed_and_hands_out_no_staging_folder_before_it_ends` | None. |
 | #708 | Ops-log record stays open | not applicable | — | — | tC4 machinery; duplicate of #707. |
 | #801 | Let the user go Home after a refused save | covered | A4b; FIX-R | `a_save_refused_for_good_lets_the_person_go_home_and_keeps_the_text` (tc-ui) | Fixed by FIX-R step 2: a refusal that can never succeed lets Home proceed and keeps the text as a draft (tC4 drops it; declared difference). |
-| #702 | Text zoom | unit todo | G1 | the zoom part of the #639 test | Keep Ctrl or Cmd with +, - and 0 working. |
+| #702 | Text zoom | covered | G1 | `windows_window_has_no_native_bar_and_keeps_zoom_and_reload`; `linux_window_keeps_native_frame`; `macos_window_hides_the_frame_and_centres_the_traffic_lights` | Keep Ctrl or Cmd with +, - and 0 working. |
 | #46 | Rollback plan | unit todo | V, G1 | `older_build_starts_on_newer_app_data` | As in §5. |
 | #658 | Arabic epic | not applicable | — | — | Children triaged. |
 | #543 | Account menu epic | not applicable | — | — | Child #476 is not triaged (§7). |
