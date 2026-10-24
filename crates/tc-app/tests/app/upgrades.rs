@@ -104,7 +104,9 @@ fn decisions(tn: &ResourcePin, titus: &str, only: usize) -> Vec<(CheckKey, Decis
             let content = book
                 .verse(
                     chapter.as_str().parse().ok()?,
-                    tc_core::VerseSpan::single(verse.as_str().parse().ok()?),
+                    tc_core::VerseSpan::single(tc_core::VerseNo::new(
+                        verse.as_str().parse().ok()?,
+                    )?),
                 )
                 .ok()?
                 .body()
@@ -257,7 +259,9 @@ fn word_decisions(
             let content = book
                 .verse(
                     chapter.as_str().parse().ok()?,
-                    tc_core::VerseSpan::single(verse.as_str().parse().ok()?),
+                    tc_core::VerseSpan::single(tc_core::VerseNo::new(
+                        verse.as_str().parse().ok()?,
+                    )?),
                 )
                 .ok()?
                 .body()

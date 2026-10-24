@@ -202,11 +202,7 @@ pub(super) async fn prepare(
     let Some(span) = VerseSpan::range(verse, last) else {
         return Err(bad("a span that ends before it starts"));
     };
-    let reference = Reference {
-        book,
-        chapter,
-        verses: span,
-    };
+    let reference = Reference::new(book, c, span);
     let source_at = match source_reference(loaded.numbering.project_scheme(), reference) {
         Ok(at) => at,
         Err(NoSourceVerse::UnknownFrame) => {

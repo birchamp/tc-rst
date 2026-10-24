@@ -40,7 +40,7 @@ impl SourceVerse {
             let found = segments.iter().enumerate().find_map(|(at, s)| {
                 s.as_verse()
                     .filter(|u| {
-                        u.chapter() == Some(chapter) && u.verses() == Some(VerseSpan::single(verse))
+                        u.chapter() == Some(chapter) && u.verses() == VerseSpan::range(verse, verse)
                     })
                     .map(|u| (at, u))
             });

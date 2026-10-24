@@ -902,7 +902,7 @@ fn legacy_place(locus: &BibleLocus) -> Option<(String, String)> {
             .map(|(c, v)| (c.to_owned(), v.to_owned())),
         BibleLocus::Verses(list) => {
             let [range] = list.ranges() else { return None };
-            if range.start().chapter != range.end().chapter {
+            if range.start().chapter().get() != range.end().chapter().get() {
                 return None;
             }
             let text = TsvLocus(locus).to_string();

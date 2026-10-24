@@ -51,7 +51,7 @@ pub fn is_frame_drafted(text: &str) -> bool {
 pub fn story_of(chapter: u16) -> Option<StoryNo> {
     u8::try_from(chapter)
         .ok()
-        .and_then(|number| StoryNo::new(number))
+        .and_then(StoryNo::new)
 }
 
 /// "Story 3".

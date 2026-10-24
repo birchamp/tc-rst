@@ -335,7 +335,6 @@ fn comments_of(
     read: &crate::counters::CountingSnapshot,
     story: StoryNo,
 ) -> Result<Vec<FrameComment>, ApiError> {
-    let story = story;
     let mut out = Vec::new();
     for key in read.story_comments_of(story) {
         let Some(Record::Comment { value, .. }) = read.projected(&key) else {
