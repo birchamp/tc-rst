@@ -10,7 +10,7 @@
 
 use tc_api::endpoint::NetKind;
 use tc_api::ids::JobId;
-use tc_api::jobs::{JobKind, JobOutcome, Phase};
+use tc_api::jobs::{JobKind, Phase};
 use tc_api::refusal::{Refusal, ResourceRefusal};
 use tc_api::resources::{
     Catalog, CatalogView, Download, FromInstalls, GatewayPackage, GatewayRef, PackageRole,
@@ -379,74 +379,79 @@ impl Handle<Download> for App {
         let key = req.gateway.key();
         let book = req.book;
         let runtime = tokio::runtime::Handle::current();
-        Ok(self.inner.jobs.start_blocking(spec, move |ctx: JobCtx| {
-            let installed = app.inner.resources.installed_dcs_pins().unwrap_or_default();
-            let mut failed = Vec::new();
-            let mut fetched_any = false;
-            let mut stopped = None;
-            for path in &paths {
-                if ctx.cancel.check().is_err() {
-                    stopped = Some(JobEnd::Cancelled);
-                    break;
-                }
-                let name = path.repo().name.to_string();
-                let phase = Phase::Install { repo: name.clone() };
-                ctx.progress.phase(phase.clone(), None);
-                let watch = JobWatch {
-                    progress: ctx.progress.clone(),
-                    cancel: ctx.cancel.clone(),
-                    phase,
-                };
-                let wanted = wanted_pin(pins.as_ref(), path.repo(), &installed);
-                let present = installed.iter().any(|p| p.is_repo(path.repo()));
-                let store = &app.inner.resources;
-                let outcome =
-                    runtime.block_on(fetch_one(store, &client, path, wanted, present, &watch));
-                match outcome {
-                    Ok(Fetched::Installed) => fetched_any = true,
-                    Ok(Fetched::Present) => {}
-                    Err(InstallError::Door43(Door43Error::Cancelled { .. })) => {
+        Ok(self
+            .inner
+            .jobs
+            .start_typed_blocking::<Download, _>(spec, move |ctx: JobCtx| {
+                let installed = app.inner.resources.installed_dcs_pins().unwrap_or_default();
+                let mut failed = Vec::new();
+                let mut fetched_any = false;
+                let mut stopped = None;
+                for path in &paths {
+                    if ctx.cancel.check().is_err() {
                         stopped = Some(JobEnd::Cancelled);
                         break;
                     }
-                    Err(InstallError::Door43(Door43Error::Offline { .. })) => {
-                        stopped = Some(JobEnd::Failed(ApiError::NeedsInternet(NetKind::Sources)));
-                        break;
+                    let name = path.repo().name.to_string();
+                    let phase = Phase::Install { repo: name.clone() };
+                    ctx.progress.phase(phase.clone(), None);
+                    let watch = JobWatch {
+                        progress: ctx.progress.clone(),
+                        cancel: ctx.cancel.clone(),
+                        phase,
+                    };
+                    let wanted = wanted_pin(pins.as_ref(), path.repo(), &installed);
+                    let present = installed.iter().any(|p| p.is_repo(path.repo()));
+                    let store = &app.inner.resources;
+                    let outcome =
+                        runtime.block_on(fetch_one(store, &client, path, wanted, present, &watch));
+                    match outcome {
+                        Ok(Fetched::Installed) => fetched_any = true,
+                        Ok(Fetched::Present) => {}
+                        Err(InstallError::Door43(Door43Error::Cancelled { .. })) => {
+                            stopped = Some(JobEnd::Cancelled);
+                            break;
+                        }
+                        Err(InstallError::Door43(Door43Error::Offline { .. })) => {
+                            stopped =
+                                Some(JobEnd::Failed(ApiError::NeedsInternet(NetKind::Sources)));
+                            break;
+                        }
+                        Err(e) => failed.push(format!("{name}: {e}")),
                     }
-                    Err(e) => failed.push(format!("{name}: {e}")),
                 }
-            }
-            // Each repository installs whole, so one finished before a cancel or a failure stays.
-            if fetched_any {
-                // The open book's panes and helps read again: what was missing may be here now
-                // (tC4 bumps `installEpoch`, which Understand's loader watches).
-                runtime.block_on(session.books().forget());
-            }
-            // tC4 counts a package for step 1 once any of its repositories is here.
-            if fetched_any || (stopped.is_none() && failed.len() < paths.len()) {
-                lock(&app.inner.downloaded).insert((key, book));
-            }
-            if let Some(end) = stopped {
-                return Err(end);
-            }
-            // What the download brought joins the project's sets (tC4 `adoptDownloadedPins`).
-            if (fetched_any || failed.len() < paths.len())
-                && let Err(error) = runtime.block_on(app.adopt_downloaded_pins(&session, gateway))
-            {
-                return Err(JobEnd::Failed(ApiError::Refused(Refusal::Resources(
-                    ResourceRefusal::AdoptFailed { error },
-                ))));
-            }
-            if failed.is_empty() {
-                Ok(JobOutcome::Finished)
-            } else {
-                Err(JobEnd::Failed(ApiError::Refused(Refusal::Resources(
-                    ResourceRefusal::SomeFailed {
-                        list: failed.join(" · "),
-                    },
-                ))))
-            }
-        }))
+                // Each repository installs whole, so one finished before a cancel or a failure stays.
+                if fetched_any {
+                    // The open book's panes and helps read again: what was missing may be here now
+                    // (tC4 bumps `installEpoch`, which Understand's loader watches).
+                    runtime.block_on(session.books().forget());
+                }
+                // tC4 counts a package for step 1 once any of its repositories is here.
+                if fetched_any || (stopped.is_none() && failed.len() < paths.len()) {
+                    lock(&app.inner.downloaded).insert((key, book));
+                }
+                if let Some(end) = stopped {
+                    return Err(end);
+                }
+                // What the download brought joins the project's sets (tC4 `adoptDownloadedPins`).
+                if (fetched_any || failed.len() < paths.len())
+                    && let Err(error) =
+                        runtime.block_on(app.adopt_downloaded_pins(&session, gateway))
+                {
+                    return Err(JobEnd::Failed(ApiError::Refused(Refusal::Resources(
+                        ResourceRefusal::AdoptFailed { error },
+                    ))));
+                }
+                if failed.is_empty() {
+                    Ok(())
+                } else {
+                    Err(JobEnd::Failed(ApiError::Refused(Refusal::Resources(
+                        ResourceRefusal::SomeFailed {
+                            list: failed.join(" · "),
+                        },
+                    ))))
+                }
+            }))
     }
 }
 

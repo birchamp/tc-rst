@@ -40,6 +40,7 @@ use crate::app::check::CheckView;
 use crate::app::check_item::{self, DecisionWrites, MarkFailure};
 use crate::app::client::{CallError, Transport};
 use crate::app::fix::{Fix, FixScreen};
+use crate::app::latest::{Attempt, Latest};
 use crate::app::save::{FieldScope, Pair, Source, View};
 use crate::app::shell::ProjectFlavor;
 
@@ -138,39 +139,17 @@ impl Default for CheckState {
 
 thread_local! {
     /// Counts the reads of the active check's detail: only the newest may land.
-    static ITEMS: Cell<u64> = const { Cell::new(0) };
+    static ITEMS: Latest = const { Latest::new() };
     /// Counts the Academy article reads asked for.
-    static ARTICLES: Cell<u64> = const { Cell::new(0) };
+    static ARTICLES: Latest = const { Latest::new() };
     /// Every write of a decision, a mark or a comment, goes through here.
     static WRITES: DecisionWrites = DecisionWrites::default();
     /// The detail a write's Ack tells, when the Ack is for the check it shows.
     static DETAIL: RefCell<Option<ArcRwSignal<Option<Detail>>>> = const { RefCell::new(None) };
     /// Counts the opens asked for: only the newest may land (tC4's `checkSessionSeq`).
-    static OPENS: Cell<u64> = const { Cell::new(0) };
+    static OPENS: Latest = const { Latest::new() };
     /// The listener that patches the open rail.
     static LISTENER: Cell<Option<ListenerId>> = const { Cell::new(None) };
-}
-
-fn next_open() -> u64 {
-    OPENS.with(|c| {
-        c.set(c.get() + 1);
-        c.get()
-    })
-}
-
-fn current_open() -> u64 {
-    OPENS.with(Cell::get)
-}
-
-fn bump(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
-    counter.with(|c| {
-        c.set(c.get() + 1);
-        c.get()
-    })
-}
-
-fn current(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
-    counter.with(Cell::get)
 }
 
 /// Writes a decision: a mark or a comment of one check, after the write before it, over the
@@ -360,7 +339,7 @@ impl Actions {
         let Some((at, list)) = self.check_list(tool) else {
             return;
         };
-        let attempt = next_open();
+        let attempt = OPENS.with(Latest::begin);
         let c = &self.s().c;
         c.view.try_set(CheckView::Tool(tool));
         c.filter.try_set(Filter::All);
@@ -398,7 +377,7 @@ impl Actions {
                 since: None,
             };
             let result = this.runtime().read_once(&open).await;
-            if current_open() != attempt {
+            if !OPENS.with(|l| l.is_current(attempt)) {
                 return;
             }
             let c = &this.s().c;
@@ -429,7 +408,7 @@ impl Actions {
     /// "← All checking tools" (tC4 `closeCheckTool`): the picker, whose card of this tool gets
     /// the focus back.
     pub fn close_check_tool(&self) {
-        next_open();
+        OPENS.with(Latest::begin);
         self.stop_rail_listener();
         self.forget_detail();
         let c = &self.s().c;
@@ -445,7 +424,7 @@ impl Actions {
     /// The Check screen of a project or book that is no longer shown: nothing of it stays.
     pub(super) fn reset_check(&self) {
         self.reset_align();
-        next_open();
+        OPENS.with(Latest::begin);
         self.stop_rail_listener();
         self.forget_detail();
         let c = &self.s().c;
@@ -569,11 +548,11 @@ impl Actions {
         let Some(at) = self.s().project.get_untracked().map(|p| p.at) else {
             return;
         };
-        let attempt = current_open();
+        let attempt = OPENS.with(Latest::current);
         let this = self.clone();
         spawn_local(async move {
             let result = this.runtime().read_once(&Rows { at, list, since }).await;
-            if current_open() != attempt {
+            if !OPENS.with(|l| l.is_current(attempt)) {
                 return;
             }
             match result {
@@ -622,8 +601,8 @@ impl Actions {
     /// project. A comment still being typed is saved by its editor leaving.
     fn forget_detail(&self) {
         let c = &self.s().c;
-        bump(&ITEMS);
-        bump(&ARTICLES);
+        ITEMS.with(Latest::begin);
+        ARTICLES.with(Latest::begin);
         c.comment_open.try_set(false);
         c.detail.try_set(None);
         c.selection.try_set(BTreeSet::new());
@@ -647,7 +626,7 @@ impl Actions {
         let Some((at, list)) = self.detail_target() else {
             return;
         };
-        let attempt = bump(&ITEMS);
+        let attempt = ITEMS.with(Latest::begin);
         c.detail.try_set(Some(Detail::Loading(index)));
         self.read_item(at, list, index, attempt);
     }
@@ -663,15 +642,15 @@ impl Actions {
         if matches!(c.detail.get_untracked(), Some(Detail::Loading(_)) | None) {
             return;
         }
-        let attempt = bump(&ITEMS);
+        let attempt = ITEMS.with(Latest::begin);
         self.read_item(at, list, index, attempt);
     }
 
-    fn read_item(&self, at: tc_api::ids::Scope, list: CheckListRef, index: u32, attempt: u64) {
+    fn read_item(&self, at: tc_api::ids::Scope, list: CheckListRef, index: u32, attempt: Attempt) {
         let this = self.clone();
         spawn_local(async move {
             let result = this.runtime().read_once(&Item { at, list, index }).await;
-            if current(&ITEMS) != attempt {
+            if !ITEMS.with(|l| l.is_current(attempt)) {
                 return;
             }
             match result {
@@ -817,7 +796,7 @@ impl Actions {
         else {
             return;
         };
-        let attempt = bump(&ARTICLES);
+        let attempt = ARTICLES.with(Latest::begin);
         c.academy.try_set(Some(Academy::Loading));
         let this = self.clone();
         spawn_local(async move {
@@ -825,7 +804,7 @@ impl Actions {
                 .runtime()
                 .read_once(&CheckArticleRead { at, list, index })
                 .await;
-            if current(&ARTICLES) != attempt {
+            if !ARTICLES.with(|l| l.is_current(attempt)) {
                 return;
             }
             let state = match result {
@@ -838,7 +817,7 @@ impl Actions {
     }
 
     pub fn close_academy(&self) {
-        bump(&ARTICLES);
+        ARTICLES.with(Latest::begin);
         self.s().c.academy.try_set(None);
     }
 

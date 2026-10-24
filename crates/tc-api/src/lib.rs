@@ -58,7 +58,7 @@ pub mod upload;
 pub mod write;
 
 pub use endpoint::{
-    ALL, API_VERSION, Endpoint, EndpointInfo, Kind, NetKind, Reply, ReplyOf, Write,
+    ALL, API_VERSION, Endpoint, EndpointInfo, Kind, NetKind, Reply, ReplyOf, StartsJob, Write,
 };
 pub use error::ApiError;
 pub use ids::{RequestId, Scope};
