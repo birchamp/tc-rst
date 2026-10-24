@@ -26,10 +26,13 @@ export function testNames(repo) {
   const exact = new Set();
   const patterns = [];
   for (const file of walk(path.join(repo, 'crates'), (n) => n.endsWith('.rs'))) {
-    for (const m of fs.readFileSync(file, 'utf8').matchAll(/\bfn\s+([A-Za-z_][A-Za-z0-9_]*)/g)) exact.add(m[1]);
     const rel = path.relative(repo, file).split(path.sep);
+    const testFile = rel[2] === 'tests' || path.basename(file) === 'tests.rs';
+    for (const name of testFns(fs.readFileSync(file, 'utf8'), testFile)) exact.add(name);
     if (rel.length === 4 && rel[2] === 'tests') exact.add(path.basename(file, '.rs'));
   }
+  // A journey file is named by its stem ("journey `create`").
+  for (const file of walk(path.join(repo, 'parity/app/journeys'), (n) => n.endsWith('.test.mjs'))) exact.add(path.basename(file, '.test.mjs'));
   for (const file of walk(path.join(repo, 'parity'), (n) => n.endsWith('.mjs'))) {
     const titles = titlesOf(fs.readFileSync(file, 'utf8'));
     for (const t of titles.exact) exact.add(t);
@@ -44,6 +47,30 @@ export function testNames(repo) {
     for (const m of fs.readFileSync(scenarios, 'utf8').matchAll(/name:\s*'([^']+)'/g)) exact.add(m[1]);
   }
   return { exact, patterns, repo };
+}
+
+/** The fns of a Rust file that are tests or test code: every fn of a test file; in product
+ * source, a fn under a test attribute, inside a `#[cfg(test)]` module or a `proptest!` block.
+ * A product fn is no test, so a claim such as `new` or `open` resolves to nothing. */
+export function testFns(text, testFile) {
+  const fns = [...text.matchAll(/\bfn\s+([A-Za-z_][A-Za-z0-9_]*)/g)];
+  if (testFile) return fns.map((m) => m[1]);
+  const regions = [];
+  for (const m of text.matchAll(/#\[cfg\(test\)\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{|proptest!\s*\{/g)) {
+    let depth = 0;
+    let end = text.length;
+    for (let i = m.index + m[0].length - 1; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}' && --depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    regions.push([m.index, end]);
+  }
+  return fns
+    .filter((m) => regions.some(([a, b]) => m.index > a && m.index < b) || /#\[(?:[\w:]+::)?test\b[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*(?:pub\s+)?(?:async\s+)?$/.test(text.slice(Math.max(0, m.index - 300), m.index)))
+    .map((m) => m[1]);
 }
 
 /** The test titles of one journey or test file: exact titles (and their leading labels), and
@@ -96,6 +123,17 @@ export function claimsOf(cell) {
   return out;
 }
 
+/** Each claim of a cell with the cards of a `(pending: ...)` marker written right after it
+ * (empty when none is): a marker excuses only the name it follows. */
+export function claimsWithPending(cell) {
+  const out = [];
+  for (const m of cell.matchAll(/`([^`]+)`(\s*\(pending:\s*([^)]+)\))?/g)) {
+    const pending = m[3] ? m[3].split(/[,\s]+/).filter(Boolean) : [];
+    for (const claim of claimsOf(`\`${m[1]}\``)) out.push({ claim, pending });
+  }
+  return out;
+}
+
 /** The ids of `(pending: X)` and `(pending: X, Y)` markers in a cell. */
 export function pendingOf(cell) {
   const out = [];
@@ -131,7 +169,7 @@ export function states(repo) {
   const out = new Map();
   const status = path.join(repo, '.audit/STATUS.md');
   if (fs.existsSync(status)) {
-    for (const m of fs.readFileSync(status, 'utf8').matchAll(/^\| ([A-Z][A-Za-z0-9-]*) \|[^|]*\|[^|]*\| ([a-z ]+) \|/gm)) out.set(m[1], m[2].trim());
+    for (const m of fs.readFileSync(status, 'utf8').matchAll(/^\| ([A-Z][A-Za-z0-9-]*)(?: ◆)? \|[^|]*\|[^|]*\| ([a-z ]+) \|/gm)) out.set(m[1], m[2].trim());
   }
   const board = JSON.parse(execFileSync('python3', ['-I', '-B', '.audit/tools/board.py', '--json'], { cwd: repo, encoding: 'utf8' }));
   for (const item of board.items) out.set(item.id, item.state);

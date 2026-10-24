@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { claimsOf, idsIn, pendingOf, resolve, states, tables, testNames } from './claims.mjs';
+import { claimsOf, claimsWithPending, idsIn, pendingOf, resolve, states, tables, testNames } from './claims.mjs';
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const names = testNames(REPO);
@@ -19,9 +19,10 @@ function cellProblems(where, cell, what) {
     if (!known.has(id)) problems.push(`INV-CLAIMED-TESTS-EXIST: ${where} is pending on ${id}, but no card ${id} exists`);
     else if (known.get(id) === 'done') problems.push(`INV-CLAIMED-TESTS-EXIST: ${where} is pending on ${id}, but ${id} is done: write the test or fix the row`);
   }
-  // A cell pending on a card that is not done may name the test that card will write.
-  if (pending.some((id) => known.has(id) && known.get(id) !== 'done')) return problems;
-  for (const claim of claimsOf(cell.replace(/\(pending:[^)]*\)/g, ''))) {
+  // A name followed by a pending marker on a card that is not done may be the test that card
+  // will write; every other name must exist.
+  for (const { claim, pending: after } of claimsWithPending(cell)) {
+    if (after.some((id) => known.has(id) && known.get(id) !== 'done')) continue;
     if (!resolve(claim, names)) problems.push(`INV-CLAIMED-TESTS-EXIST: ${where} is ${what} by ${claim}, but no such test exists`);
   }
   return problems;
@@ -34,6 +35,8 @@ test('the resolver finds fns, journey titles, template titles and parity ids', (
   assert.ok(resolve('item_navigation_translationWords_en_marking_row_boundaries_tab_and_wrapping', names), 'a template title');
   assert.ok(resolve('crates/tc-journal/tests/properties.rs', names), 'a test file path');
   assert.ok(!resolve('no_test_has_this_name_xyz', names));
+  assert.ok(!resolve('retry_delay', names), 'a product fn is no test');
+  assert.ok(resolve('create', names), 'a journey file by its stem');
   assert.deepEqual(claimsOf('`a_{b,c}_d` and `e`'), ['a_b_d', 'a_c_d', 'e']);
   assert.deepEqual(pendingOf('`x` (pending: I, F1)'), ['I', 'F1']);
 });
