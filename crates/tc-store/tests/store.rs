@@ -3,6 +3,10 @@
 //! operation counts, and the tC4 tests ported (`docs/TC4-DELTA-2026-10-16.md` §4).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test code: damages project folders on purpose, as another program or a crash would"
+)]
 
 #[path = "store/common.rs"]
 mod common;

@@ -3,6 +3,10 @@
 //! file gives, and a cache that does not stand for the file's bytes is never used.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test code writes its own fixture and snapshot files, never a project"
+)]
 
 mod common;
 mod support;

@@ -108,6 +108,10 @@ fn restore_origin(git: &Git, vfs: &dyn Vfs, path: &Path) {
 /// G4: the damaged `.git` is kept in `.tc/broken-git-<utc>` and a new repository takes its
 /// place. Returns it, where the damaged one is relative to the project folder, and where it
 /// is on the disk.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "moves a broken .git aside into .tc (G4 rebuild): git's own files, kept, not a project file"
+)]
 fn rebuild(
     outside: &Path,
     stamp: &str,
