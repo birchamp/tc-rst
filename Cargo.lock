@@ -3614,6 +3614,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-sync"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "tc-api",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "tc-ui"
 version = "0.1.0"
 dependencies = [

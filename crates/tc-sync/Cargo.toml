@@ -1,0 +1,18 @@
+[package]
+name = "tc-sync"
+description = "Door43 sync and USB exchange: one typed state machine over tc-store and tc-door43 (STORAGE §9, §10)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+tc-api = { path = "../tc-api" }
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
