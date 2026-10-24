@@ -4,18 +4,18 @@ title: The storage side of the tC4 issue sweep (what is left)
 track: A
 lane: storage
 milestone: M2
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: S2 session (Claude Code add49644)
+branch: track-T
+worktree: /home/bot/tc-rst/.worktrees/track-T
 depends: [S2]
 needs_owner: []
 proves: [P3, P10]
 no_loss: true
 size: 0.5-1 d (basis: 3ecdcae did two T items in one commit, +395 lines)
 merged: none
-updated: 2026-10-22
-next: Claim this card after S2 merges, then do step 1.
+updated: 2026-10-24
+next: Step 1: red first in crates/tc-journal/tests/screens_and_fold.rs (expect 0 where it says 168), then one review rule (AlignmentValue::needs_review).
 blocked_by: none
 ---
 
@@ -257,3 +257,4 @@ Plus `cargo test -p tc-align --release --test suggestion_budget -- --ignored --n
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
+- 2026-10-24 17:55 EDT | S2 session (Claude Code add49644) | claim | none | claimed on track-T from main 33d2378d (S2 on main), as the integration lane asked: the storage lane carries on with T, P, S3, DOM-1, DOM-2 in that order; also to decide here: C7a's finding that a save of a merged verse whose heads moved can never be stored (S2 card log, 2026-10-24 09:30) | .audit/roadmap/units/S2.md
