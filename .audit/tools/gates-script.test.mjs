@@ -57,7 +57,12 @@ test('INV-NO-UNGATED-MERGE: --check-receipt refuses a tree without a receipt', (
 
     const tree = git('rev-parse', 'HEAD^{tree}');
     mkdirSync(join(scratch, 'target', 'gates'), { recursive: true });
-    writeFileSync(join(scratch, 'target', 'gates', `${tree}.ok`), `tree ${tree}\n`);
+    writeFileSync(join(scratch, 'target', 'gates', `${tree}.ok`), `tree ${tree}\njourneys no\n`);
+    r = gates();
+    assert.equal(r.status, 1, 'a receipt without the journeys is partial: ' + r.stdout);
+    assert.match(r.stdout, /^INV-NO-UNGATED-MERGE: .*\(journeys not run; drop --no-journeys\)/);
+
+    writeFileSync(join(scratch, 'target', 'gates', `${tree}.ok`), `tree ${tree}\njourneys yes\n`);
     r = gates();
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /^gates: receipt /);

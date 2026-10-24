@@ -14,6 +14,7 @@ STEPS=(
   "clippy-windows|cargo clippy --locked --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings"
   "test|cargo test --locked --workspace"
   "alignment-budget|cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture"
+  "ignored|scripts/check-ignored.sh"
   "wasm-ui|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings"
   "wasm-ui-gallery|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features gallery -- -D warnings"
   "wasm-ui-app|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features app -- -D warnings"
@@ -52,6 +53,7 @@ command_of() {
 
 run_step() {
   local name="$1" cmd
+  if [[ "$name" == journeys ]]; then journeys; return; fi
   cmd="$(command_of "$name")"
   if [[ -z "$cmd" ]]; then echo "gates: no step named $name" >&2; return 1; fi
   if [[ "$name" == clippy-windows || "$cmd" == *x86_64-pc-windows-gnu* ]] && ! { command -v x86_64-w64-mingw32-gcc && command -v nasm; } > /dev/null; then
@@ -72,8 +74,14 @@ check_receipt() {
     return 1
   fi
   if [[ -f "$path" ]]; then
-    echo "gates: receipt $path"
-    return 0
+    # The journeys are part of the list since app-e2e (G5); a local run without them is partial.
+    if grep -qx 'journeys yes' "$path"; then
+      echo "gates: receipt $path"
+      return 0
+    fi
+    ci_receipt && return 0
+    echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree (journeys not run; drop --no-journeys)"
+    return 1
   fi
   ci_receipt && return 0
   echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree, or scripts/gates.sh --wait-ci <card> for GitHub's runs"
@@ -125,23 +133,20 @@ wait_ci() {
   return 1
 }
 
+# Every browser journey against real builds; app-e2e.yml runs this as `--step journeys`.
 journeys() {
+  [[ -d "${PLAYWRIGHT_MODULE:-parity/tc4-baseline/node_modules/playwright}" ]] || (cd parity/tc4-baseline && npm ci)
   cargo build --locked -p tc4 --features test-hooks,fixture-backend
   cargo build --locked -p tc-door43-fake
   crates/tc-ui/build-app.sh --out "$target/tc-ui-app"
   crates/tc-ui/build-app.sh --test-hooks --out "$target/tc-ui-app-hooks"
-  local tap
-  tap="$(TC4_BIN="$target/debug/tc4" TC4_UI="$target/tc-ui-app" TC4_UI_HOOKS="$target/tc-ui-app-hooks" \
+  local tap="$target/app-e2e.tap" code=0
+  TC4_BIN="$target/debug/tc4" TC4_UI="$target/tc-ui-app" TC4_UI_HOOKS="$target/tc-ui-app-hooks" \
     TC4_DOOR43_FAKE="$target/debug/tc-door43-fake" \
-    node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee >(cat >&2))" || true
-  local failed skipped
-  failed="$(printf '%s\n' "$tap" | sed -n 's/^# fail \([0-9]*\)$/\1/p' | tail -1)"
-  skipped="$(printf '%s\n' "$tap" | sed -n 's/^# skipped \([0-9]*\)$/\1/p' | tail -1)"
-  # Everything is built, so a skip is a missing build.
-  if [[ "${failed:-1}" != 0 || "${skipped:-1}" != 0 ]]; then
-    echo "gates: journeys failed: ${failed:-?} fail, ${skipped:-?} skipped" >&2
-    return 1
-  fi
+    node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee "$tap" || code=$?
+  # Everything is built, so a skip is a missing build (INV-A-SKIP-IS-A-FAILURE).
+  node parity/app/journeys/no-skips.mjs "$tap" || code=1
+  return "$code"
 }
 
 run_all() {
@@ -176,17 +181,17 @@ run_all() {
     echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "rustc $(rustc --version)"
     echo "steps $total"
-    echo "journeys $([[ "$with_journeys" == yes ]] && echo yes || echo no)"
+    echo "journeys $with_journeys"
   } > "$path"
   echo "gates: all $total steps passed; receipt $path"
 }
 
 case "${1:-}" in
-  "") run_all no ;;
-  --journeys) run_all yes ;;
+  "" | --journeys) run_all yes ;;
+  --no-journeys) run_all no ;;
   --list) list ;;
   --step) run_step "${2:?gates: --step needs a name or number}" ;;
   --check-receipt) check_receipt ;;
   --wait-ci) wait_ci "${2:?gates: --wait-ci needs a card id}" ;;
-  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --journeys | --check-receipt | --wait-ci <card>]" >&2; exit 2 ;;
+  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --no-journeys | --check-receipt | --wait-ci <card>]" >&2; exit 2 ;;
 esac
