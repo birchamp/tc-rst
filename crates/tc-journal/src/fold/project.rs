@@ -2172,8 +2172,9 @@ fn conflict_record(c: &Conflict) -> Value {
     Value::Object(m)
 }
 
-/// tC4's slot order in `resources.json`; slots it does not name come after, by name.
-fn slot_rank(name: &str) -> u8 {
+/// tC4's slot order in `resources.json` (`journal/checkpoint.mjs` `LS_SLOTS`, then `nt`,
+/// `ot`); slots it does not name come after, by name.
+pub(crate) fn slot_rank(name: &str) -> u8 {
     match name {
         "gatewayLanguage" => 0,
         "translationNotes" => 1,
@@ -2182,9 +2183,14 @@ fn slot_rank(name: &str) -> u8 {
         "translationAcademy" => 4,
         "translationQuestions" => 5,
         "simplifiedText" => 6,
-        "nt" => 7,
-        "ot" => 8,
-        _ => 9,
+        "obs" => 7,
+        "obs-tn" => 8,
+        "obs-twl" => 9,
+        "obs-tq" => 10,
+        "obs-images" => 11,
+        "nt" => 12,
+        "ot" => 13,
+        _ => 14,
     }
 }
 
@@ -2396,6 +2402,17 @@ pub(crate) fn splice_story(
                 }
             }
         }
+    }
+    // A base read back from a file lost its reference line to a record of its own (tC4
+    // `decodeStory`); tC4's `writeRef` then adds it after the last frame's paragraph, or
+    // after an empty last frame's spacing.
+    if let (None, Some(r), true) = (reference_at, reference, images > 0) {
+        let kept = out.trim_end_matches(['\n', '\r']).len();
+        out.truncate(kept);
+        let empty_last = out.rsplit('\n').next().is_some_and(|l| l.starts_with("!["));
+        out.push_str(if empty_last { "\n\n\n\n_" } else { "\n\n_" });
+        out.push_str(r);
+        out.push_str("_\n");
     }
     out
 }

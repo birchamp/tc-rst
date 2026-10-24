@@ -165,7 +165,10 @@ pub(crate) fn relationships(value: &PinGroupValue) -> Vec<Value> {
         }
         out.push(Value::Object(r));
     };
-    for slot in value.0.values() {
+    // tC4 reads the slots in its `resources.json` order.
+    let mut slots: Vec<_> = value.0.iter().collect();
+    slots.sort_by_key(|(name, _)| (super::project::slot_rank(name.as_str()), name.as_str()));
+    for (_, slot) in slots {
         match &slot.0 {
             Json::Arr(items) => items.iter().for_each(&mut push),
             other => push(other),

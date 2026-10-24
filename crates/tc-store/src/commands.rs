@@ -305,7 +305,15 @@ fn save_verse(
         shown.heads(),
         Cause::Edit,
     )];
-    out.extend(reflow(ctx, book, chapter, verse, &old, &new, dropped));
+    out.extend(reflow(
+        ctx,
+        book,
+        chapter,
+        verse,
+        (&old, shown.heads()),
+        &new,
+        dropped,
+    ));
     Ok(out)
 }
 
@@ -324,18 +332,29 @@ fn anchor_of(chapter: ChapterNo, verse: VerseNo, value: &VerseValue) -> ChapterV
 /// updated, the others go back to the bank, and the value is stamped for the new text (tC4
 /// #213, #789, `tc_align::reflow_edit` from the old text). Its parents are the alignment's heads the actor holds, so an
 /// alignment edit made elsewhere at the same time is a visible conflict with the reflow. No
-/// reflow when the alignment is in conflict, when its span is not the verse's span any more
-/// (a span was made or broken: a person aligns again), or when `tc_align::reflow_edit` leaves
-/// the value as it is.
+/// reflow when the verse's heads moved since the screen showed it, when the alignment is in
+/// conflict, when its span is not the verse's span any more (a span was made or broken: a
+/// person aligns again), or when `tc_align::reflow_edit` leaves the value as it is.
 fn reflow(
     ctx: &Ctx<'_>,
     book: BookId,
     chapter: ChapterNo,
     verse: VerseNo,
-    old: &VerseValue,
+    (old, shown): (&VerseValue, &[ChangeId]),
     new: &VerseValue,
     dropped: &mut Vec<DroppedLinks>,
 ) -> Option<PlannedChange> {
+    // The alignment was made against the verse's current text. A save from a screen whose
+    // verse moved since (a sync) knows only the text it showed, so reflowing the current
+    // alignment from it could rewrite a teammate's alignment for text it never matched; the
+    // alignment is left as it is, and its hash then marks it for review.
+    let mut current = ctx.fold.heads(&RecordKey::Verse(book, chapter, verse));
+    let mut shown = shown.to_vec();
+    current.sort();
+    shown.sort();
+    if current != shown {
+        return None;
+    }
     let VerseValue::Text {
         words,
         layout,
@@ -562,7 +581,15 @@ fn save_section(
         if let Some(old) = old
             && !unverified
         {
-            out.extend(reflow(ctx, book, chapter, verse, old, new, dropped));
+            out.extend(reflow(
+                ctx,
+                book,
+                chapter,
+                verse,
+                (old, token.heads()),
+                new,
+                dropped,
+            ));
         }
     }
     if !added.is_empty()

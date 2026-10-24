@@ -1736,7 +1736,9 @@ layer holds an open project as a handle:
 4. If the new value equals the displayed value, nothing is written. A no-op save after a sync
    must not replace a teammate's newer version.
 5. One `Verse` change, `parents = shown.heads`, `cause: Edit`. In the same batch, the verse's
-   alignment carried over to the new text (APP-DESIGN R25): when the alignment keyed by the
+   alignment carried over to the new text (APP-DESIGN R25): when the verse's heads are still
+   the token's (a save from a screen a sync overtook knows only the old text, so it leaves the
+   alignment as it is and its hash marks it for review), the alignment keyed by the
    run's anchor (§7.7) is not in conflict, covers this run's span, is not marked invalid, has a
    card, and its text hash no longer matches, `tc_align::reflow_edit`, from the old text to the
    new, keeps on each card the target words that follow into the new text, at their new

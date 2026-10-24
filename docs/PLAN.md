@@ -91,8 +91,9 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
 - Align, across a verse edit, moves each link with its own word, by position: deleting or
   adding an earlier copy of a repeated word leaves the link on the word it was on. A link
   whose word cannot be followed for sure goes back to the word bank and is listed, and the
-  verse is not marked for review (#789, Q30 (a)). tC4 4.0 moves the link to another copy of
-  the word, unannounced (#789 is open in tC4).
+  verse is not marked for review (#789, Q30 (a)); so when one copy of a repeated linked word
+  is replaced, both links go back (#820). tC4 4.0 moves the link to another copy of the word,
+  unannounced (#789 is open in tC4), and after #820 keeps the first copy's link.
 - Align opens a verse with a card for every word of the pinned original-language verse,
   comparing words in NFC; a link to a word the pin lacks goes back to the word bank and is
   listed, and the verse needs review on the rail and when it opens (#790). tC4 shows the stored cards as they are, so the sample's TIT 1:1 offers 11
@@ -101,8 +102,10 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   the pinned UHB.
 - Align's "The draft changed" notice and the rail's Invalid follow one rule: the text, the
   words, the span or the original-language text changed, or the alignment is marked for
-  re-review (#787, #796). tC4 shows the notice only for a changed text or changed words, and
-  its rail calls an alignment valid when only its words are wrong.
+  re-review (#787, #796). The alignment files' `invalid` follows the same rule, so a teammate
+  on tC4 reads such an alignment as needing re-review too. tC4 shows the notice only for a
+  changed text or changed words, its rail calls an alignment valid when only its words are
+  wrong, and its files write `invalid: false` there.
 - A carry-over that loses no link is saved when the translator leaves the verse
   (APP-DESIGN AD19); tC4 writes nothing at open (#787).
 - Align's cards are a Tab stop while words are chosen, and Enter or Space places them, so a

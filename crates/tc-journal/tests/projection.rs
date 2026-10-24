@@ -392,6 +392,48 @@ fn an_empty_frame_is_spliced_as_tc4_writes_it() {
     );
 }
 
+/// A story file read back with its reference line taken out of the base (the line is a
+/// record of its own) still writes the line: after the last frame's paragraph, as tC4's
+/// `writeRef` adds it to a story that has none.
+#[test]
+fn a_story_whose_base_has_no_reference_line_writes_its_reference() {
+    let image = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)";
+    let render = |template: &str| {
+        let mut ana = Dev::new(1);
+        let story = tc_journal::StoryNo::new(1).expect("story");
+        let changes = vec![
+            ana.one(
+                Record::StoryBase {
+                    story,
+                    value: template.into(),
+                },
+                vec![],
+            ),
+            ana.one(
+                Record::StoryRef {
+                    story,
+                    value: Some("A Bible story from: Genesis 1-2".into()),
+                },
+                vec![],
+            ),
+        ];
+        let state = FoldState::fold(
+            ProjectKind::Stories,
+            changes.into_iter().map(FoldInput::from),
+        );
+        String::from_utf8(state.render(&DerivedFile::Story(story)).expect("story")).expect("utf-8")
+    };
+    assert_eq!(
+        render(&format!("# 1. The Creation\n\n{image}\n\nOne.\n")),
+        format!("# 1. The Creation\n\n{image}\n\nOne.\n\n_A Bible story from: Genesis 1-2_\n")
+    );
+    assert_eq!(
+        render(&format!("# 1. The Creation\n\n{image}\n\n\n\n\n\n")),
+        format!("# 1. The Creation\n\n{image}\n\n\n\n_A Bible story from: Genesis 1-2_\n"),
+        "an empty last frame keeps tC4's spacing"
+    );
+}
+
 /// tC4's `TITLE_RE` and `writeTitle`: frame 0 is what follows `# N. `, and the number is the
 /// line's own, so a title a person types never loses it (docs/evidence/state-seed-check-2026-10-18.md
 /// §4.1, §5.1).
@@ -490,8 +532,8 @@ fn a_pin_that_is_no_scripture_has_no_relationship_and_makes_no_anomaly() {
 
 /// tC4's `relationshipsFromPins` (`journal/relationships.mjs:24-42`): the original
 /// languages, the extra scripture, the primary set, the fallback set, then the lexicons, with
-/// one row per repository where the first one wins (docs/evidence/state-seed-check-2026-10-18.md
-/// §4.3).
+/// one row per repository where the first one wins, and inside a group the slots in tC4's
+/// `resources.json` order (docs/evidence/state-seed-check-2026-10-18.md §4.3).
 #[test]
 fn relationships_follow_tc4_order_and_keep_the_first_row_per_repository() {
     let mut ana = Dev::new(1);
@@ -517,7 +559,10 @@ fn relationships_follow_tc4_order_and_keep_the_first_row_per_repository() {
         ana.one(
             support::pins(
                 PinGroup::Fallback,
-                &[("ult", slot("git.door43.org/uW/en_ult", "v2", scripture))],
+                &[(
+                    "gatewayLanguage",
+                    slot("git.door43.org/uW/en_ult", "v2", scripture),
+                )],
             ),
             vec![],
         ),
@@ -525,10 +570,21 @@ fn relationships_follow_tc4_order_and_keep_the_first_row_per_repository() {
             support::pins(
                 PinGroup::Primary,
                 &[
-                    ("ult", slot("git.door43.org/uW/en_ult", "v1", scripture)),
                     (
-                        "tn",
+                        "gatewayLanguage",
+                        slot("git.door43.org/uW/en_ult", "v1", scripture),
+                    ),
+                    (
+                        "translationNotes",
                         slot("git.door43.org/uW/en_tn", "v1", "parascriptural/x-tn"),
+                    ),
+                    (
+                        "translationWordsLinks",
+                        slot("git.door43.org/uW/en_twl", "v1", "parascriptural/x-twl"),
+                    ),
+                    (
+                        "translationWords",
+                        slot("git.door43.org/uW/en_tw", "v1", "peripheral/x-tw"),
                     ),
                 ],
             ),
@@ -569,8 +625,10 @@ fn relationships_follow_tc4_order_and_keep_the_first_row_per_repository() {
         [
             ("dcs::uW/el-x-koine_ugnt", "v0.34"),
             ("dcs::uW/fr_glt", "v1"),
-            ("dcs::uW/en_tn", "v1"),
             ("dcs::uW/en_ult", "v1"),
+            ("dcs::uW/en_tn", "v1"),
+            ("dcs::uW/en_twl", "v1"),
+            ("dcs::uW/en_tw", "v1"),
             ("dcs::uW/en_ugl", "v1"),
         ]
     );

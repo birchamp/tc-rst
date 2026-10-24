@@ -374,3 +374,73 @@ fn a_section_save_that_drops_an_unclear_link_lists_it() {
     assert_eq!(listed(&reply), [(1, 1, vec![(0, 1), (1, 2)])]);
     handle.close().unwrap();
 }
+
+/// A save from a screen a sync overtook leaves the alignment as it is: the teammate's
+/// alignment, made for the teammate's text, is never reflowed from text it was not made for.
+/// The verse stands as a conflict, and the alignment keeps the teammate's links.
+#[test]
+fn a_save_from_a_screen_a_sync_overtook_keeps_the_teammates_alignment() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    paul(&handle);
+    let shown = handle.mint(&verse(1, 1), None).unwrap();
+    let Some(Record::Verse { value, .. }) = handle.snapshot().fold().projected(&verse(1, 1)) else {
+        panic!("1:1");
+    };
+    let mut theirs = alignment(&handle);
+    let verse_heads = handle.snapshot().fold().heads(&verse(1, 1));
+    let alignment_heads = handle.snapshot().fold().heads(&alignment_key(1, 1));
+    handle.close().unwrap();
+    // A teammate's text and the alignment their save reflowed to it.
+    let mut text = value.clone();
+    if let tc_journal::record::VerseValue::Text { words, .. } = &mut text {
+        *words = "Paul, a slave of God".into();
+    }
+    theirs.alignments[1].bottom_words = vec![target("a", 1, 1)];
+    theirs.word_bank = vec![target("slave", 1, 1)];
+    crate::commands::teammate_batch(
+        &rig.fs,
+        &folder,
+        tc_journal::DeviceId::local([8u8; 15]),
+        1,
+        vec![
+            (
+                Record::Verse {
+                    book: TIT,
+                    chapter: ChapterNo::new(1).unwrap(),
+                    verse: VerseNo::new(1).unwrap(),
+                    value: text,
+                },
+                verse_heads,
+            ),
+            (
+                Record::Alignment {
+                    book: TIT,
+                    chapter: ChapterNo::new(1).unwrap(),
+                    verse: VerseNo::new(1).unwrap(),
+                    value: theirs.clone(),
+                },
+                alignment_heads,
+            ),
+        ],
+    );
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let reply = handle
+        .submit(Command::SaveVerse {
+            shown,
+            words: "Paul, a servant of God and an apostle".into(),
+        })
+        .wait()
+        .unwrap();
+    let keys: Vec<RecordKey> = reply
+        .changes
+        .iter()
+        .map(|id| handle.snapshot().fold().change(id).unwrap().key)
+        .collect();
+    assert_eq!(keys, [verse(1, 1)], "no alignment change");
+    assert!(reply.dropped_links.is_empty());
+    assert_eq!(alignment(&handle), theirs);
+    assert_eq!(handle.snapshot().fold().heads(&verse(1, 1)).len(), 2);
+    handle.close().unwrap();
+}
