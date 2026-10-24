@@ -16,6 +16,7 @@ mod app {
     mod home;
     mod indicator;
     mod internet;
+    mod jobs;
     mod language;
     mod offer;
     mod print;

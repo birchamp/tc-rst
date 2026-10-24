@@ -31,6 +31,7 @@ pub mod fix;
 pub mod forms;
 pub mod home;
 pub mod internet;
+pub mod jobs;
 pub mod language;
 pub mod load;
 pub mod offer;
