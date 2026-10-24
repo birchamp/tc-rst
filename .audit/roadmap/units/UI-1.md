@@ -4,7 +4,7 @@ title: Typed jobs and one job follower
 track: A
 lane: app
 milestone: M1
-state: verifying
+state: gating
 owner: C7a session (Claude Code 3058c665)
 branch: track-UI-1
 worktree: .worktrees/track-UI-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d (basis: +150/-200 lines estimated in health-app §8)
 merged: none
 updated: 2026-10-24
-next: One review (races and protocol lens), then gate with C7a merged first; UI-1 merges after C7a.
+next: Merge after C7a: merge main, run scripts/gates.sh --wait-ci UI-1 on the merge commit (or join a batch), fast-forward main.
 blocked_by: none
 ---
 
@@ -311,3 +311,5 @@ It must print `# fail 0` and `# skipped 0`.
 - 2026-10-24 | C7a session (Claude Code 3058c665) | step 5 | none | `only_the_follower_reads_jobs` (tc-ui tests/app/lint.rs) scans src with white space squeezed out, so a call split over lines is found; allowed: app/web/jobs.rs, and app/web/mod.rs inside `read_jobs` only. Proof: a stray `js::sleep(50)` and `.jobs.with_untracked(` in sources.rs fail it with `INV-ONE-JOB-FOLLOWER: ... src/app/web/sources.rs:321 js::sleep(50)` and `:322 .jobs.with_untracked(` | cargo test -p tc-ui --test app lint
 - 2026-10-24 | C7a session (Claude Code 3058c665) | step 6 | none | `tc_ui::app::latest::{Latest, Attempt}` (begin, current, is_current; no public `Attempt` constructor) replaces the nine statics in check.rs (ITEMS, ARTICLES, OPENS), align.rs (OPENS, READS, REFRESHES, NAVIGATIONS) and understand.rs (OPENS, ARTICLES) and their helpers; the open's follow passes `|| OPENS.with(|l| l.is_current(attempt))` as `wanted`. The scan also found two attempt counters the card did not list, app_ctx.rs `compose` and `share_flows`: both are `Latest` now. Allowed with reasons: id sources (fix.rs NEXT_ID, mod.rs next_listener, saves.rs next_hook), mod.rs state_frames (dates a hello), app_ctx.rs sign_in_flows (the flow id the sign-in step keeps in its own state). Tests: `a_newer_attempt_makes_an_older_reply_stale`, `no_hand_made_attempt_counters`; proof: a stray `Cell<u64>` in check.rs fails `INV-A-STALE-REPLY-NEVER-SHOWS: ... src/app/web/check.rs:854`. tc-ui host tests, native clippy and the four wasm clippy runs pass | cargo test -p tc-ui --test app
 - 2026-10-24 | C7a session (Claude Code 3058c665) | gate | none | the job journeys (source-texts, upgrades, understand, guided-fix, sync-button, share-open) on this branch: `# tests 27 # pass 27 # fail 0 # skipped 0`. Proof 3: with `asked(None)` answering no end, `a_job_the_server_no_longer_knows_ends_lost` fails at jobs.rs:90. The full gate list runs on the merge commit after C7a is on main (the branch is cut from track-C7a, which lacks main's newer merges) | .enjoy-logs/ui1-journeys.log
+- 2026-10-24 | races and protocol lens (Claude Code subagent of 3058c665) | verify | 7a4ac8b0 | no blocker, no major. Each caller's ends match the old meaning except the intended removal of the false "not available yet"; `refresh_projects()` only rereads home/List; polling once a second matches four of the old loops; a stale open reply is dropped by the OPENS check after the follow; every counter bump and read kept its meaning and direction; every typed start sends the same JobOutcome variant, scripted paths included, fixtures unchanged. Minors: (1) a `jobs/get` answer merged over a newer frame delays a Door43 result by a second; (2) a forgotten book open closes its overlay silently; (3) a Lost Door43 open or sync says nothing | cargo test -p tc-ui --test app -- jobs lint latest
+- 2026-10-24 | C7a session (Claude Code 3058c665) | fix | none | minor 1 fixed: the follower merges a `jobs/get` answer with `effects::apply_reread` over the view held before the call, so a frame that came meanwhile is never overwritten (as `read_jobs` does). Minors 2 and 3 logged in minors.tsv: both need a server restart mid-job, and 2 replaces an endless spinner. Job journeys again: `# tests 27 # pass 27 # fail 0 # skipped 0`; wasm clippy and the jobs, lint and latest tests pass | .enjoy-logs/ui1-journeys2.log

@@ -34,15 +34,25 @@ impl Actions {
                 Step::End(end) => return typed::<E>(end),
                 Step::Progress(progress) => on_progress(&progress),
                 Step::AskServer => {
+                    let held = self
+                        .s()
+                        .server
+                        .jobs
+                        .with_untracked(|jobs| jobs.get(&job).cloned());
                     // A failed call says nothing about the job: the next second asks again.
                     if let Ok(answer) = self.runtime().api().call(&JobsGet { job }).await {
                         let state_now = answer.as_ref().map(|view| view.state.clone());
-                        if let Some(view) = answer {
-                            self.s()
-                                .server
-                                .jobs
-                                .try_update(|jobs| crate::app::effects::merge_job(jobs, view));
-                        }
+                        // A frame that came while the call was out is newer than its answer.
+                        self.s()
+                            .server
+                            .jobs
+                            .try_update(|jobs| match (&held, answer) {
+                                (Some(held), answer) => {
+                                    crate::app::effects::apply_reread(jobs, held, answer)
+                                }
+                                (None, Some(view)) => crate::app::effects::merge_job(jobs, view),
+                                (None, None) => {}
+                            });
                         if let Some(Step::End(end)) = state.asked(state_now) {
                             return typed::<E>(end);
                         }
