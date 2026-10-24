@@ -4,10 +4,10 @@ title: Architecture and I/O boundary checks
 track: A
 lane: checks
 milestone: M1
-state: parked
+state: verifying
 owner: checks lane (Claude Code 2198ee19)
-branch: track-CHK-1
-worktree: .worktrees/track-CHK-1
+branch: track-CHK-1-s5
+worktree: .worktrees/track-CHK-1-s5
 depends: [INT-4, CHK-1a]
 needs_owner: []
 proves: []
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5-1 d
 merged: none
 updated: 2026-10-24
-next: do step 5 after S2 merges (crates/tc-store and crates/tc-journal clippy.toml), then the review, then ask the orchestrator for a merge turn; branch track-CHK-1, worktree .worktrees/track-CHK-1
+next: review, then a merge turn after CHK-1a (it depends on CHK-1a): merge main in, scripts/gates.sh --wait-ci CHK-1
 blocked_by: none
 ---
 
@@ -320,3 +320,4 @@ Plus: `cargo test -p tc-arch` passes, and each planted violation of steps 1, 3 a
 - 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | step 4 | 6c23dfbe | The gate list ran in CI on the pushed branch (INT-8: GitHub runs are the gate): ci 40056985489 and app-e2e 40056985483 both success, so tc-arch's tests pass on Linux and its code passes the Windows clippy | gh run view 40056985489
 - 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | park | 6c23dfbe | Parked as the card says: step 5 edits crates/tc-store while S2 is merging, not done | python3 -I .audit/tools/board.py
 - 2026-10-24 00:31 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1-4 and 6 are card CHK-1a, merged on its own; this card keeps the rest and depends on CHK-1a | .audit/roadmap/units/CHK-1a.md
+- 2026-10-24 06:10 EDT | checks lane (Claude Code 2198ee19) | step 5 | none | S2 is done (33d2378d); `cargo tree -p tc-store -e features | grep -c 'git2 feature "https"'` prints 0. Branch track-CHK-1-s5 from track-CHK-1 (CHK-1a) with main merged in. crates/tc-store/clippy.toml and crates/tc-journal/clippy.toml copy the root's four keys and forbid std::fs's thirteen mutators with the INV-ATOMIC-WRITES reason. Sites: 7 #[expect] with a reason (file-level in vfs.rs, the real filesystem, and fault.rs, FaultFs's .git mirror; fn-level in history.rs's broken-.git rebuild, repack.rs's loose-object clean-ups, one of them Windows only, and git.rs's stale-lock clean-up, each git's own files, not a project file) and 7 #[allow] with a reason in test code (git.rs's and atomic.rs's test modules, tests/store.rs, examples/storebench.rs, tc-journal's three test files). Clippy clean on Linux and on x86_64-pc-windows-gnu. Plant: a raw `std::fs::write` in tc-store's lib: "error: use of a disallowed method `std::fs::write` ... note: INV-ATOMIC-WRITES: write project files through tc_store::atomic"; reverted | cargo clippy -p tc-store -p tc-journal --all-targets

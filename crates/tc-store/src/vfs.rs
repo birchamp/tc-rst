@@ -5,6 +5,10 @@
 //!
 //! Only the helpers of [`crate::atomic`] write, rename or remove project files through it.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "StdFs is the real filesystem under tc_store::atomic: the one place project files are written"
+)]
 use std::ffi::OsString;
 use std::fmt;
 use std::fs::{File, OpenOptions};

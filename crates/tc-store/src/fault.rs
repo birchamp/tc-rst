@@ -18,6 +18,10 @@
 //!
 //! Paths are absolute, `/`-separated, without `.` or `..`.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "FaultFs's mirror: the real folder beside the model where libgit2 keeps a test project's .git, made, copied and removed for tests"
+)]
 use crate::vfs::{
     DirEntry, EntryKind, FileMeta, HeldByAnotherProgram, LockHandle, ReadHandle, Vfs, WriteHandle,
 };
