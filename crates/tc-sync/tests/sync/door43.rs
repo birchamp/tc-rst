@@ -610,3 +610,44 @@ async fn a_joined_project_holds_the_teams_work_and_syncs_both_ways() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+/// §9.6 Share: a new repository, the project connected to it, and its history pushed and
+/// confirmed; a second share with the same name is refused.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn share_makes_the_repository_and_pushes_the_project() {
+    let door43 = door43("unused-share").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    save(&a, 1, 1, "Paul, a servant of God");
+    let name: tc_door43::NewRepoName = "en_tit_ana".parse().unwrap();
+    let report = tc_sync::share(
+        &a,
+        &door43.client,
+        &door43.session,
+        &NewRepoOwner::SignedInUser,
+        &name,
+        Visibility::Public,
+        &NoPause,
+    )
+    .await
+    .unwrap();
+    synced(&report);
+    assert_eq!(branch_on_door43(&door43, "en_tit_ana"), head(&a));
+    let again = tc_sync::share(
+        &a,
+        &door43.client,
+        &door43.session,
+        &NewRepoOwner::SignedInUser,
+        &name,
+        Visibility::Public,
+        &NoPause,
+    )
+    .await;
+    assert!(
+        matches!(again, Err(tc_sync::ShareError::NameExists)),
+        "{again:?}"
+    );
+    a.close().unwrap();
+}
