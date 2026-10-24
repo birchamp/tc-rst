@@ -17,7 +17,7 @@ use tc_api::helps::{
     QuestionCard, ReadySlot, SimplifiedVerse, Slot, WordCard,
 };
 use tc_api::ids::{JobId, RefPart, WallMs};
-use tc_api::jobs::{JobKind, JobOutcome, OpenPhase, Phase};
+use tc_api::jobs::{JobKind, OpenPhase, Phase};
 use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_api::prefs::DraftUnit;
 use tc_api::session::{Close, KeptPlace, Open, OpenUnit, OpenedProject};
@@ -468,12 +468,15 @@ impl Handle<Open> for App {
         Ok(self
             .inner
             .jobs
-            .start_async(spec, move |ctx| async move { app.open_job(req, ctx).await }))
+            .start_typed::<Open, _, _>(
+                spec,
+                move |ctx| async move { app.open_job(req, ctx).await },
+            ))
     }
 }
 
 impl App {
-    async fn open_job(&self, req: Open, ctx: JobCtx) -> Result<JobOutcome, JobEnd> {
+    async fn open_job(&self, req: Open, ctx: JobCtx) -> Result<Box<OpenedProject>, JobEnd> {
         #[cfg(feature = "test-hooks")]
         self.hold_at(tc_api::test::HoldPoint::Open).await;
         let session = self
@@ -512,7 +515,7 @@ impl App {
                     tool: place.tool,
                 })
         });
-        Ok(JobOutcome::Opened(Box::new(OpenedProject {
+        Ok(Box::new(OpenedProject {
             draft_unit: self
                 .inner
                 .prefs
@@ -525,7 +528,7 @@ impl App {
             books: facts.books.unwrap_or_default(),
             place,
             session,
-        })))
+        }))
     }
 }
 

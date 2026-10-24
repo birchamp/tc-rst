@@ -14,7 +14,7 @@ use tc_api::door43::OpenDoor43;
 use tc_api::endpoint::NetKind;
 use tc_api::error::Feature;
 use tc_api::ids::{JobId, ProjectRef};
-use tc_api::jobs::{JobKind, JobOutcome, Phase, SyncPhase};
+use tc_api::jobs::{JobKind, Phase, SyncPhase};
 use tc_api::refusal::{OpenDoor43Refusal, ShareRefusal};
 use tc_api::{ApiError, Refusal};
 use tc_door43::{Door43Error, Session};
@@ -200,12 +200,11 @@ impl Handle<OpenDoor43> for App {
         }
         let app = self.clone();
         let spec = JobSpec::new(JobKind::Join, Phase::Sync(SyncPhase::Fetch));
-        Ok(self.inner.jobs.start_async(spec, move |_ctx| async move {
-            app.inner
-                .open_door43
-                .next()
-                .map(|project| JobOutcome::Created { project })
-                .map_err(JobEnd::Failed)
-        }))
+        Ok(self
+            .inner
+            .jobs
+            .start_typed::<OpenDoor43, _, _>(spec, move |_ctx| async move {
+                app.inner.open_door43.next().map_err(JobEnd::Failed)
+            }))
     }
 }

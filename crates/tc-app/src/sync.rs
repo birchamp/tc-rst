@@ -12,7 +12,7 @@ use tc_api::ApiError;
 use tc_api::door43::SyncProject;
 use tc_api::error::Feature;
 use tc_api::ids::{JobId, ProjectRef};
-use tc_api::jobs::{JobKind, JobOutcome, Phase, SyncPhase, SyncResultView};
+use tc_api::jobs::{JobKind, Phase, SyncPhase, SyncResultView};
 use tc_api::shown::PersonLabel;
 use tc_journal::fold::{ConflictCounts, ConflictKind};
 use tc_journal::{ChangeId, DeviceId};
@@ -138,7 +138,7 @@ impl App {
     }
 
     /// One sync of `folder`, after the checkpoint of the project just left (tC4 `syncRun`).
-    async fn sync_job(&self, folder: ProjectRef) -> Result<JobOutcome, JobEnd> {
+    async fn sync_job(&self, folder: ProjectRef) -> Result<SyncResultView, JobEnd> {
         self.inner.sessions.settled(&folder).await;
         #[cfg(feature = "test-hooks")]
         if let Some(outcome) = self.inner.sync.take(&folder) {
@@ -152,7 +152,7 @@ impl App {
         &self,
         folder: ProjectRef,
         outcome: tc_api::test::ScriptedSync,
-    ) -> Result<JobOutcome, JobEnd> {
+    ) -> Result<SyncResultView, JobEnd> {
         use serde_json::json;
         use tc_api::test::ScriptedSync as Scripted;
         let (teammates, joined, restored) = match outcome {
@@ -245,7 +245,7 @@ impl App {
         self.inner
             .bus
             .publish(tc_api::event::Event::HomeCard { project: folder });
-        Ok(JobOutcome::Synced(view))
+        Ok(view)
     }
 }
 
@@ -262,10 +262,12 @@ impl Handle<SyncProject> for App {
             .project(req.project.clone())
             .pass(pass);
         let app = self.clone();
-        Ok(self.inner.jobs.start_async(
-            spec,
-            move |_ctx| async move { app.sync_job(req.project).await },
-        ))
+        Ok(self
+            .inner
+            .jobs
+            .start_typed::<SyncProject, _, _>(spec, move |_ctx| async move {
+                app.sync_job(req.project).await
+            }))
     }
 }
 
