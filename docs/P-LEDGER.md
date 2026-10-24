@@ -14,6 +14,6 @@ workflow, and each pending card is not done.
 | P5 | Every project state written by a test is a valid Scripture Burrito | `test` | `assert_valid_burrito` (`crates/tc-store/tests/store/common.rs`) (pending: CHK-2) |
 | P6 | The helps screens work with Door43 and Aquifer resources | `test` | `crates/tc-helps/tests/aquifer.rs`, `crates/tc-resources/tests/aquifer_install.rs` (pending: AQ1) |
 | P7 | The key screens look like tC4's | `test` | `the_committed_record_passes_the_gate` (`crates/tc-ui/tests/screen_record.rs`) (pending: CHK-6, G2) |
-| P8 | Arabic and Hebrew render and edit right to left | `journeys`, `e2e-linux`, `e2e-windows`, `e2e-macos` | `arabic_helps_panes_are_rtl_in_an_english_interface`, `rtl_project_drafts_checks_and_aligns`, `graphite_shapes_awami_nastaliq_in_the_shell`, `plain_chromium_fails_the_graphite_probe`; Hebrew in Align waits for G4's REQUEST (not in code) |
+| P8 | Arabic and Hebrew render and edit right to left | `journeys`, `e2e-linux`, `e2e-windows`, `e2e-macos` | `arabic_helps_panes_are_rtl_in_an_english_interface`, `rtl_project_drafts_checks_and_aligns`, `graphite_shapes_awami_nastaliq_in_the_shell`, `plain_chromium_fails_the_graphite_probe`, `hebrew_original_aligns_right_to_left_on_jonah` |
 | P9 | tC4, tC3, USFM and Burrito projects carry over | — | (pending: I, F1) |
 | P10 | Old projects keep working across frozen format versions | `test` | `every_kind_has_the_pinned_wire_form`, `the_encoding_is_pinned`, `tokens_have_the_pinned_byte_form_and_key` (pending: V) |

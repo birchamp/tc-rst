@@ -1,16 +1,18 @@
 // A right-to-left project through the page (G4 steps 5 and 6, INV-RTL-PROJECTS-EDIT-CORRECTLY;
 // tC4 `e2e/j10-rtl.spec.ts`, J10 as an axis of J2, J4 and J5): an Arabic Bible created, Titus
 // added from a USFM file, a verse drafted, a check decided and a word aligned, each read right to
-// left and saved as typed and chosen. The Hebrew original in Align on Jonah waits for a fixture
-// with hbo_uhb and for the cards' lang to follow the original (G4's log, REQUEST).
+// left and saved as typed and chosen; and the Hebrew original in Align on Jonah (scenario en-pins
+// serves hbo_uhb), tagged `hbo` and read right to left.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/rtl-project.test.mjs
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { newRequestId } from '../env-rust.mjs';
 import { browserTest, catalog, until, withApp } from './kit.mjs';
 
 const en = catalog('en');
+const SCENARIO = { scenario: 'en-pins' };
 const listed = (env) => fs.readdirSync(env.projectsDir).filter((name) => !name.startsWith('.')).sort();
 const json = (env, ...parts) => JSON.parse(fs.readFileSync(path.join(env.projectsDir, ...parts), 'utf8'));
 
@@ -141,4 +143,37 @@ browserTest('rtl_project_drafts_checks_and_aligns', async () => {
     assert.ok(alignment.alignments.some((group) => group.topWords.some((w) => w.word === greek)
       && group.bottomWords.some((w) => w.word === 'بولس')), `${greek} keeps بولس on disk`);
   });
+});
+
+// The original of an Old Testament book is Hebrew: its cards carry `hbo` and read right to left.
+// Jonah 1:1 of the sample is a stub, so the test drafts it first, as a teammate's verse arrives.
+browserTest('hebrew_original_aligns_right_to_left_on_jonah', async () => {
+  await withApp(async ({ page, env }) => {
+    const project = 'sample_burrito';
+    await page.getByTestId(`project-${project}`).getByTestId('book-tile-JON').click();
+    await checkTab(page).click();
+    const at = (await env.call('app/hello', {})).sessions[0].at;
+    const stub = (await env.call('editor/chapters', { at, book: 'JON' })).chapters[0].verses.find((v) => v.key === '1');
+    await env.call('editor/saveVerse', { at, request: newRequestId(), shown: stub.words.token, words: 'Vino palabra de Jehová a Jonás' });
+    await page.getByTestId('open-align').or(allTools(page)).first().waitFor();
+    if (!(await page.getByTestId('open-align').count())) await allTools(page).click();
+    await page.getByTestId('open-align').click();
+    const missing = page.getByText(en['align.unavailable.missing.title']);
+    await page.getByTestId('align-bank').or(missing).first().waitFor();
+    assert.equal(await missing.count(), 0, 'the scenario holds the Hebrew original of Jonah (hbo_uhb)');
+    const hebrew = page.locator('[data-testid^="align-card-"] span[lang="hbo"]');
+    await hebrew.first().waitFor();
+    assert.equal(await direction(hebrew.first()), 'rtl');
+    const original = await hebrew.first().textContent();
+    const first = bank(page).first();
+    const chosen = await first.getAttribute('data-word');
+    await first.click();
+    await until('the word is chosen', async () => (await first.getAttribute('data-armed')) === '1');
+    await page.locator('[data-testid^="align-card-"]').first().click();
+    await until('the link saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    await leave(page, env, project);
+    const alignment = json(env, project, 'ingredients', 'checking', 'alignments', 'JON.json').chapters['1']['1'];
+    assert.ok(alignment.alignments.some((group) => group.topWords.some((w) => w.word === original)
+      && group.bottomWords.some((w) => w.word === chosen)), `${original} keeps ${chosen} on disk`);
+  }, SCENARIO);
 });
