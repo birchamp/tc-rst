@@ -57,9 +57,6 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 - A sync checks write access before it fetches. One API call reads `permissions.push`.
   Without write access the sync refuses, and nothing changes, as in tC4. Other refusals
   after the received work arrived keep that work and say so (Q8).
-- The aligner shows the word bank and the words of each card in verse order everywhere:
-  from the first view of a verse, after an edit, and after Clear. tC4 at `d310bf3` still
-  opens a verse with no saved alignment in word-aligner order (Q15).
 - A conflict between two check decisions is shown and can be resolved. tC4 keeps the
   newest decision and shows only a count (Q1, AGENTS.md).
 - One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
@@ -67,9 +64,6 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 
 Under AGENTS.md "Matching tC4" (2026-10-19):
 
-- Words inside nested alignments show in Translate, Check, Align and print, such as Genesis
-  1:1 "the heavens" and a Psalm's "Selah" aligned inside `\qs` (tC4 #782, on tC4 main at
-  9ad4d5c). The reference d310bf3 drops them (Q32 of `docs/TC4-DELTA-2026-10-19.md`).
 - A footnote, cross reference, figure or any other marker the shown text leaves out (`\va`,
   `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …) between two words keeps the space after it, so the
   words never join and can be checked, aligned and exported. tC4's open PR #800 does this for
