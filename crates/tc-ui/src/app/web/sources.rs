@@ -7,8 +7,7 @@ use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::event::{Aspect, ChangeParts, ChangeScope};
 use tc_api::home::HomeCard;
-use tc_api::ids::JobId;
-use tc_api::jobs::{Cancel, JobState, Phase};
+use tc_api::jobs::{Cancel, Phase};
 use tc_api::refusal::Message;
 use tc_api::resources::{Catalog, Download, GatewayPackage, PackageRow, Sources};
 use tc_api::settings::ViewFromHome;
@@ -19,6 +18,7 @@ use super::app_ctx::{Actions, Dialog};
 use super::js;
 use crate::app::client::CallError;
 use crate::app::internet::Pending;
+use crate::app::jobs::JobEnd;
 use crate::app::sources::{Dl, SettingsForm, SourcesForm};
 use crate::i18n::t_dyn;
 
@@ -266,7 +266,26 @@ impl Actions {
                 src.error = None;
                 src.dl = Some(Dl::Run { job, repo: None });
             });
-            let ended = this.follow_download(job).await;
+            let ended = this
+                .follow::<Download>(
+                    job,
+                    |progress| {
+                        if let Phase::Install { repo } = &progress.phase {
+                            this.patch_src(|src| {
+                                if let Some(Dl::Run {
+                                    job: running,
+                                    repo: shown,
+                                }) = &mut src.dl
+                                    && *running == job
+                                {
+                                    *shown = Some(repo.clone());
+                                }
+                            });
+                        }
+                    },
+                    || true,
+                )
+                .await;
             // Whatever the end, a repository may have installed before it: what a pane or a
             // help lacked may be here now, so Understand reads again (tC4 bumps
             // `installEpoch`), and step 1 counts the package.
@@ -279,13 +298,15 @@ impl Actions {
                 this.patch_src(|src| src.packages = Some(view));
             }
             match ended {
-                Ok(()) => this.patch_src(|src| src.dl = Some(Dl::Done)),
-                Err(None) => this.patch_src(|src| src.dl = None),
-                Err(Some(ApiError::NeedsInternet(_))) => {
+                JobEnd::Done(()) => this.patch_src(|src| src.dl = Some(Dl::Done)),
+                JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
+                    this.patch_src(|src| src.dl = None);
+                }
+                JobEnd::Failed(ApiError::NeedsInternet(_)) => {
                     this.patch_src(|src| src.dl = None);
                     this.ask_again(Pending::Download);
                 }
-                Err(Some(error)) => {
+                JobEnd::Failed(error) => {
                     let reason = said(&error);
                     this.patch_src(|src| {
                         src.dl = None;
@@ -294,54 +315,6 @@ impl Actions {
                 }
             }
         });
-    }
-
-    /// Follows the download until it ends, showing the repository it fetches. `Err(None)`:
-    /// cancelled, or ended without an outcome.
-    async fn follow_download(&self, job: JobId) -> Result<(), Option<ApiError>> {
-        let mut waited = 0;
-        loop {
-            let state = self
-                .s()
-                .server
-                .jobs
-                .with_untracked(|jobs| jobs.get(&job).map(|view| view.state.clone()));
-            match state {
-                Some(JobState::Done(_)) => return Ok(()),
-                Some(JobState::Failed(error)) => return Err(Some(error)),
-                Some(JobState::Cancelled) => return Err(None),
-                Some(JobState::Running(progress)) => {
-                    if let Phase::Install { repo } = progress.phase {
-                        self.patch_src(|src| {
-                            if let Some(Dl::Run {
-                                job: running,
-                                repo: shown,
-                            }) = &mut src.dl
-                                && *running == job
-                            {
-                                *shown = Some(repo);
-                            }
-                        });
-                    }
-                }
-                Some(JobState::Queued | JobState::Cancelling) | None => {}
-            }
-            js::sleep(50).await;
-            waited += 50;
-            if waited >= 1000 {
-                waited = 0;
-                match self.runtime().api().call(&tc_api::jobs::Get { job }).await {
-                    Ok(Some(view)) => {
-                        self.s()
-                            .server
-                            .jobs
-                            .try_update(|jobs| crate::app::effects::merge_job(jobs, view));
-                    }
-                    Ok(None) => return Err(None),
-                    Err(_) => {}
-                }
-            }
-        }
     }
 
     /// Cancel while a download runs: a declared difference, since tC4 has none (B9a). What was
