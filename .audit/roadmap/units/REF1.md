@@ -4,7 +4,7 @@ title: Move the tC4 reference and port its changes
 track: A
 lane: app
 milestone: M3
-state: fixing
+state: gating
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-REF1
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -15,7 +15,7 @@ no_loss: false
 size: 3-5 sessions (estimate)
 merged: none
 updated: 2026-10-24
-next: Green ci and app-e2e on the tip of track-REF1, then send the tip to the integration lane (local_f687a996) for a batch; then REF1b.
+next: The integration lane merges track-REF1 in a batch after SWEEP (depends); this session then claims REF1b.
 blocked_by: none
 ---
 
@@ -266,3 +266,4 @@ machine fingerprint in `manifest.json`).
 - 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | Major fixed: the 13 Check rows of parity/app/residuals.json now say the compare card, the note box and the #773 titles are tC4 rc.2's, and name the visible difference, tC4 #769 (folding groups, Fold all, "By figure" against "By category"), which REF1c builds; the true #764 and Invalid-count sentences kept; no row names d310bf3 any more. Minors: PLAN "differs on purpose" lists the help overlay (H16); vendor-tc4.sh:3 comment corrected; the help-pin check gap logged in .audit/minors.tsv | grep -c d310bf3 parity/app/residuals.json prints 0
 - 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | note | none | REQUEST to G3, widened: crates/tc-ui/help/ts-platform.html (its Linux row names ./start-tc4.sh) also describes tC4's package, beside gs-install.html:129 | crates/tc-ui/help/ts-platform.html:128
 - 2026-10-24 18:07 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | CI run 40136396243's parity-baseline failed INV-P1-COVERED ("the reference is the baseline's": coverage.json still named d310bf3). parity/app/journeys/coverage.json moves to d25b7871 with its 39 tC4 specs (37 before): compare-card.spec.ts maps to check-detail.test.mjs compare_card_columns_fit_the_width; sync-refusal.spec.ts (#801) is pending on FIX-R, which builds it; bundled-upgrade.spec.ts, which pended on REF1 (card step 2.6), maps to the Rust tests bundled_upgrade_leaves_the_pinned_release_and_the_projects_pins_as_they_were (tc-app upgrades.rs) and a_bundled_store_seeds_a_first_run_that_is_offline (tc-resources dcs_install.rs) instead of a duplicate journey (decision: the behaviour is the store's, and both tests drive it through the public API). scripts/gates.sh --step node: 352 tests, 0 fail | node --test parity/app/journeys/coverage.test.mjs
+- 2026-10-24 19:04 EDT | REF1 session (Claude Code 56b3f56d) | gate | 811a6385 | GitHub runs green on 811a6385: ci 40137210125 (every gate step, the cargo workspace tests included) and app-e2e 40137210117 (every journey, none skipped); scripts/gates.sh --check-receipt accepts it. Handed to the integration lane for a batch. The merge still waits for SWEEP (depends) | scripts/gates.sh --check-receipt
