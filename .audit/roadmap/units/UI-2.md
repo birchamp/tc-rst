@@ -4,18 +4,18 @@ title: Ports for sync, share, exchange and import
 track: A
 lane: app
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: C7a session (Claude Code 3058c665)
+branch: track-UI-2
+worktree: .worktrees/track-UI-2
 depends: [UI-1]
 needs_owner: []
 proves: [P2, P9]
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after UI-1 merges, then do step 1.
+updated: 2026-10-24
+next: Step 1: the lint, red first (committed with steps 2 and 3).
 blocked_by: none
 ---
 
@@ -256,3 +256,4 @@ It must print `# fail 0` and `# skipped 0`.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-app.md
+- 2026-10-24 | C7a session (Claude Code 3058c665) | claim | none | cut from track-UI-1 (efe271cd) on the orchestrator's word under the fast-release ruling; UI-1 is not done yet, so the merge waits for it. Start checks: no port exists; sync.rs's in-body branch at 143; `ScriptedOpenDoor43` share.rs:145, `ScriptedSync` sync.rs:118; in-body branches 33 (app.rs 15, dispatch.rs 8, upgrades.rs 3, align/suggest.rs 2, seed.rs 2, fixes.rs 1, sync.rs 1, understand.rs 1); no exchange or import endpoint | grep commands of "Before you start"
