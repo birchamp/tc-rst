@@ -4,7 +4,7 @@ title: Move the tC4 reference and port its changes
 track: A
 lane: app
 milestone: M3
-state: building
+state: fixing
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-REF1
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -15,7 +15,7 @@ no_loss: false
 size: 3-5 sessions (estimate)
 merged: none
 updated: 2026-10-24
-next: cargo test --workspace (when the heavy slot is free); then step 4 rows and step 5 (PLAN, owner note); then one review.
+next: Green ci and app-e2e on the tip of track-REF1, then send the tip to the integration lane (local_f687a996) for a batch; then REF1b.
 blocked_by: none
 ---
 
@@ -262,3 +262,6 @@ machine fingerprint in `manifest.json`).
 - 2026-10-24 15:30 EDT | REF1 session (Claude Code 56b3f56d) | note | none | Step 2 journeys on this PC: about, help (with help_home_shows_no_rc1_build_text_offline and the download-link cases c and d), check-picker, check-keyboard: # tests 21, # pass 21, # fail 0, # skipped 0 | TC4_BIN=… node --test parity/app/journeys/{about,help,check-picker,check-keyboard}.test.mjs
 - 2026-10-24 16:46 EDT | REF1 session (Claude Code 56b3f56d) | interrupt | none | Usage limit. Done in step 3: tC4 baseline and view gallery recaptured at d25b7871 (committed); this PC's font list changed (543 lines, 4bcf744c9986), so all 112 Rust screens and cases were recaptured on it (script: one capture-rust.mjs run per unit/layers/backend group from captures.json, with --out target/ref1-app, then copied into parity/app). Ported tC4's top-bar 'position: relative' (#801's anchor; tc-ui shell.rs). report.json now: 35 same, 77 differs, 18 unported (main had 33/79/18). The gate still fails on 12 rows: MaskMoved about; ResidualLayers align-original, align-workspace, align-workspace-620, align-workspace-row, ar-align-workspace-620, ar-align-workspace-row, en-obs-check-tn-session, license, open-progress-state; StaleResidual translate-tit1, en-translate-tit1 | cargo test -p tc-ui --test screen_record
 - 2026-10-24 17:50 EDT | REF1 session (Claude Code 56b3f56d) | step 3 | none | Rebuild side recaptured on this PC (font list 543 lines). The screen-record gate passes: 130 rows, 36 same (main: 33), 76 differ and explained, 18 unported. Ported from tC4 rc.2 on the way: the top bar's right group position: relative (#801's anchor); the OBS story check uses the compare card like a Bible check (#762; tc-ui check/detail.rs and story.rs lose their story-only branches); the License dialog is 720 px (#838). residuals.json: translate-tit1, en-translate-tit1 and license now Same, entries removed; the six Align rows differ only in the DOM (tabindex, #568) since tC4 #816 draws every source card too; en-obs-check-tn-session explains "By category" until REF1c. masks.json about-build re-measured (y 324, width 127). License and open-progress-state recaptured one at a time (harness minor logged) | cargo test -p tc-ui --test screen_record
+- 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | verify | 694f0f95 | Independent read-only reviewer (subagent of this session, did not write the code), FUNNEL §8 in order: 1 Code yes (HELP_OVERLAY one table at the only /help/ route, non-UTF-8 served as is, rules match exact page names; one reference test; About copyright as tC4 about.ts:16, LICENSE bytes pinned); 2 Checks mostly (reference test with its failure logged, overlay tests, routes test, gates.sh runs baseline.test.mjs; gap: the help pin is compared only with a hand-written README line); 3 Reach yes; 4 Siblings partly (ts-platform.html also names start-tc4.sh); 5 No loss n/a; 6 Prose: PLAN lacked a bullet for the help overlay; vendor-tc4.sh:3 comment wrong. Findings: one major (residuals.json's 13 Check rows claimed the d310bf3 stacked card and #773 as differences and did not name the visible "By category" / folding difference), four minors. Clean: story check vs tC4 Check.jsx:508-536 and CompareCard.jsx (dir, highlight, missing-source and not-drafted lines kept); catalogs remove only check.sort.byCategory, kept in all ten i18n-rebuild files; License 720 px, no GPL; card wiring | this log
+- 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | Major fixed: the 13 Check rows of parity/app/residuals.json now say the compare card, the note box and the #773 titles are tC4 rc.2's, and name the visible difference, tC4 #769 (folding groups, Fold all, "By figure" against "By category"), which REF1c builds; the true #764 and Invalid-count sentences kept; no row names d310bf3 any more. Minors: PLAN "differs on purpose" lists the help overlay (H16); vendor-tc4.sh:3 comment corrected; the help-pin check gap logged in .audit/minors.tsv | grep -c d310bf3 parity/app/residuals.json prints 0
+- 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | note | none | REQUEST to G3, widened: crates/tc-ui/help/ts-platform.html (its Linux row names ./start-tc4.sh) also describes tC4's package, beside gs-install.html:129 | crates/tc-ui/help/ts-platform.html:128

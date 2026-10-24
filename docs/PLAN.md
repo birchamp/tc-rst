@@ -64,6 +64,12 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 
 Under AGENTS.md "Matching tC4" (2026-10-19):
 
+- The help pages name this app's projects folder, `~/translationCore4/projects`, and its
+  download page, https://translationcore.com/tc4, where tC4's pages name
+  `~/pankosmia/tc4-projects` and tC4's GitHub releases (H16 parts 2 and 3). The vendored pages
+  stay tc-website's bytes; `tc4 serve` makes the change as it serves them (tc-server
+  `HELP_OVERLAY`, REF1).
+
 - A footnote, cross reference, figure or any other marker the shown text leaves out (`\va`,
   `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …) between two words keeps the space after it, so the
   words never join and can be checked, aligned and exported. tC4's open PR #800 does this for
