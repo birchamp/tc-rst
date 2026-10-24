@@ -4,7 +4,7 @@ title: Typed jobs and one job follower
 track: A
 lane: app
 milestone: M1
-state: gating
+state: verifying
 owner: C7a session (Claude Code 3058c665)
 branch: track-UI-1
 worktree: .worktrees/track-UI-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d (basis: +150/-200 lines estimated in health-app §8)
 merged: none
 updated: 2026-10-24
-next: Merge after C7a: merge main, run scripts/gates.sh --wait-ci UI-1 on the merge commit (or join a batch), fast-forward main.
+next: Reviewed and ready; the merge waits for its dependencies. Merge after C7a: merge main, run scripts/gates.sh --wait-ci UI-1 on the merge commit (or join a batch), fast-forward main.
 blocked_by: none
 ---
 
