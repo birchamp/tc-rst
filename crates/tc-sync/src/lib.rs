@@ -5,8 +5,10 @@
 //! one place.
 
 pub mod connect;
+pub mod join;
 pub mod machine;
 pub mod sync;
 
 pub use connect::{ConnectError, connect};
+pub use join::{JoinError, join};
 pub use sync::{Backoff, Pause, SyncReport, sync};

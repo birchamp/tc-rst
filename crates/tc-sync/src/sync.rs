@@ -478,27 +478,8 @@ fn read_tree(git_dir: &std::path::Path, remote: git2::Oid) -> Result<Intake, Str
         Some(blob.content().to_vec())
     };
     // N1: a newer format, or tC4's team format.
-    match blob_at(&theirs, FORMAT_JSON) {
-        Some(bytes) => {
-            if let Ok(doc) = tc_journal::format::FormatDoc::parse(&bytes)
-                && let tc_journal::format::FormatGate::Refused { major } = doc.gate()
-            {
-                let number = |n: &tc_journal::format::FormatNumber| {
-                    n.to_string().parse::<u16>().unwrap_or(u16::MAX)
-                };
-                return Ok(Intake::Blocked(SyncBlock::NeedsNewerApp {
-                    major: number(&major),
-                    min_reader_minor: number(&doc.min_reader_minor),
-                }));
-            }
-        }
-        None if theirs
-            .get_path(std::path::Path::new(TC4_JOURNAL.trim_end_matches('/')))
-            .is_ok() =>
-        {
-            return Ok(Intake::Blocked(SyncBlock::Tc4TeamRepository));
-        }
-        None => {}
+    if let Some(block) = gate_of(&repo, &theirs) {
+        return Ok(Intake::Blocked(block));
     }
     // N2: two projects are never merged.
     let id = |bytes: Option<Vec<u8>>| -> Option<String> {
@@ -539,8 +520,37 @@ fn read_tree(git_dir: &std::path::Path, remote: git2::Oid) -> Result<Intake, Str
     Ok(Intake::Packs(packs))
 }
 
+/// §9.2 N1 for a tree: a newer format than this app reads, or tC4's team format.
+pub(crate) fn gate_of(repo: &git2::Repository, tree: &git2::Tree<'_>) -> Option<SyncBlock> {
+    let blob_at = |path: &str| -> Option<Vec<u8>> {
+        let entry = tree.get_path(std::path::Path::new(path)).ok()?;
+        Some(repo.find_blob(entry.id()).ok()?.content().to_vec())
+    };
+    match blob_at(FORMAT_JSON) {
+        Some(bytes) => match tc_journal::format::FormatDoc::parse(&bytes).map(|d| (d.gate(), d)) {
+            Ok((tc_journal::format::FormatGate::Refused { major }, doc)) => {
+                let number = |n: &tc_journal::format::FormatNumber| {
+                    n.to_string().parse::<u16>().unwrap_or(u16::MAX)
+                };
+                Some(SyncBlock::NeedsNewerApp {
+                    major: number(&major),
+                    min_reader_minor: number(&doc.min_reader_minor),
+                })
+            }
+            _ => None,
+        },
+        None if tree
+            .get_path(std::path::Path::new(TC4_JOURNAL.trim_end_matches('/')))
+            .is_ok() =>
+        {
+            Some(SyncBlock::Tc4TeamRepository)
+        }
+        None => None,
+    }
+}
+
 /// A Door43 error as the refusal the person reads (§9.5).
-fn refusal_of(error: &Door43Error) -> SyncRefusal {
+pub(crate) fn refusal_of(error: &Door43Error) -> SyncRefusal {
     match error {
         Door43Error::Offline { .. } => SyncRefusal::Offline,
         Door43Error::Unreachable { .. } => SyncRefusal::Unreachable,

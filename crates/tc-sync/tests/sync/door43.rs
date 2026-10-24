@@ -553,3 +553,60 @@ async fn a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_s
     );
     a.close().unwrap();
 }
+
+/// §9.6 Join: a teammate gets the project from Door43. It opens with Ana's text and the same
+/// book file bytes, and their next syncs carry each other's work.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_joined_project_holds_the_teams_work_and_syncs_both_ways() {
+    let door43 = door43("titus-join").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    connect(&a, &door43, "titus-join");
+    synced(&sync(&a, &door43).await);
+
+    let juan = computer(dir.path(), "juan");
+    let repo: tc_door43::RepoRef = format!("{}/titus-join", seeded::USER).parse().unwrap();
+    let folder_b = tc_sync::join(
+        &juan.store,
+        &door43.client,
+        Some(&door43.session),
+        &repo,
+        "Titus",
+    )
+    .await
+    .unwrap();
+    let b = open(&juan, &folder_b);
+    assert_eq!(words(&b, 1, 1).as_deref(), Some("Paul, as Ana has it"));
+    assert_ne!(b.facts().device, a.facts().device, "a device of its own");
+    let restored: Vec<_> = b
+        .notices()
+        .into_iter()
+        .filter(|n| {
+            matches!(
+                n.notice,
+                tc_journal::fold::Notice::PackRestored { .. }
+                    | tc_journal::fold::Notice::FixedFileRestored { .. }
+            )
+        })
+        .collect();
+    assert!(
+        restored.is_empty(),
+        "every file came from the tree: {restored:?}"
+    );
+    let usfm = "ingredients/TIT.usfm";
+    assert_eq!(
+        std::fs::read(folder_a.join(usfm)).unwrap(),
+        std::fs::read(folder_b.join(usfm)).unwrap()
+    );
+    let file = b.sync_file().await.unwrap().expect(".tc/sync.json");
+    assert_eq!(file.branch, "main");
+    save(&b, 1, 2, "in hope, as Juan has it");
+    synced(&sync(&b, &door43).await);
+    synced(&sync(&a, &door43).await);
+    assert_eq!(words(&a, 1, 2).as_deref(), Some("in hope, as Juan has it"));
+    a.close().unwrap();
+    b.close().unwrap();
+}
