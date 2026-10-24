@@ -47,11 +47,16 @@ impl Actions {
     /// The text of verse `chapter`:`verse` while its save has not landed, for the grid to show
     /// in place of the stored text once its card closed (INV-NEVER-HIDE-UNSAVED-TEXT). Tracks
     /// every run of the save machine.
-    pub fn unsaved_verse(&self, chapter: u16, verse: &str) -> Option<String> {
+    pub fn unsaved_verse(
+        &self,
+        book: tc_core::BookId,
+        chapter: u16,
+        verse: &str,
+    ) -> Option<String> {
         let s = self.s();
         let saves = self.runtime().saves();
         saves.changes().track();
-        let (project, book) = (s.project.get_untracked()?, s.u.book.get_untracked()?);
+        let project = s.project.get_untracked()?;
         let key = verse_key(&project.at.project, &project.id, book, chapter, verse)?;
         saves.unsaved_text(&key)
     }

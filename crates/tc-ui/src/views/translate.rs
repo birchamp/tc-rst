@@ -979,6 +979,11 @@ fn target_verse(
 ) -> AnyView {
     let key = v.key.as_str().to_owned();
     let number = view! { <sup style=sup()>{key.clone()}</sup> }.into_any();
+    // One memo per verse: a keystroke redraws only the verse whose unsaved text it changes.
+    let unsaved = {
+        let (actions, key) = (SendWrapper::new(actions.clone()), key.clone());
+        Memo::new(move |_| actions.unsaved_verse(book, chapter, &key))
+    };
     let verse = {
         let (actions, v, key) = (actions.clone(), v.clone(), key.clone());
         move || {
@@ -1000,9 +1005,12 @@ fn target_verse(
             }
             let verse_mode = mode.get() == UnitMode::Verse;
             // A closed card whose save has not landed: its text, not the stored one, stays on
-            // the page until it is stored (INV-NEVER-HIDE-UNSAVED-TEXT).
-            let unsaved = actions.unsaved_verse(chapter, &key);
-            if v.drafted || unsaved.is_some() {
+            // the page until it is stored (INV-NEVER-HIDE-UNSAVED-TEXT); an emptied verse shows
+            // its pill, as an undrafted one does.
+            let unsaved = unsaved.get();
+            let cleared = unsaved.as_deref().is_some_and(|t| t.trim().is_empty());
+            let unsaved = unsaved.filter(|t| !t.trim().is_empty());
+            if (v.drafted && !cleared) || unsaved.is_some() {
                 let word = crate::css! {
                     "display": "inline-block",
                     "border-radius": "var(--radius-xs)",
