@@ -4,18 +4,18 @@ title: Finish the partial P1 journeys J3, J12 and J13
 track: A
 lane: app
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: gating
+owner: C7a session (Claude Code 3058c665)
+branch: track-FIX-J
+worktree: .worktrees/track-FIX-J
 depends: [INT-4]
 needs_owner: []
 proves: [P1]
 no_loss: false
 size: 1-1.5 d (basis: C8 wrote the upgrades and source-texts journeys in one session; each item here is one test over code that exists)
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: Ask the orchestrator for a merge turn; on it, merge main, run scripts/gates.sh --journeys on the merge commit, fast-forward main.
 blocked_by: none
 ---
 
@@ -160,3 +160,10 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 ## Log
 
 - 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | created | none | the review (goal-coverage R3) found J3, J12 and J13 assigned to a card that did not exist | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
+- 2026-10-23 22:40 EDT | C7a session (Claude Code 3058c665) | claim | none | claimed on track-FIX-J from main eaf809d1 (INT-4 done); the preconditions print as the card says. Decision: there is no `test/read` endpoint; the journeys read the pin files from the run's projects folder (`env.projectsDir`, the store scenario's folder on disk), which needs no new test hook | .worktrees/track-FIX-J
+- 2026-10-23 23:50 EDT | C7a session (Claude Code 3058c665) | step 1 | none | `tc_door43_fake::seeded::unfolding_word_resources` holds unfoldingWord's releases (en_tn v86, v91, v92 pre-release; en_ult v89; en_twl v86), called by `seed()` (start_seeded) and by the fake binary, so the browser tests and the Rust tests share one set of releases. Decision: not ULT Jonah at en-pins' version, as the card guessed: the scenarios pin Door43's own commits (en_twl v91 never existed in the fake), and a fake can only serve its own commits. `the_seeded_fake_publishes_the_en_pins_versions` (crates/tc-door43-fake/tests/binary.rs) checks that the binary and start_seeded publish the same unfoldingWord releases; without the binary's call it failed `the binary publishes unfoldingWord's resources` | cargo test -p tc-door43-fake --test binary -- the_seeded_fake
+- 2026-10-23 23:50 EDT | C7a session (Claude Code 3058c665) | step 2 | none | J3 `j3_a_download_from_the_seeded_fake_installs_the_pinned_version`: the sample pins Door43's commits, which the fake cannot serve, and the download rightly refuses another commit under a pinned version (probe: `the export declares revision c7277…, but e5867… was expected`); so the test first moves the text's pin to the fake's release through the upgrade screen, removes the install from the run's app data, downloads the English package, and reads the receipt from disk: the pinned commit and version. The empty-list test became the internet-question test it already was (D95, Not now sends nothing, then one catalog read); the comment "publishes no resources" is gone. Proof: with the download wanting no pin and taking the text as present, J3 failed `timed out after 60000 ms waiting for the source text is installed`. (A first break, `present = true` alone, did not fail it: a wanted pin installs regardless.) | node --test parity/app/journeys/source-texts.test.mjs
+- 2026-10-23 23:50 EDT | C7a session (Claude Code 3058c665) | step 3 | none | J12 `j12_an_upgrade_through_the_screens_moves_the_pin_on_disk` (the text upgrade of en_ult through the screens, the pin file's extraScripture entry then names the fake's commit and tag) and J13 `j13_change_writes_the_primary_set_to_disk` (the pin file's primary set is English after Change); the Keep test is unchanged. Proof: with ApplyPlan answering Applied without submitting, J12 failed `timed out after 30000 ms waiting for the pin moved on disk`. Finding: the offer reads "v91 → v89" because tC4's rule offers any release whose commit differs (D58); logged as a minor | node --test parity/app/journeys/upgrades.test.mjs
+- 2026-10-23 23:50 EDT | C7a session (Claude Code 3058c665) | step 4 | none | CHK-3 has not merged: a note on its log names the three tests; APP-DESIGN's J3 and J12/J13 rows name them (the table had no "partial" left) | docs/APP-DESIGN.md
+- 2026-10-24 01:45 EDT | C7a session (Claude Code 3058c665) | test | none | the fake-using journeys ran 40 of 41; the one failure (guided-fix's file of another commit) was this worktree lacking `parity/tc4-baseline/node_modules` for fflate, not FIX-J. With it linked from the main checkout (git-ignored), guided-fix passes 3 of 3; the fake's tests, fmt and clippy pass | .enjoy-logs/fixj-guided.log
+- 2026-10-24 02:30 EDT | C7a session (Claude Code 3058c665) | verify | none | browser-and-parity lens (subagent review of afdd5718). Fixed: J3 read the error line as soon as en_ult's receipt appeared, before the package's notes and word links finished; it now waits for `sources-done` or `sources-error` and states the error text. Fixed: the dropped "no package for this book" check is back as its own journey (Español on the fake publishes nothing). Kept as a limit, noted in J3: the fake has one en_ult release, so J3 cannot tell the pinned version from the newest (a fake route that adds a release would). Minor, logged before: J3 and J12 upgrade en_ult to a lower label (D58). Other journeys see nothing new from the added releases. source-texts 4 of 4, guided-fix 3 of 3 | .enjoy-logs/fixj-sources.log

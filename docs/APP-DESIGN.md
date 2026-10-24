@@ -3061,7 +3061,7 @@ tC4's spec assertions are the reference.
 |---|---|---|---|
 | J1 create Bible (`e2e/j01-create-project.spec.ts:16`) | B2 (UI), C6 | store, R2 | valid Burrito; `project.json` |
 | J2 draft verse (`e2e/j02-draft-verse.spec.ts:96-1143`) | B4a, B4b (UI on scripted saves), C2 | store | one pending batch per save; "Saved" only after B3 (held save); the section steps write nothing before Save *(A-1)* |
-| J3 get resources, guided fix | B9a, C8 | store + fake with resources | receipts; pins with sha |
+| J3 get resources, guided fix | B9a, C8, FIX-J | store + fake with resources | receipts; pins with sha; journey `j3_a_download_from_the_seeded_fake_installs_the_pinned_version` reads the install from disk |
 | J4 check book | B5b, C4 | store | decision records; drag-select |
 | J5 align verse | B6, C5 | store | one `Alignment` change per save |
 | J6 edit invalidation | C2, C4 | store | nothing written on decisions (STORAGE §0 item 4) |
@@ -3069,7 +3069,7 @@ tC4's spec assertions are the reference.
 | J8 resume and checkpoints | C1a, D1 | store | one commit when leaving with changes, none without (STORAGE:3820-3821); the session closes at Home *(A-25)* |
 | J9a, J9c, J9d import | F1 | store + I | P9 byte equality |
 | J11, J24 share | B9b, E1b | store + X | Upload cases become sync cases on the OBS card (Q2) |
-| J12 upgrade, J13 gateway change | C8 | store | one `ApplyUpgrade` batch; look-again when heads moved |
+| J12 upgrade, J13 gateway change | C8, FIX-J | store | one `ApplyUpgrade` batch; look-again when heads moved; journeys `j12_an_upgrade_through_the_screens_moves_the_pin_on_disk` and `j13_change_writes_the_primary_set_to_disk` read the pin file from disk |
 | J15 slow open | B3 (UI with a held open), C1a | store with `FaultFs` delay | first report 300–400 ms (STORAGE:1883-1891) |
 | J16, J25 Understand | B3, B7, C3 | store | `Comment` records |
 | J17 open from Door43 | B9b, E1b | store + X | private repository through sign-in (Q3) |
