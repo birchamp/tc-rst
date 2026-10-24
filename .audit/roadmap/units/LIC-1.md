@@ -4,7 +4,7 @@ title: Move the rebuild to the MIT licence, as tC4 did
 track: A
 lane: integration
 milestone: M1
-state: gating
+state: done
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-LIC-1
 worktree: .worktrees/track-LIC-1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d (basis: a manifest line, two text files, ten catalog lines and one recapture)
-merged: none
+merged: 819efb32
 updated: 2026-10-24
-next: Join a merge batch after SWEEP is on main.
+next: none
 blocked_by: none
 ---
 
@@ -121,3 +121,4 @@ moves to.
 - 2026-10-24 14:24 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | Cargo.toml (and the two spikes) say license = "MIT"; COPYING removed; LICENSE is tC4's MIT text at 24188928 (Copyright (c) 2017-2026 unfoldingWord, with the trademark notice); the two NOTICE files say MIT; the fixture READMEs name MIT for this repository and tC4's code; tc-usfm's words module cites tokenizer 2.2.0 (MIT); ROADMAP A5 marked not needed. Left for REF1: the ten catalogs, assets/about, account_menu.rs comments, about.json captures, about.test.mjs; help-pages.txt's Q-19 note follows vendor-help.sh | git grep -n 'GPL-2.0-or-later' -- ':!.audit' ':!Cargo.lock'
 - 2026-10-24 17:43 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | one pass by a fresh read-only reviewer agent: licence MIT in the workspace and both spikes, every crate inherits it; LICENSE equals tC4's at 24188928 byte for byte; COPYING gone and read by nothing; remaining GPL mentions are third-party, history or REF1's vendored About; the tokenizer citation matches tC4 D111 (2.2.0's MIT licence rests on tC4's evidence, 2.0.0 is all that is installed here). §8: code = one entry point (the workspace licence) and a deletion; checks: none for INV-ONE-LICENCE once step 2 moved; reach: About is reachable; siblings: two stale doc lines. One major: About keeps saying GPL after this merge and REF1's card did not carry the change; minor: TC4-ISSUES #838 stale | reviewer report in this session
 - 2026-10-24 17:43 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | the major: REF1 step 2 now vendors release/4.0 d25b7871 (with #838) and drops the GPL dialog block, and REF1's Checks carry the about check for INV-ONE-LICENCE; LIC-1's Goal and step 2 say the About half is REF1's. The minor: the #838 row says the rebuild is MIT since LIC-1 and About follows with REF1 | .audit/roadmap/units/REF1.md
+- 2026-10-24 18:35 EDT | integration lane (Claude Code 3d07d5f8) | merge | 819efb32 | merged into main in batch 2b (INT-6 a4dc42af, FIX-J f1b865b9, G1 137164e8, LIC-1 819efb32, CHK-2 a9c3710f, CHK-1 64ad5158, I 22f77f0d, RULING-H5 8bd03b4b), gated by scripts/gates.sh --wait-ci batch-2b on the batch's last commit. | scripts/gates.sh --wait-ci batch-2b

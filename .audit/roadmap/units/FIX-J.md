@@ -4,7 +4,7 @@ title: Finish the partial P1 journeys J3, J12 and J13
 track: A
 lane: app
 milestone: M1
-state: gating
+state: done
 owner: C7a session (Claude Code 3058c665)
 branch: track-FIX-J
 worktree: .worktrees/track-FIX-J
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1]
 no_loss: false
 size: 1-1.5 d (basis: C8 wrote the upgrades and source-texts journeys in one session; each item here is one test over code that exists)
-merged: none
-updated: 2026-10-23
-next: Ask the orchestrator for a merge turn; on it, merge main, run scripts/gates.sh --journeys on the merge commit, fast-forward main.
+merged: f1b865b9
+updated: 2026-10-24
+next: none
 blocked_by: none
 ---
 
@@ -167,3 +167,4 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 - 2026-10-23 23:50 EDT | C7a session (Claude Code 3058c665) | step 4 | none | CHK-3 has not merged: a note on its log names the three tests; APP-DESIGN's J3 and J12/J13 rows name them (the table had no "partial" left) | docs/APP-DESIGN.md
 - 2026-10-24 01:45 EDT | C7a session (Claude Code 3058c665) | test | none | the fake-using journeys ran 40 of 41; the one failure (guided-fix's file of another commit) was this worktree lacking `parity/tc4-baseline/node_modules` for fflate, not FIX-J. With it linked from the main checkout (git-ignored), guided-fix passes 3 of 3; the fake's tests, fmt and clippy pass | .enjoy-logs/fixj-guided.log
 - 2026-10-24 02:30 EDT | C7a session (Claude Code 3058c665) | verify | none | browser-and-parity lens (subagent review of afdd5718). Fixed: J3 read the error line as soon as en_ult's receipt appeared, before the package's notes and word links finished; it now waits for `sources-done` or `sources-error` and states the error text. Fixed: the dropped "no package for this book" check is back as its own journey (Español on the fake publishes nothing). Kept as a limit, noted in J3: the fake has one en_ult release, so J3 cannot tell the pinned version from the newest (a fake route that adds a release would). Minor, logged before: J3 and J12 upgrade en_ult to a lower label (D58). Other journeys see nothing new from the added releases. source-texts 4 of 4, guided-fix 3 of 3 | .enjoy-logs/fixj-sources.log
+- 2026-10-24 18:35 EDT | integration lane (Claude Code 3d07d5f8) | merge | f1b865b9 | merged into main in batch 2b (INT-6 a4dc42af, FIX-J f1b865b9, G1 137164e8, LIC-1 819efb32, CHK-2 a9c3710f, CHK-1 64ad5158, I 22f77f0d, RULING-H5 8bd03b4b), gated by scripts/gates.sh --wait-ci batch-2b on the batch's last commit. | scripts/gates.sh --wait-ci batch-2b

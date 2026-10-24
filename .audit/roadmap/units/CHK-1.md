@@ -4,7 +4,7 @@ title: Architecture and I/O boundary checks
 track: A
 lane: checks
 milestone: M1
-state: verifying
+state: done
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-1-s5
 worktree: .worktrees/track-CHK-1-s5
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5-1 d
-merged: none
+merged: 64ad5158
 updated: 2026-10-24
-next: a merge batch run by the integration lane
+next: none
 blocked_by: none
 ---
 
@@ -324,3 +324,4 @@ Plus: `cargo test -p tc-arch` passes, and each planted violation of steps 1, 3 a
 - 2026-10-24 10:14 EDT | checks lane (Claude Code 2198ee19) | verify | none | Step 5 review (correctness lens, one subagent, read only; it ran both clippies, Linux and Windows): no blocker, no major. Minors: rustix's filesystem calls and std's symlink and DirBuilder were not on the list (tc-store depends on rustix on Unix); the crate clippy.toml files copy the root's keys, so a key added at the root would not reach them. The expect and allow sites and their reasons hold; main's tc-arch allow list names the same five tc-store files | review report in the session transcript
 - 2026-10-24 10:14 EDT | checks lane (Claude Code 2198ee19) | fix | none | Both crate lists gain std::fs::DirBuilder::create, std::fs::soft_link, std::os::unix::fs::symlink and rustix::fs's openat, renameat, renameat_with, unlinkat and mkdirat (allow-invalid where the path exists only on Unix). A planted rustix::fs::unlinkat in tc-store's lib fails "use of a disallowed method `rustix::fs::unlinkat`"; reverted. Both clippies pass on Linux and Windows. The copied-keys minor stays as is: the crate files say they copy the root's keys | cargo clippy --locked -p tc-store -p tc-journal --all-targets [--target x86_64-pc-windows-gnu] -- -D warnings
 - 2026-10-24 14:25 EDT | checks lane (Claude Code 2198ee19) | note | none | Main merged in (0189cee4, after CHK-1a, CHK-3a, DOM-1 and CHK-4b), no conflict. On the merged tree: clippy for tc-store and tc-journal passes on Linux and Windows, the node step passes (116), the board shows 0 errors. Ready for a merge batch (owner ruling 2026-10-24: merges in batches, run by the integration lane) | cargo clippy --locked -p tc-store -p tc-journal --all-targets [--target x86_64-pc-windows-gnu] -- -D warnings; scripts/gates.sh --step node
+- 2026-10-24 18:35 EDT | integration lane (Claude Code 3d07d5f8) | merge | 64ad5158 | merged into main in batch 2b (INT-6 a4dc42af, FIX-J f1b865b9, G1 137164e8, LIC-1 819efb32, CHK-2 a9c3710f, CHK-1 64ad5158, I 22f77f0d, RULING-H5 8bd03b4b), gated by scripts/gates.sh --wait-ci batch-2b on the batch's last commit. | scripts/gates.sh --wait-ci batch-2b

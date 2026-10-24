@@ -4,7 +4,7 @@ title: Every written project is validated (P5)
 track: A
 lane: checks
 milestone: M1
-state: verifying
+state: done
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-2
 worktree: .worktrees/track-CHK-2
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P5]
 no_loss: false
 size: 1-2 d
-merged: none
+merged: a9c3710f
 updated: 2026-10-24
-next: a merge turn
+next: none
 blocked_by: none
 ---
 
@@ -251,3 +251,4 @@ G5's `app-e2e` job green if G5 has merged.
 - 2026-10-24 08:20 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | D2, E2, X and I are todo with no owner; each now says under "Before you start" that its test stores go through backend_over and its BurritoWatch and its journeys end with test/validate | grep -l BurritoWatch .audit/roadmap/units/*.md
 - 2026-10-24 10:02 EDT | checks lane (Claude Code 2198ee19) | verify | none | Review (correctness lens, one subagent, read only): no blocker; one major: the watch read the writer's findings at once, so a test's last save could escape it (a closing project writes after the watch looked; tuple bindings drop the watch first). Minors: the lint missed a wrapped or "let _ =" thrown-away watch; test/validate could race a write that came after its waits and validated anyway after its bound; an unreadable projects folder read as 0 checked; invalidOnPurpose excused every folder; Scale's end check did not wait for the store; the step 3 timings were taken under different loads | review report in the session transcript
 - 2026-10-24 10:02 EDT | checks lane (Claude Code 2198ee19) | fix | none | The watch now waits, before it reads, until every project its store still has open is idle (a test-hooks registry in tc-app's StoreBackend, idle_waiter) and every other lock on the test filesystem is gone (FaultFs::locks_held: a project lets go of its lock only after its last write), with a one-minute hung bound. p5_watch_fails_a_test_whose_store_reported_a_problem now drops the store right after a save with a probe that only the save's state fails; with the lock wait removed it fails 3 of 3 ("did not panic"), with it it passes. p5_watch_sees_the_last_save_of_a_project_still_open covers a project left open; it passes without the registry's wait too, because the checkpoint it needs already waits for the writer, so it guards the case but does not prove the registry. The lint reads each statement whole and also flags "let _ =" and ".0"; two planted throw-aways on wrapped lines are named at their lines. test/validate settles every project (screen and side), polls until nothing is busy, errors "hung" after a minute and on an unreadable folder, and checks again once before it reports a folder invalid. invalidOnPurpose names one folder and why. Scale waits for its store before its end check. Same-load timings: op_counts main 404 s, CHK-2 466 s, both 45/45; app binary 672/672 in 162 s. All 214 journeys pass. The op-count test align_save_costs_one_verse_while_model_training_is_held hit its 60 s hang bound in two CHK-2 full runs at load 15-20 and passed alone and in the same-load run; main's code is unchanged there | cargo test --locked -p tc-app; scripts/gates.sh --step journeys
+- 2026-10-24 18:35 EDT | integration lane (Claude Code 3d07d5f8) | merge | a9c3710f | merged into main in batch 2b (INT-6 a4dc42af, FIX-J f1b865b9, G1 137164e8, LIC-1 819efb32, CHK-2 a9c3710f, CHK-1 64ad5158, I 22f77f0d, RULING-H5 8bd03b4b), gated by scripts/gates.sh --wait-ci batch-2b on the batch's last commit. | scripts/gates.sh --wait-ci batch-2b

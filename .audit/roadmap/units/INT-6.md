@@ -4,7 +4,7 @@ title: Rescue stray work and free the disk
 track: A
 lane: integration
 milestone: M0
-state: gating
+state: done
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-INT-6
 worktree: .worktrees/track-INT-6
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d
-merged: none
-updated: 2026-10-23
-next: Wait for a merge turn from the orchestrator (local_d49edca7); then merge main in (keep INT-5's watch-runs.py and HANDOFF edits), make the merge commit in a separate worktree, run scripts/gates.sh --journeys there, move main only on --check-receipt.
+merged: a4dc42af
+updated: 2026-10-24
+next: none
 blocked_by: none
 ---
 
@@ -58,11 +58,11 @@ root drive is 97% full, and a full disk fails builds and tests in the middle of 
 
 - **Invariants**:
   - INV-NO-STRAY-WORK-LOST: before any worktree is removed, every uncommitted change, untracked
-    files included, in a worktree no session owns is reachable from a ref under `refs/wip/`.
+    files included, in a worktree no session owns is reachable from a ref under `refs/wip/` (not in code: a fact on this PC's disk, held by the card's step commands and `git worktree remove` without `--force`).
   - INV-REMOVE-ONLY-MERGED-AND-CLEAN: a removed worktree's HEAD is an ancestor of main and its
     `git status --porcelain` was empty; a removed build folder belonged to a removed worktree or
-    to none.
-  - INV-BUILDS-STAY-OFF-ROOT: no tool moves build folders onto the root drive.
+    to none (not in code: a fact on this PC's disk, held by the card's step commands and `git worktree remove` without `--force`).
+  - INV-BUILDS-STAY-OFF-ROOT: no tool moves build folders onto the root drive (not in code: a fact on this PC's disk, held by the card's step commands and `git worktree remove` without `--force`).
 - **Wrong states**:
   - quick-timing's 54 changed files and its new, untracked crate `crates/tc-timing/` are lost
     with its worktree; no tracking file mentions them (process-integration F5).
@@ -303,3 +303,4 @@ files.
 - 2026-10-23 17:41 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | the prune now also covers .worktrees/*/target, where builds live now; the other minor (pruning /home frees nothing when / is the fuller drive) appended to .audit/minors.tsv | python3 -I -c "import ast; ast.parse(open('.audit/tools/watch-runs.py').read())"
 - 2026-10-24 15:06 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner said "yes delete" to removing about 270 GB of old build folders (to the orchestrator session): the target folders of .worktrees/resume-build-lane, the six .worktrees/s2-* worktrees and .worktrees/rebuild-process-improvements. This session's permission check refused the rm (the yes did not reach this session), so the orchestrator session ran it with the owner's direct yes | message from the orchestrator, 2026-10-24
 - 2026-10-24 15:06 EDT | integration lane (Claude Code 3d07d5f8) | note | none | done by the orchestrator session: only compiler output deleted (debug, release, wasm32-unknown-unknown in the six s2-* worktrees and rebuild-process-improvements; debug, release, wasm32 and tc-ui-app* in resume-build-lane's target; lanes/b11/target); kept resume-patches, parity-rust, store-adapter-bench, tmp and the jsonl, and the b11 worktree itself. /home free went from 257G to 493G (orchestrator's figures); / unchanged at 637G | df -h / /home
+- 2026-10-24 18:35 EDT | integration lane (Claude Code 3d07d5f8) | merge | a4dc42af | merged into main in batch 2b (INT-6 a4dc42af, FIX-J f1b865b9, G1 137164e8, LIC-1 819efb32, CHK-2 a9c3710f, CHK-1 64ad5158, I 22f77f0d, RULING-H5 8bd03b4b), gated by scripts/gates.sh --wait-ci batch-2b on the batch's last commit. /home free after both clean-ups: 492G (df 2026-10-24). | scripts/gates.sh --wait-ci batch-2b

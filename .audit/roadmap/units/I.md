@@ -4,7 +4,7 @@ title: Import tC3 projects and update a book from USFM (tc-import)
 track: A
 lane: storage
 milestone: M2
-state: verifying
+state: done
 owner: domain lane (Claude Code 9f599c21)
 branch: track-I
 worktree: .worktrees/track-I
@@ -14,9 +14,9 @@ later: []
 proves: [P4, P5, P9]
 no_loss: true
 size: 4-7 d (basis: B1a's seed took about 2 h; §13.1 is the bulk; +1 to +2 d for Update a book, docs/STORAGE-DELTA-2026-10-21.md §6)
-merged: none
+merged: 22f77f0d
 updated: 2026-10-24
-next: The integration lane merges it in a batch after DOM-2's; in the merge commit set state done and merged to this branch's tip.
+next: none
 blocked_by: none
 ---
 
@@ -565,3 +565,4 @@ features, `--features gallery`, `--features app` and `--features test-hooks`;
 - 2026-10-24 19:05 EDT | domain lane (Claude Code 9f599c21) | verify | 18947b1f | Races and protocol lens (fresh subagent, code read, no edits). No blocker or major. Plan and commit of each part run together on the actor thread (actor.rs:160), so no plan goes stale; a crash or retry after only Fill is safe (Fill is one batch, a rerun fills nothing, Review re-plans); a replayed Review or two tabs with one file add nothing; two tabs with different files make a visible conflict; create_imported builds in a staging folder and renames with no replace, so a double click gives NameExists. Minors: the History skip in plan_update_book hides a verse the file deliberately sets back to an older text, where STORAGE 13.6 U3 asks for a conflict (fixed next, heads only); F1 must send Review right after Fill (minors.tsv) | review report quoted in this line
 - 2026-10-24 19:40 EDT | domain lane (Claude Code 9f599c21) | verify | 18947b1f | Browser and parity lens (fresh subagent; built tc4 with test-hooks and fixture-backend and the UI, drove Chromium with a throwaway journey, read tC4 at tc4-ref). Verdict merge, no blocker or major. Reach: neither tC3 import (Home, Add a project, Import, translationCore 3 project does nothing, app_ctx.rs:823) nor Update a book (nothing sends UpdateBook) is on screen yet; F1 wires both, as the ruling splits it. Same as tC4: no tC3 check history; tC3 text through the usfm-js writer; the #796 rule. Minors: three differences undeclared in APP-DESIGN (every-occurrence decisions, Update a book itself, tC3 decision times), declared next; refusal words and addBook.usfmExists for F1 (minors.tsv) | review report quoted in this line
 - 2026-10-24 19:45 EDT | domain lane (Claude Code 9f599c21) | fix | none | Races-lens minor: plan_update_book skipped a verse whose file text was anywhere in its History, so a file setting an older text back on purpose vanished from the report; it now compares with the verse's heads only, as STORAGE 13.6 U3 says, and makes a conflict. updating_from_an_old_export_reverts_nothing asserts the conflict and fails on the old rule (update.rs:206). Parity-lens minors: I's tC4 differences declared in APP-DESIGN's F1 Import row | cargo test -p tc-store --test store update::; cargo test -p tc-journal; cargo clippy -p tc-journal -p tc-store --all-targets -- -D warnings
+- 2026-10-24 18:35 EDT | integration lane (Claude Code 3d07d5f8) | merge | 22f77f0d | merged into main in batch 2b (INT-6 a4dc42af, FIX-J f1b865b9, G1 137164e8, LIC-1 819efb32, CHK-2 a9c3710f, CHK-1 64ad5158, I 22f77f0d, RULING-H5 8bd03b4b), gated by scripts/gates.sh --wait-ci batch-2b on the batch's last commit. In the batch, TC4-ISSUES #813 (Burrito import) waits with V under the 2026-10-24 scope ruling. | scripts/gates.sh --wait-ci batch-2b
