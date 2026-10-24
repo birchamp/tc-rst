@@ -60,3 +60,40 @@ test('INV-LOCAL-PASS-MEANS-CI-PASS: the workflows run the gate script', () => {
     assert.ok(body.includes('scripts/gates.sh') && !body.includes("'cargo'"), 'gate drift: .audit/tools/run-gates.mjs defaultSteps() lists its own cargo commands instead of scripts/gates.sh');
   }
 });
+
+/** The jobs of a workflow file: each job id with the text of its block. */
+function jobsOf(text) {
+  const body = text.split(/^jobs:\s*$/m)[1] ?? '';
+  return [...body.matchAll(/^ {2}([a-z0-9-]+):\s*$([\s\S]*?)(?=^ {2}[a-z0-9-]+:\s*$|(?![\s\S]))/gm)].map((m) => ({ id: m[1], text: m[2] }));
+}
+
+test('INV-CI-IS-THE-GATE: every cargo step builds --locked with the pinned toolchain', () => {
+  const toolchain = read('rust-toolchain.toml');
+  assert.match(toolchain, /^channel = "\d+\.\d+\.\d+"$/m, 'INV-CI-IS-THE-GATE: rust-toolchain.toml pins an exact version');
+  const unlocked = [...steps, ...nightly].filter((s) => s.command.startsWith('cargo ') && !s.command.startsWith('cargo fmt') && !s.command.includes(' --locked'));
+  assert.deepEqual(unlocked.map((s) => `INV-CI-IS-THE-GATE: step ${s.name} builds without --locked`), []);
+  const cargoSteps = new Set([...steps, ...nightly].filter((s) => s.command.startsWith('cargo ')).map((s) => s.name).concat('journeys'));
+  const problems = [];
+  for (const file of ['.github/workflows/ci.yml', '.github/workflows/app-e2e.yml']) {
+    const text = read(file);
+    if (text.includes('dtolnay/rust-toolchain')) problems.push(`INV-CI-IS-THE-GATE: ${file} installs a floating toolchain`);
+    for (const job of jobsOf(text)) {
+      const builds = [...job.text.matchAll(/scripts\/gates\.sh --step (\S+)/g)].some((m) => cargoSteps.has(m[1]));
+      if (builds && !job.text.includes('rustup toolchain install')) problems.push(`INV-CI-IS-THE-GATE: ${file} job ${job.id} builds without installing rust-toolchain.toml's toolchain`);
+    }
+  }
+  assert.deepEqual(problems, []);
+});
+
+test('INV-BUILDS-ON-WINDOWS: the gate list builds for Windows, and CI runs it', () => {
+  const windows = steps.find((s) => s.name === 'clippy-windows');
+  assert.ok(windows?.command.includes('--target x86_64-pc-windows-gnu'), 'INV-BUILDS-ON-WINDOWS: scripts/gates.sh has no clippy-windows step for x86_64-pc-windows-gnu');
+  assert.ok(ciSteps.includes('clippy-windows'), 'INV-BUILDS-ON-WINDOWS: ci.yml does not run scripts/gates.sh --step clippy-windows');
+});
+
+test('INV-JOURNEYS-RUN: every browser journey runs in CI on every push', () => {
+  const e2e = read('.github/workflows/app-e2e.yml');
+  assert.match(e2e.split(/^jobs:/m)[0], /^\s+push:/m, 'INV-JOURNEYS-RUN: app-e2e does not run on push');
+  assert.match(e2e, /scripts\/gates\.sh --step journeys/, 'INV-JOURNEYS-RUN: app-e2e does not run scripts/gates.sh --step journeys');
+  assert.match(gates, /node --test[^\n]*parity\/app\/journeys\/\*\.test\.mjs/, 'INV-JOURNEYS-RUN: the journeys step does not run every parity/app/journeys/*.test.mjs');
+});

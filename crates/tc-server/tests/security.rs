@@ -20,12 +20,19 @@ fn origin(server: &TestServer) -> String {
 #[test]
 fn request_without_token_is_401() {
     let server = start();
+    // Every path the router registers, and one it does not (INV-LOCAL-SERVER-IS-CLOSED; the
+    // order of the routes before the guard is tc-arch's every_route_is_behind_guard).
     for path in [
         "/",
+        "/prepare.html",
         "/ui/app.js",
         "/help/index.html",
         "/nope",
         "/api/v1/events",
+        tc_api::upload::UPLOADS_PATH,
+        "/download/1/x.zip",
+        "/media/obs/pack/01-01.jpg",
+        "/api/v1/app/hello",
     ] {
         let bare = Req::new("GET", path).with("Host", &format!("127.0.0.1:{}", server.port));
         assert_eq!(server.send(&bare).status, 401, "GET {path} without a token");

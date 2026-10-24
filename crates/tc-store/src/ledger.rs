@@ -725,7 +725,8 @@ mod tests {
         }
     }
 
-    /// Every (state, event, facts) of the table: bytes are written over or removed only
+    /// INV-LEDGER-DECIDES-WHO-WROTE and INV-OUTSIDE-EDIT-NEVER-OVERWRITTEN (I8): every
+    /// (state, event, facts) of the table: bytes are written over or removed only
     /// when they are the app's own and the fold holds what they show, or they are what the
     /// project would write; a value that cannot be read is never written as absent; bytes
     /// the ledger never named are kept (recorded or held); a hold is never written over.

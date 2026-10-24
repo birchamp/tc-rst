@@ -37,7 +37,7 @@ pub(super) async fn open_obs(app: &App) -> OpenedProject {
     )
     .await;
     let mut watch = app.jobs().watch(job).unwrap();
-    let state = tokio::time::timeout(Duration::from_secs(5), async {
+    let state = tokio::time::timeout(Duration::from_secs(60), async {
         watch
             .wait_for(tc_app::jobs::JobRegistry::is_ended)
             .await
@@ -45,7 +45,7 @@ pub(super) async fn open_obs(app: &App) -> OpenedProject {
             .clone()
     })
     .await
-    .expect("the open ends");
+    .expect("hung: the open ends");
     match state {
         JobState::Done(JobOutcome::Opened(opened)) => *opened,
         other => panic!("{other:?}"),

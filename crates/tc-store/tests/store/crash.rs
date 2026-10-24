@@ -607,8 +607,13 @@ fn crash_during_open_repairs_lose_nothing() {
     let fs = base.copy();
     let rig = rig_as(fs.clone(), APP, "host-1");
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    // Held, so the materialization a save starts three seconds later cannot run first.
+    rig.store.hooks().hold(tc_store::Point::BeforeMaterialize);
     save_verse(&handle, 2, 1, "speak what fits").unwrap();
     let base = fs.crash(true);
+    rig.store
+        .hooks()
+        .release(tc_store::Point::BeforeMaterialize);
     drop(handle);
     let mut k = 0;
     loop {

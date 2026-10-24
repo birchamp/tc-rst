@@ -2433,8 +2433,8 @@ fn histories(cases: u32, chunks: usize, every_row: bool) {
     }
 }
 
-/// §16.1: random histories of saves, materializations and checkpoints killed at any write
-/// point, outside edits and reverts, damaged journal files and restarts lose no work.
+/// INV-NO-OWN-SAVE-LOST (I2), §16.1: random histories of saves, materializations and
+/// checkpoints killed at any write point, outside edits and reverts, damaged journal files and restarts lose no work.
 #[test]
 fn random_histories_lose_no_work() {
     histories(200, 8, false);
