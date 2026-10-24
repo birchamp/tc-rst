@@ -160,11 +160,13 @@ fn update_book(
             changes: plan.changes,
             skipped: Vec::new(),
             kept: plan.left_as_it_was,
+            dropped_links: Vec::new(),
         },
         tc_journal::outside::UpdatePart::Review => Plan {
             changes: plan.review,
             skipped: Vec::new(),
             kept: Vec::new(),
+            dropped_links: Vec::new(),
         },
     })
 }
