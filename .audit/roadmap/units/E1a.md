@@ -4,10 +4,10 @@ title: Sync with Door43 in the app
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: C7a session (Claude Code 3058c665)
+branch: track-E1a
+worktree: .worktrees/track-E1a
 depends: [X, C7a, D1, UI-2, UI-3]
 needs_owner: []
 later: ["H11 from step 2"]
@@ -15,8 +15,8 @@ proves: [P1, P2, P4]
 no_loss: true
 size: 5-6 sessions (basis: B10 and C0)
 merged: none
-updated: 2026-10-22
-next: Claim this card after X, C7a, D1, UI-2 and UI-3 merge, then do step 1.
+updated: 2026-10-24
+next: Step 1: the real sync port over tc-sync, red first.
 blocked_by: none
 ---
 
@@ -295,3 +295,4 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/app-remaining.md
+- 2026-10-24 | C7a session (Claude Code 3058c665) | claim | none | on the orchestrator's word under the fast-release ruling, from track-UI-2 (9a630e9d) with track-X's tip merged (c9a833bc, two commits past the 15e01247 named); X, C7a, D1, UI-2 and UI-3 are not done, so the merge waits for them, and the steps that need D1 or UI-3 come last. Plan for step 1: tc-app gains tc-sync; the backend's `ProjectHandle` gets `door43_sync(self: Arc<Self>, ..)` (the tc-store handle runs `tc_sync::sync` on a blocking thread under its read lock; the memory backend answers none); the toast's received changes are the change ids the fold holds after the sync and not before (record keys and their histories), since tc-store's IntakeReport counts packs, not changes | none
