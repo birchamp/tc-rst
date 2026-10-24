@@ -178,7 +178,7 @@ pub fn scan_writes(path: &str, text: &str) -> Vec<Finding> {
                 });
             }
         }
-        for call in ["File::create", "OpenOptions::new("] {
+        for call in ["File::create", "File::options(", "OpenOptions::new("] {
             if has_word(code, call) {
                 out.push(Finding {
                     path: path.to_owned(),

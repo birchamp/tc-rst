@@ -4,10 +4,9 @@
 use std::path::{Path, PathBuf};
 
 pub fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
+    // cargo's own root: canonicalize() gives Windows' `\\?\` form, which the manifest paths
+    // cargo reports do not have, so no path would strip.
+    PathBuf::from(metadata()["workspace_root"].as_str().unwrap())
 }
 
 /// A path relative to the workspace root, with `/` on every platform (the Windows nightly runs
@@ -28,7 +27,7 @@ pub fn metadata() -> serde_json::Value {
             "1",
             "--offline",
         ])
-        .current_dir(root())
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")))
         .output()
         .unwrap();
     assert!(
