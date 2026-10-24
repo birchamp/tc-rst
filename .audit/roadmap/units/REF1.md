@@ -9,13 +9,13 @@ owner: none
 branch: none
 worktree: none
 depends: [SWEEP]
-needs_owner: [H7]
+needs_owner: []
 proves: [P1, P7]
 no_loss: false
 size: 3-5 sessions (estimate)
 merged: none
-updated: 2026-10-22
-next: Wait for the owner's answer to H7, then claim this card.
+updated: 2026-10-24
+next: Claim this card now: H7 is answered, match tC4 4.0 rc.2 (rulings/2026-10-24-H3-H4-H7-fast-release.md).
 blocked_by: none
 ---
 
@@ -252,3 +252,4 @@ machine fingerprint in `manifest.json`).
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-coverage.md
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md

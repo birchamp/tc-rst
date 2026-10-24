@@ -4,7 +4,7 @@ title: Nightly, Windows and no-network jobs; the mutation executor runs nightly
 track: A
 lane: checks
 milestone: M1
-state: todo
+state: parked
 owner: none
 branch: none
 worktree: none
@@ -14,8 +14,8 @@ proves: [P3, P4]
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after S2 merges, then do step 1.
+updated: 2026-10-24
+next: Parked until after the first release (rulings/2026-10-24-H3-H4-H7-fast-release.md).
 blocked_by: none
 ---
 
@@ -230,3 +230,4 @@ the Windows VM run of step 2.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md

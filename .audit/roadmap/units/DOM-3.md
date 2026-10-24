@@ -4,7 +4,7 @@ title: Capability tokens for project writes and the network
 track: A
 lane: domain
 milestone: M1
-state: todo
+state: parked
 owner: none
 branch: none
 worktree: none
@@ -14,8 +14,8 @@ proves: [P4, P5]
 no_loss: true
 size: 2-3 d (basis: DOM-1 moves every network call behind one crate in 1-2 d; this card threads two tokens through about a dozen call sites and deletes one write path)
 merged: none
-updated: 2026-10-22
-next: Claim this card after S3's core slices and DOM-1 merge, then do step 1.
+updated: 2026-10-24
+next: Parked until after the first release (rulings/2026-10-24-H3-H4-H7-fast-release.md).
 blocked_by: none
 ---
 
@@ -178,3 +178,4 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 ## Log
 
 - 2026-10-22 | roadmap session (Cursor, review of 2026-10-22) | created | none | the review (funnel F4) found the Code-layer fix for INV-ATOMIC-WRITES and INV-ONE-NETWORK-GATE parked as a minor | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
