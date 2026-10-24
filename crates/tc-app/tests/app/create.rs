@@ -788,6 +788,7 @@ fn synced_backend(world: &StoreWorld, local_synced: bool) -> tc_app::backend::st
             }),
             clock: Arc::new(tc_store::ManualClock::at(crate::store_world::START_MS)),
             threads: 2,
+            watch_debounce: std::time::Duration::from_millis(20),
         },
         Arc::default(),
     )

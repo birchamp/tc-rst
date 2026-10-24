@@ -216,6 +216,12 @@ impl FoldState {
         self.detached.iter()
     }
 
+    /// Whether the fold holds the change `id`, folded or not: a change some journal file gave
+    /// it.
+    pub fn holds(&self, id: &ChangeId) -> bool {
+        self.change_idx(id).is_some()
+    }
+
     pub fn change(&self, id: &ChangeId) -> Option<ChangeView> {
         let c = self.change_idx(id)?;
         Some(self.view(c))

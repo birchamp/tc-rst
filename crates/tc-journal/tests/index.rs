@@ -19,10 +19,12 @@ use tc_journal::index::{
 };
 use tc_journal::json::{self, Json};
 use tc_journal::pack::{PackFacts, PackPath, PackSpec, YearMonth, encode_pack, seal};
+use tc_journal::pending::Reconciles;
 use tc_journal::pending::{PendingHeader, PendingStatus, Purpose, encode_pending, read_pending};
 use tc_journal::record::VerseValue;
 use tc_journal::{
-    Cause, Change, ChangeId, PackId, ProjectId, Record, Verified, WallTime, parse_change,
+    Cause, Change, ChangeId, Md5, PackId, ProjectId, Record, RepoPath, Verified, WallTime,
+    parse_change,
 };
 
 /// Whether a file of a project folder is a pack or a pending file.
@@ -189,6 +191,34 @@ fn assert_same_inputs(file: &File, section: &Section, number: u32) {
     let read = file.load(project(), number);
     assert_eq!(from_cache.facts, read.facts);
     assert_eq!(texts(&from_cache.inputs), texts(&read.inputs));
+}
+
+/// A cache written piece by piece is the cache written whole, so the store can write the file
+/// of a whole Bible from its sections without holding it (PERFORMANCE.md memory rows).
+#[test]
+fn an_index_written_in_pieces_is_the_index_written_whole() {
+    let changes = every_kind();
+    let mut files = packs_of(&changes);
+    files.push(pending_of(&changes, 3));
+    let sections: Vec<Section> = files
+        .iter()
+        .enumerate()
+        .map(|(n, f)| {
+            f.section(project(), n as u32)
+                .expect("the file can be cached")
+        })
+        .collect();
+    let whole = Index::encode(project(), &sections);
+    let mut pieces = Vec::new();
+    let mut calls = 0;
+    Index::encode_to::<std::convert::Infallible>(project(), &sections, &mut |bytes| {
+        calls += 1;
+        pieces.extend_from_slice(bytes);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(pieces, whole);
+    assert!(calls > sections.len(), "each section goes out as it is");
 }
 
 #[test]
@@ -628,6 +658,47 @@ fn the_open_s_rules_read_the_same_ids_from_a_read_and_from_the_cache() {
         };
         assert_eq!(facts.ids, ids);
         assert_eq!(facts.header.unwrap().device, local(3));
+    }
+}
+
+/// The batch of an outside edit names the file it came from in its header (`reconciles`, §4.2),
+/// and `metadata.json` is such a file though no ingredient may be: the pending file the app
+/// wrote verifies when it is read again, and so does its section of the cache. A header that
+/// read the path as an ingredient's made the app's own file damaged, and a seal could not take it.
+#[test]
+fn a_pending_file_that_reconciles_metadata_json_verifies_and_caches_like_any_other() {
+    let changes = [Verified::Change(verse_change(local(1), 1, 1, "words"))];
+    for path in ["metadata.json", "ingredients/TIT.usfm"] {
+        let reconciles = Some(Reconciles {
+            path: RepoPath::parse_source(path).unwrap(),
+            seen_md5: Md5::of(b"the bytes found"),
+        });
+        let encoded = encode_pending(
+            &PendingHeader {
+                device: local(1),
+                project: project(),
+                purpose: Purpose::Intake,
+                reconciles: reconciles.clone(),
+            },
+            &changes,
+        )
+        .unwrap();
+        let read = read_pending(&encoded.bytes, project());
+        assert_eq!(read.status, PendingStatus::Valid, "{path}");
+        assert_eq!(read.header.unwrap().reconciles, reconciles, "{path}");
+        let file = File {
+            kind: FileKind::Pending,
+            path: format!(".tc/pending/{}", encoded.name),
+            bytes: encoded.bytes,
+        };
+        let loaded = file.load(project(), 0);
+        let section = loaded.section.clone().expect("the file can be cached");
+        let index = Index::parse(Index::encode(project(), [&section]), project()).unwrap();
+        assert_same_inputs(&file, index.section(&file.key()).unwrap(), 0);
+        let Facts::Pending(facts) = loaded.facts else {
+            panic!("a pending file")
+        };
+        assert_eq!(facts.status, PendingStatus::Valid, "{path}");
     }
 }
 

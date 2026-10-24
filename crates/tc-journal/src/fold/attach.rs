@@ -552,6 +552,9 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
     // continues a change that has not arrived marks this conflict too (§7.4).
     let mut also_keys: Vec<RecordKey> = Vec::new();
     let mut race_heads: Vec<ChangeIdx> = Vec::new();
+    // The `StartOver` changes of *Start empty* that are still verse heads: the *Start empty*
+    // candidate stands for them (§7.6), so choosing it keeps what they continue.
+    let mut start_empty_heads: Vec<ChangeIdx> = Vec::new();
     if let RecordKey::BookPresence(book) = &entry.key {
         let race = super::books::race_batches(state, *book);
         if !race.is_empty()
@@ -573,10 +576,13 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
                     .collect();
                 let mut listed = false;
                 for h in state.entry(v).heads.iter() {
-                    if bad.contains(h)
-                        || !super::merge::ancestors_or_self(state, *h)
-                            .iter()
-                            .any(|a| bad.contains(a))
+                    if bad.contains(h) {
+                        start_empty_heads.push(*h);
+                        continue;
+                    }
+                    if !super::merge::ancestors_or_self(state, *h)
+                        .iter()
+                        .any(|a| bad.contains(a))
                     {
                         continue;
                     }
@@ -598,12 +604,16 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
     unreadable.dedup();
     let (id, provisional) = (local.id, local.provisional);
     candidates.sort_by_key(|c| std::cmp::Reverse((c.at, c.head)));
+    // The batches of every head the conflict lists, a restore race's verse heads included,
+    // so a teammate's verse typed after *Start empty* groups with that teammate's work (§8.1).
     let batches: BTreeSet<crate::ids::BatchId> = heads
         .iter()
+        .chain(&race_heads)
         .map(|h| state.batch(state.meta(*h).batch).id)
         .collect();
-    let incomplete_history =
-        continues_missing(state, &heads) || continues_missing(state, &race_heads);
+    let incomplete_history = continues_missing(state, &heads)
+        || continues_missing(state, &race_heads)
+        || continues_missing(state, &start_empty_heads);
     Conflict {
         id,
         key: entry.key.clone(),
@@ -1109,7 +1119,7 @@ pub(crate) fn moved_path(path: &str, oid: &crate::ids::GitOid, infix: &str) -> S
 
 /// PathCase conflicts and the places colliding carried files take.
 pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
-    if !dirty.paths {
+    if !dirty.paths && !dirty.carried {
         return;
     }
     let mut derived: BTreeMap<String, String> = BTreeMap::new();

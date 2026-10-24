@@ -261,6 +261,8 @@ impl StoreBackend {
                 platform: Arc::new(tc_store::StdPlatform),
                 clock: Arc::new(tc_store::SystemClock),
                 threads,
+                // STORAGE §11.1: a program is done writing a file when it has been quiet this long.
+                watch_debounce: std::time::Duration::from_secs(1),
             },
             Arc::default(),
         )
@@ -436,14 +438,29 @@ impl StoreBackend {
         let Ok(folder) = ProjectRef::parse(name) else {
             return unusable(UnusableReason::NameNotAllowed);
         };
+        // The open writes a missing or damaged project.json back from the project's history
+        // (§3.5); the listing reads what the open would.
+        let repaired = || {
+            self.store
+                .repaired_project_json(&path)
+                .and_then(|b| project_json(&b).ok())
+        };
         let bytes = match read {
             Ok(bytes) => bytes,
-            Err(e) if absent(&e) => return unusable(UnusableReason::NoProjectFile),
+            Err(e) if absent(&e) => {
+                return match repaired() {
+                    Some((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
+                    None => unusable(UnusableReason::NoProjectFile),
+                };
+            }
             Err(e) => return unusable(UnusableReason::ProjectFileUnreadable(e.to_string())),
         };
         match project_json(&bytes) {
             Ok((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
-            Err(reason) => unusable(UnusableReason::ProjectFileDamaged(reason)),
+            Err(reason) => match repaired() {
+                Some((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
+                None => unusable(UnusableReason::ProjectFileDamaged(reason)),
+            },
         }
     }
 
@@ -1297,6 +1314,10 @@ fn events_loop(
             tc_store::StoreEvent::Notice(notice) => StoreEvent::Notice(notice),
             tc_store::StoreEvent::Mode(mode) => StoreEvent::Mode(session_mode(&mode)),
             tc_store::StoreEvent::Materialized { paths } => StoreEvent::Materialized { paths },
+            // D1 shows the open's progress and the commit; nothing listens yet.
+            tc_store::StoreEvent::Progress { .. } | tc_store::StoreEvent::Checkpointed { .. } => {
+                continue;
+            }
         };
         lock(subscribers)
             .senders
@@ -1399,11 +1420,10 @@ impl ProjectHandle for StoreHandle {
                 }
             });
         };
-        // S1 seals and materializes and makes no commit (S2 does), so a checkpoint that
-        // worked changed no history; the UI shows only a failure ("Checkpoint not saved").
         Box::pin(async move {
             match pending.await {
-                Ok(()) => CheckpointOutcome::Unchanged,
+                Ok(report) if report.commit.is_some() => CheckpointOutcome::Committed,
+                Ok(_) => CheckpointOutcome::Unchanged,
                 Err(error) => CheckpointOutcome::Failed {
                     reason: error.to_string(),
                 },
@@ -1796,6 +1816,7 @@ mod tests {
                 platform: Arc::new(tc_store::FakePlatform::default()),
                 clock: Arc::new(tc_store::ManualClock::at(1_792_195_200_000)),
                 threads: 2,
+                watch_debounce: std::time::Duration::from_millis(20),
             },
             hooks,
         )
@@ -1992,6 +2013,7 @@ mod tests {
             seq,
             changes: vec![change],
             skipped: Vec::new(),
+            kept: Vec::new(),
         }
     }
 
@@ -2184,7 +2206,8 @@ mod tests {
         hooks.release(tc_store::Point::BeforeCheckpoint);
         dropper.join().unwrap();
         assert!(returned, "the drop returned while the checkpoint is held");
+        // The open's first checkpoint commits the project's first tree (S2).
         let outcome = current_thread().block_on(checkpoint);
-        assert_eq!(outcome, CheckpointOutcome::Unchanged);
+        assert_eq!(outcome, CheckpointOutcome::Committed);
     }
 }

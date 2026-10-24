@@ -31,6 +31,7 @@ fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
         platform: Arc::new(tc_store::StdPlatform),
         clock: Arc::new(tc_store::SystemClock),
         threads: 2,
+        watch_debounce: std::time::Duration::from_millis(20),
     })
     .unwrap();
     store.wait_cleanup();

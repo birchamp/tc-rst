@@ -1,7 +1,6 @@
 # Storage delta: edits made outside translationCore, and carried files (2026-10-21)
 
-Status: design change, agreed by two owner rulings of 2026-10-21. Apply it to
-`docs/STORAGE.md` when unit S2 merges into main.
+Status: Applied to `docs/STORAGE.md` by the S2 merge.
 
 Line numbers written `S2:n` point into the copy of `docs/STORAGE.md` from the S2 branch at
 3b075d7: `.audit/roadmap/evidence/2026-10-21/STORAGE-s2-3b075d7.md` (5,517 lines). Code paths
