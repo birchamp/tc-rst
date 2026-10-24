@@ -21,6 +21,7 @@ const State = Object.freeze({
 const EVENTS = Object.freeze([
   'ready', // Electron is ready
   'address', // tc4's first stdout line named its address; { startup: 'preparing'|'ready'|'failed', at }
+  'homeShown', // the page is Home: the prepare page handed off once the resources were ready
   'startError', // tc4 could not start: an error line, a spawn error, or an exit before the line; { reason, at }
   'serverExit', // the running tc4 ended; { at }
   'closeRequested', // the person closed the window
@@ -59,8 +60,10 @@ const TRANSITIONS = Object.freeze({
     // The owner's ruling: the window shows at the click, before tc4 answers.
     ready: (m) => go(m, State.Starting, ['showWindow', 'spawnServer'], { startedAt: null }),
     address: (m, e) => onAddress(m, e, 'loadHome'),
+    homeShown: stay,
     startError: (m) => go(m, State.Stopped, ['showStartError']),
-    serverExit: (m) => go(m, State.Stopped, ['showStartError']),
+    // tc4 ended after its address line, before it said whether it prepares.
+    serverExit: (m, e) => afterExit(m, e.at),
     // tc4 is starting: it gets the quit message once its address line comes.
     closeRequested: (m) => go(m, State.Quitting, []),
     pageAnswered: stay,
@@ -72,6 +75,7 @@ const TRANSITIONS = Object.freeze({
   [State.Preparing]: {
     ready: stay,
     address: stay,
+    homeShown: (m) => go(m, State.Running, []),
     startError: stay,
     serverExit: (m, e) => afterExit(m, e.at),
     // Nothing can be typed while the resources are prepared.
@@ -85,6 +89,7 @@ const TRANSITIONS = Object.freeze({
   [State.Running]: {
     ready: stay,
     address: stay,
+    homeShown: stay,
     startError: stay,
     serverExit: (m, e) => afterExit(m, e.at),
     closeRequested: (m) => go(m, State.Closing, ['askPage']),
@@ -97,6 +102,7 @@ const TRANSITIONS = Object.freeze({
   [State.Restarting]: {
     ready: stay,
     address: (m, e) => onAddress(m, e, 'reloadHome'),
+    homeShown: stay,
     startError: (m, e) => afterExit(m, e.at),
     serverExit: (m, e) => afterExit(m, e.at),
     // The old page cannot reach the new port, so it holds nothing the mirror does not.
@@ -110,6 +116,7 @@ const TRANSITIONS = Object.freeze({
   [State.Closing]: {
     ready: stay,
     address: stay,
+    homeShown: stay,
     startError: stay,
     // The person asked to close, and every typed line is in the mirror.
     serverExit: (m) => go(m, State.Quitting, ['exitApp']),
@@ -125,6 +132,7 @@ const TRANSITIONS = Object.freeze({
     ready: stay,
     // A close while tc4 was starting: it gets the quit message now.
     address: (m) => go(m, State.Quitting, ['sendQuit']),
+    homeShown: stay,
     startError: (m) => go(m, State.Quitting, ['exitApp']),
     serverExit: (m) => go(m, State.Quitting, ['exitApp']),
     closeRequested: stay,
@@ -137,6 +145,7 @@ const TRANSITIONS = Object.freeze({
   [State.Stopped]: {
     ready: stay,
     address: stay,
+    homeShown: stay,
     startError: stay,
     serverExit: stay,
     closeRequested: (m) => go(m, State.Quitting, ['exitApp']),
@@ -207,7 +216,9 @@ function parseAddress(line) {
   }
   if (value && typeof value.error === 'object' && value.error !== null) {
     const type = typeof value.error.type === 'string' ? value.error.type : 'unknown';
-    const message = typeof value.error.message === 'string' ? value.error.message : type;
+    const detail = value.error.value;
+    const message =
+      detail && typeof detail.reason === 'string' ? detail.reason : typeof value.error.message === 'string' ? value.error.message : type;
     return { error: { type, message } };
   }
   const match = /^http:\/\/127\.0\.0\.1:(\d{1,5})\/$/.exec(value && value.url);
@@ -282,6 +293,101 @@ function linkTarget(url, origin) {
   return 'refuse';
 }
 
+// The options of every window the shell makes. The renderer never sees Node: the page talks to
+// the shell only through preload.cjs's bridge. Frames as tC4 sets them: Linux keeps the native
+// frame (#642); Windows hides the bar and draws its controls over the header (#639); macOS hides
+// it and centres the traffic lights in the 56 px header (#214).
+function windowOptions({ platform, preload, show = true, print = false }) {
+  const webPreferences = {
+    contextIsolation: true,
+    sandbox: true,
+    nodeIntegration: false,
+    nodeIntegrationInSubFrames: false,
+    webviewTag: false,
+    spellcheck: false,
+  };
+  if (print) return { show: false, webPreferences: { ...webPreferences, javascript: false } };
+  const frame =
+    platform === 'darwin'
+      ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 20, y: 21 } }
+      : platform === 'win32'
+        ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#014263', symbolColor: '#FFFFFF', height: 56 } }
+        : {};
+  return {
+    width: 1024,
+    height: 768,
+    minWidth: 900,
+    minHeight: 600,
+    show,
+    backgroundColor: '#ffffff',
+    title: 'translationCore4',
+    ...frame,
+    webPreferences: { ...webPreferences, preload },
+  };
+}
+
+// tC4's application menu (its template's InitializeMenu): Edit, the zoom keys Ctrl or Cmd with
+// +, - and 0, and Reload, the way back from a blank window (#435). A window without a native bar
+// never shows the menu row, but its keys still work.
+function menuTemplate(platform) {
+  const mac = platform === 'darwin';
+  const template = [
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' },
+        { role: 'paste' }, { role: 'pasteAndMatchStyle' }, { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Default Zoom', accelerator: mac ? 'Cmd+0' : 'Ctrl+0', action: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { label: 'Reload', accelerator: mac ? 'Cmd+R' : 'Ctrl+R', action: 'reload' },
+        { label: 'Force Reload', accelerator: mac ? 'Shift+Cmd+R' : 'Ctrl+Shift+R', action: 'forceReload' },
+        { label: 'Toggle Developer Tools', accelerator: mac ? 'Alt+Cmd+I' : 'Ctrl+Shift+I', action: 'toggleDevTools' },
+      ],
+    },
+  ];
+  if (mac) {
+    template.unshift({
+      label: 'translationCore4',
+      submenu: [{ role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }],
+    });
+  }
+  return template;
+}
+
+// The right-click menu of a text field (tC4 #833.4).
+function contextMenuTemplate(params) {
+  if (!params.isEditable) return [];
+  return [
+    { role: 'cut', enabled: params.editFlags.canCut },
+    { role: 'copy', enabled: params.editFlags.canCopy },
+    { role: 'paste', enabled: params.editFlags.canPaste },
+  ];
+}
+
+// The start-error page: what tc4 said, in the words of prepare.html's failure.
+function startErrorPage(reason) {
+  const escape = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  const html =
+    '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>translationCore4</title>' +
+    "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">" +
+    '<style>body{margin:36px;font:16px system-ui,sans-serif;color:#293847;background:#f5f7fa}h1{font-size:22px}p{line-height:1.5}</style>' +
+    '</head><body><h1>translationCore4 could not start</h1>' +
+    '<p>Please quit and try again.</p>' +
+    `<p id="reason" style="font-size:14px;overflow-wrap:anywhere">${escape(reason)}</p></body></html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
 // ---- Log lines (INV-THE-TOKEN-NEVER-LEAVES-THE-APP) ----
 
 // Text with every token taken out: the `#t=` fragment of a URL, and each secret given.
@@ -301,11 +407,13 @@ module.exports = {
   State,
   TRANSITIONS,
   USAGE,
+  contextMenuTemplate,
   exitReason,
   filterPatterns,
   initial,
   isWebUrl,
   linkTarget,
+  menuTemplate,
   next,
   originOf,
   parseAddress,
@@ -313,5 +421,7 @@ module.exports = {
   redact,
   sameOrigin,
   serveArgs,
+  startErrorPage,
   wantsToken,
+  windowOptions,
 };

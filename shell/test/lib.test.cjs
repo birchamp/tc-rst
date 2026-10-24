@@ -29,6 +29,9 @@ test('the_address_line_is_parsed_per_the_contract', () => {
     error: { type: 'appLockHeld', message: 'held by 12' },
   });
   assert.equal(lib.parseAddress('{"error":{"type":"start"}}').error.type, 'start');
+  assert.deepEqual(lib.parseAddress('{"error":{"type":"start","value":{"reason":"the projects folder cannot be used"}}}'), {
+    error: { type: 'start', message: 'the projects folder cannot be used' },
+  });
   assert.equal(lib.parseAddress('not json').error.type, 'garbled');
   assert.equal(lib.parseAddress(JSON.stringify({ url: 'http://0.0.0.0:1/', token: TOKEN })).error.type, 'garbled');
   assert.equal(lib.parseAddress(JSON.stringify({ url: 'http://127.0.0.1:1/', token: 'short' })).error.type, 'garbled');

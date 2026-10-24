@@ -14,6 +14,7 @@ const ACTIONS = new Set([
 const sample = {
   ready: {},
   address: { startup: 'ready', at: 0 },
+  homeShown: {},
   startError: { reason: 'x', at: 0 },
   serverExit: { at: 0 },
   closeRequested: {},
@@ -56,6 +57,8 @@ test('the_window_shows_at_ready_before_tc4_answers', () => {
 test('the_address_line_leads_to_prepare_or_home', () => {
   assert.equal(run([{ type: 'ready' }, { type: 'address', startup: 'preparing', at: 1 }]).state, State.Preparing);
   assert.deepEqual(run([{ type: 'ready' }, { type: 'address', startup: 'ready', at: 1 }]).actions.slice(-1), ['loadHome']);
+  const handedOff = run([{ type: 'ready' }, { type: 'address', startup: 'preparing', at: 1 }, { type: 'homeShown' }]);
+  assert.equal(handedOff.state, State.Running);
 });
 
 test('tc4_ending_restarts_it_and_reloads_home', () => {
