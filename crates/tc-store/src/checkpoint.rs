@@ -366,7 +366,17 @@ impl Writer {
             None => true,
             Some(h) => h.commit != *remote && !git.descends_from(h.commit, *remote),
         });
-        let remote_tree = remote.map(|r| git.tree_of(r)).transpose()?;
+        let remote_tree = match remote {
+            Some(r) => {
+                let base = head
+                    .as_ref()
+                    .and_then(|h| git.merge_base(h.commit, r))
+                    .map(|b| git.tree_of(b))
+                    .transpose()?;
+                Some((git.tree_of(r)?, base))
+            }
+            None => None,
+        };
         let built = self.build_tree(git, head.as_ref(), remote_tree)?;
         if self.manifest_changed {
             // The blobs just stored: the next checkpoint finds them in the manifest.
@@ -497,7 +507,7 @@ impl Writer {
         &mut self,
         git: &Git,
         head: Option<&Head>,
-        remote_tree: Option<GitOid>,
+        remote_tree: Option<(GitOid, Option<GitOid>)>,
     ) -> Result<Built, StoreError> {
         let head_entries: BTreeMap<String, TreeEntry> = match head {
             Some(h) => git.tree_entries(h.tree)?,
@@ -731,13 +741,26 @@ impl Writer {
         // foreign entries, with Door43's blob, and its packs this project has not taken (a
         // damaged copy, a newer format), so no pack of R ever leaves the tip (§9.2 N3, §9.4
         // "No entry of R is dropped silently"). Derived files come from the fold.
-        if let Some(remote_tree) = remote_tree {
-            for (path, entry) in git.tree_entries(remote_tree)? {
+        if let Some((remote_tree, base_tree)) = remote_tree {
+            let theirs = git.tree_entries(remote_tree)?;
+            // A foreign entry Door43 removed since the common ancestor is removed, unless this
+            // computer changed it since (§9.4): the app never edits them.
+            if let Some(base) = base_tree {
+                for (path, was) in git.tree_entries(base)? {
+                    let unchanged_here = head_entries.get(&path).is_some_and(|e| e.oid == was.oid);
+                    if !theirs.contains_key(&path) && unchanged_here && !self.app_owned(&path) {
+                        desired.remove(&path);
+                    }
+                }
+            }
+            for (path, entry) in theirs {
                 let pack = path.starts_with("ingredients/tc/changes/");
                 let foreign = !self.app_owned(&path);
                 let redundant = tc_journal::pack::PackPath::parse(&path)
                     .is_some_and(|p| replaced.contains(&p.name));
-                if desired.contains_key(&path) || redundant || !(pack || foreign) {
+                // A foreign entry is Door43's version (§9.4: "kept with R's blob"); a pack
+                // this project holds is its own.
+                if (pack && desired.contains_key(&path)) || redundant || !(pack || foreign) {
                     continue;
                 }
                 let ingredient = path.starts_with("ingredients/")

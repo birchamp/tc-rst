@@ -122,6 +122,7 @@ jobs:
       - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
       - run: scripts/gates.sh --step model-long
+      - run: scripts/gates.sh --step sync-model-long
 
   alignment-budget:
     runs-on: ubuntu-latest

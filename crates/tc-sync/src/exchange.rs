@@ -39,6 +39,10 @@ pub enum ExchangeError {
     /// The exported file did not read back as written; it was deleted.
     #[error("the file did not read back as written: {0}")]
     NotVerified(String),
+    /// The latest saves could not be committed (another installation is saving into the
+    /// folder, the project is read-only, …): nothing was exported.
+    #[error("the latest work could not be committed: {0}")]
+    NotCommitted(String),
     #[error("{0}")]
     Io(String),
     #[error(transparent)]
@@ -56,7 +60,15 @@ pub async fn export(
     destination: &Path,
     person: &str,
 ) -> Result<PathBuf, ExchangeError> {
-    project.checkpoint(CheckpointReason::BeforeExport).await?;
+    // The file holds the last commit: a checkpoint that could not commit the latest saves
+    // stops the export, so a teammate never gets less than the person sees.
+    let checkpoint = project.checkpoint(CheckpointReason::BeforeExport).await?;
+    if let Some(why) = checkpoint
+        .skipped
+        .filter(|why| *why != tc_store::CheckpointSkip::NoChanges)
+    {
+        return Err(ExchangeError::NotCommitted(format!("{why:?}")));
+    }
     let facts = project.facts();
     let git_dir = facts.git_dir.ok_or(ExchangeError::NoHistory)?;
     let destination = destination.to_owned();
@@ -325,15 +337,23 @@ pub async fn receive(
     let held = project.snapshot();
     let before: std::collections::BTreeSet<ConflictId> =
         held.fold().conflicts().map(|c| c.id).collect();
-    // Changes the project holds already are not news.
+    let report = project.receive_packs(from.to_owned(), packs).await?;
+    if let Some(why) = report.skipped.filter(|why| {
+        matches!(
+            why,
+            tc_store::CheckpointSkip::ReadOnly | tc_store::CheckpointSkip::SecondWriter
+        )
+    }) {
+        return Err(ExchangeError::NotCommitted(format!("{why:?}")));
+    }
+    let snapshot = project.snapshot();
+    // Received: new before the file, and in the project after it.
     let mut received_from: BTreeMap<tc_journal::DeviceId, u32> = BTreeMap::new();
     for (device, change) in changes {
-        if held.fold().change(&change).is_none() {
+        if held.fold().change(&change).is_none() && snapshot.fold().change(&change).is_some() {
             *received_from.entry(device).or_insert(0) += 1;
         }
     }
-    let report = project.receive_packs(from.to_owned(), packs).await?;
-    let snapshot = project.snapshot();
     let labels = snapshot.fold().person_labels(facts.device);
     let mut received_by = BTreeMap::new();
     for (device, count) in received_from {

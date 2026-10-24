@@ -527,6 +527,18 @@ impl Git {
             .unwrap_or(false)
     }
 
+    /// The best common ancestor of two commits, when they share history.
+    pub fn merge_base(&self, a: GitOid, b: GitOid) -> Option<GitOid> {
+        let (Ok(a), Ok(b)) = (
+            git2::Oid::from_bytes(a.as_bytes()),
+            git2::Oid::from_bytes(b.as_bytes()),
+        ) else {
+            return None;
+        };
+        let base = self.repo.merge_base(a, b).ok()?;
+        GitOid::parse(&base.to_string())
+    }
+
     /// HEAD's commit; `None` on a branch with no commit yet.
     pub fn head(&self) -> Result<Option<Head>, GitError> {
         let reference = match self.repo.head() {

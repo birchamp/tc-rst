@@ -45,17 +45,25 @@ impl Drop for Computer {
 }
 
 pub fn computer(dir: &Path, name: &str) -> Computer {
+    computer_on(
+        dir,
+        name,
+        FakePlatform {
+            host: name.to_owned(),
+            machine: format!("machine-of-{name}"),
+            ..FakePlatform::default()
+        },
+    )
+}
+
+pub fn computer_on(dir: &Path, name: &str, platform: FakePlatform) -> Computer {
     let projects = dir.join(format!("projects-{name}"));
     std::fs::create_dir_all(&projects).unwrap();
     let store = Store::start(StoreConfig {
         app_data: dir.join(format!("app-{name}")),
         projects: projects.clone(),
         vfs: Arc::new(tc_store::StdFs),
-        platform: Arc::new(FakePlatform {
-            host: name.to_owned(),
-            machine: format!("machine-of-{name}"),
-            ..FakePlatform::default()
-        }),
+        platform: Arc::new(platform),
         clock: Arc::new(ManualClock::at(1_792_195_200_000)),
         threads: 2,
         watch_debounce: std::time::Duration::from_millis(20),
@@ -882,4 +890,127 @@ async fn three_devices_converge_with_byte_identical_derived_files() {
             assert_eq!(&files[path], bytes, "{path} differs");
         }
     }
+}
+
+/// A commit on Door43's branch with no translationCore trailer that sets `path` to `bytes`, or
+/// removes it.
+fn door43_commit(door43: &Door43, name: &str, path: &str, bytes: Option<&[u8]>) {
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, name)).unwrap();
+    let head = bare
+        .find_reference("refs/heads/main")
+        .unwrap()
+        .peel_to_commit()
+        .unwrap();
+    let mut update = git2::build::TreeUpdateBuilder::new();
+    match bytes {
+        Some(bytes) => {
+            let blob = bare.blob(bytes).unwrap();
+            update.upsert(path, blob, git2::FileMode::Blob);
+        }
+        None => {
+            update.remove(path);
+        }
+    }
+    let tree = bare
+        .find_tree(update.create_updated(&bare, &head.tree().unwrap()).unwrap())
+        .unwrap();
+    let sig = git2::Signature::now("owner", "owner@example.org").unwrap();
+    bare.commit(
+        Some("refs/heads/main"),
+        &sig,
+        &sig,
+        "web edit",
+        &tree,
+        &[&head],
+    )
+    .unwrap();
+}
+
+fn on_door43(door43: &Door43, name: &str, path: &str) -> Option<Vec<u8>> {
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, name)).unwrap();
+    let tree = bare
+        .find_reference("refs/heads/main")
+        .unwrap()
+        .peel_to_tree()
+        .unwrap();
+    let entry = tree.get_path(Path::new(path)).ok()?;
+    Some(bare.find_blob(entry.id()).unwrap().content().to_vec())
+}
+
+/// §9.4: a file the app does not own (a README, a style guide) is Door43's: an edit made on
+/// Door43 stays after a sync, and a file deleted on Door43 stays deleted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_file_the_app_does_not_own_follows_door43() {
+    let door43 = door43("titus-readme").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-readme");
+    synced(&sync(&a, &door43).await);
+    door43_commit(&door43, "titus-readme", "README.md", Some(b"# Titus\n"));
+    save(&a, 1, 1, "Paul");
+    synced(&sync(&a, &door43).await);
+    assert_eq!(
+        on_door43(&door43, "titus-readme", "README.md").as_deref(),
+        Some(&b"# Titus\n"[..])
+    );
+    door43_commit(
+        &door43,
+        "titus-readme",
+        "README.md",
+        Some(b"# Titus, by the team\n"),
+    );
+    save(&a, 1, 2, "in hope");
+    synced(&sync(&a, &door43).await);
+    assert_eq!(
+        on_door43(&door43, "titus-readme", "README.md").as_deref(),
+        Some(&b"# Titus, by the team\n"[..]),
+        "the edit made on Door43 stays"
+    );
+    door43_commit(&door43, "titus-readme", "README.md", None);
+    save(&a, 1, 3, "in his time");
+    synced(&sync(&a, &door43).await);
+    assert_eq!(
+        on_door43(&door43, "titus-readme", "README.md"),
+        None,
+        "the file deleted on Door43 stays deleted"
+    );
+    a.close().unwrap();
+}
+
+/// PLAN Q8: the merge fails after the teammate's work was taken in (here, before the branch
+/// moves); the sync reports a failure after intake, the work stays, and the next sync ends it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_merge_that_fails_after_intake_says_the_work_was_kept() {
+    let door43 = door43("titus-q8").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-q8");
+    synced(&sync(&a, &door43).await);
+    a.close().unwrap();
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    save(&b, 1, 2, "in hope, as Juan has it");
+    synced(&sync(&b, &door43).await);
+    let a = open(&ana, &folder_a);
+    ana.store
+        .hooks()
+        .fail(tc_store::Point::BeforeHeadUpdate, tc_store::Failure::Stop);
+    let report = sync(&a, &door43).await;
+    assert!(
+        matches!(
+            report.ended,
+            Ended::Failed(tc_api::refusal::SyncFailure::AfterIntake(_))
+        ),
+        "{report:?}"
+    );
+    assert_eq!(words(&a, 1, 2).as_deref(), Some("in hope, as Juan has it"));
+    ana.store.hooks().heal(tc_store::Point::BeforeHeadUpdate);
+    synced(&sync(&a, &door43).await);
+    a.close().unwrap();
+    b.close().unwrap();
 }
