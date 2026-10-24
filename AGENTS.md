@@ -8,7 +8,10 @@ anything that writes project data.
 ## The rules that protect translators' work
 
 - Never lose, hide or silently rewrite a translator's text, alignment, check decision or
-  comment. If two versions disagree, keep both and show the conflict.
+  comment. If two versions of verse text disagree, keep both and show the conflict. For
+  everything else (checks, alignments, comments, settings, books), the newest version wins, the
+  older one stays in History where the translator can restore it, and the Received sheet says
+  what was replaced (owner ruling H5, `.audit/roadmap/rulings/2026-10-24-H5.md`).
 - Every project on disk and every project that leaves the app is a valid Scripture
   Burrito. Code that writes a project validates it in tests.
 - Write files atomically: write a temporary file in the same directory, fsync it, rename
