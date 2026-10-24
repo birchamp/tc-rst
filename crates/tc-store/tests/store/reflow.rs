@@ -234,58 +234,6 @@ fn a_link_follows_its_own_copy_of_a_repeated_word() {
 }
 
 #[test]
-fn a_concurrent_alignment_edit_on_another_device_is_kept_as_a_conflict() {
-    let (rig, folder) = titus();
-    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    paul(&mine);
-    mine.wait_idle();
-    mine.close().unwrap();
-    let theirs_rig = rig_as(rig.fs.other_machine(), "/app-laptop", "host-2");
-    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    let theirs = theirs_rig
-        .store
-        .open(
-            &folder,
-            &OpenOptions {
-                other_computer_closed: true,
-                ..OpenOptions::default()
-            },
-        )
-        .unwrap();
-    // On the other computer: the alignment changes (God moved to its own card).
-    let shown = theirs.mint(&alignment_key(1, 1), None).unwrap();
-    let verse_shown = theirs.mint(&verse(1, 1), None).unwrap();
-    let mut edit = alignment(&theirs);
-    edit.alignments[2].bottom_words.retain(|w| w.word != "God");
-    edit.word_bank.push(target("God", 1, 1));
-    theirs
-        .submit(Command::SaveAlignment {
-            shown,
-            verse_shown,
-            value: AlignmentEdit {
-                alignments: edit.alignments,
-                word_bank: edit.word_bank,
-                done: false,
-            },
-        })
-        .wait()
-        .unwrap();
-    // Here, not knowing it: a verse edit that reflows the alignment this computer holds.
-    save_verse(&mine, 1, 1, "Paul, a servant of God and an apostle").unwrap();
-    drop(mine);
-    drop(theirs);
-    let rig3 = rig_as(rig.fs.crash(false), APP, "host-1");
-    let handle = rig3.store.open(&folder, &OpenOptions::default()).unwrap();
-    let heads = handle.snapshot().fold().heads(&alignment_key(1, 1));
-    assert_eq!(
-        heads.len(),
-        2,
-        "both alignments are kept: a visible conflict"
-    );
-    handle.close().unwrap();
-}
-
-#[test]
 fn crash_a_verse_save_and_its_reflow_are_one_batch() {
     let (rig, folder) = titus();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();

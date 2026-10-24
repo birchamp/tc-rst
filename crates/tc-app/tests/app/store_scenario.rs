@@ -210,6 +210,7 @@ fn a_scenario_written_while_the_start_cleanup_runs_keeps_its_staging_folder_and_
             platform: Arc::new(FakePlatform::default()),
             clock: Arc::new(ManualClock::at(START_MS)),
             threads: 2,
+            watch_debounce: std::time::Duration::from_millis(20),
         },
         hooks.clone(),
     )
@@ -269,7 +270,11 @@ async fn a_reset_puts_back_a_changed_project_and_removes_others() {
     let fs = FaultFs::new();
     let (store, _) = scenario_on(&fs, "sample");
     let store = Arc::new(store);
-    let seed_words = words_of(&open_sample(&store).snapshot(), &tit(1, 1));
+    // Closed, not dropped: a drop closes off-thread, and the app's first open below would
+    // find the project still held.
+    let seeded = open_sample(&store);
+    let seed_words = words_of(&seeded.snapshot(), &tit(1, 1));
+    seeded.close().await.unwrap();
     assert!(seed_words.is_some());
     let dir = tempfile::tempdir().unwrap();
     let t = app_over(dir.path(), store.clone()).await;
@@ -508,6 +513,7 @@ fn a_summary_stamp_lists_one_folder_and_stats_one_file_at_any_history() {
             platform: Arc::new(FakePlatform::default()),
             clock: Arc::new(ManualClock::at(START_MS)),
             threads: 2,
+            watch_debounce: std::time::Duration::from_millis(20),
         },
         Arc::default(),
     )

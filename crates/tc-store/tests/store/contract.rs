@@ -568,8 +568,10 @@ fn a_snapshot_costs_nothing_to_take() {
     handle.close().unwrap();
 }
 
-/// APP-DESIGN §4.2 `reads_never_wait_behind_a_long_command`: with the actor held inside a
-/// checkpoint, snapshots and book reads still come back, and a save waits its turn.
+/// APP-DESIGN §4.2 `reads_never_wait_behind_a_long_command`, as the owner ruled on 2026-10-18
+/// (PERFORMANCE.md): the long part of a checkpoint runs on the writer, so with it held,
+/// snapshots and book reads still come back and a save is durable at once. (Before the
+/// ruling the save waited its turn behind the checkpoint.)
 #[test]
 fn reads_never_wait_behind_a_held_checkpoint() {
     let hooks = std::sync::Arc::new(tc_store::Hooks::default());
@@ -586,10 +588,13 @@ fn reads_never_wait_behind_a_held_checkpoint() {
     });
     assert!(handle.snapshot().fold().book_usfm(TIT).is_some());
     assert!(handle.read_book(TIT).wait().usfm.is_some());
-    assert!(!save.is_ready(), "the save waits behind the checkpoint");
+    // The hold is released even if an assertion below fails, so the test ends.
+    let saved = save.wait();
+    let still_held = !checkpoint.is_ready();
     hooks.release(tc_store::Point::BeforeCheckpoint);
+    assert!(still_held, "the checkpoint is still held on the writer");
     checkpoint.wait().unwrap();
-    assert_eq!(save.wait().unwrap().stored, Stored::Durable);
+    assert_eq!(saved.unwrap().stored, Stored::Durable);
     handle.close().unwrap();
 }
 

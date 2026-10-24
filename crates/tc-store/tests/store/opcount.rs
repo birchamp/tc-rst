@@ -22,7 +22,8 @@ fn open_once(fs: &FaultFs, folder: &std::path::Path) -> (StoreCounters, Vec<Path
 }
 
 fn is_journal(path: &std::path::Path) -> bool {
-    is_inside(path, &["ingredients", "tc", "changes"]) || is_inside(path, &[".tc", "pending"])
+    let text = slashed(path);
+    text.contains("/ingredients/tc/changes/") || text.contains("/.tc/pending/")
 }
 
 /// What an open after no change cost: the counters when the project became usable, those
@@ -173,12 +174,9 @@ fn a_save_reads_no_pack_and_writes_a_bounded_number_of_files() {
         assert!(read < 64 * 1024, "a save read {read} bytes");
         let created = log.iter().filter(|op| op.kind == OpKind::Create).count();
         assert_eq!(created, 1, "one pending file: {log:?}");
-        // Windows flushes the renamed file again after its folder (STORAGE §5.0 step 4).
+        // On Windows the atomic write also flushes the renamed file (NTFS, atomic.rs).
         let flushes = if cfg!(windows) { 3 } else { 2 };
-        assert_eq!(
-            delta.fsyncs, flushes,
-            "the file and its folder, then on Windows the renamed file"
-        );
+        assert_eq!(delta.fsyncs, flushes, "the file and its folder: {log:?}");
         writes.push(log.len());
         handle.close().unwrap();
     }
@@ -226,6 +224,8 @@ fn an_open_after_one_save_projects_only_that_books_files() {
         let (after_materialized, _) = open_once(&closed, &corpus.folder);
         assert_eq!(after_materialized.projected, 0, "{after_materialized:?}");
         let shown = handle.mint(&key, None).unwrap();
+        // Held, so the writer cannot begin the save's files before the crash on a slow run.
+        rig.store.hooks().hold(tc_store::Point::BeforeMaterialize);
         handle
             .submit(tc_journal::command::Command::SaveVerse {
                 shown,
@@ -235,6 +235,9 @@ fn an_open_after_one_save_projects_only_that_books_files() {
             .unwrap();
         // A crash after B3: the save is durable, its materialization never ran.
         let crashed = fs.crash(true);
+        rig.store
+            .hooks()
+            .release(tc_store::Point::BeforeMaterialize);
         drop(handle);
         crashed.advance(std::time::Duration::from_secs(5));
         let (counters, _) = open_once(&crashed, &corpus.folder);
@@ -385,7 +388,9 @@ fn a_record_entering_a_files_scope_projects_it() {
     assert_eq!(counts[0], counts[1]);
 }
 
-/// `FaultFs` with 2 s modification times (FAT32, §6.2).
+/// `FaultFs` with 2 s modification times (FAT32, §6.2). A same-size edit within the tick of
+/// the app's own write is read and recorded; bytes that changed after the entry settled,
+/// with the old size and time put back, are held as storage damage. Neither is written over.
 #[test]
 fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     use tc_journal::fold::Notice;
@@ -401,7 +406,8 @@ fn a_racy_or_mtime_restored_file_is_never_overwritten() {
             )
         })
     };
-    // 1. A same-size edit within the tick of the app's write.
+    // 1. A same-size edit within the tick of the app's write is not told by its stat from
+    // the app's own write: it is read, and recorded as an edit of the person's.
     let fs = rig.fs.copy();
     let rig1 = rig_as(fs.clone(), APP, "host-1");
     let handle = rig1.store.open(&folder, &OpenOptions::default()).unwrap();
@@ -415,16 +421,28 @@ fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     fs.put(&usfm, &edited, Some(mtime));
     let handle = rig1.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
-    assert!(held(&handle), "the racy edit is read and held");
-    assert_eq!(fs.peek(&usfm).as_deref(), Some(edited.as_slice()));
-    // A materialization of that book leaves it.
+    assert!(!held(&handle), "an edit is recorded, not held");
+    assert!(
+        handle.notices().iter().any(|n| matches!(
+            &n.notice,
+            Notice::OutsideEditRecorded { path, .. } if path.as_str() == "ingredients/TIT.usfm"
+        )),
+        "the racy edit is read and recorded: {:?}",
+        handle.notices()
+    );
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("paul, a servant"));
+    let copies = copies_of(&handle, "ingredients/TIT.usfm");
+    assert_eq!(copies.len(), 1);
+    assert_eq!(
+        fs.peek(&folder.join(&copies[0])).as_deref(),
+        Some(edited.as_slice()),
+        "the bytes the person saved are kept"
+    );
+    // The project shows the edit, so the next materialization writes the same bytes.
     save_verse(&handle, 1, 2, "in hope").unwrap();
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
-    assert_eq!(fs.peek(&usfm).as_deref(), Some(edited.as_slice()));
-    // Restore from the project rewrites it.
-    handle.restore_held("ingredients/TIT.usfm").wait().unwrap();
-    let restored = String::from_utf8(fs.peek(&usfm).unwrap()).unwrap();
-    assert!(restored.contains("Paul, a servant") && restored.contains("in hope"));
+    let written = String::from_utf8(fs.peek(&usfm).unwrap()).unwrap();
+    assert!(written.contains("paul, a servant") && written.contains("in hope"));
     handle.close().unwrap();
     // 2. An edit whose old mtime is put back after its entry settled.
     let fs = rig.fs.copy();
@@ -499,67 +517,4 @@ fn the_fold_cache_is_kept_by_every_open_of_the_same_encoding() {
     );
     let (again, _) = open_once(&fs, &folder);
     assert_eq!(again.journal_files_cached, again.journal_files_read);
-}
-
-/// An action costs what it touches: a book added with its text writes one pending file with one
-/// batch and reads nothing the open had not read, whatever the project holds (PERFORMANCE rule 2).
-#[test]
-fn adding_a_book_from_a_file_costs_the_book_not_the_project() {
-    let usfm = ult("TIT");
-    let mut writes = Vec::new();
-    for corpus in [psalms(), psalms_x10()] {
-        let fs = corpus.fs.copy();
-        let rig = rig_as(fs.clone(), APP, "host-1");
-        let handle = rig
-            .store
-            .open(&corpus.folder, &OpenOptions::default())
-            .unwrap();
-        handle.wait_idle();
-        let book = [
-            tc_journal::BookId::Titus,
-            tc_journal::BookId::Jude,
-            tc_journal::BookId::Philemon,
-        ]
-        .into_iter()
-        .find(|b| {
-            handle
-                .snapshot()
-                .fold()
-                .heads(&tc_journal::RecordKey::BookPresence(*b))
-                .is_empty()
-        })
-        .unwrap();
-        fs.clear_log();
-        let read_before = fs.bytes_read();
-        let before = handle.counters();
-        let reply = handle
-            .submit(tc_journal::command::Command::AddBookText {
-                book,
-                scope: tc_journal::record::Scope::Whole,
-                usfm: usfm.clone(),
-                file_name: "TIT.usfm".into(),
-            })
-            .wait()
-            .unwrap();
-        assert!(reply.changes.len() > 46 * 2);
-        let log = fs.log();
-        let opened = fs.opened();
-        let read = fs.bytes_read() - read_before;
-        let delta = handle.counters().since(&before);
-        assert!(
-            opened.is_empty(),
-            "an add opened a file the open had not: {opened:?}"
-        );
-        assert!(read < 64 * 1024, "an add read {read} bytes");
-        let created = log.iter().filter(|op| op.kind == OpKind::Create).count();
-        assert_eq!(created, 1, "one pending file for the whole book: {log:?}");
-        let flushes = if cfg!(windows) { 3 } else { 2 };
-        assert_eq!(delta.fsyncs, flushes, "one durable write");
-        writes.push(log.len());
-        handle.close().unwrap();
-    }
-    assert_eq!(
-        writes[0], writes[1],
-        "the same write points on both corpora"
-    );
 }

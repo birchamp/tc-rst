@@ -324,8 +324,9 @@ async fn the_timer_saves_links_durably_two_seconds_after_the_last_change() {
     let mut events = rig.t.app.events().subscribe(rig.t.app.events().head());
     tokio::time::advance(Duration::from_millis(500)).await;
     // Advancing the clock does not order the actor's due timer before another request.
-    // Wait for its announcement; the paused clock also handles timer-wheel rounding.
-    tokio::time::timeout(Duration::from_millis(100), async {
+    // Wait for its announcement; the paused clock also handles timer-wheel rounding. The
+    // limit only catches a hang (rulings/2026-10-23-tests-prove-behavior-not-speed.md).
+    tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             if let Next::Frame(frame) = events.next().await
                 && let Event::Session {

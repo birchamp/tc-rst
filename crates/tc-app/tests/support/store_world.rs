@@ -83,6 +83,7 @@ pub fn backend_over(
             platform: Arc::new(platform),
             clock: Arc::new(ManualClock::at(START_MS)),
             threads: 2,
+            watch_debounce: std::time::Duration::from_millis(20),
         },
         hooks,
     )

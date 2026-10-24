@@ -9,7 +9,7 @@ use super::passage::rewind;
 use super::state::{FoldState, Local};
 use super::{Candidate, Conflict, ConflictId, ConflictKind, Side, UnitName};
 use crate::change::Cause;
-use crate::command::{Choice, PlannedChange};
+use crate::command::{Choice, OutsideKeep, PlannedChange};
 use crate::ids::{ChangeId, ChapterNo, DeviceId, RepoPath, VerseNo};
 use crate::json::Json;
 use crate::keys::RecordKey;
@@ -108,6 +108,9 @@ impl FoldState {
             Choice::KeepJoined { heads } => self.keep_joined(id, heads),
             Choice::ApplyToMovedCheck => self.apply_to_moved_check(id),
             Choice::RenameCarried { from, to } => self.rename_carried(id, from, to.clone()),
+            Choice::KeepBothCarried { keep, other, to } => {
+                self.keep_both_carried(id, keep, other, to.clone())
+            }
         }
     }
 
@@ -1202,6 +1205,167 @@ impl FoldState {
         ])
     }
 
+    /// *Keep both* for a carried file in conflict (§8.3): the `keep` version stays at the
+    /// file's path with every head as parents, and the `other` version becomes a file at `to`
+    /// (a path nothing holds yet), so neither version is lost.
+    pub fn keep_both_carried(
+        &self,
+        id: &ConflictId,
+        keep: &ChangeId,
+        other: &ChangeId,
+        to: RepoPath,
+    ) -> Result<Vec<PlannedChange>, ResolveError> {
+        let conflict = self.listed(id)?;
+        let RecordKey::CarriedFile(path) = &conflict.key else {
+            return Err(ResolveError::NotOffered);
+        };
+        if conflict.kind != ConflictKind::CarriedFile {
+            return Err(ResolveError::NotOffered);
+        }
+        let candidate = |head: &ChangeId| {
+            conflict
+                .candidates
+                .iter()
+                .find(|c| c.head == *head || c.also.contains(head))
+        };
+        let (Some(kept), Some(moved)) = (candidate(keep), candidate(other)) else {
+            return Err(ResolveError::NotACandidate);
+        };
+        if kept.head == moved.head {
+            return Err(ResolveError::NotACandidate);
+        }
+        let (Record::CarriedFile { value: kept, .. }, Record::CarriedFile { value: moved, .. }) =
+            (&kept.value, &moved.value)
+        else {
+            return Err(ResolveError::NotOffered);
+        };
+        let target = RecordKey::CarriedFile(to.clone());
+        if to == *path || !self.heads(&target).is_empty() {
+            return Err(ResolveError::NotInConflict(target));
+        }
+        Ok(vec![
+            self.resolving(Record::CarriedFile {
+                path: path.clone(),
+                value: kept.clone(),
+            }),
+            PlannedChange {
+                record: Record::CarriedFile {
+                    path: to,
+                    value: moved.clone(),
+                },
+                parents: Vec::new(),
+                cause: Cause::Resolve,
+            },
+        ])
+    }
+
+    /// A bulk choice over the rows an outside edit made (§8.1 `OutsideEditLarge`): for each
+    /// conflict, the version the file wrote ([`OutsideKeep::File`]: a candidate that is, or
+    /// has an equal head that is, a change of `batch`) or the version the project had
+    /// ([`OutsideKeep::Project`]: the one other candidate). A conflict with none or several
+    /// to keep is left for *Review one by one*.
+    pub fn outside_resolution(
+        &self,
+        batch: crate::ids::BatchId,
+        keep: OutsideKeep,
+        conflicts: &[ConflictId],
+    ) -> (Vec<(ConflictId, Vec<PlannedChange>)>, Vec<ConflictId>) {
+        let in_batch = |head: &ChangeId| self.change(head).is_some_and(|v| v.batch == batch);
+        let mut resolved = Vec::new();
+        let mut skipped = Vec::new();
+        for id in conflicts {
+            let Ok(conflict) = self.listed(id) else {
+                continue;
+            };
+            let wanted: Vec<&Candidate> = conflict
+                .candidates
+                .iter()
+                .filter(|c| {
+                    let from_file = in_batch(&c.head) || c.also.iter().any(in_batch);
+                    from_file == (keep == OutsideKeep::File)
+                })
+                .collect();
+            if wanted.len() != 1 {
+                skipped.push(*id);
+                continue;
+            }
+            match self.resolution(
+                id,
+                &Choice::Candidate {
+                    head: wanted[0].head,
+                },
+            ) {
+                Ok(changes) => resolved.push((*id, changes)),
+                Err(_) => skipped.push(*id),
+            }
+        }
+        (resolved, skipped)
+    }
+
+    /// *Undo* an outside edit recorded with a known base (§11.1 X7): each change of `batch`
+    /// is replaced by the value it replaced, with the External change as its parent, so a
+    /// later edit of the record makes the undo a visible conflict, never a revert (I4). A
+    /// record the edit created is removed where a removal value exists. What cannot be taken
+    /// back (a new comment, a book the edit added, a decision or alignment, a change that
+    /// replaced several different versions) is listed in the second result and left.
+    pub fn undo_outside(
+        &self,
+        batch: crate::ids::BatchId,
+        device: DeviceId,
+    ) -> Result<(Vec<PlannedChange>, Vec<RecordKey>), ResolveError> {
+        let ids = self.batch_changes(batch);
+        if ids.is_empty() {
+            return Err(ResolveError::NotOffered);
+        }
+        let mut planned = Vec::new();
+        let mut left = Vec::new();
+        for id in ids {
+            let body = self.body(&id).ok_or(ResolveError::NotOffered)?;
+            let outside = matches!(
+                body.cause,
+                Cause::External {
+                    source: crate::change::ExternalSource::LocalFile { .. },
+                    ..
+                }
+            );
+            if body.device != device || !outside {
+                return Err(ResolveError::NotOffered);
+            }
+            let key = body.record.key();
+            let undone = match body.parents.as_slice() {
+                [] if self.history(&key).len() == 1 => {
+                    removal_of(&body.record).map(|record| (record, Cause::Edit))
+                }
+                [] => None,
+                parents => {
+                    let mut values = Vec::new();
+                    for p in parents {
+                        values.push((*p, self.body(p).map(|b| b.record)));
+                    }
+                    match values.first() {
+                        Some((from, Some(first)))
+                            if values.iter().all(|(_, r)| r.as_ref() == Some(first)) =>
+                        {
+                            Some((first.clone(), Cause::Restore { from: *from }))
+                        }
+                        _ => None,
+                    }
+                }
+            };
+            match undone {
+                Some((record, cause)) => planned.push(PlannedChange {
+                    record,
+                    parents: vec![id],
+                    cause,
+                }),
+                None => left.push(key),
+            }
+        }
+        planned.sort_by_key(|c| c.record.key());
+        left.sort();
+        Ok((planned, left))
+    }
+
     /// A bulk choice (§5.9): for each conflict, the one candidate made on a computer of
     /// `devices`. A conflict where two or more candidates, or none, come from those
     /// computers is left for a choice of its own.
@@ -1415,4 +1579,45 @@ fn passage_tokens(
         }
     }
     Some(out)
+}
+
+/// The record that takes a new record of this kind away again: a verse or chapter front
+/// absent, a carried file removed, a detail or setting unset. `None` for the kinds whose
+/// records no change removes.
+fn removal_of(record: &Record) -> Option<Record> {
+    Some(match record {
+        Record::Verse {
+            book,
+            chapter,
+            verse,
+            ..
+        } => Record::Verse {
+            book: *book,
+            chapter: *chapter,
+            verse: *verse,
+            value: VerseValue::Absent { moved_to: None },
+        },
+        Record::ChapterFront { book, chapter, .. } => Record::ChapterFront {
+            book: *book,
+            chapter: *chapter,
+            value: ChapterFront::Absent,
+        },
+        Record::CarriedFile { path, .. } => Record::CarriedFile {
+            path: path.clone(),
+            value: CarriedValue::Removed,
+        },
+        Record::Setting { key, .. } => Record::Setting {
+            key: key.clone(),
+            value: None,
+        },
+        Record::ProjectMeta { field, .. } => Record::ProjectMeta {
+            field: field.clone(),
+            value: None,
+        },
+        Record::ResourcesExtra { key, .. } => Record::ResourcesExtra {
+            key: key.clone(),
+            value: None,
+        },
+        _ => return None,
+    })
 }

@@ -11,7 +11,6 @@ pub const HEADS: &str = ".tc/heads";
 pub const LOCK: &str = ".tc/lock";
 pub const DEVICE: &str = ".tc/device.json";
 pub const MANIFEST: &str = ".tc/materialized.json";
-pub const INTENT: &str = ".tc/materialize.intent.json";
 pub const INDEX: &str = ".tc/index.bin";
 pub const DRAFTS: &str = ".tc/drafts.json";
 pub const QUARANTINE_LIST: &str = ".tc/quarantine.json";
