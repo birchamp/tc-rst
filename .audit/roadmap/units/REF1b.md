@@ -4,7 +4,7 @@ title: Poem lines as tabs in the verse editor (tC4 #810)
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-REF1b
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 sessions (basis: tC4's change is about 1,300 lines with tests, PR #810 and its pick #826)
 merged: none
 updated: 2026-10-24
-next: Step 1: map tC4 #810 (poemLines.ts, indexer.ts, splice.ts, verseEdit.ts) onto the rebuild verse model; port the tests red first.
+next: Step 2: tc-app calls tc_usfm::poem for the Translate row value, the verse save, the section save (section.rs), the durable text (wire/write.rs) and draft field text (drafts.rs); tc-api model/section.rs keeps inner tabs; rewrite verse_editor_shows_every_poem_line.
 blocked_by: none
 ---
 
@@ -118,3 +118,5 @@ blocker and every major that harms a translator's data or view.
 
 - 2026-10-24 15:15 EDT | REF1 session (Claude Code 56b3f56d) | created | none | split from REF1 on the orchestrator's word: the owner chose to match rc.2 for the first release (H7), so poem lines show as tabs; REF1 lands first | rulings/2026-10-24-H3-H4-H7-fast-release.md
 - 2026-10-24 19:06 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed on track-REF1b, cut from track-REF1 1ad7e1f8, on the orchestrator's word (REF1 is queued for batch 3; SWEEP is on main 15dc42e9). Note: REF1 is not done, so the merge waits for it. The branch lives in REF1's worktree (.worktrees/track-REF1) to spare the disk, as the orchestrator asked; REF1's branch there is unchanged | python3 -I -B .audit/tools/board.py
+- 2026-10-24 19:16 EDT | REF1 session (Claude Code 56b3f56d) | note | none | Design (a read-only planning agent, checked here): one pure pair in tc-usfm poem.rs (editor_text, words_from_editor_text, shows_tabs), called only by tc-app: the Translate row's value, the verse save (opened = section::displayed, the version the card showed), the section save, the durable write text and the draft field text. The journal keeps the markers byte for byte, so the fold, rules and export do not change; the API's verse text becomes the editor text. tC4 #829 (2-character indent) is open in tC4 and not in rc.2: out of scope. Overlap with FIX-R step 4: crates/tc-app/src/translate.rs (near its words_drafted call) and docs/PLAN.md only | crates/tc-usfm/src/poem.rs
+- 2026-10-24 19:16 EDT | REF1 session (Claude Code 56b3f56d) | step 1 | none | tc-usfm poem.rs with crates/tc-usfm/tests/poem.rs (9 tests: tC4 poemLines cases, the fixtures' round trip, a proptest that editing one line changes only that line) and resources.rs every_bundled_verse_saves_unchanged_through_the_editor_text (47,723 ULT/UST v91 verses round-trip; 0 keep markers). tC4's five #812 fixtures copied into fixtures/tc4/test-fixtures. Declared difference from tC4: a bare \q or \Q2 line shows as written (tC4 shows a tab and writes \q1/\q2 back), and a verse whose bytes tabs could not give back (a line led by a tab, mixed line ends) keeps its markers. Proof: shows_tabs forced true fails a_line_tabs_would_rewrite_stays_as_written; breaks not taken back fails four tests | cargo test -p tc-usfm --test poem
