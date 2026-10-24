@@ -4,7 +4,7 @@ title: One leave path, one network-call helper, one refusal text, Submit, dialog
 track: A
 lane: app
 milestone: M1
-state: building
+state: parked
 owner: checks lane (Claude Code 2198ee19)
 branch: track-UI-3
 worktree: .worktrees/track-UI-3
@@ -15,7 +15,7 @@ no_loss: true
 size: 2 d
 merged: none
 updated: 2026-10-24
-next: step 5
+next: not doing as one card: split into UI-3a (steps 1-4) and UI-3b (steps 5-6), orchestrator 2026-10-24
 blocked_by: none
 ---
 
@@ -342,3 +342,4 @@ save_props` must pass unchanged.
 - 2026-10-24 16:07 EDT | checks lane (Claude Code 2198ee19) | step 2 | c2944312 | Actions::net_refusal (every ApiError variant named) and run_net (NetEnd: Ok, Asked, Failed, Transport, Dropped; NetEnd lives in app/net.rs so host code uses it) replace the hand-made NeedsInternet and NeedsSignIn arms in app_ctx.rs, sources.rs, upgrades.rs and fix.rs, and the job ends of sources, upgrades, fix, Open from Door43 and Sync. api_error and the BadRequest relabels are gone: a transport failure shows its own words (said_call, NetEnd::said), and Sync shows its fixed "unexpected" sentence through a new SyncEnd::Unreached. 2b: review.rs's keep_reply takes a NetEnd; KeepPhase keeps its states (A-27's resend is unchanged); grep CallError::Transport in review.rs prints nothing. only_run_net_handles_net_refusals passes, and fails naming sources.rs when a screen matches ApiError::NeedsInternet itself. The remaining grep hit for "ApiError::BadRequest {" is net_refusal's match arm, not a relabel | cargo test -p tc-ui --test app lint
 - 2026-10-24 16:07 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | i18n::refusal_text is the one reader of Message::vars; the seven sites and share_problem use it, and Open from Door43 shows the sentence instead of the values joined by spaces. every_refusal_renders_with_no_placeholder_left passes (256 cases, every locale); with refusal_text passing no values it fails: "INV-EVERY-REFUSAL-RENDERS: upload.notWritten in en: \"The file could not be copied into translationCore: {reason}. Nothing was changed.\"". only_refusal_text_reads_vars passes | cargo test -p tc-ui --test i18n_runtime every_refusal
 - 2026-10-24 16:07 EDT | checks lane (Claude Code 2198ee19) | step 4 | none | app/submit.rs: Submit on Confirm (press, lost, not_sent, next, refused, answered). The three tests failed first (no module), then pass; with lost drawing a new id, a_lost_reply_resends_the_same_request fails ("left: Some(RequestId(0909…)) right: Some(RequestId(0101…))"). OpenForm and ImportForm hold a Submit (their busy flags are gone; OpenForm::new and ImportForm::open take the first attempt's id, so no dialog shares a default id); Sync keeps one Submit per project. A transport failure leaves the next press with the same request; the internet question, the sign-in step, a refusal and a run that ended start a new attempt, since the server caches a refusal too. random_request_id still appears in open_door43_now and sync_now, for the next attempt only. New Bible, Add a book and Settings stay as they are (minors.tsv) | cargo test -p tc-ui --test app submit
+- 2026-10-24 17:24 EDT | checks lane (Claude Code 2198ee19) | note | none | Split on the orchestrator's word into UI-3a (steps 1-4, track-UI-3a) and UI-3b (steps 5-6, track-UI-3b); their logs go on from here | none

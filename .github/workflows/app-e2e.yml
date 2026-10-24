@@ -12,7 +12,10 @@ on:
 concurrency:
   # The event name too, so a dispatched run never cancels a push run on the same branch.
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  # A newer push to a track branch cancels the run it supersedes, which frees runners. Main's
+  # runs always finish (a quick follow-up must not cancel the test of the one before), and so
+  # do gate/* runs, which are a merge's receipt (scripts/gates.sh --wait-ci).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
 jobs:
   journeys:
     runs-on: ubuntu-24.04
