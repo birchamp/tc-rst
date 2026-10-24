@@ -319,8 +319,8 @@ fn the_start_cleanup_reports_a_join_it_removed_and_hands_out_no_staging_folder_b
 
 /// `test/sync/syncOperation.test.ts` power-loss scenarios: packs written and derived files
 /// stale, then a crash, plus a real edit of the book made outside the app before the reopen.
-/// The reopen records the edit against the verse the stale file showed, keeps the file's bytes
-/// in a copy, and writes the book forward: the edit and the save both stay in the project.
+/// The reopen keeps the file's bytes in a copy and asks; *Import* takes the edit in against the
+/// verse the stale file showed and writes the book forward: the edit and the save both stay.
 #[test]
 fn a_reopen_after_packs_and_stale_files_keeps_an_outside_edit_of_the_book() {
     let (rig, folder) = titus();
@@ -350,14 +350,9 @@ fn a_reopen_after_packs_and_stale_files_keeps_an_outside_edit_of_the_book() {
     let rig2 = rig_as(fs.clone(), APP, "host-1");
     let handle = rig2.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
-    assert!(
-        handle.notices().iter().any(|n| matches!(
-            &n.notice,
-            Notice::OutsideEditRecorded { path, .. } if path.as_str() == "ingredients/TIT.usfm"
-        )),
-        "{:?}",
-        handle.notices()
-    );
+    // The edit waits for the person's answer (a declared difference from tC4, which takes it
+    // in on its own at open); *Import* takes it in against the verse the stale file showed.
+    assert_eq!(handle.waiting_books().len(), 1, "{:?}", handle.notices());
     let copies = copies_of(&handle, "ingredients/TIT.usfm");
     assert_eq!(copies.len(), 1);
     assert_eq!(
@@ -365,6 +360,7 @@ fn a_reopen_after_packs_and_stale_files_keeps_an_outside_edit_of_the_book() {
         Some(edited.as_slice()),
         "the person's bytes are kept"
     );
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     assert_eq!(
         words(&handle, 2, 1).as_deref(),
         Some("speak what fits sound teaching")
@@ -381,8 +377,8 @@ fn a_reopen_after_packs_and_stale_files_keeps_an_outside_edit_of_the_book() {
 }
 
 /// `syncOperation.test.ts`, a file that is not UTF-8: a derived file replaced by bytes that
-/// are not text still lets the project open and save. The person is told the file could not
-/// be read, the bytes are kept in a copy, and the file is written again from the project.
+/// are not text still lets the project open and save. The bytes are kept in a copy, the person
+/// is asked with the reason the file cannot be read, and *Not now* writes it from the project.
 #[test]
 fn a_derived_file_that_is_not_utf8_never_stops_the_project() {
     let (rig, folder) = titus();
@@ -396,14 +392,10 @@ fn a_derived_file_that_is_not_utf8_never_stops_the_project() {
     save_verse(&handle, 1, 1, "still saves").unwrap();
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
     handle.wait_idle();
-    assert!(
-        handle.notices().iter().any(|n| matches!(
-            &n.notice,
-            Notice::OutsideEditUnreadable { path, .. } if path.as_str() == "ingredients/TIT.usfm"
-        )),
-        "{:?}",
-        handle.notices()
-    );
+    // Kept, held and asked about with the reason it cannot be read (*Not now* only).
+    let books = handle.waiting_books();
+    assert_eq!(books.len(), 1, "{:?}", handle.notices());
+    assert!(books[0].kept.unreadable.is_some());
     let copies = copies_of(&handle, "ingredients/TIT.usfm");
     assert_eq!(copies.len(), 1);
     assert_eq!(
@@ -411,6 +403,8 @@ fn a_derived_file_that_is_not_utf8_never_stops_the_project() {
         Some(garbage),
         "the bytes are kept whole"
     );
+    handle.not_now("ingredients/TIT.usfm").wait().unwrap();
+    handle.wait_idle();
     let written = String::from_utf8(fs.peek(&usfm).unwrap()).unwrap();
     assert!(written.contains("still saves"), "{written}");
     handle.close().unwrap();

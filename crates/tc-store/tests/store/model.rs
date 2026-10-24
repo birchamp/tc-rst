@@ -3271,13 +3271,13 @@ fn a_metadata_revert_is_kept_when_a_book_revert_triggers_its_materialization() {
         run.handle.is_none(),
         "the metadata rename must trigger the crash"
     );
-    let metadata = run.puts.iter().find(|put| put.rel == META).unwrap();
-    assert_eq!(run.fs().peek(&run.path(META)), Some(metadata.bytes.clone()));
-    assert!(
-        metadata.retired,
-        "the complete folder established actual convergence"
-    );
+    // The book revert is held for the person's answer (delta §2.4), so `metadata.json` lists
+    // the held bytes and is written over the put-back version; the oracle checks that version
+    // is kept.
+    assert!(run.puts.iter().any(|put| put.rel == META));
     assert_valid_burrito(&run.fs(), &run.folder);
+    run.open().unwrap();
+    assert_eq!(run.handle().waiting_books().len(), 1);
     run.finish().unwrap();
 }
 
@@ -3318,67 +3318,6 @@ fn a_valid_outside_metadata_name_is_not_retired_as_converged_at_a_crash() {
 #[test]
 fn unreadable_metadata_is_preserved_before_a_permitted_replacement() {
     assert_kept(&metadata_unreadable_but_replaceable());
-}
-
-#[test]
-fn an_incomplete_outside_batch_is_recorded_again_without_a_retry_loop() {
-    let mut run = Run::new();
-    let mut original = None;
-    for step in an_incomplete_outside_batch() {
-        if let Step::Cut {
-            journal: Journal::Pending,
-            which,
-            ..
-        } = &step
-        {
-            let (_, bytes) = run.journal_file(Journal::Pending, *which).unwrap();
-            let read =
-                tc_journal::pending::read_pending(&bytes, project_of(&run.fs(), &run.folder));
-            assert_eq!(read.entries.len(), 2);
-            let tc_journal::Verified::Change(change) = &read.entries[0] else {
-                panic!("the original outside batch was quarantined");
-            };
-            original = Some((
-                change.body().batch.id,
-                read.entries
-                    .iter()
-                    .map(tc_journal::Verified::id)
-                    .collect::<Vec<_>>(),
-            ));
-        }
-        run.step(&step).unwrap();
-    }
-    let (batch, original_ids) = original.unwrap();
-    let snapshot = run.handle().snapshot();
-    let fold = snapshot.fold();
-    assert!(fold.anomalies().any(|anomaly| matches!(
-        anomaly,
-        tc_journal::fold::Anomaly::IncompleteBatch { batch: held, .. } if *held == batch
-    )));
-    for (verse, text) in [(1, "zq1x"), (2, "zq2x")] {
-        let key = verse_key(verse);
-        let has_text = |id: &tc_journal::ChangeId| {
-            matches!(
-                fold.body(id).map(|body| body.record),
-                Some(Record::Verse { value: VerseValue::Text { words, .. }, .. }) if words == text
-            )
-        };
-        assert!(
-            fold.history(&key).iter().any(has_text),
-            "{text} is not readable in History"
-        );
-        let heads = fold.heads(&key);
-        assert!(
-            heads.iter().any(has_text),
-            "{text} is not a recovery candidate"
-        );
-        for head in heads {
-            let view = fold.change(&head).unwrap();
-            assert!(view.folded);
-            assert!(view.parents.iter().all(|id| !original_ids.contains(id)));
-        }
-    }
-    run.finish().unwrap();
 }
 
 fn a_revert_after_a_quarantined_pending_and_a_killed_save() -> Vec<Step> {

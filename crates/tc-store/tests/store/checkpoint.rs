@@ -84,13 +84,16 @@ fn a_commit_holds_the_folds_projection_not_a_held_file() {
     let mtime = tc_store::Vfs::metadata(&fs, &usfm).unwrap().mtime_ns;
     fs.put(&usfm, &edited, Some(mtime));
     let handle = open(&rig2, &folder);
+    // A changed book file is held and asked about, whatever its size and time say
+    // (delta §2.5: R10's own hold goes).
     assert!(
         notices(&handle).iter().any(|n| matches!(
             n,
-            Notice::StorageDamage { path, .. } if path.as_str() == "ingredients/TIT.usfm"
+            Notice::OutsideEditHeld { path, .. } if path.as_str() == "ingredients/TIT.usfm"
         )),
         "the storage check holds the file"
     );
+    assert_eq!(handle.waiting_books().len(), 1);
     save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
     let report = checkpoint(&handle);
     let commit = report.commit.expect("a commit");
@@ -512,11 +515,15 @@ fn a_commit_takes_a_file_waiting_for_an_outside_edit_from_the_snapshot() {
         Vec::<String>::new()
     );
     handle.wait_idle();
-    // The outside edit is recorded all the same, and the file shows both.
+    // The outside edit waits for the person's answer; *Import* brings it in, and the file
+    // shows both.
+    assert_eq!(handle.waiting_books().len(), 1);
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     assert_eq!(
         words(&handle, 1, 2).as_deref(),
         Some("to Titus, edited by a program")
     );
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("saved in the app"));
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
     assert_commits_valid(&rig.fs, &folder);

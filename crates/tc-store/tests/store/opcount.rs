@@ -389,8 +389,8 @@ fn a_record_entering_a_files_scope_projects_it() {
 }
 
 /// `FaultFs` with 2 s modification times (FAT32, §6.2). A same-size edit within the tick of
-/// the app's own write is read and recorded; bytes that changed after the entry settled,
-/// with the old size and time put back, are held as storage damage. Neither is written over.
+/// the app's own write is read and held; bytes that changed after the entry settled, with the
+/// old size and time put back, are held too. Neither is written over.
 #[test]
 fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     use tc_journal::fold::Notice;
@@ -421,17 +421,12 @@ fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     fs.put(&usfm, &edited, Some(mtime));
     let handle = rig1.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
-    assert!(!held(&handle), "an edit is recorded, not held");
-    assert!(
-        handle.notices().iter().any(|n| matches!(
-            &n.notice,
-            Notice::OutsideEditRecorded { path, .. } if path.as_str() == "ingredients/TIT.usfm"
-        )),
-        "the racy edit is read and recorded: {:?}",
-        handle.notices()
-    );
-    assert_eq!(words(&handle, 1, 1).as_deref(), Some("paul, a servant"));
+    // The racy edit is read, kept and asked about; *Import* takes it in.
+    assert!(held(&handle), "the racy edit is read and held");
+    assert_eq!(fs.peek(&usfm).as_deref(), Some(edited.as_slice()));
     let copies = copies_of(&handle, "ingredients/TIT.usfm");
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("paul, a servant"));
     assert_eq!(copies.len(), 1);
     assert_eq!(
         fs.peek(&folder.join(&copies[0])).as_deref(),

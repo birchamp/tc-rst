@@ -305,6 +305,16 @@ impl Writer {
                     }
                     Next::Recorded
                 }
+                Action::Keep(base) => match bytes {
+                    Some(bytes) if crate::kept::asks(rel) => {
+                        self.keep_and_hold(rel, bytes, base)?
+                    }
+                    Some(bytes) => {
+                        self.found_outside(rel, bytes, base)?;
+                        Next::Recorded
+                    }
+                    None => Next::Recorded,
+                },
                 Action::Hold(cause) => {
                     if let Some(bytes) = bytes {
                         self.hold(rel, bytes, cause)?;
@@ -358,6 +368,15 @@ impl Writer {
         bytes: &[u8],
         cause: HeldCause,
     ) -> Result<(), StoreError> {
+        if crate::kept::asks(rel) {
+            // A book file or story is kept against the bytes the ledger says the app placed,
+            // and waits for the person's answer (delta §2.4).
+            let base = match self.state_of(rel) {
+                State::Placed { placed } => ledger::Base::Placed(placed.md5),
+                _ => ledger::Base::Unknown,
+            };
+            return self.keep_and_hold(rel, bytes, base).map(|_| ());
+        }
         let copy = self.copy_external(rel, bytes)?;
         let stat = self
             .vfs
@@ -519,6 +538,8 @@ impl Writer {
                     self.prerendered.insert(rel.to_owned(), new);
                 }
             }
+            // Held bytes are the person's, not the projection's: no scope and no heads.
+            Next::Converged if matches!(self.state_of(rel), State::Held { .. }) => {}
             Next::Converged => {
                 let scope = self.fold.scope_digest(file).to_hex();
                 let md5 = self.hash(disk);

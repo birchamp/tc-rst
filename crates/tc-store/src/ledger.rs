@@ -231,8 +231,13 @@ pub enum Action {
     /// Take the file's size and time again: the bytes are what the ledger says.
     Refresh,
     /// Keep both: copy the bytes to `.tc/external/` and record them as an edit against the
-    /// base (§11.1). Nothing is written over them until the batch is durable.
+    /// base (§11.1). Nothing is written over them until the batch is durable. The app's own
+    /// bytes that show work the fold lost (R4) and a held file taken in.
     Record(Base),
+    /// Bytes the app did not write: kept against the base. A book file or story is copied and
+    /// held until the person answers (*Keep and hold*, delta §2.4); any other file is recorded
+    /// as [`Action::Record`] is.
+    Keep(Base),
     /// Copy the bytes to `.tc/external/`, leave the file as it is, tell the person (§6.2).
     Hold(HeldCause),
     /// Leave the file as it is, and try again later.
@@ -408,19 +413,19 @@ fn read_bytes(state: &State, md5: &str, facts: &Facts) -> (Row, State, Vec<Actio
                 Projection::Bytes { .. } => (Row::R8, ours(placed), vec![Action::Write]),
             },
         },
-        Who::Ambiguous => (Row::R9, stay(), vec![Action::Record(Base::Unknown)]),
+        Who::Ambiguous => (Row::R9, stay(), vec![Action::Keep(Base::Unknown)]),
         Who::Other { damage: true, .. } => {
             (Row::R10, stay(), vec![Action::Hold(HeldCause::Damage)])
         }
         Who::Other {
             base: base @ Base::Placed(_),
             ..
-        } => (Row::R11, stay(), vec![Action::Record(base)]),
+        } => (Row::R11, stay(), vec![Action::Keep(base)]),
         Who::Other { base, .. } => match state {
-            State::Held { .. } => (Row::R13, stay(), vec![Action::Record(base)]),
-            _ => (Row::R12, stay(), vec![Action::Record(base)]),
+            State::Held { .. } => (Row::R13, stay(), vec![Action::Keep(base)]),
+            _ => (Row::R12, stay(), vec![Action::Keep(base)]),
         },
-        Who::Stranger => (Row::R14, stay(), vec![Action::Record(Base::Head)]),
+        Who::Stranger => (Row::R14, stay(), vec![Action::Keep(Base::Head)]),
     }
 }
 
@@ -760,9 +765,9 @@ mod tests {
                                 assert!(&old.md5 != md5 || new == md5, "{context}");
                             }
                         }
-                        let kept = actions
-                            .iter()
-                            .any(|a| matches!(a, Action::Record(_) | Action::Hold(_)));
+                        let kept = actions.iter().any(|a| {
+                            matches!(a, Action::Record(_) | Action::Keep(_) | Action::Hold(_))
+                        });
                         let left = actions
                             .iter()
                             .all(|a| matches!(a, Action::Wait(_) | Action::Refresh));
@@ -819,7 +824,7 @@ mod tests {
         };
         // A revert to the bytes a stopped write replaced, made while the app was closed.
         let (_, actions) = next(&writing, &Event::Read(Disk::Bytes { md5: A.into() }), &ok);
-        assert_eq!(actions, vec![Action::Record(Base::Unknown)]);
+        assert_eq!(actions, vec![Action::Keep(Base::Unknown)]);
         // The same bytes with the size and time they had: the rename never reached the disk,
         // or a backup tool put them back with their time. Both are kept.
         let untouched = Facts {
@@ -831,7 +836,7 @@ mod tests {
             &Event::Read(Disk::Bytes { md5: A.into() }),
             &untouched,
         );
-        assert_eq!(actions, vec![Action::Record(Base::Unknown)]);
+        assert_eq!(actions, vec![Action::Keep(Base::Unknown)]);
         assert_eq!(after, writing);
         // Bytes whose changes a journal file lost, or whose batch lost a member.
         let lost = Facts {
@@ -855,6 +860,6 @@ mod tests {
         // bytes of the first, put back, are kept.
         let (second, _) = next(&writing, &Event::WriteBegun { new: C.into() }, &ok);
         let (_, actions) = next(&second, &Event::Read(Disk::Bytes { md5: B.into() }), &ok);
-        assert_eq!(actions, vec![Action::Record(Base::Unknown)]);
+        assert_eq!(actions, vec![Action::Keep(Base::Unknown)]);
     }
 }

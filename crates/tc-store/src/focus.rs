@@ -85,7 +85,7 @@ impl Writer {
     }
 
     /// The newest snapshot is the fold the examination compares with.
-    fn begin_newest(&mut self) {
+    pub(crate) fn begin_newest(&mut self) {
         let snapshot = self.shared.snapshot();
         let packs = self.packs.clone();
         let complete = self.complete;
@@ -204,7 +204,9 @@ impl Writer {
                     match action {
                         // `metadata.json` is never held: it must list the files as they are; a
                         // fixed file is never recorded, only restored after a copy (§3.5).
-                        ledger::Action::Record(base) if kind == Kind::Metadata => {
+                        ledger::Action::Record(base) | ledger::Action::Keep(base)
+                            if kind == Kind::Metadata =>
+                        {
                             self.keep_edited_metadata(&disk, base)?;
                             report.found.push(rel.to_owned());
                         }
@@ -212,7 +214,9 @@ impl Writer {
                             self.keep_edited_metadata(&disk, ledger::Base::Unknown)?;
                             report.found.push(rel.to_owned());
                         }
-                        ledger::Action::Record(_) | ledger::Action::Hold(_) => {
+                        ledger::Action::Record(_)
+                        | ledger::Action::Keep(_)
+                        | ledger::Action::Hold(_) => {
                             self.restore_fixed(rel, &disk)?;
                             report.found.push(rel.to_owned());
                         }
@@ -301,6 +305,13 @@ impl Writer {
             .and_then(|e| e.held().map(|h| h.cause));
         if held.is_none() {
             reply.resolve(Ok(TakenIn::default()));
+            return;
+        }
+        if crate::kept::asks(rel) {
+            // A changed book file or story comes in only by *Import* of its kept copy.
+            reply.resolve(Err(StoreError::Other(format!(
+                "{rel} waits for Import or Not now"
+            ))));
             return;
         }
         if kind_of(rel) == Kind::Other {

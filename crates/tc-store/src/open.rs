@@ -685,6 +685,7 @@ fn open_inner(
     } else {
         writer.renew_hold_notices();
     }
+    writer.publish_kept();
     // A project that cannot be written holds no lock: it writes nothing, so there is
     // nothing to guard, and the person can open it again once the disk works.
     let read_only = read_only || write_failed.is_some();

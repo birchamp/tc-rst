@@ -729,9 +729,10 @@ fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
     mend_outside(&rig, &folder);
     handle.focus().wait().unwrap();
     handle.wait_idle();
+    // The edit waits for the answer; *Import* compares it with that base.
     assert_eq!(
-        outside_edit_notices(&handle),
-        vec![(1, false)],
+        counts(&import_waiting(&handle)),
+        vec![(1, 0)],
         "recorded with the base the file shows"
     );
     assert_eq!(verse_text_conflicts(&handle), 0);
@@ -755,10 +756,10 @@ fn external_copies_of(rig: &Rig, folder: &Path, bytes: &[u8]) -> Vec<String> {
 
 /// §5.10, §6.2 rule 9: the group that stopped after its rename knows the file now holds the
 /// second save. The bytes of the save before it are no longer the app's own, so a program that
-/// puts them back (a revert) has made an edit: recorded with no base, listed as a conflict, and
-/// kept whole in `.tc/external/`, exactly as when no group had stopped.
+/// puts them back (a revert) has made an edit: kept whole in `.tc/external/` and held for the
+/// person's answer, exactly as when no group had stopped.
 #[test]
-fn an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict() {
+fn an_outside_revert_after_a_stopped_group_is_kept_and_asked() {
     let (rig, folder, handle, k) = fail_after_the_rename();
     let usfm = folder.join("ingredients/TIT.usfm");
     let before = rig.fs.peek(&usfm).unwrap();
@@ -777,9 +778,12 @@ fn an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict() {
         vec!["ingredients/TIT.usfm".to_owned()],
         "the old bytes were taken for the app's own"
     );
-    assert_eq!(outside_edit_notices(&handle), vec![(1, true)]);
-    assert_eq!(verse_text_conflicts(&handle), 1);
+    // Kept whole and held: the book waits for the answer, and nothing of it is taken in.
+    assert_eq!(handle.waiting_books().len(), 1);
+    assert_eq!(outside_edit_notices(&handle), Vec::<(u32, bool)>::new());
+    assert_eq!(verse_text_conflicts(&handle), 0);
     assert_eq!(external_copies_of(&rig, &folder, &before).len(), 1);
+    assert_eq!(rig.fs.peek(&usfm), Some(before.clone()), "not written over");
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
@@ -798,9 +802,12 @@ fn a_retry_after_a_stopped_group_does_not_write_over_an_outside_revert() {
     save_verse(&handle, 1, 2, "a save after the revert").unwrap();
     handle.leave(Leave::Book(TIT)).wait().unwrap();
     handle.wait_idle();
-    assert_eq!(outside_edit_notices(&handle), vec![(1, true)]);
-    assert_eq!(verse_text_conflicts(&handle), 1);
+    // Kept whole and held: the book waits for the answer, and nothing of it is taken in.
+    assert_eq!(handle.waiting_books().len(), 1);
+    assert_eq!(outside_edit_notices(&handle), Vec::<(u32, bool)>::new());
+    assert_eq!(verse_text_conflicts(&handle), 0);
     assert_eq!(external_copies_of(&rig, &folder, &before).len(), 1);
+    assert_eq!(rig.fs.peek(&usfm), Some(before.clone()), "not written over");
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
@@ -935,9 +942,10 @@ fn an_outside_edit_of_the_bytes_a_stopped_group_left_continues_them() {
     mend_outside(&rig, &folder);
     handle.focus().wait().unwrap();
     handle.wait_idle();
+    // The edit waits for the answer; *Import* compares it with that base.
     assert_eq!(
-        outside_edit_notices(&handle),
-        vec![(1, false)],
+        counts(&import_waiting(&handle)),
+        vec![(1, 0)],
         "recorded with the base the file showed"
     );
     assert_eq!(
@@ -985,9 +993,10 @@ fn a_crash_after_a_rename_leaves_no_stale_heads_file_for_a_later_edit() {
     mend_outside(&rig, &folder);
     handle.focus().wait().unwrap();
     handle.wait_idle();
+    // The edit waits for the answer; *Import* compares it with that base.
     assert_eq!(
-        outside_edit_notices(&handle),
-        vec![(1, false)],
+        counts(&import_waiting(&handle)),
+        vec![(1, 0)],
         "recorded with the base the file shows"
     );
     assert_eq!(verse_text_conflicts(&handle), 0);
@@ -1025,9 +1034,10 @@ fn a_close_while_the_heads_file_is_held_leaves_no_stale_heads_file_for_a_later_e
     mend_outside(&rig, &folder);
     handle.focus().wait().unwrap();
     handle.wait_idle();
+    // The edit waits for the answer; *Import* compares it with that base.
     assert_eq!(
-        outside_edit_notices(&handle),
-        vec![(1, false)],
+        counts(&import_waiting(&handle)),
+        vec![(1, 0)],
         "recorded with the base the file shows"
     );
     assert_eq!(verse_text_conflicts(&handle), 0);
@@ -1065,7 +1075,7 @@ fn a_heads_file_the_open_could_not_write_is_written_by_a_later_open() {
     mend_outside(&rig, &folder);
     handle.focus().wait().unwrap();
     handle.wait_idle();
-    assert_eq!(outside_edit_notices(&handle), vec![(1, false)]);
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     assert_eq!(verse_text_conflicts(&handle), 0);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);

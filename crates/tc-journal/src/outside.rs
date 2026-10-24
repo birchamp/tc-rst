@@ -981,6 +981,22 @@ impl FoldState {
         bytes: &[u8],
         file_name: &str,
     ) -> Result<UpdatePlan, String> {
+        self.plan_update_book_from(book, bytes, file_name, &Base::Unknown)
+    }
+
+    /// [`FoldState::plan_update_book`] for a file whose base is known (§13.6 U2 a: the
+    /// kept copy of a book file another program changed, compared with the placement it was
+    /// found against). A verse the file changed since the base while the project kept the
+    /// base's heads is imported with those heads as its parents, so no conflict; a verse the
+    /// file left as the base had it is nothing, whatever the project did since. Every other
+    /// rule is H20's, so a verse changed on both sides is still one to review.
+    pub fn plan_update_book_from(
+        &self,
+        book: BookId,
+        bytes: &[u8],
+        file_name: &str,
+        base: &Base,
+    ) -> Result<UpdatePlan, String> {
         let mut plan = UpdatePlan::default();
         let mut parts = tc_usfm::codec::decompose_bytes(bytes)
             .map_err(|e| format!("the file does not read: {e}"))?;
@@ -1040,7 +1056,8 @@ impl FoldState {
             path: RepoPath::parse(&file.path()).map_err(|e| e.to_string())?,
             seen_md5: Md5::of(bytes),
         };
-        let outside = self.plan_outside_edit(&file, &decoded, &Base::Unknown, source, true);
+        let unknown = matches!(base, Base::Unknown);
+        let outside = self.plan_outside_edit(&file, &decoded, base, source, unknown);
         plan.book_added = outside.book_added.is_some();
         let cause = |unknown_base| {
             Cause::Import(crate::change::ImportSource::Usfm {
@@ -1092,6 +1109,22 @@ impl FoldState {
                     } else if project_has && !file_has {
                         plan.left_as_it_was.push(key);
                     } else if fillable && file_has {
+                        verse_imported.insert((*c, *v));
+                        plan.imported.push(key.clone());
+                        plan.changes.push(PlannedChange {
+                            parents: heads,
+                            cause: cause(false),
+                            record: change.record,
+                        });
+                    } else if file_has && !change.parents.is_empty() && {
+                        let mut parents = change.parents.clone();
+                        let mut now = heads.clone();
+                        parents.sort();
+                        now.sort();
+                        parents == now
+                    } {
+                        // Changed in the file since its base, and the project still holds
+                        // the base's heads: the file's edit, with no question.
                         verse_imported.insert((*c, *v));
                         plan.imported.push(key.clone());
                         plan.changes.push(PlannedChange {

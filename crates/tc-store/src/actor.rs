@@ -192,6 +192,14 @@ impl Actor {
                 derived,
                 copy,
             } => self.record_outside(rel, seen, *plan, derived, copy),
+            Msg::ImportKept {
+                rel,
+                copy,
+                md5,
+                bytes,
+                what,
+                reply,
+            } => self.import_kept(rel, copy, md5, bytes, what, reply),
             Msg::WritesFailed { reason } => {
                 // The open's first materialization failed: the writer made the project
                 // read-only; a project that cannot be written holds no lock.
@@ -354,6 +362,38 @@ impl Actor {
                 copy,
                 outcome,
             });
+        }
+    }
+
+    /// *Import* of a kept copy: the batches, then the writer's answer.
+    fn import_kept(
+        &mut self,
+        rel: String,
+        copy: String,
+        md5: tc_journal::Md5,
+        bytes: Vec<u8>,
+        what: crate::kept::ImportWhat,
+        reply: Resolver<Result<crate::kept::ImportReport, StoreError>>,
+    ) {
+        let result = match self.read_only() {
+            Some(reason) => Err(StoreError::Other(format!(
+                "the project is read-only: {reason:?}"
+            ))),
+            None => self.project.import_kept(&rel, md5, &bytes, what),
+        };
+        if !self.project.dirty.is_empty() {
+            self.due = Some(Instant::now() + MATERIALIZE_AFTER);
+        }
+        match &self.project.writer {
+            Some(writer) => {
+                let _ = writer.send(Job::Imported {
+                    copy,
+                    bytes,
+                    result,
+                    reply,
+                });
+            }
+            None => reply.resolve(Err(StoreError::Other("the project is closed".into()))),
         }
     }
 
@@ -571,6 +611,9 @@ impl Actor {
                     copy,
                 }) => self.record_outside(rel, seen, *plan, derived, copy),
                 Ok(Msg::Sync { reply }) => reply.resolve(()),
+                Ok(Msg::ImportKept { reply, .. }) => {
+                    reply.resolve(Err(StoreError::Other("the project is closing".into())));
+                }
                 Ok(Msg::Materialize { reply }) => {
                     if let Some(reply) = reply {
                         reply.resolve(Ok(()));

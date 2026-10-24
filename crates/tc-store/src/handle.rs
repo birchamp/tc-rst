@@ -291,6 +291,9 @@ pub(crate) struct Shared {
     open_groups: AtomicU32,
     /// The project is closing: background maintenance (a repack) stops and does not start.
     closing: Arc<AtomicBool>,
+    /// The books that wait for an answer and the kept copies, as the manifest on disk names
+    /// them (delta §2.3).
+    kept: Mutex<crate::kept::KeptView>,
 }
 
 impl Shared {
@@ -323,7 +326,16 @@ impl Shared {
             traffic: AtomicU64::new(0),
             open_groups: AtomicU32::new(0),
             closing: Arc::default(),
+            kept: Mutex::default(),
         }
+    }
+
+    pub(crate) fn set_kept(&self, view: crate::kept::KeptView) {
+        *self.kept.lock().unwrap_or_else(|e| e.into_inner()) = view;
+    }
+
+    fn kept_view(&self) -> crate::kept::KeptView {
+        self.kept.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// The project closes: maintenance that runs on a thread of its own is told to stop.
@@ -633,6 +645,16 @@ pub(crate) enum Msg {
         derived: u32,
         copy: String,
     },
+    /// *Import* of a kept copy (delta §2.11 Q4): the actor commits it and answers the writer
+    /// with [`crate::writer::Job::Imported`].
+    ImportKept {
+        rel: String,
+        copy: String,
+        md5: tc_journal::Md5,
+        bytes: Vec<u8>,
+        what: crate::kept::ImportWhat,
+        reply: Resolver<Result<crate::kept::ImportReport, StoreError>>,
+    },
     /// The writer built a commit object (§5.13 C5): the actor moves the branch to it, the
     /// last step of a checkpoint and the only one the actor takes after the seal (R21).
     MoveHead {
@@ -841,6 +863,58 @@ impl ProjectHandle {
         let (pending, resolver) =
             pending(|| Err(StoreError::Other("the project is closed".into())));
         self.send_writer(crate::writer::Job::Focus { reply: resolver });
+        pending
+    }
+
+    /// The book files and stories that wait for the person's answer, each with its newest
+    /// kept copy: one question names them all (delta §2.11 Q3). The list survives a reopen.
+    pub fn waiting_books(&self) -> Vec<crate::kept::WaitingBook> {
+        self.shared.kept_view().waiting
+    }
+
+    /// Every kept copy that is not imported or dismissed, for the conflict review's notices
+    /// (delta §2.3). The list survives a reopen.
+    pub fn kept_copies(&self) -> Vec<crate::kept::Kept> {
+        self.shared.kept_view().kept
+    }
+
+    /// *Import* of the kept copy `copy` (delta §2.11 Q4): "Update a book from USFM" on its
+    /// bytes, compared with the version they were found against. Resolves when the batches
+    /// are durable; the entry then ends and the file is written from the project.
+    pub fn import_kept(
+        &self,
+        copy: &str,
+    ) -> Pending<Result<crate::kept::ImportReport, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::ImportKept {
+            copy: copy.to_owned(),
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// *Not now* for the held book file or story `path` (delta §2.11 Q5): it is written
+    /// again from the project; its kept copies stay listed with *Import* and *Dismiss*.
+    pub fn not_now(&self, path: &str) -> Pending<Result<(), StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::NotNow {
+            rel: path.to_owned(),
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// *Dismiss* of the kept copy `copy`: the entry ends and the copy is removed while its
+    /// bytes are still the ones kept. A copy whose book waits for an answer stays.
+    pub fn dismiss_kept(&self, copy: &str) -> Pending<Result<(), StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::DismissKept {
+            copy: copy.to_owned(),
+            reply: resolver,
+        });
         pending
     }
 
