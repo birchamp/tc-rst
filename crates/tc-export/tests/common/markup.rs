@@ -4,10 +4,10 @@
 //! holds: if the model lost a distinction tC4's markup makes, the markup would differ.
 
 use serde_json::Value;
-use tc_export::book::{BookView, FlowBlock, Opening, VerseLine};
-use tc_export::page::ObsLayout;
+use tc_api::model::print::{FlowBlock, ObsLayout, Opening, VerseLine};
+use tc_export::book::BookView;
 use tc_export::stories::{FrameBlock, Side, StoriesView, StoryBlock, StoryTitle};
-use tc_export::{Direction, PrintText};
+use tc_export::{Direction, PrintText, Run};
 
 use super::vectors;
 
@@ -53,10 +53,14 @@ pub fn flow(blocks: &[FlowBlock<'_>], d: Direction) -> String {
     let mut out = String::new();
     for block in blocks {
         match block {
-            FlowBlock::Gap(text) => {
+            FlowBlock::Gap(run) => {
+                let text = PrintText::ChaptersNotDrafted(Run {
+                    from: run.from,
+                    to: run.to,
+                });
                 out.push_str(&format!(
                     "<p class=\"print-chapter-gap\" dir=\"{d}\">{}</p>",
-                    word(*text)
+                    word(text)
                 ));
             }
             FlowBlock::Chapter(chapter) => {
@@ -71,9 +75,11 @@ pub fn flow(blocks: &[FlowBlock<'_>], d: Direction) -> String {
                         "<span class=\"print-dropcap\">{}</span>",
                         chapter.chapter
                     )),
-                    Some(Opening::Heading(text)) => out.push_str(&format!(
+                    Some(Opening::Heading) => out.push_str(&format!(
                         "<h2 class=\"print-chapter-heading\">{}</h2>",
-                        word(text)
+                        word(PrintText::ChapterHeading {
+                            chapter: chapter.chapter
+                        })
                     )),
                     None => {}
                 }

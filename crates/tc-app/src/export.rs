@@ -7,11 +7,11 @@
 
 use tc_api::ApiError;
 use tc_api::export::{
-    Book, BookPrint, DraftedFrame, PrintChapter, PrintFrame, PrintItem, PrintStory, PrintStoryItem,
-    PrintVerse, Run, Stories, StoriesPrint, StoryRun,
+    Book, BookPrint, DraftedFrame, PrintFrame, PrintStory, PrintStoryItem, Run, Stories,
+    StoriesPrint, StoryRun,
 };
-use tc_api::ids::{RefPart, StoryNo};
-use tc_export::book::{BookChapter, BookVerse, PrintedItem, has_undrafted, printed_items};
+use tc_api::ids::StoryNo;
+use tc_export::book::{BookChapter, BookVerse, has_undrafted, print_items, printed_items};
 use tc_helps::obs::ObsStory;
 use tc_journal::RecordKey;
 use tc_obs::print::{PrintedFrame, PrintedStory};
@@ -26,22 +26,6 @@ fn label(verse: u16, last: u16) -> String {
         format!("{verse}-{last}")
     } else {
         verse.to_string()
-    }
-}
-
-impl App {
-    fn wire_verse(&self, verse: &BookVerse) -> Result<PrintVerse, ApiError> {
-        Ok(PrintVerse {
-            label: RefPart::parse(&verse.label).map_err(|e| {
-                self.internal(
-                    "a verse's number could not be written",
-                    crate::reports::facts(
-                        serde_json::json!({"verse": verse.label, "reason": e.to_string()}),
-                    ),
-                )
-            })?,
-            text: verse.printed_text().map(str::to_owned),
-        })
     }
 }
 
@@ -80,25 +64,14 @@ impl Handle<Book> for App {
                     .collect(),
             })
             .collect();
-        let items = printed_items(&chapters)
-            .into_iter()
-            .map(|item| {
-                Ok(match item {
-                    PrintedItem::Gap(run) => PrintItem::Gap(Run {
-                        from: run.from,
-                        to: run.to,
-                    }),
-                    PrintedItem::Chapter(chapter) => PrintItem::Chapter(PrintChapter {
-                        chapter: chapter.number,
-                        verses: chapter
-                            .verses
-                            .iter()
-                            .map(|verse| self.wire_verse(verse))
-                            .collect::<Result<_, _>>()?,
-                    }),
-                })
-            })
-            .collect::<Result<_, ApiError>>()?;
+        let items = print_items(&printed_items(&chapters)).map_err(|e| {
+            self.internal(
+                "a verse's number could not be written",
+                crate::reports::facts(
+                    serde_json::json!({"verse": e.label, "reason": e.source.to_string()}),
+                ),
+            )
+        })?;
         Ok(BookPrint {
             items,
             undrafted: has_undrafted(&chapters),

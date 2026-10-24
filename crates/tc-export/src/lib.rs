@@ -4,11 +4,12 @@
 //! plain USFM, OBS Markdown, the print HTML for the PDF, the Burrito zip) come later and
 //! read this model (APP-DESIGN §10, units A10 and D2).
 //!
-//! - [`page`] is the page setup: its choices, their defaults, and what they set (paper size,
-//!   margins, columns, leading).
-//! - [`book`] ports `printedItems` (`src/data/bookModel.js`) and the print parts of
-//!   `src/views/print/PrintBook.jsx`: which chapters a book prints, the line that stands for
-//!   each run of undrafted chapters, and what each chapter shows under a page setup.
+//! - The page setup and the print parts are tc-api's (`tc_api::model::print`), so the preview
+//!   and the PDF print from one model; [`page`] adds what only the PDF reads (margins, the
+//!   stylesheet's variables, the paper's CSS name).
+//! - [`book`] ports `printedItems` (`src/data/bookModel.js`): which chapters a book prints and
+//!   the line that stands for each run of undrafted chapters, written in tc-api's model by
+//!   [`book::print_items`].
 //! - [`stories`] ports `src/views/print/PrintStories.jsx` over tc-obs' print model
 //!   ([`tc_obs::print`]): each printed story's title, frames, pictures and reference line.
 //! - [`PrintText`] is each line the interface language words, as tC4's catalog key and its

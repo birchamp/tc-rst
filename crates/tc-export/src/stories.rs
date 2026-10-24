@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 
 use tc_obs::print::{PrintedFrame, PrintedStory};
 
-use crate::page::{ObsLayout, PageSetup, Pictures};
 use crate::{Direction, PrintText, Run};
+use tc_api::model::print::{ObsLayout, PageSetup, Pictures};
 
 /// A physical side of the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

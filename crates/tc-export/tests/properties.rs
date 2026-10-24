@@ -5,11 +5,13 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use proptest::prelude::*;
-use tc_export::book::{
-    BookChapter, BookVerse, ChapterPart, FlowBlock, Opening, Piece, PrintPart, VerseLine,
-    VersePiece, print_book, print_parts, printed_items,
+use tc_api::export::PrintVerse;
+use tc_api::ids::RefPart;
+use tc_api::model::print::{
+    ChapterOpening, ChapterPart, FlowBlock, ObsLayout, Opening, PageSetup, Pictures, Piece,
+    PrintPart, VerseLine, VerseNumbers, print_parts,
 };
-use tc_export::page::{ChapterOpening, ObsLayout, PageSetup, Pictures, VerseNumbers};
+use tc_export::book::{BookChapter, BookVerse, print_book, print_items, printed_items};
 use tc_export::stories::{FrameBlock, Side, StoryBlock, StoryPictures, StoryTitle, print_stories};
 use tc_export::{Direction, PrintText, Run};
 use tc_helps::obs::{ObsFrame, ObsImage, ObsStory};
@@ -97,7 +99,7 @@ fn chapter_prints(chapter: &BookChapter) -> bool {
 proptest! {
     #[test]
     fn every_drafted_verse_prints_once(chapters in books(), setup in setups(), dir in directions()) {
-        let items = printed_items(&chapters);
+        let items = print_items(&printed_items(&chapters)).unwrap();
         let view = print_book("Book", &items, &setup, dir);
         let printing: Vec<usize> = (0..chapters.len()).filter(|&i| chapter_prints(&chapters[i])).collect();
         let (Some(&first), Some(&last)) = (printing.first(), printing.last()) else {
@@ -116,7 +118,7 @@ proptest! {
                     prop_assert!(!block.continues);
                     let opening = match setup.chapter_opening {
                         ChapterOpening::DropCap => Opening::DropCap,
-                        ChapterOpening::Heading => Opening::Heading(PrintText::ChapterHeading { chapter: chapter.number }),
+                        ChapterOpening::Heading => Opening::Heading,
                     };
                     prop_assert_eq!(block.opening, Some(opening));
                     // One line per verse, in order: every verse prints, and only once.
@@ -133,14 +135,14 @@ proptest! {
                     }
                     i += 1;
                 }
-                Some(FlowBlock::Gap(PrintText::ChaptersNotDrafted(run))) => {
+                Some(FlowBlock::Gap(run)) => {
                     // A gap stands for the longest run of chapters with nothing to print.
                     let mut j = i;
                     while !chapter_prints(&chapters[j]) {
                         j += 1;
                     }
                     prop_assert!(j > i);
-                    prop_assert_eq!(*run, Run { from: chapter.number, to: chapters[j - 1].number });
+                    prop_assert_eq!((run.from, run.to), (chapter.number, chapters[j - 1].number));
                     i = j;
                 }
                 other => prop_assert!(false, "unexpected {:?}", other),
@@ -155,13 +157,13 @@ proptest! {
         cut in any::<prop::sample::Index>(),
         setup in setups(),
     ) {
-        let verse = BookVerse { label: "7".into(), drafted: true, text: text.clone() };
+        let verse = PrintVerse { label: RefPart::parse("7").unwrap(), text: Some(text.clone()) };
         let at = 1 + cut.index(text.len() - 1);
         let (start, rest) = text.split_at(at);
         let page = |head, piece| vec![PrintPart::Chapter(ChapterPart {
             chapter: 3,
             head,
-            verses: vec![VersePiece { verse: &verse, piece }],
+            verses: vec![(&verse, piece)],
         })];
         let first = print_parts(&page(true, Piece::Start(start)), &setup, true);
         let second = print_parts(&page(false, Piece::Continued(rest)), &setup, false);

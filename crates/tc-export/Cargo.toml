@@ -7,7 +7,11 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# The page setup and the print parts are tc-api's, so the preview and the PDF print from one
+# model. Never its `server` feature.
+tc-api = { path = "../tc-api" }
 tc-obs = { path = "../tc-obs" }
+thiserror.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

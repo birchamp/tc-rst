@@ -1,16 +1,17 @@
-//! The Community Checking preview's pages (unit B8): the twin of tc-export's print parts
-//! (`tc_export::book::print_parts`, a port of `PrintParts`, `tC4:src/views/print/PrintBook.jsx:37-58`)
-//! and of the paging the preview does in the page (`tC4:src/views/print/PrintPages.jsx`).
+//! The print model (unit B8, D2): the page setup and what each print part shows
+//! (`PrintParts`, `tC4:src/views/print/PrintBook.jsx:37-58`), and the paging the preview does
+//! in the page (`tC4:src/views/print/PrintPages.jsx`). It is the one print model: the
+//! Community Checking preview and tc-export's PDF both print from it (INV-ONE-PRINT-MODEL).
 //!
 //! tC4 measures the preview's pages on screen: a hidden sheet takes verses until the next one
 //! would overflow, and a verse that does not fit is split between words. The UI does the same
 //! with [`paginate`], whose `fits` measures and whose `words` is the browser's word segmenter;
 //! here both are inputs, so the paging is a pure function. [`print_parts`] then says what each
-//! page's parts show under the page setup. A differential test holds it to tc-export's on every
-//! preview page of `fixtures/export/print-vectors.json` (APP-DESIGN §3.8).
+//! page's parts show under the page setup. tc-export's `tests/vectors.rs` holds it to tC4's
+//! markup on every preview page of `fixtures/export/print-vectors.json` (APP-DESIGN §3.8).
 //!
-//! [`PageSetup`] is tc-export's page setup (`tc_export::page`): the choices, tC4's defaults
-//! (`DEFAULT_PAGE_SETUP`) and the sheet's measures.
+//! [`PageSetup`] holds the choices and tC4's defaults (`DEFAULT_PAGE_SETUP`) and the sheet's
+//! measures; tc-export's `page` adds what only the PDF reads.
 
 use crate::export::{PrintItem, PrintVerse, Run};
 
