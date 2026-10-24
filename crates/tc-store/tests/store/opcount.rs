@@ -224,6 +224,8 @@ fn an_open_after_one_save_projects_only_that_books_files() {
         let (after_materialized, _) = open_once(&closed, &corpus.folder);
         assert_eq!(after_materialized.projected, 0, "{after_materialized:?}");
         let shown = handle.mint(&key, None).unwrap();
+        // Held, so the writer cannot begin the save's files before the crash on a slow run.
+        rig.store.hooks().hold(tc_store::Point::BeforeMaterialize);
         handle
             .submit(tc_journal::command::Command::SaveVerse {
                 shown,
@@ -233,6 +235,9 @@ fn an_open_after_one_save_projects_only_that_books_files() {
             .unwrap();
         // A crash after B3: the save is durable, its materialization never ran.
         let crashed = fs.crash(true);
+        rig.store
+            .hooks()
+            .release(tc_store::Point::BeforeMaterialize);
         drop(handle);
         crashed.advance(std::time::Duration::from_secs(5));
         let (counters, _) = open_once(&crashed, &corpus.folder);
