@@ -11,8 +11,7 @@ use super::app_ctx::Actions;
 use super::sources::{api_error, said};
 use super::{bridge, js};
 use crate::app::jobs::JobEnd;
-use crate::app::print::{ExportOf, ExportPanel, conflict_question, export_notice};
-use crate::i18n::{keys, t};
+use crate::app::print::{ExportOf, ExportPanel, conflict_question, delivered_panel, pdf_panel};
 
 /// tC4's `deliverFile`: a click on `<a download>`, so the browser or the shell saves it.
 pub(crate) fn deliver(download: &str, file_name: &str) {
@@ -90,27 +89,19 @@ impl Actions {
                 }
             };
             let shown = match this.follow::<RunExport>(job, |_| {}, || true).await {
-                JobEnd::Done(exported) => {
-                    let delivered = match &exported.file {
-                        ExportedFile::Download {
-                            download,
-                            file_name,
-                        } => {
-                            deliver(download.as_str(), file_name);
-                            true
-                        }
-                        ExportedFile::Print { .. } => {
-                            bridge::print_pdf(&format!("/print/{}", job.get())).await
-                        }
-                    };
-                    if delivered {
-                        ExportPanel::Ready(export_notice(&exported))
-                    } else if pictures {
-                        ExportPanel::Failed(t(keys::refusal::export::PRINT_FAILED_PICTURES, &[]))
-                    } else {
-                        ExportPanel::Failed(t(keys::refusal::export::PRINT_FAILED, &[]))
+                JobEnd::Done(exported) => match &exported.file {
+                    ExportedFile::Download {
+                        download,
+                        file_name,
+                    } => {
+                        deliver(download.as_str(), file_name);
+                        delivered_panel(&exported, bridge::has_download_done())
                     }
-                }
+                    ExportedFile::Print { .. } => {
+                        let answer = bridge::print_pdf(&format!("/print/{}", job.get())).await;
+                        pdf_panel(answer, &exported, pictures)
+                    }
+                },
                 JobEnd::Failed(error) => ExportPanel::Failed(said(&error)),
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => ExportPanel::Idle,
             };

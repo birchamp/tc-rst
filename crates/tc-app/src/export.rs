@@ -301,6 +301,14 @@ fn file_name(subject: &str, today: tc_api::ids::WallMs, ext: &str) -> String {
     format!("{subject}-{}.{ext}", &date[..10])
 }
 
+/// A print's `<title>`: its file name without `.pdf`, since the shell names the PDF it saves
+/// after the page's title (G1's `printPdf`).
+fn document_title(subject: &str, today: tc_api::ids::WallMs) -> String {
+    file_name(subject, today, "pdf")
+        .trim_end_matches(".pdf")
+        .to_owned()
+}
+
 /// tc-export's facts, as the wire's.
 fn wire_facts(facts: &tc_export::ExportFacts) -> ExportFacts {
     ExportFacts {
@@ -446,15 +454,14 @@ impl App {
                 facts,
             })
         };
-        let project_name = session.scope().project.as_str().to_owned();
         match (producer, subject, print) {
             (Producer::AlignedUsfm | Producer::PlainUsfm, Subject::Book { book }, None) => {
                 let input = crate::align::export::book_input(self, session, book).await?;
-                let id = book.code().to_lowercase();
+                let id = book.code();
                 let (producer, name) = if producer == Producer::AlignedUsfm {
                     (tc_export::Producer::AlignedUsfm, format!("{id}-aligned"))
                 } else {
-                    (tc_export::Producer::PlainUsfm, id)
+                    (tc_export::Producer::PlainUsfm, id.to_owned())
                 };
                 made(
                     tc_export::produce(producer, &ExportInput::Book(input)),
@@ -463,6 +470,7 @@ impl App {
                 )
             }
             (Producer::StoryMarkdown, Subject::Stories, None) => {
+                let project_name = self.export_name(session).await;
                 let files = story_files(session).await.map_err(|Unread(reason)| {
                     self.report_export_failure(reason);
                     failed(ExportRefusal::ReadFailed)
@@ -491,8 +499,10 @@ impl App {
                     )
                 };
                 let words = |text| print_word(&print.words, text);
+                let name = book.code().to_owned();
                 let input = PrintBookInput {
                     title: print.title.clone(),
+                    document_title: document_title(&name, today),
                     items: self.book_items(&chapters)?,
                     setup: print.setup,
                     dir,
@@ -504,11 +514,12 @@ impl App {
                         tc_export::Producer::PrintHtml,
                         &ExportInput::PrintBook(input),
                     ),
-                    book.code().to_lowercase(),
+                    name,
                     "pdf",
                 )
             }
             (Producer::PrintHtml, Subject::Stories, Some(print)) => {
+                let project_name = self.export_name(session).await;
                 let (stories, dir) = {
                     let read = session.read();
                     (
@@ -548,6 +559,7 @@ impl App {
                 let words = |text| print_word(&print.words, text);
                 let input = PrintStoriesInput {
                     title: print.title.clone(),
+                    document_title: document_title(&project_name, today),
                     items: &printed.items,
                     pictures,
                     setup: print.setup,
@@ -569,6 +581,22 @@ impl App {
                 reason: format!("{producer:?} does not export this subject"),
             })),
         }
+    }
+
+    /// tC4's `project.name`, which names a stories export: the name Home shows for the
+    /// project (`card_facts`), else its folder.
+    async fn export_name(&self, session: &Arc<ProjectSession>) -> String {
+        let folder = session.scope().project.clone();
+        let kind = crate::home::api_kind(session.handle().facts().kind);
+        let store = self.inner.sessions.store().clone();
+        let peeked = folder.clone();
+        let metadata = tokio::task::spawn_blocking(move || store.peek(&peeked))
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .map(|p| p.metadata)
+            .unwrap_or_else(|| Err("the project's metadata could not be read".to_owned()));
+        crate::home::card_facts(&metadata, &folder, kind).name
     }
 
     fn report_export_failure(&self, reason: String) {

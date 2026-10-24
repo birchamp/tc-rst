@@ -529,7 +529,8 @@ async fn a_story_export_zips_the_stories_and_the_front_and_back_matter() {
         panic!("a download")
     };
     assert!(
-        file_name.starts_with("sample_burrito_obs-stories-") && file_name.ends_with(".zip"),
+        file_name.starts_with("Equipo Ejemplo — Historias Bíblicas Abiertas-stories-")
+            && file_name.ends_with(".zip"),
         "{file_name}"
     );
     let files = downloads.files.lock().unwrap();
@@ -622,13 +623,18 @@ async fn the_print_page_is_a_finished_print_exports_and_no_other_jobs() {
         panic!("a print")
     };
     assert!(
-        file_name.starts_with("tit-") && file_name.ends_with(".pdf"),
+        file_name.starts_with("TIT-") && file_name.ends_with(".pdf"),
         "{file_name}"
     );
     let page = t.app.print_page(&job.get().to_string()).await.unwrap();
     assert_eq!(page.content_type, "text/html; charset=utf-8");
     let html = String::from_utf8(page.bytes).unwrap();
-    assert!(html.contains("<title>Tito</title>"), "{html}");
+    let title = file_name.trim_end_matches(".pdf");
+    assert!(html.contains(&format!("<title>{title}</title>")), "{html}");
+    assert!(
+        html.contains(">Tito</h1>"),
+        "the heading is the book's name"
+    );
     assert!(
         html.contains("Chapter 1"),
         "the request's words fill the heading"

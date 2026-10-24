@@ -63,6 +63,7 @@ fn the_print_document_holds_tc4s_print_dom_and_page() {
             Producer::PrintHtml,
             &ExportInput::PrintBook(PrintBookInput {
                 title: title.clone(),
+                document_title: "TIT-2026-10-24".to_owned(),
                 items,
                 setup,
                 dir: Direction::Ltr,
@@ -79,7 +80,7 @@ fn the_print_document_holds_tc4s_print_dom_and_page() {
     let view = tc_export::book::print_book(&title, &items, &setup, Direction::Ltr);
     assert!(
         html.starts_with(
-            "<!doctype html>\n<html dir=\"ltr\"><head><meta charset=\"utf-8\"><title>"
+            "<!doctype html>\n<html dir=\"ltr\"><head><meta charset=\"utf-8\"><title>TIT-2026-10-24</title>"
         )
     );
     assert!(

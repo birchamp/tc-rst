@@ -20,8 +20,11 @@ pub type Words<'a> = &'a dyn Fn(PrintText) -> String;
 
 /// A book's print.
 pub struct PrintBookInput<'a> {
-    /// The book's name in the interface language (`bookName`).
+    /// The book's name in the interface language (`bookName`), the print's heading.
     pub title: String,
+    /// The document's `<title>`, which the shell names the saved PDF after: the export's file
+    /// name without `.pdf`, where tC4's document carries the book's name.
+    pub document_title: String,
     /// [`crate::book::print_items`] of the book.
     pub items: Vec<PrintItem>,
     pub setup: PageSetup,
@@ -35,6 +38,8 @@ pub struct PrintBookInput<'a> {
 pub struct PrintStoriesInput<'a> {
     /// The project's name.
     pub title: String,
+    /// The document's `<title>`, as [`PrintBookInput::document_title`].
+    pub document_title: String,
     pub items: &'a [PrintedStory<'a>],
     /// Each printed frame's picture as a `data:` URL: the document stands alone, so the print
     /// window needs no address of the app's.
@@ -53,7 +58,7 @@ pub fn book_document(input: &PrintBookInput<'_>) -> Result<String, ExportError> 
     }
     let view = print_book(&input.title, &input.items, &input.setup, input.dir);
     Ok(shell(
-        &input.title,
+        &input.document_title,
         &book_markup(&view, input.words),
         &input.setup,
         input.dir,
@@ -65,7 +70,7 @@ pub fn book_document(input: &PrintBookInput<'_>) -> Result<String, ExportError> 
 pub fn stories_document(input: &PrintStoriesInput<'_>) -> String {
     let view = print_stories(input.items, &input.pictures, &input.setup, input.dir);
     shell(
-        &input.title,
+        &input.document_title,
         &stories_markup(&view, input.words),
         &input.setup,
         input.dir,

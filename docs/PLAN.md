@@ -251,6 +251,23 @@ And this (unit B11):
 - A version dated more than a day after this computer's clock says the clock it was made on
   may be wrong, and the review has a History of the verse (#78). tC4 4.0 has neither.
 
+And these (unit D2):
+
+- Aligned USFM weaves a verse's alignment only when the verse needs no review and its words
+  match. Any other verse keeps its stored text and markup, and the export names it (at most
+  20, then the total). This is tC4's rule from e2bfd8c3 (#796), which is on tC4 `main` only,
+  newer than the reference d310bf3 and not in v4.0.0-rc.2; d310bf3 leaves such an alignment
+  out of the file without a word.
+- An aligned word inside a character span such as `\add` keeps the span in aligned USFM
+  (#420). tC4 4.0 moves the word out of the span, so the file loses its style; its v4.0.0
+  notes list this as a known limit (tC4 D89 point 11).
+- Plain USFM is the aligned book with its alignment markup taken out. tC4 exports the stored
+  book file byte for byte. The two differ only for a verse imported with inline `\zaln`
+  (#794), which plain USFM writes without that markup.
+- The PDF's print page is titled with the export's file name without `.pdf`, because the
+  shell names the saved PDF from the title (`tc4Shell.printPdf`). tC4's print document is
+  titled with the book's or the project's name. The printed heading is the same.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

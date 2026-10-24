@@ -31,8 +31,8 @@ use wasm_bindgen::prelude::Closure;
 
 use crate::app::load::Load;
 use crate::app::print::{
-    ExportOf, ExportPanel, Sheet, export_items, flow_markup, flow_style, frame_gap_text,
-    page_number_style, producer_of, sheet_style, story_gap_text,
+    ExportOf, ExportPanel, Sheet, download_done_panel, export_items, flow_markup, flow_style,
+    frame_gap_text, page_number_style, producer_of, sheet_style, story_gap_text,
 };
 use crate::app::shell::{ProjectFlavor, View};
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
@@ -43,7 +43,7 @@ use crate::ds::{
     ToastProps, Toggle,
 };
 use crate::i18n::{Key, keys, t};
-use crate::tokens::{Size, ToastTone};
+use crate::tokens::Size;
 
 /// tC4's `CommunityChecking`.
 #[component]
@@ -571,7 +571,7 @@ fn export_menu(
             let action_label = download.is_some().then(|| t(keys::export::DOWNLOAD, &[]));
             // The side panel is narrower than the toast's 300px minimum width (tC4).
             let toast = Toast(ToastProps {
-                tone: ToastTone::Info,
+                tone: notice.tone,
                 message: notice.ready,
                 action: download,
                 action_label,
@@ -582,18 +582,11 @@ fn export_menu(
             });
             view! {
                 {toast}
-                {notice.skipped.map(|skipped| view! {
-                    <Callout
-                        tone=CalloutTone::Warn
-                        style=crate::css! { "margin-top": 10 }
-                        attrs=Attrs::from([("data-testid", "export-skipped")])
-                    >
-                        {skipped}
-                    </Callout>
-                })}
+                {notice.skipped.map(skipped_callout)}
             }
             .into_any()
         }
+        ExportPanel::Saving(skipped) => skipped.map(skipped_callout).into_any(),
         ExportPanel::Failed(why) => view! {
             <Callout
                 tone=CalloutTone::Warn
@@ -605,11 +598,28 @@ fn export_menu(
         }
         .into_any(),
     };
+    crate::app::web::bridge::on_download_done(move |done| {
+        let shown = panel.get_untracked();
+        panel.try_set(download_done_panel(done, &shown));
+    });
     view! {
         <div data-testid="export-menu">
             <Menu trigger=trigger items=items />
             {below}
         </div>
+    }
+}
+
+/// The verses an export left its alignment out of (tC4 e2bfd8c3).
+fn skipped_callout(skipped: String) -> impl IntoView {
+    view! {
+        <Callout
+            tone=CalloutTone::Warn
+            style=crate::css! { "margin-top": 10 }
+            attrs=Attrs::from([("data-testid", "export-skipped")])
+        >
+            {skipped}
+        </Callout>
     }
 }
 

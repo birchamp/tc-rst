@@ -3421,7 +3421,7 @@ fn events() -> Vec<Event> {
             state: JobState::Done(JobOutcome::ExportReady(export::Exported {
                 file: export::ExportedFile::Download {
                     download: DownloadId::parse("0123456789abcdef0123456789abcdef").unwrap(),
-                    file_name: "tit-aligned-2026-10-24.usfm".into(),
+                    file_name: "TIT-aligned-2026-10-24.usfm".into(),
                 },
                 facts: export::ExportFacts {
                     skipped: vec![export::SkippedVerse {

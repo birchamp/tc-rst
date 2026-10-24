@@ -18,10 +18,11 @@ use tc_api::model::print::{
 use tc_api::shown::Direction;
 use tc_core::BookId;
 use tc_ui::app::print::{
-    ExportOf, Sheet, conflict_question, export_items, export_notice, flow_markup, flow_style,
-    page_number_style, print_words, producer_of, px, sheet_style,
+    DownloadDone, ExportOf, ExportPanel, PdfAnswer, Sheet, conflict_question, delivered_panel,
+    download_done_panel, export_items, export_notice, flow_markup, flow_style, page_number_style,
+    pdf_panel, print_words, producer_of, px, sheet_style,
 };
-use tc_ui::i18n::{t, t_dyn};
+use tc_ui::i18n::{keys, t, t_dyn};
 
 fn vectors() -> Value {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -360,4 +361,78 @@ fn the_toast_names_at_most_20_skipped_verses() {
     });
     assert_eq!(print.ready, "Export ready: TIT-2026-10-24.pdf");
     assert_eq!(print.download, None);
+}
+
+#[test]
+fn the_shells_print_answer_shows_saved_nothing_or_the_print_failure() {
+    let print = Exported {
+        file: ExportedFile::Print {
+            file_name: "TIT-2026-10-24.pdf".to_owned(),
+        },
+        facts: ExportFacts::default(),
+    };
+    let saved = pdf_panel(
+        PdfAnswer::Saved("Tito-2026-10-24.pdf".to_owned()),
+        &print,
+        false,
+    );
+    let ExportPanel::Ready(notice) = saved else {
+        panic!("{saved:?}")
+    };
+    assert_eq!(notice.ready, "Saved Tito-2026-10-24.pdf");
+    assert_eq!(notice.download, None);
+    assert_eq!(
+        pdf_panel(PdfAnswer::Cancelled, &print, true),
+        ExportPanel::Idle
+    );
+    assert_eq!(
+        pdf_panel(PdfAnswer::Failed, &print, false),
+        ExportPanel::Failed(t(keys::refusal::export::PRINT_FAILED, &[]))
+    );
+    assert_eq!(
+        pdf_panel(PdfAnswer::Failed, &print, true),
+        ExportPanel::Failed(t(keys::refusal::export::PRINT_FAILED_PICTURES, &[]))
+    );
+}
+
+#[test]
+fn the_shells_download_report_shows_saved_interrupted_or_nothing() {
+    use tc_ui::tokens::ToastTone;
+    let done = |state, file: &str| DownloadDone::of(state, file.to_owned());
+    // Without the shell, "Export ready" as before; with it, only the skipped verses until it reports.
+    let ExportPanel::Ready(browser) = delivered_panel(&exported(2, 2), false) else {
+        panic!("a browser gets Export ready")
+    };
+    assert_eq!(browser.ready, "Export ready: TIT-2026-10-24.usfm");
+    assert_eq!(browser.tone, ToastTone::Info);
+    let saving = delivered_panel(&exported(2, 2), true);
+    assert_eq!(saving, ExportPanel::Saving(browser.skipped.clone()));
+
+    let ExportPanel::Ready(saved) =
+        download_done_panel(done(Some("completed"), "TIT-2026-10-24.usfm"), &saving)
+    else {
+        panic!("saved")
+    };
+    assert_eq!(saved.ready, "Saved TIT-2026-10-24.usfm");
+    assert_eq!(saved.tone, ToastTone::Success);
+    assert_eq!(saved.download, None);
+    assert_eq!(saved.skipped, browser.skipped, "the skipped verses stay");
+
+    let ExportPanel::Ready(cut) =
+        download_done_panel(done(Some("interrupted"), "TIT-2026-10-24.usfm"), &saving)
+    else {
+        panic!("interrupted")
+    };
+    assert_eq!(
+        cut.ready,
+        "TIT-2026-10-24.usfm did not finish downloading. Export it again."
+    );
+    assert_eq!(cut.tone, ToastTone::Warn);
+
+    for state in [Some("cancelled"), Some("progressing"), None] {
+        assert_eq!(
+            download_done_panel(done(state, "x"), &saving),
+            ExportPanel::Idle
+        );
+    }
 }

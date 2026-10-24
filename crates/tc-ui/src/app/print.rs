@@ -16,6 +16,7 @@ use tc_api::shown::Direction;
 
 use crate::css::Css;
 use crate::i18n::{Key, keys, t};
+use crate::tokens::ToastTone;
 
 /// React's escaping of text and attribute values.
 pub fn escape(text: &str) -> String {
@@ -324,6 +325,8 @@ pub fn conflict_question(verses: u32) -> Option<String> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportNotice {
     pub ready: String,
+    /// Info for "Export ready", success for "Saved", warn for an interrupted download (tC4).
+    pub tone: ToastTone,
     /// `/download/<id>/<name>`, unescaped; a print has none, since the shell saves it.
     pub download: Option<(String, String)>,
     pub skipped: Option<String>,
@@ -356,9 +359,95 @@ pub fn export_notice(exported: &Exported) -> ExportNotice {
     });
     ExportNotice {
         ready: t(keys::cc::EXPORT_READY, &[("filename", file_name)]),
+        tone: ToastTone::Info,
         download,
         skipped,
     }
+}
+
+/// The shell's answer to `printPdf` (G1's contract): `{ok: true, file}` is the file it saved;
+/// `{ok: false, reason}` is a cancel, a failure or a refusal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PdfAnswer {
+    Saved(String),
+    Cancelled,
+    Failed,
+}
+
+/// What the menu shows once the shell answered a print: tC4's "Saved {filename}"
+/// (`cc.exportSaved`), nothing after a cancel, the print-failed words otherwise.
+pub fn pdf_panel(answer: PdfAnswer, exported: &Exported, pictures: bool) -> ExportPanel {
+    match answer {
+        PdfAnswer::Saved(file) => ExportPanel::Ready(ExportNotice {
+            ready: t(keys::cc::EXPORT_SAVED, &[("filename", &file)]),
+            tone: ToastTone::Success,
+            ..export_notice(exported)
+        }),
+        PdfAnswer::Cancelled => ExportPanel::Idle,
+        PdfAnswer::Failed if pictures => {
+            ExportPanel::Failed(t(keys::refusal::export::PRINT_FAILED_PICTURES, &[]))
+        }
+        PdfAnswer::Failed => ExportPanel::Failed(t(keys::refusal::export::PRINT_FAILED, &[])),
+    }
+}
+
+/// The shell's `onDownloadDone({state, filename})` when its save dialog closed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DownloadDone {
+    Completed(String),
+    Interrupted(String),
+    /// A cancelled save, or a state the page does not know.
+    Other,
+}
+
+impl DownloadDone {
+    pub fn of(state: Option<&str>, filename: String) -> Self {
+        match state {
+            Some("completed") => Self::Completed(filename),
+            Some("interrupted") => Self::Interrupted(filename),
+            _ => Self::Other,
+        }
+    }
+}
+
+/// What the menu shows once a file is handed to the browser. With a shell that reports the
+/// save, tC4 says nothing until it does; the rebuild still names the skipped verses then.
+/// Without one, tC4's "Export ready".
+pub fn delivered_panel(exported: &Exported, shell_reports: bool) -> ExportPanel {
+    let notice = export_notice(exported);
+    if shell_reports {
+        ExportPanel::Saving(notice.skipped)
+    } else {
+        ExportPanel::Ready(notice)
+    }
+}
+
+/// What the menu shows when the shell reports a download (`ExportMenu.jsx`'s listener):
+/// "Saved {filename}", "{filename} did not finish downloading…", or nothing after a cancel.
+/// The skipped verses of the export on show stay with it.
+pub fn download_done_panel(done: DownloadDone, shown: &ExportPanel) -> ExportPanel {
+    let skipped = match shown {
+        ExportPanel::Saving(skipped) => skipped.clone(),
+        ExportPanel::Ready(notice) => notice.skipped.clone(),
+        _ => None,
+    };
+    let (ready, tone) = match done {
+        DownloadDone::Completed(filename) => (
+            t(keys::cc::EXPORT_SAVED, &[("filename", &filename)]),
+            ToastTone::Success,
+        ),
+        DownloadDone::Interrupted(filename) => (
+            t(keys::cc::EXPORT_INTERRUPTED, &[("filename", &filename)]),
+            ToastTone::Warn,
+        ),
+        DownloadDone::Other => return ExportPanel::Idle,
+    };
+    ExportPanel::Ready(ExportNotice {
+        ready,
+        tone,
+        download: None,
+        skipped,
+    })
 }
 
 /// What the export menu shows under itself.
@@ -373,5 +462,7 @@ pub enum ExportPanel {
         run: Box<RunExport>,
     },
     Ready(ExportNotice),
+    /// A download handed to the shell, which reports the save; the skipped verses, if any.
+    Saving(Option<String>),
     Failed(String),
 }
