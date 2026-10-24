@@ -4653,14 +4653,19 @@ the verse, so no check could select a word and the aligner could not open it. Ea
 holds alignment markup is taken apart instead (`tc_journal::alignment::split_aligned`, over
 `tc_usfm::parse_aligned`):
 
-- When it reads apart and the alignment woven back into the plain verse (`tc_usfm::weave` of the
-  `Alignment` value's groups) gives the verse's content byte for byte, the import writes the
+- When it reads apart and its runs woven back into the plain verse (`tc_usfm::weave` of each
+  run of words under the same milestones, its words as the value writes them) give the verse's
+  content byte for byte, the import writes the
   plain verse as the `Verse` value (`words` and `layout` split as in §2.4) and one `Alignment`
   record keyed by the verse (its anchor, §7.7): `span_end` is the verse's `last`; each
   `\zaln-s` is a source word (`x-content` is `word`; `x-strong`, `x-lemma`, `x-morph`,
   `x-occurrence` and `x-occurrences` are the named fields; every other attribute is in `extra`
-  under its own name), each group's `\w` words are its target words, and the verse's words in
-  no group are the word bank, in verse order; `target_verse_md5` is the md5 of the plain
+  under its own name). The cards are tC4's (word-aligner's `unmerge`,
+  `tc_journal::alignment::tc4_cards`): runs under the same outermost source word join one card,
+  whose target words are the runs' `\w` words, so a source word is never on two cards. Where
+  the file writes one source word over two runs (en_ult TIT 1:1, ἐκλεκτῶν), an export writes
+  that card as one run: the same links, in tC4's bytes. The verse's words on no card are the
+  word bank, in verse order; `target_verse_md5` is the md5 of the plain
   verse's `plain_text_v1`; `source` is none and `source_version` empty, since a USFM file names
   no pin (validity then does not read the original-language pin, and the aligner checks the
   source words against the pinned text when it opens the verse); `done` is set when every word

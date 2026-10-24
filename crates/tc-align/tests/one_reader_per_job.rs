@@ -8,7 +8,6 @@ mod common;
 use common::*;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use tc_align::usfm::from_aligned;
 use tc_align::{AlignmentGroup, AlignmentValue, record};
 use tc_core::BookId;
 use tc_journal::alignment::split_aligned;
@@ -106,57 +105,47 @@ fn links(cards: &[AlignmentGroup]) -> BTreeSet<(String, u32, String, u32)> {
         .collect()
 }
 
-/// The cards as groups of words, in order.
-fn groupings(cards: &[AlignmentGroup]) -> Vec<(Vec<String>, Vec<String>)> {
-    cards
-        .iter()
-        .filter(|c| !c.top_words.is_empty())
-        .map(|c| {
-            (
-                c.top_words
-                    .iter()
-                    .map(|s| format!("{}{}", s.word, s.occurrence))
-                    .collect(),
-                c.bottom_words
-                    .iter()
-                    .map(|t| format!("{}{}", t.word, t.occurrence))
-                    .collect(),
-            )
+/// The runs' links, as `tc-usfm` reads them: each run's source words to its target words.
+fn run_links(runs: &[tc_usfm::AlignmentGroup]) -> BTreeSet<(String, u32, String, u32)> {
+    runs.iter()
+        .flat_map(|r| {
+            r.sources.iter().flat_map(move |s| {
+                r.targets.iter().map(move |t| {
+                    (
+                        s.content.clone(),
+                        s.occurrence,
+                        t.text.clone(),
+                        t.occurrence,
+                    )
+                })
+            })
         })
         .collect()
 }
 
+/// The import reads every aligned verse of en_ult Titus into tC4's cards (word-aligner's
+/// `unmerge`): the links the runs make, and each source word on one card only.
+/// `tc4_vectors.rs` holds the cards against tC4's own output for en_ult and en_ust.
 #[test]
 fn the_aligned_usfm_readers_give_tc4s_cards_on_en_ult_titus() {
-    let mut found = Vec::new();
-    let mut counts = (0, 0, 0);
+    let mut read = 0;
     for (reference, body) in verses(EN_ULT) {
-        counts.0 += 1;
         let aligned = tc_usfm::parse_aligned(&body).unwrap();
-        let tc4 = from_aligned(&aligned, None);
-        let Some((plain, kept)) = split_aligned(&body, VerseNo::new(1).unwrap()) else {
-            found.push(format!(
-                "{reference} split_aligned keeps the verse as written"
-            ));
-            continue;
-        };
-        if plain != aligned.plain {
-            found.push(format!("{reference} plain text differs"));
-        }
-        if links(&kept.alignments) != links(&tc4.alignments) {
-            counts.1 += 1;
-            found.push(format!("{reference} links differ"));
-        }
-        if groupings(&kept.alignments) != groupings(&tc4.alignments) {
-            counts.2 += 1;
-            found.push(format!(
-                "{reference} cards: {} / tC4 {}",
-                kept.alignments.len(),
-                tc4.alignments.len()
-            ));
-        }
-        if kept.word_bank != tc4.word_bank {
-            found.push(format!("{reference} bank order differs"));
+        let (plain, kept) = split_aligned(&body, VerseNo::new(1).unwrap())
+            .unwrap_or_else(|| panic!("{reference} is kept as written"));
+        assert_eq!(plain, aligned.plain, "{reference}");
+        assert_eq!(
+            links(&kept.alignments),
+            run_links(&aligned.groups),
+            "{reference}"
+        );
+        let mut seen = BTreeSet::new();
+        for word in kept.alignments.iter().flat_map(|c| &c.top_words) {
+            assert!(
+                seen.insert((word.word.clone(), word.occurrence)),
+                "{reference}: {} is on two cards",
+                word.word
+            );
         }
         if reference == "1:1" {
             let chosen = kept
@@ -164,14 +153,10 @@ fn the_aligned_usfm_readers_give_tc4s_cards_on_en_ult_titus() {
                 .iter()
                 .filter(|c| c.top_words.iter().any(|s| s.word == "ἐκλεκτῶν"))
                 .count();
-            found.push(format!("1:1 cards naming ἐκλεκτῶν: {chosen}"));
+            assert_eq!(chosen, 1, "TIT 1:1: ἐκλεκτῶν is on one card");
+            assert_eq!(kept.alignments.len(), 17, "TIT 1:1 has tC4's 17 cards");
         }
+        read += 1;
     }
-    println!(
-        "{} verses, links differ in {}, cards differ in {}",
-        counts.0, counts.1, counts.2
-    );
-    for line in &found {
-        println!("usfm {line}");
-    }
+    assert_eq!(read, 46);
 }

@@ -332,3 +332,30 @@ pub fn imported() -> Vec<Imported> {
     }
     out
 }
+
+/// Cards in the order tC4 saves them after reading aligned USFM with the original verse
+/// (word-aligner's `orderAlignments`): a card goes where its first source word stands, a
+/// phrase's other words take no place of their own, a source word nothing is aligned to gets
+/// an empty card, and a card whose first word the verse does not have goes last.
+pub fn in_tc4_source_order(
+    source: &SourceVerse,
+    mut unordered: Vec<tc_align::AlignmentGroup>,
+) -> Vec<tc_align::AlignmentGroup> {
+    let same = |a: &SourceWord, b: &SourceWord| a.word == b.word && a.occurrence == b.occurrence;
+    let mut ordered: Vec<tc_align::AlignmentGroup> = Vec::new();
+    for word in source.words() {
+        if let Some(at) = unordered
+            .iter()
+            .position(|g| g.top_words.first().is_some_and(|s| same(s, word)))
+        {
+            ordered.push(unordered.remove(at));
+            continue;
+        }
+        let holds = |g: &tc_align::AlignmentGroup| g.top_words.iter().any(|s| same(s, word));
+        if !unordered.iter().any(holds) && !ordered.iter().any(holds) {
+            ordered.push(tc_align::edit::card(word.clone()));
+        }
+    }
+    ordered.extend(unordered);
+    ordered
+}

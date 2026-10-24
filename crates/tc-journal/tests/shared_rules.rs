@@ -773,7 +773,7 @@ fn aligned_titus_verses_split_into_text_and_alignment() {
         .join("../../fixtures/tc4/test-fixtures/en_ult/TIT.usfm");
     let text = std::fs::read_to_string(path).unwrap();
     let book = tc_usfm::Book::parse(&text);
-    let mut split = 0;
+    let (mut split, mut identical) = (0, 0);
     for unit in book.verses() {
         let content = unit.body();
         let last = VerseNo::new(1).unwrap();
@@ -791,13 +791,36 @@ fn aligned_titus_verses_split_into_text_and_alignment() {
                     .count()
         );
         assert_eq!(value.target_verse_md5, verse_text_md5_v1(&plain));
-        assert_eq!(
-            tc_usfm::weave(&plain, &value.usfm_groups()).unwrap(),
-            content
-        );
+        // tC4's cards write en_ult's bytes, or, where en_ult writes one source word over
+        // two runs, the same links with the card's words in one run.
+        let woven = tc_usfm::weave(&plain, &value.usfm_groups()).unwrap();
+        let links = |text: &str| -> std::collections::BTreeSet<(String, u32, String, u32)> {
+            tc_usfm::parse_aligned(text)
+                .unwrap()
+                .groups
+                .iter()
+                .flat_map(|g| {
+                    g.sources.iter().flat_map(move |s| {
+                        g.targets.iter().map(move |t| {
+                            (
+                                s.content.clone(),
+                                s.occurrence,
+                                t.text.clone(),
+                                t.occurrence,
+                            )
+                        })
+                    })
+                })
+                .collect()
+        };
+        assert_eq!(links(&woven), links(content));
+        if woven == content {
+            identical += 1;
+        }
         assert!(value.source.is_none() && !value.marked_invalid);
         split += 1;
     }
+    assert_eq!(identical, 41);
     assert_eq!(split, 46);
     // Unaligned text is not split.
     assert!(split_aligned("Paul, a servant of God", VerseNo::new(1).unwrap()).is_none());

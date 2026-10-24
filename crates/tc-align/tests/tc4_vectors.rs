@@ -10,11 +10,13 @@ use tc_align::bootstrap;
 
 use common::*;
 use serde_json::Value;
-use tc_align::usfm::{from_aligned, usfm_groups, weave_verse};
+use tc_align::Aligner;
+use tc_align::usfm::{usfm_groups, weave_verse};
 use tc_align::{
-    AlignedRun, AlignmentGroup, AlignmentValue, Malformed, TargetVerse, VerseState, record,
-    verse_status,
+    AlignedRun, AlignmentValue, Malformed, TargetVerse, VerseState, record, verse_status,
 };
+use tc_journal::alignment::split_aligned;
+use tc_journal::ids::VerseNo;
 use tc_journal::json::Json;
 use tc_usfm::parse_aligned;
 
@@ -106,20 +108,32 @@ fn aligned_en_ult_and_en_ust_read_into_the_cards_tc4_reads_with_ugnt() {
     {
         let file = case["file"].as_str().unwrap();
         let reference = case["ref"].as_str().unwrap();
-        let aligned = parse_aligned(&verse_body(file, reference)).unwrap();
-        let extracted = from_aligned(&aligned, Some(&source_verse(UGNT, reference)));
-        let value = with(extracted.alignments, extracted.word_bank);
+        let (plain, read) = split_aligned(&verse_body(file, reference), VerseNo::new(1).unwrap())
+            .unwrap_or_else(|| panic!("{file} {reference} is not taken apart"));
+        let source = source_verse(UGNT, reference);
+        let opened = Aligner::open(
+            Some(&read),
+            None,
+            TargetVerse::new(&plain),
+            &source,
+            basis(1),
+        )
+        .unwrap();
+        let value = opened.value();
         let expected = &case["withOriginal"];
         let at = format!("{file} {reference}");
-        assert_eq!(cards(&value), json_cards(&expected["alignments"]), "{at}");
+        assert_eq!(cards(value), json_cards(&expected["alignments"]), "{at}");
         assert_eq!(value.word_bank, target_words(&expected["wordBank"]), "{at}");
         checked += 1;
     }
     assert_eq!(checked, 92);
 }
 
+/// tC4's cards, and tC4's banked words. The bank stands in verse order, where tC4 groups it
+/// by occurrence: every value the rebuild holds is in verse order (STORAGE.md §5.3, the
+/// owner's Q15 and Q19), and the aligner shows it so either way.
 #[test]
-fn partly_aligned_verses_read_with_tc4s_bank_order() {
+fn partly_aligned_verses_read_into_tc4s_cards_and_bank() {
     let weave = weave_cases();
     let mut checked = 0;
     for case in vectors("extract-vectors.json")
@@ -132,34 +146,36 @@ fn partly_aligned_verses_read_with_tc4s_bank_order() {
             .find(|c| c["source"] == name)
             .and_then(|c| c["woven"].as_str())
             .unwrap();
-        let extracted = from_aligned(&parse_aligned(woven).unwrap(), None);
-        let value = with(extracted.alignments, extracted.word_bank);
+        let (plain, value) = split_aligned(woven, VerseNo::new(1).unwrap()).unwrap();
         let expected = &case["alone"];
         assert_eq!(cards(&value), json_cards(&expected["alignments"]), "{name}");
+        let by_word = |mut words: Vec<tc_align::TargetWord>| {
+            words.sort_by(|a, b| (&a.word, a.occurrence).cmp(&(&b.word, b.occurrence)));
+            words
+        };
         assert_eq!(
-            value.word_bank,
-            target_words(&expected["wordBank"]),
+            by_word(value.word_bank.clone()),
+            by_word(target_words(&expected["wordBank"])),
             "{name}"
         );
+        let mut in_order = value.word_bank.clone();
+        TargetVerse::new(&plain).sort_in_verse_order(&mut in_order);
+        assert_eq!(value.word_bank, in_order, "{name}");
         checked += 1;
     }
     assert_eq!(checked, 136);
 }
 
+/// An aligned verse as the import reads it.
+fn read_back(aligned: &str) -> AlignmentValue {
+    split_aligned(aligned, VerseNo::new(1).unwrap())
+        .unwrap_or_else(|| panic!("not taken apart: {aligned}"))
+        .1
+}
+
 fn weave_cases() -> Vec<Value> {
     let v: Value = serde_json::from_str(&read("fixtures/usfm/weave-vectors.json")).unwrap();
     v["cases"].as_array().unwrap().clone()
-}
-
-fn with(alignments: Vec<AlignmentGroup>, word_bank: Vec<tc_align::TargetWord>) -> AlignmentValue {
-    let mut value = bootstrap(
-        &tc_align::SourceVerse::default(),
-        &TargetVerse::new(""),
-        basis(1),
-    );
-    value.alignments = alignments;
-    value.word_bank = word_bank;
-    value
 }
 
 /// Read every published verse of en_ult and en_ust Titus into cards as tC4 does, weave
@@ -178,9 +194,8 @@ fn export_of_read_back_alignments_writes_tc4s_bytes() {
         let tc4 = case["woven"].as_str().unwrap_or(aligned_text);
         let aligned = parse_aligned(aligned_text).unwrap();
         assert_eq!(aligned.plain, plain);
-        let extracted = from_aligned(&aligned, None);
-        assert!(extracted.word_bank.is_empty());
-        let value = with(extracted.alignments, extracted.word_bank);
+        let value = read_back(aligned_text);
+        assert!(value.word_bank.is_empty());
         let woven = weave_verse(plain, &value).unwrap();
         assert_eq!(woven, tc4, "{}", case["source"]);
         if woven == aligned_text {

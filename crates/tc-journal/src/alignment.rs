@@ -230,35 +230,61 @@ impl AlignmentValue {
 
 /// An aligned verse taken apart for an import (§13.5): its content with the alignment markup
 /// removed, and the `Alignment` value of the run it starts, whose span ends at `span_end`.
-/// `None` unless the markup reads apart and the value's groups woven back into the plain
-/// content give `content` byte for byte; such a verse is imported as written.
+/// `None` unless the markup reads apart and its runs woven back into the plain content give
+/// `content` byte for byte; such a verse is imported as written.
+///
+/// The cards are tC4's (word-aligner's `unmerge`): `tc-usfm` gives one group per run of
+/// words under the same milestones, and runs under the same outermost source word join one
+/// card, so a source word is never on two cards. Where en_ult writes one source word over two
+/// runs (TIT 1:1 "of" and "the chosen people" under ἐκλεκτῶν), the card holds both, and an
+/// export writes them as one run: the same links, in tC4's bytes.
 pub fn split_aligned(content: &str, span_end: VerseNo) -> Option<(String, AlignmentValue)> {
     let verse = tc_usfm::parse_aligned(content).ok()?;
     if verse.groups.is_empty() {
         return None;
     }
-    let placed: BTreeSet<(&str, u32)> = verse
+    // Each run as the value's words write it, so a verse whose words would not write back
+    // the same (an attribute order, say) is kept as written.
+    let runs: Vec<tc_usfm::AlignmentGroup> = verse
         .groups
         .iter()
-        .flat_map(|g| g.targets.iter().map(|t| (t.text.as_str(), t.occurrence)))
+        .filter(|g| !g.sources.is_empty() && !g.targets.is_empty())
+        .map(|g| tc_usfm::AlignmentGroup {
+            sources: g
+                .sources
+                .iter()
+                .map(|s| SourceWord::from_usfm(s).to_usfm())
+                .collect(),
+            targets: g
+                .targets
+                .iter()
+                .map(|t| TargetWord::from_usfm(t).to_usfm())
+                .collect(),
+        })
+        .collect();
+    if tc_usfm::weave(&verse.plain, &runs).ok()? != content {
+        return None;
+    }
+    let alignments = tc4_cards(&verse.groups);
+    // Every word no card holds is banked, so no word of the verse is lost.
+    let placed: BTreeSet<(&str, u32)> = alignments
+        .iter()
+        .flat_map(|g| {
+            g.bottom_words
+                .iter()
+                .map(|t| (t.word.as_str(), t.occurrence))
+        })
+        .collect();
+    let word_bank = verse
+        .words
+        .iter()
+        .filter(|w| !placed.contains(&(w.text.as_str(), w.occurrence)))
+        .map(TargetWord::from_usfm)
         .collect();
     let value = AlignmentValue {
         span_end,
-        alignments: verse
-            .groups
-            .iter()
-            .map(|g| AlignmentGroup {
-                top_words: g.sources.iter().map(SourceWord::from_usfm).collect(),
-                bottom_words: g.targets.iter().map(TargetWord::from_usfm).collect(),
-                extra: JsonMap::new(),
-            })
-            .collect(),
-        word_bank: verse
-            .words
-            .iter()
-            .filter(|w| !placed.contains(&(w.text.as_str(), w.occurrence)))
-            .map(TargetWord::from_usfm)
-            .collect(),
+        alignments,
+        word_bank,
         target_verse_md5: crate::decision::verse_text_md5_v1(&verse.plain),
         source_version: "".into(),
         source: None,
@@ -267,10 +293,53 @@ pub fn split_aligned(content: &str, span_end: VerseNo) -> Option<(String, Alignm
         dismissed: false,
         extra: JsonMap::new(),
     };
-    let woven = tc_usfm::weave(&verse.plain, &value.usfm_groups()).ok()?;
-    if woven != content {
-        return None;
-    }
     let done = value.is_fully_aligned();
     Some((verse.plain, AlignmentValue { done, ..value }))
+}
+
+/// tC4's cards for the runs of an aligned verse, the rule [`split_aligned`] reads with: one
+/// card per outermost source word, in the order its first run stands. A run with no target
+/// word adds no source word, and a card left without one aligns nothing and is not kept, as
+/// in word-aligner.
+pub fn tc4_cards(runs: &[tc_usfm::AlignmentGroup]) -> Vec<AlignmentGroup> {
+    let mut cards: Vec<((&str, u32), AlignmentGroup)> = Vec::new();
+    for run in runs {
+        let Some(outer) = run.sources.first() else {
+            continue;
+        };
+        let key = (outer.content.as_str(), outer.occurrence);
+        let at = match cards.iter().position(|(k, _)| *k == key) {
+            Some(at) => at,
+            None => {
+                cards.push((
+                    key,
+                    AlignmentGroup {
+                        top_words: Vec::new(),
+                        bottom_words: Vec::new(),
+                        extra: JsonMap::new(),
+                    },
+                ));
+                cards.len() - 1
+            }
+        };
+        let card = &mut cards[at].1;
+        if !run.targets.is_empty() {
+            for word in &run.sources {
+                let held = card
+                    .top_words
+                    .iter()
+                    .any(|s| s.word == word.content && s.occurrence == word.occurrence);
+                if !held {
+                    card.top_words.push(SourceWord::from_usfm(word));
+                }
+            }
+        }
+        card.bottom_words
+            .extend(run.targets.iter().map(TargetWord::from_usfm));
+    }
+    cards
+        .into_iter()
+        .map(|(_, card)| card)
+        .filter(|card| !card.top_words.is_empty())
+        .collect()
 }
