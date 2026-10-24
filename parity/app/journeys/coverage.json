@@ -217,12 +217,15 @@
       {
         "file": "parity/app/journeys/conflict-review.test.mjs",
         "tests": [
-          "J18 (#679, #724). A refused open keeps the sync toast and its Review; the next Review opens the review and closes the toast; each version shows its teammate and date, newest first; Keep this version writes one resolution however often it is pressed, and the verse, Translate and Home show it"
+          "J18 (#679, #724). A refused open keeps the sync toast and its Review; the next Review opens the review and closes the toast; each version shows its teammate and date, newest first; Keep this version writes one resolution however often it is pressed, and the verse, Translate and Home show it",
+          "J18 step 6. With two verses in conflict, Previous and Next step between them, each shown with nothing selected; once one is kept, the other shows and the count goes down",
+          "C7a. A teammate joined Titus 1:4-5 on Door43 while this computer changed 1:5: the review lists one passage conflict with a button per side; Keep Teammate 1’s passage writes one resolution over both verses however often it is pressed, and Translate then holds 4-5 as one verse",
+          "C7a (#78). Every History row but the one shown has Restore this version; a double press writes one restore, the restored text is the one kept, and the replaced version stays in History",
+          "C7a. With two verses in conflict, Keep all of Teammate 1’s keeps their version in both with one request however often it is pressed, and says how many were left"
         ]
       },
       {
         "pending": [
-          "C7a",
           "E1a"
         ]
       }
