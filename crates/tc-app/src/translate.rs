@@ -327,7 +327,7 @@ impl App {
     ) {
         if let RecordKey::Frame(story, _) | RecordKey::StoryRef(story) = shown.key() {
             let frame = match shown.key() {
-                RecordKey::Frame(_, frame) => frame.0,
+                RecordKey::Frame(_, frame) => frame.get(),
                 _ => 0,
             };
             self.record_story_edit(session, *story, frame, text, at);

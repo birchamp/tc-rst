@@ -1233,7 +1233,7 @@ fn save_frame(ctx: &Ctx<'_>, shown: &ShownToken, text: &str) -> R<Vec<PlannedCha
     let text = nfc(text);
     let record = match shown.key().clone() {
         RecordKey::Frame(story, frame) => {
-            let problem = if frame.0 == 0 {
+            let problem = if frame.get() == 0 {
                 tc_obs::story::title_text_problem(&text)
             } else {
                 tc_obs::story::frame_text_problem(&text)

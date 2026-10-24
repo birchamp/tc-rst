@@ -274,7 +274,7 @@ fn a_story_is_one_of_the_fifty() {
         );
     }
     for number in [0u8, 51, 255] {
-        assert!(StoryNo::new(number).is_err(), "{number}");
+        assert!(StoryNo::new(number).is_none(), "{number}");
         assert!(
             serde_json::from_value::<StoryNo>(json!(number)).is_err(),
             "{number}"

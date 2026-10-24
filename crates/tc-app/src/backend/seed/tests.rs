@@ -699,7 +699,7 @@ fn obs_story_one_after(frame: u16, text: &str) -> (String, String) {
         v: FORMAT_MINOR,
         record: Record::Frame {
             story,
-            frame: tc_journal::FrameNo(frame),
+            frame: tc_journal::FrameNo::new(frame),
             value: text.to_owned(),
         },
         parents: Vec::new(),
@@ -732,7 +732,7 @@ fn obs_frame_edits_project_other_bytes_than_tc4_writes_today() {
     // An edit of an empty frame: the fold keeps the template's blank lines and adds the
     // text after them; tC4's writer puts one blank line on each side.
     let (base, projected) = obs_story_one_after(3, "Texto nuevo.");
-    let tc4 = tc_obs::story::write_frame(&base, tc_obs::FrameNo(3), "Texto nuevo.").unwrap();
+    let tc4 = tc_obs::story::write_frame(&base, tc_obs::FrameNo::new(3), "Texto nuevo.").unwrap();
     let image3 = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-03.jpg)";
     let image4 = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-04.jpg)";
     let between = |text: &str| -> String {
@@ -746,12 +746,12 @@ fn obs_frame_edits_project_other_bytes_than_tc4_writes_today() {
     // tC4 still reads the frame's text there, but not in its writers' layout: reading the
     // file back, as an outside edit is read, names frame 3 as reformatted.
     let read = tc_obs::StoryFile::parse(projected.clone()).unwrap();
-    assert_eq!(read.text(tc_obs::FrameNo(3)), Some("Texto nuevo."));
+    assert_eq!(read.text(tc_obs::FrameNo::new(3)), Some("Texto nuevo."));
     let decoded = tc_obs::decode_story(&projected).unwrap();
     assert!(
         decoded
             .reformatted
-            .contains(&tc_obs::Reformatted::Frame(tc_obs::FrameNo(3))),
+            .contains(&tc_obs::Reformatted::Frame(tc_obs::FrameNo::new(3))),
         "{:?}",
         decoded.reformatted
     );

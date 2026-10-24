@@ -203,10 +203,8 @@ fn snapshot_text(snapshot: &tc_app::backend::Snapshot, key: &RecordKey) -> Strin
         .unwrap();
     let rendered = tc_obs::story::parse_story(std::str::from_utf8(&bytes).unwrap()).unwrap();
     match key {
-        RecordKey::Frame(_, FrameNo(0)) => rendered.title,
-        RecordKey::Frame(_, FrameNo(frame)) => {
-            rendered.frames[usize::from(*frame) - 1].text.clone()
-        }
+        RecordKey::Frame(_, FrameNo::TITLE) => rendered.title,
+        RecordKey::Frame(_, frame) => rendered.frames[usize::from(frame.get()) - 1].text.clone(),
         RecordKey::StoryRef(_) => rendered.reference.unwrap_or_default(),
         _ => unreachable!(),
     }
@@ -270,8 +268,8 @@ impl World {
         let story = tc_journal::StoryNo::new(1).unwrap();
         let record = match kind {
             ProductionKind::Verse => tit(1, 12),
-            ProductionKind::Frame => RecordKey::Frame(story, FrameNo(1)),
-            ProductionKind::Title => RecordKey::Frame(story, FrameNo(0)),
+            ProductionKind::Frame => RecordKey::Frame(story, FrameNo::new(1)),
+            ProductionKind::Title => RecordKey::Frame(story, FrameNo::TITLE),
             ProductionKind::Reference => RecordKey::StoryRef(story),
             ProductionKind::Comment => {
                 let ack = post(

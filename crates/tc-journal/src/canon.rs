@@ -513,11 +513,11 @@ impl Wire for StoryNo {
 
 impl Wire for FrameNo {
     fn to_json(&self) -> Json {
-        Json::from(self.0)
+        Json::from(self.get())
     }
 
     fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
-        u16::from_json(j, cx).map(FrameNo)
+        u16::from_json(j, cx).map(FrameNo::new)
     }
 }
 

@@ -378,7 +378,7 @@ fn obs_changes() -> Vec<Change> {
     out.push(dev.one(
         Record::Frame {
             story,
-            frame: FrameNo(1),
+            frame: FrameNo::new(1),
             value: "Así es como Dios hizo todo.".into(),
         },
         vec![],
@@ -397,7 +397,7 @@ fn obs_changes() -> Vec<Change> {
             check_id: CheckId::parse(id).unwrap(),
             target: CheckTarget::Frame {
                 story,
-                frame: FrameNo(frame),
+                frame: FrameNo::new(frame),
             },
             occurrence: 1,
         };
@@ -426,7 +426,7 @@ fn obs_changes() -> Vec<Change> {
             5,
             CommentTarget::Frame {
                 story,
-                frame: FrameNo(2),
+                frame: FrameNo::new(2),
             },
             "Falta traducir",
         ),
@@ -537,7 +537,7 @@ fn decisions_against_another_resource_and_unplaced_frame_comments_are_detached()
         check_id: CheckId::parse("f3").unwrap(),
         target: CheckTarget::Frame {
             story,
-            frame: FrameNo(1),
+            frame: FrameNo::new(1),
         },
         occurrence: 1,
     };
@@ -545,7 +545,7 @@ fn decisions_against_another_resource_and_unplaced_frame_comments_are_detached()
     // The story's template holds two frames: a comment on a ninth has no place.
     let nowhere = CommentTarget::Frame {
         story,
-        frame: FrameNo(9),
+        frame: FrameNo::new(9),
     };
     changes.push(dev.one(comment(6, nowhere, "¿Dónde?"), vec![]));
     let state = assert_converges_as(ProjectKind::Stories, &changes);

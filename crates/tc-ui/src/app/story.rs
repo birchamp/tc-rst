@@ -17,7 +17,7 @@ use crate::i18n::{keys, t};
 /// The store's story-frame place, also used by recovered drafts (frame 0 is the title).
 pub fn parse_frame_place(place: &str) -> Option<(StoryNo, u16)> {
     let (story, frame) = place.split_once('-')?;
-    Some((StoryNo::new(story.parse().ok()?).ok()?, frame.parse().ok()?))
+    Some((StoryNo::new(story.parse().ok()?)?, frame.parse().ok()?))
 }
 
 pub fn unit_key(
@@ -51,7 +51,7 @@ pub fn is_frame_drafted(text: &str) -> bool {
 pub fn story_of(chapter: u16) -> Option<StoryNo> {
     u8::try_from(chapter)
         .ok()
-        .and_then(|number| StoryNo::new(number).ok())
+        .and_then(|number| StoryNo::new(number))
 }
 
 /// "Story 3".

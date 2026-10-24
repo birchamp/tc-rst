@@ -1664,7 +1664,7 @@ pub(crate) fn stories() -> (FaultFs, PathBuf) {
 fn frame(story: u8, frame: u16) -> RecordKey {
     RecordKey::Frame(
         tc_journal::StoryNo::new(story).unwrap(),
-        tc_journal::FrameNo(frame),
+        tc_journal::FrameNo::new(frame),
     )
 }
 

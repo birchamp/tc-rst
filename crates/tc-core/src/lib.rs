@@ -1,5 +1,6 @@
-//! Identifiers shared by every crate: books, chapters, verse spans and references, and the
-//! two digests every layer records (a git object id and an MD5).
+//! Identifiers shared by every crate: books, chapter, verse, story and frame numbers, verse
+//! spans and references, and the two digests every layer records (a git object id and an
+//! MD5).
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -7,9 +8,11 @@ use std::str::FromStr;
 
 mod books;
 mod digest;
+mod ids;
 
 pub use books::{BookId, Testament};
 pub use digest::{DigestError, GitOid, Md5, Md5Stream};
+pub use ids::{ChapterNo, FrameNo, NotAStory, StoryNo, VerseNo};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {

@@ -28,13 +28,16 @@ fn every_shipped_story_reads_back_byte_for_byte() {
             assert_eq!(usize::from(file.number().get()), i + 1);
             assert_eq!(file.frame_count(), story.frames.len());
             for (f, frame) in story.frames.iter().enumerate() {
-                assert_eq!(file.text(FrameNo(f as u16 + 1)), Some(frame.text.as_str()));
+                assert_eq!(
+                    file.text(FrameNo::new(f as u16 + 1)),
+                    Some(frame.text.as_str())
+                );
                 assert_eq!(
                     file.image_line(f + 1),
                     Some(frame.image.to_string().as_str())
                 );
             }
-            assert_eq!(file.text(FrameNo(story.frames.len() as u16 + 1)), None);
+            assert_eq!(file.text(FrameNo::new(story.frames.len() as u16 + 1)), None);
             assert_eq!(file.text(FrameNo::TITLE), Some(story.title.as_str()));
             assert_eq!(file.reference(), story.reference.as_deref());
             assert_eq!(file.into_string(), text);
@@ -137,7 +140,7 @@ fn an_outside_edit_of_a_new_projects_story_changes_only_the_parts_it_edits() {
     let template = &stories("template")[0];
     let store = new_project_story(1, template);
     let edited = write_title(&store.render().unwrap(), "La creación").unwrap();
-    let edited = write_frame(&edited, FrameNo(3), "Al tercer día.").unwrap();
+    let edited = write_frame(&edited, FrameNo::new(3), "Al tercer día.").unwrap();
     let edited = write_reference(&edited, "Génesis 1-2").unwrap();
     let found = decode_story(&edited).unwrap().records;
     assert_eq!(
@@ -147,7 +150,7 @@ fn an_outside_edit_of_a_new_projects_story_changes_only_the_parts_it_edits() {
     // A frame cleared outside the app is a change of a frame the store holds text for.
     let mut drafted = store.clone();
     drafted.frames[1] = Some("Dios creó.".to_owned());
-    let cleared = write_frame(&drafted.render().unwrap(), FrameNo(2), "").unwrap();
+    let cleared = write_frame(&drafted.render().unwrap(), FrameNo::new(2), "").unwrap();
     assert_eq!(cleared, store.render().unwrap());
     assert_eq!(
         changed_keys(
@@ -179,7 +182,12 @@ fn a_cleared_frame_and_a_frame_never_written_are_the_same_file_and_the_same_reco
 #[test]
 fn a_frame_write_changes_only_that_frames_paragraph() {
     let text = &stories("en_obs")[0];
-    let written = write_frame(text, FrameNo(3), "Al tercer día.\nDios separó el agua.").unwrap();
+    let written = write_frame(
+        text,
+        FrameNo::new(3),
+        "Al tercer día.\nDios separó el agua.",
+    )
+    .unwrap();
     let before: Vec<&str> = text.split('\n').collect();
     let after: Vec<&str> = written.split('\n').collect();
     // Frame 3's one line became two; every other line is where it was, shifted by one.
@@ -196,7 +204,7 @@ fn a_frame_write_changes_only_that_frames_paragraph() {
     assert_eq!(before[at + 1..], after[at + 2..]);
     let file = StoryFile::parse(written).unwrap();
     assert_eq!(
-        file.text(FrameNo(3)),
+        file.text(FrameNo::new(3)),
         Some("Al tercer día.\nDios separó el agua.")
     );
 }
@@ -228,8 +236,8 @@ fn whitespace_no_record_keeps_is_named_where_rendering_rewrites_it() {
         b.reformatted,
         [
             Reformatted::Title,
-            Reformatted::Frame(FrameNo(1)),
-            Reformatted::Frame(FrameNo(2)),
+            Reformatted::Frame(FrameNo::new(1)),
+            Reformatted::Frame(FrameNo::new(2)),
             Reformatted::Reference,
         ]
     );
@@ -240,19 +248,19 @@ fn whitespace_no_record_keeps_is_named_where_rendering_rewrites_it() {
     ] {
         assert_eq!(
             decode_story(spaced).unwrap().reformatted,
-            [Reformatted::Frame(FrameNo(1))]
+            [Reformatted::Frame(FrameNo::new(1))]
         );
     }
     // Empty frames, and a file without a line end after its reference line.
     let empty = "# 4.\n\n![a](b)\n\n\n![a](c)\n\n\n\n_R_";
     assert_eq!(
         decode_story(empty).unwrap().reformatted,
-        [Reformatted::Frame(FrameNo(1)), Reformatted::Reference]
+        [Reformatted::Frame(FrameNo::new(1)), Reformatted::Reference]
     );
     let last = "# 4.\n\n![a](b)\n\n\n\n![a](c)\n\n\n\n";
     assert_eq!(
         decode_story(last).unwrap().reformatted,
-        [Reformatted::Frame(FrameNo(2))]
+        [Reformatted::Frame(FrameNo::new(2))]
     );
     // A frame the writers refuse keeps its layout in the base.
     let kept = "# 4.\n\n![a](b)\n \nuno\n_x_\n\n\n![a](c)\n\ndos\n";
@@ -316,17 +324,21 @@ fn a_story_reads_up_to_the_frames_a_frame_number_can_count() {
     };
     let most = story(usize::from(u16::MAX));
     let file = StoryFile::parse(most.as_str()).unwrap();
-    assert_eq!(file.text(FrameNo(u16::MAX)), Some("frame 65535"));
+    assert_eq!(file.text(FrameNo::new(u16::MAX)), Some("frame 65535"));
     let parsed = file.story();
     assert_eq!(parsed.frames.len(), 65_535);
     assert_eq!(parsed.frames[65_534].text, "frame 65535");
     let records = decode_story(&most).unwrap().records;
     assert_eq!(records.render().unwrap(), most);
     let mut state = StoryState::default();
-    state.frames.insert(FrameNo(u16::MAX), "last".to_owned());
+    state
+        .frames
+        .insert(FrameNo::new(u16::MAX), "last".to_owned());
     let applied = apply_story_state(&most, &state).unwrap();
     assert_eq!(
-        StoryFile::parse(applied).unwrap().text(FrameNo(u16::MAX)),
+        StoryFile::parse(applied)
+            .unwrap()
+            .text(FrameNo::new(u16::MAX)),
         Some("last")
     );
 
@@ -359,7 +371,7 @@ fn a_title_with_a_line_separator_is_refused_where_tc4_would_write_an_unreadable_
         assert!(parse_story(&seed.replacen("# 1.", &format!("# 1. {title}"), 1)).is_err());
     }
     // A separator inside a frame's paragraph or the reference reads back.
-    let framed = write_frame(&seed, FrameNo(1), "a\u{2028}b").unwrap();
+    let framed = write_frame(&seed, FrameNo::new(1), "a\u{2028}b").unwrap();
     let referenced = write_reference(&framed, "r\u{2028}s").unwrap();
     let story = parse_story(&referenced).unwrap();
     assert_eq!(story.frames[0].text, "a\u{2028}b");
@@ -614,14 +626,14 @@ proptest! {
         let text = g.text(false);
         let f = pick.index(g.frames.len()) + 1;
         let new = lines.join("\n");
-        let written = write_frame(&text, FrameNo(f as u16), &new).unwrap();
+        let written = write_frame(&text, FrameNo::new(f as u16), &new).unwrap();
         let before = StoryFile::parse(text.clone()).unwrap();
         let after = StoryFile::parse(written.clone()).unwrap();
-        prop_assert_eq!(after.text(FrameNo(f as u16)), Some(new.as_str()));
+        prop_assert_eq!(after.text(FrameNo::new(f as u16)), Some(new.as_str()));
         prop_assert_eq!(after.title(), before.title());
         prop_assert_eq!(after.reference(), before.reference());
         for other in (1..=g.frames.len()).filter(|o| *o != f) {
-            prop_assert_eq!(after.text(FrameNo(other as u16)), before.text(FrameNo(other as u16)));
+            prop_assert_eq!(after.text(FrameNo::new(other as u16)), before.text(FrameNo::new(other as u16)));
             prop_assert_eq!(after.image_line(other), before.image_line(other));
         }
         // Every byte up to the frame's image line, and from the next image line or the
@@ -634,7 +646,7 @@ proptest! {
             prop_assert!(written.ends_with(tail));
         }
         // Writing the same text again changes nothing.
-        prop_assert_eq!(write_frame(&written, FrameNo(f as u16), &new).unwrap(), written);
+        prop_assert_eq!(write_frame(&written, FrameNo::new(f as u16), &new).unwrap(), written);
     }
 
     #[test]
@@ -723,7 +735,7 @@ proptest! {
         // A title must be one trimmed line.
         let frames = parts
             .into_iter()
-            .map(|(f, t)| (FrameNo(f), if f == 0 { t.replace('\n', " ").trim().to_owned() } else { t }))
+            .map(|(f, t)| (FrameNo::new(f), if f == 0 { t.replace('\n', " ").trim().to_owned() } else { t }))
             .collect();
         let state = StoryState { frames, reference };
         prop_assert_eq!(apply_story_state(&base, &state), apply_one_by_one(&base, &state));

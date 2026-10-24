@@ -953,7 +953,7 @@ fn put_check(out: &mut Out, check: &CheckKey) {
         CheckTarget::Frame { story, frame } => {
             out.u8(1);
             out.u8(story.get());
-            out.var(u64::from(frame.0));
+            out.var(u64::from(frame.get()));
         }
     }
     out.var(u64::from(check.occurrence));
@@ -1074,7 +1074,7 @@ fn put_shape(out: &mut Out, shape: &Shape, resources: &mut Vec<Arc<ResourceRef>>
                 CommentTarget::Frame { story, frame } => {
                     out.u8(2);
                     out.u8(story.get());
-                    out.var(u64::from(frame.0));
+                    out.var(u64::from(frame.get()));
                 }
             }
         }
@@ -1325,7 +1325,7 @@ impl<'a> In<'a> {
     }
 
     fn frame(&mut self) -> R<FrameNo> {
-        Ok(FrameNo(self.var_u16()?))
+        Ok(FrameNo::new(self.var_u16()?))
     }
 
     fn ref_part(&mut self) -> R<RefPart> {
