@@ -165,6 +165,7 @@ fn hello(instance: ServerInstance, sessions: Vec<OpenSession>) -> HelloView {
             app_locale: LocaleId::ENGLISH,
         },
         startup: StartupState::Ready,
+        checkpoints: Vec::new(),
     }
 }
 
