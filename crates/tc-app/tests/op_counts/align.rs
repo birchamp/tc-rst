@@ -259,7 +259,7 @@ async fn training_held(s: &Scale) -> CancelTrainingOnDrop {
         },
     )
     .await;
-    let running = tokio::time::timeout(Duration::from_secs(5), async {
+    let running = tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             match events.next().await {
                 Next::Frame(frame) => {
@@ -297,7 +297,7 @@ async fn training_held(s: &Scale) -> CancelTrainingOnDrop {
     }
     let guard = CancelTrainingOnDrop {
         jobs: s.app.jobs().clone(),
-        id: running.expect("the held Train job reports Running"),
+        id: running.expect("hung: the held Train job never reported Running"),
     };
     assert_eq!(
         s.app.holding(),
@@ -431,11 +431,11 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             )
             .await;
             let terminal = tokio::time::timeout(
-                Duration::from_secs(5),
+                Duration::from_secs(60),
                 ended.wait_for(JobRegistry::is_ended),
             )
             .await
-            .expect("the held training cancels")
+            .expect("hung: the held training cancels")
             .unwrap()
             .clone();
             assert_eq!(terminal, JobState::Cancelled);

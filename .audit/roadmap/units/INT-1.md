@@ -57,10 +57,10 @@ remote (ASSESSMENT.md §2), so one disk failure on this PC would lose them.
 
 - **Invariants**:
   - INV-OFF-PC-COPY: every branch that holds commits on no remote has a copy outside this PC
-    whose tip equals the local tip at the time of the copy.
+    whose tip equals the local tip at the time of the copy. (not in code: a one-time backup step, checked by the commands of its log)
   - INV-NO-SECRET-LEAVES: no pushed branch adds a token, a password, a private key or a path to
-    a secret file that origin's main does not already hold.
-  - INV-MAIN-ONLY-THROUGH-INT-4: this item never moves or pushes `claude/focused-ride-5uzj7p`.
+    a secret file that origin's main does not already hold. (not in code: a one-time backup step, checked by the commands of its log)
+  - INV-MAIN-ONLY-THROUGH-INT-4: this item never moves or pushes `claude/focused-ride-5uzj7p`. (not in code: a one-time backup step, checked by the commands of its log)
 - **Wrong states**:
   - A disk failure on this PC loses B4b to C5 and S2 (182 commits on no remote).
   - A forced push replaces `origin/storage` (0d7d4f7) and loses what only the remote holds.
@@ -249,3 +249,4 @@ The full gate list (`scripts/gates.sh` once INT-3 lands; until then every comman
 - 2026-10-22 | roadmap session (Cursor) | note | none | commits made on these branches after this backup are not covered; their owners push them at their own stage boundaries under the H1 ruling | none
 - 2026-10-22 | roadmap session (Cursor) | gate | none | step 6: this branch changes only its own card; its merge rides with INT-4's integration merge so the full gate list runs once (step 6 allows it); INT-4 sets state done and merged | .audit/roadmap/units/INT-4.md
 - 2026-10-23 13:32 EDT | checks lane (Claude Code 2198ee19) | merge | ff648f95 | track-INT-1 reached main inside INT-4's integration merge (97da2945's parent chain, main d293375a); this card edit, which INT-4's merge should have carried, lands with its own gate receipt | git merge-base --is-ancestor ff648f95 claude/focused-ride-5uzj7p
+- 2026-10-23 23:48 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: INV-OFF-PC-COPY, INV-NO-SECRET-LEAVES and INV-MAIN-ONLY-THROUGH-INT-4 are marked "(not in code: a one-time backup step ...)": no code prints them; the commands of this log checked them | node --test .audit/tools/claims.test.mjs

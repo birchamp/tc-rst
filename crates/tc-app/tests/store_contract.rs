@@ -111,7 +111,6 @@ macro_rules! store_contract {
     ($name:ident, $make:path) => {
         mod $name {
             use std::sync::Arc;
-            use std::time::Duration;
 
             use tc_api::app::SessionRole;
             use tc_api::{ApiError, NotSaved};
@@ -350,20 +349,26 @@ macro_rules! store_contract {
                         store.opens(&f.bible) == 1
                     })
                     .await;
-                    let side = tokio::spawn(side);
-                    tokio::time::sleep(Duration::from_millis(30)).await;
+                    let mut side = Box::pin(side);
+                    assert!(
+                        crate::store_world::poll_once(&mut side).await.is_none(),
+                        "it joins"
+                    );
                     store.release_open(&f.bible);
-                    (screen.await.unwrap(), side.await.unwrap())
+                    (screen.await.unwrap(), side.await)
                 } else {
                     let side = tokio::spawn(side);
                     crate::common::until("the first open reaches the store", || {
                         store.opens(&f.bible) == 1
                     })
                     .await;
-                    let screen = tokio::spawn(screen);
-                    tokio::time::sleep(Duration::from_millis(30)).await;
+                    let mut screen = Box::pin(screen);
+                    assert!(
+                        crate::store_world::poll_once(&mut screen).await.is_none(),
+                        "it joins"
+                    );
                     store.release_open(&f.bible);
-                    (screen.await.unwrap(), side.await.unwrap())
+                    (screen.await, side.await.unwrap())
                 };
                 assert_eq!(&screen.at, side.scope(), "one session, one epoch");
                 assert_eq!(store.opens(&f.bible), 1, "the store opened the folder once");

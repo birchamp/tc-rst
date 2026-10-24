@@ -18,13 +18,11 @@ use std::io::{Cursor, Read};
 use std::sync::Arc;
 use std::time::Duration;
 
-use reqwest::StatusCode;
-use reqwest::header::{ACCEPT, HeaderMap};
 use serde::Deserialize;
 use tc_core::BookId;
 use tc_door43::{
-    GitOid, Http, HttpSpec, InternetSwitch, ProxyFinder, TagName, UnreachableCause, check_names,
-    system_proxy_finder,
+    GitOid, Http, HttpError, HttpResponse, HttpSpec, InternetSwitch, ProxyFinder, RedirectRule,
+    TagName, UnreachableCause, check_names, system_proxy_finder,
 };
 use tc_helps::HelpRef;
 use tc_helps::aquifer::{
@@ -205,25 +203,17 @@ impl AquiferClient {
                 });
             }
         }
-        let origins = [web.origin(), api.origin()];
-        let redirects = reqwest::redirect::Policy::custom(move |attempt| {
-            let url = attempt.url();
-            // The API redirects a renamed repository within itself; a download goes to
-            // GitHub's asset hosts. A test server's redirects stay on its own origin.
-            let allowed = origins.contains(&url.origin())
-                || (!loopback
-                    && url.scheme() == "https"
-                    && url
-                        .host_str()
-                        .is_some_and(|h| ASSET_HOSTS.iter().any(|a| h.eq_ignore_ascii_case(a))));
-            if attempt.previous().len() >= MAX_REDIRECTS {
-                attempt.error("too many redirects")
-            } else if allowed {
-                attempt.follow()
+        // The API redirects a renamed repository within itself; a download goes to
+        // GitHub's asset hosts. A test server's redirects stay on its own origin.
+        let redirects = RedirectRule {
+            origins: vec![web.clone(), api.clone()],
+            https_hosts: if loopback {
+                Vec::new()
             } else {
-                attempt.error("a redirect off GitHub")
-            }
-        });
+                ASSET_HOSTS.iter().map(|h| (*h).to_owned()).collect()
+            },
+            max: MAX_REDIRECTS,
+        };
         // Every origin a request or a redirect can reach.
         let mut origins = vec![web.clone(), api.clone()];
         if !loopback {
@@ -274,59 +264,29 @@ impl AquiferClient {
     }
 
     /// The only place a request leaves this module.
-    async fn get(
-        &self,
-        url: Url,
-        accept: &str,
-    ) -> Result<(String, reqwest::Response), AquiferError> {
+    async fn get(&self, url: Url, accept: &str) -> Result<(String, HttpResponse), AquiferError> {
         let route = format!("GET {}", url.path());
-        let Ok(http) = self.http.client().await else {
-            return Err(AquiferError::Offline { route });
-        };
-        let response = http
-            .get(url)
-            .header(ACCEPT, accept)
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .send()
+        let response = self
+            .http
+            .get(url, accept, &[("X-GitHub-Api-Version", "2022-11-28")])
             .await
             .map_err(|e| transport_error(&route, e))?;
-        let status = response.status();
-        if status.is_success() {
+        if (200..300).contains(&response.status()) {
             return Ok((route, response));
         }
-        Err(classify(route, status, response.headers()))
+        Err(classify(route, &response))
     }
 
     async fn body(
         &self,
         route: &str,
-        mut response: reqwest::Response,
+        response: HttpResponse,
         limit: u64,
     ) -> Result<Vec<u8>, AquiferError> {
-        let too_large = || AquiferError::TooLarge {
-            route: route.to_owned(),
-            limit,
-        };
-        if response.content_length().is_some_and(|len| len > limit) {
-            return Err(too_large());
-        }
-        let mut body = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
+        response
+            .body(limit)
             .await
-            .map_err(|e| transport_error(route, e))?
-        {
-            if self.internet.check().is_err() {
-                return Err(AquiferError::Offline {
-                    route: route.to_owned(),
-                });
-            }
-            if (body.len() + chunk.len()) as u64 > limit {
-                return Err(too_large());
-            }
-            body.extend_from_slice(&chunk);
-        }
-        Ok(body)
+            .map_err(|e| transport_error(route, e))
     }
 
     async fn json<T: for<'de> Deserialize<'de>>(&self, url: Url) -> Result<T, AquiferError> {
@@ -426,34 +386,28 @@ fn parse_release(route: &str, raw: RawRelease) -> Result<AquiferRelease, Aquifer
     })
 }
 
-fn transport_error(route: &str, error: reqwest::Error) -> AquiferError {
-    if error.is_redirect() {
-        return AquiferError::UnexpectedResponse {
-            route: route.to_owned(),
-            reason: "GitHub redirected the request off GitHub".to_owned(),
-        };
-    }
-    let cause = if error.is_timeout() {
-        UnreachableCause::Timeout
-    } else if error.is_connect() {
-        UnreachableCause::Connect
-    } else if error.is_body() || error.is_decode() {
-        UnreachableCause::Interrupted
-    } else {
-        UnreachableCause::Other(error.without_url().to_string())
+fn transport_error(route: &str, error: HttpError) -> AquiferError {
+    let route = route.to_owned();
+    let cause = match error {
+        HttpError::Offline => return AquiferError::Offline { route },
+        HttpError::TooLarge { limit } => return AquiferError::TooLarge { route, limit },
+        HttpError::Redirect => {
+            return AquiferError::UnexpectedResponse {
+                route,
+                reason: "GitHub redirected the request off GitHub".to_owned(),
+            };
+        }
+        HttpError::Timeout => UnreachableCause::Timeout,
+        HttpError::Connect => UnreachableCause::Connect,
+        HttpError::Interrupted => UnreachableCause::Interrupted,
+        HttpError::Other(reason) => UnreachableCause::Other(reason),
     };
-    AquiferError::Unreachable {
-        route: route.to_owned(),
-        cause,
-    }
+    AquiferError::Unreachable { route, cause }
 }
 
-fn classify(route: String, status: StatusCode, headers: &HeaderMap) -> AquiferError {
-    let exhausted = headers
-        .get("x-ratelimit-remaining")
-        .and_then(|v| v.to_str().ok())
-        == Some("0");
-    match status.as_u16() {
+fn classify(route: String, response: &HttpResponse) -> AquiferError {
+    let exhausted = response.header("x-ratelimit-remaining") == Some("0");
+    match response.status() {
         404 => AquiferError::NotFound { route },
         429 => AquiferError::RateLimited { route, status: 429 },
         403 if exhausted => AquiferError::RateLimited { route, status: 403 },
