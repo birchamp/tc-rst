@@ -4,7 +4,7 @@ title: Every written project is validated (P5)
 track: A
 lane: checks
 milestone: M1
-state: claimed
+state: verifying
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-2
 worktree: .worktrees/track-CHK-2
@@ -15,7 +15,7 @@ no_loss: false
 size: 1-2 d
 merged: none
 updated: 2026-10-24
-next: step 4
+next: review, then a merge turn
 blocked_by: none
 ---
 
@@ -246,3 +246,6 @@ G5's `app-e2e` job green if G5 has merged.
 - 2026-10-24 07:44 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | Every tc-app test store carries a BurritoWatch: backend_over and watch_over install S2's writer probe (metadata.json and ingredients/ only, so the probe costs what it checks), StoreWorld and TestApp hold the watch, and its drop fails with "P5/INV-VALID-BURRITO: after <test>, <folder> is not a valid Scripture Burrito: <problems>". The two direct StoreBackend::start sites in store_scenario.rs call watch_over; app/store.rs's real-folder store is checked with assert_valid_burrito_files. every_store_a_tc_app_test_builds_is_watched scans tests/ for unwatched starts and thrown-away watches | cargo test --locked -p tc-app --test app p5::
 - 2026-10-24 07:44 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | p5_probe_names_a_planted_bad_md5 and p5_watch_fails_a_test_whose_store_reported_a_problem pass. With the watch's check emptied, the second fails: "test did not panic as expected at crates/tc-app/tests/app/p5.rs:34:10" | cargo test --locked -p tc-app --test app p5::
 - 2026-10-24 07:44 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | No store-written state was invalid: no blocker. Opt-outs: 2 (p5.rs's planted md5; the op-count corpus stores, whose watch stops and whose Scale drop checks each folder once). Times, same machine, load noted: app binary main 252 s (load 7) vs CHK-2 244 s (load 10-26); op_counts main 453 s (load 6-8) vs CHK-2 564-589 s with the watch on (load 9-14) and 511 s with the corpus watch stopped, so the corpus stores take step 3's opt-out. Mutation: one md5 hex digit flipped in tc-store's metadata_entries: 147 app tests fail, first on the older checks (the world's assert_valid_burrito, the store refusing NotABurrito); with the world's assert also off, 106 fail with "P5/INV-VALID-BURRITO: after app::create::a_create_sent_twice_with_one_request_id_makes_one_project, /projects/.staging-create-… is not a valid Scripture Burrito: ChecksumMismatch { path: \"ingredients/JON.usfm\", … }". Both reverted. Found in passing, not CHK-2's: a saved proptest case fails save_machine's C3 on main's code (story reference, Retry after a refused empty text); case and details in the shared notes, reported to the orchestrator | cargo test --locked -p tc-app --test app
+- 2026-10-24 08:20 EDT | checks lane (Claude Code 2198ee19) | step 4 | none | test/validate (tc-api Validate, ValidateView, InvalidProject; golden request and reply) waits until each open project has settled, its store is idle and no close runs, then checks every non-dot folder of the projects folder with tc_burrito::validate_dir. test_validate_names_a_project_whose_ingredient_md5_is_wrong passes on an on-disk app and fails when the handler returns no invalid folder ("left: 0, right: 1"). HOOK_TEXT gains test/script and test/validate; the ignored release check passes on a release build of tc4 | cargo test --locked -p tc-api; cargo test --locked -p tc-app --test app hooks::; TC4_RELEASE_BIN=target/release/tc4 cargo test --locked -p tc4 --test release -- --ignored
+- 2026-10-24 08:20 EDT | checks lane (Claude Code 2198ee19) | step 5 | none | withApp calls test/validate after every journey body and fails with "P5/INV-VALID-BURRITO: after <test>, <folder> is not a valid Scripture Burrito: <problems>"; a named scenario that checked no folder fails too; a journey that ended tc4 says so instead. All 214 journeys ran: 213 passed, and the one that failed seeds a broken folder on purpose (home's an_unusable_folder_shows_its_name_and_reason_and_opens_nothing), now marked invalidOnPurpose; home's 7 pass after. A wrong md5 planted at the end of a_language_preview_redraws_no_home_node failed it with "P5/INV-VALID-BURRITO: after a_language_preview_redraws_no_home_node, sample_burrito is not a valid Scripture Burrito: ChecksumMismatch { path: \"ingredients/JON.usfm\", … }"; reverted | scripts/gates.sh --step journeys
+- 2026-10-24 08:20 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | D2, E2, X and I are todo with no owner; each now says under "Before you start" that its test stores go through backend_over and its BurritoWatch and its journeys end with test/validate | grep -l BurritoWatch .audit/roadmap/units/*.md

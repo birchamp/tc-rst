@@ -23,7 +23,7 @@ use crate::store_world::{assert_valid_burrito_files, sample_records, words_of};
 
 /// Makes the project `name` in `projects` with tc-store on this computer's files: the sample's
 /// Titus as records, as the store tests make it.
-fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
+pub(super) fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
     let store = tc_store::Store::start(tc_store::StoreConfig {
         app_data: app_data.to_owned(),
         projects: projects.to_owned(),

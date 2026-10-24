@@ -130,7 +130,7 @@ browserTest('an_unusable_folder_shows_its_name_and_reason_and_opens_nothing', as
     assert.match(text, /no ingredients\/tc\/project\.json/);
     assert.equal(await unusable.getByRole('button').count(), 0, 'it offers nothing to press');
     assert.equal(await page.getByText('No projects yet', { exact: false }).count(), 0, 'no invitation to make a project in its place');
-  }, { seed });
+  }, { seed, invalidOnPurpose: "the journey seeds a folder whose metadata.json is not a Burrito's, to show it cannot be opened" });
 });
 
 browserTest('a_language_preview_redraws_no_home_node', async () => {

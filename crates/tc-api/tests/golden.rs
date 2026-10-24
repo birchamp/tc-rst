@@ -107,6 +107,7 @@ use tc_api::test::{
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
     TeammatesEdit, TokenBase,
 };
+use tc_api::test::{InvalidProject, Validate, ValidateView};
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
@@ -1038,6 +1039,26 @@ impl Example for Quiet {
 impl Example for QuietView {
     fn example() -> Self {
         QuietView { busy: false }
+    }
+}
+
+impl Example for Validate {
+    fn example() -> Self {
+        Validate {}
+    }
+}
+
+impl Example for ValidateView {
+    fn example() -> Self {
+        ValidateView {
+            checked: 1,
+            invalid: vec![InvalidProject {
+                folder: "en_ult_tit_book".into(),
+                problems: vec![
+                    "ChecksumMismatch { path: \"ingredients/TIT.usfm\", listed: \"00000000000000000000000000000000\", actual: \"1ce94f44dd0f1c4e87fa88a7a80f9216\" }".into(),
+                ],
+            }],
+        }
     }
 }
 
