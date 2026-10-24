@@ -131,7 +131,7 @@ fn next_match(text: &str, at: usize) -> Option<(usize, TokenKind)> {
         if is_word(c) {
             return Some((start, TokenKind::Word));
         }
-        if is_whitespace(c) {
+        if in_whitespace_table(c) {
             return Some((start, TokenKind::Whitespace));
         }
         if (offset == 0 && is_punctuation(c))
@@ -155,7 +155,7 @@ fn match_end(text: &str, start: usize, kind: TokenKind) -> usize {
     };
     match kind {
         TokenKind::Word => run(is_word),
-        TokenKind::Whitespace => run(is_whitespace),
+        TokenKind::Whitespace => run(in_whitespace_table),
         TokenKind::Number => run(is_number),
         TokenKind::Punctuation => {
             // `<` and `>` are not `\p{P}`, so punctuation that starts with one is a pair of
@@ -199,7 +199,8 @@ fn is_punctuation(c: char) -> bool {
     in_table(tables::PUNCTUATION, c)
 }
 
-fn is_whitespace(c: char) -> bool {
+/// The tokenizer's own whitespace table (string-punctuation-tokenizer), not JavaScript's `\s`.
+fn in_whitespace_table(c: char) -> bool {
     in_table(tables::WHITESPACE, c)
 }
 

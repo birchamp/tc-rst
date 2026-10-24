@@ -250,7 +250,11 @@ fn real_notes_on_titus_light_their_rendering_in_the_ult() {
             continue;
         };
         let at = list.ranges()[0].start();
-        let h = highlight_quote(&ult(at.chapter, at.verse), &n.quote, n.occurrence);
+        let h = highlight_quote(
+            &ult(at.chapter().get(), at.verse().get()),
+            &n.quote,
+            n.occurrence,
+        );
         *tally.entry(format!("{:?}", h.quality)).or_default() += 1;
         if h.quality == MatchQuality::Approximate {
             approximate.push(n.quote.as_str().to_owned());
@@ -381,7 +385,7 @@ fn every_jonah_note_quote_finds_its_words_in_the_uhb_verse() {
         let at = list.ranges()[0].start();
         // Each Hebrew word aligned to itself: the quote is in the verse's own order.
         let mut verse = AlignedVerse::new();
-        let words = uhb_words(at.chapter, at.verse);
+        let words = uhb_words(at.chapter().get(), at.verse().get());
         for source in sources(&words) {
             let id = verse.add_alignment(vec![source.clone()]);
             verse.push_word(source.content, Some(id)).unwrap();
@@ -410,7 +414,8 @@ fn single_verse(reference: &HelpRef) -> Option<(u16, u16)> {
     let [range] = list.ranges() else {
         return None;
     };
-    (range.start() == range.end()).then_some((range.start().chapter, range.start().verse))
+    (range.start() == range.end())
+        .then_some((range.start().chapter().get(), range.start().verse().get()))
 }
 
 /// One verse of a USFM fixture.

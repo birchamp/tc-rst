@@ -158,7 +158,7 @@ fn run(text: &str, op: &Value) -> Option<Result<String, WriteError>> {
             if frame < 0.0 || frame.fract() != 0.0 {
                 return None;
             }
-            write_frame(text, FrameNo(frame as u16), s(1))
+            write_frame(text, FrameNo::new(frame as u16), s(1))
         }
         "title" => write_title(text, s(0)),
         "ref" => write_reference(text, s(0)),
@@ -168,7 +168,12 @@ fn run(text: &str, op: &Value) -> Option<Result<String, WriteError>> {
                 .as_object()
                 .unwrap()
                 .iter()
-                .map(|(k, v)| (FrameNo(k.parse().unwrap()), v.as_str().unwrap().to_owned()))
+                .map(|(k, v)| {
+                    (
+                        FrameNo::new(k.parse().unwrap()),
+                        v.as_str().unwrap().to_owned(),
+                    )
+                })
                 .collect();
             apply_story_state(
                 text,
@@ -691,11 +696,11 @@ fn the_sample_story_is_the_template_drafted_by_generate_obs() {
     let draft = &vectors()["draft"];
     let d = &draft["draft"];
     let mut bytes = seed_story(&sets()["template"][0]).unwrap();
-    bytes = write_frame(&bytes, FrameNo(0), d["title"].as_str().unwrap()).unwrap();
+    bytes = write_frame(&bytes, FrameNo::TITLE, d["title"].as_str().unwrap()).unwrap();
     for (frame, text) in d["frames"].as_object().unwrap() {
         bytes = write_frame(
             &bytes,
-            FrameNo(frame.parse().unwrap()),
+            FrameNo::new(frame.parse().unwrap()),
             text.as_str().unwrap(),
         )
         .unwrap();
@@ -717,10 +722,10 @@ fn the_sample_story_is_the_template_drafted_by_generate_obs() {
 fn a_negative_control_a_changed_byte_is_noticed() {
     // The vectors bind: one wrong byte in an expected text fails the comparison.
     let text = &sets()["en_obs"][0];
-    let written = write_frame(text, FrameNo(1), "Otro texto.").unwrap();
+    let written = write_frame(text, FrameNo::new(1), "Otro texto.").unwrap();
     assert_ne!(md5_hex(&written), md5_hex(text));
     assert!(matches!(
-        write_frame("# 1.\n\n![a](b)\n", FrameNo(2), "x"),
+        write_frame("# 1.\n\n![a](b)\n", FrameNo::new(2), "x"),
         Err(WriteError::NoSuchFrame { frames: 1, .. })
     ));
     assert!(matches!(

@@ -212,7 +212,7 @@ fn a_record_that_matches_its_text_opens_as_it_is() {
     for (chapter, verses) in file["chapters"].as_object().unwrap() {
         for (verse, record) in verses.as_object().unwrap() {
             let at = format!("{chapter}:{verse}");
-            let stored = tc_align::record::from_record(record, basis(1)).unwrap();
+            let stored = tc4_record(record).unwrap();
             let source = SourceVerse::new(
                 stored
                     .alignments

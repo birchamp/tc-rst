@@ -593,7 +593,7 @@ fn verse_order(r: &BibleRef, a: &AquiferArticle) -> (Bcv, u32) {
         BibleLocus::AsWritten(text) => (text.chapter().unwrap_or(0), 0),
         BibleLocus::Verses(list) => {
             let start = list.start();
-            (start.chapter, start.verse)
+            (start.chapter().get(), start.verse().get())
         }
     };
     let key = Bcv {

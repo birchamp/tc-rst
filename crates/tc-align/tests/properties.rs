@@ -13,11 +13,13 @@ use common::basis;
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 use tc_align::suggest::RawLink;
-use tc_align::usfm::{from_aligned, weave_verse};
+use tc_align::usfm::weave_verse;
 use tc_align::{
     Aligner, AlignmentValue, Click, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord,
     reflow,
 };
+use tc_journal::alignment::split_aligned;
+use tc_journal::ids::VerseNo;
 
 const TARGET_WORDS: [&str; 7] = ["a", "b", "c", "de", "Dios", "λόγος", "וַ\u{2060}יְהִי"];
 const SOURCE_WORDS: [&str; 5] = ["Α", "Β", "Γ", "Θεοῦ", "דְּבַר"];
@@ -481,10 +483,12 @@ proptest! {
         let woven = weave_verse(&text, &value).unwrap();
         let aligned = tc_usfm::parse_aligned(&woven).unwrap();
         prop_assert_eq!(&aligned.plain, &text);
-        let back = from_aligned(&aligned, None);
         let mut read = value.clone();
-        read.alignments = back.alignments;
-        read.word_bank = back.word_bank;
+        // A verse with no link has no markup to take apart.
+        if let Some((_, back)) = split_aligned(&woven, VerseNo::new(1).unwrap()) {
+            read.alignments = back.alignments;
+            read.word_bank = back.word_bank;
+        }
         prop_assert_eq!(links(&read), links(&value));
         prop_assert_eq!(read.total(), value.total());
     }

@@ -18,7 +18,7 @@ use tc_obs::print::{PrintedFrame, PrintedStory};
 
 use crate::app::App;
 use crate::dispatch::Handle;
-use crate::story::{journal_story, read_story, story_numbers};
+use crate::story::{read_story, story_numbers};
 
 /// A verse's label as the book writes it: `4`, or `4-5` for a span.
 fn label(verse: u16, last: u16) -> String {
@@ -108,10 +108,10 @@ impl Handle<Book> for App {
 
 /// A story number tc-obs printed, as the wire's: every story the project holds is 1 to 50.
 fn story_no(app: &App, number: u8) -> Result<StoryNo, ApiError> {
-    StoryNo::new(number).map_err(|e| {
+    StoryNo::new(number).ok_or_else(|| {
         app.internal(
             "a story's number could not be written",
-            crate::reports::facts(serde_json::json!({"story": number, "reason": e.to_string()})),
+            crate::reports::facts(serde_json::json!({"story": number, "reason": "not 1 to 50"})),
         )
     })
 }
@@ -127,13 +127,10 @@ impl Handle<Stories> for App {
         let read = session.read();
         let mut stories: Vec<ObsStory> = Vec::new();
         for number in story_numbers() {
-            let Ok(story) = StoryNo::new(number) else {
+            let Some(story) = StoryNo::new(number) else {
                 continue;
             };
-            if read
-                .key_state(&RecordKey::StoryBase(journal_story(story)?))
-                .is_none()
-            {
+            if read.key_state(&RecordKey::StoryBase(story)).is_none() {
                 continue;
             }
             stories.push(read_story(&read, story)?);

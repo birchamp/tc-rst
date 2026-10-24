@@ -314,7 +314,7 @@ pub fn card(
                         .iter()
                         .filter_map(|story| {
                             Some(StoryTileView {
-                                story: StoryNo::new(story.number).ok()?,
+                                story: StoryNo::new(story.number)?,
                                 title: story.title.clone(),
                                 drafted: known(story.percent),
                             })

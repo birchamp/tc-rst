@@ -34,7 +34,7 @@ use tc_helps::aquifer::{
 use tc_helps::articles::{academy_article, parse_word_article, word_article_id};
 use tc_helps::metadata::{AquiferPin as HelpsAquiferPin, DcsPin, HelpsSource};
 use tc_helps::obs::{ObsStory, parse_obs_story};
-use tc_helps::tsv::{TsvScope, parse_notes, parse_questions, parse_word_links};
+use tc_helps::tsv::{TsvScope, parse_notes, parse_questions_leniently, parse_word_links};
 use tc_helps::{HelpRef, Helps, HelpsPart};
 use tc_journal::pins::{Collection, UnusablePin};
 
@@ -414,7 +414,10 @@ fn load_table(
             HelpsPart::WordLinks | HelpsPart::ObsWordLinks => {
                 helps.add_word_links(&source, parse_word_links(&text, scope).map_err(unreadable)?)
             }
-            _ => helps.add_questions(&source, parse_questions(&text, scope).map_err(unreadable)?),
+            _ => helps.add_questions(
+                &source,
+                parse_questions_leniently(&text, scope).map_err(unreadable)?,
+            ),
         };
         added.map_err(unreadable)
     })();
