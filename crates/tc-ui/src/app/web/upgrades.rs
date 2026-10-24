@@ -20,9 +20,12 @@ use tc_api::resources::{
 };
 use wasm_bindgen_futures::spawn_local;
 
+use super::leave::LeaveTo;
+
 use super::app_ctx::Actions;
 use super::js;
-use super::sources::{api_error, said};
+use super::sources::{said, said_call};
+use crate::app::client::CallError;
 use crate::app::internet::Pending;
 use crate::app::jobs::JobEnd;
 use crate::app::upgrades::Installing;
@@ -38,14 +41,14 @@ enum Planned {
 
 /// What a failed confirm says: tC4's `upgrade.failed` wraps the stale words, and a refused disk
 /// says its own reason.
-fn apply_error(error: &ApiError) -> String {
+fn apply_error(error: &CallError) -> String {
     match error {
-        ApiError::NotSaved(NotSaved::PlanStale) => t(
+        CallError::Api(ApiError::NotSaved(NotSaved::PlanStale)) => t(
             keys::upgrade::FAILED,
             &[("reason", &t(keys::upgrade::STALE, &[]))],
         ),
-        ApiError::NotSaved(NotSaved::Disk(reason)) => reason.clone(),
-        other => said(other),
+        CallError::Api(ApiError::NotSaved(NotSaved::Disk(reason))) => reason.clone(),
+        other => said_call(other),
     }
 }
 
@@ -72,11 +75,9 @@ impl Actions {
         spawn_local(async move {
             let project = at.project.clone();
             let answer = this
-                .runtime()
-                .api()
-                .call(&CheckUpdates { at })
+                .run_net(Pending::Updates, &CheckUpdates { at })
                 .await
-                .map_err(api_error);
+                .said();
             let current = this
                 .s()
                 .project
@@ -89,9 +90,9 @@ impl Actions {
                             .try_update(|up| up.offers_read(&project, &current, view));
                     }
                 }
-                Err(ApiError::NeedsInternet(_)) => this.ask_again(Pending::Updates),
-                Err(error) => {
-                    let reason = t(keys::upgrade::CHECK_FAILED, &[("reason", &said(&error))]);
+                Err(None) => {}
+                Err(Some(said)) => {
+                    let reason = t(keys::upgrade::CHECK_FAILED, &[("reason", &said)]);
                     this.s().up.try_update(|up| up.check_failed(reason));
                 }
             }
@@ -134,7 +135,7 @@ impl Actions {
         let this = self.clone();
         spawn_local(async move {
             // Saved first: the plan is read over work that is safe (A-26).
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Plan).await {
                 // tC4's own sentence for a text upgrade that finds work unsaved.
                 let reason = t(
                     keys::upgrade::FAILED,
@@ -148,18 +149,11 @@ impl Actions {
                 at: at.clone(),
                 offer,
             };
-            let job = match this.runtime().api().call(&request).await.map_err(api_error) {
+            let job = match this.run_net(pending.clone(), &request).await.said() {
                 Ok(job) => job,
-                Err(ApiError::NeedsInternet(_)) => {
-                    this.s().up.try_update(|up| up.install_failed(None));
-                    return this.ask_again(pending);
-                }
-                Err(error) => {
-                    let reason = said(&error);
-                    {
-                        this.s().up.try_update(|up| up.install_failed(Some(reason)));
-                        return;
-                    }
+                Err(reason) => {
+                    this.s().up.try_update(|up| up.install_failed(reason));
+                    return;
                 }
             };
             match this
@@ -174,13 +168,9 @@ impl Actions {
                 Planned::Stopped => {
                     this.s().up.try_update(|up| up.install_failed(None));
                 }
-                Planned::Failed(ApiError::NeedsInternet(_)) => {
-                    this.s().up.try_update(|up| up.install_failed(None));
-                    this.ask_again(pending);
-                }
                 Planned::Failed(error) => {
-                    let reason = said(&error);
-                    this.s().up.try_update(|up| up.install_failed(Some(reason)));
+                    let reason = this.net_refusal(pending, error).map(|error| said(&error));
+                    this.s().up.try_update(|up| up.install_failed(reason));
                 }
             }
         });
@@ -217,7 +207,7 @@ impl Actions {
                 at: at.clone(),
                 plan,
             };
-            match this.runtime().api().call(&request).await.map_err(api_error) {
+            match this.runtime().api().call(&request).await {
                 Ok(PlanApplied::Applied) => {
                     this.s().up.try_update(|up| up.applied());
                     this.pins_changed(&at);
@@ -267,7 +257,7 @@ impl Actions {
         }
         let this = self.clone();
         spawn_local(async move {
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Plan).await {
                 let reason = t(keys::gateway::UNSAVED, &[]);
                 {
                     this.s().gw.try_update(|gw| gw.plan_failed(package, reason));
@@ -279,14 +269,12 @@ impl Actions {
                 at: at.clone(),
                 gateway: package.gateway.clone(),
             };
-            let job = match this.runtime().api().call(&request).await.map_err(api_error) {
+            let job = match this.runtime().api().call(&request).await {
                 Ok(job) => job,
                 Err(error) => {
-                    let reason = said(&error);
-                    {
-                        this.s().gw.try_update(|gw| gw.plan_failed(package, reason));
-                        return;
-                    }
+                    let reason = said_call(&error);
+                    this.s().gw.try_update(|gw| gw.plan_failed(package, reason));
+                    return;
                 }
             };
             // The person left the project while the plan was made: it would describe one project
@@ -350,7 +338,7 @@ impl Actions {
                 at: at.clone(),
                 plan,
             };
-            match this.runtime().api().call(&request).await.map_err(api_error) {
+            match this.runtime().api().call(&request).await {
                 Ok(PlanApplied::Applied) => {
                     this.s().gw.try_update(|gw| gw.applied());
                     this.pins_changed(&at);

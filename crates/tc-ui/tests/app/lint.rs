@@ -136,3 +136,50 @@ fn no_hand_made_attempt_counters() {
         "INV-A-STALE-REPLY-NEVER-SHOWS: a hand-made attempt counter; use app::latest::Latest: {counters:#?}"
     );
 }
+
+/// INV-ONE-LEAVE-PATH (UI-3): every move away from a screen or a project runs `leave`, which
+/// runs the save gate, then the checkpoint, then the switch. Allowed: `leave` itself; saves.rs,
+/// the gate and the window-close guard (D1's quit flow takes that over); the test-hooks probe
+/// page (mod.rs `ProbeRoot`, probe.rs), which drives the gate directly to test it.
+#[test]
+fn only_leave_calls_the_gate() {
+    let callers = found(&[".gate()"], |file, text, line| {
+        file == "app/web/leave.rs"
+            || file == "app/web/saves.rs"
+            || file == "app/web/probe.rs"
+            || (file == "app/web/mod.rs" && fn_lines(text, "ProbeRoot").contains(&line))
+    });
+    assert!(
+        callers.is_empty(),
+        "INV-ONE-LEAVE-PATH: the save gate is called outside Actions::leave: {callers:#?}"
+    );
+}
+
+/// INV-NET-REFUSALS-HANDLED-ONCE (UI-3): the internet question and the sign-in step are asked
+/// for in one function, `Actions::net_refusal` in app_ctx.rs, which `run_net` and the job ends
+/// call; no screen matches those refusals itself.
+#[test]
+fn only_run_net_handles_net_refusals() {
+    let handlers = found(
+        &["ApiError::NeedsInternet", "ApiError::NeedsSignIn"],
+        |file, text, line| {
+            !file.starts_with("app/web/")
+                || (file == "app/web/app_ctx.rs" && fn_lines(text, "net_refusal").contains(&line))
+        },
+    );
+    assert!(
+        handlers.is_empty(),
+        "INV-NET-REFUSALS-HANDLED-ONCE: a network refusal is handled outside Actions::net_refusal: {handlers:#?}"
+    );
+}
+
+/// INV-EVERY-REFUSAL-RENDERS (UI-3): a refusal is put into words by `i18n::refusal_text` alone,
+/// which fills every placeholder; no screen reads a refusal's values itself.
+#[test]
+fn only_refusal_text_reads_vars() {
+    let readers = found(&[".vars()"], |file, _, _| file == "i18n.rs");
+    assert!(
+        readers.is_empty(),
+        "INV-EVERY-REFUSAL-RENDERS: a refusal's values are read outside i18n::refusal_text: {readers:#?}"
+    );
+}

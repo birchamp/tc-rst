@@ -335,3 +335,25 @@ fn a_key_constant_and_its_text_give_the_same_message() {
         "refusal.open.lock-held"
     );
 }
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+
+    /// INV-EVERY-REFUSAL-RENDERS (UI-3): every refusal reads as a whole sentence in every
+    /// shipped language, with no `{placeholder}` left, whatever its values.
+    #[test]
+    fn every_refusal_renders_with_no_placeholder_left(refusal in proptest::prelude::any::<tc_api::refusal::Refusal>()) {
+        use tc_api::refusal::Message;
+        proptest::prop_assume!(refusal.vars().iter().all(|(_, value)| !value.contains('{')));
+        install_all();
+        for id in LOCALE_IDS {
+            show_locale(locale(id));
+            let text = tc_ui::i18n::refusal_text(&refusal);
+            proptest::prop_assert!(
+                !text.contains('{'),
+                "INV-EVERY-REFUSAL-RENDERS: {} in {id}: {text:?}",
+                refusal.key()
+            );
+        }
+    }
+}
