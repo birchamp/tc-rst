@@ -45,7 +45,8 @@ jobs:
         run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
       - run: crates/tc-ui/build-app.sh --out target/tc-ui-app
       - run: crates/tc-ui/build-app.sh --test-hooks --out target/tc-ui-app-hooks
-      - run: cargo run --locked -p tc-app --example bundle_store -- --from bundle/en --only en_obs-tn --out target/shell-bundle
+      # rust-cache keeps target/, and bundle_store refuses an install that is already there.
+      - run: rm -rf target/shell-bundle && cargo run --locked -p tc-app --example bundle_store -- --from bundle/en --only en_obs-tn --out target/shell-bundle
       - uses: actions/upload-artifact@v4
         with:
           name: shell-builds
