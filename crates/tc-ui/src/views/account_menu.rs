@@ -27,10 +27,9 @@ use crate::ds::{
 };
 use crate::i18n::{LOCALES, keys, locale_of, t, t_dyn};
 
-/// tC4's LICENSE, whose first line is About's copyright line (`tC4:src/data/about.ts`), and
-/// COPYING, the GNU GPL version 2, both as tC4 ships them (vendor-tc4.sh).
+/// tC4's LICENSE as tC4 ships it (vendor-tc4.sh); its line that starts with "Copyright" is
+/// About's copyright line (`tC4:src/data/about.ts`).
 const LICENSE_TEXT: &str = include_str!("../../assets/about/LICENSE");
-const GPL_TEXT: &str = include_str!("../../assets/about/COPYING");
 
 fn trigger_base() -> Css {
     crate::css! {
@@ -715,7 +714,11 @@ fn AboutDialog(focus_read: bool, on_read: Callback<()>, on_close: Callback<()>) 
         hold();
         super::each_frame(10, hold);
     }
-    let copyright = js_trim(LICENSE_TEXT.split('\n').next().unwrap_or_default()).to_owned();
+    let copyright = LICENSE_TEXT
+        .split('\n')
+        .find(|line| line.starts_with("Copyright"))
+        .map(|line| js_trim(line).to_owned())
+        .unwrap_or_default();
     let body_style = body().with("color", "var(--text-body)").to_style();
     let plain = body().to_style();
     let footer: ChildrenFn = Arc::new(move || {
@@ -781,7 +784,6 @@ fn LicenseDialog(on_close: Callback<()>) -> impl IntoView {
             "border-radius": 8,
         };
         let notice = license_pre().with("margin", 0).to_style();
-        let gpl = license_pre().with("margin", "18px 0 0").to_style();
         view! {
             <div
                 role="region"
@@ -791,7 +793,6 @@ fn LicenseDialog(on_close: Callback<()>) -> impl IntoView {
                 style=region.to_style()
             >
                 <pre data-testid="license-notice" style=notice>{LICENSE_TEXT}</pre>
-                <pre data-testid="license-gpl" style=gpl>{GPL_TEXT}</pre>
             </div>
         }
         .into_any()

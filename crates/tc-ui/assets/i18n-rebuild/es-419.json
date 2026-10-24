@@ -1,3 +1,4 @@
 {
-  "openDoor43.whereAny": "El proyecto se abre desde {host}."
+  "openDoor43.whereAny": "El proyecto se abre desde {host}.",
+  "check.sort.byCategory": "Por categoría"
 }

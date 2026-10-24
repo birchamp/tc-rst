@@ -154,5 +154,6 @@
   "translate.changedWhileTyping": "{name} changed this verse while you were typing. Your text will be kept as a second version.",
   "translate.changedWhileTypingUnnamed": "This verse was changed while you were typing. Your text will be kept as a second version.",
   "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed.",
-  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code."
+  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code.",
+  "check.sort.byCategory": "By category"
 }
