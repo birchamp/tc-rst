@@ -140,8 +140,6 @@ pub struct AppState {
     pub gw: ArcRwSignal<crate::app::upgrades::GatewayState>,
     /// A refused open, on Home (tC4 `bookError`; B3 sets it).
     pub book_error: ArcRwSignal<Option<HomeBanner>>,
-    /// The checkpoint of the project just left failed (tC4 `commitError`; D1 sets it).
-    pub commit_error: ArcRwSignal<Option<HomeBanner>>,
     /// The project a sync runs for (tC4 `syncing`).
     pub syncing: ArcRwSignal<Option<ProjectRef>>,
     /// The result of the last sync, which Home shows (tC4 `syncResult`). Never stored.
@@ -195,7 +193,6 @@ impl AppState {
             up: ArcRwSignal::new(crate::app::upgrades::UpgradeState::default()),
             gw: ArcRwSignal::new(crate::app::upgrades::GatewayState::default()),
             book_error: ArcRwSignal::new(None),
-            commit_error: ArcRwSignal::new(None),
             syncing: ArcRwSignal::new(None),
             sync_result: ArcRwSignal::new(None),
             import_toast: ArcRwSignal::new(None),
@@ -741,15 +738,37 @@ impl Actions {
     // ---- the save indicator (X2) ------------------------------------------------------------
 
     /// The indicator's Retry. Every failed field is retried, whichever kind it is; the
-    /// checkpoint's retry is D1's `session/retryCheckpoint`, which no phase-0 state can reach.
+    /// checkpoint's retry is `session/retryCheckpoint` (D1).
     pub fn retry(&self, which: Retry) {
         match which {
-            Retry::Checkpoint => {}
+            Retry::Checkpoint => self.retry_checkpoint(),
             Retry::Story | Retry::Note | Retry::Save => {
                 self.0.runtime.saves().retry();
                 self.retry_align_save();
             }
         }
+    }
+
+    /// The checkpoint that failed runs again (D1, tC4 `retryCheckpoint`): its outcome comes back
+    /// as the session's event, which clears or keeps the failure.
+    fn retry_checkpoint(&self) {
+        let Some(at) = self
+            .s()
+            .project
+            .with_untracked(|p| p.as_ref().map(|p| p.at.clone()))
+        else {
+            return;
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            let request = tc_api::session::RetryCheckpoint {
+                request: js::random_request_id(),
+                at,
+            };
+            if let Err(error) = this.0.runtime.api().call(&request).await {
+                console_warn(&format!("tc4: the checkpoint was not retried: {error}"));
+            }
+        });
     }
 
     // ---- Home and its dialogs (B2) ----------------------------------------------------------

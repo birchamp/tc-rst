@@ -244,6 +244,7 @@ fn every_shared_type_round_trips() {
             HelloView,
             BuildInfo,
             OpenSession,
+            FailedCheckpoint,
             SessionRole,
             AppPrefsView,
             DraftUnit,

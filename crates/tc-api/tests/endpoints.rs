@@ -43,6 +43,7 @@ const PHASE_0: &[&str] = &[
     // B3: open and Understand.
     "session/open",
     "session/close",
+    "session/retryCheckpoint",
     "editor/book",
     "editor/sources",
     "helps/passage",

@@ -132,6 +132,7 @@ macro_rules! endpoint_table {
 
             job "session/open": $crate::session::Open => $crate::ids::JobId;
             command "session/close": $crate::session::Close => ();
+            command "session/retryCheckpoint": $crate::session::RetryCheckpoint => $crate::event::CheckpointOutcome;
 
             query "editor/book": $crate::editor::Book => $crate::editor::BookView;
             query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;

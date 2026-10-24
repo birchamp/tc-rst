@@ -285,6 +285,7 @@ impl Runtime {
                 self.0.busy.set_jobs(active);
             }
             Effect::Checkpoint { at, outcome } => {
+                state.checkpoint_ended(&at, &outcome);
                 state.checkpoints.update(|map| {
                     map.insert(at, outcome);
                 });

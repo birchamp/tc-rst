@@ -407,6 +407,22 @@ impl SessionRegistry {
         outcome
     }
 
+    /// The projects whose last checkpoint failed, for `hello`.
+    pub fn failed_checkpoints(&self) -> Vec<tc_api::app::FailedCheckpoint> {
+        lock(&self.inner.checkpoints)
+            .iter()
+            .filter_map(|(project, state)| match state {
+                CheckpointState::Ended(CheckpointOutcome::Failed { reason }) => {
+                    Some(tc_api::app::FailedCheckpoint {
+                        project: project.clone(),
+                        reason: reason.clone(),
+                    })
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Where `folder`'s last checkpoint stands.
     pub fn checkpoint_state(&self, folder: &ProjectRef) -> CheckpointState {
         lock(&self.inner.checkpoints)

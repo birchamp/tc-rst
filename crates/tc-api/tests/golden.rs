@@ -279,6 +279,10 @@ impl Example for HelloView {
                 done: 1200,
                 total: 3739,
             }),
+            checkpoints: vec![tc_api::app::FailedCheckpoint {
+                project: scope().project,
+                reason: "the disk is full".into(),
+            }],
         }
     }
 }
@@ -1665,6 +1669,21 @@ impl Example for Close {
             request: request(31),
             at: scope(),
         }
+    }
+}
+
+impl Example for tc_api::session::RetryCheckpoint {
+    fn example() -> Self {
+        tc_api::session::RetryCheckpoint {
+            request: request(32),
+            at: scope(),
+        }
+    }
+}
+
+impl Example for tc_api::event::CheckpointOutcome {
+    fn example() -> Self {
+        tc_api::event::CheckpointOutcome::Committed
     }
 }
 
@@ -3128,6 +3147,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "resources/planGateway",
             "resources/planUpgrade",
             "session/close",
+            "session/retryCheckpoint",
             "session/copy",
             "session/discardDraft",
             "session/drafts",

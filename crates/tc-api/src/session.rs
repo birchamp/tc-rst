@@ -104,6 +104,17 @@ pub struct Close {
     pub at: Scope,
 }
 
+/// `session/retryCheckpoint` (D1, tC4 `retryCheckpoint`): the save indicator's Retry after a
+/// checkpoint failed. The project's checkpoint runs again; its outcome is the reply and the
+/// session's `Checkpoint` event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RetryCheckpoint {
+    pub request: RequestId,
+    pub at: Scope,
+}
+
 /// `session/drafts`: what to offer of the open project's unsaved text. A command: the texts it
 /// offers are written into `drafts.json` before it answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

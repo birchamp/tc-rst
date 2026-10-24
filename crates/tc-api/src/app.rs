@@ -41,6 +41,18 @@ pub struct HelloView {
     pub sessions: Vec<OpenSession>,
     pub prefs: AppPrefsView,
     pub startup: StartupState,
+    /// INV-A-FAILED-CHECKPOINT-IS-SHOWN-UNTIL-RETRIED (D1): each project of this server run whose
+    /// last checkpoint failed, so a reload shows "Checkpoint not saved" again.
+    pub checkpoints: Vec<FailedCheckpoint>,
+}
+
+/// A project whose last checkpoint failed, and why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct FailedCheckpoint {
+    pub project: ProjectRef,
+    pub reason: String,
 }
 
 /// The build the server runs. A UI built from another commit reloads once (§3.10).

@@ -173,6 +173,7 @@ scoped!(
     crate::prefs::SetAlignSuggestions,
     crate::prefs::RecordPlace,
     crate::session::Close,
+    crate::session::RetryCheckpoint,
     crate::session::Drafts,
     crate::session::KeepDraft,
     crate::session::DiscardDraft,

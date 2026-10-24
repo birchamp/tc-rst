@@ -43,7 +43,13 @@
           "done": 1200,
           "total": 3739
         }
-      }
+      },
+      "checkpoints": [
+        {
+          "project": "kr_ulb",
+          "reason": "the disk is full"
+        }
+      ]
     }
   },
   "error": {

@@ -541,6 +541,24 @@ impl Handle<Close> for App {
     }
 }
 
+/// The save indicator's Retry after a failed checkpoint (D1): the same checkpoint again.
+impl Handle<tc_api::session::RetryCheckpoint> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::RetryCheckpoint,
+    ) -> Result<tc_api::event::CheckpointOutcome, ApiError> {
+        let session = self.read(&req.at)?;
+        Ok(self
+            .inner
+            .sessions
+            .checkpoint(
+                &session,
+                crate::backend::CheckpointReason::Other("retry".to_owned()),
+            )
+            .await)
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // editor/book, editor/sources
 // ---------------------------------------------------------------------------------------
