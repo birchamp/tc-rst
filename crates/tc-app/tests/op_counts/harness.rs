@@ -100,6 +100,12 @@ impl Drop for Scale {
             return;
         }
         if let Some(fs) = &self.disk {
+            // The last save's background work may still be writing the folder.
+            for (_, session) in self.app.sessions().all_projects() {
+                if let Some(session) = session {
+                    session.handle().wait_idle();
+                }
+            }
             assert_valid_burrito(
                 fs,
                 &std::path::Path::new(PROJECTS).join(self.folder.as_str()),

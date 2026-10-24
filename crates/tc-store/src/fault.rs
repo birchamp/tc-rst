@@ -668,6 +668,12 @@ impl FaultFs {
         self.model().faults.dead
     }
 
+    /// How many `.tc/lock` files are held: a project's lock goes only after its last write
+    /// (STORAGE §5.0), so none held means every open project has finished writing.
+    pub fn locks_held(&self) -> usize {
+        self.locks.lock().unwrap_or_else(|e| e.into_inner()).len()
+    }
+
     /// The write point `n` from now fails with `kind`, and the writer goes on.
     pub fn fail_op(&self, n: u64, kind: io::ErrorKind) {
         let mut model = self.model();

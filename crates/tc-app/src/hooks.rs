@@ -703,41 +703,86 @@ impl Handle<Quiet> for App {
 
 impl Handle<Validate> for App {
     /// Every folder in the projects folder as a Scripture Burrito (P5, INV-VALID-BURRITO),
-    /// once no open, leave checkpoint or close runs and each open store has written all it
-    /// was asked to.
+    /// once no open, leave checkpoint, close or write runs and each open store has written all
+    /// it was asked to.
     async fn handle(&self, _req: Validate) -> Result<ValidateView, ApiError> {
         self.hooks()?;
+        self.settle_for_validate().await?;
+        let root = self.projects_root().path.clone();
+        let first = validate_projects(&root).map_err(|e| self.validate_failed(&root, &e))?;
+        if first.invalid.is_empty() {
+            return Ok(first);
+        }
+        // A write that began after the wait may be between an ingredient and its listing:
+        // only what is still wrong once the app is quiet again counts.
+        self.settle_for_validate().await?;
+        validate_projects(&root).map_err(|e| self.validate_failed(&root, &e))
+    }
+}
+
+impl App {
+    /// Waits until no session is busy and every open project's store is idle; a wait that
+    /// lasts a minute is a hang, not slowness, and says which projects were open.
+    async fn settle_for_validate(&self) -> Result<(), ApiError> {
         let sessions = self.sessions();
-        for open in sessions.open_sessions() {
-            sessions.settled(&open.at.project).await;
-            if let Ok(session) = sessions.reader(&open.at) {
-                let handle = session.handle().clone();
-                // `wait_idle` blocks until the store's writer is done.
-                let _ = tokio::task::spawn_blocking(move || handle.wait_idle()).await;
+        let settle = async {
+            loop {
+                for (folder, session) in sessions.all_projects() {
+                    sessions.settled(&folder).await;
+                    if let Some(session) = session {
+                        let handle = session.handle().clone();
+                        // `wait_idle` blocks until the store's actor and writer are done.
+                        let _ = tokio::task::spawn_blocking(move || handle.wait_idle()).await;
+                    }
+                }
+                if !sessions.busy() {
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
             }
+        };
+        if tokio::time::timeout(std::time::Duration::from_secs(60), settle)
+            .await
+            .is_err()
+        {
+            let open: Vec<String> = sessions
+                .all_projects()
+                .into_iter()
+                .map(|(folder, _)| folder.as_str().to_owned())
+                .collect();
+            return Err(self.internal(
+                "hung: test/validate waited a minute for the projects to settle",
+                crate::reports::facts(json!({ "projects": open })),
+            ));
         }
-        // A close still running writes the folder it closes.
-        let hung = std::time::Instant::now() + std::time::Duration::from_secs(60);
-        while sessions.busy() && std::time::Instant::now() < hung {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-        Ok(validate_projects(&self.projects_root().path))
+        Ok(())
+    }
+
+    fn validate_failed(&self, root: &Path, error: &std::io::Error) -> ApiError {
+        self.internal(
+            "test/validate could not read the projects folder",
+            crate::reports::facts(
+                json!({ "folder": root.display().to_string(), "reason": error.to_string() }),
+            ),
+        )
     }
 }
 
 /// Each folder of `root` checked as a Scripture Burrito. Dot folders are the store's staging
 /// and are not projects.
-fn validate_projects(root: &Path) -> ValidateView {
-    let mut folders: Vec<(String, PathBuf)> = std::fs::read_dir(root)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|entry| entry.file_type().is_ok_and(|t| t.is_dir()))
-        .filter_map(|entry| {
-            let name = entry.file_name().to_str()?.to_owned();
-            (!name.starts_with('.')).then(|| (name, entry.path()))
-        })
-        .collect();
+fn validate_projects(root: &Path) -> std::io::Result<ValidateView> {
+    let mut folders: Vec<(String, PathBuf)> = Vec::new();
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str()
+            && !name.starts_with('.')
+        {
+            folders.push((name.to_owned(), entry.path()));
+        }
+    }
     folders.sort();
     let invalid = folders
         .iter()
@@ -752,10 +797,10 @@ fn validate_projects(root: &Path) -> ValidateView {
             })
         })
         .collect();
-    ValidateView {
+    Ok(ValidateView {
         checked: u32::try_from(folders.len()).unwrap_or(u32::MAX),
         invalid,
-    }
+    })
 }
 
 impl Handle<Echo> for App {

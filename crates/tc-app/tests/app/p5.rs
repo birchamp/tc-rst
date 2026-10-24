@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use tc_app::backend::ProjectStore;
+use tc_app::backend::{CheckpointReason, ProjectStore};
 
 use crate::store_world::{PROJECTS, burrito_probe, files, progress, save, store_world, tit};
 
@@ -33,21 +33,48 @@ fn p5_probe_names_a_planted_bad_md5() {
 #[should_panic(expected = "P5/INV-VALID-BURRITO")]
 async fn p5_watch_fails_a_test_whose_store_reported_a_problem() {
     let world = store_world();
-    world
-        .hooks
-        .check_burrito(|folder: &Path| vec![format!("{} planted by the test", folder.display())]);
+    plant_problem_in_the_save(&world);
     let handle = world.backend.open(&world.bible, progress()).unwrap();
     handle.wait_idle();
-    save(
-        handle.as_ref(),
-        &tit(1, 1),
-        "a verse the writer then looks at",
-    )
-    .await
-    .unwrap();
-    handle.wait_idle();
+    save(handle.as_ref(), &tit(1, 1), SAVED).await.unwrap();
+    // No wait: the watch itself waits for the writer to look at what the save wrote.
     drop(handle);
     drop(world);
+}
+
+/// The same with the project still open when the watch looks, as when an app's background
+/// task outlives the test.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[should_panic(expected = "P5/INV-VALID-BURRITO")]
+async fn p5_watch_sees_the_last_save_of_a_project_still_open() {
+    let world = store_world();
+    plant_problem_in_the_save(&world);
+    let handle = world.backend.open(&world.bible, progress()).unwrap();
+    handle.wait_idle();
+    save(handle.as_ref(), &tit(1, 1), SAVED).await.unwrap();
+    // A checkpoint has the writer put the save in the folder, in the background.
+    let _ = handle
+        .checkpoint(CheckpointReason::Other("the P5 test".to_owned()))
+        .await;
+    drop(world);
+    drop(handle);
+}
+
+const SAVED: &str = "a verse the writer then looks at";
+
+/// A problem only in the state a save of [`SAVED`] writes: the watch must see the last write.
+fn plant_problem_in_the_save(world: &crate::store_world::StoreWorld) {
+    let fs = world.fs.clone();
+    world.hooks.check_burrito(move |folder: &Path| {
+        // The book file while the project is open holds it only after a leave; the journal
+        // under ingredients/ holds it from the save on.
+        fs.files_under(&folder.join("ingredients"))
+            .iter()
+            .any(|(_, bytes)| String::from_utf8_lossy(bytes).contains(SAVED))
+            .then(|| format!("{} holds the save, planted by the test", folder.display()))
+            .into_iter()
+            .collect()
+    });
 }
 
 /// Every store a tc-app test starts goes through `backend_over` or `watch_over`, or checks a
@@ -69,7 +96,7 @@ fn every_store_a_tc_app_test_builds_is_watched() {
         let text = std::fs::read_to_string(&file).unwrap();
         let lines: Vec<&str> = text.lines().collect();
         for (i, line) in lines.iter().enumerate() {
-            if line.contains("StoreBackend::start(") || line.contains("Store::start(") {
+            if line.contains("StoreBackend::start(") || line.contains("Store::start") {
                 let near = lines[i.saturating_sub(25)..(i + 25).min(lines.len())].join("\n");
                 let watched = near.contains("watch_over(")
                     || near.contains("world.hooks")
@@ -81,10 +108,23 @@ fn every_store_a_tc_app_test_builds_is_watched() {
                     ));
                 }
             }
-            if line.contains("backend_over(") && line.contains(", _)") {
+        }
+        // A statement as one line, so a call rustfmt wrapped is still seen whole.
+        for statement in text.split(';') {
+            let flat = statement.split_whitespace().collect::<Vec<_>>().join(" ");
+            let Some(at) = flat.find("backend_over(") else {
+                continue;
+            };
+            let before = &flat[..at];
+            let thrown = before.ends_with("let _ = ")
+                || before.trim_end().ends_with(", _) =")
+                || flat.contains(").0");
+            if thrown {
+                let start = statement.as_ptr() as usize - text.as_ptr() as usize;
+                let call = start + statement.find("backend_over(").unwrap_or(0);
+                let line = text[..call].matches('\n').count() + 1;
                 problems.push(format!(
-                    "P5/INV-VALID-BURRITO: tests/{rel}:{} throws the store's watch away",
-                    i + 1
+                    "P5/INV-VALID-BURRITO: tests/{rel}:{line} throws the store's watch away"
                 ));
             }
         }

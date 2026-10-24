@@ -77,7 +77,7 @@ pub fn backend_over(
     platform: FakePlatform,
     hooks: Arc<Hooks>,
 ) -> (StoreBackend, BurritoWatch) {
-    let watch = watch_over(fs, hooks.clone());
+    let mut watch = watch_over(fs, hooks.clone());
     let backend = StoreBackend::start(
         StoreConfig {
             app_data: PathBuf::from(app),
@@ -94,6 +94,7 @@ pub fn backend_over(
     // The start removes staging folders a crash left (N1); a test that plants one plants it
     // after this.
     backend.store().wait_cleanup();
+    watch.follow(&backend);
     (backend, watch)
 }
 
@@ -396,6 +397,7 @@ pub fn watch_over(fs: &FaultFs, hooks: Arc<Hooks>) -> BurritoWatch {
         hooks,
         fs: fs.clone(),
         stopped: false,
+        open_projects: None,
     }
 }
 
@@ -407,9 +409,17 @@ pub struct BurritoWatch {
     hooks: Arc<Hooks>,
     fs: FaultFs,
     stopped: bool,
+    /// Waits until each project the store still has open has written all it was asked to,
+    /// and answers how many are open.
+    open_projects: Option<Box<dyn Fn() -> usize + Send + Sync>>,
 }
 
 impl BurritoWatch {
+    /// Has the watch wait for the projects `backend` opens before it reads what the writer saw.
+    pub fn follow(&mut self, backend: &StoreBackend) {
+        self.open_projects = Some(Box::new(backend.idle_waiter()));
+    }
+
     /// The test leaves a folder that is not a valid Burrito on purpose (an outside edit, a
     /// damaged or removed file), so the watch stops looking; `why` says which.
     pub fn stop(&mut self, why: &str) {
@@ -424,6 +434,22 @@ impl Drop for BurritoWatch {
         // A failing test, a filesystem killed on purpose, or a stopped watch says nothing more.
         if std::thread::panicking() || self.fs.is_dead() || self.stopped {
             return;
+        }
+        // The writer looks at the folder after each job. A project still open is waited on until
+        // it has written all it was asked to; one closing lets go of its lock only after its last
+        // job. So once every lock held belongs to an idle open project, every state the test's
+        // saves wrote was seen. A minute is a hang, never slowness.
+        let hung = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        loop {
+            let open = self.open_projects.as_ref().map_or(0, |idle| idle());
+            if self.fs.locks_held() <= open {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < hung,
+                "hung: a project of this test's store was still closing a minute after the test"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
         }
         let problems = self.hooks.burrito_problems();
         if !problems.is_empty() {
