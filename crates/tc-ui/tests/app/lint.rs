@@ -110,3 +110,29 @@ fn only_the_follower_reads_jobs() {
         "INV-ONE-JOB-FOLLOWER: a job's state is read outside app/web/jobs.rs: {readers:#?}"
     );
 }
+
+/// INV-A-STALE-REPLY-NEVER-SHOWS: screens use `Latest`, never a counter of their own. Allowed:
+/// id sources (fix.rs `NEXT_ID`, mod.rs `next_listener`, saves.rs `next_hook`), mod.rs's
+/// `state_frames` (a count of applied frames that dates a `hello`), and app_ctx.rs's
+/// `sign_in_flows` (the flow id the sign-in step keeps in its own state).
+#[test]
+fn no_hand_made_attempt_counters() {
+    let allowed = [
+        ("app/web/fix.rs", "NEXT_ID"),
+        ("app/web/mod.rs", "next_listener"),
+        ("app/web/mod.rs", "state_frames"),
+        ("app/web/saves.rs", "next_hook"),
+        ("app/web/app_ctx.rs", "sign_in_flows"),
+    ];
+    let counters = found(&["Cell<u64>"], |file, text, line| {
+        let at = text.lines().nth(line - 1).unwrap_or("");
+        !file.starts_with("app/web/")
+            || allowed
+                .iter()
+                .any(|(f, name)| *f == file && at.contains(name))
+    });
+    assert!(
+        counters.is_empty(),
+        "INV-A-STALE-REPLY-NEVER-SHOWS: a hand-made attempt counter; use app::latest::Latest: {counters:#?}"
+    );
+}

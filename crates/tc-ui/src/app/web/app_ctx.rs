@@ -35,6 +35,7 @@ use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
 use crate::app::forms::{AddBookForm, ImportForm, ImportKind, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
+use crate::app::latest::Latest;
 use crate::app::open_door43::OpenForm;
 use crate::app::save::indicator::Retry;
 use crate::app::share::{ShareForm, ShareProject, ShareStep, Target};
@@ -233,7 +234,7 @@ struct Inner {
     sending: Cell<bool>,
     /// Counts the attachments asked for, so a compose reply for a report replaced meanwhile
     /// does not land in the new one.
-    compose: Cell<u64>,
+    compose: Latest,
     /// The step that ran after a question already met `NeedsInternet` once (AD25).
     reasked: Cell<bool>,
     /// The `net/set` requests, one at a time.
@@ -242,7 +243,7 @@ struct Inner {
     sign_in_flows: Cell<u64>,
     /// Counts the share flows (tC4's `startShareFlow`): a new Share or a closed dialog ends the
     /// one before, whose late answers then do nothing.
-    share_flows: Cell<u64>,
+    share_flows: Latest,
 }
 
 /// tC4's `actions`, the ones the shell owns. Cheap to clone. The wrapper lets views capture
@@ -256,11 +257,11 @@ impl Actions {
             runtime,
             s,
             sending: Cell::new(false),
-            compose: Cell::new(0),
+            compose: Latest::new(),
             reasked: Cell::new(false),
             switch: Cell::new(SwitchRequests::default()),
             sign_in_flows: Cell::new(0),
-            share_flows: Cell::new(0),
+            share_flows: Latest::new(),
         })))
     }
 
@@ -584,8 +585,7 @@ impl Actions {
     /// Opens the dialog at once and asks the server for the attachment, which lands only in
     /// the report it was asked for.
     fn open_feedback(&self, form: FeedbackForm, report: Option<ReportId>) {
-        let seq = self.0.compose.get() + 1;
-        self.0.compose.set(seq);
+        let seq = self.0.compose.begin();
         self.s().fb.try_set(Some(form));
         self.s().layers.dialog.try_set(Some(Dialog::Feedback));
         let this = self.clone();
@@ -594,7 +594,7 @@ impl Actions {
                 Ok(draft) => Attachment::Ready(draft.attachment),
                 Err(error) => Attachment::Failed(error.to_string()),
             };
-            if this.0.compose.get() != seq {
+            if !this.0.compose.is_current(seq) {
                 return;
             }
             this.s().fb.try_update(|fb| {
@@ -793,7 +793,7 @@ impl Actions {
         s.od.try_set(None);
         s.c.fix.try_set(None);
         s.st.try_set(None);
-        self.0.share_flows.set(self.0.share_flows.get() + 1);
+        self.0.share_flows.begin();
     }
 
     /// The languages that match `query` (`home/languages`, ranked on the server, offline).
@@ -1004,8 +1004,7 @@ impl Actions {
     /// resumes a kept sign-in or answers `NeedsSignIn`, and the sign-in step comes first, then
     /// this step again.
     fn share_now(&self, project: ShareProject) {
-        let flow = self.0.share_flows.get() + 1;
-        self.0.share_flows.set(flow);
+        let flow = self.0.share_flows.begin();
         let opened = self.s().server.account.with_untracked(|a| a.user.is_some());
         if opened {
             self.open_share(&project);
@@ -1016,7 +1015,7 @@ impl Actions {
                 language: project.language.clone(),
             };
             let reply = this.0.runtime.api().call(&request).await;
-            if this.0.share_flows.get() != flow {
+            if !this.0.share_flows.is_current(flow) {
                 return;
             }
             let dialog = this.s().layers.dialog.get_untracked();
@@ -1090,7 +1089,7 @@ impl Actions {
         else {
             return;
         };
-        self.0.share_flows.set(self.0.share_flows.get() + 1);
+        self.0.share_flows.begin();
         self.end_share();
         let this = self.clone();
         spawn_local(async move {

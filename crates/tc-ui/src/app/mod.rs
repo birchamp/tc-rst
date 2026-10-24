@@ -33,6 +33,7 @@ pub mod home;
 pub mod internet;
 pub mod jobs;
 pub mod language;
+pub mod latest;
 pub mod load;
 pub mod offer;
 pub mod open_door43;
