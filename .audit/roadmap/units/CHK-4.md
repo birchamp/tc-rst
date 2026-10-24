@@ -4,10 +4,10 @@ title: Deterministic and fast tests
 track: A
 lane: checks
 milestone: M1
-state: done
+state: fixing
 owner: checks lane (Claude Code 2198ee19)
-branch: chk-4-fix
-worktree: .worktrees/chk-4-fix
+branch: chk-4-fix2
+worktree: .worktrees/chk-4-fix2
 depends: [INT-4]
 needs_owner: []
 proves: []
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (cut to the flaky waits by the ruling of 2026-10-23)
 merged: c327fea4
 updated: 2026-10-23
-next: none
+next: merge by the CI route (INT-8): --wait-ci, fast-forward, main green
 blocked_by: none
 ---
 
@@ -258,3 +258,4 @@ fixed seed.
 - 2026-10-23 19:36 EDT | checks lane (Claude Code 2198ee19) | fix | none | CI on the fix merge 16ff363a (run 40037285872) failed on app::hooks::reset_keeps_a_write_in_flight_so_its_retry_still_waits_for_it; local gates passed (receipt). Cause in the Reset test hook (hooks.rs, test-hooks only): it released the holds first and forgot settled replies later, so the held write could finish in between and be forgotten, and its retry ran again. Its own doc says a write still running at the reset is kept; forget_settled now runs before release_all. hooks:: 18 ok five times beside a 12-job build; replies:: 17 ok; clippy (all targets and the release-like lib) clean | crates/tc-app/src/hooks.rs
 - 2026-10-23 20:13 EDT | checks lane (Claude Code 2198ee19) | fix | none | On merge 5afdc631 CI was fully green (ci 40040632243, app-e2e 40040632067), but the local journeys failed home.test.mjs a_card_reads_again_on_a_new_home_visit_not_on_a_redraw ("a preview reads no card", 1 !== 0): the Home summary job can finish after the tiles show and its card event makes the page read the card, inside the counted window. The journey now waits for the server's test/quiet (live jobs) and then the page before it counts, as internet-consent.test.mjs does | .enjoy-logs/gates-3.log (chk-4-fix-merge)
 - 2026-10-23 20:13 EDT | checks lane (Claude Code 2198ee19) | merge | c327fea4 | Merge commit `Merge CHK-4 fix: the test races that kept main red`, gated by scripts/gates.sh --journeys here and by CI on gate/CHK-4-fix | scripts/gates.sh --check-receipt
+- 2026-10-23 21:48 EDT | checks lane (Claude Code 2198ee19) | fix | none | Main's ci on INT-8's merge 646d38c9 (run 40049770850) failed app::check_story::a_frame_edit_that_drops_the_tapped_word_invalidates_the_mark_and_keeps_it: the teammate's edit through the store found the project locked ("already open: process 4242"). A test race, not a lock bug: after the screen leaves, a side user (a background read) keeps the session open by design, settled() returns for an open session that is not leaving, and the lock goes only when that user lets go. check_story's leave() now loops settled() until no open session names the project (60 s bound, "hung"). check_story:: 3 ok four times beside a 12-job build; clippy clean | gh run view 40049770850 --log-failed
