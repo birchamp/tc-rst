@@ -56,4 +56,4 @@ random strings and hand-written verses were written for these files and are in t
 domain. The files hold only the libraries' output, no library code. The libraries are
 `string-punctuation-tokenizer` (GPL-2.0), `xregexp` (MIT), `usfm-js` (ISC),
 `word-aligner-lib` (MIT) and `word-aligner` (ISC); the generator scripts are part of this
-repository (GPL-2.0-or-later).
+repository (MIT).

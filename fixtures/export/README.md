@@ -20,5 +20,5 @@ node crates/tc-export/tools/gen-print-vectors.mjs /path/to/translationcore4 > fi
 
 The Titus, Jonah and OBS samples' Spanish text is CC BY-SA 4.0, Equipo Ejemplo (see
 `../tc4/LICENSE-CONTENT.md`). The hand-written and generated cases were written for this
-file and are in the public domain. The file holds what tC4's code (GPL-2.0-or-later)
+file and are in the public domain. The file holds what tC4's code (MIT)
 computes, not the code.

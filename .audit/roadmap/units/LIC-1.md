@@ -4,7 +4,7 @@ title: Move the rebuild to the MIT licence, as tC4 did
 track: A
 lane: integration
 milestone: M1
-state: claimed
+state: building
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-LIC-1
 worktree: .worktrees/track-LIC-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: a manifest line, two text files, ten catalog lines and one recapture)
 merged: none
 updated: 2026-10-24
-next: Step 1: the licence files.
+next: One verify pass, then join a merge batch after SWEEP. The About screen's licence line and dialog change with REF1's re-vendor from tC4 release/4.0 (recommended to the orchestrator 2026-10-24).
 blocked_by: none
 ---
 
@@ -126,3 +126,5 @@ moves to.
 
 - 2026-10-23 | integration lane (Claude Code 3d07d5f8) | created | none | from the owner's licence answers of 2026-10-23 | rulings/2026-10-23-tokenizer-relicense.md
 - 2026-10-24 14:21 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-LIC-1, cut from track-SWEEP (the card and its rulings are there); SWEEP is not merged yet, so the merge waits for it (batch 2) | python3 -I -B .audit/tools/board.py
+- 2026-10-24 14:24 EDT | integration lane (Claude Code 3d07d5f8) | note | none | scope change, decided here (technical): the About line, the licence dialog and the ten catalogs are vendored byte for byte from one tC4 commit (crates/tc-ui/vendored-from-tc4.txt, tests/vendored_assets.rs). Moving them needs a re-vendor from a tC4 commit with #838 (release/4.0 d25b7871 has it; rc.2 does not), which also adds keys and renames check.sort.byCategory: REF1's job. So step 2 moves to REF1, recommended to the orchestrator; LIC-1 keeps the repository's own licence. Also found: string-punctuation-tokenizer 2.2.0 is already MIT and equals 2.0.0 (tC4 D111), so owner action A5 is not needed | git -C ~/unfoldingword/tc4-sweep show 24188928:docs/DECISIONS.md (D111)
+- 2026-10-24 14:24 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | Cargo.toml (and the two spikes) say license = "MIT"; COPYING removed; LICENSE is tC4's MIT text at 24188928 (Copyright (c) 2017-2026 unfoldingWord, with the trademark notice); the two NOTICE files say MIT; the fixture READMEs name MIT for this repository and tC4's code; tc-usfm's words module cites tokenizer 2.2.0 (MIT); ROADMAP A5 marked not needed. Left for REF1: the ten catalogs, assets/about, account_menu.rs comments, about.json captures, about.test.mjs; help-pages.txt's Q-19 note follows vendor-help.sh | git grep -n 'GPL-2.0-or-later' -- ':!.audit' ':!Cargo.lock'

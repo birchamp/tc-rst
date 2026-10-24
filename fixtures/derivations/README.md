@@ -40,4 +40,4 @@ unfoldingWord content is CC BY-SA 4.0, © unfoldingWord. The edge cases and rand
 were written for these files and are in the public domain. The files hold only the
 libraries' output, no library code. The libraries are `usfm-js` (ISC),
 `string-punctuation-tokenizer` (GPL-2.0) and `word-aligner-lib` (MIT); the generator script
-is part of this repository (GPL-2.0-or-later).
+is part of this repository (MIT).
