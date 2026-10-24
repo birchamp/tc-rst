@@ -16,7 +16,10 @@ mod app {
     mod home;
     mod indicator;
     mod internet;
+    mod jobs;
     mod language;
+    mod latest;
+    mod lint;
     mod offer;
     mod print;
     mod recovery;

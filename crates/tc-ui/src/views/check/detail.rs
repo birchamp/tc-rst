@@ -14,7 +14,7 @@ use leptos::html;
 use leptos::prelude::*;
 use tc_api::check::{
     CheckNotice, CheckSources, CheckUnit, DecideEdit, DecisionStatus, GatewayText, GatewayView,
-    OriginalView, Testament, Tool,
+    OriginalVerse, OriginalView, Testament, Tool,
 };
 use tc_api::helps::ArticleView;
 use tc_api::shown::Direction as TextDir;
@@ -119,6 +119,29 @@ fn verse_text_style() -> Css {
     }
 }
 
+/// A verse's tokens with the `lit` ones in a `<mark>` (tC4's `UltPane` highlight).
+fn marked(tokens: &[String], lit: &[u32], testid: &'static str) -> impl IntoView + use<> {
+    let mark = crate::css! {
+        "background": "var(--tc-highlight-soft)",
+        "color": "var(--text-heading)",
+        "border-radius": "var(--radius-xs)",
+        "padding": "0 .06em",
+    }
+    .to_style();
+    tokens
+        .iter()
+        .enumerate()
+        .map(|(i, token)| {
+            if u32::try_from(i).is_ok_and(|i| lit.contains(&i)) {
+                view! { <mark data-testid=testid style=mark.clone()>{token.clone()}</mark> }
+                    .into_any()
+            } else {
+                token.clone().into_any()
+            }
+        })
+        .collect_view()
+}
+
 /// The original-language card (tC4's `OrigPane`).
 fn original_pane(original: &OriginalView) -> AnyView {
     let testament = match original {
@@ -130,7 +153,8 @@ fn original_pane(original: &OriginalView) -> AnyView {
     let ot = testament == Testament::Ot;
     let body = match original {
         OriginalView::Ready {
-            verse: Some(text), ..
+            verse: Some(OriginalVerse { tokens, lit }),
+            ..
         } => {
             let mut style = verse_text_style();
             style.set(
@@ -142,8 +166,8 @@ fn original_pane(original: &OriginalView) -> AnyView {
                 },
             );
             view! {
-                <p dir=if ot { "rtl" } else { "ltr" } lang=if ot { "hbo" } else { "el" } style=style.to_style()>
-                    {text.clone()}
+                <p data-testid="orig-pane-text" dir=if ot { "rtl" } else { "ltr" } lang=if ot { "hbo" } else { "el" } style=style.to_style()>
+                    {marked(tokens, lit, "orig-hl")}
                 </p>
             }
             .into_any()
@@ -180,25 +204,7 @@ fn gateway_pane(gateway: &GatewayView) -> AnyView {
             GatewayText::Verse { tokens, lit } => {
                 let mut style = verse_text_style();
                 style.set("font-family", "var(--font-scripture)");
-                let mark = crate::css! {
-                    "background": "var(--tc-highlight-soft)",
-                    "color": "var(--text-heading)",
-                    "border-radius": "var(--radius-xs)",
-                    "padding": "0 .06em",
-                }
-                .to_style();
-                let words = tokens
-                    .iter()
-                    .enumerate()
-                    .map(|(i, token)| {
-                        if lit.contains(&(i as u32)) {
-                            view! { <mark data-testid="ult-hl" style=mark.clone()>{token.clone()}</mark> }
-                                .into_any()
-                        } else {
-                            token.clone().into_any()
-                        }
-                    })
-                    .collect_view();
+                let words = marked(tokens, lit, "ult-hl");
                 view! { <p data-testid="ult-pane-text" dir="auto" style=style.to_style()>{words}</p> }
                     .into_any()
             }

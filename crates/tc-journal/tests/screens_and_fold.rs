@@ -795,11 +795,9 @@ fn edits_joins_renumbers_and_pins_change_files_and_screens_alike() {
     assert!(tw.iter().any(|d| d.key == tw_key));
 }
 
-#[test]
-fn alignments_follow_their_text_on_the_rail_as_in_the_file() {
-    // en_ult Titus as aligned USFM: each verse split into its text and an alignment
-    // (§13.5).
-    let mut ana = Dev::new(1);
+/// en_ult Titus as aligned USFM: each verse split into its text and an alignment (§13.5),
+/// imported by `ana` in one batch per kind.
+fn aligned_titus(ana: &mut Dev) -> Vec<Change> {
     let mut changes = Vec::new();
     for (book, path) in [(BookId::Titus, "tc4/test-fixtures/en_ult/TIT.usfm")] {
         let mut parts = codec::decompose(&fixture(path)).unwrap();
@@ -826,7 +824,7 @@ fn alignments_follow_their_text_on_the_rail_as_in_the_file() {
                 });
             }
         }
-        changes.extend(import_book(&mut ana, book, &parts));
+        changes.extend(import_book(ana, book, &parts));
         changes.extend(ana.batch(
             alignments.into_iter().map(|r| (r, vec![])).collect(),
             Cause::Import(ImportSource::Usfm {
@@ -834,6 +832,13 @@ fn alignments_follow_their_text_on_the_rail_as_in_the_file() {
             }),
         ));
     }
+    changes
+}
+
+#[test]
+fn alignments_follow_their_text_on_the_rail_as_in_the_file() {
+    let mut ana = Dev::new(1);
+    let mut changes = aligned_titus(&mut ana);
     let state = fold(&changes);
     let imported = compare(&state);
     assert_eq!(imported.alignments, 46, "{imported:?}");
@@ -897,6 +902,59 @@ fn alignments_follow_their_text_on_the_rail_as_in_the_file() {
     );
 }
 
+/// INV-ONE-REVIEW-RULE: an alignment stamped with the verse's current text but holding a
+/// word the verse lacks ("siervo" where 1:1 says "esclavo") needs review in the file as on the
+/// Align rail.
+#[test]
+fn the_alignment_files_and_the_rail_agree_on_invalid() {
+    let mut ana = Dev::new(1);
+    let mut changes = aligned_titus(&mut ana);
+    let state = fold(&changes);
+    let key = RecordKey::Alignment(
+        BookId::Titus,
+        tc_journal::ChapterNo::new(1).unwrap(),
+        tc_journal::VerseNo::new(1).unwrap(),
+    );
+    let old = on(&changes, &key);
+    let Record::Alignment { value, .. } = state.projected(&key).unwrap() else {
+        panic!("1:1 has an alignment");
+    };
+    let mut value = value;
+    let word = value
+        .alignments
+        .iter_mut()
+        .find_map(|g| g.bottom_words.first_mut())
+        .expect("a placed word");
+    word.word = "siervo".into();
+    word.occurrence = 1;
+    word.occurrences = 1;
+    changes.extend(ana.batch(
+        vec![(
+            Record::Alignment {
+                book: BookId::Titus,
+                chapter: tc_journal::ChapterNo::new(1).unwrap(),
+                verse: tc_journal::VerseNo::new(1).unwrap(),
+                value,
+            },
+            vec![old.id()],
+        )],
+        Cause::Edit,
+    ));
+    let state = fold(&changes);
+    let file: Value = serde_json::from_slice(
+        &state
+            .render(&DerivedFile::Alignments(BookId::Titus))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        file["chapters"]["1"]["1"]["invalid"], true,
+        "INV-ONE-REVIEW-RULE: the file says the alignment needs review"
+    );
+    let compared = compare(&state);
+    assert_eq!(compared.words_not_the_verse, 0, "{compared:?}");
+}
+
 #[test]
 fn the_psalms_corpus_files_are_what_the_screens_compute() {
     let corpus = Corpus::generate(&Spec::psalms(8).with_history(60, 0.1)).expect("the corpus");
@@ -914,6 +972,7 @@ fn the_psalms_corpus_files_are_what_the_screens_compute() {
     assert!(compared.verse_edits > 0, "{compared:?}");
     assert!(compared.invalidated > 0, "{compared:?}");
     assert!(compared.no_text > 0, "{compared:?}");
-    // The corpus saves alignments with the hash of the text but the words of the ULT.
-    assert_eq!(compared.words_not_the_verse, 168, "{compared:?}");
+    // The corpus saves alignments with the hash of the text but the words of the ULT; the
+    // file and the rail judge those by one rule (INV-ONE-REVIEW-RULE).
+    assert_eq!(compared.words_not_the_verse, 0, "{compared:?}");
 }

@@ -71,6 +71,21 @@ browserTest('translate_shows_the_source_beside_the_translation_by_section_and_by
   });
 });
 
+// OLH-1 (owner ruling Q39, tC4 #840): with the Greek tab chosen, a note's quote is marked in
+// the Greek words, at the note's occurrence.
+browserTest('a_note_marks_its_quote_in_the_greek_tab', async () => {
+  await withApp(async ({ page }) => {
+    await openTranslate(page);
+    await page.getByTestId('source-tab-orig').click();
+    await until('the Greek text', async () => (await page.getByTestId('draft-source-text').first().getAttribute('lang')) === 'el');
+    const note = page.getByTestId('helps-note').filter({ hasText: 'abstract nouns' }).first();
+    await note.hover();
+    const marks = page.getByTestId('draft-source-text').first().getByTestId('source-hl');
+    await until('the quote is marked in Titus 1:1', async () => (await marks.count()) > 0);
+    assert.deepEqual(await marks.allTextContents(), ['κατὰ', 'πίστιν', 'ἐκλεκτῶν', 'Θεοῦ', 'καὶ', 'ἐπίγνωσιν', 'ἀληθείας']);
+  }, { scenario: 'en-pins' });
+});
+
 // AD16: the translation of every chapter came with the book; a chapter switch reads the new
 // chapter's source panes and helps (per chapter, as Understand reads them) and records the
 // place, and reads nothing of the translation or the book again.

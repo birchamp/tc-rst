@@ -5,21 +5,17 @@
 //! Every call here takes the account and write server, `--door43` (tC4 #120), with the internet
 //! check of its endpoint done by dispatch first.
 
-use std::collections::VecDeque;
-use std::sync::Mutex;
-
 use serde_json::json;
 use tc_api::account::{LinkView, OrgChoice, Orgs, RepoLink, ShareTargets};
 use tc_api::door43::OpenDoor43;
 use tc_api::endpoint::NetKind;
-use tc_api::error::Feature;
-use tc_api::ids::{JobId, ProjectRef};
-use tc_api::jobs::{JobKind, JobOutcome, Phase, SyncPhase};
+use tc_api::ids::JobId;
+use tc_api::jobs::{JobKind, Phase, SyncPhase};
 use tc_api::refusal::{OpenDoor43Refusal, ShareRefusal};
 use tc_api::{ApiError, Refusal};
 use tc_door43::{Door43Error, Session};
 
-use crate::app::{App, lock};
+use crate::app::App;
 use crate::dispatch::Handle;
 use crate::jobs::{JobEnd, JobSpec};
 use crate::reports::facts;
@@ -139,31 +135,13 @@ impl Handle<RepoLink> for App {
     }
 }
 
-/// The open from Door43 before unit X (AD6): the outcomes a test scripted, in order, and
-/// `Unavailable(Sync)` when none is left. It sends nothing and writes nothing.
-#[derive(Default)]
-pub(crate) struct ScriptedOpenDoor43 {
-    scripted: Mutex<VecDeque<Result<ProjectRef, ApiError>>>,
-}
-
-impl ScriptedOpenDoor43 {
-    fn next(&self) -> Result<ProjectRef, ApiError> {
-        lock(&self.scripted)
-            .pop_front()
-            .unwrap_or(Err(ApiError::Unavailable(Feature::Sync)))
-    }
-
-    #[cfg(feature = "test-hooks")]
-    pub(crate) fn clear(&self) {
-        lock(&self.scripted).clear();
-    }
-}
-
 impl App {
     /// The outcome of the next `door43/open` job: the project it added, or its refusal.
     #[cfg(feature = "test-hooks")]
-    pub fn script_open_door43(&self, outcome: Result<ProjectRef, ApiError>) {
-        lock(&self.inner.open_door43.scripted).push_back(outcome);
+    pub fn script_open_door43(&self, outcome: Result<tc_api::ids::ProjectRef, ApiError>) {
+        if let Some(scripted) = self.inner.sync.scripted() {
+            scripted.script_open(outcome);
+        }
     }
 }
 
@@ -200,12 +178,14 @@ impl Handle<OpenDoor43> for App {
         }
         let app = self.clone();
         let spec = JobSpec::new(JobKind::Join, Phase::Sync(SyncPhase::Fetch));
-        Ok(self.inner.jobs.start_async(spec, move |_ctx| async move {
-            app.inner
-                .open_door43
-                .next()
-                .map(|project| JobOutcome::Created { project })
-                .map_err(JobEnd::Failed)
-        }))
+        Ok(self
+            .inner
+            .jobs
+            .start_typed::<OpenDoor43, _, _>(spec, move |_ctx| async move {
+                let port = app.inner.sync.clone();
+                port.open(app, req.repo, req.name)
+                    .await
+                    .map_err(JobEnd::Failed)
+            }))
     }
 }

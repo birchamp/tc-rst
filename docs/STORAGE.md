@@ -1727,13 +1727,18 @@ layer holds an open project as a handle:
    (`ARCHITECTURE.md`) and in `.tc/drafts.json` (§5.14).
 2. The actor checks the token's MAC and takes the value the token stands for: the displayed
    candidate for a conflict, the merged value for a merged record, the head's value otherwise.
-   The value must be `Text`; structure changes go through `SaveSection`.
+   A merged record whose heads moved since the screen showed it (a sync landed) stands for
+   the merge of the token's heads (`FoldState::merged_at`), so the save is stored beside the
+   newer text, never refused. The value must be `Text`; structure changes go through
+   `SaveSection`.
 3. New value = that value with `words` replaced by the NFC form of the sent text. Rule V3 is
    checked.
 4. If the new value equals the displayed value, nothing is written. A no-op save after a sync
    must not replace a teammate's newer version.
 5. One `Verse` change, `parents = shown.heads`, `cause: Edit`. In the same batch, the verse's
-   alignment carried over to the new text (APP-DESIGN R25): when the alignment keyed by the
+   alignment carried over to the new text (APP-DESIGN R25): when the verse's heads are still
+   the token's (a save from a screen a sync overtook knows only the old text, so it leaves the
+   alignment as it is and its hash marks it for review), the alignment keyed by the
    run's anchor (§7.7) is not in conflict, covers this run's span, is not marked invalid, has a
    card, and its text hash no longer matches, `tc_align::reflow_edit`, from the old text to the
    new, keeps on each card the target words that follow into the new text, at their new

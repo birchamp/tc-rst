@@ -11,6 +11,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::app::jobs::JobEnd;
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 use tc_api::ApiError;
@@ -21,7 +22,6 @@ use tc_api::door43::{OpenDoor43, SyncProject};
 use tc_api::feedback::Compose;
 use tc_api::home::{HomeCard, LanguageSuggestion};
 use tc_api::ids::{LocaleId, ProjectRef, ReportId};
-use tc_api::jobs::{JobOutcome, JobState};
 use tc_api::net::Set as NetSet;
 use tc_api::prefs::SetLocale;
 use tc_api::refusal::FeedbackRefusal;
@@ -35,6 +35,7 @@ use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
 use crate::app::forms::{AddBookForm, ImportForm, ImportKind, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
+use crate::app::latest::Latest;
 use crate::app::open_door43::OpenForm;
 use crate::app::save::indicator::Retry;
 use crate::app::share::{ShareForm, ShareProject, ShareStep, Target};
@@ -233,7 +234,7 @@ struct Inner {
     sending: Cell<bool>,
     /// Counts the attachments asked for, so a compose reply for a report replaced meanwhile
     /// does not land in the new one.
-    compose: Cell<u64>,
+    compose: Latest,
     /// The step that ran after a question already met `NeedsInternet` once (AD25).
     reasked: Cell<bool>,
     /// The `net/set` requests, one at a time.
@@ -242,7 +243,7 @@ struct Inner {
     sign_in_flows: Cell<u64>,
     /// Counts the share flows (tC4's `startShareFlow`): a new Share or a closed dialog ends the
     /// one before, whose late answers then do nothing.
-    share_flows: Cell<u64>,
+    share_flows: Latest,
 }
 
 /// tC4's `actions`, the ones the shell owns. Cheap to clone. The wrapper lets views capture
@@ -256,11 +257,11 @@ impl Actions {
             runtime,
             s,
             sending: Cell::new(false),
-            compose: Cell::new(0),
+            compose: Latest::new(),
             reasked: Cell::new(false),
             switch: Cell::new(SwitchRequests::default()),
             sign_in_flows: Cell::new(0),
-            share_flows: Cell::new(0),
+            share_flows: Latest::new(),
         })))
     }
 
@@ -584,8 +585,7 @@ impl Actions {
     /// Opens the dialog at once and asks the server for the attachment, which lands only in
     /// the report it was asked for.
     fn open_feedback(&self, form: FeedbackForm, report: Option<ReportId>) {
-        let seq = self.0.compose.get() + 1;
-        self.0.compose.set(seq);
+        let seq = self.0.compose.begin();
         self.s().fb.try_set(Some(form));
         self.s().layers.dialog.try_set(Some(Dialog::Feedback));
         let this = self.clone();
@@ -594,7 +594,7 @@ impl Actions {
                 Ok(draft) => Attachment::Ready(draft.attachment),
                 Err(error) => Attachment::Failed(error.to_string()),
             };
-            if this.0.compose.get() != seq {
+            if !this.0.compose.is_current(seq) {
                 return;
             }
             this.s().fb.try_update(|fb| {
@@ -793,7 +793,7 @@ impl Actions {
         s.od.try_set(None);
         s.c.fix.try_set(None);
         s.st.try_set(None);
-        self.0.share_flows.set(self.0.share_flows.get() + 1);
+        self.0.share_flows.begin();
     }
 
     /// The languages that match `query` (`home/languages`, ranked on the server, offline).
@@ -880,15 +880,15 @@ impl Actions {
                 name: name.clone(),
             };
             let ended = match this.0.runtime.api().call(&request).await {
-                Ok(job) => this.job_end(job).await,
-                Err(CallError::Api(error)) => Err(error),
-                Err(other) => Err(ApiError::BadRequest {
+                Ok(job) => this.follow::<OpenDoor43>(job, |_| {}, || true).await,
+                Err(CallError::Api(error)) => JobEnd::Failed(error),
+                Err(other) => JobEnd::Failed(ApiError::BadRequest {
                     field: "door43/open".into(),
                     reason: other.to_string(),
                 }),
             };
             match ended {
-                Ok(JobOutcome::Created { project }) => {
+                JobEnd::Done(project) => {
                     this.close_modal();
                     this.s().import_toast.try_set(Some(ImportToast {
                         message: crate::i18n::t(
@@ -899,13 +899,18 @@ impl Actions {
                     this.s().imported_repo.try_set(Some(project));
                     this.refresh_projects();
                 }
-                Ok(_) => this.open_refused(None, String::new()),
-                Err(ApiError::NeedsInternet(_)) => this.ask_again(Pending::OpenDoor43),
-                Err(ApiError::NeedsSignIn(_)) => {
+                // The open ended without a word on how (cancelled, or the server restarted):
+                // no failure is shown; the project list says whether it took effect.
+                JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
+                    this.patch_od(|od| od.busy = false);
+                    this.refresh_projects();
+                }
+                JobEnd::Failed(ApiError::NeedsInternet(_)) => this.ask_again(Pending::OpenDoor43),
+                JobEnd::Failed(ApiError::NeedsSignIn(_)) => {
                     this.patch_od(|od| od.busy = false);
                     this.needs_sign_in(Pending::OpenDoor43);
                 }
-                Err(ApiError::Refused(refusal)) => {
+                JobEnd::Failed(ApiError::Refused(refusal)) => {
                     let reason = refusal
                         .vars()
                         .into_iter()
@@ -914,50 +919,13 @@ impl Actions {
                         .join(" ");
                     this.open_refused(refusal.code(), reason);
                 }
-                Err(other) => this.open_refused(None, other.to_string()),
+                JobEnd::Failed(other) => this.open_refused(None, other.to_string()),
             }
         });
     }
 
     fn open_refused(&self, code: Option<&str>, reason: String) {
         self.patch_od(|od| od.refused(code, reason));
-    }
-
-    /// The end of a job this page started: its outcome, or why it did not finish. Its state
-    /// comes with the event stream, which the runtime reads again after a gap; a job the page
-    /// has not heard of for a second is asked for, and one the server no longer knows (a new
-    /// server run) ended without an outcome.
-    async fn job_end(&self, job: tc_api::ids::JobId) -> Result<JobOutcome, ApiError> {
-        let mut unheard = 0u32;
-        loop {
-            let mut state = self
-                .s()
-                .server
-                .jobs
-                .with_untracked(|jobs| jobs.get(&job).map(|view| view.state.clone()));
-            if state.is_none() {
-                unheard += 1;
-                if unheard.is_multiple_of(20) {
-                    match self.0.runtime.api().call(&tc_api::jobs::Get { job }).await {
-                        Ok(Some(view)) => state = Some(view.state),
-                        Ok(None) => {
-                            return Err(ApiError::Unavailable(tc_api::error::Feature::Sync));
-                        }
-                        Err(_) => {}
-                    }
-                }
-            }
-            match state {
-                Some(JobState::Done(outcome)) => return Ok(outcome),
-                Some(JobState::Failed(error)) => return Err(error),
-                Some(JobState::Cancelled) => {
-                    return Err(ApiError::Unavailable(tc_api::error::Feature::Sync));
-                }
-                Some(JobState::Queued | JobState::Running(_) | JobState::Cancelling) | None => {
-                    js::sleep(50).await;
-                }
-            }
-        }
     }
 
     pub fn dismiss_import_toast(&self) {
@@ -982,9 +950,9 @@ impl Actions {
                 project: project.clone(),
             };
             let ended = match this.0.runtime.api().call(&request).await {
-                Ok(job) => this.job_end(job).await,
-                Err(CallError::Api(error)) => Err(error),
-                Err(other) => Err(ApiError::BadRequest {
+                Ok(job) => this.follow::<SyncProject>(job, |_| {}, || true).await,
+                Err(CallError::Api(error)) => JobEnd::Failed(error),
+                Err(other) => JobEnd::Failed(ApiError::BadRequest {
                     field: "door43/sync".into(),
                     reason: other.to_string(),
                 }),
@@ -992,13 +960,19 @@ impl Actions {
             // The button comes back whatever the sync did.
             this.s().syncing.try_set(None);
             let end = match ended {
-                Err(ApiError::NeedsInternet(_)) => return this.ask_again(Pending::Sync(project)),
-                Err(ApiError::NeedsSignIn(_)) => {
+                JobEnd::Failed(ApiError::NeedsInternet(_)) => {
+                    return this.ask_again(Pending::Sync(project));
+                }
+                JobEnd::Failed(ApiError::NeedsSignIn(_)) => {
                     return this.needs_sign_in(Pending::Sync(project));
                 }
-                Ok(JobOutcome::Synced(view)) => SyncEnd::Synced(view),
-                Ok(_) => SyncEnd::Failed(ApiError::Unavailable(tc_api::error::Feature::Sync)),
-                Err(error) => SyncEnd::Failed(error),
+                JobEnd::Done(view) => SyncEnd::Synced(view),
+                // The sync ended without a word on how (cancelled, or the server restarted): no
+                // failure is shown; the project card says whether it took effect.
+                JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
+                    return this.refresh_projects();
+                }
+                JobEnd::Failed(error) => SyncEnd::Failed(error),
             };
             this.s()
                 .sync_result
@@ -1030,8 +1004,7 @@ impl Actions {
     /// resumes a kept sign-in or answers `NeedsSignIn`, and the sign-in step comes first, then
     /// this step again.
     fn share_now(&self, project: ShareProject) {
-        let flow = self.0.share_flows.get() + 1;
-        self.0.share_flows.set(flow);
+        let flow = self.0.share_flows.begin();
         let opened = self.s().server.account.with_untracked(|a| a.user.is_some());
         if opened {
             self.open_share(&project);
@@ -1042,7 +1015,7 @@ impl Actions {
                 language: project.language.clone(),
             };
             let reply = this.0.runtime.api().call(&request).await;
-            if this.0.share_flows.get() != flow {
+            if !this.0.share_flows.is_current(flow) {
                 return;
             }
             let dialog = this.s().layers.dialog.get_untracked();
@@ -1116,7 +1089,7 @@ impl Actions {
         else {
             return;
         };
-        self.0.share_flows.set(self.0.share_flows.get() + 1);
+        self.0.share_flows.begin();
         self.end_share();
         let this = self.clone();
         spawn_local(async move {

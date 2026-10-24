@@ -4,18 +4,18 @@ title: Sweep tC4 again, then every week
 track: A
 lane: integration
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: done
+owner: integration lane (Claude Code 3d07d5f8)
+branch: track-SWEEP
+worktree: .worktrees/track-SWEEP
 depends: [INT-4]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d, then about 1 h a week
-merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+merged: 21fbbec0
+updated: 2026-10-24
+next: Merges in batch 2 (the integration lane runs batches, ruling 2026-10-24). The weekly sweep (step 5 items 2-4) waits until after the first release (rulings/2026-10-24-H3-H4-H7-fast-release.md item 4).
 blocked_by: none
 ---
 
@@ -55,7 +55,7 @@ rebuild tracks none of the 16 new or changed issues except #792.
   - INV-EVERY-TC4-CHANGE-HAS-A-ROW: every first-parent merge on tC4 `main`, every commit on
     `release/4.0`, and every tC4 issue opened or updated since the last sweep has a row in
     `docs/TC4-ISSUES.md` (or a line in the delta's not-applicable list) with its status, owner
-    card and test.
+    card and test (not in code: whether tC4 moved needs the network; the weekly rule holds it).
   - INV-THE-SWEEP-NAMES-ITS-RANGE: the top of `docs/TC4-ISSUES.md` holds one line that names the
     swept `main` commit, the swept `release/4.0` commit and the issue date, and the next sweep
     starts from that line.
@@ -243,3 +243,14 @@ it), and CHK-3's TC4-ISSUES test if CHK-3 has landed.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-coverage.md
+- 2026-10-23 16:45 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-SWEEP from main eaf809d1 while INT-7 and INT-5 wait for merge turns (the orchestrator's queue) | python3 -I -B .audit/tools/board.py
+- 2026-10-23 16:46 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | ~/unfoldingword/tc4-sweep cloned with no checkout, tags fetched: v4.0.0-rc.2 is a5ce0307; 19 first-parent merges 9ad4d5c..origin/main; tips origin/main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, origin/release/4.0 d25b7871904228a342c0d80280136d8636833653; no v4.0.0 tag; the reference clone still at d310bf3 | git -C ~/unfoldingword/tc4-sweep rev-parse origin/main origin/release/4.0
+- 2026-10-23 16:46 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | tc4-issue-sweep.js takes base, releaseBase, since and date (range, release log, issue search, delta name); storage context points at docs/STORAGE.md on main or s2-proof-executor; the unit list is board.py; the sweep clone is never checked out and the reference clone never touched; README row lists the arguments. The fixed-value grep prints nothing; node --check passes | grep -n "2026-10-19\|2026-10-01\|d310bf3\.\.\|'storage'" .audit/workflows/tc4-issue-sweep.js
+- 2026-10-23 16:58 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | by two read-only agents, every line classified (19 main merges + 40 release commits + 41 issues = 100). Commits: covered 25, unit todo 7, reference change 8, not applicable 19, rebuild bug 0, owner question 0. Issues: covered 16, unit todo 10, reference change 1 (#791), rebuild bug 5 (#825, #830, #832, #833.1, #836, all FIX-R), owner question 2 (#822 H13, #837 H14), not applicable 7; 22 have rows, 19 need new ones; #782, #787, #789, #790, #793-#796 and #786 move from rebuild bug to covered (tests exist and pass). Three choices no H question covers go to the owner: does an Align edit clear "needs review" (#814 D105.5), raw rc:// links in Arabic notes (#628), the original-language highlight (#840) | .audit/roadmap/evidence/2026-10-23-sweep/
+- 2026-10-23 17:06 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | written by an agent from the step 3 files, checked here: docs/TC4-DELTA-2026-10-23.md (changes C55-C75, not-applicable list, 7 interface strings, Q37-Q39 pending with the owner, the licence note); docs/TC4-ISSUES.md: range line on line 3, 24 rows added and 31 changed (8 rebuild bug rows now covered with existing tests; #710 also covered, its test is crates/tc-door43/tests/push.rs), §1 rows 18-22 for the five FIX-R bugs; Counts recounted from the rows: 11 rebuild bug, 86 unit todo, 10 reference change, 118 covered, 6 owner question, 64 not applicable, 295 rows (the old table was stale: it said 269, there were 271). docs/PLAN.md: the declared differences for #789/D106, #790/D107, #791/D108, #796/D105, #794 and #800 say what tC4 does since rc.2, and one new difference: a verse whose text starts on the next line can still be aligned (the owner is told). D2's card got one test (to create) and a note; T, E1a, E1b, F1, G1, I and FIX-R already list theirs. tc4_issues_names_its_swept_range fails without the line (`INV-THE-SWEEP-NAMES-ITS-RANGE: docs/TC4-ISSUES.md has no line …`) and passes with it; baseline tests 12/12; the 15-issue grep prints nothing | node --test parity/tc4-baseline/baseline.test.mjs
+- 2026-10-23 17:10 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | one pass by a fresh read-only reviewer agent: every merge, release commit and issue checked (not sampled): each has a row or a not-applicable line; 32 of 35 tests named in covered rows exist, the other three are marked to create; rebuild bug rows reachable (#825, #830 confirmed in code); PLAN's rc.2 descriptions match tC4's BURRITO-SPEC 1.25-1.29 and the rebuild's own behavior is unchanged; workflow parses with no fixed range; range test sound. §8: code = one range line as entry point; the range invariant has a failing-first CI test, the every-change invariant is the weekly rule (needs the network); reach yes; siblings: #773 and #766 rows were stale; no-loss N/A; Q37-Q39 are translator-visible. No blocker, no major; five minors | reviewer report in this session
+- 2026-10-23 17:10 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | minors fixed: #795 row to unit todo (its only test is to create); #773 rows to covered (a_reordered_quote_lights_only_its_own_phrase passes here: 1 passed) and §1 row 1 marked fixed; #766 row to covered (built, store_scenario.rs); the delta says 15 release commits carry pre-9ad4d5c changes; the Scope line names both sweeps' dates; Counts recounted per area: 10 rebuild bug, 87 unit todo, 8 reference change, 120 covered, 6 owner question, 64 not applicable, 295. Logged: no Align test yet for a verse whose text starts on the next line | cargo test -p tc-helps --test highlight a_reordered_quote_lights_only_its_own_phrase
+- 2026-10-23 17:42 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner, through the orchestrator: "yes, needs-review, raw links are fine, yes orig lang highlights. MIT license new as of https://github.com/unfoldingWord/translationCore4/pull/838". Q37 (a): only Mark valid clears "needs review"; the D105.5 row is now a rebuild bug for FIX-R (§1 row 23; FIX-R is claimed, so its card is not edited here; the orchestrator is told). Q38 (a): raw rc:// links stay as in tC4; the row becomes a keep-it test to create. Q39: "yes", build now or wait asked again; the row stays an owner question. Licence: MIT chosen, blocked because tc-usfm's words module ports string-punctuation-tokenizer (GPL-2.0, unfoldingWord's); nothing changed. Counts recounted: 11, 88, 8, 120, 4, 64 = 295 | rulings/2026-10-23-Q37-needs-review.md, -Q38-raw-rc-links.md, -licence-mit.md
+- 2026-10-23 17:47 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner, through the orchestrator: "1 yes. 2. build it. (this project will most likely replace original tC4)". Licence: unfoldingWord relicenses string-punctuation-tokenizer to MIT, so the blocker is cleared; new card LIC-1 (integration, after SWEEP) and owner action A5 (relicense the npm package upstream). Q39: build original-language highlighting now; new card OLH-1 (app, M3, depends INT-4); the #840 row is unit todo for OLH-1. Strategy: the rebuild will most likely replace tC4; ROADMAP principle 7 says tC4 4.0 is the baseline, not the ceiling. DONE depends on both new cards. Counts recounted: 11 89 8 120 3 64 = 295 | rulings/2026-10-23-tokenizer-relicense.md, -Q39-original-language-highlight.md, -replace-tc4.md
+- 2026-10-24 14:21 EDT | integration lane (Claude Code 3d07d5f8) | note | none | the owner's ruling of 2026-10-24 (finish in days) parks the weekly sweep until after the first release; this first sweep still merges, in batch 2 | rulings/2026-10-24-H3-H4-H7-fast-release.md (on track-PLAN-FAST)
+- 2026-10-24 17:36 EDT | integration lane (Claude Code 3d07d5f8) | merge | 21fbbec0 | merged into main in batch 2a (UI-1 4a86b252, UI-2 312cef3f, SWEEP 21fbbec0, OLH-1 14e0f12b, T a01c188e), gated by scripts/gates.sh --wait-ci batch-2a on the batch's last commit. TC4-ISSUES merged with FIX-R's and T's fixes and recounted (295 rows). | scripts/gates.sh --wait-ci batch-2a

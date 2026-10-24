@@ -462,6 +462,23 @@ browserTest('check_shows_new_draft_after_switching_back', async () => {
 // tC4 #762 (`e2e/compare-card.spec.ts`, which renders 1 to 6 sources in a harness; the product
 // shows two): as many source texts in a row as fit at 40ch each, all as wide as one another, a
 // card alone in the last row as wide as the row, and "Your translation" a card of its own below.
+// OLH-1 (owner ruling Q39, tC4 #840): the Greek row of the check card marks the check's quote,
+// the words the server names, as the gateway row marks its rendering.
+browserTest('the_greek_row_marks_the_quote_of_the_check', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTool(page, 'translationNotes');
+    const index = Number(await shownIndex(page));
+    const view = await item(env, 'translationNotes', index);
+    const verse = view.sources.value.original.value.verse;
+    const named = verse.lit.map((i) => verse.tokens[i]);
+    assert.ok(named.length > 0, `the first note's quote is in its verse: ${JSON.stringify(view.sources)}`);
+    const marks = page.getByTestId('orig-pane').getByTestId('orig-hl');
+    await until('the Greek row marks the quote', async () => (await marks.count()) > 0);
+    assert.deepEqual(await marks.allTextContents(), named);
+    assert.ok((await page.getByTestId('ult-pane').getByTestId('ult-hl').count()) > 0, 'the gateway row is marked too');
+  });
+});
+
 browserTest('compare_card_columns_fit_the_width', async () => {
   await withApp(async ({ page }) => {
     await openTool(page, 'translationNotes');
