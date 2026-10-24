@@ -91,6 +91,7 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | CHK-5 | Nightly, Windows and no-network jobs; the mutation executor runs nightly | checks | S2, INT-3 | 1-2 d |
 | CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4, CHK-6a | 1 d |
 | CHK-6a | Release builds without the test server, every ignored test named, PLAN's reference checked | checks | INT-4 | 0.5 d |
+| CHK-4b | tc-app's tests wait for events, never for a short clock | checks | CHK-4 | 0.5 d |
 | UI-1 | Typed jobs and one job follower | app | INT-4, C7a | 1 d |
 | UI-2 | Ports for sync, share, exchange and import | app | UI-1 | 1-2 d |
 | UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced | app | UI-1 | 2 d |

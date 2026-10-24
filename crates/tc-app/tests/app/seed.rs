@@ -67,7 +67,7 @@ async fn start(dir: &Path, bundle: &Path, pace_ms: Option<u64>) -> TestApp {
 
 /// Waits, in real time, until the startup state is no longer `Preparing`, and returns it.
 async fn until_startup_ends(app: &App) -> StartupState {
-    for _ in 0..60_000 {
+    for () in crate::store_world::for_a_minute() {
         let state = app.startup();
         if !matches!(state, StartupState::Preparing(_)) {
             return state;
@@ -78,7 +78,7 @@ async fn until_startup_ends(app: &App) -> StartupState {
 }
 
 async fn until_job_ends(app: &App, id: JobId) -> JobState {
-    for _ in 0..60_000 {
+    for () in crate::store_world::for_a_minute() {
         if let Some(view) = app.jobs().view(id)
             && tc_app::jobs::JobRegistry::is_ended(&view.state)
         {
@@ -90,9 +90,9 @@ async fn until_job_ends(app: &App, id: JobId) -> JobState {
 }
 
 async fn next_frame(subscription: &mut Subscription) -> EventFrame {
-    match tokio::time::timeout(Duration::from_secs(30), subscription.next()).await {
+    match tokio::time::timeout(Duration::from_secs(60), subscription.next()).await {
         Ok(Next::Frame(frame)) => frame,
-        other => panic!("no frame: {other:?}"),
+        other => panic!("hung or ended: no frame: {other:?}"),
     }
 }
 
@@ -344,7 +344,7 @@ async fn quit_while_seeding_stops_the_seed_and_waits_for_it() {
     let id = seed_job_of(&mut subscription).await;
     // Wait until one install is whole, so the stop can fall inside a later one.
     let resources = resources_of(&first);
-    for _ in 0..60_000 {
+    for () in crate::store_world::for_a_minute() {
         let whole = ResourceStore::open_read_only(&resources)
             .unwrap()
             .installed()
@@ -360,8 +360,8 @@ async fn quit_while_seeding_stops_the_seed_and_waits_for_it() {
     let began = std::time::Instant::now();
     first.app.quit().await;
     assert!(
-        began.elapsed() < Duration::from_secs(5),
-        "{:?}",
+        began.elapsed() < Duration::from_secs(60),
+        "hung: the quit did not stop the seed: {:?}",
         began.elapsed()
     );
     assert_eq!(

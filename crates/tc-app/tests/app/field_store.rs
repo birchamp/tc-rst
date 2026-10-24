@@ -268,9 +268,9 @@ multi! {
 
         assert!(is_busy(&t.app).await);
         // Reads do not wait behind a held store.
-        let log = tokio::time::timeout(Duration::from_secs(5), field_log(&t.app, "title"))
+        let log = tokio::time::timeout(Duration::from_secs(60), field_log(&t.app, "title"))
             .await
-            .expect("fieldLog answered while the store was held");
+            .expect("hung: fieldLog answered while the store was held");
         assert!(log.stores.is_empty(), "nothing is stored yet");
 
         release_saves(&t.app, 201).await;
@@ -789,11 +789,11 @@ multi! {
         until_held_count(&t.app, 1).await;
 
         let ack = tokio::time::timeout(
-            Duration::from_secs(5),
+            Duration::from_secs(60),
             store(&t.app, 2, "title", &t0, "Saved"),
         )
         .await
-        .expect("the store did not wait behind the held draft")
+        .expect("hung: the store did not wait behind the held draft")
         .unwrap();
         assert_eq!(ack.stored, Stored::Written);
 

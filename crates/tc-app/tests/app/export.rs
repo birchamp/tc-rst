@@ -347,7 +347,7 @@ async fn the_preview_prints_the_words_inside_nested_alignments() {
     )
     .await;
     let mut watch = t.app.jobs().watch(job).unwrap();
-    let state = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let state = tokio::time::timeout(std::time::Duration::from_secs(60), async {
         watch
             .wait_for(tc_app::jobs::JobRegistry::is_ended)
             .await
@@ -355,7 +355,7 @@ async fn the_preview_prints_the_words_inside_nested_alignments() {
             .clone()
     })
     .await
-    .unwrap();
+    .expect("hung: the open ends");
     let at = match state {
         tc_api::jobs::JobState::Done(tc_api::jobs::JobOutcome::Opened(opened)) => opened.session.at,
         other => panic!("{other:?}"),

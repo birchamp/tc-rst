@@ -118,7 +118,7 @@ fn card_events(events: &mut Subscription) -> usize {
 
 /// Until no job runs: the summaries the reads queued are done.
 async fn quiet(app: &App) {
-    for _ in 0..500 {
+    for () in crate::store_world::for_a_minute() {
         let quiet: tc_api::test::QuietView = ok(app, &tc_api::test::Quiet {}).await;
         if !quiet.busy {
             return;

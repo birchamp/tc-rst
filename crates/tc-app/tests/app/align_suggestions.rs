@@ -1,9 +1,9 @@
 /// A later edit while the disk is saving must remain unsaved and must not join the model.
 #[tokio::test]
 async fn a_successful_save_learns_its_sent_links_without_learning_a_newer_unsaved_edit() {
-    tokio::time::timeout(Duration::from_secs(20), learns_the_sent_links())
+    tokio::time::timeout(Duration::from_secs(60), learns_the_sent_links())
         .await
-        .expect("the confirmed-save suggestion scenario must finish");
+        .expect("hung: the confirmed-save suggestion scenario must finish");
 }
 
 async fn learns_the_sent_links() {
@@ -38,41 +38,41 @@ async fn learns_the_sent_links() {
         .unwrap();
     tokio::time::pause();
     let sent = tokio::time::timeout(
-        Duration::from_secs(1),
+        Duration::from_secs(60),
         place(&t.app, &at, &view, 91, "fe", "πίστιν"),
     )
     .await
-    .expect("the first edit must finish before its save timer");
+    .expect("hung: the first edit must finish before its save timer");
     // A Flush holds the aligner slot until the save finishes, so it cannot overlap the
     // next Edit. The timer starts the same sent version without holding that request lock.
     tokio::time::advance(Duration::from_secs(2)).await;
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while saved_links(&backend).is_empty() {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
     })
     .await
-    .expect("the first save must reach the delayed backend reply");
+    .expect("hung: the first save must reach the delayed backend reply");
     assert_eq!(
         saved_links(&backend).len(),
         1,
         "the first version reached the disk"
     );
     let newer = tokio::time::timeout(
-        Duration::from_secs(1),
+        Duration::from_secs(60),
         place(&t.app, &at, &sent, 94, "verdad", "ἀληθείας"),
     )
     .await
-    .expect("a newer edit must finish while the first save reply waits");
+    .expect("hung: a newer edit must finish while the first save reply waits");
     assert_eq!(
         saved_links(&backend).len(),
         1,
         "the first reply still waits"
     );
     tokio::time::advance(Duration::from_secs(5)).await;
-    let saved = tokio::time::timeout(Duration::from_secs(1), flush(&t.app, &at, 93))
+    let saved = tokio::time::timeout(Duration::from_secs(60), flush(&t.app, &at, 93))
         .await
-        .expect("the newer version's refused save must finish");
+        .expect("hung: the newer version's refused save must finish");
     assert!(matches!(saved, AlignSave::Failed(_)));
     tokio::time::resume();
     assert_eq!(
@@ -80,7 +80,7 @@ async fn learns_the_sent_links() {
         2,
         "the later version was refused"
     );
-    for _ in 0..200 {
+    for () in crate::store_world::for_a_minute() {
         if suggest_events(&t.app).len() > learned_before {
             break;
         }

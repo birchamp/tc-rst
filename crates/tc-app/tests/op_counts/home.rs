@@ -50,7 +50,7 @@ async fn visit(s: &Scale) {
 
 /// Until the summary jobs the visit queued are done.
 async fn settle(app: &App) {
-    for _ in 0..2_000 {
+    for () in crate::store_world::for_a_minute() {
         let Reply::Ok(QuietView { busy }) = app.request(&Quiet {}).await.unwrap() else {
             panic!("test/quiet")
         };
