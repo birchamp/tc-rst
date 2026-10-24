@@ -1,0 +1,215 @@
+# The release pipeline (card G3, docs/RELEASE.md): the app for Windows, macOS and Linux (H3),
+# each installer installed on a fresh runner and smoke-tested there, a draft GitHub release only
+# from a tag. Windows is signed only on a manual run of the default branch with `sign` ticked,
+# inside the `windows-signing` environment (H4; tC4 package-desktop.yml #456). macOS stays
+# unsigned, as tC4 4.0 rc.2.
+name: release
+permissions:
+  contents: read
+on:
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: Sign the Windows build (default branch only)
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+    # A change to the pipeline itself runs it, unsigned and unpublished, on its own branch.
+    paths: ['.github/workflows/release.yml', 'scripts/release/**']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  ELECTRONITE: v37.1.0-graphite
+  TC4_BUILD_COMMIT: ${{ github.sha }}
+
+jobs:
+  # INV-NO-UNTRANSLATED-STRING-SHIPS (rulings/2026-10-22-H10.md rule 2): a tag builds nothing while
+  # a rebuild key is untranslated; other runs still build, to test the pipeline.
+  translations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked --release -p tc-api --test refusals
+
+  # The UI and the bundle are the same files on every system: built once.
+  common:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - id: bindgen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-bindgen
+          key: wasm-bindgen-cli-0.2.129-${{ runner.os }}
+      - if: steps.bindgen.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      # INV-A-RELEASE-HAS-NO-TEST-HOOKS: the shipped page is built without --test-hooks.
+      - run: crates/tc-ui/build-app.sh --release --out release/ui
+      - name: bundle
+        run: |
+          set -o pipefail
+          cargo run --locked --release -p tc-app --example bundle_store -- --from bundle/en --out release/bundle | tee bundle.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-common
+          path: release
+          retention-days: 7
+
+  build:
+    needs: [translations, common]
+    if: ${{ always() && needs.common.result == 'success' && (github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/') || needs.translations.result == 'success') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            os: ubuntu-24.04
+            electronite: electronite-v37.1.0-graphite-linux-x64.zip
+          - platform: windows-x64
+            os: windows-2025
+            electronite: electronite-v37.1.0-graphite-win32-x64.zip
+          - platform: macos-arm64
+            os: macos-15
+            electronite: electronite-v37.1.0-graphite-darwin-arm64.zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    # Signing (H4): Azure trusts only this environment's OIDC subject, and its branch rules allow
+    # only the default branch. Every other run uses no environment and builds unsigned.
+    environment: ${{ matrix.platform == 'windows-x64' && github.event_name == 'workflow_dispatch' && inputs.sign && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'windows-signing' || '' }}
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      SIGN: ${{ matrix.platform == 'windows-x64' && github.event_name == 'workflow_dispatch' && inputs.sign && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'yes' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.platform }}
+      - name: tc4
+        env:
+          # tC4 #284: no Visual C++ runtime needed on the translator's computer.
+          RUSTFLAGS: ${{ matrix.platform == 'windows-x64' && '-C target-feature=+crt-static' || '' }}
+        run: cargo build --locked --release -p tc4
+      - name: no test hooks in the shipped binary
+        env:
+          RUSTFLAGS: ${{ matrix.platform == 'windows-x64' && '-C target-feature=+crt-static' || '' }}
+        run: |
+          exe=target/release/tc4; [ "${{ matrix.platform }}" = windows-x64 ] && exe=target/release/tc4.exe
+          TC4_RELEASE_BIN=$exe cargo test --locked --release -p tc4 --test release -- --ignored
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: matrix.platform == 'windows-x64'
+        name: tc4.exe needs no Visual C++ runtime
+        run: node scripts/release/pe-imports.mjs target/release/tc4.exe
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-common
+          path: release
+      - name: Electronite
+        run: curl -sSfL -o "$RUNNER_TEMP/${{ matrix.electronite }}" "https://github.com/unfoldingWord/electronite/releases/download/$ELECTRONITE/${{ matrix.electronite }}"
+      - name: stage
+        env:
+          TC_HELP_DESK_TOKEN: ${{ secrets.TC_HELP_DESK_TOKEN }}
+          TC_HELP_DESK_EMAIL: ${{ secrets.TC_HELP_DESK_EMAIL }}
+        run: |
+          exe=target/release/tc4; [ "${{ matrix.platform }}" = windows-x64 ] && exe=target/release/tc4.exe
+          scripts/release/stage.sh ${{ matrix.platform }} "$exe" release/ui release/bundle "$RUNNER_TEMP/${{ matrix.electronite }}" stage
+      - if: env.SIGN == 'yes'
+        name: sign the staged app
+        shell: pwsh
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+        run: |
+          scripts/release/sign-windows.ps1 -ToolDir "$env:RUNNER_TEMP\sign" -Setup
+          scripts/release/sign-windows.ps1 -ToolDir "$env:RUNNER_TEMP\sign" -Sign stage\translationCore4
+          # The manifest records the signed files.
+          node scripts/release/manifest.mjs --root stage\translationCore4 --platform windows-x64 --electronite $env:ELECTRONITE --electronite-sha256 8146ca21fa090e12bca01a8af73d234d9a31d90f51da0da86bb0e1731c371b52
+      - name: package
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+        run: scripts/release/package.sh ${{ matrix.platform }} stage dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist
+          retention-days: 14
+
+  # INV-EVERY-INSTALLER-PASSES-THE-SMOKE-TEST: each installer on a fresh runner of its system.
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-x64, os: ubuntu-24.04 }
+          - { platform: windows-x64, os: windows-2025 }
+          - { platform: macos-arm64, os: macos-15 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist
+      - if: matrix.platform == 'linux-x64'
+        run: sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2t64 libgbm1
+      - name: install, smoke-test, start, uninstall
+        run: scripts/release/smoke-installed.sh ${{ matrix.platform }} dist
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.platform }}
+          path: smoke-logs
+          if-no-files-found: ignore
+
+  # Only a tag publishes, and only after every build, smoke test and the translations gate. The
+  # release is a draft: the owner publishes it.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [translations, common, build, smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*-*
+          path: dist
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "translationCore 4 ${GITHUB_REF_NAME#v}" --notes "Built from $GITHUB_SHA." dist/*
