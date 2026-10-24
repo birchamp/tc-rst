@@ -1972,3 +1972,97 @@ fn adding_a_book_from_a_file_loses_no_byte_of_it() {
         })
         .unwrap();
 }
+
+/// The ULT v91 book `code` as the app ships it.
+fn bundled_ult(code: &str) -> String {
+    use std::io::Read;
+    let file = std::fs::File::open(repo_root().join("bundle/en/en_ult_v91.sb.zip")).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut entry = archive
+        .by_name(&format!("en_ult/ingredients/{code}.usfm"))
+        .unwrap();
+    let mut text = String::new();
+    entry.read_to_string(&mut text).unwrap();
+    text
+}
+
+/// tC4 #812: a verse with a `\p`, `\ts\*`, `\b`, `\q3` or `\s` line inside shows every
+/// word, and a save of it keeps every word, on the screen and in the book file.
+#[test]
+fn verses_with_a_layout_line_inside_save_whole() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let books: BTreeMap<&str, String> = ["1SA", "REV", "MAT"]
+        .into_iter()
+        .map(|code| (code, bundled_ult(code)))
+        .collect();
+    for (code, usfm) in &books {
+        let book: BookId = code.parse().unwrap();
+        handle
+            .submit(Command::AddBookText {
+                book,
+                scope: Scope::Whole,
+                usfm: usfm.clone(),
+                file_name: format!("{code}.usfm"),
+            })
+            .wait()
+            .unwrap();
+    }
+    let verses = [("1SA", 2, 2), ("1SA", 4, 1), ("REV", 7, 12), ("MAT", 27, 9)];
+    let words_of = |text: &str, c: u16, v: u16| -> Vec<String> {
+        let parts = tc_usfm::codec::decompose(text).unwrap();
+        let Some(tc_usfm::codec::VersePart::Text(verse)) = parts.chapters[&c].verses.get(&v) else {
+            panic!("{c}:{v}");
+        };
+        tc_usfm::target_words(&format!("{}{}", verse.words, verse.layout))
+            .into_iter()
+            .map(|w| w.text)
+            .collect()
+    };
+    let mut want = BTreeMap::new();
+    for (code, c, v) in verses {
+        let book: BookId = code.parse().unwrap();
+        let all = words_of(&books[code], c, v);
+        let key = RecordKey::Verse(book, ChapterNo::new(c).unwrap(), VerseNo::new(v).unwrap());
+        let shown = |handle: &ProjectHandle| match handle.snapshot().fold().projected(&key) {
+            Some(Record::Verse {
+                value: VerseValue::Text { words, .. },
+                ..
+            }) => words,
+            other => panic!("{code} {c}:{v}: {other:?}"),
+        };
+        let before = shown(&handle);
+        let shown_words: Vec<String> = tc_usfm::target_words(&before)
+            .into_iter()
+            .map(|w| w.text)
+            .collect();
+        assert_eq!(shown_words, all, "{code} {c}:{v} shows every word");
+        let edited = format!("{before} Amén");
+        let token = handle.mint(&key, None).unwrap();
+        handle
+            .submit(Command::SaveVerse {
+                shown: token,
+                words: edited.clone(),
+            })
+            .wait()
+            .unwrap();
+        assert_eq!(shown(&handle), edited);
+        let mut all = all;
+        all.push("Amén".into());
+        want.insert((code, c, v), all);
+    }
+    handle.close().unwrap();
+    for ((code, c, v), all) in want {
+        let file = rig
+            .fs
+            .peek(&folder.join(format!("ingredients/{code}.usfm")))
+            .unwrap();
+        assert_eq!(
+            words_of(&String::from_utf8(file).unwrap(), c, v),
+            all,
+            "{code} {c}:{v} in the file"
+        );
+    }
+    assert_valid_burrito(&rig.fs, &folder);
+}

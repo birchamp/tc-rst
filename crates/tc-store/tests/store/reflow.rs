@@ -144,6 +144,31 @@ fn a_lossless_edit_keeps_every_card_and_banks_the_new_words() {
     handle.close().unwrap();
 }
 
+/// tC4 #794: a verse whose text holds its alignment inline (`\zaln-s`) is not reflowed: the
+/// save writes the verse alone, and the alignment record stays as it was.
+#[test]
+fn a_verse_edit_of_an_inline_aligned_verse_writes_no_alignment() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    paul(&handle);
+    let before = alignment(&handle);
+    let reply = save_verse(
+        &handle,
+        1,
+        1,
+        "\\zaln-s |x-strong=\"G39720\" x-lemma=\"Παῦλος\" x-morph=\"Gr,N,,,,,NMS,\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"Παῦλος\"\\*\\w Paul|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*, a servant of God and an apostle",
+    )
+    .unwrap();
+    let keys: Vec<RecordKey> = reply
+        .changes
+        .iter()
+        .map(|id| handle.snapshot().fold().change(id).unwrap().key)
+        .collect();
+    assert_eq!(keys, [verse(1, 1)]);
+    assert_eq!(alignment(&handle), before);
+    handle.close().unwrap();
+}
+
 #[test]
 fn a_lossy_edit_drops_only_the_words_the_verse_lost() {
     let (rig, folder) = titus();

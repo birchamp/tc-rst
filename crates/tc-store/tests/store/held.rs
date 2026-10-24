@@ -236,6 +236,62 @@ fn a_complete_temp_that_cannot_be_placed_rotates_the_device() {
     handle.close().unwrap();
 }
 
+/// A new device names its person as the old one did (§6.3, tC4 #161): the old device's
+/// Door43 username is copied to the new one, so the screens call both "mine".
+#[test]
+fn a_new_device_copies_the_profile_and_both_group_as_mine() {
+    use tc_journal::Record;
+    use tc_journal::fold::PersonLabel;
+    use tc_journal::record::{DeviceProfileValue, Door43Username};
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let device = handle.facts().device;
+    let key = tc_journal::RecordKey::DeviceProfile(device);
+    let parents = handle.snapshot().fold().heads(&key);
+    handle
+        .submit(tc_journal::command::Command::ApplyUpgrade {
+            plan: tc_journal::command::UpgradePlan {
+                changes: vec![tc_journal::command::PlannedChange {
+                    record: Record::DeviceProfile {
+                        device,
+                        value: DeviceProfileValue {
+                            display_name: None,
+                            door43_username: Some(Door43Username::parse("jdoe").unwrap()),
+                            legacy: None,
+                        },
+                    },
+                    parents,
+                    cause: tc_journal::Cause::Seed,
+                }],
+            },
+        })
+        .wait()
+        .unwrap();
+    rig.fs.hold_new_files(&pending_dir(&folder), None);
+    assert!(save_verse(&handle, 1, 1, "A, held at the next open").is_err());
+    rig.fs.release_new_files(&pending_dir(&folder));
+    handle.close().unwrap();
+    let left = temps(&rig.fs, &folder);
+    rig.fs.set_busy(&folder.join(&left[0]), true);
+
+    let handle = open(&rig, &folder);
+    let me = handle.facts().device;
+    assert_ne!(me, device, "a new device");
+    let snapshot = handle.snapshot();
+    let labels = snapshot.fold().person_labels(me);
+    assert_eq!(labels.get(&me), Some(&PersonLabel::Mine));
+    assert_eq!(labels.get(&device), Some(&PersonLabel::Mine), "{labels:?}");
+    let copied = match snapshot
+        .fold()
+        .projected(&tc_journal::RecordKey::DeviceProfile(me))
+    {
+        Some(Record::DeviceProfile { value, .. }) => value.door43_username.clone(),
+        _ => None,
+    };
+    assert_eq!(copied, Some(Door43Username::parse("jdoe").unwrap()));
+    handle.close().unwrap();
+}
+
 /// What cannot be read is never removed.
 #[test]
 fn an_open_never_removes_a_temp_it_cannot_read() {
