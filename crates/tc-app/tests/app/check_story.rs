@@ -65,9 +65,14 @@ async fn open_obs(t: &TestApp) -> Scope {
         .at
 }
 
+/// Leaves the story project and waits until no session holds it: a side user (a background
+/// read) keeps it open after the screen leaves, and its close lets go of the project's lock,
+/// which a teammate's edit through the store needs.
 async fn leave(t: &TestApp, at: &Scope) {
     t.app.sessions().leave_screen(at).unwrap();
-    t.app.sessions().settled(&folder(OBS)).await;
+    // A left screen's session closes after its checkpoint; the store opens the folder next in
+    // these tests, so wait for the close itself, not only for the screen to go.
+    t.app.sessions().close_all().await;
 }
 
 async fn rail(t: &TestApp, at: &Scope, tool: Tool) -> Vec<RailRow> {

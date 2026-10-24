@@ -57,6 +57,44 @@ impl DerivedFile {
         }
     }
 
+    /// The file a repository path names, if it is one this format derives (§3.3): the
+    /// inverse of [`Self::path`].
+    pub fn from_path(path: &str) -> Option<DerivedFile> {
+        let rest = path.strip_prefix("ingredients/")?;
+        let book = |name: &str| -> Option<BookId> { name.strip_suffix(".json")?.parse().ok() };
+        let file = match rest {
+            "vrs.json" => Self::Versification,
+            "checking/resources.json" => Self::Resources,
+            "checking/settings.json" => Self::Settings,
+            "tc/conflicts.json" => Self::Conflicts,
+            "tc/comments/OBS.json" => Self::StoryComments,
+            _ => {
+                if let Some(name) = rest.strip_prefix("tc/comments/") {
+                    Self::Comments(book(name)?)
+                } else if let Some(name) = rest.strip_prefix("content/") {
+                    let number: u8 = name.strip_suffix(".md")?.parse().ok()?;
+                    Self::Story(StoryNo::new(number)?)
+                } else if let Some(name) = rest.strip_prefix("checking/alignments/") {
+                    Self::Alignments(book(name)?)
+                } else if let Some(tail) = rest.strip_prefix("checking/") {
+                    let (tool, name) = tail.split_once('/')?;
+                    let tool = ToolId::parse(tool)?;
+                    if name == "OBS.json" {
+                        Self::StoryDecisions(tool)
+                    } else {
+                        Self::Decisions(tool, book(name)?)
+                    }
+                } else if !rest.contains('/') {
+                    Self::Usfm(rest.strip_suffix(".usfm")?.parse().ok()?)
+                } else {
+                    return None;
+                }
+            }
+        };
+        // Only the spelling `path` writes: `content/7.md` is no story file.
+        (file.path() == path).then_some(file)
+    }
+
     /// The repository path of the file.
     pub fn path(&self) -> String {
         match self {
@@ -102,6 +140,17 @@ impl DerivedFile {
         };
         Some(serde_json::json!({ book.code(): [] }))
     }
+}
+
+/// A record and the digest of how a file shows it (`crate::outside`).
+pub type RecordDigest = (RecordKey, crate::outside::ShownDigest);
+
+/// A derived file with its bytes and, for a book's USFM, the digest of each record it shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedFile {
+    pub file: DerivedFile,
+    pub bytes: Vec<u8>,
+    pub digests: Vec<RecordDigest>,
 }
 
 /// Where a carried file's bytes go (§7.7, §11.4).
@@ -520,6 +569,14 @@ impl FoldState {
         for book in self.books.keys() {
             self.book_files_into(*book, &mut out);
         }
+        self.project_files_into(&mut out);
+        let mut files: Vec<DerivedFile> = out.into_iter().collect();
+        files.sort_by_key(DerivedFile::path);
+        files
+    }
+
+    /// The derived files of no book that the projection holds.
+    fn project_files_into(&self, out: &mut BTreeSet<DerivedFile>) {
         if !self.pin_keys.is_empty() {
             out.insert(DerivedFile::Resources);
         }
@@ -553,9 +610,25 @@ impl FoldState {
                 out.insert(DerivedFile::Story(*story));
             }
         }
-        let mut files: Vec<DerivedFile> = out.into_iter().collect();
-        files.sort_by_key(DerivedFile::path);
-        files
+    }
+
+    /// Whether the projection holds `file` now. It costs what that file's book or the
+    /// project's own records hold, never the project: a book's files are found from its own
+    /// records (replaces `derived_files().contains(..)`).
+    pub fn projects_file(&self, file: &DerivedFile) -> bool {
+        let mut set = BTreeSet::new();
+        match file.book() {
+            Some(book) => self.book_files_into(book, &mut set),
+            None => self.project_files_into(&mut set),
+        }
+        set.contains(file)
+    }
+
+    /// The projected parts of a book, as `book_usfm` composes them; `None` when the book
+    /// does not project. A caller that compares a file with the projection decomposes the
+    /// file into the same parts.
+    pub fn book_parts(&self, book: BookId) -> Option<BookParts> {
+        self.book(book).projects().then(|| self.parts(book, None))
     }
 
     /// The derived files of one book: [`Self::derived_files`] of that book, found from its
@@ -624,6 +697,47 @@ impl FoldState {
     /// on up to four threads, and its files share the book's text and render on up to four
     /// threads.
     pub fn render_book(&self, book: BookId) -> Vec<(DerivedFile, Vec<u8>)> {
+        self.render_book_inner(book, false)
+            .into_iter()
+            .map(|r| (r.file, r.bytes))
+            .collect()
+    }
+
+    /// [`Self::render_book`] with the digest of each record of the book's USFM (§11.1: the
+    /// heads file keeps them as the base of an outside edit).
+    pub fn render_book_with_digests(&self, book: BookId) -> Vec<RenderedFile> {
+        self.render_book_inner(book, true)
+    }
+
+    /// [`Self::render`] with the digests of a USFM file's records.
+    pub fn render_with_digests(&self, file: &DerivedFile) -> Option<RenderedFile> {
+        match file {
+            DerivedFile::Usfm(book) => {
+                let (bytes, digests) = self.usfm_with_digests(*book)?;
+                Some(RenderedFile {
+                    file: file.clone(),
+                    bytes,
+                    digests,
+                })
+            }
+            other => Some(RenderedFile {
+                file: other.clone(),
+                bytes: self.render(other)?,
+                digests: Vec::new(),
+            }),
+        }
+    }
+
+    fn usfm_with_digests(&self, book: BookId) -> Option<(Vec<u8>, Vec<RecordDigest>)> {
+        if !self.book(book).projects() {
+            return None;
+        }
+        let parts = self.parts(book, None);
+        let digests = crate::outside::usfm_digests(book, &parts);
+        Some((codec::recompose(&parts).usfm.into_bytes(), digests))
+    }
+
+    fn render_book_inner(&self, book: BookId, digests: bool) -> Vec<RenderedFile> {
         let files = self.book_files(book);
         if files.is_empty() {
             return Vec::new();
@@ -633,13 +747,25 @@ impl FoldState {
         if view.book(book).projects() {
             let _ = text.set(view.book_text(book));
         }
-        let mut out: Vec<(DerivedFile, Vec<u8>)> = on_threads(&files, |f| {
-            view.render_with(f, &text).map(|b| (f.clone(), b))
+        let mut out: Vec<RenderedFile> = on_threads(&files, |f| match f {
+            DerivedFile::Usfm(b) if digests => {
+                view.usfm_with_digests(*b)
+                    .map(|(bytes, digests)| RenderedFile {
+                        file: f.clone(),
+                        bytes,
+                        digests,
+                    })
+            }
+            _ => view.render_with(f, &text).map(|bytes| RenderedFile {
+                file: f.clone(),
+                bytes,
+                digests: Vec::new(),
+            }),
         })
         .into_iter()
         .flatten()
         .collect();
-        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out.sort_by(|a, b| a.file.cmp(&b.file));
         // The decoded records are hundreds of thousands of small allocations: freed on one
         // thread they were a tenth of the projection's time.
         drop(view);
@@ -779,13 +905,17 @@ impl FoldState {
                     // The alignment covers as many verses as it did where it was made: a
                     // text that moved keeps its alignment valid at its new number.
                     let label_end = value.moved_span_end(v, rv).unwrap_or(rv);
-                    let valid = value.is_valid(&AlignedRun {
-                        anchor: v,
-                        run_start: rv,
-                        run_end: end,
-                        text_md5: text.facts(content).md5(),
-                        source_sha: ol_sha,
-                    });
+                    let words = crate::alignment::verse_words(&content);
+                    let valid = !value.needs_review(
+                        &AlignedRun {
+                            anchor: v,
+                            run_start: rv,
+                            run_end: end,
+                            text_md5: text.facts(content).md5(),
+                            source_sha: ol_sha,
+                        },
+                        &words,
+                    );
                     taken.insert((rc, rv));
                     plan.push((
                         value,
@@ -1568,6 +1698,29 @@ impl FoldState {
         out.sort();
         out
     }
+
+    /// The blob of every version of every carried file the fold holds, the earlier ones a
+    /// later change replaced included, in blob order (§9.8): the versions `refs/tc/carried`
+    /// keeps reachable, so a repack never prunes one that was replaced before a checkpoint
+    /// committed it (L73).
+    pub fn carried_versions(&self) -> Vec<GitOid> {
+        let mut out = BTreeSet::new();
+        for k in self.carried_keys.iter() {
+            for c in self.entry(*k).changes.iter() {
+                if !self.meta(*c).active() {
+                    continue;
+                }
+                if let Some(Record::CarriedFile {
+                    value: CarriedValue::Present { oid, .. },
+                    ..
+                }) = record_of(self, *c)
+                {
+                    out.insert(oid);
+                }
+            }
+        }
+        out.into_iter().collect()
+    }
 }
 
 /// The numeric chapter and first verse of a check's target.
@@ -2019,8 +2172,9 @@ fn conflict_record(c: &Conflict) -> Value {
     Value::Object(m)
 }
 
-/// tC4's slot order in `resources.json`; slots it does not name come after, by name.
-fn slot_rank(name: &str) -> u8 {
+/// tC4's slot order in `resources.json` (`journal/checkpoint.mjs` `LS_SLOTS`, then `nt`,
+/// `ot`); slots it does not name come after, by name.
+pub(crate) fn slot_rank(name: &str) -> u8 {
     match name {
         "gatewayLanguage" => 0,
         "translationNotes" => 1,
@@ -2029,9 +2183,14 @@ fn slot_rank(name: &str) -> u8 {
         "translationAcademy" => 4,
         "translationQuestions" => 5,
         "simplifiedText" => 6,
-        "nt" => 7,
-        "ot" => 8,
-        _ => 9,
+        "obs" => 7,
+        "obs-tn" => 8,
+        "obs-twl" => 9,
+        "obs-tq" => 10,
+        "obs-images" => 11,
+        "nt" => 12,
+        "ot" => 13,
+        _ => 14,
     }
 }
 
@@ -2205,25 +2364,36 @@ pub(crate) fn splice_story(
         i += 1;
         if text.starts_with("![") {
             images += 1;
-            // Blank lines, then the frame's paragraph up to the next blank line.
-            while i < lines.len() && body(lines[i]).trim().is_empty() {
-                out.push_str(lines[i]);
-                i += 1;
-            }
+            // The frame's region runs to the next image or reference line (tC4 `writeFrame`).
             let start = i;
-            while i < lines.len()
-                && !body(lines[i]).trim().is_empty()
-                && Some(i) != reference_at
-                && !body(lines[i]).starts_with("![")
-            {
+            while i < lines.len() && Some(i) != reference_at && !body(lines[i]).starts_with("![") {
                 i += 1;
             }
             match frame(images) {
                 Some(text) => {
-                    let end = lines.get(i.saturating_sub(1)).copied().unwrap_or("");
-                    out.push_str(&text);
-                    let t = if i > start { terminator(end) } else { "\n" };
-                    out.push_str(t);
+                    let nl = match terminator(line) {
+                        "" => {
+                            out.push('\n');
+                            "\n"
+                        }
+                        t => t,
+                    };
+                    // tC4 joins the region's new lines with newlines: a blank line, the
+                    // text and a blank line, or the template's empty form, which is longer
+                    // when nothing follows.
+                    let followed = i < lines.len();
+                    let region: Vec<&str> = match (text.is_empty(), followed) {
+                        (true, true) => vec![""; 3],
+                        (true, false) => vec![""; 6],
+                        (false, _) => std::iter::once("")
+                            .chain(text.split('\n'))
+                            .chain(std::iter::once(""))
+                            .collect(),
+                    };
+                    out.push_str(&region.join(nl));
+                    if followed {
+                        out.push_str(nl);
+                    }
                 }
                 None => {
                     for l in &lines[start..i] {
@@ -2232,6 +2402,17 @@ pub(crate) fn splice_story(
                 }
             }
         }
+    }
+    // A base read back from a file lost its reference line to a record of its own (tC4
+    // `decodeStory`); tC4's `writeRef` then adds it after the last frame's paragraph, or
+    // after an empty last frame's spacing.
+    if let (None, Some(r), true) = (reference_at, reference, images > 0) {
+        let kept = out.trim_end_matches(['\n', '\r']).len();
+        out.truncate(kept);
+        let empty_last = out.rsplit('\n').next().is_some_and(|l| l.starts_with("!["));
+        out.push_str(if empty_last { "\n\n\n\n_" } else { "\n\n_" });
+        out.push_str(r);
+        out.push_str("_\n");
     }
     out
 }

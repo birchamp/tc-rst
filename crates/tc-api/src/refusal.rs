@@ -404,6 +404,10 @@ pub enum SyncBlock {
     NeedsNewerApp { major: u16, min_reader_minor: u16 },
     /// The repository is still in tC4's team format; the team move is offered (N1).
     Tc4TeamRepository,
+    /// Door43's repository has history but not the branch this project syncs: its owner
+    /// deleted it. Pushing a new one from this computer would cut the team off from it, so
+    /// nothing is sent and the owner is asked to restore it (X step 5).
+    BranchMissing,
 }
 
 /// Why a sync step failed, before or after intake (STORAGE §9.1, §9.5; DELTA §3.15.2; tC4
@@ -475,7 +479,8 @@ impl Message for SyncFailure {
             Err(
                 SyncBlock::ProjectMismatch
                 | SyncBlock::NeedsNewerApp { .. }
-                | SyncBlock::Tc4TeamRepository,
+                | SyncBlock::Tc4TeamRepository
+                | SyncBlock::BranchMissing,
             ) => None,
             Ok((R::Offline, _)) => Some("sync.offline"),
             Ok((R::AuthFailed, _)) => Some("sync.auth-failed"),
@@ -496,6 +501,7 @@ impl Message for SyncFailure {
             Err(SyncBlock::ProjectMismatch) => "syncResult.error.projectMismatch",
             Err(SyncBlock::NeedsNewerApp { .. }) => "syncResult.error.needsNewerApp",
             Err(SyncBlock::Tc4TeamRepository) => "syncResult.error.tc4TeamRepository",
+            Err(SyncBlock::BranchMissing) => "syncResult.error.branchMissing",
             Ok((R::Offline, _)) => "syncResult.error.offline",
             Ok((R::NotSignedIn | R::AuthFailed, _)) => "syncResult.error.authFailed",
             Ok((R::NoWriteAccess { .. }, _)) => "syncResult.error.noWriteAccess",
@@ -515,7 +521,10 @@ impl Message for SyncFailure {
                 vec![("format", major.to_string())]
             }
             Self::Blocked(
-                SyncBlock::NotShared | SyncBlock::ProjectMismatch | SyncBlock::Tc4TeamRepository,
+                SyncBlock::NotShared
+                | SyncBlock::ProjectMismatch
+                | SyncBlock::Tc4TeamRepository
+                | SyncBlock::BranchMissing,
             ) => Vec::new(),
             // Q36: Door43's words and an I/O reason, which can hold a path on this computer,
             // never reach the message; the refusal keeps them for the operation report.

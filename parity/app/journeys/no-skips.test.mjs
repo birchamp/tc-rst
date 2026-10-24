@@ -57,7 +57,7 @@ function run(tap) {
 }
 
 test('no_skips_passes_a_run_with_no_skip', () => {
-  assert.deepEqual(countSkips(CLEAN), { tests: 1, skipped: [] });
+  assert.deepEqual(countSkips(CLEAN), { tests: 1, summarySkipped: 0, skipped: [] });
   assert.deepEqual(run(CLEAN), { code: 0, out: 'app-e2e: 1 tests, 0 skipped\n' });
 });
 
@@ -71,6 +71,9 @@ test('no_skips_names_each_skipped_test_and_its_reason', () => {
   assert.match(out, /^INV-A-SKIP-IS-A-FAILURE: 2 tests skipped in app-e2e/);
   assert.match(out, /\nsign_in_with_door43: set TC4_DOOR43_FAKE/);
   assert.match(out, /\nnested_probe: set TC4_UI_HOOKS/);
+  const unmatched = SKIPS.replace(/ # SKIP/g, ' (skipped)');
+  assert.equal(countSkips(unmatched).skipped.length, 0);
+  assert.equal(run(unmatched).code, 1, 'the "# skipped 2" summary fails the run even when no skip line matches');
 });
 
 test('no_skips_fails_a_run_with_no_summary', () => {

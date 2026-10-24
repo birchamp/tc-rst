@@ -500,3 +500,35 @@ fn a_reflow_from_text_the_value_was_not_made_against_counts_instead() {
         reflow(&stored, &after)
     );
 }
+
+/// tC4 #820: "Dios Dios", each copy linked, edited to "Dios Pablo". Either copy may be the one
+/// that stayed, so neither link is kept and both are listed as dropped.
+#[test]
+fn replacing_one_copy_of_a_repeated_linked_word_keeps_no_unsure_link() {
+    let source = SourceVerse::new(vec![
+        greek("θεοῦ", "G23160", "θεός"),
+        greek("θεὸς", "G23160", "θεός"),
+    ]);
+    let before = TargetVerse::new("Dios Dios");
+    let mut value = bootstrap(&source, &before, basis(1));
+    for (card, occurrence) in [(0, 1), (1, 2)] {
+        let word = value
+            .word_bank
+            .iter()
+            .find(|w| w.word == "Dios" && w.occurrence == occurrence)
+            .cloned()
+            .unwrap();
+        value.link(card, &word).unwrap();
+    }
+    value.settle(&before);
+    assert_eq!(placed(&value), [["Dios/1/2"], ["Dios/2/2"]]);
+    let next = reflow_edit(&value, &before, &TargetVerse::new("Dios Pablo")).unwrap();
+    assert!(placed(&next.value).iter().all(Vec::is_empty), "{next:?}");
+    let dropped: Vec<(usize, u32)> = next
+        .dropped
+        .iter()
+        .map(|d| (d.card, d.word.occurrence))
+        .collect();
+    assert_eq!(dropped, [(0, 1), (1, 2)]);
+    assert_eq!(next.value.well_formed(), Ok(()));
+}

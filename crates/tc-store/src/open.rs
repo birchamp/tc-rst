@@ -1,11 +1,12 @@
 //! The open sequence (`docs/STORAGE.md` §6.1, O1 to O14) and the classification of derived
 //! files (§6.2).
 //!
-//! Unit S1 has no git: the repository steps (O3, the blobs of O8, restoring a pack or
-//! `format.json` from HEAD) are unit S2's. An expected pack (§4.4) is known from the
-//! manifest's pack list; when one is missing, nothing derived is removed until it is back
-//! (`PackMissing`). A derived file changed outside the app is held (§6.2), not recorded:
-//! recording outside edits (§11.1) is unit S2's.
+//! The repository (O3) is opened, made or, when it is damaged, replaced by `history`; a pack,
+//! `project.json` or `format.json` that is gone comes back from HEAD's tree. An expected pack
+//! (§4.4) is known from the manifest's pack list and HEAD's tree; when one is missing and no
+//! blob restores it, nothing derived is removed until it is back (`PackMissing`). A derived
+//! file changed outside the app is recorded as changes (§11.1) when its time says someone
+//! saved it, and held (§6.2) when only its bytes changed, which is storage damage.
 //!
 //! The open reads each journal file once (O8), takes unchanged files' changes from the fold
 //! cache, and classifies each derived file without reading it when its entry is clean by
@@ -14,7 +15,8 @@
 
 use crate::appdata::{AppData, rfc3339};
 use crate::atomic::{
-    DirSet, SyncDir, atomic_create_dirs, atomic_remove, atomic_write, temp_target,
+    DirSet, HeldRetry, Removed, SyncDir, atomic_create_dirs, atomic_remove_checked,
+    atomic_remove_if_free, atomic_write,
 };
 use crate::clock::Clock;
 use crate::counters::{Counters, CountingVfs};
@@ -24,25 +26,26 @@ use crate::error::StoreError;
 use crate::handle::{Mode, ProjectFacts, ProjectHandle, Shared};
 use crate::hooks::Hooks;
 use crate::layout::{
-    self, FORMAT_JSON, Folder, INDEX, INTENT, LOCK, MANIFEST, METADATA, PACKS, PENDING,
-    PROJECT_JSON, QUARANTINE, TC,
+    self, FORMAT_JSON, Folder, INDEX, LOCK, MANIFEST, PACKS, PENDING, PROJECT_JSON, QUARANTINE, TC,
 };
 use crate::load::{
     FileRead, JournalFile, JournalKind, LoadSetup, list, load_streaming, relocation,
 };
-use crate::manifest::{Entry, Intent, Manifest};
+use crate::manifest::Manifest;
 use crate::platform::Platform;
 use crate::progress::{Phase, ProgressSink, Tracker, no_progress};
 use crate::project::{Dirty, IndexCache, Journal, PackInfo, PendingInfo, Project};
 use crate::reply::ReadOnlyReason;
 use crate::source::FileSource;
-use crate::vfs::{EntryKind, LockHandle, Vfs, is_not_found};
+use crate::temps::{Settled, Temps, finish_temps, settle_temps};
+use crate::vfs::{LockHandle, Vfs, is_not_found};
+use crate::writer::Writer;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
-use tc_journal::fold::{Anomaly, DerivedFile, FoldState, Notice, ProjectKind, RotationReason};
+use tc_journal::fold::{Anomaly, FoldState, Notice, ProjectKind, RotationReason};
 use tc_journal::format::{FormatDoc, FormatGate};
 use tc_journal::index::{Facts, Index};
 use tc_journal::keys::{PinGroup, RecordKey};
@@ -150,6 +153,11 @@ impl ProjectJson {
         out
     }
 
+    /// Whether `bytes` are a `project.json` this app reads.
+    pub(crate) fn reads(bytes: &[u8]) -> bool {
+        Self::parse(bytes).is_some()
+    }
+
     fn parse(bytes: &[u8]) -> Option<(ProjectId, ProjectKind)> {
         let file: ProjectJson = serde_json::from_slice(bytes).ok()?;
         let kind = match file.kind.as_str() {
@@ -189,6 +197,7 @@ pub(crate) struct Env {
     pub platform: Arc<dyn Platform>,
     pub clock: Arc<dyn Clock>,
     pub threads: usize,
+    pub watch_debounce: std::time::Duration,
     pub hooks: Arc<Hooks>,
 }
 
@@ -210,6 +219,53 @@ pub(crate) fn open_project(
     let result = open_inner(env, path, options, identity, &tracker);
     reporter.finish(&tracker);
     result
+}
+
+/// The `project.json` of HEAD's tree, when the repository has a commit whose copy reads
+/// (§3.5).
+pub(crate) fn head_project_json(
+    env: &Env,
+    vfs: &dyn Vfs,
+    path: &Path,
+    counters: &Arc<Counters>,
+) -> Option<Vec<u8>> {
+    use crate::git::{Git, Opened};
+    let outside = vfs.outside_dir(path).ok()?;
+    let (Opened::Existing(git) | Opened::Created(git)) =
+        Git::open(&outside, true, counters.clone(), &env.hooks)
+    else {
+        return None;
+    };
+    let head = git.head().ok()??;
+    let bytes = git.read_path(head.commit, PROJECT_JSON).ok()??;
+    ProjectJson::parse(&bytes).is_some().then_some(bytes)
+}
+
+/// Writes HEAD's `project.json` back after keeping a copy of the bytes found there: the
+/// path of the copy, or `None` when there was no file.
+fn restore_project_json(
+    vfs: &dyn Vfs,
+    folder: &Folder,
+    clock: &dyn Clock,
+    good: &[u8],
+    damaged: Option<&[u8]>,
+) -> Result<Option<String>, StoreError> {
+    let mut copy = None;
+    if let Some(damaged) = damaged {
+        let dir = folder.path(layout::EXTERNAL);
+        atomic_create_dirs(vfs, &dir)?;
+        let name = format!(
+            "{}-{}",
+            crate::appdata::utc_stamp(clock.now()),
+            layout::escaped(PROJECT_JSON)
+        );
+        atomic_write(vfs, &dir, &name, damaged, SyncDir::Now).map_err(|e| e.into_inner())?;
+        copy = Some(format!("{}/{name}", layout::EXTERNAL));
+    }
+    let (dir, name) = folder.dir_and_name(PROJECT_JSON);
+    atomic_create_dirs(vfs, &dir)?;
+    atomic_write(vfs, &dir, name, good, SyncDir::Now).map_err(|e| e.into_inner())?;
+    Ok(copy)
 }
 
 /// What O1 to O6 decided.
@@ -234,15 +290,25 @@ fn open_inner(
     let folder = Folder::new(path);
     vfs.metadata(path)
         .map_err(|e| OpenError::Unreadable(StoreError::io("stat", path, e)))?;
-    let project_json = match vfs.read(&folder.path(PROJECT_JSON)) {
-        Ok(bytes) => bytes,
-        Err(e) if is_not_found(&e) => return Err(OpenError::NotAProject),
-        Err(e) => {
-            return Err(OpenError::Unreadable(StoreError::io(
-                "read",
-                &folder.path(PROJECT_JSON),
-                e,
-            )));
+    // §3.5: a `project.json` that is missing or does not read is restored from the HEAD
+    // tree; with no copy there, the folder is not a project of this format.
+    let (project_json, restored) = match vfs.read(&folder.path(PROJECT_JSON)) {
+        Ok(bytes) if ProjectJson::parse(&bytes).is_some() => (bytes, None),
+        found => {
+            let damaged = found.as_ref().ok().cloned();
+            match head_project_json(env, &*vfs, path, &counters) {
+                Some(good) => (good.clone(), Some((good, damaged))),
+                None => {
+                    return Err(match found {
+                        Err(e) if !is_not_found(&e) => OpenError::Unreadable(StoreError::io(
+                            "read",
+                            &folder.path(PROJECT_JSON),
+                            e,
+                        )),
+                        _ => OpenError::NotAProject,
+                    });
+                }
+            }
         }
     };
     let (id, kind) = ProjectJson::parse(&project_json).ok_or(OpenError::NotAProject)?;
@@ -292,10 +358,12 @@ fn open_inner(
         }
     }
     // O2.
+    let mut temps = Temps::default();
     if !read_only && write_failed.is_none() {
         // O4's repair: unit S1 has no HEAD to restore `format.json` from, so a missing or
         // damaged one is written as this app's; a newer one was never damaged here.
-        let repaired = finish_temps(&*vfs, &folder, id).and_then(|()| {
+        let repaired = finish_temps(&*vfs, &folder, id).and_then(|found| {
+            temps = found;
             // The folder every save goes into is made durable now (once, §5.0), not by the
             // first save.
             atomic_create_dirs(&*vfs, &folder.path(PENDING))?;
@@ -317,7 +385,46 @@ fn open_inner(
             write_failed = Some(e.to_string());
         }
     }
+    let mut restored_project: Option<Option<String>> = None;
+    if let Some((good, damaged)) = &restored
+        && !read_only
+        && write_failed.is_none()
+    {
+        match restore_project_json(&*vfs, &folder, &*env.clock, good, damaged.as_deref()) {
+            Ok(copy) => restored_project = Some(copy),
+            Err(e) => write_failed = Some(e.to_string()),
+        }
+    }
     tracker.add(1, 0);
+    // O3: the project's repository (§6.1).
+    let mut notices: Vec<(Notice, Option<String>)> = Vec::new();
+    let writable = !read_only && write_failed.is_none();
+    let (git, git_failed, broken_git) =
+        match crate::history::open(env, &*vfs, path, writable, &counters) {
+            Ok(opened) => {
+                notices.extend(opened.notices);
+                (opened.git, None, opened.broken)
+            }
+            Err(e) => (None, Some(e.to_string()), None),
+        };
+    if writable && let Some(reason) = git_failed {
+        write_failed = Some(reason);
+    }
+    if let Some(copy) = restored_project.take()
+        && let Ok(path) = RepoPath::parse(PROJECT_JSON)
+    {
+        // The person is told the file was restored, and where the bytes found are.
+        match copy {
+            Some(copy) => notices.push((
+                Notice::FixedFileRestored {
+                    path,
+                    copy: copy.as_str().into(),
+                },
+                Some(copy),
+            )),
+            None => notices.push((Notice::MissingFileRebuilt { path }, None)),
+        }
+    }
     // O8: the journal, in parallel, from the fold cache where it stands.
     let files = list(&*vfs, &folder)
         .map_err(|e| OpenError::Unreadable(StoreError::io("list", &folder.path(PACKS), e)))?;
@@ -331,7 +438,7 @@ fn open_inner(
     let source = Arc::new(FileSource::new(vfs.clone()));
     let value_source: Arc<dyn tc_journal::fold::ValueSource> = source.clone();
     let fold_tracker = tracker.clone();
-    let (fold, reads) = load_streaming(
+    let (mut fold, reads) = load_streaming(
         LoadSetup {
             vfs: vfs.clone(),
             project: id,
@@ -352,7 +459,6 @@ fn open_inner(
             })
         },
     );
-    let mut notices: Vec<(Notice, Option<String>)> = Vec::new();
     for read in &reads {
         if let Ok(facts) = &read.outcome {
             counters.add(&counters.journal_files_read, 1);
@@ -393,6 +499,20 @@ fn open_inner(
             notices.push((Notice::PackMissing { path }, None));
         }
     }
+    // O2, second half: the pending temps wait for the fold (§6.1).
+    let mut settled = Settled::default();
+    if !read_only && write_failed.is_none() {
+        settled = settle_temps(
+            &*vfs,
+            &folder,
+            &*env.clock,
+            &mut fold,
+            &mut journal,
+            &mut notices,
+            std::mem::take(&mut temps.deferred),
+        );
+        settled.pending_unreadable |= temps.pending_unreadable;
+    }
     // O6, second half: the ledger and duplicate devices need the fold (§6.3).
     let stats = fold.device_stats();
     let now = env.clock.now().0;
@@ -409,10 +529,11 @@ fn open_inner(
         }
     }
     if !read_only && write_failed.is_none() {
-        let pending_unreadable = journal
-            .unreadable
-            .iter()
-            .any(|rel| rel.starts_with(&format!("{PENDING}/")));
+        let pending_unreadable = settled.pending_unreadable
+            || journal
+                .unreadable
+                .iter()
+                .any(|rel| rel.starts_with(&format!("{PENDING}/")));
         match check_identity(
             env,
             &*vfs,
@@ -422,6 +543,7 @@ fn open_inner(
             &stats,
             &print,
             pending_unreadable,
+            &settled.unplaced_seq,
         ) {
             Ok((checked, notice)) => {
                 identity = checked;
@@ -459,6 +581,7 @@ fn open_inner(
             (None, Some(reason)) => Mode::ReadOnly(ReadOnlyReason::WriteFailed(reason.clone())),
             (None, None) => Mode::Writable,
         },
+        git_dir: git.as_ref().map(|g| g.git_dir().to_path_buf()),
     };
     let shared = Arc::new(Shared::new(
         fold.clone(),
@@ -467,6 +590,8 @@ fn open_inner(
         counters.clone(),
         hooks.clone(),
     ));
+    let (writer_tx, writer_rx) = std::sync::mpsc::channel();
+    let (actor_tx, actor_rx) = std::sync::mpsc::channel();
     let mut project = Project {
         vfs: vfs.clone(),
         counters: counters.clone(),
@@ -480,24 +605,75 @@ fn open_inner(
         source,
         clock: env.clock.clone(),
         app: env.app.clone(),
-        network: gates.network,
         journal,
         index: index_cache,
-        manifest,
         dirty: Dirty::default(),
-        stamp_ns,
         shared: shared.clone(),
+        writer: None,
+        git: git.as_ref().and_then(|g| g.another().ok()),
+    };
+    let mut writer = Writer {
+        // Its flushes and renames wait for the saves in flight, a little (PERFORMANCE.md).
+        vfs: Arc::new(crate::pace::PacedVfs::new(
+            vfs.clone(),
+            shared.gate.clone(),
+            counters.clone(),
+        )),
+        counters: counters.clone(),
+        folder: folder.clone(),
+        kind,
+        shared: shared.clone(),
+        clock: env.clock.clone(),
+        network: gates.network,
+        manifest,
         manifest_changed: false,
-        prerendered: BTreeMap::new(),
+        stamp_ns,
         busy: BTreeMap::new(),
-        copied_outside: BTreeSet::new(),
+        unrecorded_metadata: BTreeMap::new(),
+        fold: project.fold.clone(),
+        seq: 0,
+        written_seq: BTreeMap::new(),
+        unattempted: std::collections::BTreeSet::new(),
+        packs: project.pack_facts(),
+        complete: project.journal.complete(),
+        packs_missing: project.journal.blocked_packs(),
+        dirty: Dirty::default(),
+        prerendered: BTreeMap::new(),
+        prerendered_seq: 0,
+        reasons: BTreeMap::new(),
+        values_told: None,
+        opening: false,
+        git,
+        device,
+        recover: broken_git,
+        loose: None,
+        repack: None,
+        carried_kept: None,
+        wrote_group: false,
+        pending_record: BTreeMap::new(),
+        shown_by_path: BTreeMap::new(),
+        bases: BTreeMap::new(),
+        heads_cache: BTreeMap::new(),
+        pending_carried: BTreeMap::new(),
+        deferred_paths: Vec::new(),
+        waiting: BTreeMap::new(),
+        collecting: false,
+        found: Vec::new(),
+        actor: actor_tx.clone(),
     };
     for (notice, copy) in notices {
         project.notice(notice, copy);
     }
+    project.renew_quarantine_notices();
     let mut unchecked: Vec<String> = Vec::new();
     if !read_only && write_failed.is_none() {
-        match repair_and_materialize(&mut project, tracker, identity, &options.creation_pins) {
+        match repair_and_classify(
+            &mut project,
+            &mut writer,
+            tracker,
+            identity,
+            &options.creation_pins,
+        ) {
             Ok(paths) => unchecked = paths,
             Err(e) => {
                 let reason = e.to_string();
@@ -508,7 +684,7 @@ fn open_inner(
             }
         }
     } else {
-        project.renew_hold_notices();
+        writer.renew_hold_notices();
     }
     // A project that cannot be written holds no lock: it writes nothing, so there is
     // nothing to guard, and the person can open it again once the disk works.
@@ -527,56 +703,125 @@ fn open_inner(
         counters.clone(),
         read_only,
     ));
-    project.publish();
+    let seq = project.publish();
+    // What O9 projected stands for the fold of this snapshot only.
+    writer.prerendered_seq = seq;
     // O14 and the fold cache, in the background.
     let background = (!read_only).then(|| {
         let mut paths = unchecked;
-        paths.extend(unsettled(&project.manifest));
+        paths.extend(unsettled(&writer.manifest));
         paths.sort();
         paths.dedup();
         crate::handle::Background {
+            writer: writer_tx.clone(),
             vfs: vfs.clone(),
             counters: counters.clone(),
             folder: folder.clone(),
             index: project.index_bytes_later(),
             project: id,
             check: paths,
-            stamp_ns: project.stamp_ns,
+            stamp_ns: writer.stamp_ns,
         }
     });
-    let handle = crate::actor::spawn(project, gates.lock.take(), drafts);
+    // Carried files the open found to look at are read once the actor can record them.
+    let deferred = std::mem::take(&mut writer.deferred_paths);
+    let writer_thread = crate::writer::spawn(writer, writer_rx);
+    if !deferred.is_empty() {
+        let _ = writer_tx.send(crate::writer::Job::Paths(deferred));
+    }
+    let watch_writer = writer_tx.clone();
+    let watch_actor = actor_tx.clone();
+    let handle = crate::actor::spawn(
+        project,
+        gates.lock.take(),
+        drafts,
+        writer_tx,
+        writer_thread,
+        actor_tx,
+        actor_rx,
+    );
+    if !read_only {
+        // §11.1: what another program saves into the folder is told while the project is
+        // open; the window focus covers a filesystem that does not watch.
+        let watching = crate::watch::Watching::start(
+            &vfs,
+            &folder,
+            env.watch_debounce,
+            watch_writer,
+            watch_actor,
+        );
+        *handle.watcher.lock().unwrap_or_else(|e| e.into_inner()) = watching;
+    }
     if let Some(background) = background {
         handle.start_background(background);
     }
     Ok(handle)
 }
 
-/// O7, O9 and O10: finishes interrupted work, classifies the derived files and writes what
-/// differs. Returns the paths O9 took as converged without reading them (for O14). A write
-/// that fails ends the open's writes (see the caller).
-fn repair_and_materialize(
+/// O7 and O9: finishes interrupted work and classifies the derived files, marking what
+/// differs. O10, the writing, is the writer's first job. Returns the paths O9 took as
+/// converged without reading them (for O14). A write that fails ends the open's writes (see
+/// the caller).
+fn repair_and_classify(
     project: &mut Project,
+    writer: &mut Writer,
     tracker: &Tracker,
     identity: Identity,
     creation_pins: &[(PinGroup, PinGroupValue)],
 ) -> Result<Vec<String>, StoreError> {
     // O7.
     project.finish_interrupted()?;
+    // O7: the packs the project expects, written back from their blobs (§4.4).
+    project.restore_expected_packs(true)?;
     // A new device names its person as the old one did (§6.3).
     if let Identity::Minted { old: Some(old), .. } = identity {
         project.copy_profile(old)?;
     }
     project.write_creation_pins(creation_pins)?;
-    // O9, O10.
-    let unchecked = project.classify(tracker)?;
-    let paths = project.dirty_count();
-    tracker.phase(Phase::Writing, paths as u64, 0);
-    project.materialize()?;
-    if project.manifest_changed {
-        project.write_manifest()?;
+    // O9.
+    writer.fold = project.fold.clone();
+    writer.packs = project.pack_facts();
+    writer.complete = project.journal.complete();
+    writer.collecting = true;
+    let classified = writer.classify(tracker).and_then(|unchecked| {
+        // The folders are listed for files that are new: a book file put in, a file that
+        // cannot be an ingredient (§3.3, §11.1).
+        writer.look_for_new_files_at_open()?;
+        Ok(unchecked)
+    });
+    writer.collecting = false;
+    let unchecked = classified?;
+    record_found(project, writer)?;
+    tracker.phase(Phase::Writing, 1, 0);
+    if writer.manifest_changed {
+        writer.write_manifest()?;
     }
-    tracker.set(paths as u64);
+    tracker.set(1);
     Ok(unchecked)
+}
+
+/// §6.1 O9: the paths the classification found changed outside the app are examined and
+/// recorded before the open ends (§11.1), each as one batch, the next on the project the
+/// last one left.
+fn record_found(project: &mut Project, writer: &mut Writer) -> Result<(), StoreError> {
+    use crate::outside::Examined;
+    for found in std::mem::take(&mut writer.found) {
+        let md5 = Md5::of(&found.bytes);
+        writer.fold = project.fold.clone();
+        let (examined, copy) = writer.examine(&found.rel, &found.bytes, &found.base)?;
+        match examined {
+            Examined::Plan(plan, derived) => {
+                let outcome = project.record_outside(&found.rel, md5, *plan, derived);
+                writer.recorded(found.rel, md5, copy, outcome, &found.bytes);
+            }
+            Examined::Nothing => writer.accept(&found.rel, md5, &found.bytes, None)?,
+            Examined::Undecodable { reason } => {
+                writer.undecodable(&found.rel, &copy, &reason);
+                writer.accept(&found.rel, md5, &found.bytes, None)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// O1, O4 and O5: the lock, the format gate and the filesystem gate. A folder that must
@@ -683,79 +928,6 @@ fn gates(
     })
 }
 
-/// O2: a temporary file of a pending file or pack whose bytes verify is renamed into place
-/// durably (a power cut on Windows can keep the temp and lose the rename after "Saved");
-/// every other temporary file is removed.
-fn finish_temps(vfs: &dyn Vfs, folder: &Folder, project: ProjectId) -> Result<(), StoreError> {
-    let mut stack: Vec<(PathBuf, String)> = vec![(folder.root().to_owned(), String::new())];
-    while let Some((dir, rel)) = stack.pop() {
-        let entries = match vfs.read_dir(&dir) {
-            Ok(entries) => entries,
-            Err(e) if is_not_found(&e) => continue,
-            Err(e) => return Err(StoreError::io("list", &dir, e)),
-        };
-        let mut dirs = DirSet::new();
-        for entry in entries {
-            let name = entry.name.to_string_lossy().into_owned();
-            let child = if rel.is_empty() {
-                name.clone()
-            } else {
-                format!("{rel}/{name}")
-            };
-            if entry.kind == EntryKind::Dir {
-                if child != ".git" && !name.starts_with(".staging-") {
-                    stack.push((dir.join(&entry.name), child));
-                }
-                continue;
-            }
-            let Some(target) = temp_target(&name) else {
-                continue;
-            };
-            let abs = dir.join(&entry.name);
-            let target_rel = if rel.is_empty() {
-                target.to_owned()
-            } else {
-                format!("{rel}/{target}")
-            };
-            let complete = vfs
-                .read(&abs)
-                .ok()
-                .is_some_and(|bytes| verifies(&target_rel, &bytes, project));
-            if complete {
-                vfs.rename(&abs, &dir.join(target))
-                    .map_err(|e| StoreError::io("rename", &abs, e))?;
-                dirs.add_dir(&dir);
-                // Windows keeps a rename in its log until the renamed file is flushed.
-                let _ = vfs.sync_file(&dir.join(target));
-            } else {
-                atomic_remove(vfs, &abs, SyncDir::Deferred(&mut dirs))?;
-            }
-        }
-        dirs.sync(vfs)?;
-    }
-    Ok(())
-}
-
-/// Whether `bytes` are a complete file for `rel`: a pending file whose name its bytes give,
-/// or a pack that passes P2 to P4 at its path (its name is the hash of its header and ids).
-fn verifies(rel: &str, bytes: &[u8], project: ProjectId) -> bool {
-    if let Some(name) = rel.strip_prefix(&format!("{PENDING}/")) {
-        let read = read_pending(bytes, project);
-        let Some(header) = read.header.clone() else {
-            return false;
-        };
-        if read.status != PendingStatus::Valid {
-            return false;
-        }
-        return encode_pending(&header, &read.entries)
-            .is_ok_and(|encoded| encoded.name == name && encoded.bytes == bytes);
-    }
-    if rel.starts_with(PACKS) {
-        return read_pack(rel, bytes, project).is_valid();
-    }
-    false
-}
-
 /// What the open's reads say of each journal file, the notices they call for, and the fold
 /// cache's sections that stand.
 fn journal_of(
@@ -837,6 +1009,9 @@ fn journal_of(
                             .map(|h| h.replaces.clone())
                             .unwrap_or_default(),
                         ids: pack.ids,
+                        blob: None,
+                        seen: None,
+                        damaged: matches!(pack.status, PackStatus::Damaged(_)),
                     },
                 );
             }
@@ -845,6 +1020,11 @@ fn journal_of(
                     rel,
                     PendingInfo {
                         ids: pending.ids,
+                        reconciles: pending
+                            .header
+                            .as_ref()
+                            .and_then(|h| h.reconciles.as_ref())
+                            .map(|r| (r.path.as_str().to_owned(), r.seen_md5)),
                         number: Some(read.number),
                         status: pending.status,
                     },
@@ -869,9 +1049,14 @@ fn check_identity(
     stats: &BTreeMap<DeviceId, tc_journal::fold::DeviceStat>,
     print: &[u8; 32],
     pending_unreadable: bool,
+    unplaced_seq: &BTreeMap<DeviceId, u64>,
 ) -> Result<(Identity, Option<Notice>), StoreError> {
     let device = identity.device();
-    let held = stats.get(&device).map_or(0, |s| s.max_seq.0);
+    // A temp that could be neither folded nor kept holds sequence numbers this device used.
+    let held = stats
+        .get(&device)
+        .map_or(0, |s| s.max_seq.0)
+        .max(unplaced_seq.get(&device).copied().unwrap_or(0));
     let reason = if let Some(entry) = env.app.ledger_entry(device)
         && entry.last_seq > held
     {
@@ -913,15 +1098,6 @@ fn check_identity(
 }
 
 impl Project {
-    /// The number of derived paths a materialization would write now.
-    pub(crate) fn dirty_count(&self) -> usize {
-        if self.dirty.everything {
-            self.fold.derived_files().len() + 1
-        } else {
-            self.dirty.files.len() + usize::from(self.dirty.metadata)
-        }
-    }
-
     /// O7 (§6.1): pending files a valid pack holds whole, packs a valid pack replaces, and
     /// damaged or foreign pending files. Each file goes only once every change it holds is
     /// in another verified file, whose values the fold reads from then on.
@@ -936,13 +1112,13 @@ impl Project {
         let mut dirs = DirSet::new();
         let mut flushed: BTreeSet<String> = BTreeSet::new();
         // Pending files whose every change a valid pack holds: a seal that stopped after K3.
-        let pending: Vec<(String, PendingInfo)> = self
-            .journal
-            .pending
-            .iter()
-            .map(|(rel, p)| (rel.clone(), p.clone()))
-            .collect();
-        for (rel, info) in pending {
+        let pending: Vec<String> = self.journal.pending.keys().cloned().collect();
+        for rel in pending {
+            // Salvaging an earlier path can replace this pending file and its source slot.
+            // Relocate the current slot before removal, including aliases from that salvage.
+            let Some(info) = self.journal.pending.get(&rel).cloned() else {
+                continue;
+            };
             match &info.status {
                 PendingStatus::Valid => {}
                 PendingStatus::Damaged(reason) => {
@@ -950,7 +1126,11 @@ impl Project {
                     continue;
                 }
                 PendingStatus::Foreign { .. } => {
-                    self.quarantine(&rel, &mut dirs)?;
+                    let abs = self.folder.path(&rel);
+                    let Ok(bytes) = self.vfs.read(&abs) else {
+                        continue;
+                    };
+                    self.quarantine_pending(&rel, &bytes)?;
                     self.journal.pending.remove(&rel);
                     continue;
                 }
@@ -975,11 +1155,16 @@ impl Project {
             }
             self.flush_holders(&holders, &mut flushed)?;
             if self.relocate_to_packs(&rel, JournalKind::Pending, info.number, &holders)? {
-                atomic_remove(
+                // A file a scanner still holds stays for the next open: the open never
+                // fails for it.
+                let removed = atomic_remove_if_free(
                     &*self.vfs,
                     &self.folder.path(&rel),
                     SyncDir::Deferred(&mut dirs),
                 )?;
+                if !removed {
+                    self.journal.left.insert(rel.clone());
+                }
                 self.journal.pending.remove(&rel);
                 if self.index.sections.remove(&rel).is_some() {
                     self.index.changed = true;
@@ -1022,9 +1207,10 @@ impl Project {
                 let holders = BTreeSet::from([by_rel.clone()]);
                 self.flush_holders(&holders, &mut flushed)?;
                 if self.relocate_to_packs(&rel, JournalKind::Pack, number, &holders)? {
-                    atomic_remove(&*self.vfs, &abs, SyncDir::Deferred(&mut dirs))?;
+                    if !atomic_remove_if_free(&*self.vfs, &abs, SyncDir::Deferred(&mut dirs))? {
+                        self.journal.left.insert(rel.clone());
+                    }
                     self.journal.packs.remove(&rel);
-                    self.manifest.packs.remove(&rel);
                     if self.index.sections.remove(&rel).is_some() {
                         self.index.changed = true;
                     }
@@ -1093,7 +1279,10 @@ impl Project {
                 .map_err(|e| StoreError::io("read", &habs, e))?;
             let hnumber = match self.journal.packs.get(holder).and_then(|p| p.number) {
                 Some(n) => n,
-                None => self.source.add(&habs),
+                None => self
+                    .source
+                    .add_target(&habs)
+                    .map_err(|e| StoreError::io("open the verified holder", &habs, e))?,
             };
             targets.push((
                 JournalFile {
@@ -1117,10 +1306,7 @@ impl Project {
             .map(|(f, n, b)| (f, *n, b.as_slice()))
             .collect();
         match relocation(self.id, (&from, &bytes), &refs) {
-            Some(map) => {
-                self.source.moved(number, map);
-                Ok(true)
-            }
+            Some(map) => Ok(self.source.moved(number, map)),
             None => Ok(false),
         }
     }
@@ -1132,7 +1318,7 @@ impl Project {
         &mut self,
         rel: &str,
         reason: tc_journal::pack::PackError,
-        dirs: &mut DirSet,
+        _dirs: &mut DirSet,
     ) -> Result<(), StoreError> {
         let abs = self.folder.path(rel);
         let Ok(bytes) = self.vfs.read(&abs) else {
@@ -1151,17 +1337,19 @@ impl Project {
             let encoded =
                 encode_pending(&header, &lines).map_err(|e| StoreError::Other(e.to_string()))?;
             let dir = self.folder.path(PENDING);
-            atomic_write(
+            let name = crate::recovery::preserve_bytes(
                 &*self.vfs,
                 &dir,
                 &encoded.name,
                 &encoded.bytes,
-                SyncDir::Now,
-            )
-            .map_err(|e| e.into_inner())?;
-            let new_rel = format!("{PENDING}/{}", encoded.name);
+                Some(&abs),
+            )?;
+            let new_rel = format!("{PENDING}/{name}");
             let new_abs = self.folder.path(&new_rel);
-            let number = self.source.add(&new_abs);
+            let number = self
+                .source
+                .add_target(&new_abs)
+                .map_err(|e| StoreError::io("open the verified salvage", &new_abs, e))?;
             if let Some(old) = self.journal.pending.get(rel).and_then(|p| p.number) {
                 let from = JournalFile {
                     rel: rel.to_owned(),
@@ -1176,7 +1364,11 @@ impl Project {
                     size: encoded.bytes.len() as u64,
                 };
                 match relocation(self.id, (&from, &bytes), &[(&to, number, &encoded.bytes)]) {
-                    Some(map) => self.source.moved(old, map),
+                    Some(map) => {
+                        if !self.source.moved(old, map) {
+                            return Ok(());
+                        }
+                    }
                     None => return Ok(()),
                 }
             }
@@ -1184,40 +1376,181 @@ impl Project {
                 new_rel,
                 PendingInfo {
                     ids: lines.iter().map(Verified::id).collect(),
+                    reconciles: None,
                     number: Some(number),
                     status: PendingStatus::Valid,
                 },
             );
         }
-        self.quarantine(rel, dirs)?;
+        let copy = self.quarantine_pending(rel, &bytes)?;
         self.journal.pending.remove(rel);
-        self.notice(
-            Notice::QuarantinedPending {
-                file: rel.into(),
-                reason,
-                salvaged,
-            },
-            None,
-        );
+        if copy.is_none() {
+            self.notice(
+                Notice::QuarantinedPending {
+                    file: rel.into(),
+                    reason,
+                    salvaged,
+                },
+                None,
+            );
+        }
         Ok(())
     }
 
-    /// Moves a file to `.tc/quarantine/`, where it stays until the person dismisses the
-    /// notice (§3.6).
-    fn quarantine(&mut self, rel: &str, dirs: &mut DirSet) -> Result<(), StoreError> {
-        let dir = self.folder.path(QUARANTINE);
-        atomic_create_dirs(&*self.vfs, &dir)?;
-        let name = layout::escaped(rel);
+    /// The original is removed only after a distinct exact copy is durable. A failed
+    /// last look or sharing violation leaves the source for the next open as well.
+    pub(crate) fn quarantine_pending(
+        &mut self,
+        rel: &str,
+        bytes: &[u8],
+    ) -> Result<Option<String>, StoreError> {
         let from = self.folder.path(rel);
-        let to = dir.join(&name);
-        self.vfs
-            .rename(&from, &to)
-            .map_err(|e| StoreError::io("move to quarantine", &from, e))?;
-        dirs.add_dir(&dir);
-        if let Some(parent) = from.parent() {
-            dirs.add_dir(parent);
+        let dir = self.folder.path(QUARANTINE);
+        let base = format!(
+            "pending~{}~{}",
+            layout::escaped(rel),
+            crate::recovery::fingerprint(bytes)
+        );
+        let name = crate::recovery::preserve_bytes(&*self.vfs, &dir, &base, bytes, None)?;
+        let copy = format!("{QUARANTINE}/{name}");
+        // The self-describing durable copy reconstructs its notice even if a crash
+        // occurs before this session publishes the notice or removes the source.
+        self.notice_quarantined(rel, &copy, bytes);
+        let backup = self.folder.path(&copy);
+        let mut backup_missing = false;
+        let removed = atomic_remove_checked(
+            &*self.vfs,
+            &from,
+            SyncDir::Now,
+            &HeldRetry::SAVE,
+            &mut || {
+                if !self.vfs.read(&from).is_ok_and(|current| current == bytes) {
+                    return Ok(false);
+                }
+                if !self.vfs.read(&backup).is_ok_and(|current| current == bytes) {
+                    backup_missing = true;
+                    return Ok(false);
+                }
+                self.vfs
+                    .sync_file(&backup)
+                    .and_then(|()| self.vfs.sync_dir(&dir))
+                    .and_then(|()| self.vfs.sync_file(&backup))
+                    .map_err(|e| StoreError::io("flush the recovery copy", &backup, e))?;
+                Ok(true)
+            },
+        );
+        if backup_missing {
+            for notice in self.shared.notices() {
+                if notice.copy.as_deref() == Some(copy.as_str()) {
+                    self.shared.remove_notice(notice.id);
+                }
+            }
+            self.notice(Notice::FileUnreadable {
+                path: rel.into(),
+                reason: "the original save was kept because its recovery copy changed or disappeared".into(),
+            }, None);
         }
-        Ok(())
+        match removed {
+            Ok(Removed::Removed) => {}
+            Ok(Removed::Refused) => {
+                self.journal.left.insert(rel.to_owned());
+            }
+            Err(e) if e.io_error().is_some_and(|e| self.vfs.is_held(e)) => {
+                self.journal.left.insert(rel.to_owned());
+            }
+            Err(e) => return Err(e),
+        }
+        Ok(Some(copy))
+    }
+
+    fn renew_quarantine_notices(&self) {
+        let Ok(entries) = self.vfs.read_dir(&self.folder.path(QUARANTINE)) else {
+            return;
+        };
+        for entry in entries {
+            if entry.kind != crate::vfs::EntryKind::File {
+                continue;
+            }
+            let Some(name) = entry.name.to_str() else {
+                continue;
+            };
+            let Some(rest) = name.strip_prefix("pending~") else {
+                continue;
+            };
+            let Some((escaped, number)) = rest.rsplit_once('~') else {
+                continue;
+            };
+            if number.parse::<u16>().is_err() {
+                continue;
+            }
+            let Some((escaped, digest)) = escaped.rsplit_once('~') else {
+                continue;
+            };
+            if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit()) {
+                continue;
+            }
+            let rel = escaped.replace("%2F", "/").replace("%25", "%");
+            let Some(file) = rel.strip_prefix(".tc/pending/") else {
+                continue;
+            };
+            if file.is_empty() || file.contains('/') || matches!(file, "." | "..") {
+                continue;
+            }
+            let copy = format!("{QUARANTINE}/{name}");
+            if self
+                .shared
+                .notices()
+                .iter()
+                .any(|notice| notice.copy.as_ref() == Some(&copy))
+            {
+                continue;
+            }
+            let Ok(bytes) = self.vfs.read(&self.folder.path(&copy)) else {
+                continue;
+            };
+            if crate::recovery::fingerprint(&bytes) != digest {
+                self.notice(
+                    Notice::FileUnreadable {
+                        path: copy.as_str().into(),
+                        reason: format!(
+                            "this preserved recovery copy changed; its original source was {rel}"
+                        )
+                        .into(),
+                    },
+                    Some(copy),
+                );
+                continue;
+            }
+            self.notice_quarantined(&rel, &copy, &bytes);
+        }
+    }
+
+    fn notice_quarantined(&self, rel: &str, copy: &str, bytes: &[u8]) {
+        if self
+            .shared
+            .notices()
+            .iter()
+            .any(|notice| notice.copy.as_deref() == Some(copy))
+        {
+            return;
+        }
+        let read = read_pending(bytes, self.id);
+        let notice = match read.status {
+            PendingStatus::Damaged(reason) => Notice::QuarantinedPending {
+                file: rel.into(),
+                reason,
+                salvaged: read.entries.len() as u32,
+            },
+            PendingStatus::Foreign { project } => Notice::FileUnreadable {
+                path: rel.into(),
+                reason: format!(
+                    "this save belongs to project {project}; its original bytes were kept"
+                )
+                .into(),
+            },
+            PendingStatus::Valid | PendingStatus::Newer { .. } => return,
+        };
+        self.notice(notice, Some(copy.to_owned()));
     }
 
     /// A new device's profile copies the old one's names (§6.3).
@@ -1237,6 +1570,8 @@ impl Project {
                 cause: tc_journal::Cause::Edit,
             }],
             skipped: Vec::new(),
+            kept: Vec::new(),
+            dropped_links: Vec::new(),
         };
         self.commit(plan)
             .map(|_| ())
@@ -1268,356 +1603,17 @@ impl Project {
                 })
                 .collect(),
             skipped: Vec::new(),
+            kept: Vec::new(),
+            dropped_links: Vec::new(),
         };
         self.commit(plan)
             .map(|_| ())
             .map_err(|e| StoreError::Other(e.to_string()))
     }
 
-    /// O9 (§6.2): classifies every derived path, reading and projecting only what may have
-    /// changed, and marks what to write. Returns the paths taken as converged without being
-    /// read, for the storage check (O14).
-    pub(crate) fn classify(&mut self, tracker: &Tracker) -> Result<Vec<String>, StoreError> {
-        let files = self.fold.derived_files();
-        tracker.phase(Phase::Checking, files.len() as u64 + 1, 0);
-        let digests = self.fold.scope_digests(&files);
-        let intent = self
-            .vfs
-            .read(&self.folder.path(INTENT))
-            .ok()
-            .and_then(|b| Intent::parse(&b));
-        let versions = self.manifest.versions_current();
-        let mut unread: Vec<String> = Vec::new();
-        let mut to_project: Vec<(String, DerivedFile, Option<Vec<u8>>)> = Vec::new();
-        let projected: BTreeSet<String> = files.iter().map(DerivedFile::path).collect();
-        for (file, digest) in files.iter().zip(&digests) {
-            let rel = file.path();
-            let named = intent.as_ref().is_some_and(|i| i.names(&rel));
-            let entry = self.manifest.paths.get(&rel).cloned();
-            let same_scope = versions
-                && entry
-                    .as_ref()
-                    .is_some_and(|e| e.scope.as_deref() == Some(digest.to_hex().as_str()));
-            if same_scope && !named && self.clean_by_stat(&rel) {
-                unread.push(rel);
-                tracker.add(1, 0);
-                continue;
-            }
-            let disk = match self.read_derived(&rel) {
-                Ok(disk) => disk,
-                Err(reason) => {
-                    // A file another program holds, or a placeholder: neither damaged nor
-                    // gone. Nothing is written over it, and it is tried again (§4.4, §6.1).
-                    self.unreadable_derived(&rel, file, reason);
-                    tracker.add(1, 0);
-                    continue;
-                }
-            };
-            match (&disk, &entry) {
-                (Some(bytes), Some(entry))
-                    if same_scope && entry.held.is_none() && md5_hex(bytes) == entry.md5 =>
-                {
-                    // Read, not projected: the bytes are the app's own.
-                    let md5 = entry.md5.clone();
-                    self.refresh_entry(&rel, &md5, bytes.len() as u64, None, None);
-                }
-                _ => to_project.push((rel, file.clone(), disk)),
-            }
-            tracker.add(1, 0);
-        }
-        // Paths only the manifest lists: a removal that stopped before M7, or files to go.
-        let listed: Vec<String> = self
-            .manifest
-            .paths
-            .keys()
-            .filter(|p| {
-                !projected.contains(*p)
-                    && p.as_str() != METADATA
-                    && !crate::materialize::FIXED.contains(&p.as_str())
-            })
-            .cloned()
-            .collect();
-        for rel in listed {
-            let entry = self.manifest.paths.get(&rel).cloned();
-            if entry.as_ref().is_some_and(|e| e.oid.is_some()) {
-                continue;
-            }
-            match self.vfs.metadata(&self.folder.path(&rel)) {
-                Err(e) if is_not_found(&e) => {
-                    self.manifest.paths.remove(&rel);
-                    self.manifest_changed = true;
-                }
-                // Still on disk: the materialization removes it (M0, X).
-                _ => self.dirty.metadata = true,
-            }
-        }
-        if !to_project.is_empty() {
-            let wanted: BTreeSet<DerivedFile> =
-                to_project.iter().map(|(_, f, _)| f.clone()).collect();
-            let mut rendered = self.render_files(&wanted);
-            for (rel, file, disk) in to_project {
-                let Some(new) = rendered.remove(&rel) else {
-                    continue;
-                };
-                self.classify_one(&rel, &file, disk.as_deref(), &new, intent.as_ref())?;
-                if self.dirty.files.contains(&file) {
-                    self.prerendered.insert(rel, new);
-                }
-            }
-        }
-        // metadata.json: converged when its entry is clean by stat and lists what it would.
-        let scope = self.metadata_scope();
-        let metadata_ok = versions
-            && self
-                .manifest
-                .paths
-                .get(METADATA)
-                .is_some_and(|e| e.scope.as_deref() == Some(scope.as_str()))
-            && !intent.as_ref().is_some_and(|i| i.names(METADATA))
-            && (self.clean_by_stat(METADATA) || self.metadata_matches_entry());
-        if !metadata_ok {
-            self.dirty.metadata = true;
-        }
-        tracker.add(1, 0);
-        if intent.is_some() && self.dirty.is_empty() {
-            atomic_remove(&*self.vfs, &self.folder.path(INTENT), SyncDir::Now)?;
-        }
-        self.renew_hold_notices();
-        Ok(unread)
-    }
-
-    /// The bytes of a derived file: `None` when it is gone, the reason when it cannot be
-    /// read now.
-    fn read_derived(&self, rel: &str) -> Result<Option<Vec<u8>>, String> {
-        let path = self.folder.path(rel);
-        match self.vfs.read(&path) {
-            Ok(bytes) => {
-                self.counters.add(&self.counters.derived_read, 1);
-                Ok(Some(bytes))
-            }
-            Err(e) if is_not_found(&e) => Ok(None),
-            Err(e) => Err(StoreError::io("read", &path, e).to_string()),
-        }
-    }
-
-    /// A derived file the open could not read: the person is told (`FileUnreadable`), the
-    /// file is left as it is, and the path stays dirty, so the next materialization reads it
-    /// again (M1) and writes it when it can.
-    fn unreadable_derived(&mut self, rel: &str, file: &DerivedFile, reason: String) {
-        self.dirty.files.insert(file.clone());
-        self.notice(
-            Notice::FileUnreadable {
-                path: rel.into(),
-                reason: reason.as_str().into(),
-            },
-            None,
-        );
-    }
-
-    /// Whether `metadata.json` holds what the manifest says the app wrote. A file that
-    /// cannot be read now is not known to, so `metadata.json` is written again.
-    fn metadata_matches_entry(&self) -> bool {
-        let Some(entry) = self.manifest.paths.get(METADATA) else {
-            return false;
-        };
-        matches!(self.read_derived(METADATA), Ok(Some(bytes)) if md5_hex(&bytes) == entry.md5)
-    }
-
-    /// Takes a path's md5, size and mtime again after a read found bytes the projection
-    /// gives; the entry settles when the read began at least 2 s after its mtime (§6.2).
-    /// `scope` replaces the entry's digest, and `nfc` its normalization, when given.
-    fn refresh_entry(
-        &mut self,
-        rel: &str,
-        md5: &str,
-        size: u64,
-        scope: Option<String>,
-        nfc: Option<bool>,
-    ) {
-        let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
-        let stamp = self.stamp_ns;
-        let network = self.network;
-        if let Some(entry) = self.manifest.paths.get_mut(rel) {
-            let mtime = meta.map_or(entry.mtime_ns, |m| m.mtime_ns);
-            let settled = !network && stamp >= mtime.saturating_add(2_000_000_000);
-            let changed = entry.md5 != md5
-                || entry.size != size
-                || entry.mtime_ns != mtime
-                || entry.settled != settled
-                || entry.held.is_some()
-                || (scope.is_some() && entry.scope != scope)
-                || (nfc.is_some() && entry.nfc != nfc);
-            entry.md5 = md5.to_owned();
-            entry.size = size;
-            entry.mtime_ns = mtime;
-            entry.settled = settled;
-            let was_held = entry.held.take().is_some();
-            if scope.is_some() {
-                entry.scope = scope;
-            }
-            if nfc.is_some() {
-                entry.nfc = nfc;
-            }
-            self.manifest_changed |= changed;
-            if was_held {
-                self.shared.remove_notices_of(rel);
-            }
-        }
-    }
-
-    /// The table of §6.2 for one path whose projection is `new`.
-    fn classify_one(
-        &mut self,
-        rel: &str,
-        file: &DerivedFile,
-        disk: Option<&[u8]>,
-        new: &[u8],
-        intent: Option<&Intent>,
-    ) -> Result<(), StoreError> {
-        let e = md5_hex(new);
-        let entry = self.manifest.paths.get(rel).cloned();
-        let Some(disk) = disk else {
-            // Missing: rebuilt, never read as a deletion (I11). A deletion ends a hold too,
-            // which M0 does for the path it writes (§5.10).
-            self.dirty.files.insert(file.clone());
-            if entry.is_some()
-                && let Ok(path) = RepoPath::parse(rel)
-            {
-                self.notice(Notice::MissingFileRebuilt { path }, None);
-            }
-            return Ok(());
-        };
-        let d = md5_hex(disk);
-        if d == e {
-            let scope = self.fold.scope_digest(file).to_hex();
-            // `metadata.json` declares the normalization of the text it lists, so an entry
-            // made from a read keeps what the read found.
-            let nfc = crate::materialize::is_text_path(rel)
-                .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(disk)));
-            match self.manifest.paths.contains_key(rel) {
-                true => self.refresh_entry(rel, &d, disk.len() as u64, Some(scope), nfc),
-                false => {
-                    let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
-                    self.manifest.paths.insert(
-                        rel.to_owned(),
-                        Entry {
-                            scope: Some(scope),
-                            nfc,
-                            ..Entry::of(d, disk.len() as u64, meta.map_or(0, |m| m.mtime_ns), false)
-                        },
-                    );
-                    self.manifest_changed = true;
-                }
-            }
-            return Ok(());
-        }
-        let ours = entry.as_ref().is_some_and(|en| en.md5 == d)
-            || intent.is_some_and(|i| i.md5s_of(rel).contains(&d.as_str()));
-        if let Some(held) = entry.as_ref().and_then(|en| en.held.as_ref()) {
-            if held.md5 == d {
-                return Ok(());
-            }
-            self.hold(rel, disk, false)?;
-            return Ok(());
-        }
-        if ours {
-            self.dirty.files.insert(file.clone());
-            return Ok(());
-        }
-        let damage = self.clean_by_stat(rel);
-        self.hold(rel, disk, damage)
-    }
-
-    /// Renders `files`, a book's files together.
-    fn render_files(&self, files: &BTreeSet<DerivedFile>) -> BTreeMap<String, Vec<u8>> {
-        let mut out = BTreeMap::new();
-        let mut books = BTreeSet::new();
-        for file in files {
-            match file.book() {
-                Some(book) => {
-                    books.insert(book);
-                }
-                None => {
-                    if let Some(bytes) = self.fold.render(file) {
-                        self.counters.add(&self.counters.projected, 1);
-                        out.insert(file.path(), bytes);
-                    }
-                }
-            }
-        }
-        for book in books {
-            for (file, bytes) in self.fold.render_book(book) {
-                if files.contains(&file) {
-                    self.counters.add(&self.counters.projected, 1);
-                    out.insert(file.path(), bytes);
-                }
-            }
-        }
-        out
-    }
-
-    /// O14 results (§6.1): equal bytes settle an entry once its tick is over; different
-    /// bytes are classified again on the actor, where nothing can change them meanwhile.
-    pub(crate) fn apply_check(&mut self, results: Vec<CheckResult>) -> Result<(), StoreError> {
-        for result in results {
-            let Some(entry) = self.manifest.paths.get(&result.rel).cloned() else {
-                continue;
-            };
-            if entry.held.is_some() {
-                continue;
-            }
-            match &result.md5 {
-                Some(md5) if *md5 == entry.md5 => {
-                    let settled = !self.network
-                        && entry.size == result.size
-                        && entry.mtime_ns == result.mtime_ns
-                        && result.stamp_ns >= result.mtime_ns.saturating_add(2_000_000_000);
-                    if settled
-                        && !entry.settled
-                        && let Some(e) = self.manifest.paths.get_mut(&result.rel)
-                    {
-                        e.settled = true;
-                        self.manifest_changed = true;
-                    }
-                }
-                Some(_) => {
-                    // Read again here: the file may have changed since the check read it.
-                    let Some(file) = self
-                        .fold
-                        .derived_files()
-                        .into_iter()
-                        .find(|f| f.path() == result.rel)
-                    else {
-                        continue;
-                    };
-                    let Ok(disk) = self.read_derived(&result.rel) else {
-                        continue;
-                    };
-                    let rendered = self.render_files(&BTreeSet::from([file.clone()]));
-                    if let Some(new) = rendered.get(&result.rel) {
-                        self.classify_one(&result.rel, &file, disk.as_deref(), new, None)?;
-                    }
-                }
-                None => {}
-            }
-        }
-        if self.manifest_changed {
-            self.write_manifest()?;
-        }
-        Ok(())
-    }
-
-    /// The fold cache's bytes (§3.6) if its sections changed since it was last written.
-    pub(crate) fn index_bytes(&mut self) -> Option<Vec<u8>> {
-        if !self.index.changed {
-            return None;
-        }
-        self.index.changed = false;
-        Some(Index::encode(self.id, self.index.sections.values()))
-    }
-
-    /// The sections to encode off the actor, if they changed: sections share their bytes,
-    /// so this copies no change.
+    /// The sections of the fold cache (§3.6) if they changed since it was last written:
+    /// sections share their bytes, so this copies no change, and the file is written from
+    /// them piece by piece ([`write_index_file`]).
     pub(crate) fn index_bytes_later(&mut self) -> Option<Vec<tc_journal::index::Section>> {
         if !self.index.changed {
             return None;
@@ -1625,6 +1621,32 @@ impl Project {
         self.index.changed = false;
         Some(self.index.sections.values().cloned().collect())
     }
+}
+
+/// Writes the fold cache (§3.6) `.tc/index.bin` atomically from its sections, piece by piece:
+/// the file of a whole Bible is 65 MB, and holding it whole beside the fold would add that to
+/// the project store's memory peak at close (PERFORMANCE.md). A failure only costs the next
+/// open the parse of the files the cache lacks.
+pub(crate) fn write_index_file(
+    vfs: &dyn Vfs,
+    dir: &Path,
+    project: ProjectId,
+    sections: &[tc_journal::index::Section],
+) {
+    let mut fill = |out: &mut crate::atomic::Sink<'_>| -> Result<(), StoreError> {
+        Index::encode_to(project, sections.iter(), &mut |bytes: &[u8]| {
+            out(bytes).map_err(|e| StoreError::io("write", dir, e))
+        })
+    };
+    let _ = crate::atomic::atomic_write_streamed(
+        vfs,
+        dir,
+        "index.bin",
+        &mut fill,
+        crate::atomic::SyncDir::Now,
+        &crate::atomic::HeldRetry::SAVE,
+        &mut || Ok(true),
+    );
 }
 
 /// O14's reads, off the actor: each path's md5, size and mtime, and the newest time stamp
@@ -1664,7 +1686,7 @@ pub(crate) fn unsettled(manifest: &Manifest) -> Vec<String> {
     manifest
         .paths
         .iter()
-        .filter(|(_, e)| !e.settled && e.held.is_none() && e.oid.is_none())
+        .filter(|(_, e)| e.oid.is_none() && e.placement().is_some_and(|p| !p.settled))
         .map(|(p, _)| p.clone())
         .collect()
 }

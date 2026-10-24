@@ -1574,7 +1574,14 @@ async fn smart_http_route(
         rec.owner.to_lowercase(),
         rec.name.to_lowercase()
     );
-    smart_http::run(
+    let cut = shared
+        .take_faults(method.as_str(), uri.path(), false)
+        .into_iter()
+        .find_map(|fault| match fault {
+            Fault::BreakOff { after } => Some(after),
+            _ => None,
+        });
+    let response = smart_http::run(
         &shared,
         CgiRequest {
             method: method.as_str(),
@@ -1586,5 +1593,16 @@ async fn smart_http_route(
             body: body.to_vec(),
         },
     )
-    .await
+    .await;
+    match cut {
+        // git has run the request (a push is applied) before its reply is cut.
+        Some(after) => {
+            let (parts, body) = response.into_parts();
+            match axum::body::to_bytes(body, usize::MAX).await {
+                Ok(bytes) => Response::from_parts(parts, shaped_body(bytes, None, Some(after))),
+                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+            }
+        }
+        None => response,
+    }
 }

@@ -174,9 +174,7 @@ impl Alignment for AlignmentValue {
     }
 
     fn all_target_words(&self) -> impl Iterator<Item = &TargetWord> {
-        self.word_bank
-            .iter()
-            .chain(self.alignments.iter().flat_map(|g| g.bottom_words.iter()))
+        AlignmentValue::all_target_words(self)
     }
 
     fn well_formed(&self) -> Result<(), Malformed> {

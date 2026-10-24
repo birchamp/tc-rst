@@ -428,15 +428,7 @@ impl TargetVerse {
     /// The verse whose content is `content`.
     pub fn new(content: &str) -> Self {
         let derived = TargetText::new(content.to_owned());
-        let words: Vec<TargetWord> = tc_usfm::target_words(content)
-            .into_iter()
-            .map(|w| TargetWord {
-                word: w.text,
-                occurrence: w.occurrence,
-                occurrences: w.occurrences,
-                extra: JsonMap::new(),
-            })
-            .collect();
+        let words = tc_journal::alignment::verse_words(content);
         let mut places: HashMap<String, Vec<usize>> = HashMap::new();
         for (at, word) in words.iter().enumerate() {
             places.entry(word.word.clone()).or_default().push(at);

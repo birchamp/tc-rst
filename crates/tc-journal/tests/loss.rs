@@ -1251,6 +1251,21 @@ fn loss_carried_file_two_versions_both_kept() {
     );
 }
 
+/// L73: every version of a carried file the history names is listed for `refs/tc/carried`,
+/// the replaced ones included.
+#[test]
+fn carried_versions_lists_every_blob_the_history_names() {
+    let mut maria = Dev::new(1);
+    let book = imported_book(&mut maria, &[1]);
+    let first = maria.one(carried("audio/01.mp3", 1), vec![]);
+    let second = maria.one(carried("audio/01.mp3", 2), vec![first.id()]);
+    let other = maria.one(carried("audio/02.mp3", 3), vec![]);
+    let state = assert_converges(&all_of(&[&book, &[first, second, other]]));
+    assert_eq!(state.carried_files().len(), 2, "two files are placed");
+    let versions: BTreeSet<_> = state.carried_versions().into_iter().collect();
+    assert_eq!(versions, [oid(1), oid(2), oid(3)].into());
+}
+
 /// L50: open span conflicts never drop a verse's words from the provisional USFM.
 #[test]
 fn loss_span_conflict_never_drops_words() {
@@ -1983,6 +1998,32 @@ fn incomplete_history_conflict_labelled() {
     assert!(conflict.incomplete_history);
 }
 
+/// tC4 #179: a teammate's verse edit whose parent never arrived does not replace the text
+/// that stands: the verse has two heads, the standing text shows, and the conflict says the
+/// history is incomplete.
+#[test]
+fn loss_unknown_parent_verse_edit_keeps_standing_text() {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = imported_book(&mut maria, &[2]);
+    let base = latest(&book, &verse_key(1, 1));
+    let lost = juan.one(verse(1, 1, text("Juan's first", 1)), vec![base.id()]);
+    let arrived = juan.one(verse(1, 1, text("Juan's second", 1)), vec![lost.id()]);
+    let state = assert_converges(&all_of(&[&book, &[arrived]]));
+    assert_eq!(state.heads(&verse_key(1, 1)).len(), 2);
+    assert_eq!(
+        state
+            .projected(&verse_key(1, 1))
+            .as_ref()
+            .and_then(words_of)
+            .as_deref(),
+        Some("words of 1:1")
+    );
+    let conflict = the_conflict(&state);
+    assert!(conflict.incomplete_history, "{conflict:?}");
+    every_text_once(&state);
+}
+
 /// L79: carried paths that differ only in letter case are both kept, one at a `.case-`
 /// path, and listed.
 #[test]
@@ -2689,6 +2730,129 @@ fn a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict() {
             .any(|a| matches!(a, Anomaly::MissingParent { .. }))
     );
     assert!(!race(&after).incomplete_history);
+}
+
+/// WIN "Open", second item: a *Start empty* `StartOver` change that is still the head of its
+/// verse and continues a change that has not arrived marks the presence conflict as
+/// incomplete, as it marks the verse's own conflict (§7.4, §7.6): choosing *Start empty*
+/// keeps what that change continues, and the person is told.
+fn start_empty_after_a_held_change() -> (Vec<Change>, Vec<Change>, Vec<Change>) {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = titus_and_ruth(&mut maria, &[2]);
+    let presence = on(&book, &RecordKey::BookPresence(BOOK));
+    let removal = maria.one(removed(&ids(&book)), vec![presence.id()]);
+    juan.at = maria.at;
+    maria.at += 3_600_000;
+    // Juan saved two verses in one action; the second change has not arrived here.
+    let held = juan.batch(
+        vec![
+            (
+                verse(1, 1, text("Juan held one", 1)),
+                vec![on(&book, &verse_key(1, 1)).id()],
+            ),
+            (
+                verse(1, 2, text("Juan held two", 2)),
+                vec![on(&book, &verse_key(1, 2)).id()],
+            ),
+        ],
+        Cause::Edit,
+    );
+    let empty = juan.batch(
+        vec![
+            (present(PresentHow::StartedEmpty), vec![removal.id()]),
+            (verse(1, 2, text("___", 2)), vec![held[1].id()]),
+        ],
+        Cause::StartOver,
+    );
+    let restore = maria.one(present(PresentHow::RestoredText), vec![removal.id()]);
+    let before = all_of(&[&book, &[removal], &held[..1], &empty, &[restore]]);
+    (before, held, empty)
+}
+
+#[test]
+fn a_start_empty_verse_head_with_a_missing_parent_marks_the_presence_conflict() {
+    let (before, held, empty) = start_empty_after_a_held_change();
+    let state = assert_converges(&before);
+    let verse_change = empty
+        .iter()
+        .find(|c| c.body().record.key() == verse_key(1, 2))
+        .expect("the StartOver verse")
+        .id();
+    assert!(
+        state
+            .anomalies()
+            .any(|a| matches!(a, Anomaly::MissingParent { change, .. } if *change == verse_change)),
+        "the StartOver change continues a change that has not arrived"
+    );
+    let race = |state: &FoldState| {
+        state
+            .conflicts_of(ConflictKind::BookPresence)
+            .next()
+            .cloned()
+            .expect("the restore race")
+    };
+    assert!(
+        race(&state).incomplete_history,
+        "choosing Start empty keeps a change that continues one this device cannot see"
+    );
+    let mut after = state;
+    after.add([FoldInput::from(held[1].clone())]);
+    let mut all = before;
+    all.push(held[1].clone());
+    same_fold(
+        &assert_converges(&all),
+        &after,
+        "the held change arrives last",
+    );
+    assert!(!race(&after).incomplete_history);
+}
+
+/// WIN "Open", fourth item: a conflict's batches include the batches of the verse heads of a
+/// restore race, so a teammate's verse typed after *Start empty* groups with that teammate's
+/// other work (§8.1).
+#[test]
+fn a_restore_race_lists_the_batches_of_its_verse_candidates() {
+    let (all, _empty_presence, typed, _restore) = start_empty_then_typed();
+    let state = assert_converges(&all);
+    let race = state
+        .conflicts_of(ConflictKind::BookPresence)
+        .next()
+        .cloned()
+        .expect("the restore race");
+    assert!(race.candidates.iter().any(|c| c.head == typed.id()));
+    let typed_batch = state.change(&typed.id()).expect("typed folded").batch;
+    assert!(
+        race.batches.contains(&typed_batch),
+        "the typed verse's batch is listed: {:?}",
+        race.batches
+    );
+}
+
+/// WIN "Open", first item: the mark is a warning on the conflict and never a reason to hide
+/// a choice (§7.4): every choice of a restore race stays offered while its history is
+/// incomplete, so the person can always keep every version.
+#[test]
+fn an_incomplete_restore_race_offers_every_choice() {
+    let (before, _held, _empty) = start_empty_after_a_held_change();
+    let state = assert_converges(&before);
+    let race = state
+        .conflicts_of(ConflictKind::BookPresence)
+        .next()
+        .cloned()
+        .expect("the restore race");
+    assert!(race.incomplete_history);
+    for candidate in &race.candidates {
+        let planned = state
+            .resolution(
+                &race.id,
+                &Choice::Candidate {
+                    head: candidate.head,
+                },
+            )
+            .unwrap_or_else(|e| panic!("{:?} is refused: {e}", candidate.value));
+        assert!(!planned.is_empty(), "{:?} writes nothing", candidate.value);
+    }
 }
 
 /// L102: after *Restore the text* wins provisionally, a verse typed after *Start empty* is

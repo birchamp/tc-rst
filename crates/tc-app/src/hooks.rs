@@ -848,7 +848,11 @@ impl Handle<Reset> for App {
     async fn handle(&self, _req: Reset) -> Result<(), ApiError> {
         let hooks = self.hooks()?;
         *lock(&hooks.crash) = None;
-        // Holds go first: a held operation could keep a session from closing.
+        // A launch starts with no kept replies, so a request id may be used again. Forgotten
+        // before the holds go: a write the reset finds running is kept, and one a released hold
+        // lets finish meanwhile must not be taken for an old one (its retry waits for it).
+        self.inner.replies.forget_settled();
+        // Holds go next: a held operation could keep a session from closing.
         hooks.holds.release_all();
         // Every session closes after its leave checkpoint, then every project goes back to
         // its seed. Epochs go on counting, so a page from before the reset is stale.
@@ -871,8 +875,6 @@ impl Handle<Reset> for App {
             scripted.clear();
         }
         self.inner.scripted_resources.clear();
-        // A launch starts with no kept replies, so a request id may be used again.
-        self.inner.replies.forget_settled();
         // The account as a launch finds it, on a computer whose keychain works and holds
         // nothing, so one captured screen's sign-in cannot reach the next.
         if let Some(keychain) = &hooks.keychain {

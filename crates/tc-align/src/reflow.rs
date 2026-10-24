@@ -275,3 +275,72 @@ fn follow(old: &[TargetWord], new: &[TargetWord]) -> Vec<Option<usize>> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::follow;
+    use proptest::prelude::*;
+    use tc_journal::json::JsonMap;
+    use tc_journal::record::TargetWord;
+
+    /// Every common subsequence of `old[i..]` and `new[j..]`, as the pairs it matches.
+    fn common(old: &[&str], new: &[&str], i: usize, j: usize) -> Vec<Vec<(usize, usize)>> {
+        let mut out = vec![Vec::new()];
+        for a in i..old.len() {
+            for b in j..new.len() {
+                if old[a] == new[b] {
+                    for mut rest in common(old, new, a + 1, b + 1) {
+                        rest.insert(0, (a, b));
+                        out.push(rest);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn words(text: &[&str]) -> Vec<TargetWord> {
+        text.iter()
+            .map(|w| TargetWord {
+                word: (*w).to_owned(),
+                occurrence: 1,
+                occurrences: 1,
+                extra: JsonMap::new(),
+            })
+            .collect()
+    }
+
+    fn list(alphabet: usize) -> impl Strategy<Value = Vec<&'static str>> {
+        prop::collection::vec(
+            prop::sample::select(&["Dios", "de", "y"][..alphabet]),
+            0..=8,
+        )
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 512, ..ProptestConfig::default() })]
+
+        /// tC4 #820: a word follows to `j` exactly when every longest common subsequence,
+        /// enumerated by brute force, matches it to `j`; any edit, replacements included.
+        #[test]
+        fn follow_matches_every_longest_common_subsequence(
+            (old, new) in (2usize..=3).prop_flat_map(|k| (list(k), list(k)))
+        ) {
+            let all = common(&old, &new, 0, 0);
+            let longest = all.iter().map(Vec::len).max().unwrap_or(0);
+            let longest: Vec<_> = all.into_iter().filter(|m| m.len() == longest).collect();
+            let want: Vec<Option<usize>> = (0..old.len())
+                .map(|i| {
+                    let mut to = longest
+                        .iter()
+                        .map(|m| m.iter().find(|(a, _)| *a == i).map(|(_, b)| *b));
+                    let first = to.next().flatten();
+                    if first.is_some() && to.all(|j| j == first) { first } else { None }
+                })
+                .collect();
+            prop_assert_eq!(follow(&words(&old), &words(&new)), want, "{:?} -> {:?}", old, new);
+        }
+    }
+}

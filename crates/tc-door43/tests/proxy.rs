@@ -10,7 +10,8 @@ mod common;
 use common::repo;
 use std::sync::{Arc, Mutex, PoisonError};
 use tc_door43::{
-    Door43Client, Door43Error, InternetSwitch, Limits, ProxyAnswer, ProxyFinder, UnreachableCause,
+    Door43Client, Door43Error, GitRemote, InternetSwitch, Limits, ProxyAnswer, ProxyFinder,
+    UnreachableCause, git,
 };
 use tc_door43_fake::{FakeDoor43, FakeProxy};
 use url::Url;
@@ -84,6 +85,36 @@ async fn a_request_goes_through_the_proxy_the_finder_names() {
                 ..
             }
         ),
+        "{error:?}"
+    );
+    assert_eq!(proxy.requests(), ["CONNECT door43.test:443 HTTP/1.1"]);
+    assert_eq!(finder.asked(), ["https://door43.test/"]);
+}
+
+/// INV-ONE-PROXY-FINDER: git goes through the proxy the finder names, as every request does.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_git_fetch_goes_through_the_proxy_the_finder_names() {
+    let proxy = FakeProxy::start().await.unwrap();
+    let finder = Always::named(&proxy);
+    let switch = InternetSwitch::new();
+    switch.turn_on();
+    let client = client("https://door43.test", &switch, &finder);
+    let remote = GitRemote {
+        server: client.server().clone(),
+        repo: repo("unfoldingWord/en_tn"),
+        session: None,
+    };
+    let http = client.http().clone();
+    let error = tokio::task::spawn_blocking(move || {
+        let dir = tempfile::tempdir().unwrap();
+        let local = git2::Repository::init_bare(dir.path()).unwrap();
+        git::fetch(&http, &local, &remote, &["refs/heads/*:refs/heads/*"]).unwrap_err()
+    })
+    .await
+    .unwrap();
+    // The proxy refused the tunnel, so the fetch could not connect.
+    assert!(
+        matches!(&error, Door43Error::Unreachable { .. }),
         "{error:?}"
     );
     assert_eq!(proxy.requests(), ["CONNECT door43.test:443 HTTP/1.1"]);

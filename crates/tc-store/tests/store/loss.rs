@@ -1,5 +1,5 @@
-//! The silent-loss cases of `docs/STORAGE.md` §15.3 that unit S1 owns: two writers in one
-//! folder (L64), a lost rename (L80), a disk error after the rename (L86), a read-only open
+//! The silent-loss cases of `docs/STORAGE.md` §15.3 that unit S1 owns: a journal file of
+//! another installation appearing in the folder (L64), a lost rename (L80), a disk error after the rename (L86), a read-only open
 //! (L87), a pack deleted outside the app (L65, the local half), a rename retry (L82) and
 //! storage damage (L83).
 
@@ -16,12 +16,17 @@ fn notices_of(handle: &tc_store::ProjectHandle) -> Vec<Notice> {
     handle.notices().into_iter().map(|n| n.notice).collect()
 }
 
+/// The second-writer guard, the one test the one-instance ruling keeps until the owner
+/// answers its open point (`rulings/2026-10-22-one-instance.md`): a journal file this
+/// installation did not write appears while the project is open (a sync tool copying another
+/// computer's saves into a folder nobody recognised as synced). The project turns read-only
+/// with a notice, and both computers' saves are kept.
 #[test]
-fn loss_pending_names_never_collide_two_writers() {
+fn an_unknown_journal_file_appearing_turns_the_project_read_only() {
     let (rig, folder) = titus();
-    let other_fs = rig.fs.other_machine();
-    let other = rig_as(other_fs, "/app-desktop", "host-2");
-    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    // Another computer saves into its own copy of the project.
+    let theirs_fs = rig.fs.copy();
+    let other = rig_as(theirs_fs.clone(), "/app-desktop", "host-2");
     let theirs = other
         .store
         .open(
@@ -32,43 +37,25 @@ fn loss_pending_names_never_collide_two_writers() {
             },
         )
         .unwrap();
-    save_verse(&mine, 1, 10, "mine").unwrap();
-    save_verse(&theirs, 1, 11, "theirs").unwrap();
-    let pending = pending_files(&rig.fs, &folder);
-    assert_eq!(pending.len(), 2, "two files, neither replaced: {pending:?}");
-    drop(mine);
-    drop(theirs);
-    let reopened = rig_as(rig.fs.crash(false), APP, "host-1");
-    let handle = reopened
-        .store
-        .open(&folder, &OpenOptions::default())
-        .unwrap();
-    assert_eq!(words(&handle, 1, 10).as_deref(), Some("mine"));
-    assert_eq!(words(&handle, 1, 11).as_deref(), Some("theirs"));
-    handle.close().unwrap();
-}
-
-#[test]
-fn second_writer_detected_read_only() {
-    let (rig, folder) = titus();
-    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    let other = rig_as(rig.fs.other_machine(), "/app-desktop", "host-2");
-    let theirs = other
-        .store
-        .open(
-            &folder,
-            &OpenOptions {
-                other_computer_closed: true,
-                ..OpenOptions::default()
-            },
-        )
-        .unwrap();
-    save_verse(&mine, 1, 12, "kept").unwrap();
     save_verse(&theirs, 1, 13, "also kept").unwrap();
+    let theirs_device = theirs.facts().device;
+    let brought: Vec<(String, Vec<u8>)> = pending_files(&theirs_fs, &folder)
+        .into_iter()
+        .map(|rel| {
+            let bytes = theirs_fs.peek(&folder.join(&rel)).unwrap();
+            (rel, bytes)
+        })
+        .collect();
+    assert_eq!(brought.len(), 1, "{brought:?}");
+    drop(theirs);
+    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&mine, 1, 12, "kept").unwrap();
+    for (rel, bytes) in &brought {
+        rig.fs.put(&folder.join(rel), bytes, None);
+    }
     mine.checkpoint(tc_store::CheckpointReason::LeavingTranslate)
         .wait()
         .unwrap();
-    let theirs_device = theirs.facts().device;
     match mine.facts().mode {
         Mode::ReadOnly(ReadOnlyReason::SecondWriter { device }) => {
             assert_eq!(device, theirs_device)
@@ -78,35 +65,14 @@ fn second_writer_detected_read_only() {
     assert!(notices_of(&mine).contains(&Notice::SecondWriter {
         device: theirs_device
     }));
-    // Both installations' work is in the fold, and nothing more is written.
+    // Both computers' work is in the fold, and nothing more is written.
     assert_eq!(words(&mine, 1, 12).as_deref(), Some("kept"));
     assert_eq!(words(&mine, 1, 13).as_deref(), Some("also kept"));
     assert!(matches!(
         save_verse(&mine, 1, 14, "x"),
         Err(tc_store::CommandError::ReadOnly(_))
     ));
-    drop(theirs);
     drop(mine);
-}
-
-#[test]
-fn a_lock_naming_another_computer_opens_read_only() {
-    let (rig, folder) = titus();
-    let mine = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    let other = rig_as(rig.fs.other_machine(), "/app-desktop", "host-2");
-    let theirs = other.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_eq!(
-        theirs.facts().mode,
-        Mode::ReadOnly(ReadOnlyReason::OpenOnAnotherComputer {
-            host: "host-1".into()
-        })
-    );
-    theirs.close().unwrap();
-    mine.close().unwrap();
-    // Closed: the lock's content is cleared, so the other computer opens it writable.
-    let theirs = other.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_eq!(theirs.facts().mode, Mode::Writable);
-    theirs.close().unwrap();
 }
 
 #[test]
@@ -131,6 +97,7 @@ fn open_cloud_synced_folder_read_only() {
         }),
         clock,
         threads: 2,
+        watch_debounce: std::time::Duration::from_millis(20),
     })
     .unwrap();
     store.wait_cleanup();
@@ -245,11 +212,16 @@ fn save_disk_error_after_rename_counts_as_saved() {
     handle.close().unwrap();
 }
 
+/// A pack deleted outside the app that no copy in the object database can restore (the
+/// project's `.git` went with it): nothing derived from it is removed (§4.4). With a copy, the
+/// pack is restored (`checkpoint::loss_pack_deleted_outside_app_restored`).
 #[test]
-fn loss_pack_deleted_outside_app_removes_nothing_derived() {
+fn loss_pack_deleted_with_no_copy_removes_nothing_derived() {
     let (rig, folder) = titus();
     let pack = packs(&rig.fs, &folder).into_iter().next().unwrap();
     rig.fs.delete(&folder.join(&pack)).unwrap();
+    let outside = tc_store::Vfs::outside_dir(&rig.fs, &folder).unwrap();
+    std::fs::remove_dir_all(outside.join(".git")).unwrap();
     let before_usfm = rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
@@ -268,7 +240,7 @@ fn loss_pack_deleted_outside_app_removes_nothing_derived() {
 
 /// L82. A rename that another program refuses leaves the path dirty and tried again by the
 /// actor's timer, and every try repeats the compare-and-swap: a program that saved the file
-/// meanwhile is never written over.
+/// meanwhile is never written over. Its bytes are kept in a copy and read as an edit.
 #[test]
 fn loss_rename_retry_never_overwrites_outside_save() {
     let (rig, folder) = titus();
@@ -278,33 +250,37 @@ fn loss_rename_retry_never_overwrites_outside_save() {
     rig.fs.set_busy(&usfm, true);
     save_verse(&handle, 1, 1, "a new first verse").unwrap();
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
+    // The writer's job is over, and so is the look at the folder that follows it (the rig's):
+    // the outside save below belongs to the wait that follows, not to the state that look sees.
+    handle.wait_idle();
     // Paratext saves the file while the app waits to write it, then lets go of it.
-    rig.fs.put(&usfm, b"\\id TIT saved by Paratext\n", None);
+    let outside = b"\\id TIT saved by Paratext\n".to_vec();
+    rig.fs.put(&usfm, &outside, None);
     rig.fs.set_busy(&usfm, false);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
-    while !notices_of(&handle).iter().any(|n| {
-        matches!(
-            n,
-            Notice::OutsideEditHeld { .. } | Notice::StorageDamage { .. }
-        )
-    }) {
+    let copy = loop {
+        if let Some(copy) = copies_of(&handle, "ingredients/TIT.usfm").pop() {
+            break copy;
+        }
         assert!(
             std::time::Instant::now() < deadline,
             "the retry never found the outside save"
         );
         std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+    };
     assert_eq!(
-        rig.fs.peek(&usfm).as_deref(),
-        Some(b"\\id TIT saved by Paratext\n".as_slice()),
-        "the outside save is never written over"
+        rig.fs.peek(&folder.join(&copy)),
+        Some(outside),
+        "the outside save is kept whole"
+    );
+    handle.wait_idle();
+    let written = String::from_utf8(rig.fs.peek(&usfm).unwrap()).unwrap();
+    assert!(
+        written.contains("a new first verse"),
+        "the project's save is written after the copy: {written}"
     );
     handle.close().unwrap();
-    assert_eq!(
-        rig.fs.peek(&usfm).as_deref(),
-        Some(b"\\id TIT saved by Paratext\n".as_slice()),
-        "not at close either"
-    );
+    assert_valid_burrito(&rig.fs, &folder);
 }
 
 /// L65. A pack a cloud client holds back (a placeholder whose stat and read both fail) is
@@ -457,9 +433,11 @@ fn a_project_created_through_a_symlinked_projects_folder_keeps_its_device() {
         platform: Arc::new(FakePlatform::default()),
         clock: Arc::new(tc_store::ManualClock::at(1_792_195_200_000)),
         threads: 2,
+        watch_debounce: std::time::Duration::from_millis(20),
     })
     .unwrap();
     store.wait_cleanup();
+    watch_real_burrito(&store);
     let folder = store
         .create(&tc_store::NewProject {
             name: "Titus".into(),
@@ -488,4 +466,5 @@ fn a_project_created_through_a_symlinked_projects_folder_keeps_its_device() {
         notices_of(&handle)
     );
     handle.close().unwrap();
+    assert!(store.hooks().burrito_problems().is_empty());
 }

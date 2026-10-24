@@ -20,7 +20,7 @@
 //! is held once, in the bank or on one card, and every occurrence lies between 1 and its
 //! count.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use tc_journal::alignment::AlignedRun;
 use tc_journal::ids::VerseNo;
 use tc_journal::record::{AlignmentGroup, AlignmentValue, ResourceRef, SourceWord, TargetWord};
@@ -111,11 +111,7 @@ pub fn needs_review(
     verse: &TargetVerse,
     pin: Option<&SourceVerse>,
 ) -> bool {
-    let key = |w: &TargetWord| (w.word.clone(), w.occurrence, w.occurrences);
-    let mut words: HashSet<_> = verse.words().iter().map(key).collect();
-    !value.is_valid(run)
-        || !value.all_target_words().all(|w| words.remove(&key(w)))
-        || pin.is_some_and(|pin| !Pin::new(pin).holds(value))
+    value.needs_review(run, verse.words()) || pin.is_some_and(|pin| !Pin::new(pin).holds(value))
 }
 
 /// The pinned original-language words, to find a card's source words in (tC4 #790). A source

@@ -5,11 +5,13 @@ mod common;
 use common::{credentials, left_in, repo, sha, tag, token_name};
 use std::time::{Duration, Instant};
 use tc_door43::{
-    CatalogQuery, Door43Client, Door43Error, DownloadTo, InternetSwitch, NewRepoOwner, Session,
-    Token, TokenScope, Visibility,
+    CatalogQuery, Door43Client, Door43Error, DownloadTo, FastForwardRefspec, GitRemote, HttpError,
+    InternetSwitch, NewRepoOwner, Session, Token, TokenScope, Visibility, git,
 };
 use tc_door43_fake::{FakeDoor43, Fault, FaultRule};
 
+/// INV-NO-REQUEST-WHILE-SWITCH-OFF: every call, HTTP and git, sends nothing while the switch is
+/// off.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off() {
     let dl = tempfile::tempdir().unwrap();
@@ -89,6 +91,55 @@ async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off()
         ),
     ];
     for (call, outcome) in outcomes {
+        assert!(
+            matches!(outcome, Err(Door43Error::Offline { .. })),
+            "{call}: {outcome:?}"
+        );
+    }
+
+    let get = client
+        .http()
+        .get(
+            format!("{}/api/v1/repos/unfoldingWord/en_tn", fake.url())
+                .parse()
+                .unwrap(),
+            "application/json",
+            &[],
+        )
+        .await;
+    assert!(matches!(get, Err(HttpError::Offline)), "get: {get:?}");
+    let http = client.http().clone();
+    let remote = GitRemote {
+        server: client.server().clone(),
+        repo: tn.clone(),
+        session: Some(session.clone()),
+    };
+    let git_outcomes = tokio::task::spawn_blocking(move || {
+        let dir = tempfile::tempdir().unwrap();
+        let local = git2::Repository::init_bare(dir.path()).unwrap();
+        vec![
+            (
+                "fetch",
+                git::fetch(&http, &local, &remote, &["refs/heads/*:refs/heads/*"]),
+            ),
+            (
+                "push",
+                git::push(
+                    &http,
+                    &local,
+                    &remote,
+                    &FastForwardRefspec::branch("main").unwrap(),
+                ),
+            ),
+            (
+                "ls_remote",
+                git::ls_remote(&http, &local, &remote).map(drop),
+            ),
+        ]
+    })
+    .await
+    .unwrap();
+    for (call, outcome) in git_outcomes {
         assert!(
             matches!(outcome, Err(Door43Error::Offline { .. })),
             "{call}: {outcome:?}"

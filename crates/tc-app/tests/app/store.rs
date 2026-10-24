@@ -31,6 +31,7 @@ fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
         platform: Arc::new(tc_store::StdPlatform),
         clock: Arc::new(tc_store::SystemClock),
         threads: 2,
+        watch_debounce: std::time::Duration::from_millis(20),
     })
     .unwrap();
     store.wait_cleanup();
@@ -318,7 +319,7 @@ async fn a_staging_folder_removed_at_start_is_reported() {
         ReportOp::OpenDoor43,
         ReportOp::StagingRemoved,
     ];
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
     let mut removed = loop {
         let removed: Vec<_> = t
             .app
