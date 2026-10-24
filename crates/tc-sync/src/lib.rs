@@ -5,6 +5,7 @@
 //! one place.
 
 pub mod connect;
+pub mod exchange;
 pub mod join;
 pub mod machine;
 pub mod share;

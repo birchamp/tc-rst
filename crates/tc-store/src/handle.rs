@@ -566,6 +566,11 @@ pub enum CheckpointReason {
     SyncMerge {
         remote: tc_journal::GitOid,
     },
+    /// §10.2 R7: work received from an exchange file, taken in before the seal; the commit
+    /// has one parent. `from` names the file's person and date.
+    Received {
+        from: String,
+    },
 }
 
 impl CheckpointReason {
@@ -580,6 +585,7 @@ impl CheckpointReason {
             Self::Periodic => "every 30 minutes".into(),
             Self::Other(words) => words.clone(),
             Self::SyncMerge { .. } => "sync with Door43".into(),
+            Self::Received { from } => format!("received work from {from}"),
         }
     }
 }
@@ -1043,6 +1049,22 @@ impl ProjectHandle {
             pending(|| Err(StoreError::Other("the project is closed".into())));
         self.send(Msg::SyncFile {
             write,
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// §10.2 R7: an exchange file's packs taken in, sealed and committed with one parent.
+    pub fn receive_packs(
+        &self,
+        from: String,
+        packs: Vec<ReceivedPack>,
+    ) -> Pending<Result<CheckpointReport, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send(Msg::Checkpoint {
+            reason: CheckpointReason::Received { from },
+            intake: packs,
             reply: resolver,
         });
         pending
