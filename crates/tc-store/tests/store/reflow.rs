@@ -297,8 +297,11 @@ fn dios_dios(handle: &ProjectHandle) {
     );
 }
 
-/// The verse and the (card, occurrence) of each link a save's reply lists.
-fn listed(reply: &tc_store::StoreReply) -> Vec<(u16, u16, Vec<(usize, u32)>)> {
+/// A verse's chapter and verse, and the (card, occurrence) of each link listed for it.
+type Listed = (u16, u16, Vec<(usize, u32)>);
+
+/// What a save's reply lists.
+fn listed(reply: &tc_store::StoreReply) -> Vec<Listed> {
     reply
         .dropped_links
         .iter()

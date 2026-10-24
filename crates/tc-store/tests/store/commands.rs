@@ -2066,3 +2066,87 @@ fn verses_with_a_layout_line_inside_save_whole() {
     }
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// A save from a screen that showed a merged verse is stored even when a sync moved the
+/// verse's heads since (no-loss; C7a's finding): the save continues the heads the screen
+/// showed, so it stands beside the newer text as a conflict, and both texts are kept.
+#[test]
+fn a_save_of_a_merged_verse_whose_heads_moved_is_stored_as_a_conflict() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let base = handle.snapshot().fold().heads(&verse(1, 1));
+    let Some(Record::Verse { value, .. }) = projected(&handle, &verse(1, 1)) else {
+        panic!("1:1");
+    };
+    handle.close().unwrap();
+    let with = |words: Option<&str>, layout: Option<&str>| {
+        let mut value = value.clone();
+        if let VerseValue::Text {
+            words: w,
+            layout: l,
+            ..
+        } = &mut value
+        {
+            if let Some(words) = words {
+                *w = words.into();
+            }
+            if let Some(layout) = layout {
+                *l = layout.into();
+            }
+        }
+        Record::Verse {
+            book: TIT,
+            chapter: ChapterNo::new(1).unwrap(),
+            verse: VerseNo::new(1).unwrap(),
+            value,
+        }
+    };
+    // Two teammates change different parts of 1:1: the fold merges them.
+    let a = teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([8u8; 15]),
+        1,
+        vec![(with(Some("Paul, a servant of God"), None), base.clone())],
+    );
+    teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([9u8; 15]),
+        1,
+        vec![(with(None, Some("\n\\p\n")), base)],
+    );
+    let (rig, handle) = open(&rig.fs, &folder);
+    let shown = token(&handle, &verse(1, 1));
+    assert_eq!(shown.heads().len(), 2, "a merged verse");
+    handle.close().unwrap();
+    // A third teammate continues the first: the heads move.
+    let moved = teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([7u8; 15]),
+        1,
+        vec![(with(Some("Paul, a slave of God"), None), a)],
+    );
+    let (_rig, handle) = open(&rig.fs, &folder);
+    assert_ne!(handle.snapshot().fold().heads(&verse(1, 1)), shown.heads());
+    let reply = submit(
+        &handle,
+        Command::SaveVerse {
+            shown: shown.clone(),
+            words: "Paul, a servant of God and an apostle".into(),
+        },
+    )
+    .expect("stored, not refused");
+    let mine = handle.snapshot().fold().body(&reply.changes[0]).unwrap();
+    assert_eq!(mine.parents, shown.heads());
+    let mut heads = handle.snapshot().fold().heads(&verse(1, 1));
+    heads.sort();
+    let mut want = vec![reply.changes[0], moved[0]];
+    want.sort();
+    assert_eq!(heads, want, "both texts are kept");
+    let conflict = conflict_of(handle.snapshot().fold(), &verse(1, 1));
+    assert_eq!(conflict.candidates.len(), 2);
+    handle.close().unwrap();
+}

@@ -124,7 +124,11 @@ impl Ctx<'_> {
                     .ok_or(CommandError::Refused(Refusal::Unreadable)),
                 Resolved::Conflict(_) => Err(CommandError::LookAgain),
             },
-            _ => Err(CommandError::LookAgain),
+            _ => self
+                .fold
+                .merged_at(token.key(), heads)
+                .map(Some)
+                .ok_or(CommandError::LookAgain),
         }
     }
 

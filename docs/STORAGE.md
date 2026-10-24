@@ -1727,7 +1727,10 @@ layer holds an open project as a handle:
    (`ARCHITECTURE.md`) and in `.tc/drafts.json` (§5.14).
 2. The actor checks the token's MAC and takes the value the token stands for: the displayed
    candidate for a conflict, the merged value for a merged record, the head's value otherwise.
-   The value must be `Text`; structure changes go through `SaveSection`.
+   A merged record whose heads moved since the screen showed it (a sync landed) stands for
+   the merge of the token's heads (`FoldState::merged_at`), so the save is stored beside the
+   newer text, never refused. The value must be `Text`; structure changes go through
+   `SaveSection`.
 3. New value = that value with `words` replaced by the NFC form of the sent text. Rule V3 is
    checked.
 4. If the new value equals the displayed value, nothing is written. A no-op save after a sync
