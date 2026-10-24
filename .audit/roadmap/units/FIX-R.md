@@ -15,7 +15,7 @@ proves: [P1, P8]
 no_loss: true
 size: 2-3 d
 merged: none
-updated: 2026-10-22
+updated: 2026-10-23
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
