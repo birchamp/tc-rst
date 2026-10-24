@@ -742,6 +742,11 @@ impl ProjectHandle for MemoryHandle {
         Box::pin(async { CheckpointOutcome::Unchanged })
     }
 
+    fn carried_bytes(&self, oid: GitOid) -> BoxFuture<Result<Option<Vec<u8>>, StoreError>> {
+        let bytes = self.state.seeded.carried.get(&oid).cloned();
+        Box::pin(async move { Ok(bytes) })
+    }
+
     /// The memory backend touches no file.
     fn counters(&self) -> StoreCounters {
         StoreCounters::default()

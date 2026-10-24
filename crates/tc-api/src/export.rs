@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
 use crate::ids::{DownloadId, RefPart, RequestId, Scope, StoryNo};
+use crate::model::print::PageSetup;
 
 /// `export/book`: the printed items of a book of the open project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -215,17 +216,116 @@ pub struct RunExport {
     pub at: Scope,
     pub producer: Producer,
     pub subject: Subject,
+    /// What only the UI holds for a print: required for [`Producer::PrintHtml`], and refused
+    /// with any other producer.
+    pub print: Option<PrintRequest>,
 }
 
-/// A finished export: the file to download and the verses whose alignment it left out.
+/// The print's choices and words as the person sees them: the preview's page setup, the
+/// title in the interface language (`bookName`, or the project's name), and the interface
+/// language's catalog messages for each line the print words.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PrintRequest {
+    pub setup: PageSetup,
+    pub title: String,
+    pub words: PrintWords,
+}
+
+/// The catalog messages of a print's lines, each with its `{n}` or `{from}` and `{to}` still
+/// in it: the server fills them with [`crate::model::fill`], as the UI's `t` does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PrintWords {
+    /// `cc.chapterHeading`: "Chapter {n}".
+    pub chapter_heading: String,
+    /// `cc.chapterNotDrafted`.
+    pub chapter_not_drafted: String,
+    /// `cc.chaptersNotDrafted`.
+    pub chapters_not_drafted: String,
+    /// `cc.notYetDrafted`.
+    pub not_yet_drafted: String,
+    /// `cc.frameNotDrafted`.
+    pub frame_not_drafted: String,
+    /// `cc.framesNotDrafted`.
+    pub frames_not_drafted: String,
+    /// `cc.storyNotDrafted`.
+    pub story_not_drafted: String,
+    /// `cc.storiesNotDrafted`.
+    pub stories_not_drafted: String,
+    /// `storyDraft.storyNumber`.
+    pub story_number: String,
+    /// `storyDraft.imageAlt`.
+    pub image_alt: String,
+    /// `cc.nothingDraftedObs`.
+    pub nothing_drafted_obs: String,
+}
+
+impl PrintWords {
+    /// The catalog keys, in field order: what the UI looks up to fill this.
+    pub const KEYS: [&'static str; 11] = [
+        "cc.chapterHeading",
+        "cc.chapterNotDrafted",
+        "cc.chaptersNotDrafted",
+        "cc.notYetDrafted",
+        "cc.frameNotDrafted",
+        "cc.framesNotDrafted",
+        "cc.storyNotDrafted",
+        "cc.storiesNotDrafted",
+        "storyDraft.storyNumber",
+        "storyDraft.imageAlt",
+        "cc.nothingDraftedObs",
+    ];
+
+    /// The message of catalog key `key`, or `None` for a key a print does not word.
+    pub fn message(&self, key: &str) -> Option<&str> {
+        Some(match key {
+            "cc.chapterHeading" => &self.chapter_heading,
+            "cc.chapterNotDrafted" => &self.chapter_not_drafted,
+            "cc.chaptersNotDrafted" => &self.chapters_not_drafted,
+            "cc.notYetDrafted" => &self.not_yet_drafted,
+            "cc.frameNotDrafted" => &self.frame_not_drafted,
+            "cc.framesNotDrafted" => &self.frames_not_drafted,
+            "cc.storyNotDrafted" => &self.story_not_drafted,
+            "cc.storiesNotDrafted" => &self.stories_not_drafted,
+            "storyDraft.storyNumber" => &self.story_number,
+            "storyDraft.imageAlt" => &self.image_alt,
+            "cc.nothingDraftedObs" => &self.nothing_drafted_obs,
+            _ => return None,
+        })
+    }
+}
+
+/// A finished export: its file and the verses whose alignment it left out.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct Exported {
-    pub download: DownloadId,
-    /// `<subject>-<YYYY-MM-DD>.<ext>`, as tC4's `exportFilename` names it.
-    pub file_name: String,
+    pub file: ExportedFile,
     pub facts: ExportFacts,
+}
+
+/// Where an export's file is. Each name is `<subject>-<YYYY-MM-DD>.<ext>`, as tC4's
+/// `exportFilename` names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ExportedFile {
+    /// `GET /download/{download}/{file_name}`.
+    Download {
+        download: DownloadId,
+        file_name: String,
+    },
+    /// The print document at `GET /print/{job}`, this job's id, which the shell prints to
+    /// the PDF `file_name`.
+    Print { file_name: String },
 }
 
 /// The verses an aligned export kept as stored, without their alignment (tC4 e2bfd8c3, #796).

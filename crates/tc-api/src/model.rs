@@ -6,6 +6,8 @@
 //! `renderArticleBlocks`), and the UI cuts a long note's preview with [`take_spans`], tC4's
 //! `takeSpans`. A differential test in tc-app holds this copy to tc-helps' own. [`print`] is the
 //! Community Checking preview's pages, tc-export's print parts on pages the UI measures (B8).
+//! [`fill`] is tC4's `t` substitution, which the UI words its catalog with and the server
+//! words a print's lines with (D2).
 
 pub mod draft;
 pub mod print;
@@ -15,6 +17,18 @@ pub mod selection;
 use serde::{Deserialize, Serialize};
 
 pub mod rail;
+
+/// tC4's `t(key, vars)` substitution in a catalog `message`: each `{name}` of `vars` replaced,
+/// one variable after another, as tC4's `replaceAll` loop does, so a value that holds a later
+/// variable's `{name}` is replaced again. A value is inserted as it is; tC4's `replaceAll`
+/// would also read `$&` or `$$` in it as a pattern.
+pub fn fill(message: &str, vars: &[(&str, &dyn std::fmt::Display)]) -> String {
+    let mut message = message.to_owned();
+    for (name, value) in vars {
+        message = message.replace(&format!("{{{name}}}"), &value.to_string());
+    }
+    message
+}
 
 /// What a block is: tC4's `kind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

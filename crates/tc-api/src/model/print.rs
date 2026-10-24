@@ -13,10 +13,14 @@
 //! [`PageSetup`] holds the choices and tC4's defaults (`DEFAULT_PAGE_SETUP`) and the sheet's
 //! measures; tc-export's `page` adds what only the PDF reads.
 
+use serde::{Deserialize, Serialize};
+
 use crate::export::{PrintItem, PrintVerse, Run};
 
 /// The columns a Bible book's text runs in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum Columns {
     #[default]
     One,
@@ -33,7 +37,9 @@ impl Columns {
 }
 
 /// The line spacing: double is twice single.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum Spacing {
     #[default]
     Single,
@@ -41,7 +47,9 @@ pub enum Spacing {
 }
 
 /// The paper a print is set on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum Paper {
     /// 210 × 297 mm.
     #[default]
@@ -61,7 +69,9 @@ impl Paper {
 }
 
 /// How a chapter of a Bible book opens.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum ChapterOpening {
     /// The chapter's number as a drop cap.
     #[default]
@@ -71,7 +81,9 @@ pub enum ChapterOpening {
 }
 
 /// Whether a drafted verse shows its number. An undrafted verse always does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum VerseNumbers {
     #[default]
     Shown,
@@ -79,7 +91,9 @@ pub enum VerseNumbers {
 }
 
 /// Whether an OBS frame shows its picture.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum Pictures {
     #[default]
     Shown,
@@ -88,7 +102,9 @@ pub enum Pictures {
 
 /// Where an OBS frame's picture sits: above its text, or a quarter of the page wide at the
 /// frame's start corner with the text wrapped around it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum ObsLayout {
     #[default]
     Above,
@@ -96,7 +112,9 @@ pub enum ObsLayout {
 }
 
 /// Every choice of the page setup; the default is tC4's `DEFAULT_PAGE_SETUP`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PageSetup {
     pub columns: Columns,
     pub chapter_opening: ChapterOpening,

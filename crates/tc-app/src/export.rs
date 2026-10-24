@@ -9,24 +9,24 @@
 //! `export/run` checkpoints, makes the file with `tc_export::produce` and registers it with the
 //! server's downloads. An export writes only into the downloads folder, never the project.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use tc_api::ApiError;
-use tc_api::error::Feature;
 use tc_api::event::CheckpointOutcome;
 use tc_api::export::{
-    Book, BookPrint, DraftedFrame, ExportFacts, Exported, Preflight, PreflightView, PrintFrame,
-    PrintStory, PrintStoryItem, Producer, Run, RunExport, SkipReason, SkippedVerse, Stories,
-    StoriesPrint, StoryRun, Subject,
+    Book, BookPrint, DraftedFrame, ExportFacts, Exported, ExportedFile, Preflight, PreflightView,
+    PrintFrame, PrintItem, PrintRequest, PrintStory, PrintStoryItem, PrintWords, Producer, Run,
+    RunExport, SkipReason, SkippedVerse, Stories, StoriesPrint, StoryRun, Subject,
 };
 use tc_api::ids::{DownloadId, JobId, RefPart, StoryNo};
-use tc_api::jobs::{JobKind, Phase};
+use tc_api::jobs::{JobKind, JobOutcome, JobState, Phase};
+use tc_api::model::print::Pictures;
 use tc_api::refusal::{ExportRefusal, Refusal};
 use tc_export::book::{BookChapter, BookVerse, has_undrafted, print_items, printed_items};
-use tc_export::{ExportError, ExportInput, Produced};
+use tc_export::{ExportError, ExportInput, PrintBookInput, PrintStoriesInput, PrintText, Produced};
 use tc_helps::obs::ObsStory;
 use tc_journal::RecordKey;
 use tc_journal::fold::DerivedFile;
@@ -38,7 +38,7 @@ use crate::dispatch::Handle;
 use crate::jobs::{JobEnd, JobSpec};
 use crate::reports::{ReportOp, ReportOutcome};
 use crate::session::ProjectSession;
-use crate::story::{journal_story, read_story, story_numbers};
+use crate::story::{MediaFile, journal_story, read_story, story_numbers};
 
 /// A verse's label as the book writes it: `4`, or `4-5` for a span.
 fn label(verse: u16, last: u16) -> String {
@@ -49,49 +49,63 @@ fn label(verse: u16, last: u16) -> String {
     }
 }
 
-impl Handle<Book> for App {
-    async fn handle(&self, req: Book) -> Result<BookPrint, ApiError> {
-        let session = self.read(&req.at)?;
-        let read = session.read();
-        let numbers = read.chapters_of(req.book);
-        if numbers.is_empty() {
-            return Err(ApiError::BadRequest {
-                field: "book".to_owned(),
-                reason: format!("{} is not in the project", req.book.code()),
-            });
-        }
-        let chapters: Vec<BookChapter> = numbers
-            .into_iter()
-            .map(|number| BookChapter {
-                number,
-                verses: crate::translate::texts(&read, req.book, number)
-                    .into_iter()
-                    .map(|text| {
-                        let drafted = crate::drafted::words_drafted(&text.words);
-                        BookVerse {
-                            label: label(text.verse, text.last),
-                            drafted,
-                            text: if drafted {
-                                tc_usfm::shown_text_v1(&tc_usfm::codec::join_verse(
-                                    &text.words,
-                                    &text.layout,
-                                ))
-                            } else {
-                                String::new()
-                            },
-                        }
-                    })
-                    .collect(),
-            })
-            .collect();
-        let items = print_items(&printed_items(&chapters)).map_err(|e| {
+/// The book as the editor holds it, chapter by chapter: what a print of it reads.
+fn book_chapters(
+    read: &crate::counters::CountingSnapshot,
+    book: tc_core::BookId,
+) -> Result<Vec<BookChapter>, ApiError> {
+    let numbers = read.chapters_of(book);
+    if numbers.is_empty() {
+        return Err(ApiError::BadRequest {
+            field: "book".to_owned(),
+            reason: format!("{} is not in the project", book.code()),
+        });
+    }
+    Ok(numbers
+        .into_iter()
+        .map(|number| BookChapter {
+            number,
+            verses: crate::translate::texts(read, book, number)
+                .into_iter()
+                .map(|text| {
+                    let drafted = crate::drafted::words_drafted(&text.words);
+                    BookVerse {
+                        label: label(text.verse, text.last),
+                        drafted,
+                        text: if drafted {
+                            tc_usfm::shown_text_v1(&tc_usfm::codec::join_verse(
+                                &text.words,
+                                &text.layout,
+                            ))
+                        } else {
+                            String::new()
+                        },
+                    }
+                })
+                .collect(),
+        })
+        .collect())
+}
+
+impl App {
+    /// A book's printed items, as tc-export's print rules state them.
+    fn book_items(&self, chapters: &[BookChapter]) -> Result<Vec<PrintItem>, ApiError> {
+        print_items(&printed_items(chapters)).map_err(|e| {
             self.internal(
                 "a verse's number could not be written",
                 crate::reports::facts(
                     serde_json::json!({"verse": e.label, "reason": e.source.to_string()}),
                 ),
             )
-        })?;
+        })
+    }
+}
+
+impl Handle<Book> for App {
+    async fn handle(&self, req: Book) -> Result<BookPrint, ApiError> {
+        let session = self.read(&req.at)?;
+        let chapters = book_chapters(&session.read(), req.book)?;
+        let items = self.book_items(&chapters)?;
         Ok(BookPrint {
             items,
             undrafted: has_undrafted(&chapters),
@@ -114,29 +128,37 @@ fn frame_no(n: usize) -> u16 {
     u16::try_from(n).unwrap_or(u16::MAX)
 }
 
+/// The project's stories in story order, or `BadRequest` naming `field` when it holds none.
+fn project_stories(
+    read: &crate::counters::CountingSnapshot,
+    field: &str,
+) -> Result<Vec<ObsStory>, ApiError> {
+    let mut stories: Vec<ObsStory> = Vec::new();
+    for number in story_numbers() {
+        let Ok(story) = StoryNo::new(number) else {
+            continue;
+        };
+        if read
+            .key_state(&RecordKey::StoryBase(journal_story(story)?))
+            .is_none()
+        {
+            continue;
+        }
+        stories.push(read_story(read, story)?);
+    }
+    if stories.is_empty() {
+        return Err(ApiError::BadRequest {
+            field: field.to_owned(),
+            reason: "the project holds no stories".to_owned(),
+        });
+    }
+    Ok(stories)
+}
+
 impl Handle<Stories> for App {
     async fn handle(&self, req: Stories) -> Result<StoriesPrint, ApiError> {
         let session = self.read(&req.at)?;
-        let read = session.read();
-        let mut stories: Vec<ObsStory> = Vec::new();
-        for number in story_numbers() {
-            let Ok(story) = StoryNo::new(number) else {
-                continue;
-            };
-            if read
-                .key_state(&RecordKey::StoryBase(journal_story(story)?))
-                .is_none()
-            {
-                continue;
-            }
-            stories.push(read_story(&read, story)?);
-        }
-        if stories.is_empty() {
-            return Err(ApiError::BadRequest {
-                field: "at".to_owned(),
-                reason: "the project holds no stories".to_owned(),
-            });
-        }
+        let stories = project_stories(&session.read(), "at")?;
         let loaded = self.loaded_obs(&session).await?;
         let mut pictures = |story: &ObsStory| {
             loaded
@@ -302,25 +324,44 @@ fn wire_facts(facts: &tc_export::ExportFacts) -> ExportFacts {
     }
 }
 
-/// The stories' files as the project holds them, by their path from the project folder.
-// shortcut: the 50 story files only; tC4 also zips `content/front` and `content/back`, which
-// the project keeps as carried files whose bytes only the store can read. Add them when the
-// store hands the app a carried file's bytes.
-fn story_files(
-    read: &crate::counters::CountingSnapshot,
-) -> Result<Vec<(String, Vec<u8>)>, ApiError> {
-    let mut files = Vec::new();
-    for number in story_numbers() {
-        let Ok(story) = StoryNo::new(number) else {
-            continue;
-        };
-        let file = DerivedFile::Story(journal_story(story)?);
-        if let Some(bytes) = read.render(&file) {
-            files.push((file.path(), bytes));
+/// The stories' `content/` files as the project holds them, by their path from the project
+/// folder: the fifty story files the project derives, and the front and back matter it
+/// carries. A carried file whose bytes this computer lacks fails the export: leaving it out
+/// would drop the translator's text from it.
+async fn story_files(session: &ProjectSession) -> Result<Vec<(String, Vec<u8>)>, Unread> {
+    let (mut files, carried) = {
+        let read = session.read();
+        let mut files = Vec::new();
+        for number in story_numbers() {
+            let Ok(story) = StoryNo::new(number) else {
+                continue;
+            };
+            let Some(number) = tc_journal::StoryNo::new(story.get()) else {
+                continue;
+            };
+            let file = DerivedFile::Story(number);
+            if let Some(bytes) = read.render(&file) {
+                files.push((file.path(), bytes));
+            }
+        }
+        (files, read.carried_under(CONTENT))
+    };
+    for (path, oid) in carried {
+        match session.handle().carried_bytes(oid).await {
+            Ok(Some(bytes)) => files.push((path.as_str().to_owned(), bytes)),
+            Ok(None) => return Err(Unread(format!("{} has no bytes here", path.as_str()))),
+            Err(error) => return Err(Unread(format!("{}: {error}", path.as_str()))),
         }
     }
+    files.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(files)
 }
+
+/// A file of the project an export could not read, and why.
+struct Unread(String);
+
+/// The project's folder of story text (tC4 `obsMarkdown.ts`).
+const CONTENT: &str = "ingredients/content/";
 
 fn zip_files(files: &[(String, Vec<u8>)]) -> Result<Vec<u8>, String> {
     let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
@@ -335,11 +376,39 @@ fn zip_files(files: &[(String, Vec<u8>)]) -> Result<Vec<u8>, String> {
     Ok(writer.finish().map_err(|e| e.to_string())?.into_inner())
 }
 
-/// What an export's job made, before it is handed to the downloads.
+/// tC4's print stylesheet. One copy: the preview loads this file from the UI's assets, and
+/// the print document embeds the same file, so both set lines alike (INV-ONE-PRINT-MODEL).
+const PRINT_CSS: &str = include_str!("../../tc-ui/assets/ds/tokens/print.css");
+
+/// A print line worded from the UI's catalog messages, filled as the UI's `t` fills them. A
+/// key the request has no message for is the key itself, as `t` gives a missing key.
+fn print_word(words: &PrintWords, text: PrintText) -> String {
+    let key = text.key();
+    let values = text.values();
+    let vars: Vec<(&str, &dyn std::fmt::Display)> = values
+        .iter()
+        .map(|(name, value)| (*name, value as &dyn std::fmt::Display))
+        .collect();
+    tc_api::model::fill(words.message(key).unwrap_or(key), &vars)
+}
+
+/// A picture under `/media/obs/` as a `data:` URL: the print document stands alone, so the
+/// window printing it needs no address of the app's (tC4 `inlinePicture`).
+async fn inline_picture(app: &App, uri: &str) -> Option<String> {
+    use base64::Engine as _;
+    let (pack, path) = uri.strip_prefix("/media/obs/")?.split_once('/')?;
+    let file = app.obs_picture(pack, path).await?;
+    Some(format!(
+        "data:{};base64,{}",
+        file.content_type,
+        base64::engine::general_purpose::STANDARD.encode(&file.bytes)
+    ))
+}
+
+/// What an export's job made, before it is handed over.
 struct Made {
     bytes: Vec<u8>,
     file_name: String,
-    content_type: &'static str,
     facts: tc_export::ExportFacts,
 }
 
@@ -350,10 +419,36 @@ impl App {
         session: &Arc<ProjectSession>,
         producer: Producer,
         subject: Subject,
+        print: Option<PrintRequest>,
     ) -> Result<Made, JobEnd> {
         let today = self.inner.clock.now();
-        let (producer, input, name, ext, content_type) = match (producer, subject) {
-            (Producer::AlignedUsfm | Producer::PlainUsfm, Subject::Book { book }) => {
+        let made = |produced: Result<(Produced, tc_export::ExportFacts), ExportError>,
+                    name: String,
+                    ext: &str|
+         -> Result<Made, JobEnd> {
+            let (produced, facts) = produced.map_err(|e| match e {
+                ExportError::NothingDrafted => failed(ExportRefusal::NothingDrafted),
+                other => {
+                    self.report_export_failure(other.to_string());
+                    failed(ExportRefusal::ReadFailed)
+                }
+            })?;
+            let bytes = match produced {
+                Produced::File(bytes) => bytes,
+                Produced::Files(files) => zip_files(&files).map_err(|reason| {
+                    self.report_export_failure(reason);
+                    failed(ExportRefusal::ReadFailed)
+                })?,
+            };
+            Ok(Made {
+                bytes,
+                file_name: file_name(&name, today, ext),
+                facts,
+            })
+        };
+        let project_name = session.scope().project.as_str().to_owned();
+        match (producer, subject, print) {
+            (Producer::AlignedUsfm | Producer::PlainUsfm, Subject::Book { book }, None) => {
                 let input = crate::align::export::book_input(self, session, book).await?;
                 let id = book.code().to_lowercase();
                 let (producer, name) = if producer == Producer::AlignedUsfm {
@@ -361,57 +456,119 @@ impl App {
                 } else {
                     (tc_export::Producer::PlainUsfm, id)
                 };
-                (
-                    producer,
-                    ExportInput::Book(input),
+                made(
+                    tc_export::produce(producer, &ExportInput::Book(input)),
                     name,
                     "usfm",
-                    "text/plain",
                 )
             }
-            (Producer::StoryMarkdown, Subject::Stories) => {
-                let files = story_files(&session.read())?;
+            (Producer::StoryMarkdown, Subject::Stories, None) => {
+                let files = story_files(session).await.map_err(|Unread(reason)| {
+                    self.report_export_failure(reason);
+                    failed(ExportRefusal::ReadFailed)
+                })?;
                 if files.is_empty() {
                     return Err(JobEnd::Failed(ApiError::BadRequest {
                         field: "subject".to_owned(),
                         reason: "the project holds no stories".to_owned(),
                     }));
                 }
-                (
-                    tc_export::Producer::StoryMarkdown,
-                    ExportInput::StoryFiles(files),
-                    format!("{}-stories", session.scope().project.as_str()),
+                made(
+                    tc_export::produce(
+                        tc_export::Producer::StoryMarkdown,
+                        &ExportInput::StoryFiles(files),
+                    ),
+                    format!("{project_name}-stories"),
                     "zip",
-                    "application/zip",
                 )
             }
-            (producer, _) => {
-                return Err(JobEnd::Failed(ApiError::BadRequest {
-                    field: "subject".to_owned(),
-                    reason: format!("{producer:?} does not export this subject"),
-                }));
+            (Producer::PrintHtml, Subject::Book { book }, Some(print)) => {
+                let (chapters, dir) = {
+                    let read = session.read();
+                    (
+                        book_chapters(&read, book)?,
+                        crate::align::export::print_dir(&read),
+                    )
+                };
+                let words = |text| print_word(&print.words, text);
+                let input = PrintBookInput {
+                    title: print.title.clone(),
+                    items: self.book_items(&chapters)?,
+                    setup: print.setup,
+                    dir,
+                    stylesheet: PRINT_CSS,
+                    words: &words,
+                };
+                made(
+                    tc_export::produce(
+                        tc_export::Producer::PrintHtml,
+                        &ExportInput::PrintBook(input),
+                    ),
+                    book.code().to_lowercase(),
+                    "pdf",
+                )
             }
-        };
-        let (produced, facts) = tc_export::produce(producer, &input).map_err(|e| match e {
-            ExportError::NothingDrafted => failed(ExportRefusal::NothingDrafted),
-            other => {
-                self.report_export_failure(other.to_string());
-                failed(ExportRefusal::ReadFailed)
+            (Producer::PrintHtml, Subject::Stories, Some(print)) => {
+                let (stories, dir) = {
+                    let read = session.read();
+                    (
+                        project_stories(&read, "subject")?,
+                        crate::align::export::print_dir(&read),
+                    )
+                };
+                let shown = print.setup.pictures == Pictures::Shown;
+                let sources = if shown {
+                    let loaded = self.loaded_obs(session).await?;
+                    let mut sources = |story: &ObsStory| {
+                        loaded
+                            .frame_pictures(story)
+                            .into_iter()
+                            .enumerate()
+                            .filter_map(|(at, uri)| Some((at + 1, uri?)))
+                            .collect()
+                    };
+                    tc_obs::print::printed(&stories, Some(&mut sources)).pictures
+                } else {
+                    BTreeMap::new()
+                };
+                let mut pictures = BTreeMap::new();
+                for (story, frames) in sources {
+                    let mut inlined = BTreeMap::new();
+                    for (frame, uri) in frames {
+                        // tC4 fails the export on a picture it cannot read.
+                        let Some(data) = inline_picture(self, &uri).await else {
+                            self.report_export_failure(format!("picture {uri} could not be read"));
+                            return Err(failed(ExportRefusal::ReadFailed));
+                        };
+                        inlined.insert(frame, data);
+                    }
+                    pictures.insert(story, inlined);
+                }
+                let printed = tc_obs::print::printed(&stories, None);
+                let words = |text| print_word(&print.words, text);
+                let input = PrintStoriesInput {
+                    title: print.title.clone(),
+                    items: &printed.items,
+                    pictures,
+                    setup: print.setup,
+                    dir,
+                    stylesheet: PRINT_CSS,
+                    words: &words,
+                };
+                made(
+                    tc_export::produce(
+                        tc_export::Producer::PrintHtml,
+                        &ExportInput::PrintStories(input),
+                    ),
+                    project_name,
+                    "pdf",
+                )
             }
-        })?;
-        let bytes = match produced {
-            Produced::File(bytes) => bytes,
-            Produced::Files(files) => zip_files(&files).map_err(|reason| {
-                self.report_export_failure(reason);
-                failed(ExportRefusal::ReadFailed)
-            })?,
-        };
-        Ok(Made {
-            bytes,
-            file_name: file_name(&name, today, ext),
-            content_type,
-            facts,
-        })
+            (producer, _, _) => Err(JobEnd::Failed(ApiError::BadRequest {
+                field: "subject".to_owned(),
+                reason: format!("{producer:?} does not export this subject"),
+            })),
+        }
     }
 
     fn report_export_failure(&self, reason: String) {
@@ -424,26 +581,92 @@ impl App {
             now,
         );
     }
+
+    /// `GET /print/{job}`: the print document of `job` once it finished as a print export;
+    /// `None` for an unknown or unfinished job, a failed one, or an export of another kind.
+    pub async fn print_page(&self, job: &str) -> Option<MediaFile> {
+        let n: u64 = job.parse().ok()?;
+        // One job, one address: `07` is not job 7.
+        if n.to_string() != job {
+            return None;
+        }
+        let id = JobId::new(n);
+        let JobState::Done(JobOutcome::ExportReady(Exported {
+            file: ExportedFile::Print { .. },
+            ..
+        })) = self.inner.jobs.view(id)?.state
+        else {
+            return None;
+        };
+        let bytes = self.inner.prints.get(id)?;
+        Some(MediaFile {
+            bytes: bytes.as_ref().clone(),
+            content_type: "text/html; charset=utf-8",
+        })
+    }
+}
+
+/// The print documents of print exports, by job, kept while their job's outcome is: what
+/// `GET /print/{job}` serves.
+#[derive(Default)]
+pub(crate) struct Prints {
+    by_job: std::sync::Mutex<HashMap<JobId, PageSlot>>,
+}
+
+/// A print job's document, set once when the job made it.
+type PageSlot = Arc<OnceLock<Arc<Vec<u8>>>>;
+
+impl Prints {
+    /// Keeps the slot `job` fills with its document. The documents of jobs the registry
+    /// forgot go first, so a document lasts as long as its job's outcome.
+    fn keep(&self, job: JobId, page: PageSlot, live: impl Fn(JobId) -> bool) {
+        let mut by_job = crate::app::lock(&self.by_job);
+        by_job.retain(|id, _| live(*id));
+        by_job.insert(job, page);
+    }
+
+    fn get(&self, job: JobId) -> Option<Arc<Vec<u8>>> {
+        crate::app::lock(&self.by_job).get(&job)?.get().cloned()
+    }
 }
 
 impl Handle<RunExport> for App {
     async fn handle(&self, req: RunExport) -> Result<JobId, ApiError> {
-        // The print document needs the page setup and the interface's words, which only the
-        // UI holds and no request carries yet.
-        if req.producer == Producer::PrintHtml {
-            return Err(ApiError::Unavailable(Feature::Export));
+        // The UI sends the print's setup and words exactly when it asks for a print.
+        match (req.producer, &req.print) {
+            (Producer::PrintHtml, None) => {
+                return Err(ApiError::BadRequest {
+                    field: "print".to_owned(),
+                    reason: "a print needs its page setup and words".to_owned(),
+                });
+            }
+            (Producer::AlignedUsfm | Producer::PlainUsfm | Producer::StoryMarkdown, Some(_)) => {
+                return Err(ApiError::BadRequest {
+                    field: "print".to_owned(),
+                    reason: "only a print takes a page setup".to_owned(),
+                });
+            }
+            _ => {}
         }
         let session = self.read(&req.at)?;
-        let Some(downloads) = self.inner.downloads.get().cloned() else {
-            return Err(self.internal(
-                "the server gave no downloads folder",
-                crate::reports::facts(serde_json::json!({})),
-            ));
+        // A print is served from its job (`GET /print/{job}`), every other file downloaded.
+        let downloads = if req.producer == Producer::PrintHtml {
+            None
+        } else {
+            let Some(downloads) = self.inner.downloads.get().cloned() else {
+                return Err(self.internal(
+                    "the server gave no downloads folder",
+                    crate::reports::facts(serde_json::json!({})),
+                ));
+            };
+            Some(downloads)
         };
         let spec =
             JobSpec::new(JobKind::Export, Phase::Export).project(session.scope().project.clone());
+        let page: PageSlot = Arc::default();
+        let filled = page.clone();
         let app = self.clone();
-        Ok(self
+        let job = self
             .inner
             .jobs
             .start_typed::<RunExport, _, _>(spec, move |_ctx| async move {
@@ -463,9 +686,23 @@ impl Handle<RunExport> for App {
                 let Made {
                     bytes,
                     file_name,
-                    content_type,
                     facts,
-                } = app.make_export(&session, req.producer, req.subject).await?;
+                } = app
+                    .make_export(&session, req.producer, req.subject, req.print)
+                    .await?;
+                let facts = wire_facts(&facts);
+                let Some(downloads) = downloads else {
+                    let _ = filled.set(Arc::new(bytes));
+                    return Ok(Exported {
+                        file: ExportedFile::Print { file_name },
+                        facts,
+                    });
+                };
+                let content_type = if req.producer == Producer::StoryMarkdown {
+                    "application/zip"
+                } else {
+                    "text/plain"
+                };
                 let written = downloads.dir().join(format!("{}.part", req.request));
                 let name = file_name.clone();
                 let registered = tokio::task::spawn_blocking(move || {
@@ -480,10 +717,21 @@ impl Handle<RunExport> for App {
                     failed(ExportRefusal::ReadFailed)
                 })?;
                 Ok(Exported {
-                    download,
-                    file_name,
-                    facts: wire_facts(&facts),
+                    file: ExportedFile::Download {
+                        download,
+                        file_name,
+                    },
+                    facts,
                 })
-            }))
+            });
+        if req.producer == Producer::PrintHtml {
+            // The page is kept under the id the registry gave, whether or not the job has
+            // filled it yet; `print_page` serves it only once the job is done.
+            let jobs = self.inner.jobs.clone();
+            self.inner
+                .prints
+                .keep(job, page, |id| jobs.view(id).is_some());
+        }
+        Ok(job)
     }
 }

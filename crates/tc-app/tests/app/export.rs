@@ -1,15 +1,22 @@
 //! What the Community Checking preview prints (unit B8) through `App::request`: the sample's
 //! Titus and Jonah and its story project, each as tC4's own print code states it in
-//! `fixtures/export/print-vectors.json`.
+//! `fixtures/export/print-vectors.json`. Then D2's exports: the conflict check before one,
+//! the Story Markdown zip, and the print page a print export leaves for `GET /print/{job}`.
 
-use std::sync::OnceLock;
+use std::io::Read as _;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use serde_json::Value;
+use tc_api::ApiError;
 use tc_api::export::{self, PrintFrame, PrintItem, PrintStoryItem};
-use tc_api::ids::Scope;
+use tc_api::ids::{DownloadId, JobId, Scope};
+use tc_api::jobs::{JobKind, JobOutcome, JobState, Phase};
+use tc_app::jobs::JobSpec;
 use tc_core::BookId;
 
-use super::common::{post, repo_root};
+use super::common::{ManualJob, post, repo_root, rid};
 use super::understand::{ok, opened, start};
 
 fn vectors() -> &'static Value {
@@ -421,4 +428,237 @@ async fn preflight_counts_open_conflicts() {
         .await
         .unwrap();
     assert_eq!(stories, none);
+}
+
+/// The server's downloads, kept in memory: each file registered, by its name.
+struct Downloads {
+    dir: tempfile::TempDir,
+    files: Mutex<Vec<(String, Vec<u8>)>>,
+}
+
+impl tc_app::DownloadFiles for Downloads {
+    fn dir(&self) -> PathBuf {
+        self.dir.path().to_owned()
+    }
+
+    fn add(
+        &self,
+        written: &Path,
+        file_name: &str,
+        _content_type: &'static str,
+    ) -> Result<DownloadId, String> {
+        let bytes = std::fs::read(written).map_err(|e| e.to_string())?;
+        let mut files = self.files.lock().unwrap();
+        files.push((file_name.to_owned(), bytes));
+        Ok(DownloadId::parse(&format!("{:032x}", files.len())).unwrap())
+    }
+}
+
+fn give_downloads(app: &tc_app::App) -> Arc<Downloads> {
+    let downloads = Arc::new(Downloads {
+        dir: tempfile::tempdir().unwrap(),
+        files: Mutex::default(),
+    });
+    app.provide_downloads(downloads.clone());
+    downloads
+}
+
+/// Runs an export and waits for its end; a minute is a hang.
+async fn run(app: &tc_app::App, req: &export::RunExport) -> (JobId, JobState) {
+    let job = post(app, req).await.unwrap();
+    let mut watch = app.jobs().watch(job).unwrap();
+    let state = tokio::time::timeout(Duration::from_secs(60), async {
+        watch
+            .wait_for(tc_app::jobs::JobRegistry::is_ended)
+            .await
+            .unwrap()
+            .clone()
+    })
+    .await
+    .expect("hung: the export ends");
+    (job, state)
+}
+
+fn exported(state: JobState) -> export::Exported {
+    match state {
+        JobState::Done(JobOutcome::ExportReady(done)) => done,
+        other => panic!("{other:?}"),
+    }
+}
+
+/// tC4's English catalog messages for a print's lines.
+fn english_words() -> export::PrintWords {
+    export::PrintWords {
+        chapter_heading: "Chapter {n}".into(),
+        chapter_not_drafted: "[ chapter {n} not yet drafted ]".into(),
+        chapters_not_drafted: "[ chapters {from}–{to} not yet drafted ]".into(),
+        not_yet_drafted: "[ verse not yet drafted ]".into(),
+        frame_not_drafted: "[ frame {n} not yet drafted ]".into(),
+        frames_not_drafted: "[ frames {from}–{to} not yet drafted ]".into(),
+        story_not_drafted: "[ story {n} not yet drafted ]".into(),
+        stories_not_drafted: "[ stories {from}–{to} not yet drafted ]".into(),
+        story_number: "Story {n}".into(),
+        image_alt: "Story frame {n}".into(),
+        nothing_drafted_obs: "Nothing is drafted in this project yet.".into(),
+    }
+}
+
+/// tC4 zips every file of `content/` (`obsMarkdown.ts`): the story files and the front and
+/// back matter, byte for byte. Leaving the matter out would drop the translator's text.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_story_export_zips_the_stories_and_the_front_and_back_matter() {
+    let (_dir, t) = start("sample").await;
+    let downloads = give_downloads(&t.app);
+    let at = super::story::open_obs(&t.app).await.session.at;
+    let (_, state) = run(
+        &t.app,
+        &export::RunExport {
+            request: rid(70),
+            at,
+            producer: export::Producer::StoryMarkdown,
+            subject: export::Subject::Stories,
+            print: None,
+        },
+    )
+    .await;
+    let export::ExportedFile::Download { file_name, .. } = exported(state).file else {
+        panic!("a download")
+    };
+    assert!(
+        file_name.starts_with("sample_burrito_obs-stories-") && file_name.ends_with(".zip"),
+        "{file_name}"
+    );
+    let files = downloads.files.lock().unwrap();
+    let [(name, zip)] = files.as_slice() else {
+        panic!("one file")
+    };
+    assert_eq!(name, &file_name);
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip.clone())).unwrap();
+    let stored = super::scenario::scenario("sample").files();
+    let project = "sample_burrito_obs/ingredients/";
+    let mut want: Vec<(String, &Vec<u8>)> = stored
+        .iter()
+        .filter_map(|(path, bytes)| {
+            let rest = &path[path.find(project)? + project.len()..];
+            (rest.starts_with("content/") && !rest.ends_with(".bak"))
+                .then(|| (rest.to_owned(), bytes))
+        })
+        .collect();
+    want.sort();
+    for matter in [
+        "content/front/title.md",
+        "content/front/intro.md",
+        "content/back/intro.md",
+    ] {
+        assert!(
+            want.iter().any(|(p, _)| p == matter),
+            "the fixture has {matter}"
+        );
+    }
+    let mut got: Vec<(String, Vec<u8>)> = (0..archive.len())
+        .map(|i| {
+            let mut entry = archive.by_index(i).unwrap();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            (entry.name().to_owned(), bytes)
+        })
+        .collect();
+    got.sort();
+    let got: Vec<(String, &Vec<u8>)> = got.iter().map(|(p, b)| (p.clone(), b)).collect();
+    assert_eq!(got, want);
+}
+
+/// A print export keeps its document for `GET /print/{job}`, which serves it only once the
+/// job finished as a print: never for an unknown job, one still running, another export, or
+/// an id written another way.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_print_page_is_a_finished_print_exports_and_no_other_jobs() {
+    let (_dir, t) = start("sample").await;
+    give_downloads(&t.app);
+    let at = opened(&t.app).await.session.at;
+    let titus = export::Subject::Book {
+        book: BookId::Titus,
+    };
+    let print = export::PrintRequest {
+        setup: tc_api::model::print::PageSetup {
+            chapter_opening: tc_api::model::print::ChapterOpening::Heading,
+            ..Default::default()
+        },
+        title: "Tito".into(),
+        words: english_words(),
+    };
+    let missing = post(
+        &t.app,
+        &export::RunExport {
+            request: rid(71),
+            at: at.clone(),
+            producer: export::Producer::PrintHtml,
+            subject: titus,
+            print: None,
+        },
+    )
+    .await;
+    assert!(
+        matches!(&missing, Err(ApiError::BadRequest { field, .. }) if field == "print"),
+        "{missing:?}"
+    );
+
+    let (job, state) = run(
+        &t.app,
+        &export::RunExport {
+            request: rid(72),
+            at: at.clone(),
+            producer: export::Producer::PrintHtml,
+            subject: titus,
+            print: Some(print),
+        },
+    )
+    .await;
+    let export::ExportedFile::Print { file_name } = exported(state).file else {
+        panic!("a print")
+    };
+    assert!(
+        file_name.starts_with("tit-") && file_name.ends_with(".pdf"),
+        "{file_name}"
+    );
+    let page = t.app.print_page(&job.get().to_string()).await.unwrap();
+    assert_eq!(page.content_type, "text/html; charset=utf-8");
+    let html = String::from_utf8(page.bytes).unwrap();
+    assert!(html.contains("<title>Tito</title>"), "{html}");
+    assert!(
+        html.contains("Chapter 1"),
+        "the request's words fill the heading"
+    );
+    assert!(
+        html.contains(".print-book"),
+        "the print stylesheet is in the page"
+    );
+
+    assert!(t.app.print_page(&format!("0{}", job.get())).await.is_none());
+    assert!(t.app.print_page("99999").await.is_none());
+    assert!(t.app.print_page("x").await.is_none());
+
+    let (usfm, _) = run(
+        &t.app,
+        &export::RunExport {
+            request: rid(73),
+            at,
+            producer: export::Producer::PlainUsfm,
+            subject: titus,
+            print: None,
+        },
+    )
+    .await;
+    assert!(t.app.print_page(&usfm.get().to_string()).await.is_none());
+
+    let running =
+        ManualJob::start(t.app.jobs(), JobSpec::new(JobKind::Export, Phase::Export)).await;
+    assert!(
+        t.app
+            .print_page(&running.id.get().to_string())
+            .await
+            .is_none(),
+        "a job still running"
+    );
+    running.finish(Err(tc_app::jobs::JobEnd::Cancelled));
 }

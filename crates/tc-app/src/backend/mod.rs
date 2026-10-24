@@ -27,7 +27,7 @@ use tc_journal::command::{
 };
 use tc_journal::fold::{ConflictId, Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
-use tc_journal::{BookId, ChangeId, DeviceId, RecordKey, ShownToken};
+use tc_journal::{BookId, ChangeId, DeviceId, GitOid, RecordKey, ShownToken};
 
 use crate::jobs::ProgressSink;
 
@@ -1173,6 +1173,10 @@ pub trait ProjectHandle: Send + Sync {
     fn subscribe(&self) -> tokio::sync::mpsc::UnboundedReceiver<StoreEvent>;
 
     fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome>;
+
+    /// The bytes of a carried file's version, the git blob `oid` its record names (STORAGE
+    /// §11.4), for an export. Reads only. `Ok(None)` when this computer lacks the blob.
+    fn carried_bytes(&self, oid: GitOid) -> BoxFuture<Result<Option<Vec<u8>>, StoreError>>;
 
     /// The store's operation counters (R14): files opened and created, flushes, renames,
     /// commands and their queue waits. What a count test reads.

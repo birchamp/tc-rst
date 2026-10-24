@@ -350,18 +350,12 @@ fn lookup(key: &str, vars: Vars<'_>, fallback: Option<&str>) -> String {
             None => warn_in_console(&message),
         }
     }
-    let mut message = match (found, fallback) {
+    let message = match (found, fallback) {
         (Some(message), _) => message,
         (None, Some(fallback)) => return fallback.to_owned(),
         (None, None) => key.to_owned(),
     };
-    for (name, value) in vars {
-        // One variable after another, as tC4's `replaceAll` loop does: a value that holds a
-        // later variable's `{name}` is replaced again. A value is inserted as it is; tC4's
-        // `replaceAll` would also read `$&` or `$$` in it as a pattern.
-        message = message.replace(&format!("{{{name}}}"), &value.to_string());
-    }
-    message
+    tc_api::model::fill(&message, vars)
 }
 
 #[cfg(target_arch = "wasm32")]

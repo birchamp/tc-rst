@@ -75,6 +75,7 @@ use tc_api::ids::{
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
 };
+use tc_api::model::print::{ChapterOpening, Columns, PageSetup};
 use tc_api::model::section::ParaFormat;
 use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_api::net::{NetView, Set, State as NetState};
@@ -3002,10 +3003,31 @@ impl Example for export::RunExport {
         export::RunExport {
             request: request(41),
             at: scope(),
-            producer: export::Producer::AlignedUsfm,
+            producer: export::Producer::PrintHtml,
             subject: export::Subject::Book {
                 book: BookId::Titus,
             },
+            print: Some(export::PrintRequest {
+                setup: PageSetup {
+                    columns: Columns::Two,
+                    chapter_opening: ChapterOpening::Heading,
+                    ..PageSetup::default()
+                },
+                title: "Tito".into(),
+                words: export::PrintWords {
+                    chapter_heading: "Capítulo {n}".into(),
+                    chapter_not_drafted: "[ capítulo {n} sin borrador ]".into(),
+                    chapters_not_drafted: "[ capítulos {from}–{to} sin borrador ]".into(),
+                    not_yet_drafted: "[ versículo sin borrador ]".into(),
+                    frame_not_drafted: "[ cuadro {n} sin borrador ]".into(),
+                    frames_not_drafted: "[ cuadros {from}–{to} sin borrador ]".into(),
+                    story_not_drafted: "[ historia {n} sin borrador ]".into(),
+                    stories_not_drafted: "[ historias {from}–{to} sin borrador ]".into(),
+                    story_number: "Historia {n}".into(),
+                    image_alt: "Cuadro de la historia {n}".into(),
+                    nothing_drafted_obs: "Nada tiene borrador en este proyecto.".into(),
+                },
+            }),
         }
     }
 }
@@ -3397,8 +3419,10 @@ fn events() -> Vec<Event> {
             kind: JobKind::Export,
             project: Some(ProjectRef::parse("sample_burrito").unwrap()),
             state: JobState::Done(JobOutcome::ExportReady(export::Exported {
-                download: DownloadId::parse("0123456789abcdef0123456789abcdef").unwrap(),
-                file_name: "tit-aligned-2026-10-24.usfm".into(),
+                file: export::ExportedFile::Download {
+                    download: DownloadId::parse("0123456789abcdef0123456789abcdef").unwrap(),
+                    file_name: "tit-aligned-2026-10-24.usfm".into(),
+                },
                 facts: export::ExportFacts {
                     skipped: vec![export::SkippedVerse {
                         chapter: 1,

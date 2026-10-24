@@ -40,6 +40,14 @@ impl Backend for AppBackend {
             content_type: file.content_type,
         })
     }
+
+    async fn print_page(&self, job: &str) -> Option<MediaFile> {
+        let file = self.0.print_page(job).await?;
+        Some(MediaFile {
+            bytes: file.bytes,
+            content_type: file.content_type,
+        })
+    }
 }
 
 impl EventSource for AppEvents {

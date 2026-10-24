@@ -211,6 +211,8 @@ pub(crate) struct Inner {
     pub(crate) uploads: std::sync::OnceLock<crate::fixes::Uploads>,
     /// The server's downloads, where an export's file goes (D2). Given once, as `uploads`.
     pub(crate) downloads: std::sync::OnceLock<crate::export::Downloads>,
+    /// The print documents of print exports, served by `GET /print/{job}` (D2).
+    pub(crate) prints: crate::export::Prints,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -475,6 +477,7 @@ impl App {
             plans: crate::upgrades::KeptPlans::default(),
             uploads: std::sync::OnceLock::new(),
             downloads: std::sync::OnceLock::new(),
+            prints: crate::export::Prints::default(),
             #[cfg(feature = "test-hooks")]
             scripted_resources: crate::upgrades::ScriptedResources::default(),
             calls: AtomicUsize::new(0),

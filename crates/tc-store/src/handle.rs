@@ -857,6 +857,19 @@ impl ProjectHandle {
         pending
     }
 
+    /// The bytes of a carried file's version, the blob `oid` the fold names (§11.4): `None`
+    /// when this computer's object database lacks it. Reads only; the writer answers, since
+    /// it holds the repository.
+    pub fn read_carried(&self, oid: GitOid) -> Pending<Result<Option<Vec<u8>>, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::ReadCarried {
+            oid,
+            reply: resolver,
+        });
+        pending
+    }
+
     /// Starts the open's background work (see [`Background`]).
     pub(crate) fn start_background(&self, job: Background) {
         let shared = self.shared.clone();
