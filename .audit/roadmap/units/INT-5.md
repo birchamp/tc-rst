@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5 d
 merged: e2c2ae36
-updated: 2026-10-23
+updated: 2026-10-24
 next: none
 blocked_by: none
 ---
@@ -58,7 +58,7 @@ could build it a second time, or skip a step that keeps text safe.
     cards; `board.py --check` holds it in CI.
   - INV-LOGS-NEVER-CONFLICT: two branches that each append rows to `.audit/minors.tsv` or
     `.audit/rebuild.tsv` merge without a conflict, and the result keeps every row.
-  - INV-ONE-LIVE-TRACKER: every older tracker's first line says it is history.
+  - INV-ONE-LIVE-TRACKER: every older tracker's first line says it is history. (not in code: a one-time edit of the older trackers, checked by its step commands)
 - **Wrong states**:
   - An agent trusts STATUS.md ("37 of 48", B11 "ready to start") and redoes merged work.
   - Two branches conflict on the minors list (the RL × S2 merge has a 94-line add/add conflict
@@ -275,3 +275,4 @@ could build it a second time, or skip a step that keeps text safe.
 - 2026-10-24 06:05 EDT | integration lane (Claude Code 3d07d5f8) | resume | none | the orchestrator gave INT-5 its merge turn after S2 (main 33d2378d), so step 8 runs now and the card merges done, not parked; main merged into track-INT-5 with no conflict | git log track-INT-5
 - 2026-10-24 06:05 EDT | integration lane (Claude Code 3d07d5f8) | step 8 | none | .audit/PROCESS.md gets the history first line; HANDOFF.md has no "S2: where it stands" section after S2's merge, so nothing to replace and no S2 note; minors.tsv has the header once and every row of s2-proof-executor's and track-S2's copies (0 missing); the tools README already has S2's lane-state.mjs and run-gates.mjs rows | head -n1 .audit/PROCESS.md
 - 2026-10-24 06:05 EDT | integration lane (Claude Code 3d07d5f8) | merge | e2c2ae36 | track-INT-5 merged into main with step 8 done; gated by scripts/gates.sh --wait-ci INT-5 on this exact commit; main moves only when --check-receipt passes | scripts/gates.sh --wait-ci INT-5
+- 2026-10-24 06:53 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3a (claims check): INV-ONE-LIVE-TRACKER is marked "(not in code: a one-time edit of the older trackers ...)", since no test prints it; test_two_branches_appending_to_an_audit_log_merge_without_conflict now resolves (the claims resolver reads .audit/tools/*_test.py) | node --test .audit/tools/claims.test.mjs

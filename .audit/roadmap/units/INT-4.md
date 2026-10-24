@@ -56,7 +56,7 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
   - INV-NO-UNGATED-MERGE: main moves only to a commit that `scripts/gates.sh --check-receipt`
     accepts and on which the journeys, the alignment budget and the Windows VM gate passed.
   - INV-NOTHING-DROPPED: every commit of `resume-build-lane` up to BOUNDARY is an ancestor of
-    main afterwards, and every row of `.audit/b5b-minors-pending.tsv` is in `.audit/minors.tsv`.
+    main afterwards, and every row of `.audit/b5b-minors-pending.tsv` is in `.audit/minors.tsv`. (not in code: a one-time merge, checked by its step 1 commands)
   - INV-CI-IS-THE-GATE: GitHub CI is green on main's new tip.
 - **Wrong states**:
   - Main at a commit CI rejects: af4eef3 fails at "clippy for Windows" (run 39426828571).
@@ -278,3 +278,4 @@ had no full gate since its B8, C4 and B11 merges, and no Windows run since 2026-
 - 2026-10-23 13:07 EDT | checks lane (Claude Code 2198ee19) | merge | 2b1d722b | Merge commit 97da2945 (plus track-INT-1's card, the alignment-budget step, the guided-fix load fix and this card) moves to main by fast-forward once scripts/gates.sh passes on this exact commit and --check-receipt exits 0; then the push and the CI watch. INT-3's merge run on main was 39946614391 (green); this card's CI run id follows in a note | scripts/gates.sh --check-receipt
 - 2026-10-23 13:11 EDT | checks lane (Claude Code 2198ee19) | note | 86c1ee4c | Main moved before the fast-forward: the owner merged PR #1 (G5, ext/g5-app-e2e) at 3d6d8f1c. Merged into track-INT-4 as 86c1ee4c with no conflict; it brings app-e2e.yml, G5's card and two journey files (no-skips.mjs, no-skips.test.mjs), no Rust. Decided (technical): the gate run with the journeys is repeated on this tree; the Windows VM gate is not repeated because no crate changed between 09233474 and this merge (git diff --stat). The gate run on 8fe2f7d1 was stopped unfinished | git diff --stat 8fe2f7d1...3d6d8f1c
 - 2026-10-23 13:11 EDT | checks lane (Claude Code 2198ee19) | gate | none | started scripts/gates.sh --journeys on the merged tree, log .enjoy-logs/int4-gates-4.log | .enjoy-logs/int4-gates-4.log
+- 2026-10-23 23:48 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: INV-NOTHING-DROPPED is marked "(not in code: a one-time merge ...)"; its step 1 commands checked it. INV-CI-IS-THE-GATE is now tested by .audit/tools/gates-sync.test.mjs | node --test .audit/tools/claims.test.mjs

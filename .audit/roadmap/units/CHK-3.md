@@ -4,18 +4,18 @@ title: Claimed tests must exist
 track: A
 lane: checks
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
-depends: [INT-4]
+state: parked
+owner: checks lane (Claude Code 2198ee19)
+branch: track-CHK-3
+worktree: .worktrees/track-CHK-3
+depends: [INT-4, CHK-3a]
 needs_owner: []
 proves: [P1, P3]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-24
+next: step 5 after S2 merges (docs/STORAGE.md section 15, which S2 rewrites), then the review and a merge turn; branch track-CHK-3
 blocked_by: none
 ---
 
@@ -261,3 +261,14 @@ and each planted failure is in the log.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
+- 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-3 from main 48d29235. S2 is merging, not done: step 5 (STORAGE.md §15) waits for it. FIX-R is not claimed, so its rows of TC4-ISSUES.md are marked pending only. tC4 reference clone: ~/unfoldingword/translationcore4 (has d310bf3) | python3 -I .audit/tools/board.py
+- 2026-10-23 23:43 EDT | checks lane (Claude Code 2198ee19) | note | none | Correction to the claim line: track-CHK-3 branched from main 325244a1 (G5's merge), not 48d29235 | git merge-base track-CHK-3 claude/focused-ride-5uzj7p
+- 2026-10-23 23:43 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | .audit/tools/claims.mjs (testNames, resolve, claimsOf, pendingOf, tables, states, idsIn) and claims.test.mjs. Old unit ids (A5, B4a, ...) take their state from .audit/STATUS.md, cards from board.py --json. Resolver decisions: a template title with under 12 literal characters is not a pattern (`${r.path}${r.query}` matched every claim); a title's leading label ("language-tags: ...") resolves; a bare test file name (`fetched_lock.rs`) resolves to its binary; a tC4 `*.spec.ts` is the reference a journey ports, not a claim; every {a,b} group expands. Red list on TC4-ISSUES: #795 and #765 covered but "to add"; #507 j25_a_story_opens_with_its_rail_its_units_and_a_comment_box_that_takes_no_typing; #737 and #42 WordNav; #529 imported_obsolete_checking_language_is_kept_and_ignored; 29 unit-todo rows waiting on done units only (A5, A8, B2, B3, B4a, B5b, B9a, B9b, C6) or on no card (#179, #576, #801). Third-rule plant (units/X.md set done in a copy): "INV-CLAIMED-TESTS-EXIST: docs/TC4-ISSUES.md:298 (#676) waits on X, but they are done: write the test or mark the row" | node --test .audit/tools/claims.test.mjs
+- 2026-10-23 23:43 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | 35 rows changed in docs/TC4-ISSUES.md: #795, #507, #765 (pending: FIX-R) (FIX-R step 5 writes #795's test, renames #507's journey, and reconciles); #529 (pending: I); WordNav unquoted in #737 and #42; the 29 unit-todo rows' unit cells end "FIX-R reconciles" (FIX-R step 5.4 sets each to covered or to the card that now owns it). Plant: one letter off in #788's test: "INV-CLAIMED-TESTS-EXIST: docs/TC4-ISSUES.md:136 (#788) is covered by only_the_shown_selection_is_plaaced_and_the_cards_look_armed_only_while_it_is_not_empty, but no such test exists"; reverted. Both tests pass | node --test .audit/tools/claims.test.mjs
+- 2026-10-23 23:46 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | parity/app/journeys/coverage.json from ~/unfoldingword/translationcore4 at d310bf3 (the baseline's commit): 24 live journeys, 10 mapped, 7 partial (J3, J8, J11, J12, J13, J17, J18), 7 pending (J7 and J23 D2; J9a, J9c, J9d F1; J24 E1b; J26 E1a); 37 specs, every one mapped (bundled-upgrade REF1, j10-rtl G4, j14-join-isolation E1b, j15-slow-open the Rust test j15_a_quick_open_reports_nothing_before_300_ms; the others to the journey file that cites them). A part is {file, tests}, {rust, tests} or {pending}; a list holds a partial mapping's parts. coverage.test.mjs passes (titlesOf, now shared in claims.mjs, also matches template titles). Plants: J5 deleted: "INV-P1-COVERED: tC4's journey J5 is not mapped"; one letter off: "INV-P1-COVERED: J16 maps to parity/app/journeys/comments.test.mjs: \"j16_three_help_stepz_then_three_pauses_and_a_blur_add_one_comment\", but that file has no such test"; both reverted | node --test parity/app/journeys/coverage.test.mjs
+- 2026-10-23 23:48 EDT | checks lane (Claude Code 2198ee19) | step 3b | none | claims.test.mjs "INV-CLAIMED-TESTS-EXIST: units" reads the 7 done cards: their Checks names resolve, and every INV- name of their Invariants appears in crates, parity, .audit/tools or scripts. First run: CHK-4 the_gates_fix_the_proptest_seed, INV-DETERMINISTIC, INV-FAST (cut by the ruling); INT-1's three and INT-4's INV-NOTHING-DROPPED (one-time process steps); INT-2's INV-CI-IS-THE-GATE and INV-BUILDS-ON-WINDOWS and G5's INV-JOURNEYS-RUN (nothing tested them). Decided: an item marked "(not in code: <why>)" or "(retired <by what>)" is skipped, and must give its reason; the first two groups are marked so (notes in those cards); the last three are now tests in gates-sync.test.mjs (the pin and --locked on every cargo step and every building CI job; the Windows clippy step in CI; app-e2e on push over every journey). Plants, each reverted: G5's no_skips_passes_a_run_with_no_skip misspelled: "INV-CLAIMED-TESTS-EXIST: units/G5.md names no_skips_passes_a_run_with_no_skipx but no test has that name"; wasm-api without --locked: "INV-CI-IS-THE-GATE: step wasm-api builds without --locked"; app-e2e without push: "INV-JOURNEYS-RUN: app-e2e does not run on push" | node --test .audit/tools/claims.test.mjs .audit/tools/gates-sync.test.mjs
+- 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | step 4 | none | docs/P-LEDGER.md: one row per P1 to P10 with its CI job (journeys, parity-baseline, test; none yet for P2 and P9) and the tests that exist, with (pending: ID) for each card still owed; claims.test.mjs "INV-CLAIMED-TESTS-EXIST: P-LEDGER": every P has a row, every job is a job of a workflow, every named test exists (a pending marker never excuses one here), every pending card is not done. Plant: P8's job as nightlyy: "INV-CLAIMED-TESTS-EXIST: docs/P-LEDGER.md:17 (P8) names CI job nightlyy, but no workflow has that job"; reverted | node --test .audit/tools/claims.test.mjs
+- 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | note | none | Step 6's hand-on: notes in X's and I's logs (FIX-R's was written at step 2): replace each (pending: <ID>) marker with the test's name in the commit that writes it | .audit/roadmap/units/X.md
+- 2026-10-24 00:27 EDT | checks lane (Claude Code 2198ee19) | gate | 04f67580 | CI on the pushed branch: ci 40059874342 and app-e2e 40059874380 both success (the node step runs claims.test.mjs and coverage.test.mjs) | gh run view 40059874342
+- 2026-10-24 00:27 EDT | checks lane (Claude Code 2198ee19) | park | 04f67580 | Parked: step 5 waits for S2 | python3 -I .audit/tools/board.py
+- 2026-10-24 00:31 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1-4 and 3b are card CHK-3a, merged on its own; this card keeps the rest and depends on CHK-3a | .audit/roadmap/units/CHK-3a.md
