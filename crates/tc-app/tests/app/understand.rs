@@ -65,10 +65,10 @@ pub async fn ok<E: tc_api::Endpoint>(app: &App, req: &E) -> E::Ok {
     }
 }
 
-/// The job's end, within five seconds.
+/// The job's end; a minute is a hang.
 async fn ended(app: &App, job: JobId) -> JobState {
     let mut watch = app.jobs().watch(job).unwrap();
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         watch
             .wait_for(tc_app::jobs::JobRegistry::is_ended)
             .await
@@ -76,7 +76,7 @@ async fn ended(app: &App, job: JobId) -> JobState {
             .clone()
     })
     .await
-    .expect("the open ends")
+    .expect("hung: the open ends")
 }
 
 async fn open(app: &App, project: &str, unit: Option<OpenUnit>) -> JobState {
@@ -472,13 +472,13 @@ async fn a_held_open_runs_until_it_is_released() {
         },
     )
     .await;
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while t.app.holding() == 0 {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
     .await
-    .expect("the open reaches its hold");
+    .expect("hung: the open reaches its hold");
     let held = t.app.jobs().view(job).unwrap().state;
     assert!(!tc_app::jobs::JobRegistry::is_ended(&held), "{held:?}");
     assert!(

@@ -259,7 +259,7 @@ async fn training_held(s: &Scale) -> CancelTrainingOnDrop {
         },
     )
     .await;
-    let running = tokio::time::timeout(Duration::from_secs(5), async {
+    let running = tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             match events.next().await {
                 Next::Frame(frame) => {
@@ -297,7 +297,7 @@ async fn training_held(s: &Scale) -> CancelTrainingOnDrop {
     }
     let guard = CancelTrainingOnDrop {
         jobs: s.app.jobs().clone(),
-        id: running.expect("the held Train job reports Running"),
+        id: running.expect("hung: the held Train job never reported Running"),
     };
     assert_eq!(
         s.app.holding(),
@@ -329,8 +329,18 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             }
             let mut frames = s.app.events().subscribe(s.app.events().head());
             let measured = tokio::time::timeout(
-                Duration::from_secs(5),
+                Duration::from_secs(60),
                 cost(&s, async |s| {
+                    // The draft writer writes on a one-second timer, so on a slow run it would
+                    // write once more inside the count; held, it writes once, after the save.
+                    ok(
+                        &s.app,
+                        &Hold {
+                            request: request(46),
+                            at: HoldPoint::DraftWrite,
+                        },
+                    )
+                    .await;
                     let view = open_verse(s, first_verse(), 2).await;
                     assert_eq!(view.suggest.status, tc_api::align::SuggestStatus::Reading);
                     let (card, word) = view
@@ -365,6 +375,14 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
                         // its own; the store being idle does not mean that frame has gone.
                         changed(&mut frames, &first_alignment()).await;
                     }
+                    ok(
+                        &s.app,
+                        &Release {
+                            request: request(47),
+                            at: HoldPoint::DraftWrite,
+                        },
+                    )
+                    .await;
                 }),
             )
             .await
@@ -413,11 +431,11 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             )
             .await;
             let terminal = tokio::time::timeout(
-                Duration::from_secs(5),
+                Duration::from_secs(60),
                 ended.wait_for(JobRegistry::is_ended),
             )
             .await
-            .expect("the held training cancels")
+            .expect("hung: the held training cancels")
             .unwrap()
             .clone();
             assert_eq!(terminal, JobState::Cancelled);

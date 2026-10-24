@@ -35,6 +35,8 @@ pub struct StoreReply {
     pub changes: Vec<ChangeId>,
     /// Conflicts a bulk choice left for a choice of their own.
     pub skipped: Vec<ConflictId>,
+    /// Records an undo could not take back (a new comment, a decision, a book the edit added).
+    pub kept: Vec<RecordKey>,
 }
 
 /// Why a project is read-only (§5.0, §6.1).
@@ -113,4 +115,28 @@ pub enum Refusal {
     WrongProject,
     #[error("a batch never holds two changes of one record")]
     TwoChangesOfOneRecord,
+    #[error("the bytes of this version of the file are not on this computer")]
+    FileNotOnThisComputer,
+}
+
+/// What looking at the folder found (`docs/STORAGE.md` §11.1, window focus): a path is
+/// listed once, by the first thing that happened to it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FocusReport {
+    /// Files whose bytes were read: those whose size or time differ from what the app wrote,
+    /// that are not settled, or that are held.
+    pub read: u32,
+    /// Files whose bytes are none the app wrote, handed to the project to be recorded.
+    pub found: Vec<String>,
+    /// Files that cannot be ingredients, moved to `.tc/external/` (the new names).
+    pub moved: Vec<String>,
+}
+
+/// What taking in a held file did (§6.2, APP-DESIGN R7).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TakenIn {
+    /// The batch that holds the file's changes; none when the file showed what the project
+    /// shows, or could not be read.
+    pub batch: Option<tc_journal::BatchId>,
+    pub changes: u32,
 }

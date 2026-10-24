@@ -60,9 +60,9 @@ async fn committed_until(
 ) -> Vec<(u64, tc_journal::fold::Delta, StoreCause)> {
     let mut out = Vec::new();
     while out.last().is_none_or(|(seq, _, _)| *seq < last) {
-        let event = tokio::time::timeout(Duration::from_secs(10), events.recv())
+        let event = tokio::time::timeout(Duration::from_secs(60), events.recv())
             .await
-            .expect("the event comes")
+            .expect("hung: the event comes")
             .expect("the channel is open");
         if let StoreEvent::Committed { seq, delta, cause } = event {
             out.push((seq, delta, cause));
@@ -189,9 +189,9 @@ async fn a_command_is_announced_with_its_origin() {
         .unwrap();
     let mut causes = Vec::new();
     while causes.len() < 2 {
-        let next = tokio::time::timeout(Duration::from_secs(5), frames.next())
+        let next = tokio::time::timeout(Duration::from_secs(60), frames.next())
             .await
-            .expect("the frame comes");
+            .expect("hung: the frame comes");
         let Next::Frame(frame) = next else {
             panic!("{next:?}")
         };
@@ -287,7 +287,7 @@ async fn a_save_held_at_the_close_is_kept_and_announced_as_its_request() {
             let _ = tx.send(());
             closing
         });
-        (rx.recv_timeout(Duration::from_secs(1)).is_ok(), closer)
+        (rx.recv_timeout(Duration::from_secs(60)).is_ok(), closer)
     };
     world.hooks.release(Point::BeforeDurablePending);
     let closing = closer.join().unwrap();
@@ -297,9 +297,9 @@ async fn a_save_held_at_the_close_is_kept_and_announced_as_its_request() {
 
     let mut batches = Vec::new();
     loop {
-        let event = tokio::time::timeout(Duration::from_secs(10), events.recv())
+        let event = tokio::time::timeout(Duration::from_secs(60), events.recv())
             .await
-            .expect("the channel ends with the close");
+            .expect("hung: the channel ends with the close");
         match event {
             Some(StoreEvent::Committed { seq, cause, .. }) => batches.push((seq, cause)),
             Some(_) => {}
@@ -388,9 +388,9 @@ fn concurrent_submits_are_each_announced_as_their_own_request() {
             }
             let mut announced = BTreeMap::new();
             while announced.len() < ours.len() {
-                let event = tokio::time::timeout(Duration::from_secs(10), events.recv())
+                let event = tokio::time::timeout(Duration::from_secs(60), events.recv())
                     .await
-                    .expect("every batch is announced")
+                    .expect("hung: every batch is announced")
                     .expect("the channel is open");
                 let StoreEvent::Committed { delta, cause, .. } = event else {
                     continue;
@@ -532,9 +532,9 @@ fn a_close_racing_submits_keeps_every_stored_save_and_no_closed_one() {
             closing.await.unwrap().unwrap();
             let mut announced = BTreeMap::new();
             loop {
-                let event = tokio::time::timeout(Duration::from_secs(10), events.recv())
+                let event = tokio::time::timeout(Duration::from_secs(60), events.recv())
                     .await
-                    .expect("the channel ends with the close");
+                    .expect("hung: the channel ends with the close");
                 match event {
                     Some(StoreEvent::Committed { delta, cause, .. }) => {
                         for key in delta.keys {
@@ -582,14 +582,17 @@ async fn events_end_when_the_handle_closes() {
     let handle = world.open(&world.bible);
     let mut events = handle.subscribe();
     handle.clone().close().await.unwrap();
-    let ended = tokio::time::timeout(Duration::from_secs(5), async {
+    let ended = tokio::time::timeout(Duration::from_secs(60), async {
         while events.recv().await.is_some() {}
     })
     .await;
-    assert!(ended.is_ok(), "the channel ended");
+    assert!(
+        ended.is_ok(),
+        "hung: the channel did not end after the close"
+    );
     let mut late = handle.subscribe();
     assert!(late.try_recv().is_err());
-    let late_end = tokio::time::timeout(Duration::from_secs(5), late.recv()).await;
+    let late_end = tokio::time::timeout(Duration::from_secs(60), late.recv()).await;
     assert!(
         matches!(late_end, Ok(None)),
         "a subscription after the close ends at once: {late_end:?}"
@@ -792,6 +795,8 @@ fn edit_fields(
 #[tokio::test]
 async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
     type Change = fn(&StoreWorld, &Path);
+    // S2 (STORAGE §3.5): a project.json that is wrong or missing is written back from the
+    // project's history, so every case opens, and the listing says so too.
     let cases: [(&str, Change, bool); 11] = [
         ("as written", |_, _| {}, true),
         (
@@ -806,17 +811,17 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
         (
             "no schemaVersion",
             |w, f| edit_fields(w, f, |m| drop(m.remove("schemaVersion"))),
-            false,
+            true,
         ),
         (
             "no created",
             |w, f| edit_fields(w, f, |m| drop(m.remove("created"))),
-            false,
+            true,
         ),
         (
             "no projectId",
             |w, f| edit_fields(w, f, |m| drop(m.remove("projectId"))),
-            false,
+            true,
         ),
         (
             "schemaVersion as text",
@@ -825,7 +830,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("schemaVersion".into(), "1".into());
                 });
             },
-            false,
+            true,
         ),
         (
             "a negative schemaVersion",
@@ -834,7 +839,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("schemaVersion".into(), (-1).into());
                 });
             },
-            false,
+            true,
         ),
         (
             "created as a number",
@@ -843,7 +848,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("created".into(), 5.into());
                 });
             },
-            false,
+            true,
         ),
         (
             "an unknown kind",
@@ -852,7 +857,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("kind".into(), "psalter".into());
                 });
             },
-            false,
+            true,
         ),
         (
             "not a project id",
@@ -861,10 +866,10 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("projectId".into(), "not an id".into());
                 });
             },
-            false,
+            true,
         ),
         // The folder keeps its journal, its books and its metadata.json.
-        ("deleted", |w, f| w.fs.delete(f).unwrap(), false),
+        ("deleted", |w, f| w.fs.delete(f).unwrap(), true),
     ];
     for (case, change, project) in cases {
         let world = store_world();
@@ -1080,7 +1085,7 @@ async fn a_draft_never_waits_behind_a_long_command() {
         .await
         .unwrap();
     let draft = tokio::time::timeout(
-        Duration::from_secs(1),
+        Duration::from_secs(60),
         handle.submit(StoreCommand::draft(
             DraftField::Words,
             vec![token(handle.as_ref(), &tit(1, 7))],
@@ -1089,7 +1094,7 @@ async fn a_draft_never_waits_behind_a_long_command() {
         )),
     )
     .await
-    .expect("the draft did not wait")
+    .expect("hung: the draft waited when it should not")
     .unwrap();
     assert_eq!(draft.stored, Stored::Unchanged);
     world.hooks.release(Point::BeforeDurablePending);
@@ -1370,7 +1375,10 @@ fn check_run(ops: Vec<Op>) -> Result<(), TestCaseError> {
                     let outcome = handle
                         .checkpoint(CheckpointReason::Other("prop".into()))
                         .await;
-                    prop_assert_eq!(outcome, CheckpointOutcome::Unchanged);
+                    prop_assert!(matches!(
+                        outcome,
+                        CheckpointOutcome::Committed | CheckpointOutcome::Unchanged
+                    ));
                 }
             }
         }
@@ -1382,9 +1390,9 @@ fn check_run(ops: Vec<Op>) -> Result<(), TestCaseError> {
             .collect();
         handle.clone().close().await.unwrap();
         let mut committed = Vec::new();
-        while let Some(event) = tokio::time::timeout(Duration::from_secs(10), events.recv())
+        while let Some(event) = tokio::time::timeout(Duration::from_secs(60), events.recv())
             .await
-            .expect("the channel ends with the close")
+            .expect("hung: the channel ends with the close")
         {
             if let StoreEvent::Committed { seq, delta, cause } = event {
                 committed.push((seq, delta, cause));

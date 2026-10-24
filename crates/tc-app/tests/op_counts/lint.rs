@@ -17,7 +17,7 @@ use crate::common::{folder, open_progress, sample_bible};
 
 /// Every public read of `FoldState` that walks every key, change, book, batch or conflict of
 /// a fold, or projects a whole book, for everything it is asked or only for some of it.
-const WHOLE_FOLD_WALKS: [&str; 16] = [
+const WHOLE_FOLD_WALKS: [&str; 23] = [
     "record_keys",
     "frontier",
     "device_stats",
@@ -35,6 +35,15 @@ const WHOLE_FOLD_WALKS: [&str; 16] = [
     "render",
     "scope_digest",
     "scope_digests",
+    // S2: a book's parts and digests project the book; the carried versions, the metadata
+    // heads and an outside edit's plan or undo walk the records of a whole file.
+    "book_parts",
+    "render_book_with_digests",
+    "render_with_digests",
+    "carried_versions",
+    "metadata_heads",
+    "plan_outside_edit",
+    "undo_outside",
 ];
 
 /// Every other public method of `FoldState`, by what it costs at most.
@@ -47,6 +56,7 @@ const COSTS_LESS: &[(&str, &[&str])] = &[
             "counters",
             "conflict_count",
             "conflict_counts",
+            "values_unreadable",
         ],
     ),
     (
@@ -65,6 +75,9 @@ const COSTS_LESS: &[(&str, &[&str])] = &[
             "review_token",
             "token",
             "placement",
+            "change_at",
+            "holds",
+            "shown_value",
         ],
     ),
     (
@@ -80,6 +93,7 @@ const COSTS_LESS: &[(&str, &[&str])] = &[
             "book_keys",
             "book_heads_seen",
             "book_files",
+            "projects_file",
             "chapter_usfm",
             "check_texts",
             "check_texts_at",
@@ -108,6 +122,8 @@ const COSTS_LESS: &[(&str, &[&str])] = &[
         "one conflict, or the conflicts the caller names",
         &[
             "resolution",
+            "keep_both_carried",
+            "outside_resolution",
             "keep_passage",
             "keep_separate",
             "keep_joined",

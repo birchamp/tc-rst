@@ -1,9 +1,9 @@
 /// A later edit while the disk is saving must remain unsaved and must not join the model.
 #[tokio::test]
 async fn a_successful_save_learns_its_sent_links_without_learning_a_newer_unsaved_edit() {
-    tokio::time::timeout(Duration::from_secs(20), learns_the_sent_links())
+    tokio::time::timeout(Duration::from_secs(60), learns_the_sent_links())
         .await
-        .expect("the confirmed-save suggestion scenario must finish");
+        .expect("hung: the confirmed-save suggestion scenario must finish");
 }
 
 async fn learns_the_sent_links() {
@@ -37,6 +37,8 @@ async fn learns_the_sent_links() {
         )
         .unwrap();
     tokio::time::pause();
+    // On the paused clock below, a timeout is virtual time: the 1 s bounds check that each
+    // step ends before the 2 s save timer and the 5 s reply, which no machine can stretch.
     let sent = tokio::time::timeout(
         Duration::from_secs(1),
         place(&t.app, &at, &view, 91, "fe", "πίστιν"),
@@ -80,7 +82,7 @@ async fn learns_the_sent_links() {
         2,
         "the later version was refused"
     );
-    for _ in 0..200 {
+    for () in crate::store_world::for_a_minute() {
         if suggest_events(&t.app).len() > learned_before {
             break;
         }

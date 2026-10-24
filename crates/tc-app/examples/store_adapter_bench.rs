@@ -93,6 +93,7 @@ fn config(dir: &Path) -> tc_store::StoreConfig {
         platform: Arc::new(tc_store::StdPlatform),
         clock: Arc::new(tc_store::SystemClock),
         threads: std::thread::available_parallelism().map_or(2, |n| n.get()),
+        watch_debounce: std::time::Duration::from_millis(20),
     }
 }
 
@@ -198,6 +199,7 @@ async fn in_memory() {
                 platform: Arc::new(tc_store::FakePlatform::default()),
                 clock: Arc::new(tc_store::SystemClock),
                 threads: 2,
+                watch_debounce: std::time::Duration::from_millis(20),
             },
             Arc::new(tc_store::Hooks::default()),
         )

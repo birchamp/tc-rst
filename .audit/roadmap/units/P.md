@@ -4,7 +4,7 @@ title: Scale: re-apply unit P on post-S2 main
 track: A
 lane: storage
 milestone: M2
-state: todo
+state: parked
 owner: none
 branch: none
 worktree: none
@@ -15,8 +15,8 @@ proves: []
 no_loss: true
 size: 2-3 d (basis: the original 23 commits in about 5 h, on a store that has since changed by +16,598/-1,873 lines)
 merged: none
-updated: 2026-10-22
-next: Claim this card after S2 merges, then do step 1.
+updated: 2026-10-24
+next: Parked until after the first release (rulings/2026-10-24-H3-H4-H7-fast-release.md).
 blocked_by: none
 ---
 
@@ -244,3 +244,5 @@ command; for steps 3 and 4, the store's model, crash and long-seed runs and stor
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
+- 2026-10-24 01:44 EDT | checks lane (Claude Code 2198ee19) | note | none | From the checks lane: in CI the alignment budget only reports. When this card measures the budgets on the reference laptop, run `TC_ALIGN_BUDGET_ENFORCE=1 cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture`, which fails over three times the 50 ms budget | crates/tc-align/tests/suggestion_budget.rs
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md

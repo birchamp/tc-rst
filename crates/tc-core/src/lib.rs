@@ -9,7 +9,7 @@ mod books;
 mod digest;
 
 pub use books::{BookId, Testament};
-pub use digest::{DigestError, GitOid, Md5};
+pub use digest::{DigestError, GitOid, Md5, Md5Stream};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {

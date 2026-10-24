@@ -504,6 +504,14 @@ async fn a_mark_for_another_check_is_look_again() {
 
 // ---- the check comment's server draft (C4, A-10) --------------------------------------------
 
+/// Waits until the draft writer has put every typed draft in the project's file. A draft is
+/// best effort (STORAGE §5.14) and its reply comes before the write, so a crash right after
+/// typing may lose it; these tests mean a draft that reached the file before the app ended.
+fn drafts_written(t: &TestApp, at: &Scope) {
+    let session = t.app.sessions().reader(at).unwrap();
+    tokio::task::block_in_place(|| session.handle().wait_idle());
+}
+
 /// The next launch over the files an ended app left: a new app on `fs`'s crash image, with the
 /// same app data (the installed resources).
 async fn relaunch(dir: &tempfile::TempDir, fs: &FaultFs) -> TestApp {
@@ -572,6 +580,7 @@ async fn a_check_comment_typed_before_the_app_ended_is_offered_and_kept_beside_t
     )
     .await
     .unwrap();
+    drafts_written(&t, &at);
     drop(t);
 
     let t = relaunch(&dir, &fs).await;
@@ -643,7 +652,7 @@ async fn a_check_comment_typed_before_a_bookmark_outlives_it_and_is_kept_beside_
     .await
     .unwrap();
     // Past the draft file's next write.
-    tokio::time::sleep(std::time::Duration::from_millis(1_500)).await;
+    drafts_written(&t, &at);
     drop(t);
 
     let t = relaunch(&dir, &fs).await;
@@ -696,6 +705,7 @@ async fn a_check_comment_typed_on_an_undecided_check_is_kept_as_its_first_decisi
     )
     .await
     .unwrap();
+    drafts_written(&t, &at);
     drop(t);
 
     let t = relaunch(&dir, &fs).await;
@@ -755,6 +765,7 @@ async fn a_check_comment_typed_before_the_first_mark_is_kept_beside_it() {
     )
     .await
     .unwrap();
+    drafts_written(&t, &at);
     drop(t);
 
     let t = relaunch(&dir, &fs).await;

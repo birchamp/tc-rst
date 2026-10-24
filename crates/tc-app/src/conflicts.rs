@@ -287,8 +287,20 @@ fn notice_view(
         Notice::StorageDamage { path, .. } => NoticeView::StorageDamage { file: file(path) },
         Notice::OutsideEditHeld { path, .. } => NoticeView::OutsideEditHeld { file: file(path) },
         Notice::MetadataEditedOutside { .. } => NoticeView::DetailsEditedOutside,
-        Notice::WriteBlocked { path } => NoticeView::WriteBlocked { file: file(path) },
-        Notice::WhitespaceOnlyEdit { .. } => return None,
+        Notice::MaterializeBlocked { paths, .. } => NoticeView::WriteBlocked {
+            file: paths.first().map(|p| file(p)).unwrap_or_default(),
+        },
+        Notice::OutsideRemovalKept { path, .. } | Notice::FixedFileRestored { path, .. } => {
+            NoticeView::FileRepaired { file: file(path) }
+        }
+        Notice::DerivedFieldsEdited { .. } => NoticeView::DetailsEditedOutside,
+        // D1 gives these their own words; until then the review lists nothing for them.
+        Notice::WhitespaceOnlyEdit { .. }
+        | Notice::CarriedTooLarge { .. }
+        | Notice::HistoryRebuilt { .. }
+        | Notice::HistoryUnavailable { .. }
+        | Notice::PendingWrittenAgain { .. }
+        | Notice::UnsavedAttemptKept { .. } => return None,
         Notice::SecondWriter { .. } => NoticeView::SecondWriter,
         Notice::SavedWithDiskError { .. } => NoticeView::SavedWithDiskError,
         Notice::ImportUnfinished { .. } => NoticeView::ImportUnfinished,

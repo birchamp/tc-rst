@@ -37,7 +37,7 @@ mod validate;
 
 pub use build::{
     DERIVED_FIELDS, IngredientEntry, MetadataSource, build_metadata, check_field,
-    check_relationship, check_scope, is_derived_field,
+    check_relationship, check_scope, is_derived_field, render_metadata_unchecked,
 };
 pub use error::{Error, ValueError};
 pub use files::{DirProject, FileState, MemProject, ProjectFiles};

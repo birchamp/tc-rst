@@ -82,9 +82,11 @@ postcard = { version = "1.1.3", default-features = false, features = ["alloc"] }
 machine-uid = "0.6.0"
 sysinfo = { version = "0.39.6", default-features = false, features = ["disk", "system"] }
 rustix = { version = "1.1.5", features = ["fs"] }
-# Local git (docs/STORAGE.md §9): libgit2 1.9.7 built from source, without TLS. tc-door43's
-# tests push to the plain-HTTP fake; a crate that reaches Door43 adds `features = ["https"]`.
+# Local git (docs/STORAGE.md §9): libgit2 1.9.7 built from source, without TLS. Only
+# tc-door43, which sends sync's fetch and push, adds `features = ["https"]`.
 git2 = { version = "=0.21.0", default-features = false, features = ["vendored-libgit2"] }
+# tc-store: the file watcher of docs/STORAGE.md §11.1 (inotify, FSEvents, ReadDirectoryChangesW).
+notify = "8.2.0"
 
 # Full debug info made each agent worktree's target dir several GB and filled the disk.
 [profile.dev]
@@ -107,6 +109,12 @@ opt-level = 2
 [profile.dev.package.tc-usfm]
 opt-level = 2
 
+# The corpora commit hundreds of megabytes in tests; libgit2's C code and its zlib are not
+# built at -O0.
+[profile.dev.package.libgit2-sys]
+opt-level = 3
+
+[profile.dev.package.libz-sys]
 # The parity gate (crates/tc-ui/tests/screen_record.rs) decodes and encodes 1280x800
 # screenshots wherever a planted or real capture differs from tC4's. Unoptimized, the planted
 # pixel test took 3.1 s (whole file 3.8-4.0 s, load 3.5-4.4); optimized, 0.96 s (1.26-1.34 s,

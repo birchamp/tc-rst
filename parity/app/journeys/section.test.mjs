@@ -514,6 +514,9 @@ browserTest('a_section_card_opened_after_a_reload_during_its_save_saves_each_ver
     await page.getByTestId('account-menu').waitFor();
     await env.call('test/release', { request: newRequestId(), at: 'save' });
     await until('stored', async () => (await verseOf(env, '10')).words.value === TEN);
+    // The reload restores Translate or shows Home; wait for one before choosing, since a check
+    // made while the page still loads finds neither.
+    await until('Titus 2 or Home after the reload', async () => (await pill(page, '9–10').isVisible()) || (await titus(page).isVisible()));
     if (!(await pill(page, '9–10').isVisible())) await openTitus2(page);
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     await pill(page, '9–10').click();
