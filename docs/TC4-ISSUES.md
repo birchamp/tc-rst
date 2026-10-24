@@ -31,11 +31,11 @@
 | Area | rebuild bug | unit todo | reference change | covered | owner question | not applicable | Rows |
 |---|---|---|---|---|---|---|---|
 | Align | 7 | 7 | 2 | 13 | 1 | 1 | 31 |
-| USFM, Translate and helps | 1 | 30 | 1 | 6 | 0 | 8 | 46 |
+| USFM, Translate and helps | 1 | 29 | 1 | 7 | 0 | 8 | 46 |
 | Check and resources | 3 | 19 | 3 | 13 | 1 | 24 | 63 |
 | Sync, storage and import | 4 | 29 | 3 | 10 | 0 | 11 | 57 |
-| Shell, startup, languages and help | 2 | 31 | 1 | 21 | 0 | 17 | 72 |
-| All area rows | 17 | 116 | 10 | 63 | 2 | 61 | 269 |
+| Shell, startup, languages and help | 2 | 30 | 1 | 22 | 0 | 17 | 72 |
+| All area rows | 17 | 114 | 10 | 65 | 2 | 61 | 269 |
 
 The commit range adds 22 items (`TC4-DELTA-2026-10-19.md` §2): 4 rebuild bugs, 4 unit
 todos, 5 reference changes, 3 covered, 3 owner questions and 3 not applicable. Counting each
@@ -201,7 +201,7 @@ the rebuild fixed it or does as tC4 does:
 | #650 | An Arabic gateway package end to end | covered | B3 | journey `arabic_helps_panes_are_rtl_in_an_english_interface` | Done by B3: each helps slot carries its gateway's direction (`rung_dir`), and the cards, questions, simplified text and article read in it. |
 | #29 | Right-to-left and complex scripts end to end | unit todo | G2 (B4a's case, B5b and B6's case done) | J10 `rtl_project_drafts_checks_and_aligns`; B4a `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`; B6 `a_right_to_left_project_aligns_with_its_bank_right_to_left` | Each journey adds the Arabic case; G2 captures the `ar` screens. B4a: Arabic typed through an IME composition into the verse card while a teammate's change arrives keeps every keystroke and saves as a second version. B6: a project created right to left with Titus added from an Arabic file opens Titus 1:1 with its bank right to left and the Greek cards left to right, a repeated Arabic word numbered in verse order, and a placement saved to the store; the Arabic interface's Align screens are captured (`ar-align-workspace-row`, `ar-align-workspace-620`). |
 | #614 | Four English literals in design-system props | unit todo | A5 (C6, B4b and B5b done); FIX-R reconciles | port of tC4 `ds-labels` a–d; `ds_labels_d_a_verse_numbers_name_follows_the_app_language`; `academy_drawer_close_label_is_in_the_shown_language` | C6 passes catalog strings to Add a book; B4b passes `draft.moveVerse` to each `VerseMarker`; B5b passes the Check drawer eyebrow, title and close label from the catalog. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` (pending: G4) | Use logical properties where tC4's physical ones break right to left, and record it. |
+| #29 | Right-to-left and complex scripts end to end | covered | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` | Use logical properties where tC4's physical ones break right to left, and record it. |
 | #614 | Four English literals in design-system props | unit todo | B4b, C6, A5 (B5b done); FIX-R reconciles | tC4 `ds-labels` a–d | As in §3. |
 | #702 | Text zoom sliders | not applicable | — | — | tC4 4.1.0. |
 | #719 | Add source Bibles to a project | not applicable | later B9a | — | tC4 4.1.0. |
@@ -361,7 +361,7 @@ the rebuild fixed it or does as tC4 does:
 | #278 | Show the build in the app | unit todo | G3 (A5 and G1 done: G1 passes the build to both builds) | `about_commit_matches_the_release_record` (pending: G3) | G1 sets `TC4_BUILD_COMMIT` for server and wasm. |
 | #167 | Which interface languages | covered | tc-ui | `the_registry_names_the_ten_decided_locales_each_with_a_catalog` | None. |
 | #37 | Unused catalog keys | not applicable | tc-ui | — | Optional: check that each rebuild key is used. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` (pending: G4) | Use logical properties where tC4's physical ones break right to left, and record it. |
+| #29 | Right-to-left and complex scripts end to end | covered | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` | Use logical properties where tC4's physical ones break right to left, and record it. |
 | #701 | Urdu (Devanagari) direction | rebuild bug | tc-resources | `ur_deva_helps_read_left_to_right_and_are_named_in_devanagari` | See §1 row 12. |
 | #548 | Dropdown follow-ups | covered | tc-ui | `a_book_matches_by_name_or_code_prefix`; gallery `select-search` | None. |
 | #552 | Move the dropdown onto a library | rebuild bug | tc-ui | ds-gallery `Select/disabled-while-open` | See §1 row 13. |
