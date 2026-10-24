@@ -807,7 +807,11 @@ impl LoadedBook {
             let Some(LoadedPane {
                 text: LoadedText::Ready(book),
                 ..
-            }) = self.panes.iter().find(|p| p.id == pane.pane)
+            }) = self
+                .panes
+                .iter()
+                .chain(self.original.iter())
+                .find(|p| p.id == pane.pane)
             else {
                 continue;
             };
@@ -853,6 +857,20 @@ impl LoadedBook {
                     lit,
                 })
             })
+            .chain(self.original.iter().filter_map(|pane| {
+                let LoadedText::Ready(book) = &pane.text else {
+                    return None;
+                };
+                Some(PaneFocus {
+                    pane: pane.id.clone(),
+                    title: None,
+                    lit: book
+                        .chapters
+                        .get(&chapter)
+                        .map(|c| c.original_focus(verse.as_str(), quote, occurrence))
+                        .unwrap_or_default(),
+                })
+            }))
             .collect()
     }
 

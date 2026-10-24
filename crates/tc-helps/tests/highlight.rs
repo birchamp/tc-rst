@@ -13,8 +13,8 @@ use common::{fixture, repo_text, resource};
 use proptest::prelude::*;
 use tc_core::BookId;
 use tc_helps::highlight::{
-    AlignedVerse, MatchQuality, SourceWord, TokenKind, gateway_quote, highlight_plain,
-    highlight_quote, normalize_word, tokenize_plain,
+    AlignedVerse, MatchQuality, SourceWord, TokenKind, gateway_quote, highlight_original,
+    highlight_plain, highlight_quote, normalize_word, tokenize_plain,
 };
 use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
 use tc_helps::{BibleLocus, Error, HelpItemId, HelpRef, Note, Occurrence, Quote};
@@ -783,4 +783,107 @@ proptest! {
         let lit = highlight_plain(&tokens, &Quote::new(quote));
         prop_assert!(lit.iter().all(|&i| tokens[i].word));
     }
+}
+
+/// The words of a UGNT Titus verse in order, as its `\\w` markers write them.
+fn ugnt_words(chapter: u16, verse: u16) -> Vec<String> {
+    let usfm = fixture("align/el-x-koine_ugnt-TIT.usfm");
+    let marker = format!("\\c {chapter}\n");
+    let body = &usfm[usfm.find(&marker).unwrap() + marker.len()..];
+    let body = &body[..body.find("\\c ").unwrap_or(body.len())];
+    let marker = format!("\\v {verse} ");
+    let text = &body[body.find(&marker).unwrap() + marker.len()..];
+    let text = &text[..text.find("\\v ").unwrap_or(text.len())];
+    text.split("\\w ")
+        .skip(1)
+        .map(|w| w.split('|').next().unwrap().to_owned())
+        .collect()
+}
+
+fn nth(n: u32) -> Occurrence {
+    Occurrence::nth(n).unwrap()
+}
+
+/// OLH-1 (owner ruling Q39, tC4 #840): the original-language pane marks the note's quote at
+/// the note's occurrence, matched against the verse's own `\w` words.
+#[test]
+fn the_original_pane_marks_the_quote_at_its_occurrence() {
+    // TIT 1:1 has Θεοῦ twice; the second is the eleventh word.
+    let tit_1_1 = ugnt_words(1, 1);
+    assert_eq!(tit_1_1[2], "Θεοῦ");
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new("Θεοῦ,"), nth(1)),
+        [2]
+    );
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new("Θεοῦ"), nth(2)),
+        [10]
+    );
+    // TIT 1:9: "τῇ ὑγιαινούσῃ" starts at the second τῇ, not the first.
+    let tit_1_9 = ugnt_words(1, 9);
+    assert_eq!(
+        highlight_original(&tit_1_9, &Quote::new("τῇ ὑγιαινούσῃ"), nth(1)),
+        [15, 16]
+    );
+    assert_eq!(
+        highlight_original(&tit_1_9, &Quote::new("ἐν τῇ & ὑγιαινούσῃ"), nth(1)),
+        [12, 13, 16]
+    );
+    // Every occurrence, or an unrecorded one, marks each match.
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new("Θεοῦ"), Occurrence::All),
+        [2, 10]
+    );
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new("Θεοῦ"), Occurrence::Unrecorded),
+        [2, 10]
+    );
+    // JON 1:3 has "Tarshish, from before" twice; a maqaf compound splits into the verse's words.
+    let jon_1_3 = uhb_words(1, 3);
+    let twice = format!("{} {}", jon_1_3[3], jon_1_3[4]);
+    assert_eq!(
+        highlight_original(&jon_1_3, &Quote::new(twice.as_str()), nth(1)),
+        [3, 4]
+    );
+    assert_eq!(
+        highlight_original(&jon_1_3, &Quote::new(twice.as_str()), nth(2)),
+        [18, 19]
+    );
+    let jon_1_5 = uhb_words(1, 5);
+    let compound = format!("{}\u{05BE}{}", jon_1_5[11], jon_1_5[12]);
+    assert_eq!(
+        highlight_original(&jon_1_5, &Quote::new(compound.as_str()), nth(1)),
+        [11, 12]
+    );
+}
+
+#[test]
+fn a_quote_the_verse_lacks_marks_nothing_in_the_original_pane() {
+    let tit_1_1 = ugnt_words(1, 1);
+    let none: [usize; 0] = [];
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new("Θεοῦ"), nth(3)),
+        none,
+        "an occurrence the verse lacks"
+    );
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new("Θεοῦ ἀγάπη"), nth(1)),
+        none,
+        "a partial match"
+    );
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new("Παῦλος & ἀγάπη"), nth(1)),
+        none,
+        "a span the verse lacks"
+    );
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new("Θεοῦ"), Occurrence::NotTied),
+        none,
+        "a note tied to no words"
+    );
+    assert_eq!(
+        highlight_original(&tit_1_1, &Quote::new(""), nth(1)),
+        none,
+        "no quote"
+    );
 }

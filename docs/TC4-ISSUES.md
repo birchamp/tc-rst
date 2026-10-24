@@ -311,7 +311,7 @@ the rebuild fixed it or does as tC4 does:
 | #652 | Basic checks | not applicable | — | — | tC4 4.1.0. |
 | #653 | AI-assisted checking | not applicable | — | — | tC4 4.1.0. |
 | #651 | BT Servant | not applicable | — | — | tC4 4.2.0. |
-| #840 | Highlight the current note's words in the original-language text | unit todo | tc-helps, tc-ui; OLH-1 | `the_original_pane_marks_the_quote_at_its_occurrence`, `a_quote_the_verse_lacks_marks_nothing_in_the_original_pane` (to create, OLH-1) | Ruled 2026-10-23 (Q39, `rulings/2026-10-23-Q39-original-language-highlight.md`): build it now, ahead of tC4. Both highlight only the gateway text today. |
+| #840 | Highlight the current note's words in the original-language text | covered | tc-helps, tc-app, tc-ui; OLH-1 | `the_original_pane_marks_the_quote_at_its_occurrence`, `a_quote_the_verse_lacks_marks_nothing_in_the_original_pane` (tc-helps); `a_note_shows_its_panes_its_article_and_the_draft_words`, `a_chapters_helps_are_tc4s_cards_with_gateway_titles` (tc-app); journeys `a_note_marks_its_quote_in_the_greek_tab`, `the_greek_row_marks_the_quote_of_the_check` | Ruled 2026-10-23 (Q39, `rulings/2026-10-23-Q39-original-language-highlight.md`): built ahead of tC4, a declared difference in PLAN. Draft's original tab and the check card's original row mark the quote; Understand shows no original text. |
 
 ## 5. Sync, storage and import
 
