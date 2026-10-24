@@ -68,16 +68,67 @@ receipt_path() { echo "$target/gates/$(tree_now).ok"; }
 check_receipt() {
   local path
   path="$(receipt_path)"
-  if [[ -z "$(git status --porcelain)" && -f "$path" ]]; then
-    # The journeys are part of the list since app-e2e (G5); a run without them is partial.
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree (the tree has changes)"
+    return 1
+  fi
+  if [[ -f "$path" ]]; then
+    # The journeys are part of the list since app-e2e (G5); a local run without them is partial.
     if grep -qx 'journeys yes' "$path"; then
       echo "gates: receipt $path"
       return 0
     fi
+    ci_receipt && return 0
     echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree (journeys not run; drop --no-journeys)"
     return 1
   fi
-  echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree"
+  ci_receipt && return 0
+  echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree, or scripts/gates.sh --wait-ci <card> for GitHub's runs"
+  return 1
+}
+
+# A green run of both workflows on a commit with this tree is a receipt too (INT-8): GitHub runs
+# the same list in parallel, so lanes need not queue for this PC. Only push runs count: a
+# pull_request run tests the pull request's merge ref, not the commit's own tree.
+ci_receipt() {
+  local tree sha runs ci_run e2e_run
+  tree="$(tree_now)"; sha="$(git rev-parse HEAD)"
+  command -v gh > /dev/null || return 1
+  runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
+    --jq '.workflow_runs[] | select(.event == "push" and .status == "completed" and .conclusion == "success") | "\(.name) \(.id) \(.head_sha)"' 2> /dev/null)" || return 1
+  ci_run="$(green_run_for ci "$runs" "$tree")"
+  e2e_run="$(green_run_for app-e2e "$runs" "$tree")"
+  [[ -n "$ci_run" && -n "$e2e_run" ]] || return 1
+  echo "gates: CI receipt: ci run $ci_run, app-e2e run $e2e_run on ${sha:0:8}"
+}
+
+# The id of a green run of workflow $1 among the lines $2 whose commit has the tree $3.
+green_run_for() {
+  local name id run_sha
+  while read -r name id run_sha; do
+    [[ "$name" == "$1" && "$(git rev-parse "$run_sha^{tree}" 2> /dev/null)" == "$3" ]] && { echo "$id"; return; }
+  done <<< "$2"
+}
+
+# Push HEAD to gate/<card>, wait for GitHub's ci and app-e2e runs on it, then check the receipt.
+wait_ci() {
+  local card="$1" sha deadline done_runs
+  [[ -z "$(git status --porcelain)" ]] || { echo "gates: --wait-ci needs a clean tree" >&2; return 1; }
+  command -v gh > /dev/null || { echo "gates: --wait-ci needs gh on PATH" >&2; return 1; }
+  sha="$(git rev-parse HEAD)"
+  git push origin "+$sha:refs/heads/gate/$card"
+  echo "gates: pushed ${sha:0:8} to gate/$card; waiting for the ci and app-e2e runs"
+  deadline=$((SECONDS + 5400))
+  while (( SECONDS < deadline )); do
+    done_runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
+      --jq '[.workflow_runs[] | select(.event == "push" and .status == "completed") | .name] | unique | join(" ")' 2> /dev/null || true)"
+    if [[ " $done_runs " == *" ci "* && " $done_runs " == *" app-e2e "* ]]; then
+      check_receipt
+      return
+    fi
+    sleep 60
+  done
+  echo "gates: no completed ci and app-e2e runs for ${sha:0:8} after 90 minutes" >&2
   return 1
 }
 
@@ -140,5 +191,6 @@ case "${1:-}" in
   --list) list ;;
   --step) run_step "${2:?gates: --step needs a name or number}" ;;
   --check-receipt) check_receipt ;;
-  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --no-journeys | --check-receipt]" >&2; exit 2 ;;
+  --wait-ci) wait_ci "${2:?gates: --wait-ci needs a card id}" ;;
+  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --no-journeys | --check-receipt | --wait-ci <card>]" >&2; exit 2 ;;
 esac

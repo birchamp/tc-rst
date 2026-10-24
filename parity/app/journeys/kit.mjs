@@ -32,7 +32,7 @@ export const setup = browserSetup();
 
 /** A test that needs `tc4` and a browser; `hooks` also needs the probe build, `door43` the fake
  * Door43. */
-export function browserTest(name, body, { hooks = false, door43 = false, timeout = 120_000 } = {}) {
+export function browserTest(name, body, { hooks = false, door43 = false, timeout = 600_000 } = {}) {
   let skip = setup.skip ?? false;
   if (!skip && hooks && !setup.hooks) skip = 'set TC4_UI_HOOKS (build-app.sh --test-hooks --out target/tc-ui-app-hooks)';
   if (!skip && door43 && !setup.door43) skip = 'set TC4_DOOR43_FAKE (cargo build -p tc-door43-fake)';
@@ -41,14 +41,16 @@ export function browserTest(name, body, { hooks = false, door43 = false, timeout
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Polls `read` until it gives something truthy; fails after `ms` with `what`. */
-export async function until(what, read, ms = 10_000) {
+/** Polls `read` until it gives something truthy; fails after `ms` with `what`. The bound only
+ * catches a hang, never slowness: a loaded runner took over 10 s for waits that pass in 1 s
+ * (ruling 2026-10-23, tests prove behavior, not speed). */
+export async function until(what, read, ms = 60_000) {
   const stop = Date.now() + ms;
   let last;
   for (;;) {
     last = await read();
     if (last) return last;
-    if (Date.now() > stop) throw new Error(`timed out after ${ms} ms waiting for ${what} (last: ${JSON.stringify(last)})`);
+    if (Date.now() > stop) throw new Error(`hung: no ${what} after ${ms} ms (last: ${JSON.stringify(last)})`);
     await sleep(25);
   }
 }
