@@ -44,6 +44,7 @@ const PHASE_0: &[&str] = &[
     "session/open",
     "session/close",
     "session/retryCheckpoint",
+    "session/leave",
     "editor/book",
     "editor/sources",
     "helps/passage",

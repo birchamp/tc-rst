@@ -151,3 +151,71 @@ async fn retry_after_a_failed_checkpoint_commits_once() {
         "a committed retry clears the failure"
     );
 }
+
+mod policy {
+    use std::time::Duration;
+
+    use tc_api::ids::WallMs;
+    use tc_app::backend::CheckpointReason;
+    use tc_app::session::{CheckpointPolicy, MODE_SWITCH_POLICY, checkpoint_due};
+
+    const MINUTE: i64 = 60_000;
+
+    /// Q-5's fallback: a mode switch checkpoints at most once every two minutes.
+    #[test]
+    fn a_mode_switch_checkpoints_at_most_once_every_two_minutes() {
+        assert_eq!(
+            MODE_SWITCH_POLICY,
+            CheckpointPolicy::AtMostEvery(Duration::from_secs(120))
+        );
+        let switch = CheckpointReason::LeavingTranslate;
+        let now = WallMs(10 * MINUTE);
+        assert!(
+            checkpoint_due(MODE_SWITCH_POLICY, None, now, &switch),
+            "the first switch"
+        );
+        assert!(!checkpoint_due(
+            MODE_SWITCH_POLICY,
+            Some(WallMs(now.0 - MINUTE)),
+            now,
+            &switch
+        ));
+        assert!(checkpoint_due(
+            MODE_SWITCH_POLICY,
+            Some(WallMs(now.0 - 2 * MINUTE)),
+            now,
+            &switch
+        ));
+        assert!(!checkpoint_due(
+            MODE_SWITCH_POLICY,
+            Some(WallMs(now.0 - MINUTE)),
+            now,
+            &CheckpointReason::LeavingMode("Check".into())
+        ));
+    }
+
+    /// Going Home always looks for changes, however recent the last mode switch's checkpoint.
+    #[test]
+    fn leaving_the_project_always_checks_for_changes() {
+        let now = WallMs(10 * MINUTE);
+        assert!(checkpoint_due(
+            MODE_SWITCH_POLICY,
+            Some(now),
+            now,
+            &CheckpointReason::LeavingProject
+        ));
+    }
+
+    /// The rule is a value: with every switch checkpointing, a second switch within two
+    /// minutes checkpoints too.
+    #[test]
+    fn every_mode_switch_policy_checkpoints_each_switch() {
+        let now = WallMs(10 * MINUTE);
+        assert!(checkpoint_due(
+            CheckpointPolicy::EveryModeSwitch,
+            Some(WallMs(now.0 - 1_000)),
+            now,
+            &CheckpointReason::LeavingTranslate
+        ));
+    }
+}

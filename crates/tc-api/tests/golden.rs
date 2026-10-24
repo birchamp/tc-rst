@@ -1672,6 +1672,16 @@ impl Example for Close {
     }
 }
 
+impl Example for tc_api::session::LeaveMode {
+    fn example() -> Self {
+        tc_api::session::LeaveMode {
+            request: request(33),
+            at: scope(),
+            from: tc_api::session::ScreenMode::Translate,
+        }
+    }
+}
+
 impl Example for tc_api::session::RetryCheckpoint {
     fn example() -> Self {
         tc_api::session::RetryCheckpoint {
@@ -3148,6 +3158,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "resources/planUpgrade",
             "session/close",
             "session/retryCheckpoint",
+            "session/leave",
             "session/copy",
             "session/discardDraft",
             "session/drafts",
