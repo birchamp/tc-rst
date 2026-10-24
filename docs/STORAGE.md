@@ -4606,20 +4606,29 @@ translationCore 4 cannot sync until they update; their unsynced work comes along
 
 ### 13.4 tC3 projects
 
-A tC3 project (zip or folder, CRC-checked) becomes a new project; it is never merged into an
-existing one (tC4 D53). The parser follows tC4's `tc3.ts`:
+A tC3 project (zip, CRC-checked; one or several zips of one language, one book each) becomes a
+new project; it is never merged into an existing one (tC4 D53). `tc_import::tc3` follows tC4's
+`tc3.ts` (d310bf3, with e79a2795's #796 rule) and imports the current state, as tC4 does:
 
-- **Text:** `<book>/<chapter>.json` → USFM through a `usfm-js` `toUSFM`-compatible writer (tC4's
-  definition of "text unchanged" for tC3, J9a), then the codec.
-- **Checks:** tC3's per-check history files (`checkData/<kind>/<book>/<ch>/<v>/<time>.json`,
-  each with a user and a time) become a chain of changes in time order, parents = the previous
-  record, device = Tc3User(user). The newest record per check is authoritative: if the chain's
-  last value differs from it, one more `Import` change makes them equal. tC3 invalidation markers
-  set `imported_invalid`. History then shows who chose what in tC3.
-- **Alignments:** `alignmentData` → `Alignment` values (occurrences as integers);
-  `target_verse_md5` from the imported text; `marked_invalid` from tC3's invalid markers.
-- **Pins:** tC3 `externalResources` tags resolved to shas (an explicit internet step, or the
-  bundled suite); an alignment source without a resolvable sha gets `source: None`.
+- **Text:** `<book>/<chapter>.json` → USFM through tC3's own export, usfm-js 3.4.3 `toUSFM`
+  with forced new lines (`tc_usfm::tc3_book_usfm`, byte for byte; tC4's definition of "text
+  unchanged" for tC3, J9a), then the codec. The records must give that text back byte for
+  byte, or nothing is imported (P9).
+- **Alignments:** `alignmentData` → one tC4 §5.1 record per verse (occurrences as integers,
+  NFC, tC3's `type` kept on a banked word), read with `decode_alignment_record` as tC4 wrote
+  it. `marked_invalid` is tC3's invalid marker, or a record that holds a link and whose words
+  are not the verse's words (#796); the record is kept as tC3 held it.
+- **Checks:** the check index items that hold the translator's work become decisions, read
+  with `decode_decisions`, their `verseTextMd5` the imported verse's and tC3's `invalidated`
+  their `imported_invalid`. tC3's per-check history files (`checkData`) give no change of
+  their own, as in tC4: History starts at the import. A decision on a translationNotes row
+  tied to every occurrence (`-1`) has no check in the rebuild (`tc-check`
+  `EveryOccurrence`); it is not imported, the report lists it, and the source keeps it.
+- **Pins:** tC3 `externalResources` tags are listed for the app to resolve to shas (an
+  explicit internet step, or the installed versions); the decisions are stored against the
+  pins the app passes. An alignment's `source` is none.
+- **Write:** one `Store::create_imported` with cause `Import(Tc3)` on every record, built in a
+  staging folder and placed whole (§6.4 N1, N2).
 
 ### 13.5 Raw USFM, foreign burritos, and the codec
 

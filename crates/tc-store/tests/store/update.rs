@@ -85,7 +85,7 @@ fn update_a_book_conflicts_a_verse_changed_on_both_sides() {
             body.cause
         );
     }
-    handle.close();
+    handle.close().unwrap();
 }
 
 /// INV-UPDATE-NEVER-REMOVES: a verse the file lacks is a conflict, never a removal.
@@ -105,7 +105,7 @@ fn a_verse_the_file_lacks_is_a_conflict_never_a_removal() {
     update(&handle, &file).unwrap();
     assert!(conflicted(&handle, &verse(1, 4)));
     assert_eq!(words(&handle, 1, 4).as_deref(), Some("To Titus"));
-    handle.close();
+    handle.close().unwrap();
 }
 
 /// A file that does not read, or that is another book, writes nothing and says why.
@@ -129,7 +129,7 @@ fn update_a_book_from_an_unreadable_file_writes_nothing_and_names_the_line() {
         other => panic!("{other:?}"),
     }
     assert_eq!(handle.snapshot().fold().record_keys().len(), before);
-    handle.close();
+    handle.close().unwrap();
 }
 
 /// INV-UPDATE-KEEPS-ALIGNMENTS (U4): an aligned file's verse that the project held empty comes
@@ -157,5 +157,5 @@ fn an_aligned_usfm_file_updates_its_alignments() {
     assert!(conflicted(&handle, &verse(1, 2)));
     assert!(!words(&handle, 1, 1).unwrap().contains("\\zaln"));
     assert!(!reply.changes.is_empty());
-    handle.close();
+    handle.close().unwrap();
 }
