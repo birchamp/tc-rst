@@ -4,7 +4,7 @@ title: CI runs the full tests only on gates and main; fast checks before a gate;
 track: A
 lane: integration
 milestone: M1
-state: building
+state: verifying
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-CHK-7
 worktree: .worktrees/track-CHK-7
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: three workflow conditions, one script step, one stub script)
 merged: none
 updated: 2026-10-24
-next: Step 3: scripts/nightly-stub.sh and the nightly jobs' failure step.
+next: One verify pass, then the batch after batch 3. Item 4 (the daily trial merge) is a standing duty of the integration lane, not code; item 5 is answered in the log.
 blocked_by: none
 ---
 
@@ -117,3 +117,5 @@ reach translators sooner, and no nightly failure goes unread.
 - 2026-10-24 19:26 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-CHK-7, cut from batch/3 (UI-3a's cancel rule and PROCESS-6 are there); merges in the batch after 3 | python3 -I -B .audit/tools/board.py
 - 2026-10-24 19:28 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | ci.yml's test, alignment-budget and parity-baseline run only on main, gate/* and on request; app-e2e pushes only on main and gate/** (pull_request dropped); the cancel rule from UI-3a stays. gates-sync: INV-JOURNEYS-RUN checks the branches, new INV-FULL-TESTS-GATE-MERGES case; 39 pass. With the test job's condition removed: `INV-FULL-TESTS-GATE-MERGES: ci.yml job test runs on every push` | node --test .audit/tools/*.test.mjs
 - 2026-10-24 19:28 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | none | wait_ci runs board.py --check, claims.test.mjs and coverage.test.mjs before it pushes. With C7b set to building and owner none (scratch commit, undone): `gates: --wait-ci stops before pushing: board.py --check or the claims and coverage checks fail; run them to see why`, exit 1, and no gate/probe-chk7 branch was pushed | scripts/gates.sh --wait-ci probe-chk7
+- 2026-10-24 19:32 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | scripts/nightly-stub.sh writes units/NIGHTLY-<date>-<job>.md (state todo, the run URL, the log lines naming a seed or a failure), adds it to DONE's depends, commits on nightly/<date>-<job> and pushes; the two nightly jobs tee their log (bash with pipefail) and call it on a scheduled failure, with contents: write for that job only. In a scratch clone with a fake log and --no-push: the card is written with the seed and panic lines, and board.py --check shows 0 errors | scripts/nightly-stub.sh model-long <log> --no-push
+- 2026-10-24 19:32 EDT | integration lane (Claude Code 3d07d5f8) | note | none | item 5 of the orchestrator's brief: op_counts::align::align_save_costs_one_verse and its _while_model_training_is_held variant pass in every main and gate ci run since batch 1 (40127991235, 40133930168, 40136425572, 40139145271: 2 ok each); fix-book-removal-unseen's hold of draft writes fixed it | gh run view <id> --log
