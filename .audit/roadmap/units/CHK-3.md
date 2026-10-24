@@ -4,7 +4,7 @@ title: Claimed tests must exist
 track: A
 lane: checks
 milestone: M1
-state: claimed
+state: building
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-3
 worktree: .worktrees/track-CHK-3
@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d
 merged: none
 updated: 2026-10-23
-next: step 1
+next: step 3 (coverage.json from ~/unfoldingword/translationcore4 at d310bf3)
 blocked_by: none
 ---
 
@@ -262,3 +262,6 @@ and each planted failure is in the log.
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
 - 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-3 from main 48d29235. S2 is merging, not done: step 5 (STORAGE.md §15) waits for it. FIX-R is not claimed, so its rows of TC4-ISSUES.md are marked pending only. tC4 reference clone: ~/unfoldingword/translationcore4 (has d310bf3) | python3 -I .audit/tools/board.py
+- 2026-10-23 23:43 EDT | checks lane (Claude Code 2198ee19) | note | none | Correction to the claim line: track-CHK-3 branched from main 325244a1 (G5's merge), not 48d29235 | git merge-base track-CHK-3 claude/focused-ride-5uzj7p
+- 2026-10-23 23:43 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | .audit/tools/claims.mjs (testNames, resolve, claimsOf, pendingOf, tables, states, idsIn) and claims.test.mjs. Old unit ids (A5, B4a, ...) take their state from .audit/STATUS.md, cards from board.py --json. Resolver decisions: a template title with under 12 literal characters is not a pattern (`${r.path}${r.query}` matched every claim); a title's leading label ("language-tags: ...") resolves; a bare test file name (`fetched_lock.rs`) resolves to its binary; a tC4 `*.spec.ts` is the reference a journey ports, not a claim; every {a,b} group expands. Red list on TC4-ISSUES: #795 and #765 covered but "to add"; #507 j25_a_story_opens_with_its_rail_its_units_and_a_comment_box_that_takes_no_typing; #737 and #42 WordNav; #529 imported_obsolete_checking_language_is_kept_and_ignored; 29 unit-todo rows waiting on done units only (A5, A8, B2, B3, B4a, B5b, B9a, B9b, C6) or on no card (#179, #576, #801). Third-rule plant (units/X.md set done in a copy): "INV-CLAIMED-TESTS-EXIST: docs/TC4-ISSUES.md:298 (#676) waits on X, but they are done: write the test or mark the row" | node --test .audit/tools/claims.test.mjs
+- 2026-10-23 23:43 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | 35 rows changed in docs/TC4-ISSUES.md: #795, #507, #765 (pending: FIX-R) (FIX-R step 5 writes #795's test, renames #507's journey, and reconciles); #529 (pending: I); WordNav unquoted in #737 and #42; the 29 unit-todo rows' unit cells end "FIX-R reconciles" (FIX-R step 5.4 sets each to covered or to the card that now owns it). Plant: one letter off in #788's test: "INV-CLAIMED-TESTS-EXIST: docs/TC4-ISSUES.md:136 (#788) is covered by only_the_shown_selection_is_plaaced_and_the_cards_look_armed_only_while_it_is_not_empty, but no such test exists"; reverted. Both tests pass | node --test .audit/tools/claims.test.mjs
