@@ -14,7 +14,11 @@ use tc_app::App;
 use tc_door43_fake::seeded::PARITY_USER;
 
 use super::common::{folder, post, rid, until};
-use super::sync::{World, card_with_counts, internet_on, script, shared, sign_in};
+use super::sync::{
+    World, card_with_counts, internet_on, script, shared, shared_with, sign_in, synced,
+};
+use std::sync::Arc;
+use tc_door43_fake::{Fault, FaultRule, RepoSeed};
 
 const SAMPLE: &str = "sample_burrito";
 
@@ -131,6 +135,7 @@ macro_rules! sync_port_contract {
                 let w = <$fixture>::world().await;
                 let app = &w.t.app;
                 internet_on(app).await;
+                sign_in(app).await;
                 let before = listed(app).await;
                 let project = <$fixture>::open_succeeds(&w).await;
                 if <$fixture>::OPEN_WRITES {
@@ -151,6 +156,7 @@ macro_rules! sync_port_contract {
                 let w = <$fixture>::world().await;
                 let app = &w.t.app;
                 internet_on(app).await;
+                sign_in(app).await;
                 let before = listed(app).await;
                 let error = <$fixture>::open_refused(&w).await;
                 let job = post(app, &open(4, "contract-refused")).await.unwrap();
@@ -178,8 +184,73 @@ macro_rules! sync_port_contract {
     };
 }
 
+/// The real port on the fake Door43: the sample is connected to an empty repository of the
+/// parity user's, which a first sync fills.
+pub(super) struct Door43;
+
+const REPO: &str = "es-419_tit_equipo";
+
+fn repo_lookup_fails(w: &World) -> ApiError {
+    w.fake.inject(FaultRule::once(
+        "GET",
+        &format!("/api/v1/repos/{PARITY_USER}/{REPO}"),
+        Fault::Status {
+            status: 404,
+            message: "Not Found".to_owned(),
+        },
+    ));
+    ApiError::Refused(Refusal::Sync(SyncFailure::BeforeIntake(
+        SyncRefusal::RemoteMissing,
+    )))
+}
+
+impl SyncPortFixture for Door43 {
+    const OPEN_WRITES: bool = true;
+
+    async fn world() -> World {
+        let w = shared_with(Some(Arc::new(tc_app::ports::door43::Door43Sync))).await;
+        w.fake
+            .add_repo(RepoSeed {
+                owner: PARITY_USER.to_owned(),
+                name: REPO.to_owned(),
+                subject: "Bible".to_owned(),
+                language: "es-419".to_owned(),
+                topics: Vec::new(),
+                private: false,
+                commits: Vec::new(),
+            })
+            .await
+            .unwrap();
+        w.t.app
+            // The fake's seeded repositories' default branch.
+            .connect_door43(&folder(SAMPLE), PARITY_USER, REPO, "master")
+            .await
+            .unwrap();
+        w.fake.clear_requests();
+        w
+    }
+
+    async fn sync_fails_before_intake(w: &World) -> ApiError {
+        repo_lookup_fails(w)
+    }
+
+    async fn open_succeeds(w: &World) -> ProjectRef {
+        // The repository holds the sample once a first sync pushed it.
+        synced(&w.t.app, 91).await;
+        folder("contract-open")
+    }
+
+    async fn open_refused(w: &World) -> ApiError {
+        repo_lookup_fails(w)
+    }
+
+    fn calls(w: &World) -> usize {
+        w.fake.requests().len()
+    }
+}
+
 sync_port_contract!(scripted, Scripted);
-// E1a: sync_port_contract!(door43, Door43Port);
+sync_port_contract!(door43, Door43);
 
 /// A script sent to an app whose sync port is not the scripted one is refused, so a test can
 /// never pass on a script that went nowhere.

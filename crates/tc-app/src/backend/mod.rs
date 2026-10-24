@@ -1083,6 +1083,19 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// the projects folder: the copy offer of a read-only project (STORAGE §5.0, R7). Blocking.
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure>;
 
+    /// The open from Door43 (E1a, unit X's `tc_sync::join`): `repo` fetched and placed as the
+    /// project `name`; its folder. `None` from a store that keeps no git repository.
+    fn door43_join(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+        repo: tc_door43::RepoRef,
+        name: String,
+    ) -> BoxFuture<Option<Result<std::path::PathBuf, tc_sync::JoinError>>> {
+        let _ = (client, session, repo, name);
+        Box::pin(async { None })
+    }
+
     /// Creates a project in the projects folder: built in a staging folder and renamed into
     /// place without replacing anything (R2), so a crash leaves the whole project or none.
     /// Blocking. Only the store on disk creates projects.
@@ -1188,6 +1201,29 @@ pub trait ProjectHandle: Send + Sync {
     /// *Discard* of an offered draft: its entry leaves `drafts.json` (STORAGE §5.14), written
     /// before this returns. Whether the file holds the change.
     fn discard_draft(&self, id: u64) -> bool;
+
+    /// One sync of this project with its Door43 repository (E1a, unit X's `tc_sync::sync`).
+    /// `None` from a backend that keeps no git repository (the memory backend).
+    /// Points this project's repository at Door43's `repo` on `server` (unit X's
+    /// `tc_sync::connect`): what share and the tests' connected projects set.
+    fn door43_connect(
+        self: Arc<Self>,
+        server: tc_door43::ServerUrl,
+        repo: tc_door43::RepoRef,
+        branch: String,
+    ) -> BoxFuture<Option<Result<(), tc_sync::ConnectError>>> {
+        let _ = (server, repo, branch);
+        Box::pin(async { None })
+    }
+
+    fn door43_sync(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+    ) -> BoxFuture<Option<tc_sync::SyncReport>> {
+        let _ = (client, session);
+        Box::pin(async { None })
+    }
 
     /// Cancel only the current draft matching this editor's exact text, base and time.
     /// A newer entry and offered drafts stay; true means the resulting list is durable.

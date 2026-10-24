@@ -12,6 +12,7 @@ use crate::app::App;
 use crate::backend::BoxFuture;
 use crate::jobs::JobEnd;
 
+pub mod door43;
 #[cfg(feature = "test-hooks")]
 pub mod scripted;
 

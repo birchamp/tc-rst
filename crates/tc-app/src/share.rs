@@ -189,3 +189,49 @@ impl Handle<OpenDoor43> for App {
             }))
     }
 }
+
+impl App {
+    /// The open from Door43 (E1a, unit X's `tc_sync::join`): `repo` fetched and placed as the
+    /// project `name`. A refusal before anything was placed changes nothing.
+    pub(crate) async fn door43_open(
+        &self,
+        repo: tc_api::door43::RepoSource,
+        name: tc_api::door43::ProjectName,
+    ) -> Result<tc_api::ids::ProjectRef, ApiError> {
+        let client = self.door43()?.clone();
+        let session = self.door43_session().await?;
+        let repo: tc_door43::RepoRef = format!("{}/{}", repo.owner(), repo.name())
+            .parse()
+            .map_err(|_| ApiError::BadRequest {
+                field: "repo".to_owned(),
+                reason: "not owner/repository".to_owned(),
+            })?;
+        let store = self.inner.sessions.store().clone();
+        let joined = store
+            .door43_join(client, Some(session), repo, name.as_str().to_owned())
+            .await
+            .ok_or(ApiError::Unavailable(tc_api::error::Feature::Sync))?;
+        let folder = joined.map_err(|e| match e {
+            tc_sync::JoinError::Blocked(block) => {
+                ApiError::Refused(Refusal::Sync(tc_api::refusal::SyncFailure::Blocked(block)))
+            }
+            tc_sync::JoinError::Refused(refusal) => ApiError::Refused(Refusal::Sync(
+                tc_api::refusal::SyncFailure::BeforeIntake(refusal),
+            )),
+            other => self.internal(
+                "the project from Door43 could not be placed",
+                facts(json!({ "reason": other.to_string() })),
+            ),
+        })?;
+        let placed = folder
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| tc_api::ids::ProjectRef::parse(n).ok());
+        placed.ok_or_else(|| {
+            self.internal(
+                "the project from Door43 was placed under a name the app cannot read",
+                facts(json!({ "folder": folder.display().to_string() })),
+            )
+        })
+    }
+}

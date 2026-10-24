@@ -130,6 +130,84 @@ impl App {
         self.inner.sync.sync(self.clone(), folder).await
     }
 
+    /// One real sync of `folder` with its Door43 repository (E1a): unit X's `tc_sync::sync` on
+    /// the project's store, then the toast's view of what came in. A sync that fails after
+    /// intake keeps what came in, and the card is told either way.
+    pub(crate) async fn door43_sync(&self, folder: ProjectRef) -> Result<SyncResultView, JobEnd> {
+        let client = self.door43().map_err(JobEnd::Failed)?.clone();
+        let session = self.door43_session().await.map_err(JobEnd::Failed)?;
+        let progress = crate::jobs::ProgressSink::new(Phase::Sync(tc_api::jobs::SyncPhase::Fetch));
+        let lease = self
+            .inner
+            .sessions
+            .open_side(&folder, progress)
+            .await
+            .map_err(|e| {
+                JobEnd::Failed(self.internal(
+                    "the project to sync did not open",
+                    crate::reports::facts(serde_json::json!({ "reason": format!("{e:?}") })),
+                ))
+            })?;
+        let handle = lease.session().handle().clone();
+        let report = handle.door43_sync(client, Some(session)).await;
+        let ended = match report {
+            Some(report) => match report.ended {
+                tc_sync::machine::Ended::Synced { .. } => Ok(()),
+                tc_sync::machine::Ended::Failed(failure) => {
+                    Err(ApiError::Refused(tc_api::Refusal::Sync(failure)))
+                }
+            },
+            None => Err(ApiError::Unavailable(tc_api::error::Feature::Sync)),
+        };
+        let view = {
+            let session = lease.session();
+            let me = session.handle().facts().device;
+            let snapshot = session.read();
+            // shortcut: tc-sync's report does not name the changes it took in (it counts packs), so the
+            // toast counts none received; when tc-store's IntakeReport carries their ids, pass them.
+            let received: Vec<ChangeId> = Vec::new();
+            let resources = &self.inner.resources;
+            synced_view(&snapshot, me, &received, 0, &|pin| resources.has_dcs(pin))
+        };
+        drop(lease);
+        self.inner.sessions.settled(&folder).await;
+        self.inner
+            .bus
+            .publish(tc_api::event::Event::HomeCard { project: folder });
+        ended.map(|()| view).map_err(JobEnd::Failed)
+    }
+
+    /// Points `folder`'s repository at Door43's `owner/name` and its `branch` (unit X's
+    /// connect): what share sets, for tests of a project shared before they start.
+    #[cfg(feature = "test-hooks")]
+    pub async fn connect_door43(
+        &self,
+        folder: &ProjectRef,
+        owner: &str,
+        name: &str,
+        branch: &str,
+    ) -> Result<(), String> {
+        let progress = crate::jobs::ProgressSink::new(Phase::Sync(tc_api::jobs::SyncPhase::Fetch));
+        let lease = self
+            .inner
+            .sessions
+            .open_side(folder, progress)
+            .await
+            .map_err(|e| format!("{e:?}"))?;
+        let handle = lease.session().handle().clone();
+        let server = self.door43().map_err(|e| e.to_string())?.server().clone();
+        let repo = format!("{owner}/{name}")
+            .parse()
+            .map_err(|e| format!("{e:?}"))?;
+        let connected = handle
+            .door43_connect(server, repo, branch.to_owned())
+            .await
+            .ok_or("this store keeps no history")?;
+        drop(lease);
+        self.inner.sessions.settled(folder).await;
+        connected.map_err(|e| e.to_string())
+    }
+
     /// What the scripted sync port does for a sync a test scripted: the teammates' changes
     /// written through the store, then the project read again as a sync's intake does.
     #[cfg(feature = "test-hooks")]

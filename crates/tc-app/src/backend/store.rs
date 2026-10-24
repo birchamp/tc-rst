@@ -718,6 +718,16 @@ impl ProjectStore for StoreBackend {
     /// The copy goes into the projects folder, or into the local projects folder where the
     /// projects folder itself is what made the project read-only (Q-30): a copy beside it would
     /// be read-only too. It is refused only where this computer has no folder that is safe.
+    fn door43_join(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+        repo: tc_door43::RepoRef,
+        name: String,
+    ) -> BoxFuture<Option<Result<PathBuf, tc_sync::JoinError>>> {
+        join_on(self, |backend| &backend.store, client, session, repo, name)
+    }
+
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
         let from = match self.beside_of(folder) {
             Some(beside) => beside.listed(folder),
@@ -1407,6 +1417,42 @@ impl ProjectHandle for StoreHandle {
         rx
     }
 
+    fn door43_connect(
+        self: Arc<Self>,
+        server: tc_door43::ServerUrl,
+        repo: tc_door43::RepoRef,
+        branch: String,
+    ) -> BoxFuture<Option<Result<(), tc_sync::ConnectError>>> {
+        let runtime = tokio::runtime::Handle::current();
+        let work = tokio::task::spawn_blocking(move || {
+            let inner = self.inner();
+            let handle = inner.as_ref()?;
+            Some(runtime.block_on(tc_sync::connect(handle, &server, &repo, &branch)))
+        });
+        Box::pin(async move { work.await.ok().flatten() })
+    }
+
+    fn door43_sync(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+    ) -> BoxFuture<Option<tc_sync::SyncReport>> {
+        let runtime = tokio::runtime::Handle::current();
+        // The sync borrows the open project for its whole run: it runs on a blocking thread
+        // under the read lock, so the project cannot close under it.
+        let work = tokio::task::spawn_blocking(move || {
+            let inner = self.inner();
+            let handle = inner.as_ref()?;
+            Some(runtime.block_on(tc_sync::sync(
+                handle,
+                &client,
+                session.as_ref(),
+                &tc_sync::Backoff::default(),
+            )))
+        });
+        Box::pin(async move { work.await.ok().flatten() })
+    }
+
     fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome> {
         let Some(pending) = self.inner().as_ref().map(|handle| {
             handle.checkpoint(match reason {
@@ -1546,6 +1592,29 @@ impl Drop for StoreHandle {
             drop(rx);
         }
     }
+}
+
+/// `tc_sync::join` on `owner`'s tc-store, on a blocking thread: the store is borrowed for the
+/// whole fetch and placement.
+pub(crate) fn join_on<S: Send + Sync + 'static>(
+    owner: Arc<S>,
+    store: fn(&S) -> &tc_store::Store,
+    client: tc_door43::Door43Client,
+    session: Option<tc_door43::Session>,
+    repo: tc_door43::RepoRef,
+    name: String,
+) -> BoxFuture<Option<Result<PathBuf, tc_sync::JoinError>>> {
+    let runtime = tokio::runtime::Handle::current();
+    let work = tokio::task::spawn_blocking(move || {
+        runtime.block_on(tc_sync::join(
+            store(&owner),
+            &client,
+            session.as_ref(),
+            &repo,
+            &name,
+        ))
+    });
+    Box::pin(async move { work.await.ok() })
 }
 
 #[cfg(test)]
