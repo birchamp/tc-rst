@@ -84,7 +84,8 @@ jobs:
     runs-on: ubuntu-latest
     # The old single job took 26 min; the test binaries sum to about 15 min locally.
     timeout-minutes: 75
-    if: github.event_name != 'schedule'
+    # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
+    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -127,7 +128,8 @@ jobs:
   alignment-budget:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event_name != 'schedule'
+    # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
+    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -150,6 +152,8 @@ jobs:
   # no install step.
   parity-baseline:
     runs-on: ubuntu-latest
+    # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
+    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
         with:
