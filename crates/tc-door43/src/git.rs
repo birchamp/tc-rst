@@ -77,13 +77,43 @@ pub fn fetch(
         .map_err(|e| failed(http, &route, e))
 }
 
-/// Pushes `refspecs` of `repo` to `remote`. A ref Door43 refuses comes back as
+/// The one refspec a push may send: a local branch onto a remote branch, never forced. It is
+/// built only from two branch names that git accepts, so it can never start with `+`
+/// (INV-PUSH-IS-NEVER-FORCED).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FastForwardRefspec(String);
+
+impl FastForwardRefspec {
+    /// `refs/heads/{branch}` onto the same branch of the remote.
+    pub fn branch(branch: &str) -> Result<Self, Door43Error> {
+        Self::onto(branch, branch)
+    }
+
+    /// `refs/heads/{local}` onto `refs/heads/{remote}`.
+    pub fn onto(local: &str, remote: &str) -> Result<Self, Door43Error> {
+        for name in [local, remote] {
+            if name.starts_with(['+', '-']) || !git2::Branch::name_is_valid(name).unwrap_or(false) {
+                return Err(Door43Error::UnexpectedResponse {
+                    route: "push".into(),
+                    reason: format!("{name:?} is not a branch name"),
+                });
+            }
+        }
+        Ok(Self(format!("refs/heads/{local}:refs/heads/{remote}")))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Pushes `refspec` of `repo` to `remote`. A ref Door43 refuses comes back as
 /// [`refused_push`] reads it.
 pub fn push(
     http: &Http,
     repo: &git2::Repository,
     remote: &GitRemote,
-    refspecs: &[&str],
+    refspec: &FastForwardRefspec,
 ) -> Result<(), Door43Error> {
     let route = remote.route("git-receive-pack");
     let proxy = proxy(http, remote, &route)?;
@@ -114,7 +144,7 @@ pub fn push(
     let mut git = repo
         .remote_anonymous(remote.url().as_str())
         .map_err(|e| failed(http, &route, e))?;
-    git.push(refspecs, Some(&mut options))
+    git.push(&[refspec.as_str()], Some(&mut options))
         .map_err(|e| failed(http, &route, e))?;
     drop(options);
     match refused.into_inner() {
