@@ -3,8 +3,8 @@
 //! file" takes the zip's packs in through the store, as a sync's intake does, and commits.
 //!
 //! Not built yet: E5's read-back bypassing the page cache (the file is read back and checked
-//! through the cache), R2's "create the project from this file", and R7's `.tc/intake.json`
-//! marker (each pack is taken whole, and receiving a file again adds nothing).
+//! through the cache), and R7's `.tc/intake.json` marker (each pack is taken whole, and
+//! receiving a file again adds nothing).
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -529,6 +529,53 @@ fn unique(destination: &Path, name: &str) -> Result<String, ExchangeError> {
         .map(|n| format!("{stem}-{n}.zip"))
         .find(|candidate| !destination.join(candidate).exists())
         .ok_or_else(|| ExchangeError::Io("no free file name".into()))
+}
+
+/// R2 "Create the project from this file": a newcomer builds the project in a staging folder
+/// from the file's entries (`.tc-root/` back at the root), written with the store's atomic
+/// writes, and places it as `name`. The first open folds the packs and makes the history.
+pub fn receive_new(
+    store: &tc_store::Store,
+    path: &Path,
+    name: &str,
+) -> Result<PathBuf, ExchangeError> {
+    let zip = read_zip(path)?;
+    if !zip.damaged.is_empty() {
+        return Err(ExchangeError::Damaged(zip.damaged.join(", ")));
+    }
+    if !zip.files.contains_key(PROJECT_JSON) {
+        return Err(ExchangeError::OtherProject);
+    }
+    if let Some(bytes) = zip.files.get(FORMAT_JSON)
+        && let Ok(doc) = tc_journal::format::FormatDoc::parse(bytes)
+        && let tc_journal::format::FormatGate::Refused { major } = doc.gate()
+    {
+        return Err(ExchangeError::NeedsNewerApp {
+            major: major.to_string(),
+        });
+    }
+    let staging = store.staging(tc_store::StagingKind::Import);
+    let vfs = store.vfs().clone();
+    let written = (|| -> Result<(), ExchangeError> {
+        for (entry, bytes) in &zip.files {
+            let rel = entry.strip_prefix(ROOT).unwrap_or(entry);
+            let full = staging.join(rel);
+            let (Some(dir), Some(file)) =
+                (full.parent(), full.file_name().and_then(|n| n.to_str()))
+            else {
+                continue;
+            };
+            tc_store::atomic_create_dirs(&*vfs, dir).map_err(io)?;
+            tc_store::atomic_write(&*vfs, dir, file, bytes, tc_store::SyncDir::Now)
+                .map_err(|e| io(e.into_inner()))?;
+        }
+        Ok(())
+    })();
+    if let Err(e) = written {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(e);
+    }
+    store.place(&staging, name).map_err(io)
 }
 
 #[cfg(test)]
