@@ -261,6 +261,16 @@ impl Handle<tc_api::test::Script> for App {
     async fn handle(&self, req: tc_api::test::Script) -> Result<(), ApiError> {
         use tc_api::test::Scripted;
         self.hooks()?;
+        let scripts_door43 = matches!(
+            req.next,
+            Scripted::OpenDoor43Fails(_) | Scripted::Sync { .. }
+        );
+        if scripts_door43 && self.scripted_sync_port().is_none() {
+            return Err(ApiError::BadRequest {
+                field: "next".to_owned(),
+                reason: "this app's sync port is not the scripted one".to_owned(),
+            });
+        }
         match req.next {
             Scripted::OpenDoor43Fails(failure) => {
                 self.script_open_door43(Err(ApiError::Refused(tc_api::Refusal::Sync(failure))))
