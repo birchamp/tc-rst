@@ -18,6 +18,7 @@ mod app {
     mod internet;
     mod jobs;
     mod language;
+    mod lint;
     mod offer;
     mod print;
     mod recovery;
