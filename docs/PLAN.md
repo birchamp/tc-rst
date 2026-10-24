@@ -37,10 +37,12 @@ user-visible outcome binds it. The tC4 user interface and design system are kept
 
 ### The reference version
 
-tC4 4.0 has no tag yet. Until it has one, the reference is tC4 `main` at commit `d310bf3`
-(2026-10-16). When the v4.0.0 tag exists on `release/4.0`, the reference moves to that tag.
-`parity/tc4-baseline/README.md` records the commit that its screens show.
-`docs/TC4-DELTA-2026-10-16.md` lists every tC4 change from `d494a9d` to `d310bf3`.
+The owner chose tC4 4.0 rc.2 (H7, 2026-10-24): the reference is tC4 `release/4.0` at commit
+`d25b7871` (2026-10-22, version 4.0.0-rc.2), the tag `v4.0.0-rc.2` (`a5ce0307`) plus the fixes
+picked onto `release/4.0` after it, among them the MIT licence (#838). When the v4.0.0 tag
+exists on `release/4.0`, the reference moves to that tag. `parity/tc4-baseline/README.md`
+records the commit that its screens show. `docs/TC4-DELTA-2026-10-16.md` lists every tC4 change
+from `d494a9d` to `d310bf3`, and `docs/TC4-DELTA-2026-10-23.md` (SWEEP) the changes after it.
 
 ### Where the rebuild differs from tC4 4.0 on purpose
 

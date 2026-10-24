@@ -4,7 +4,7 @@ title: Move the tC4 reference and port its changes
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-REF1
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -15,7 +15,7 @@ no_loss: false
 size: 3-5 sessions (estimate)
 merged: none
 updated: 2026-10-24
-next: Step 1: write the_reference_is_one_commit_everywhere, move PLAN to tC4 release/4.0 d25b7871.
+next: Step 2: crates/tc-ui/vendor-tc4.sh ~/unfoldingword/tc4-sweep d25b7871, then the help pages, key moves, Q31 and the help overlay.
 blocked_by: none
 ---
 
@@ -254,3 +254,4 @@ machine fingerprint in `manifest.json`).
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-coverage.md
 - 2026-10-24 15:00 EDT | REF1 session (Claude Code 56b3f56d) | ruling | none | H7, the owner on 2026-10-24: "match tC4 4.0 rc.2 now" (rulings/2026-10-24-H3-H4-H7-fast-release.md, on track-PLAN-FAST until batch 1 lands). The orchestrator names the commit: tC4 release/4.0 tip d25b7871904228a342c0d80280136d8636833653 (rc.2 a5ce0307 plus later fixes, #838 among them, so About shows MIT); its fetch-help.mjs pins tc-website dbb7cd03 as rc.2 does | git -C ~/unfoldingword/tc4-sweep show d25b7871:scripts/fetch-help.mjs
 - 2026-10-24 15:00 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed on track-REF1 in .worktrees/track-REF1 from main 0189cee4, on the orchestrator's assignment. SWEEP is not done (batch 2): the merge waits for it, and this branch leaves docs/TC4-ISSUES.md alone until SWEEP lands, since SWEEP rewrites its rows. Asked the orchestrator whether #810 (poem lines as tabs) is built here or on its own card | python3 -I -B .audit/tools/board.py
+- 2026-10-24 15:01 EDT | REF1 session (Claude Code 56b3f56d) | step 1 | none | PLAN "The reference version" names tC4 release/4.0 d25b7871 (rc.2 plus picks, #838). the_reference_is_one_commit_everywhere extends CHK-6's "PLAN's reference commit is the baseline's" (both now read a branch name, and a line break before the sha); it passes on d310bf3, fails with vendored-from-tc4.txt's commit changed by one character ("INV-THE-REFERENCE-IS-ONE-COMMIT: crates/tc-ui/vendored-from-tc4.txt names tC4 e310bf30…; PLAN names d310bf3"), and now fails as it must: "parity/tc4-baseline/manifest.json names tC4 d310bf30…; PLAN names d25b7871". No tc4-rc2 clone yet: vendor-tc4.sh reads blobs from ~/unfoldingword/tc4-sweep, so the clone waits for step 3's capture | node --test parity/tc4-baseline/baseline.test.mjs
