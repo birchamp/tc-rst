@@ -145,6 +145,29 @@ Under the same rule, in the conflict review (B11 and C7a, 2026-10-23):
 - A refused choice says why in words ("Another version of this verse is kept.", the store's
   reason), never as an error code.
 
+Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-23):
+
+- A project's text direction has one source, the metadata's `scriptDirection`, else the
+  settings file's `textDirection` (tC4's own `projectPresentation` rule). Project settings
+  writes both, so a direction changed there shows on Home, in the open project and in Align,
+  also after a restart. tC4 writes only the settings file, so the change shows nowhere
+  (#832.1). As in tC4, a metadata value other than `ltr` or `rtl` does not count. Settings names the language from the metadata when the settings file names none,
+  where tC4 shows an empty field for a tC4 project (#832.2).
+- The words placed on an aligner card read in the translation's direction, even on an Old
+  Testament verse; tC4 lays them out in the original's direction, so a Hebrew verse's
+  placed words read backwards (#830).
+- Each note, word and question text reads in its own direction under its pane's layout, so
+  an English question in an Arabic set is not laid out right to left (#836).
+- A save refused for a reason no retry in this open can fix (a bad token, a newer change)
+  keeps its text for the next open's offer and does not block going Home; tC4 keeps Home
+  blocked (#801). A text refused for its content still shows why beside the field.
+- A failed check for updates says one plain sentence by cause; tC4 shows the browser's
+  "Failed to fetch" (#833.1).
+- Dropbox's own settings folder (`~/.dropbox`) never marks a project as synced, so having
+  Dropbox installed on Linux or macOS no longer makes every project read-only.
+- Align lists the links its open sent back to the word bank (owner answer Q30 (a)); the list
+  after a verse save in Translate waits for the storage unit S2.
+
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:
 

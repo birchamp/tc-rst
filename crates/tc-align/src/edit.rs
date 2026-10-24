@@ -147,9 +147,9 @@ pub trait Alignment {
     /// does not have goes last in its card. Only the target words move. tC4's
     /// `cardsInVerseOrder` (#754).
     fn cards_in_verse_order(&mut self, verse: &TargetVerse);
-    /// After an edit made against `verse`: the record now vouches for that text, tC3's
-    /// and tC4's re-review flag is cleared, and `done` is recomputed: set when the verse
-    /// is fully aligned, cleared otherwise, so an edit takes back an earlier Mark valid.
+    /// After an edit made against `verse`: the record now vouches for that text, the
+    /// re-review flag stays, and `done` is recomputed: set when the verse is fully aligned
+    /// and not flagged, cleared otherwise, so an edit takes back an earlier Mark valid.
     /// tC4's `settleDone(stampTargetVerse(record, text))`.
     fn settle(&mut self, verse: &TargetVerse);
     /// Mark valid: the translator declares the verse done, words left in the bank or not.
@@ -325,8 +325,8 @@ impl Alignment for AlignmentValue {
 
     fn settle(&mut self, verse: &TargetVerse) {
         self.target_verse_md5 = verse.md5();
-        self.marked_invalid = false;
-        self.done = self.is_fully_aligned();
+        // Only Mark valid clears a "needs review" mark (owner ruling Q37, tC4 #814).
+        self.done = self.is_fully_aligned() && !self.marked_invalid;
     }
 
     fn mark_done(&mut self, verse: &TargetVerse) {

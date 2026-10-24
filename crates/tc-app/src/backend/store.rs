@@ -567,8 +567,15 @@ impl ProjectStore for StoreBackend {
             .read(&path.join(SYNC_JSON))
             .ok()
             .and_then(|bytes| sync_remote(&bytes));
+        let text_direction = self
+            .vfs
+            .read(&path.join(tc_journal::fold::DerivedFile::Settings.path()))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .and_then(|doc| doc.get("textDirection")?.as_str().map(str::to_owned));
         Ok(super::ProjectPeek {
             metadata,
+            text_direction,
             remote,
             stamp: self.summary_stamp(folder).ok(),
         })
