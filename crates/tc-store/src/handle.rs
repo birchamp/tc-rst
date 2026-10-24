@@ -613,6 +613,12 @@ pub struct SyncFile {
     pub branch: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed: Option<Confirmed>,
+    /// The device that wrote its Door43 username after a signed-in sync (Q7). A folder copied
+    /// to another computer carries this file, and the new device's copied username is not
+    /// its own, so the first signed-in sync there replaces it (#161); a device's own
+    /// confirmed name never changes (first wins).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username_device: Option<String>,
 }
 
 /// "Your work up to 14:32 is on Door43" (§9.5).

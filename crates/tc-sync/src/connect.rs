@@ -43,11 +43,14 @@ pub async fn connect(
         .config()
         .and_then(|mut c| c.set_str("tc.branch", branch))
         .map_err(git)?;
+    // A username this computer confirmed stays confirmed.
+    let username_device = project.sync_file().await?.and_then(|f| f.username_device);
     project
         .set_sync_file(SyncFile {
             remote_url: url,
             branch: branch.to_owned(),
             confirmed: None,
+            username_device,
         })
         .await?;
     Ok(())

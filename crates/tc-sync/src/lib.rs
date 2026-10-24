@@ -10,8 +10,10 @@ pub mod join;
 pub mod machine;
 pub mod share;
 pub mod sync;
+pub mod username;
 
 pub use connect::{ConnectError, connect};
 pub use join::{JoinError, join};
 pub use share::{ShareError, share};
 pub use sync::{Backoff, OtherToolCommit, Pause, SyncReport, sync};
+pub use username::{UsernameError, record_username};

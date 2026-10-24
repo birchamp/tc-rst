@@ -1014,3 +1014,73 @@ async fn a_merge_that_fails_after_intake_says_the_work_was_kept() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+fn username_of(handle: &ProjectHandle) -> Option<String> {
+    match handle
+        .snapshot()
+        .fold()
+        .projected(&RecordKey::DeviceProfile(handle.facts().device))
+    {
+        Some(Record::DeviceProfile { value, .. }) => {
+            value.door43_username.map(|u| u.as_str().to_owned())
+        }
+        _ => None,
+    }
+}
+
+/// A session of another account; `record_username` reads only its name.
+fn session_as(user: &str) -> Session {
+    Session {
+        username: user.parse().unwrap(),
+        token: tc_door43::Token::new("a-token-of-another-account".to_owned()).unwrap(),
+    }
+}
+
+/// Q7 and #680: the username is written once, after a sync and the name notice, and another
+/// account signing in later does not change it; without the notice nothing is written.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn username_written_once_after_first_successful_fetch() {
+    let door43 = door43("titus-name").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-name");
+    assert!(matches!(
+        tc_sync::record_username(&a, &door43.session).await,
+        Err(tc_sync::UsernameError::NotSynced)
+    ));
+    synced(&sync(&a, &door43).await);
+    // share_no_username_without_consent: the sync alone writes no name.
+    assert_eq!(username_of(&a), None);
+    assert!(tc_sync::record_username(&a, &door43.session).await.unwrap());
+    assert_eq!(username_of(&a).as_deref(), Some(seeded::USER));
+    let other = session_as("juan-p");
+    assert!(!tc_sync::record_username(&a, &other).await.unwrap());
+    assert_eq!(username_of(&a).as_deref(), Some(seeded::USER), "first wins");
+    a.close().unwrap();
+}
+
+/// #161: a folder copied to another computer copies the name; the first signed-in sync there
+/// replaces it with the account that signs in.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn copied_username_is_replaced_by_the_first_signed_in_fetch() {
+    let door43 = door43("titus-copied").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-copied");
+    synced(&sync(&a, &door43).await);
+    tc_sync::record_username(&a, &door43.session).await.unwrap();
+    a.close().unwrap();
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    assert_eq!(username_of(&b).as_deref(), Some(seeded::USER), "copied");
+    synced(&sync(&b, &door43).await);
+    let other = session_as("juan-p");
+    assert!(tc_sync::record_username(&b, &other).await.unwrap());
+    assert_eq!(username_of(&b).as_deref(), Some("juan-p"));
+    b.close().unwrap();
+}
