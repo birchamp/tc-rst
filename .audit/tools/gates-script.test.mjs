@@ -36,7 +36,7 @@ test('INV-NO-UNGATED-MERGE: --check-receipt refuses a tree without a receipt', (
   mkdirSync(join(scratch, 'scripts'), { recursive: true });
   try {
     copyFileSync(SCRIPT, join(scratch, 'scripts', 'gates.sh'));
-    writeFileSync(join(scratch, '.gitignore'), '/target\n');
+    writeFileSync(join(scratch, '.gitignore'), '/target\n/bin\n');
     const git = (...args) => {
       const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], { cwd: scratch, encoding: 'utf8' });
       assert.equal(r.status, 0, r.stderr);
@@ -45,7 +45,10 @@ test('INV-NO-UNGATED-MERGE: --check-receipt refuses a tree without a receipt', (
     git('init', '-q');
     git('add', '.');
     git('commit', '-q', '-m', 'gates');
-    const env = { CARGO_TARGET_DIR: join(scratch, 'target') };
+    // A fake gh on PATH answers the runs FAKE_GH_RUNS names, so no test asks GitHub.
+    mkdirSync(join(scratch, 'bin'));
+    writeFileSync(join(scratch, 'bin', 'gh'), '#!/bin/bash\nprintf "%s\\n" "${FAKE_GH_RUNS:-}"\n', { mode: 0o755 });
+    const env = { CARGO_TARGET_DIR: join(scratch, 'target'), PATH: `${join(scratch, 'bin')}:${process.env.PATH}` };
     const gates = () => spawnSync('bash', [join(scratch, 'scripts', 'gates.sh'), '--check-receipt'], { cwd: scratch, env: { ...clean, ...env }, encoding: 'utf8' });
 
     let r = gates();
@@ -54,7 +57,12 @@ test('INV-NO-UNGATED-MERGE: --check-receipt refuses a tree without a receipt', (
 
     const tree = git('rev-parse', 'HEAD^{tree}');
     mkdirSync(join(scratch, 'target', 'gates'), { recursive: true });
-    writeFileSync(join(scratch, 'target', 'gates', `${tree}.ok`), `tree ${tree}\n`);
+    writeFileSync(join(scratch, 'target', 'gates', `${tree}.ok`), `tree ${tree}\njourneys no\n`);
+    r = gates();
+    assert.equal(r.status, 1, 'a receipt without the journeys is partial: ' + r.stdout);
+    assert.match(r.stdout, /^INV-NO-UNGATED-MERGE: .*\(journeys not run; drop --no-journeys\)/);
+
+    writeFileSync(join(scratch, 'target', 'gates', `${tree}.ok`), `tree ${tree}\njourneys yes\n`);
     r = gates();
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /^gates: receipt /);
@@ -62,6 +70,26 @@ test('INV-NO-UNGATED-MERGE: --check-receipt refuses a tree without a receipt', (
     writeFileSync(join(scratch, 'probe'), '');
     r = gates();
     assert.equal(r.status, 1, 'an untracked file is a different tree: ' + r.stdout);
+    assert.match(r.stdout, /^INV-NO-UNGATED-MERGE/);
+    rmSync(join(scratch, 'probe'));
+    rmSync(join(scratch, 'target', 'gates'), { recursive: true });
+
+    // INV-NO-UNGATED-MERGE: a green ci and app-e2e run on the same tree is a receipt.
+    const head = git('rev-parse', 'HEAD');
+    env.FAKE_GH_RUNS = `ci 11 ${head}\napp-e2e 12 ${head}`;
+    r = gates();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^gates: CI receipt: ci run 11, app-e2e run 12 on /);
+    env.FAKE_GH_RUNS = `ci 11 ${head}`;
+    r = gates();
+    assert.equal(r.status, 1, 'ci alone is no receipt: ' + r.stdout);
+    assert.match(r.stdout, /^INV-NO-UNGATED-MERGE/);
+    writeFileSync(join(scratch, 'other'), '');
+    git('add', '.');
+    git('commit', '-q', '-m', 'other tree');
+    env.FAKE_GH_RUNS = `ci 11 ${head}\napp-e2e 12 ${head}`;
+    r = gates();
+    assert.equal(r.status, 1, 'runs on another tree are no receipt: ' + r.stdout);
     assert.match(r.stdout, /^INV-NO-UNGATED-MERGE/);
   } finally {
     rmSync(scratch, { recursive: true, force: true });

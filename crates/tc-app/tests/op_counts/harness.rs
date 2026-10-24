@@ -119,16 +119,51 @@ impl Scale {
 
     /// The open session's handle on the store; `None` before the open.
     fn store_handle(&self) -> Option<Arc<dyn tc_app::backend::ProjectHandle>> {
-        let open = self.app.sessions().open_sessions();
-        let at = &open.first()?.at;
-        Some(self.app.read(at).ok()?.handle().clone())
+        Some(self.session()?.handle().clone())
     }
 
-    /// Waits until the store's queue and background work are done, so the open's storage
-    /// check never counts into an action (the fold's counters are shared with it).
+    fn session(&self) -> Option<Arc<tc_app::session::ProjectSession>> {
+        let open = self.app.sessions().open_sessions();
+        let at = &open.first()?.at;
+        self.app.read(at).ok()
+    }
+
+    /// Waits until the store's queue, its background work and the app's jobs are done, so no
+    /// background read counts into an action (the counters are shared with them). On a loaded
+    /// machine a job outlived the store's idle and added a record read to a save's count.
     fn settle(&self) {
         if let Some(handle) = self.store_handle() {
             tokio::task::block_in_place(|| handle.wait_idle());
+        }
+        // The session's event pump labels each commit after the action returns, reading
+        // records as it goes (who wrote it, what a comment targets); wait until it has seen the
+        // store's newest commit, or its reads land on either side of the count.
+        if let Some(session) = self.session() {
+            let started = std::time::Instant::now();
+            while session.view().get() < session.handle().snapshot().seq() {
+                assert!(
+                    started.elapsed() < std::time::Duration::from_secs(60),
+                    "hung: the session's events stopped at {} of {} after 60 s",
+                    session.view().get(),
+                    session.handle().snapshot().seq()
+                );
+                tokio::task::block_in_place(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(5))
+                });
+            }
+        }
+        // A job a test holds at a hold point stays live on purpose; only the others must end.
+        let started = std::time::Instant::now();
+        while self.app.jobs().live() > self.app.holding() {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(60),
+                "hung: {} app job(s) still live after 60 s, {} held by the test",
+                self.app.jobs().live(),
+                self.app.holding()
+            );
+            tokio::task::block_in_place(|| {
+                std::thread::sleep(std::time::Duration::from_millis(10))
+            });
         }
     }
 
