@@ -134,19 +134,18 @@ fn crate_edges_follow_the_architecture_table() {
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
+/// INV-ONE-NETWORK-GATE: no crate but tc-door43 depends on a network library.
 #[test]
-fn network_libraries_only_in_door43_and_resources() {
+fn network_libraries_only_in_door43() {
     let mut problems = Vec::new();
     for m in common::members() {
         for d in m.deps.iter().filter(|d| normal(d)) {
             if !["reqwest", "hyper", "hyper-util"].contains(&d.name.as_str()) {
                 continue;
             }
-            let allowed =
-                m.name == "tc-door43" || (m.name == "tc-resources" && d.name == "reqwest");
-            if !allowed {
+            if m.name != "tc-door43" {
                 problems.push(format!(
-                    "INV-ARCHITECTURE: only tc-door43 reaches the network (tc-resources's reqwest until DOM-1); {} depends on {}",
+                    "INV-ARCHITECTURE: only tc-door43 reaches the network; {} depends on {}",
                     m.name, d.name
                 ));
             }
@@ -155,6 +154,7 @@ fn network_libraries_only_in_door43_and_resources() {
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
+/// INV-ONE-NETWORK-GATE: no crate but tc-door43 turns on libgit2's TLS.
 #[test]
 fn git_https_only_in_door43() {
     let mut problems = Vec::new();

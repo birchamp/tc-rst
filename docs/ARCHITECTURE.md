@@ -88,9 +88,9 @@ Every crate lives in `crates/`. Arrows read "is used by".
 Dependency rules:
 
 - `tc-ui` depends only on `tc-api` and `tc-core`, so the UI cannot touch storage directly.
-- Only `tc-store` writes project files. Only `tc-door43` and `tc-resources` open network
-  connections, and only behind `tc-door43`'s internet switch (`tc-resources` until DOM-1 moves
-  its calls into `tc-door43`).
+- Only `tc-store` writes project files. Only `tc-door43` opens network connections, HTTP
+  through `tc_door43::Http` and sync's git through `tc_door43::git`, and only behind its
+  internet switch; `tc-resources`' Aquifer client sends through `Http`.
 - Pure logic (`tc-usfm`, `tc-versification`, `tc-helps`, `tc-journal`'s fold, `tc-check`,
   `tc-align`, `tc-obs`, `tc-export`) does no I/O and is tested with plain values.
 

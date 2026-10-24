@@ -4,18 +4,18 @@ title: One network gate: all network code behind tc-door43
 track: A
 lane: domain
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: done
+owner: domain lane (Claude Code 9f599c21)
+branch: track-DOM-1
+worktree: .worktrees/track-DOM-1
 depends: [S2]
 needs_owner: []
 proves: []
 no_loss: false
 size: 1-2 d
-merged: none
-updated: 2026-10-22
-next: Claim this card after S2 merges, then do step 1.
+merged: 0802bcf4
+updated: 2026-10-24
+next: none
 blocked_by: none
 ---
 
@@ -100,8 +100,8 @@ do, because both use the same proxy finder (the FIX-proxy work).
     SOCKS answer from the finder makes the git call fail as `Unreachable`, with that reason.
 - **Checks**:
   - `every_call_is_refused_before_anything_is_sent_while_the_switch_is_off` in
-    `crates/tc-door43/tests/internet_switch.rs:14`, extended with `get`, `fetch`, `push` and
-    `ls_remote`; kind: unit through the public API; runs in: CI job `rust`,
+    `crates/tc-door43/tests/internet_switch.rs:14`, extended with the calls get, fetch, push and
+    ls-remote; kind: unit through the public API; runs in: CI job `rust`,
     `cargo test --workspace`.
   - `a_fetch_stops_when_the_switch_goes_off` in `crates/tc-door43/tests/git.rs` (to create);
     kind: unit, against `tc-door43-fake`'s smart HTTP (`crates/tc-door43-fake/src/smart_http.rs`)
@@ -115,7 +115,7 @@ do, because both use the same proxy finder (the FIX-proxy work).
     (`crates/tc-door43-fake/src/proxy.rs`); kind: unit; runs in: CI `rust`.
   - The Aquifer tests `crates/tc-resources/tests/aquifer_install.rs` and
     `aquifer_proxy.rs` pass unchanged.
-  - CHK-1's `git_https_only_in_door43` and `network_libraries_only_in_door43_and_resources`
+  - CHK-1's `git_https_only_in_door43` and `network_libraries_only_in_door43`
     (`crates/tc-arch/tests/architecture.rs`), the second narrowed by step 6 to tc-door43 with
     no exception for tc-resources.
   - Proof it can fail: (1) remove the switch check from `git::fetch`: the extended switch
@@ -295,3 +295,18 @@ no-network job exists (it proves no test reaches past the fakes).
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-domain.md
+- 2026-10-24 07:21 EDT | domain lane (Claude Code 9f599c21) | claim | none | Claimed in .worktrees/track-DOM-1 from main 29048562. Before-you-start: S2 done; reqwest only in aquifer.rs (21,22,209,281,303,429); git2 has no https anywhere (workspace line vendored-libgit2 only); tc-door43 has git2 in dev-deps only; proxy_auto at STORAGE.md 3716 and 3864; crates/tc-arch absent; S3 not active | python3 -I .audit/tools/board.py
+- 2026-10-24 07:28 EDT | domain lane (Claude Code 9f599c21) | step 1 | none | Http::get, HttpResponse (status, header, body(limit) with the per-chunk switch check), RedirectRule and HttpError in tc-door43; HttpSpec.redirects is a RedirectRule; with_finder returns HttpError; client() and the http module are crate-private; reqwest errors are classified once (From<reqwest::Error> for HttpError, used by Door43Client too). Before: `cargo test -p tc-door43 --test http_get` failed to compile (E0432 HttpError, RedirectRule; E0599 no method get). After: 3 passed, `cargo test -p tc-door43` all pass. Deviation: HttpError has TooLarge and HttpResponse has body(limit) instead of a public chunk(), so the switch check per chunk lives in tc-door43 | crates/tc-door43/tests/http_get.rs
+- 2026-10-24 07:28 EDT | domain lane (Claude Code 9f599c21) | step 2 | none | aquifer.rs sends through Http::get with a RedirectRule (API and web origins; asset hosts unless loopback; MAX_REDIRECTS); reqwest moved to tc-resources' dev-dependencies. `cargo tree -p tc-resources -e normal --depth 1 | grep -c reqwest` prints 0; `cargo test -p tc-resources` passes with no test file changed | cargo test -p tc-resources
+- 2026-10-24 07:36 EDT | domain lane (Claude Code 9f599c21) | step 3 | none | The check under "Before you start" printed 0 (S2 already took https out), so 3.1 had nothing to do. tc-door43 depends on git2 with `https`, and on Linux with `vendored-openssl`; the workspace comment says only tc-door43 adds TLS. The metadata check prints ['tc-door43']; `cargo test -p tc-store` passes; `cargo clippy -p tc-door43 -p tc-store --all-targets --target x86_64-pc-windows-gnu -- -D warnings` passes | cargo metadata (card step 3)
+- 2026-10-24 07:36 EDT | domain lane (Claude Code 9f599c21) | step 4 | none | Http::proxy_for (blocking; finder lookups share one thread-with-timeout body with the async client path) and tc_door43::git::{fetch, push, ls_remote} with GitRemote {server, repo, session}; Door43Client::http() hands the gate to sync. Switch checked before each call (through proxy_for), in credentials, transfer_progress, push_negotiation and sideband_progress; a failure while the switch is off reads as Offline. Token offered once (libgit2 would ask forever). SOCKS refused as Unreachable. GitProgress not made: no caller needs progress yet (X adds it if its UI does). Proof: with transfer_progress and sideband_progress both ignoring the switch, a_fetch_stops_when_the_switch_goes_off fails with `Ok(())` at tests/git.rs:170 (either check alone stops it) | cargo test -p tc-door43 --test git
+- 2026-10-24 07:36 EDT | domain lane (Claude Code 9f599c21) | step 5 | none | The switch test now covers Http::get, git::fetch, git::push and git::ls_remote; a_git_fetch_goes_through_the_proxy_the_finder_names added. Mutation (1), git calls skip proxy_for's switch check: every_call_is_refused_… fails with `ls_remote: Ok(())` (internet_switch.rs:136). Mutation (2), ProxyOptions::auto() instead of the finder's URL: the proxy test fails, `left: [] right: ["CONNECT door43.test:443 HTTP/1.1"]` (proxy.rs:119) | cargo test -p tc-door43 --test internet_switch --test proxy
+- 2026-10-24 07:37 EDT | domain lane (Claude Code 9f599c21) | step 6 | none | docs/STORAGE.md §9's crate line, S3, §9.5, the crate table and the dependency list say TLS and the proxy come from tc-door43 (`Http::proxy_for`), with the switch checked before and in the callbacks; `grep -n proxy_auto docs/STORAGE.md` prints nothing. tc-door43's crate doc says it is the only crate that uses the network | grep -n proxy_auto docs/STORAGE.md
+- 2026-10-24 07:37 EDT | domain lane (Claude Code 9f599c21) | note | none | crates/tc-arch does not exist yet: CHK-1 must hold INV-ONE-NETWORK-GATE with no exception for tc-resources (its card's table row "`tc-resources` until DOM-1" and the "until DOM-1" exception at CHK-1.md:115, :169, :265 are void once DOM-1 merges). Proof mutation (3) waits for that test | .audit/roadmap/units/CHK-1.md
+- 2026-10-24 07:39 EDT | domain lane (Claude Code 9f599c21) | note | 178ab069 | The times of the step 1 to step 6 lines were written ahead of the clock; they now are the commits' times (git log). No other text changed | git log --format='%h %ci %s' 29048562..track-DOM-1
+- 2026-10-24 07:40 EDT | domain lane (Claude Code 9f599c21) | verify | 178ab069 | Independent review (fresh subagent, read-only, ran the git/proxy/switch/get tests). 1 Code: yes, typed Http::get, RedirectRule, HttpError, private http module, git calls as the one entry. 2 Checks: invariant tests exist and run in CI rust; mutations (1)(2) recorded; (3) waits for CHK-1 (note logged); git error mapping untested (finding 2). 3 Reach: Aquifer and REST reachable now; git calls reachable once X calls them. 4 Siblings: no other crate has reqwest/hyper as a normal dependency; no proxy_auto left; tc-store sends nothing. 5 No loss: n/a. 6 Prose: two nits. Findings: major, NotFastForward read as Unreachable (sync would not retry, STORAGE §9.5); minor, 5xx not Server and auth paths untested; minor, anonymous credentials message; minor, STORAGE S3 snippet silent on the one offer; minor, Http::get doc contradicts itself. Aquifer: no regression (redirect with user info now refused, stricter) | review report quoted in this line
+- 2026-10-24 07:40 EDT | domain lane (Claude Code 9f599c21) | fix | none | All five findings fixed: NotFastForward reads as RefMoved, a smart-HTTP 5xx as Server, 403/404 by the parsed status; anonymous credentials say Door43 asks for an account; STORAGE S3 says the token is offered once; Http::get's doc says any status comes back. New tests a_push_that_does_not_build_on_the_branch_reads_as_ref_moved and a_refused_token_is_auth_failed_and_offered_once. Mutations: without the NotFastForward arm the first fails (`Unreachable … Other("cannot push because a reference … contains commits that are not present locally.")`); offering the token every time fails the second (`Unreachable … "too many redirects or authentication replays"`) | cargo test -p tc-door43 --test git
+- 2026-10-24 09:49 EDT | domain lane (Claude Code 9f599c21) | step 6 | none | crates/tc-arch arrived with CHK-1a, so 6.2 now applies in the merge: network_libraries_only_in_door43 (renamed) allows no crate but tc-door43; the tc_door43::http line of crates/tc-arch/allow/imports.txt is gone (the module is private); docs/ARCHITECTURE.md says only tc-door43 opens network connections. Proof mutation (3), reqwest back in tc-resources' [dependencies]: `INV-ARCHITECTURE: only tc-door43 reaches the network; tc-resources depends on reqwest` (architecture.rs:153). CHK-1.md's test name updated to match | cargo test -p tc-arch
+- 2026-10-24 09:49 EDT | domain lane (Claude Code 9f599c21) | note | none | On the orchestrator's word, S2.md's claims are fixed in this merge commit without changing what they claim: its "Proof they can fail" item is titled "Proof it can fail" (the claims check reads write_creation_pins there as a test otherwise), and the four invariant names it lists are written in the doc comments of the tests that prove them: INV-NO-OWN-SAVE-LOST on model::random_histories_lose_no_work, INV-OUTSIDE-EDIT-NEVER-OVERWRITTEN on ledger every_pair_of_the_table_keeps_every_byte and writer an_outside_save_during_the_rename_window_is_never_overwritten, INV-VALID-BURRITO on tests/store/burrito.rs, INV-LEDGER-DECIDES-WHO-WROTE on the ledger table test. That test proves the pure ledger decides; nothing tests that Writer::apply is ledger::next's only caller (today it is, classify.rs:89) | node --test .audit/tools/claims.test.mjs
+- 2026-10-24 09:49 EDT | domain lane (Claude Code 9f599c21) | merge | 0802bcf4 | Merged main d8176c40 into track-DOM-1 once; main moves to this merge commit when scripts/gates.sh --check-receipt accepts it | scripts/gates.sh --wait-ci DOM-1
+- 2026-10-24 09:49 EDT | domain lane (Claude Code 9f599c21) | note | none | With DOM-1 done, the claims check reads this card too: the calls get, fetch, push and ls-remote in the Checks bullet are named as calls, not tests; the tc-arch test is network_libraries_only_in_door43; INV-ONE-NETWORK-GATE, INV-NO-REQUEST-WHILE-SWITCH-OFF and INV-ONE-PROXY-FINDER are written in the doc comments of the tests that prove them (tc-arch's two network tests; internet_switch.rs and git.rs; proxy.rs) | node --test .audit/tools/claims.test.mjs
