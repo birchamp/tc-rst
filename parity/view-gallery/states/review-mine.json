@@ -42,7 +42,7 @@
     "opening": null,
     "book": "TIT",
     "chapter": 1,
-    "bookRaw": "\\id TIT ejemplo_tj\n\\usfm 3.0\n\\h Tito\n\\toc1 La Epístola de Pablo a Tito\n\\toc2 Tito\n\\toc3 Tit\n\\mt Tito\n\\c 1\n\\p\n\\v 1 Pablo, mi versión del versículo.\n\\v 2 con la esperanza de la vida eterna, la cual Dios, que no miente, prometió desde antes del principio de los siglos,\n\\v 3 y a su debido tiempo manifestó su palabra por medio de la predicación que me fue encomendada por mandato de Dios nuestro Salvador,\n\\v 4 a Tito, verdadero hijo en la común fe: Gracia y paz de parte de Dios Padre y de Cristo Jesús nuestro Salvador.\n\\v 5 Por esta causa te dejé en Creta, para que corrigieras lo deficiente y establecieras ancianos en cada ciudad, como te mandé.\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\v 11 ___\n\\v 12 ___\n\\v 13 ___\n\\v 14 ___\n\\v 15 ___\n\\v 16 ___\n\\c 2\n\\p\n\\v 1 ___\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n\\v 5 ___\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\v 11 ___\n\\v 12 ___\n\\v 13 ___\n\\v 14 ___\n\\v 15 ___\n\\c 3\n\\p\n\\v 1 ___\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n\\v 5 ___\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\v 11 ___\n\\v 12 ___\n\\v 13 ___\n\\v 14 ___\n\\v 15 ___\n",
+    "bookRaw": "\\id TIT ejemplo_tj\n\\usfm 3.0\n\\h Tito\n\\toc1 La Epístola de Pablo a Tito\n\\toc2 Tito\n\\toc3 Tit\n\\mt Tito\n\\c 1\n\\p\n\\v 1 Pablo, versión del compañero 2.\n\\v 2 con la esperanza de la vida eterna, la cual Dios, que no miente, prometió desde antes del principio de los siglos,\n\\v 3 y a su debido tiempo manifestó su palabra por medio de la predicación que me fue encomendada por mandato de Dios nuestro Salvador,\n\\v 4 a Tito, verdadero hijo en la común fe: Gracia y paz de parte de Dios Padre y de Cristo Jesús nuestro Salvador.\n\\v 5 Por esta causa te dejé en Creta, para que corrigieras lo deficiente y establecieras ancianos en cada ciudad, como te mandé.\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\v 11 ___\n\\v 12 ___\n\\v 13 ___\n\\v 14 ___\n\\v 15 ___\n\\v 16 ___\n\\c 2\n\\p\n\\v 1 ___\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n\\v 5 ___\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\v 11 ___\n\\v 12 ___\n\\v 13 ___\n\\v 14 ___\n\\v 15 ___\n\\c 3\n\\p\n\\v 1 ___\n\\v 2 ___\n\\v 3 ___\n\\v 4 ___\n\\v 5 ___\n\\v 6 ___\n\\v 7 ___\n\\v 8 ___\n\\v 9 ___\n\\v 10 ___\n\\v 11 ___\n\\v 12 ___\n\\v 13 ___\n\\v 14 ___\n\\v 15 ___\n",
     "bookError": null,
     "bookErrorHelp": null,
     "storyNumbers": [],
@@ -497,9 +497,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:52:26.018Z#1",
+          "id": "2026-10-24T19:39:59.434Z#1",
           "op": "open",
-          "startedAt": "2026-10-19T02:52:26.018Z",
+          "startedAt": "2026-10-24T19:39:59.434Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -507,31 +507,24 @@
             "op": "open",
             "ok": true,
             "facts": {
-              "replayed": [
-                {
-                  "ts": "2026-10-19T02:52:24.478Z|0000|a4bbd43216f529e5",
-                  "outcome": "republished"
-                }
-              ],
+              "replayed": [],
               "seeded": false,
-              "classification": "regenerated-forward",
-              "regeneratedPaths": [
-                "checking/resources.json"
-              ],
+              "classification": "converged",
+              "regeneratedPaths": [],
               "reconciledBooks": [],
               "forks": [],
               "retained": [],
               "pendingStructural": [],
               "phases": []
             },
-            "startedAt": "2026-10-19T02:52:26.095Z",
-            "endedAt": "2026-10-19T02:52:27.141Z"
+            "startedAt": "2026-10-24T19:39:59.452Z",
+            "endedAt": "2026-10-24T19:39:59.549Z"
           }
         },
         {
-          "id": "2026-10-19T02:52:28.473Z#2",
+          "id": "2026-10-24T19:39:59.815Z#2",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:52:28.473Z",
+          "startedAt": "2026-10-24T19:39:59.815Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "message": "Checkpoint, leaving Understand: TIT checks, settings, sources (tC4)"
@@ -543,14 +536,14 @@
               "message": "Checkpoint, leaving Understand: TIT checks, settings, sources (tC4)",
               "written": []
             },
-            "startedAt": "2026-10-19T02:52:28.307Z",
-            "endedAt": "2026-10-19T02:52:29.422Z"
+            "startedAt": "2026-10-24T19:39:59.784Z",
+            "endedAt": "2026-10-24T19:39:59.909Z"
           }
         },
         {
-          "id": "2026-10-19T02:52:31.993Z#3",
+          "id": "2026-10-24T19:40:02.333Z#3",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:52:31.993Z",
+          "startedAt": "2026-10-24T19:40:02.333Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "message": "Checkpoint, leaving the project: TIT text, TIT alignment (tC4)"
@@ -562,14 +555,14 @@
               "message": "Checkpoint, leaving the project: TIT text, TIT alignment (tC4)",
               "written": []
             },
-            "startedAt": "2026-10-19T02:52:31.908Z",
-            "endedAt": "2026-10-19T02:52:32.430Z"
+            "startedAt": "2026-10-24T19:40:02.319Z",
+            "endedAt": "2026-10-24T19:40:02.374Z"
           }
         },
         {
-          "id": "2026-10-19T02:52:33.311Z#4",
+          "id": "2026-10-24T19:40:02.855Z#4",
           "op": "sync",
-          "startedAt": "2026-10-19T02:52:33.311Z",
+          "startedAt": "2026-10-24T19:40:02.855Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "phase": "apply",
@@ -580,7 +573,7 @@
             "op": "sync",
             "ok": true,
             "facts": {
-              "carried": 4,
+              "carried": 3,
               "restored": 0,
               "received": {
                 "b678teammate0001": 1,
@@ -591,39 +584,40 @@
                   "key": "text|TIT|1:1",
                   "heads": [
                     {
+                      "actor": "a1e0d9f96a0a0452",
+                      "ts": "2026-10-24T19:39:59.996Z|0000|a1e0d9f96a0a0452",
+                      "text": "Pablo, mi versión del versículo.\n"
+                    },
+                    {
                       "actor": "b678teammate0001",
-                      "ts": "2026-10-19T02:52:26.905Z|0000|b678teammate0001",
+                      "ts": "2026-10-24T19:40:00.401Z|0000|b678teammate0001",
                       "text": "Pablo, versión del compañero 1.\n"
                     },
                     {
                       "actor": "c678teammate0002",
-                      "ts": "2026-10-19T02:52:27.905Z|0000|c678teammate0002",
+                      "ts": "2026-10-24T19:40:01.401Z|0000|c678teammate0002",
                       "text": "Pablo, versión del compañero 2.\n"
-                    },
-                    {
-                      "actor": "a4bbd43216f529e5",
-                      "ts": "2026-10-19T02:52:29.535Z|0000|a4bbd43216f529e5",
-                      "text": "Pablo, mi versión del versículo.\n"
                     }
                   ],
-                  "provisional": "2026-10-19T02:52:29.535Z|0000|a4bbd43216f529e5"
+                  "provisional": "2026-10-24T19:40:01.401Z|0000|c678teammate0002"
                 }
               ],
               "newestWins": [],
+              "alignReplaced": [],
               "names": {
-                "a4bbd43216f529e5": "facilitator-zq"
+                "a1e0d9f96a0a0452": "facilitator-zq"
               },
               "tries": 1,
               "repoPath": "_local_/_local_/sample_burrito"
             },
-            "startedAt": "2026-10-19T02:52:33.357Z",
-            "endedAt": "2026-10-19T02:52:35.425Z"
+            "startedAt": "2026-10-24T19:40:02.861Z",
+            "endedAt": "2026-10-24T19:40:03.172Z"
           }
         },
         {
-          "id": "2026-10-19T02:52:35.720Z#5",
+          "id": "2026-10-24T19:40:03.619Z#5",
           "op": "open",
-          "startedAt": "2026-10-19T02:52:35.720Z",
+          "startedAt": "2026-10-24T19:40:03.619Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -640,19 +634,19 @@
                 {
                   "key": "text|TIT|1:1",
                   "heads": [
-                    "2026-10-19T02:52:26.905Z|0000|b678teammate0001",
-                    "2026-10-19T02:52:27.905Z|0000|c678teammate0002",
-                    "2026-10-19T02:52:29.535Z|0000|a4bbd43216f529e5"
+                    "2026-10-24T19:39:59.996Z|0000|a1e0d9f96a0a0452",
+                    "2026-10-24T19:40:00.401Z|0000|b678teammate0001",
+                    "2026-10-24T19:40:01.401Z|0000|c678teammate0002"
                   ],
-                  "provisional": "2026-10-19T02:52:29.535Z|0000|a4bbd43216f529e5"
+                  "provisional": "2026-10-24T19:40:01.401Z|0000|c678teammate0002"
                 }
               ],
               "retained": [],
               "pendingStructural": [],
               "phases": []
             },
-            "startedAt": "2026-10-19T02:52:35.783Z",
-            "endedAt": "2026-10-19T02:52:36.252Z"
+            "startedAt": "2026-10-24T19:40:03.636Z",
+            "endedAt": "2026-10-24T19:40:03.749Z"
           }
         }
       ],
@@ -1035,10 +1029,10 @@
     "teamByProject": {
       "_local_/_local_/sample_burrito": {
         "names": {
-          "a4bbd43216f529e5": "facilitator-zq"
+          "a1e0d9f96a0a0452": "facilitator-zq"
         },
         "actors": [
-          "a4bbd43216f529e5",
+          "a1e0d9f96a0a0452",
           "b678teammate0001",
           "c678teammate0002"
         ]
@@ -1054,33 +1048,33 @@
         "verse": "1",
         "versions": [
           {
-            "ts": "2026-10-19T02:52:26.905Z|0000|b678teammate0001",
+            "ts": "2026-10-24T19:39:59.996Z|0000|a1e0d9f96a0a0452",
+            "actor": "a1e0d9f96a0a0452",
+            "text": "Pablo, mi versión del versículo.\n",
+            "provisional": false
+          },
+          {
+            "ts": "2026-10-24T19:40:00.401Z|0000|b678teammate0001",
             "actor": "b678teammate0001",
             "text": "Pablo, versión del compañero 1.\n",
             "provisional": false
           },
           {
-            "ts": "2026-10-19T02:52:27.905Z|0000|c678teammate0002",
+            "ts": "2026-10-24T19:40:01.401Z|0000|c678teammate0002",
             "actor": "c678teammate0002",
             "text": "Pablo, versión del compañero 2.\n",
-            "provisional": false
-          },
-          {
-            "ts": "2026-10-19T02:52:29.535Z|0000|a4bbd43216f529e5",
-            "actor": "a4bbd43216f529e5",
-            "text": "Pablo, mi versión del versículo.\n",
             "provisional": true
           }
         ]
       }
     ],
     "team": {
-      "me": "a4bbd43216f529e5",
+      "me": "a1e0d9f96a0a0452",
       "names": {
-        "a4bbd43216f529e5": "facilitator-zq"
+        "a1e0d9f96a0a0452": "facilitator-zq"
       },
       "actors": [
-        "a4bbd43216f529e5",
+        "a1e0d9f96a0a0452",
         "b678teammate0001",
         "c678teammate0002"
       ]
@@ -1097,7 +1091,7 @@
           "mode": "draft",
           "chapter": 1,
           "verse": "1",
-          "at": 1792378348997
+          "at": 1792870799932
         }
       }
     },
@@ -1106,6 +1100,7 @@
       "_local_/_local_/sample_burrito": "verse"
     },
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "verses": 0,
@@ -1119,7 +1114,7 @@
       "verse": "1",
       "snippet": "Pablo, mi versión del versículo.",
       "mode": "draft",
-      "at": 1792378348997
+      "at": 1792870799932
     },
     "tick": 0,
     "projectScope": {

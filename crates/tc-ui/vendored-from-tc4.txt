@@ -1,8 +1,7 @@
 # tC4 files in crates/tc-ui/assets, copied byte for byte by vendor-tc4.sh.
 # Each line: the file's git blob id in tC4, then its path in tC4.
-commit d310bf304cfee784f4ca45dee474a3faf0d5616e
-9efa6fbc962836e243e20f7f23db062e2c077d28 COPYING
-61cac4bc8f396b083f23d00df7bb62f7122f88dd LICENSE
+commit d25b7871904228a342c0d80280136d8636833653
+0e6251550837d2363b8f0226eeb2576622c5e51f LICENSE
 68c61b70f8eb00cf8e324faf4792ed853891f652 public/assets/logo-mark-color.png
 f1d7427826efc3d54b33971a7ba61ea9bafe9025 public/assets/translationcore-logo.png
 af1eb69500a96d049816896bcb4bb04cbdcdc637 src/ds/assets/fonts/AwamiNastaliq-Bold.ttf
@@ -75,13 +74,13 @@ ebbd706f3929e860e6beeed9827ef0a2e89bf6bb src/ds/tokens/spacing.css
 e7b8f6de60b75178b494e5a12c7022bcd61b344c src/ds/tokens/tone.css
 ea44976e558bedae4bbc8da0ed0de46c3863302b src/ds/tokens/typography.css
 699c4d131c0c5a621146f3b44648ad9e4685ac07 src/ui.css
-be3c26dfcd7db61ecbe801646d6886860a084efe src/i18n/ar.json
-0cc7aaf268daa83c3628e3ecdc1e2d26ab7d47aa src/i18n/en.json
-c0b63e930c4e51569c05dbf84c0ff1c98d41fdcc src/i18n/es-419.json
-7cd079d9ac5d2902aac962348e367a2b410c181a src/i18n/fr.json
-23a1e92e2ac6fa3343147cf5c7eb1098167e5fd4 src/i18n/hi.json
-31c625c5b92d955134016512fdd7e0dd914860f3 src/i18n/id.json
-8eaea4bb78b6d36f00c8cf841f1b9c7f7ecaf077 src/i18n/pt-BR.json
-4e52af49b6feb419ac7fe9649ae9619a3e7c3339 src/i18n/ru.json
-a44d5395f11258b8d1d9f7d6fa20054a8a9ad024 src/i18n/uk.json
-60147318511507e8a7b0e46e2be480be33c712c7 src/i18n/vi.json
+7e11b1fc321ee2bd37c3569242faa2fbc8700713 src/i18n/ar.json
+d4e5e5326a781666a018f93f3909ed4fae1dd8e2 src/i18n/en.json
+2aa664d710b3fa2c19b794821130526256673848 src/i18n/es-419.json
+4f80d89e54d6a4bff57b685a3b40b5cec5df92eb src/i18n/fr.json
+4446d3e1e8d7072bb93143bd8664bfab937a0369 src/i18n/hi.json
+e879b69f70828d2534712fef49b14528ccabc09d src/i18n/id.json
+4ab446cdb021d1b4f30fd3b3fd6f324862987e37 src/i18n/pt-BR.json
+76f56ed33b6c05b15f4825801d1505ef27cd2e79 src/i18n/ru.json
+412a92d2abcd042183c867c434c84c7965b3b265 src/i18n/uk.json
+7954b81e751b875f4fbeba78fac9e5cfb3fbc913 src/i18n/vi.json

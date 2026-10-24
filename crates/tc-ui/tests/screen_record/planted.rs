@@ -1188,9 +1188,10 @@ fn a_masked_element_takes_no_part_in_a_sequence() {
             .dom
             .root
             .iter()
-            .position(|l| l.trim_start() == r#""4.0.0-rc.1 (d310bf3)""#)
+            .position(|l| l.trim_start().starts_with(r#""4.0.0-rc."#))
             .unwrap();
-        step.dom.root[version] = step.dom.root[version].replace("4.0.0-rc.1", &format!("0.{n}.0"));
+        step.dom.root[version] =
+            step.dom.root[version].replace("4.0.0-rc.", &format!("0.{n}.0-rc."));
     }
     write_recording(&p.paths().tc4_behaviour, &tc4);
     write_recording(&p.app().join("behaviour"), &rust);

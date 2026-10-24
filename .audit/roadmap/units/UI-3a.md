@@ -67,7 +67,7 @@ controls must be off instead of failing after the click.
   - INV-ONE-REQUEST-PER-ATTEMPT: one attempt of a dialog or button sends one request id; a
     resend after a lost reply reuses it, so the server's reply cache answers it.
   - INV-READ-ONLY-HAS-NO-WRITE-CONTROLS: align and check edit actions cannot be called
-    without a `WriteCap`, so their controls are off in a read-only project.
+    without a `WriteCap`, so their controls are off in a read-only project (not in code: the `WriteCap` type holds it; a call without one does not compile).
 - **Wrong states**:
   - D1 adds a checkpoint at one leave site and misses another (nine sites today).
   - A lost reply to Open from Door43 or Sync, then a second press, starts a second job (a new

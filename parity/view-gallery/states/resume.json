@@ -121,9 +121,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:51:18.453Z#1",
+          "id": "2026-10-24T19:40:55.068Z#1",
           "op": "open",
-          "startedAt": "2026-10-19T02:51:18.453Z",
+          "startedAt": "2026-10-24T19:40:55.068Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -155,19 +155,19 @@
                       "checking/settings.json"
                     ]
                   },
-                  "startedAt": "2026-10-19T02:51:18.821Z",
-                  "endedAt": "2026-10-19T02:51:19.844Z"
+                  "startedAt": "2026-10-24T19:40:55.176Z",
+                  "endedAt": "2026-10-24T19:40:56.126Z"
                 }
               ]
             },
-            "startedAt": "2026-10-19T02:51:18.513Z",
-            "endedAt": "2026-10-19T02:51:19.846Z"
+            "startedAt": "2026-10-24T19:40:55.147Z",
+            "endedAt": "2026-10-24T19:40:56.126Z"
           }
         },
         {
-          "id": "2026-10-19T02:51:21.318Z#2",
+          "id": "2026-10-24T19:40:56.531Z#2",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:51:21.318Z",
+          "startedAt": "2026-10-24T19:40:56.531Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "message": "Checkpoint, leaving Understand: TIT checks, settings, sources (tC4)"
@@ -179,14 +179,14 @@
               "message": "Checkpoint, leaving Understand: TIT checks, settings, sources (tC4)",
               "written": []
             },
-            "startedAt": "2026-10-19T02:51:21.192Z",
-            "endedAt": "2026-10-19T02:51:22.452Z"
+            "startedAt": "2026-10-24T19:40:56.523Z",
+            "endedAt": "2026-10-24T19:40:57.318Z"
           }
         },
         {
-          "id": "2026-10-19T02:51:24.946Z#3",
+          "id": "2026-10-24T19:40:59.314Z#3",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:51:24.946Z",
+          "startedAt": "2026-10-24T19:40:59.314Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "message": "Checkpoint, leaving the project: TIT text, TIT alignment (tC4)"
@@ -198,8 +198,8 @@
               "message": "Checkpoint, leaving the project: TIT text, TIT alignment (tC4)",
               "written": []
             },
-            "startedAt": "2026-10-19T02:51:24.881Z",
-            "endedAt": "2026-10-19T02:51:25.259Z"
+            "startedAt": "2026-10-24T19:40:59.300Z",
+            "endedAt": "2026-10-24T19:40:59.348Z"
           }
         }
       ],
@@ -581,7 +581,7 @@
       "_local_/_local_/sample_burrito": {
         "names": {},
         "actors": [
-          "ae76e6061189b444"
+          "a21ea2c199fa9d32"
         ]
       }
     },
@@ -598,13 +598,14 @@
           "mode": "draft",
           "chapter": 1,
           "verse": "1",
-          "at": 1792378282100
+          "at": 1792870857066
         }
       }
     },
     "storyFrame": null,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "verses": 0,
@@ -618,7 +619,7 @@
       "verse": "1",
       "snippet": "Pablo, siervo de Dios y  xapóstol de Jesucristo, según la fe de los escogidos de Dios y el",
       "mode": "draft",
-      "at": 1792378282100
+      "at": 1792870857066
     },
     "tick": 0,
     "projectScope": {

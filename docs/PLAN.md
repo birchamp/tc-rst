@@ -37,10 +37,12 @@ user-visible outcome binds it. The tC4 user interface and design system are kept
 
 ### The reference version
 
-tC4 4.0 has no tag yet. Until it has one, the reference is tC4 `main` at commit `d310bf3`
-(2026-10-16). When the v4.0.0 tag exists on `release/4.0`, the reference moves to that tag.
-`parity/tc4-baseline/README.md` records the commit that its screens show.
-`docs/TC4-DELTA-2026-10-16.md` lists every tC4 change from `d494a9d` to `d310bf3`.
+The owner chose tC4 4.0 rc.2 (H7, 2026-10-24): the reference is tC4 `release/4.0` at commit
+`d25b7871` (2026-10-22, version 4.0.0-rc.2), the tag `v4.0.0-rc.2` (`a5ce0307`) plus the fixes
+picked onto `release/4.0` after it, among them the MIT licence (#838). When the v4.0.0 tag
+exists on `release/4.0`, the reference moves to that tag. `parity/tc4-baseline/README.md`
+records the commit that its screens show. `docs/TC4-DELTA-2026-10-16.md` lists every tC4 change
+from `d494a9d` to `d310bf3`, and `docs/TC4-DELTA-2026-10-23.md` (SWEEP) the changes after it.
 
 ### Where the rebuild differs from tC4 4.0 on purpose
 
@@ -55,9 +57,6 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 - A sync checks write access before it fetches. One API call reads `permissions.push`.
   Without write access the sync refuses, and nothing changes, as in tC4. Other refusals
   after the received work arrived keep that work and say so (Q8).
-- The aligner shows the word bank and the words of each card in verse order everywhere:
-  from the first view of a verse, after an edit, and after Clear. tC4 at `d310bf3` still
-  opens a verse with no saved alignment in word-aligner order (Q15).
 - A conflict between two check decisions is shown and can be resolved. tC4 keeps the
   newest decision and shows only a count (Q1, AGENTS.md).
 - One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
@@ -65,9 +64,12 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 
 Under AGENTS.md "Matching tC4" (2026-10-19):
 
-- Words inside nested alignments show in Translate, Check, Align and print, such as Genesis
-  1:1 "the heavens" and a Psalm's "Selah" aligned inside `\qs` (tC4 #782, on tC4 main at
-  9ad4d5c). The reference d310bf3 drops them (Q32 of `docs/TC4-DELTA-2026-10-19.md`).
+- The help pages name this app's projects folder, `~/translationCore4/projects`, and its
+  download page, https://translationcore.com/tc4, where tC4's pages name
+  `~/pankosmia/tc4-projects` and tC4's GitHub releases (H16 parts 2 and 3). The vendored pages
+  stay tc-website's bytes; `tc4 serve` makes the change as it serves them (tc-server
+  `HELP_OVERLAY`, REF1).
+
 - A footnote, cross reference, figure or any other marker the shown text leaves out (`\va`,
   `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …) between two words keeps the space after it, so the
   words never join and can be checked, aligned and exported. tC4 PR #800 (merged, in rc.2) does
