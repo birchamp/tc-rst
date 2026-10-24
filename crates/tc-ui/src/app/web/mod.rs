@@ -617,6 +617,10 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
 /// probe outside the App, so a restart's way Home never unmounts its fields (D15).
 fn page(after: Option<CrashMarker>, probe: bool) -> AnyView {
     #[cfg(feature = "test-hooks")]
+    if let Some(name) = probe::q9_requested() {
+        return view! { <probe::Q9 name=name /> }.into_any();
+    }
+    #[cfg(feature = "test-hooks")]
     if probe {
         return view! { <ProbeRoot after=after /> }.into_any();
     }
