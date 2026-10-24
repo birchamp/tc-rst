@@ -57,3 +57,50 @@ test('INV-CLAIMED-TESTS-EXIST: TC4-ISSUES covered rows', () => {
   }
   assert.deepEqual(problems, []);
 });
+
+/** The lines of a card's `- **<label>**` bullet in its `## Funnel card`, up to the next one. */
+function bullet(card, label) {
+  const funnel = card.split('## Funnel card')[1]?.split('\n## ')[0] ?? '';
+  const start = funnel.indexOf(`- **${label}**`);
+  if (start < 0) return '';
+  const rest = funnel.slice(start + 1);
+  const next = rest.search(/\n- \*\*/);
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
+/** A bullet's items, without those marked "(not in code: <why>)" (a one-time step, such as a
+ * backup or a merge, that a command checked) or "(retired <by what>)"; each mark names its reason. */
+function claimed(text) {
+  return text.split(/\n(?= {2}- )/).filter((item) => !/\((?:not in code|retired)\b[^)]*\S[^)]*\)/.test(item));
+}
+
+/** Every file of the trees an invariant's name may be printed or tested in, read once. */
+const sources = (() => {
+  const out = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name === 'target') continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.(rs|mjs|js|sh|py)$/.test(e.name)) out.push(fs.readFileSync(p, 'utf8'));
+    }
+  };
+  for (const d of ['crates', 'parity', '.audit/tools', 'scripts']) if (fs.existsSync(path.join(REPO, d))) walk(path.join(REPO, d));
+  return out.join('\n');
+})();
+
+test('INV-CLAIMED-TESTS-EXIST: units', () => {
+  const dir = path.join(REPO, '.audit/roadmap/units');
+  const problems = [];
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.md') && !f.startsWith('_'))) {
+    const card = fs.readFileSync(path.join(dir, file), 'utf8');
+    if (!/^state: done$/m.test(card)) continue;
+    for (const m of claimed(bullet(card, 'Checks')).join('\n').matchAll(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g)) {
+      if (!resolve(m[1], names)) problems.push(`INV-CLAIMED-TESTS-EXIST: units/${file} names ${m[1]} but no test has that name`);
+    }
+    for (const m of new Set(claimed(bullet(card, 'Invariants')).join('\n').match(/INV-[A-Z0-9-]*[A-Z0-9]/g) ?? [])) {
+      if (!sources.includes(m)) problems.push(`INV-INVARIANT-NAMES-ARE-USED: units/${file} names ${m} but nothing prints or tests it`);
+    }
+  }
+  assert.deepEqual(problems, []);
+});
