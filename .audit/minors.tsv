@@ -148,3 +148,18 @@ DOM-2	This app's own alignment sidecar now reads a digit-string occurrence ("1")
 DOM-2	Writer::Tc4 keeps a non-boolean dismissed or markedInvalid as an unknown field, which this app's reader would refuse once written back; Tc4 has no production caller yet (card I)	crates/tc-journal/src/fold/sidecar.rs decode_alignment_record; races-lens review
 DOM-2	Opening a tC4 project (tc-app seed/records.rs) rewrites `invalid` into `markedInvalid` and reads with decode_alignments (Writer::ThisApp): a second path for tC4 records next to Writer::Tc4; card I should read tC4 records with Writer::Tc4	crates/tc-app/src/backend/seed/records.rs:383-420; loss-lens review
 DOM-2	Imported cards stand in first-run (target) order where word-aligner orders them by the source verse; invisible, since Aligner::open re-sorts as tC4 does	crates/tc-journal/src/alignment.rs tc4_cards; parity-lens review
+G1	Log lines can grow: drafts-buffer.log is read whole as one string at launch; a run of days with long section texts could pass V8's string limit	evidence/2026-10-24/G1-lens-loss.md m2 (inference, not measured)
+G1	A retried fsync after EIO can report success on Linux after the dirty pages were dropped; the page is not told	evidence/2026-10-24/G1-lens-loss.md m3
+G1	Closing + tc4 exit quits while the 'Unsaved changes' question may be open; the text is in the mirror, so nothing is lost, but the window closes without the answer	evidence/2026-10-24/G1-lens-loss.md m5, G1-lens-races.md minor 8
+G1	The JS reduction is looser than serde (kinds, ids, base, sent, draft unchecked); no reachable line found that Rust keeps and JS drops	evidence/2026-10-24/G1-lens-loss.md m6
+G1	On Windows the launch rewrite skips the folder fsync; a crash right after launch can bring back the old log, a superset of the lines	evidence/2026-10-24/G1-lens-loss.md m7
+G1	A reload (Ctrl+R) while the page is asked to close leads to the 'Unsaved changes' question after 5 s for a page just reloaded	evidence/2026-10-24/G1-lens-races.md minor 2
+G1	A second launch while the first is quitting (up to about 11 s) only focuses the closing window; nothing opens	evidence/2026-10-24/G1-lens-races.md minor 7
+G1	After a restart that went through Preparing, child windows of the old origin stay open (reloadHome only runs from Restarting + ready)	evidence/2026-10-24/G1-lens-races.md minor 6
+G1	No window icon on Linux and no AppUserModelId on Windows yet (G3 ships the icons)	evidence/2026-10-24/G1-lens-parity.md m5
+G1	The prepare and start-error pages have no drag area on Windows and macOS (hidden title bar)	evidence/2026-10-24/G1-lens-parity.md m6
+G1	Same-origin child windows (help) get the main window's hidden frame on Windows and macOS	evidence/2026-10-24/G1-lens-parity.md m7
+G1	printPdf's answer {ok, file | reason: refused | failed | cancelled} and the file name rule are not in SHELL.md v1	evidence/2026-10-24/G1-lens-parity.md m8
+G1	A navigation off the origin is dropped without a word, and subframe navigations are not guarded (will-frame-navigate)	evidence/2026-10-24/G1-lens-parity.md m10
+G1	Some e2e test names claim more than they assert: window_is_painted_within_1_s_of_the_click asserts the window shows before tc4's address, not the paint or the 1 s (ruling 2026-10-23: tests prove behavior, not speed)	evidence/2026-10-24/G1-lens-parity.md m13
+G1	Downloads and their onDownloadDone report have no end-to-end proof yet; it needs a registered download (D2's exports)	evidence/2026-10-24/G1-lens-parity.md m14
