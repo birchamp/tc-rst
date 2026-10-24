@@ -4,7 +4,7 @@ title: Typed jobs and one job follower
 track: A
 lane: app
 milestone: M1
-state: claimed
+state: building
 owner: C7a session (Claude Code 3058c665)
 branch: track-UI-1
 worktree: .worktrees/track-UI-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d (basis: +150/-200 lines estimated in health-app §8)
 merged: none
 updated: 2026-10-24
-next: Step 1: type each job row's outcome in tc-api.
+next: Step 2: start job rows through Jobs::start_typed on the server.
 blocked_by: none
 ---
 
@@ -304,3 +304,4 @@ It must print `# fail 0` and `# skipped 0`.
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-app.md
 - 2026-10-24 | C7a session (Claude Code 3058c665) | claim | none | cut from track-C7a (d07d6612) on the orchestrator's word under the fast-release ruling (rulings/2026-10-24-H3-H4-H7-fast-release.md); C7a is not done yet, so the merge waits for it. The start checks print as the card says: four follow loops plus `follow_plan` (understand.rs:352, upgrades.rs:370 and :380, app_ctx.rs:930, sources.rs:301), seven job rows, three `Feature::Sync` lines (944, 954, 1000), ten `Cell<u64>` statics; C7a added no loop or counter | grep commands of "Before you start"
+- 2026-10-24 | C7a session (Claude Code 3058c665) | step 1 | none | `StartsJob` in tc-api's endpoint.rs (exported beside `Write`), the seven job rows implemented in jobs.rs through one `starts_job!` table (OpenDoor43 -> ProjectRef, SyncProject -> SyncResultView, Open -> Box<OpenedProject>, Download and FixFetch -> (), PlanUpgrade and PlanGateway -> Box<PlanView>), and the job arm of `write_impl!` asserts `StartsJob` at compile time. With FixFetch's impl removed, `cargo check -p tc-api` fails `the trait bound FixFetch: StartsJob is not satisfied`. tc-api passes, golden fixtures unchanged, native and wasm clippy clean | cargo test -p tc-api --features proptest
