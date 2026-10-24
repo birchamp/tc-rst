@@ -14,7 +14,7 @@ proves: []
 no_loss: false
 size: 0.5 d (basis: one cfg guard, a toolchain file and CI edits)
 merged: 07d8f36a
-updated: 2026-10-22
+updated: 2026-10-23
 next: none
 blocked_by: none
 ---
@@ -312,3 +312,4 @@ CI's `lint-windows` stand in); the `node --test` line of `parity-baseline`. Plus
 - 2026-10-22 23:06 EDT | checks lane (Claude Code 2198ee19) | note | none | INT-4: resume-build-lane has the same harness.rs:179 line and adds an `alignment-budget` job. The lane has not changed harness.rs since af4eef3, so the merge carries INT-2's guard; if a later lane commit changes harness.rs, cherry-pick INT-2's harness.rs commit onto the merge. Keep INT-2's guard, toolchain file and four jobs; give `alignment-budget` the same four first steps and `cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture`. Also keep INT-2's plans.rs remove_dir fix and the suggest.rs Reading-before-job fix | .audit/roadmap/units/INT-4.md
 - 2026-10-22 23:06 EDT | checks lane (Claude Code 2198ee19) | note | none | Step 7, to the owner: (1) "GitHub can require the 'ci' check before main changes only on a paid plan (GitHub Pro) or a public repository. Nothing is needed now: once INT-3 lands, our merge rule refuses an untested merge." (2) The MinGW and NASM install: done by the owner on 2026-10-22 during this card, so this PC runs the Windows clippy; no action left | gh api repos/birchamp/tc-rst/branches/claude%2Ffocused-ride-5uzj7p/protection
 - 2026-10-22 23:07 EDT | checks lane (Claude Code 2198ee19) | note | 78eeec19 | Main pushed (push rule: the tree's full gates passed; I act as the integration lane, since no integration card is active and INT-4 is mine next). CI run 39893217059 on main started no job: GitHub says "The job was not started because recent account payments have failed or your spending limit needs to be increased" (Billing & plans). Step 6's done-when (five green jobs on main) waits for the owner to fix the Actions billing; the same code tip was green on track-INT-2 (run 39887316084). Worktrees int-2 and int-2-merge removed; branch track-INT-2 kept | gh run view 39893217059
+- 2026-10-23 23:48 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: INV-CI-IS-THE-GATE (the pin, --locked, every building CI job installs the pinned toolchain) and INV-BUILDS-ON-WINDOWS (the clippy-windows step, run in CI) are now tests in .audit/tools/gates-sync.test.mjs | node --test .audit/tools/claims.test.mjs

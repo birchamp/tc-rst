@@ -25,6 +25,7 @@ h.shellTest('window_is_painted_within_1_s_of_the_click', async () => {
   }
 });
 
+// INV-ONE-INSTANCE: a second launch starts no tc4, quits, and the running window comes forward.
 h.shellTest('second_launch_focuses_the_running_window_and_starts_no_server', async () => {
   const dir = h.appDataDir('second');
   const app = await h.launch(dir);

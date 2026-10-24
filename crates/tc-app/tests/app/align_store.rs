@@ -223,19 +223,19 @@ async fn a_save_ack_restores_the_draft_of_links_changed_while_it_waited() {
     let placed = link(&rig, &at, &view).await;
     let hooks = rig.hooks.clone();
     tokio::time::timeout(
-        Duration::from_secs(10),
+        Duration::from_secs(60),
         tokio::task::spawn_blocking(move || {
             hooks.wait_reached(Point::BeforeDurablePending, 1);
         }),
     )
     .await
-    .unwrap()
+    .expect("hung: the save reaching its hold")
     .unwrap();
     let newer = place(&rig.t.app, &at, &placed, 63, "verdad", "ἀληθείας").await;
     assert_eq!(newer.save, AlignSave::Saving);
     rig.hooks.release(Point::BeforeDurablePending);
     // Read the actor until its first save has replied; the newer links have a fresh timer.
-    for _ in 0..1000 {
+    for () in crate::store_world::for_a_minute() {
         if ready(&rig.t.app, &at, 1, 1).await.save == AlignSave::Unsaved {
             break;
         }
@@ -345,7 +345,21 @@ async fn the_timer_saves_links_durably_two_seconds_after_the_last_change() {
     .expect("the due timer announces its save");
     // Real fsync/relay work is not simulated by advancing tokio's clock.
     session.handle().wait_idle();
-    assert_eq!(ready(&rig.t.app, &at, 1, 1).await.save, AlignSave::Saved);
+    // The aligner hears the store's reply on its own task after the store is idle; wait for it,
+    // bounded only to catch a hang (ruling 2026-10-23: behavior, not speed).
+    let started = std::time::Instant::now();
+    loop {
+        let save = ready(&rig.t.app, &at, 1, 1).await.save;
+        if save == AlignSave::Saved {
+            break;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(60),
+            "hung: the aligner still shows {save:?} 60 s after the store went idle"
+        );
+        tokio::task::yield_now().await;
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     assert!(has_link(&stored(&session), "πίστιν", "fe"));
     assert!(has_link(&stored(&session), "ἀληθείας", "verdad"));
     tokio::time::resume();

@@ -284,7 +284,13 @@ async fn scoped_prefs_land_where_the_session_says() {
         .unwrap()
         .into_result()
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    for () in crate::store_world::for_a_minute() {
+        // Place is the last of the three in the writer's queue: once it is set, all are.
+        if t.app.prefs().place(&id, "TIT").is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
     assert_eq!(t.app.prefs().draft_unit(&id), Some(DraftUnit::Verse));
     assert_eq!(t.app.prefs().align_suggestions(&folder), Some(true));
     let record = t.app.prefs().place(&id, "TIT").unwrap();
@@ -453,9 +459,9 @@ async fn quit_is_safe_twice() {
     let (_dir, t) = started().await;
     t.app.quit().await;
     t.app.quit().await;
-    tokio::time::timeout(Duration::from_secs(5), t.app.quitting())
+    tokio::time::timeout(Duration::from_secs(60), t.app.quitting())
         .await
-        .expect("quitting resolves");
+        .expect("hung: quitting resolves");
     let answer = t
         .app
         .call(
