@@ -135,18 +135,31 @@ impl Ctx<'_> {
     }
 }
 
-/// "Update a book from USFM" (§13.6, H20). The verses left as they were, with words in the
-/// project and none in the file, are the reply's `kept`.
-fn update_book(ctx: &Ctx<'_>, book: BookId, bytes: &[u8], file_name: &str) -> R<Plan> {
+/// One part of "Update a book from USFM" (§13.6, H20). The verses left as they were are
+/// the `Fill` reply's `kept`.
+fn update_book(
+    ctx: &Ctx<'_>,
+    book: BookId,
+    bytes: &[u8],
+    file_name: &str,
+    part: tc_journal::outside::UpdatePart,
+) -> R<Plan> {
     ctx.require_kind(ProjectKind::Bible)?;
     let plan = ctx
         .fold
         .plan_update_book(book, bytes, file_name)
         .map_err(|e| refused(Refusal::Book(e)))?;
-    Ok(Plan {
-        changes: plan.changes,
-        skipped: Vec::new(),
-        kept: plan.left_as_it_was,
+    Ok(match part {
+        tc_journal::outside::UpdatePart::Fill => Plan {
+            changes: plan.changes,
+            skipped: Vec::new(),
+            kept: plan.left_as_it_was,
+        },
+        tc_journal::outside::UpdatePart::Review => Plan {
+            changes: plan.review,
+            skipped: Vec::new(),
+            kept: Vec::new(),
+        },
     })
 }
 
@@ -229,7 +242,8 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             book,
             bytes,
             file_name,
-        } => return update_book(ctx, *book, bytes, file_name),
+            part,
+        } => return update_book(ctx, *book, bytes, file_name, *part),
         Command::ResolveOutsideEdit {
             batch,
             keep,

@@ -4725,7 +4725,11 @@ U3  Compare each record of the file with the base, as the planner does
       never overwrites a verse changed on both sides (L145);
     - equal to an older version in that record's own history (a revert, for example a cloud
       client restoring a copy): no parents, so a conflict unless equal;
-    - a verse or record the file lacks that had a value: a conflict, never a removal (I11);
+    - a verse or record the file lacks that had a value: a conflict, never a removal (I11). For
+      a verse, with no base (as built, DOM lane 2026-10-24): left as it was and listed ("not in
+      the file"), as is a verse the file holds inside a span; a removal would win over an empty
+      stub (§7.3), and as a conflict it makes a passage with the verses around it, so the
+      file's other verses would not show;
     - no base (H20): a verse equal in the file and the project imports nothing. The project's
       verse empty and the file's with text: the file's text is imported directly, no conflict.
       The file's verse empty and the project's with text: the project's text stays, no
@@ -4755,7 +4759,11 @@ U4  Alignments, in the same batch, verse by verse:
       whose markup reads apart (§13.5 "Aligned USFM") imports its alignment as a change by the
       rules of U3. A verse whose markup does not read apart is imported as text with markup,
       and the report lists it.
-U5  One batch: cause Import(Usfm { file_name }) or Import(Markdown { file_name }), this device,
+U5  Two batches (as built): first what comes in with no question (the book, verses empty in the
+    project, their alignments), then the changes to review, planned again on the new fold. The
+    fold makes one passage conflict of a batch's verse changes, so in one batch a verse to
+    review would take the filled verses into its conflict. Cause Import(Usfm { file_name }) or
+    Import(Markdown { file_name }), this device,
     the pending header reconciles {path, seenMd5} for a kept copy (§4.2). Changes that rewrite
     verse structure (spans, numbers) form a passage over their range (§0 item 3), as a section
     save does. Plain text changes are verse by verse.

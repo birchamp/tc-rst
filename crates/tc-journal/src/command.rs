@@ -81,11 +81,13 @@ pub enum Command {
         file_name: String,
     },
     /// "Update a book from USFM" with a file chosen from anywhere (§13.6, H20): the
-    /// file's bytes as read, compared with the project with no base. One batch.
+    /// file's bytes as read, compared with the project with no base. Two batches, one per
+    /// part, the `Fill` first (`crate::outside::UpdatePlan`).
     UpdateBook {
         book: BookId,
         bytes: Vec<u8>,
         file_name: String,
+        part: crate::outside::UpdatePart,
     },
     RemoveBook {
         book: BookId,

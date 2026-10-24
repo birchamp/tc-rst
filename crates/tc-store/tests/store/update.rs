@@ -5,17 +5,27 @@
 use crate::common::*;
 use tc_journal::command::Command;
 use tc_journal::fold::DerivedFile;
+use tc_journal::outside::UpdatePart;
 use tc_journal::{Cause, ImportSource, Record, RecordKey};
 use tc_store::{CommandError, ProjectHandle, Refusal, StoreReply};
 
+/// Both parts of the update, the filling first; the reply of each, merged.
 fn update(handle: &ProjectHandle, usfm: &str) -> Result<StoreReply, CommandError> {
-    handle
-        .submit(Command::UpdateBook {
-            book: TIT,
-            bytes: usfm.as_bytes().to_vec(),
-            file_name: "TIT.usfm".to_owned(),
-        })
-        .wait()
+    let part = |part| {
+        handle
+            .submit(Command::UpdateBook {
+                book: TIT,
+                bytes: usfm.as_bytes().to_vec(),
+                file_name: "TIT.usfm".to_owned(),
+                part,
+            })
+            .wait()
+    };
+    let mut reply = part(UpdatePart::Fill)?;
+    let review = part(UpdatePart::Review)?;
+    reply.changes.extend(review.changes);
+    reply.new_conflicts.extend(review.new_conflicts);
+    Ok(reply)
 }
 
 /// The project's Titus as its book file shows it now.
@@ -88,9 +98,10 @@ fn update_a_book_conflicts_a_verse_changed_on_both_sides() {
     handle.close().unwrap();
 }
 
-/// INV-UPDATE-NEVER-REMOVES: a verse the file lacks is a conflict, never a removal.
+/// INV-UPDATE-NEVER-REMOVES: a verse the file lacks is never removed: it is left as it was
+/// and listed.
 #[test]
-fn a_verse_the_file_lacks_is_a_conflict_never_a_removal() {
+fn a_verse_the_file_lacks_is_never_removed() {
     let (rig, folder) = titus();
     let handle = rig.store.open(&folder, &Default::default()).unwrap();
     save_verse(&handle, 1, 4, "To Titus").unwrap();
@@ -102,8 +113,9 @@ fn a_verse_the_file_lacks_is_a_conflict_never_a_removal() {
         file.matches("\\v 4 ").count() + 1,
         shown.matches("\\v 4 ").count()
     );
-    update(&handle, &file).unwrap();
-    assert!(conflicted(&handle, &verse(1, 4)));
+    let reply = update(&handle, &file).unwrap();
+    assert!(reply.kept.contains(&verse(1, 4)));
+    assert!(!conflicted(&handle, &verse(1, 4)));
     assert_eq!(words(&handle, 1, 4).as_deref(), Some("To Titus"));
     handle.close().unwrap();
 }
@@ -158,4 +170,128 @@ fn an_aligned_usfm_file_updates_its_alignments() {
     assert!(!words(&handle, 1, 1).unwrap().contains("\\zaln"));
     assert!(!reply.changes.is_empty());
     handle.close().unwrap();
+}
+
+/// §13.6 U3: a change the update made with no parents is never the text shown, even though it
+/// is the newest version of the verse (F7 ranks it last).
+#[test]
+fn a_no_base_import_never_becomes_the_provisional_text() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &Default::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    let file = book_file(&handle).replace("Paul, a servant of God", "Paul, a slave of God");
+    update(&handle, &file).unwrap();
+    assert!(conflicted(&handle, &verse(1, 1)));
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a servant of God")
+    );
+    handle.close().unwrap();
+}
+
+/// L148: a file exported before the project's last edits reverts nothing: its older verse
+/// is a conflict with the newer one, and the newer one stays shown.
+#[test]
+fn updating_from_an_old_export_reverts_nothing() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &Default::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    let old_export = book_file(&handle);
+    save_verse(&handle, 1, 1, "Paul, a slave of God").unwrap();
+    update(&handle, &old_export).unwrap();
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a slave of God")
+    );
+    handle.close().unwrap();
+}
+
+/// What a verse holds on one side of an update.
+#[derive(Debug, Clone)]
+enum Side {
+    Empty,
+    Words(&'static str),
+    /// The file lacks the verse.
+    Missing,
+}
+
+fn side(project: bool) -> impl proptest::strategy::Strategy<Value = Side> {
+    use proptest::prelude::*;
+    let words = prop::sample::select(vec!["grace and peace", "to Titus", "a true son", "in hope"]);
+    if project {
+        prop_oneof![Just(Side::Empty), words.prop_map(Side::Words)].boxed()
+    } else {
+        prop_oneof![
+            Just(Side::Empty),
+            Just(Side::Missing),
+            words.prop_map(Side::Words)
+        ]
+        .boxed()
+    }
+}
+
+/// `file` with TIT 1:v's text replaced by `side`, or the verse cut out.
+fn with_verse(file: &str, v: u16, side: &Side) -> String {
+    let marker = format!("\\v {v} ");
+    let chapter_two = file.find("\\c 2").unwrap_or(file.len());
+    let Some(at) = file[..chapter_two].find(&marker) else {
+        return file.to_owned();
+    };
+    let end = at + 1 + file[at + 1..].find("\\v ").unwrap_or(file.len() - at - 1);
+    let end = end.min(chapter_two.max(at + 1));
+    let text = match side {
+        Side::Empty => format!("{marker}___\n"),
+        Side::Words(w) => format!("{marker}{w}\n"),
+        Side::Missing => String::new(),
+    };
+    format!("{}{}{}", &file[..at], text, &file[end..])
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig { cases: 24, ..Default::default() })]
+
+    /// INV-UPDATE-NEVER-OVERWRITES-NEWER-WORK and INV-UPDATE-NEVER-REMOVES over random projects
+    /// and files: a verse with words keeps them shown and keeps its heads; an empty verse takes
+    /// the file's words; no verse is removed.
+    #[test]
+    fn update_a_book_conserves(
+        project in proptest::collection::vec(side(true), 6),
+        file in proptest::collection::vec(side(false), 6),
+    ) {
+        let (rig, folder) = titus();
+        let handle = rig.store.open(&folder, &Default::default()).unwrap();
+        for (i, s) in project.iter().enumerate() {
+            if let Side::Words(w) = s {
+                save_verse(&handle, 1, i as u16 + 1, w).unwrap();
+            }
+        }
+        let before = handle.snapshot().fold().clone();
+        let mut text = book_file(&handle);
+        for (i, s) in file.iter().enumerate() {
+            text = with_verse(&text, i as u16 + 1, s);
+        }
+        update(&handle, &text).unwrap();
+        let after = handle.snapshot().fold().clone();
+        for (i, (p, f)) in project.iter().zip(&file).enumerate() {
+            let v = i as u16 + 1;
+            let key = verse(1, v);
+            let shown = words(&handle, 1, v);
+            proptest::prop_assert!(shown.is_some(), "1:{} was removed", v);
+            match (p, f) {
+                (Side::Words(w), _) => {
+                    proptest::prop_assert_eq!(shown.as_deref(), Some(*w));
+                    let heads = after.heads(&key);
+                    for h in before.heads(&key) {
+                        proptest::prop_assert!(heads.contains(&h), "1:{} lost a head", v);
+                    }
+                }
+                (_, Side::Words(w)) => {
+                    proptest::prop_assert_eq!(shown.as_deref(), Some(*w));
+                    proptest::prop_assert!(!conflicted(&handle, &key));
+                }
+                _ => {}
+            }
+        }
+        handle.close().unwrap();
+    }
 }

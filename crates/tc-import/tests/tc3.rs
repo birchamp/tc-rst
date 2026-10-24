@@ -296,3 +296,79 @@ fn a_tc3_project_imports_with_its_text_unchanged_into_a_valid_project() {
         file: String::new(),
     };
 }
+
+/// INV-IMPORT-IS-WHOLE-OR-ABSENT under a kill at every write point: after the next start the
+/// projects folder holds no project and no staging folder, or the whole imported project,
+/// valid, with tC3's text.
+#[test]
+fn crash_import_leaves_no_project_or_a_whole_one() {
+    let import = read(&[source("tc3/cfm_fbt_tit_book.zip")]).unwrap();
+    let records = import.records(&pins()).unwrap();
+    let fs = FaultFs::new();
+    drop(store(&fs));
+    let base = fs.crash(false);
+    let mut k = 0;
+    loop {
+        let fs = base.copy();
+        let store1 = store(&fs);
+        fs.kill_before(k, false);
+        let made = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            store1.create_imported(
+                &NewProject {
+                    name: import.name.clone(),
+                    kind: ProjectKind::Bible,
+                    records: records.clone(),
+                    books: Vec::new(),
+                },
+                Cause::Import(ImportSource::Tc3 { user: None }),
+            )
+        }));
+        let dead = fs.is_dead();
+        drop(store1);
+        let after = fs.crash(true);
+        let store2 = store(&after);
+        let projects = Path::new("/projects");
+        let left: Vec<String> = after
+            .files_under(projects)
+            .keys()
+            .map(|p| {
+                p.strip_prefix(projects)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert!(
+            !left.iter().any(|p| p.starts_with(".staging-")),
+            "the start cleanup removes the staging folder (N1): {left:?}"
+        );
+        let target = projects.join(&import.name);
+        if after
+            .peek(&target.join("ingredients/tc/project.json"))
+            .is_some()
+        {
+            let handle = store2.open(&target, &OpenOptions::default()).unwrap();
+            handle.wait_idle();
+            let text = handle
+                .snapshot()
+                .fold()
+                .render(&DerivedFile::Usfm(BookId::Titus));
+            assert_eq!(
+                text.map(|t| String::from_utf8(t).unwrap()),
+                Some(import.books[0].usfm.clone())
+            );
+            handle.close().unwrap();
+        } else {
+            assert!(
+                !matches!(made, Ok(Ok(_))) || !dead,
+                "a reported import is there"
+            );
+        }
+        if !dead {
+            break;
+        }
+        k += 1;
+        assert!(k < 3000);
+    }
+    assert!(k > 10, "{k} kill points");
+}
