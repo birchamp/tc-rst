@@ -2025,6 +2025,13 @@ show a 401 page.
   a fetch while a screen of the old run still holds the dead one, and the old screen's release
   cannot take a holder from the new read. A read of the app has no run: a restart does not end
   it.)*
+- A questions table (en_tq, en_obs-tq) is read as tC4's `deriveTqItems` reads it
+  (`tC4:src/data/derive.ts:323-348`): one bad row (an `Occurrence` of `x`) costs only its own
+  occurrence, not the table. Declared differences from tC4, each only for a damaged resource:
+  a row whose `ID` is not a row id is left out, where tC4 shows its question, because a
+  question here is keyed by a valid id; and an OBS row whose `Reference` has a third part
+  (`1:2:3`) is left out, where tC4 shows it on frame 2 of story 1, because an OBS address here
+  is a story and a frame only (`tc_helps::tsv::parse_questions_leniently`, DOM-2).
 - `window.__tcIdle` is true when no fetch, save or job is in flight. *(A4b: a save counts while it
   is in flight and while its timer is armed, so a test that waits for idle sees a save that is
   due; a section card's buffer, which saves only on Save, does not keep the page busy.)*

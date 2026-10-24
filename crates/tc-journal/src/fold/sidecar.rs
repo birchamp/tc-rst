@@ -90,11 +90,11 @@ fn occurrence(m: &Map<String, Value>, key: &str, at: &str) -> Result<u32, Sideca
     }
 }
 
-/// A flag that is absent, or `true` or `false`; anything else would be lost if read as
+/// A flag that is absent, `null`, `true` or `false`; anything else would be lost if read as
 /// false.
 fn strict_flag(m: &Map<String, Value>, key: &str, at: &str) -> Result<bool, SidecarError> {
     match m.get(key) {
-        None => Ok(false),
+        None | Some(Value::Null) => Ok(false),
         Some(Value::Bool(b)) => Ok(*b),
         Some(_) => Err(fail(at, format!("{key} is not true or false"))),
     }
@@ -243,10 +243,7 @@ pub fn decode_alignment_record(
     };
     let marked_invalid = match writer {
         Writer::ThisApp => strict_flag(m, "markedInvalid", at)?,
-        Writer::Tc4 => match m.get("invalid") {
-            Some(Value::Null) => false,
-            _ => strict_flag(m, "invalid", at)?,
-        },
+        Writer::Tc4 => strict_flag(m, "invalid", at)?,
     };
     // tC4 writes no `markedInvalid`; one in its record is a field this reader keeps.
     let known: &[&str] = match writer {

@@ -230,14 +230,16 @@ impl AlignmentValue {
 
 /// An aligned verse taken apart for an import (§13.5): its content with the alignment markup
 /// removed, and the `Alignment` value of the run it starts, whose span ends at `span_end`.
-/// `None` unless the markup reads apart and its runs woven back into the plain content give
-/// `content` byte for byte; such a verse is imported as written.
+/// `None` unless the markup reads apart, its runs woven back into the plain content give
+/// `content` byte for byte, and the cards make exactly the runs' links; such a verse is
+/// imported as written.
 ///
 /// The cards are tC4's (word-aligner's `unmerge`): `tc-usfm` gives one group per run of
 /// words under the same milestones, and runs under the same outermost source word join one
-/// card, so a source word is never on two cards. Where en_ult writes one source word over two
-/// runs (TIT 1:1 "of" and "the chosen people" under ἐκλεκτῶν), the card holds both, and an
-/// export writes them as one run: the same links, in tC4's bytes.
+/// card. Where en_ult writes one source word over two runs (TIT 1:1 "of" and "the chosen
+/// people" under ἐκλεκτῶν), the card holds both, and an export writes them as one run: the
+/// same links, in tC4's bytes. Where joining would link a word to a source word its run did
+/// not name (runs `A B: x` and `A C: y` would link x to C), the verse is kept as written.
 pub fn split_aligned(content: &str, span_end: VerseNo) -> Option<(String, AlignmentValue)> {
     let verse = tc_usfm::parse_aligned(content).ok()?;
     if verse.groups.is_empty() {
@@ -266,6 +268,27 @@ pub fn split_aligned(content: &str, span_end: VerseNo) -> Option<(String, Alignm
         return None;
     }
     let alignments = tc4_cards(&verse.groups);
+    let card_links: Vec<(tc_usfm::SourceWord, tc_usfm::TargetWord)> = alignments
+        .iter()
+        .flat_map(|card| {
+            card.top_words
+                .iter()
+                .flat_map(|s| card.bottom_words.iter().map(|t| (s.to_usfm(), t.to_usfm())))
+        })
+        .collect();
+    let run_links: Vec<(tc_usfm::SourceWord, tc_usfm::TargetWord)> = runs
+        .iter()
+        .flat_map(|run| {
+            run.sources
+                .iter()
+                .flat_map(|s| run.targets.iter().map(|t| (s.clone(), t.clone())))
+        })
+        .collect();
+    // A verse's links are few, so comparing them pairwise costs what the verse holds.
+    let same = |a: &[_], b: &[_]| a.iter().all(|link| b.contains(link));
+    if !same(&card_links, &run_links) || !same(&run_links, &card_links) {
+        return None;
+    }
     // Every word no card holds is banked, so no word of the verse is lost.
     let placed: BTreeSet<(&str, u32)> = alignments
         .iter()

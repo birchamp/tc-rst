@@ -589,11 +589,12 @@ const QUESTION_OCCURRENCE: usize = 4;
 ///   question, the response and the reference (`src/views/HelpsPanel.jsx:294-309`).
 /// - A row whose `ID` is not a row id (1 to 16 ASCII letters and digits) is left out, and
 ///   the rest kept. tC4 shows its question; a question here cannot hold that ID, and this
-///   reader does not make one up.
+///   reader does not make one up (a declared difference).
 ///
 /// tC4 reads only the first two parts of a locator and any integers, so it keeps `1:2:3`
-/// as frame 2 of story 1, and `0:1` and `51:1` for stories no project has. No session of a
-/// story shows those, and a question here cannot hold them, so they are left out too.
+/// as frame 2 of story 1, and `0:1` and `51:1` for stories no project has. A question here
+/// cannot hold any of those, so they are left out too: for `1:2:3`, which tC4 shows on frame
+/// 2, a declared difference (`docs/APP-DESIGN.md`, the questions table).
 ///
 /// The questions are read for the screen only: tC4 derives them on each load and never
 /// stores or writes them (`src/state.jsx:2349-2353`, `:2386`).
