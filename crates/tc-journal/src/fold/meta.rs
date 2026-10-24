@@ -5,7 +5,7 @@
 
 use super::cow::FxMap;
 use crate::canon;
-use crate::change::{Cause, ChangeBody};
+use crate::change::{Cause, ChangeBody, ImportSource};
 use crate::ids::{BatchId, ChangeId, DeviceId, DeviceSeq, GitOid, WallTime};
 use crate::json;
 use crate::keys::{CheckKey, RecordKey};
@@ -152,7 +152,7 @@ pub(crate) enum CauseClass {
     Restore,
     CarryOver,
     External { unknown_base: bool },
-    Import,
+    Import { unknown_base: bool },
     Seed,
     StartOver,
     System,
@@ -169,7 +169,15 @@ impl CauseClass {
             Cause::External { unknown_base, .. } => Self::External {
                 unknown_base: *unknown_base,
             },
-            Cause::Import(_) => Self::Import,
+            Cause::Import(source) => Self::Import {
+                unknown_base: matches!(
+                    source,
+                    ImportSource::Usfm {
+                        unknown_base: true,
+                        ..
+                    }
+                ),
+            },
             Cause::Seed => Self::Seed,
             Cause::StartOver => Self::StartOver,
             Cause::System(_) => Self::System,
@@ -288,12 +296,12 @@ impl Meta {
         self.flags & flag != 0
     }
 
-    /// 0 for an outside change recorded without a base (§11.1 X3), 1 for every other: such
-    /// a change is never chosen as provisional over another (F7).
+    /// 0 for an outside change or an import recorded without a base (§11.1 X3, §13.6 U3), 1
+    /// for every other: such a change is never chosen as provisional over another (F7).
     pub(crate) fn rank(&self) -> u8 {
         u8::from(!matches!(
             self.cause,
-            CauseClass::External { unknown_base: true }
+            CauseClass::External { unknown_base: true } | CauseClass::Import { unknown_base: true }
         ))
     }
 

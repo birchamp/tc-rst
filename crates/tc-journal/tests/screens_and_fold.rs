@@ -444,6 +444,7 @@ fn import_book(dev: &mut Dev, book: BookId, parts: &codec::BookParts) -> Vec<Cha
         items,
         Cause::Import(ImportSource::Usfm {
             file_name: format!("{}.usfm", book.code()).into(),
+            unknown_base: false,
         }),
     )
 }
@@ -829,6 +830,7 @@ fn aligned_titus(ana: &mut Dev) -> Vec<Change> {
             alignments.into_iter().map(|r| (r, vec![])).collect(),
             Cause::Import(ImportSource::Usfm {
                 file_name: format!("{}.usfm", book.code()).into(),
+                unknown_base: false,
             }),
         ));
     }

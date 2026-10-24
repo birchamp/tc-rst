@@ -37,16 +37,16 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 
 | Area | rebuild bug | unit todo | reference change | covered | owner question | not applicable | Rows |
 |---|---|---|---|---|---|---|---|
-| Align | 1 | 5 | 1 | 28 | 0 | 1 | 36 |
+| Align | 1 | 4 | 1 | 30 | 0 | 1 | 37 |
 | USFM, Translate and helps | 0 | 6 | 1 | 38 | 0 | 9 | 54 |
 | Check and resources | 0 | 2 | 2 | 37 | 1 | 22 | 64 |
-| Sync, storage and import | 0 | 20 | 3 | 27 | 2 | 13 | 65 |
+| Sync, storage and import | 0 | 19 | 3 | 28 | 2 | 13 | 65 |
 | Shell, startup, languages and help | 0 | 15 | 1 | 42 | 0 | 18 | 76 |
-| All area rows | 1 | 48 | 8 | 172 | 3 | 63 | 295 |
+| All area rows | 1 | 46 | 8 | 175 | 3 | 63 | 296 |
 
-Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep, T and G1. A row counts once
-per area table. All area rows: 295; 1 rebuild bug, 48 unit todo, 8 reference
-change, 172 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
+Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep, T, G1 and I. A row counts once
+per area table. All area rows: 296; 1 rebuild bug, 46 unit todo, 8 reference
+change, 175 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
 added 24 area rows (271 before) and changed 31, and its commit range holds 59 items
 (`TC4-DELTA-2026-10-23.md`; 25 covered, 7 unit todo, 8 reference change, 19 not applicable).
 Earlier: the 2026-10-19 range added 22 items (`TC4-DELTA-2026-10-19.md` §2). §1 lists the
@@ -153,9 +153,10 @@ the rebuild fixed it or does as tC4 does:
 | D105.5 (#814) | Does an Align edit clear "needs review"? | covered | tc-align; FIX-R | `an_edit_keeps_the_review_mark_until_mark_valid` (replaces the old test that wanted an edit to clear the flag) | Ruled 2026-10-23 (Q37, `rulings/2026-10-23-Q37-needs-review.md`): follow tC4, only Mark valid clears it. Fixed by FIX-R: an edit keeps the mark (§1 row 23). |
 | #796 (export) | Never drop a verse's alignment silently, and keep imported markup | unit todo | D2 | `export_reports_and_keeps_a_verse_that_needs_review`; `export_keeps_inline_zaln_bytes_even_with_a_matching_record`; `a_record_with_nothing_placed_exports_the_stored_bytes` (all to create, D2) | Weave only a verse that passes `needs_review` and whose words match. Otherwise write the stored bytes and name the verse in a notice. Check for inline `\zaln` before validity (tC4 PR #799). |
 | D105 (#809, #811, #814) | The export leaves out a verse that needs review and names it | unit todo | D2; REF1 | `export_reports_and_keeps_a_verse_that_needs_review` (to create, D2) | tC4's notice is `cc.exportSkipped`: "Your alignment of these verses is not in the file. Check them in Align: {refs}". D2 uses that string (REF1 vendors it); the rebuild writes the stored bytes for such a verse, as the #796 (export) row says. |
+| #796 (tC3 import) | A tC3 alignment whose words no longer fit the verse imports as current | covered | I | `a_tc3_alignment_whose_words_do_not_fit_the_verse_is_marked_invalid` | tC4 e79a2795 and e17fce08 (after 9ad4d5c): a tC3 record is invalid when tC3 kept an invalid marker, or when it holds a link and its words are not the verse's words (text edited outside tC3); it is kept as tC3 held it, never rewritten to fit. The rebuild imports it with `marked_invalid` set. |
 | #795 | One hash for the aligner and the alignment files | covered | tc-store, tc-align; FIX-R | `an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen` (tc-app, FIX-R step 5) | The rebuild stamps `plain_text_v1` of the stored NFC verse everywhere. The display half is #796 (word list). tC4 #800 also refuses a verse whose text starts on the next line ("tC4 cannot save an alignment for this verse"); the rebuild aligns it, a declared difference (PLAN). |
 | #794 | Do not align over a verse that holds imported alignment markup | covered | tc-align, tc-store; T, I, REF1 | `a_verse_that_holds_alignment_markup_does_not_open`; `a_verse_edit_of_an_inline_aligned_verse_writes_no_alignment` (tc-store, T) | See §1 row 7. I lists such tC4 books in the import report. tC4 merged #799; REF1 takes its `align.unavailable.inline-alignment.*` strings in place of the rebuild's `align.unavailable.alignedInText`. |
-| #553 | Keep the alignments of an aligned USFM file on import or Add a book | unit todo | I (C6 done) | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` (to create, I) | Both paths call `split_aligned`. A verse it refuses keeps its text, is counted, and falls under #794. Compare in NFC (#793) and per verse with x-ref (#409). |
+| #553 | Keep the alignments of an aligned USFM file on import or Add a book | covered | tc-store (Add a book, C6); I (Update a book) | `aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records`, `an_aligned_usfm_file_updates_its_alignments` | Both paths call `split_aligned`. A verse it refuses keeps its text, is counted, and falls under #794. Import of a raw USFM project waits (rulings/2026-10-24-H3-H4-H7-fast-release.md). Compare in NFC (#793) and per verse with x-ref (#409). |
 | #793 | Suggestions: Hebrew source words in two Unicode forms | covered | tc-align | `memory_trained_on_nfc_records_suggests_for_raw_source_words` | See §1 row 8. |
 | #792 | A span made while an alignment save waits leaves orphan records | not applicable | tc-store | — (the scratch test `zz792_late_alignment_save_after_join` was not kept) | No book-wide buffer. A late save after a join is kept and offered at the joined run ("Use as a starting point"). tC4's fix (#804, drain the align queue before a span save) caused #807 (§5). |
 | #791 | Tell a translator when a teammate aligned the same verse differently | reference change | E1a, B11 | J26 step `two_actors_align_one_verse_and_the_row_and_review_show_it` (to create, E1a) | tC4 shipped D108's per-verse rows in #806 (see the D108 row in §5). Storage keeps both as a conflict. B10 built the sync result's note "1 verse has two alignments to review." with Review (`a_verse_with_two_alignments_is_named_and_offers_review`, `the_toast_counts_verse_conflicts_alignments_and_the_rest_apart`); the per-verse rows of D108 (book, chapter, verse and teammate) are E1a's to port. Done by B11: the aligner's verse shows "2 versions · Review" and opens the review's Alignments tab, read only until C7b (`align/open` carries the record's marker). |
@@ -350,13 +351,13 @@ the rebuild fixed it or does as tC4 does:
 | #791 | Tell a translator about a teammate's alignment | reference change | B10, E1a | `two_different_alignments_of_one_verse_are_listed_once` (to create, E1a) | tC4 shipped D108 (#806); port its rows, worded as "a verse with two alignments to review". Until then the toast counts such verses in one note (B10; PLAN, a declared difference). |
 | #767 | Import creates an empty book | covered | tc-store; C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent` | See §1 row 17. The rebuild never refuses a book for its size. |
 | 5fefba8 (D104) | tC4 journal pieces up to 8 MiB | reference change | I | `tc4_project_with_a_6_8_mib_book_add_segment_imports_whole` (to create, I) | Port the validator with 8 MiB. |
-| #553 | Keep an aligned USFM file's alignments | unit todo | I (C6 done) | J9 `aligned_titus_import_has_no_inline_zaln_and_46_records` (to create, I) | One function for both paths; coordinate with #794. |
+| #553 | Keep an aligned USFM file's alignments | covered | tc-store (Add a book, C6); I (Update a book) | `aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records`, `an_aligned_usfm_file_updates_its_alignments` | One function for both paths; coordinate with #794. |
 | #484 | Add a book from a USFM file | covered | C6 | see the first #484 row | Built on the #767 command. |
 | #499 | Use the typed Bible name | unit todo | F1, I | `typed_import_name_is_the_project_name` | Leave review-edited fields out of the P9 comparison. |
 | #502 | Two USFM files never reach review | unit todo | F1 | J9 `a_two_file_drop_is_one_new_project` | Each book in one Import batch. |
 | #492 | Guess a language code from the name | covered | B2, C6 | `language_suggestions_rank_as_tc4_offline` | Ship `langnames.json`; never let a suggestion become "Undetermined" (#582). |
 | #386 | Keep regional language tags | covered | S1, C6 | `create_keeps_regional_language_tags` (tc-store and tc-app); journey `create` (`language-tags`) | es-419, pt-BR, x-ug and the adjusted `acm-x-lebarabi-c` are kept. |
-| #529 | Remove unused checkingLanguage writes | covered | tc-journal; I | `imported_obsolete_checking_language_is_kept_and_ignored` (pending: I) | Nothing writes it. |
+| #529 | Remove unused checkingLanguage writes | covered | tc-journal; I | `imported_obsolete_checking_language_is_kept_and_ignored` (pending: DONE), as tC4 4.0 import is after the first release | Nothing writes it. |
 | #530 | Upload details in a dialog | not applicable | B2 | — | No project keeps "Upload changes" (Q2). |
 | #514 | Account menu and asking before internet use | covered | A5, A8 | `the_menu_has_tc4s_rows_in_order_for_signed_out`; `the_keys_move_wrap_and_tab_closes_the_menu` (journey `account-menu`); `internet-consent` case h | Three menu states; Escape returns focus. |
 | #559 | One internet on/off state per app session | covered | tc-door43; A8 | `every_call_is_refused_before_anything_is_sent_while_the_switch_is_off` | A8 builds the dialog. |
@@ -376,7 +377,7 @@ the rebuild fixed it or does as tC4 does:
 | #159 | `docs/SYSTEM.md` | not applicable | — | — | Not planned. |
 | D108 (#806) | The sync result names each verse where a teammate's alignment replaced yours | reference change | E1a | `two_different_alignments_of_one_verse_are_listed_once` (to create, E1a) | tC4: "{book} {ref}: {name}'s alignment replaced yours." (`syncResult.alignReplaced`), and it keeps only the newest. The rebuild keeps both as a conflict; E1a ports the per-verse rows worded as a verse with two alignments to review, never "replaced yours" (PLAN). |
 | #807 | After a sync, a span save waiting on a refused alignment save blocks Home | not applicable | E1a | — (the outcome is #801's tests) | The rebuild has no alignment-save queue for a span save to wait behind. A refusal that traps Home is #801. |
-| #813 | A burrito with no `vrs.json`: every checkpoint refused (D110) | unit todo | I | `a_tc4_project_with_a_book_and_no_versification_frame_imports_and_reports_its_scheme` (to create, I) | tC4 #817 (D110) imports with the English scheme. The rebuild guesses the scheme and names it in the import review (H13). |
+| #813 | A burrito with no `vrs.json`: every checkpoint refused (D110) | unit todo | V | `a_tc4_project_with_a_book_and_no_versification_frame_imports_and_reports_its_scheme` (to create; importing outside Burritos and tC4 4.0 projects is cut from the first release, rulings/2026-10-24-H3-H4-H7-fast-release.md, so it waits with V) | tC4 #817 (D110) imports with the English scheme. The rebuild guesses the scheme and names it in the import review (H13). |
 | #821 | Recover a project with a book and no versification frame, also from Door43 | unit todo | I, X | as #813 (to create, I) | The rebuild never makes this state. A tC4 4.0 project in it comes in through I's import, or as a teammate's Door43 repository (X). |
 | #822 | Detect the versification scheme from the content | owner question | I; H13 | as #813 (to create, I) | H13 is with the owner (recommendation: guess, and say which scheme). |
 | #835 | Import: accept x- codes the server accepts, refuse the others before Import | unit todo | F1, I | `import_accepts_x_codes_and_refuses_unusable_codes_before_import` (to create) | The vendored hint "such as kau or es-419" (`importer.review.langHint`, `langError`) suggests a code the server refuses; F1 must not show it as is. |

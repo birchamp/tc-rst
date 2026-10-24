@@ -141,6 +141,34 @@ impl Ctx<'_> {
     }
 }
 
+/// One part of "Update a book from USFM" (§13.6, H20). The verses left as they were are
+/// the `Fill` reply's `kept`.
+fn update_book(
+    ctx: &Ctx<'_>,
+    book: BookId,
+    bytes: &[u8],
+    file_name: &str,
+    part: tc_journal::outside::UpdatePart,
+) -> R<Plan> {
+    ctx.require_kind(ProjectKind::Bible)?;
+    let plan = ctx
+        .fold
+        .plan_update_book(book, bytes, file_name)
+        .map_err(|e| refused(Refusal::Book(e)))?;
+    Ok(match part {
+        tc_journal::outside::UpdatePart::Fill => Plan {
+            changes: plan.changes,
+            skipped: Vec::new(),
+            kept: plan.left_as_it_was,
+        },
+        tc_journal::outside::UpdatePart::Review => Plan {
+            changes: plan.review,
+            skipped: Vec::new(),
+            kept: Vec::new(),
+        },
+    })
+}
+
 /// B1 for one command.
 pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
     let mut dropped = Vec::new();
@@ -217,6 +245,12 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             plan,
         } => resolve_pins(ctx, conflict, shown, plan)?,
         Command::UndoOutsideEdit { batch } => return undo_outside_edit(ctx, *batch),
+        Command::UpdateBook {
+            book,
+            bytes,
+            file_name,
+            part,
+        } => return update_book(ctx, *book, bytes, file_name, *part),
         Command::ResolveOutsideEdit {
             batch,
             keep,
@@ -1076,6 +1110,7 @@ fn add_book_text(
         .map_err(|e| refused(Refusal::Book(format!("the file does not read: {e}"))))?;
     let cause = Cause::Import(ImportSource::Usfm {
         file_name: file_name.into(),
+        unknown_base: false,
     });
     if parts.chapters.is_empty() {
         return Err(refused(Refusal::Book(

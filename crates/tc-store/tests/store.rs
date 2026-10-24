@@ -91,3 +91,6 @@ mod last_look;
 
 #[path = "store/carried_last_look.rs"]
 mod carried_last_look;
+
+#[path = "store/update.rs"]
+mod update;
