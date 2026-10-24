@@ -5,10 +5,13 @@
 //! one place.
 
 pub mod connect;
+pub mod exchange;
 pub mod join;
 pub mod machine;
+pub mod share;
 pub mod sync;
 
 pub use connect::{ConnectError, connect};
 pub use join::{JoinError, join};
-pub use sync::{Backoff, Pause, SyncReport, sync};
+pub use share::{ShareError, share};
+pub use sync::{Backoff, OtherToolCommit, Pause, SyncReport, sync};

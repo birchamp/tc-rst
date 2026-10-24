@@ -391,6 +391,9 @@ impl Writer {
             Subject::Checkpoint(crate::handle::CheckpointReason::SyncMerge { .. }) => {
                 "Sync with Door43".to_owned()
             }
+            Subject::Checkpoint(crate::handle::CheckpointReason::Received { from }) => {
+                format!("Received work from {from}")
+            }
             Subject::Checkpoint(reason) => format!("Checkpoint, {}", reason.words()),
             Subject::Recovered => "Recovered history".to_owned(),
         };

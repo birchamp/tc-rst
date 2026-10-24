@@ -610,3 +610,276 @@ async fn a_joined_project_holds_the_teams_work_and_syncs_both_ways() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+/// §9.6 Share: a new repository, the project connected to it, and its history pushed and
+/// confirmed; a second share with the same name is refused.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn share_makes_the_repository_and_pushes_the_project() {
+    let door43 = door43("unused-share").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    save(&a, 1, 1, "Paul, a servant of God");
+    let name: tc_door43::NewRepoName = "en_tit_ana".parse().unwrap();
+    let report = tc_sync::share(
+        &a,
+        &door43.client,
+        &door43.session,
+        &NewRepoOwner::SignedInUser,
+        &name,
+        Visibility::Public,
+        &NoPause,
+    )
+    .await
+    .unwrap();
+    synced(&report);
+    assert_eq!(branch_on_door43(&door43, "en_tit_ana"), head(&a));
+    let again = tc_sync::share(
+        &a,
+        &door43.client,
+        &door43.session,
+        &NewRepoOwner::SignedInUser,
+        &name,
+        Visibility::Public,
+        &NoPause,
+    )
+    .await;
+    assert!(
+        matches!(again, Err(tc_sync::ShareError::NameExists)),
+        "{again:?}"
+    );
+    a.close().unwrap();
+}
+
+/// Commits on Door43's branch with no translationCore trailer, as another tool (or Door43's
+/// own editor) makes, and the change it makes to `path`.
+fn commit_by_another_tool(
+    door43: &Door43,
+    name: &str,
+    path: &str,
+    edit: impl Fn(&[u8]) -> Vec<u8>,
+) {
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, name)).unwrap();
+    let head = bare
+        .find_reference("refs/heads/main")
+        .unwrap()
+        .peel_to_commit()
+        .unwrap();
+    let tree = head.tree().unwrap();
+    let old = bare
+        .find_blob(tree.get_path(Path::new(path)).unwrap().id())
+        .unwrap()
+        .content()
+        .to_vec();
+    let blob = bare.blob(&edit(&old)).unwrap();
+    let mut update = git2::build::TreeUpdateBuilder::new();
+    update.upsert(path, blob, git2::FileMode::Blob);
+    let tree = bare
+        .find_tree(update.create_updated(&bare, &tree).unwrap())
+        .unwrap();
+    let sig = git2::Signature::now("jdoe", "jdoe@example.org").unwrap();
+    bare.commit(
+        Some("refs/heads/main"),
+        &sig,
+        &sig,
+        "Edit TIT.usfm",
+        &tree,
+        &[&head],
+    )
+    .unwrap();
+}
+
+/// `rulings/2026-10-22-H18.md` B and delta L152: a book changed on Door43 with another tool
+/// is reported once, by its author and commit; the project keeps its own text, and the
+/// sync's merge puts translationCore's file back on Door43.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_door43_edit_by_another_tool_is_reported_once() {
+    let door43 = door43("titus-web").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    save(&a, 1, 1, "Paul, a servant of God");
+    connect(&a, &door43, "titus-web");
+    synced(&sync(&a, &door43).await);
+    let ours = std::fs::read(folder.join("ingredients/TIT.usfm")).unwrap();
+    commit_by_another_tool(&door43, "titus-web", "ingredients/TIT.usfm", |bytes| {
+        String::from_utf8_lossy(bytes)
+            .replace("Paul, a servant of God", "Paul, a slave of God")
+            .into_bytes()
+    });
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert_eq!(report.other_tools.len(), 1, "{report:?}");
+    assert_eq!(report.other_tools[0].author, "jdoe");
+    assert_eq!(report.other_tools[0].books, [BookId::Titus]);
+    assert_eq!(words(&a, 1, 1).as_deref(), Some("Paul, a servant of God"));
+    assert_eq!(
+        std::fs::read(folder.join("ingredients/TIT.usfm")).unwrap(),
+        ours
+    );
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, "titus-web")).unwrap();
+    let tip = bare
+        .find_reference("refs/heads/main")
+        .unwrap()
+        .peel_to_tree()
+        .unwrap();
+    let on_door43 = bare
+        .find_blob(
+            tip.get_path(Path::new("ingredients/TIT.usfm"))
+                .unwrap()
+                .id(),
+        )
+        .unwrap()
+        .content()
+        .to_vec();
+    assert_eq!(
+        on_door43, ours,
+        "the merge puts translationCore's file back on Door43"
+    );
+    let again = sync(&a, &door43).await;
+    synced(&again);
+    assert!(again.other_tools.is_empty(), "said once: {again:?}");
+    a.close().unwrap();
+}
+
+/// INV-OWN-WORK-NEVER-REVERTED: both computers change one verse; the sync keeps both
+/// versions as a conflict, lists it as new, and says who sent the changes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn two_versions_of_one_verse_are_a_listed_conflict_after_sync() {
+    let door43 = door43("titus-both").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-both");
+    synced(&sync(&a, &door43).await);
+    a.close().unwrap();
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    let a = open(&ana, &folder_a);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    save(&b, 1, 1, "Paul, as Juan has it");
+    synced(&sync(&b, &door43).await);
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert_eq!(report.new_conflicts.len(), 1, "{report:?}");
+    assert!(report.received_by.values().sum::<u32>() > 0, "{report:?}");
+    let snapshot = a.snapshot();
+    let conflict = snapshot
+        .fold()
+        .conflicts()
+        .next()
+        .expect("a conflict")
+        .clone();
+    let texts: Vec<String> = conflict
+        .candidates
+        .iter()
+        .filter_map(|c| match &c.value {
+            Record::Verse {
+                value: VerseValue::Text { words, .. },
+                ..
+            } => Some(words.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.contains(&"Paul, as Ana has it".to_owned()),
+        "{texts:?}"
+    );
+    assert!(
+        texts.contains(&"Paul, as Juan has it".to_owned()),
+        "{texts:?}"
+    );
+    a.close().unwrap();
+    b.close().unwrap();
+}
+
+/// Every file under `ingredients/` and `metadata.json`, by path.
+fn project_files(folder: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![folder.join("ingredients")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                let rel = path
+                    .strip_prefix(folder)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.insert(rel, std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    out.insert(
+        "metadata.json".into(),
+        std::fs::read(folder.join("metadata.json")).unwrap(),
+    );
+    out
+}
+
+/// J26: three computers, each with its own saves, converge through Door43 with the same
+/// project files byte for byte (INV-SYNC-CONVERGES).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn three_devices_converge_with_byte_identical_derived_files() {
+    let door43 = door43("titus-three").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-three");
+    synced(&sync(&a, &door43).await);
+    let repo: tc_door43::RepoRef = format!("{}/titus-three", seeded::USER).parse().unwrap();
+    let mut others = Vec::new();
+    for name in ["juan", "maria"] {
+        let computer = computer(dir.path(), name);
+        let folder = tc_sync::join(
+            &computer.store,
+            &door43.client,
+            Some(&door43.session),
+            &repo,
+            "Titus",
+        )
+        .await
+        .unwrap();
+        others.push((computer, folder));
+    }
+    let b = open(&others[0].0, &others[0].1);
+    let c = open(&others[1].0, &others[1].1);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    save(&b, 1, 2, "in hope, as Juan has it");
+    save(&c, 1, 3, "in his time, as Maria has it");
+    for handle in [&a, &b, &c, &a, &b] {
+        synced(&sync(handle, &door43).await);
+    }
+    for handle in [&a, &b, &c] {
+        assert_eq!(words(handle, 1, 1).as_deref(), Some("Paul, as Ana has it"));
+        assert_eq!(
+            words(handle, 1, 2).as_deref(),
+            Some("in hope, as Juan has it")
+        );
+        assert_eq!(
+            words(handle, 1, 3).as_deref(),
+            Some("in his time, as Maria has it")
+        );
+    }
+    a.close().unwrap();
+    b.close().unwrap();
+    c.close().unwrap();
+    let first = project_files(&folder_a);
+    for (_, folder) in &others {
+        let files = project_files(folder);
+        assert_eq!(
+            files.keys().collect::<Vec<_>>(),
+            first.keys().collect::<Vec<_>>()
+        );
+        for (path, bytes) in &first {
+            assert_eq!(&files[path], bytes, "{path} differs");
+        }
+    }
+}

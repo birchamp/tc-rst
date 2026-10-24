@@ -8,3 +8,6 @@ mod model;
 
 #[path = "sync/door43.rs"]
 mod door43;
+
+#[path = "sync/exchange.rs"]
+mod exchange;

@@ -244,3 +244,57 @@ fn a_damaged_remote_pack_is_salvaged_and_kept_in_the_tree() {
     );
     a.close().unwrap();
 }
+
+/// §6.4 Y2 to Y4: a sync's merge killed at any write point, with or without a power cut,
+/// leaves this computer's own work, a teammate's verse whole or absent (never half a batch),
+/// a valid folder, and a retry that takes the teammate's work and commits.
+#[test]
+fn crash_intake_folds_whole_batches_only_and_commits_on_retry() {
+    use crate::crash::{Outcome, kill_everywhere};
+    let (rig_a, folder) = titus();
+    let a = open(&rig_a, &folder);
+    save_verse(&a, 1, 1, "Paul, as Ana has it").unwrap();
+    checkpoint(&a);
+    a.close().unwrap();
+    let rig_b = rig_as(rig_a.fs.copy(), APP, "host-2");
+    let b = open(&rig_b, &folder);
+    save_verse(&b, 1, 2, "in hope, as Juan has it").unwrap();
+    save_verse(&b, 1, 3, "in his time, as Juan has it").unwrap();
+    checkpoint(&b);
+    b.close().unwrap();
+    let repo_a = repo_of(&rig_a.fs, &folder);
+    let (theirs, packs) = fetch(&repo_a, &git_dir_of(&rig_b.fs, &folder));
+    let remote = tc_journal::GitOid::from_bytes(theirs.as_bytes().try_into().unwrap());
+    let base = rig_a.fs.crash(false);
+    drop(rig_a);
+    let action = |handle: &ProjectHandle| {
+        let _ = handle.sync_merge(remote, packs.clone()).wait();
+        Outcome::NotSaved
+    };
+    let points = kill_everywhere(&base, &folder, &action, &|handle, _| {
+        assert_eq!(
+            words(handle, 1, 1).as_deref(),
+            Some("Paul, as Ana has it"),
+            "INV-OWN-WORK-NEVER-REVERTED"
+        );
+        let two = words(handle, 1, 2);
+        let three = words(handle, 1, 3);
+        let whole = two.as_deref() == Some("in hope, as Juan has it")
+            && three.as_deref() == Some("in his time, as Juan has it");
+        let absent = two.as_deref() == Some("___") && three.as_deref() == Some("___");
+        assert!(
+            whole || absent,
+            "INV-RECEIVED-WORK-IS-KEPT-WHOLE-OR-ABSENT: {two:?} {three:?}"
+        );
+        let retry = handle.sync_merge(remote, packs.clone()).wait().unwrap();
+        assert!(
+            retry.skipped.is_none() || retry.commit.is_some() || whole,
+            "{retry:?}"
+        );
+        assert_eq!(
+            words(handle, 1, 2).as_deref(),
+            Some("in hope, as Juan has it")
+        );
+    });
+    assert!(points > 5, "{points}");
+}

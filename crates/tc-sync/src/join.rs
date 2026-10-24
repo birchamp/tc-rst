@@ -77,6 +77,9 @@ pub async fn join(
     Ok(store.place(&staging, name)?)
 }
 
+/// The fetched repository's address, and the files of its tree by path.
+type Fetched = (String, Vec<(String, Vec<u8>)>);
+
 /// The fetch into a new history at `outside`, the branch set to what it fetched, and the
 /// files to write: every regular file of the tree but foreign dot paths, which stay in the
 /// history only (§9.4).
@@ -85,7 +88,7 @@ fn fetch(
     outside: &Path,
     remote: &GitRemote,
     branch: &str,
-) -> Result<(String, Vec<(String, Vec<u8>)>), JoinError> {
+) -> Result<Fetched, JoinError> {
     let git = |e: git2::Error| JoinError::Io(e.message().to_owned());
     let mut options = git2::RepositoryInitOptions::new();
     options
@@ -109,9 +112,8 @@ fn fetch(
         .find_commit(commit)
         .and_then(|c| c.tree())
         .map_err(git)?;
-    match crate::sync::gate_of(&repo, &tree) {
-        Some(block) => return Err(JoinError::Blocked(block)),
-        None => {}
+    if let Some(block) = crate::sync::gate_of(&repo, &tree) {
+        return Err(JoinError::Blocked(block));
     }
     let mut files = Vec::new();
     tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
