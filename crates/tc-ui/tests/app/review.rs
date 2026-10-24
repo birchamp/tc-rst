@@ -6,16 +6,20 @@
 
 use tc_api::check::Tool;
 use tc_api::conflicts::{
-    ConflictEntry, ConflictKind, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount, Version,
-    VersionValue,
+    ConflictEntry, ConflictKind, KeepChoice, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount,
+    Version, VersionValue,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, ProjectRef, RecordRef, RequestId, WallMs};
 use tc_api::jobs::SyncResultView;
 use tc_api::shown::{Computer, PersonLabel, Who};
+use tc_api::write::SaveRefusal;
+use tc_api::{ApiError, NotSaved};
 use tc_core::BookId;
+use tc_ui::app::client::{CallError, Transport};
 use tc_ui::app::review::{
-    BackTo, Owner, ReviewState, back_label, consequence, group_others, kept_name, made_by,
-    notice_text, place_book, place_label, tabs_shown,
+    BackTo, Choices, KeepOutcome, KeepPhase, KeepReply, Owner, Press, ReviewState, back_label,
+    choices, consequence, failure_text, group_others, keep_passage_label, kept_name, made_by,
+    notice_text, persons, picks_of, place_book, place_label, tabs_shown,
 };
 use tc_ui::app::sync::{SyncEnd, SyncToast, person_label};
 
@@ -25,6 +29,14 @@ fn conflict(c: char) -> ConflictRef {
 
 fn change(c: char) -> ChangeRef {
     ChangeRef::parse(&c.to_string().repeat(64)).unwrap()
+}
+
+/// *Keep this version* of change `c` in conflict `k`.
+fn press_keep(k: char, c: char) -> Press {
+    Press::Keep {
+        conflict: conflict(k),
+        choice: KeepChoice::Candidate { change: change(c) },
+    }
 }
 
 fn person(who: Who) -> MadeBy {
@@ -37,6 +49,11 @@ fn person(who: Who) -> MadeBy {
 fn version(c: char, by: MadeBy) -> Version {
     Version {
         change: change(c),
+        place: ReviewPlace::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 1,
+        },
         by,
         at: WallMs(1_790_812_860_000),
         clock_ahead: false,
@@ -200,25 +217,46 @@ fn after_a_keep_the_conflict_now_at_its_place_shows() {
     assert_eq!(last.shown(&entries[..2]), Some(1));
 }
 
-/// A-27: a second press of Keep for the same version of the same conflict sends the first
-/// press's request, so the server answers it with its first reply and writes nothing more;
-/// another choice is a new request.
+/// A mint of request ids that counts what it minted.
+fn minter() -> (impl FnMut() -> RequestId, std::rc::Rc<std::cell::Cell<u8>>) {
+    let minted = std::rc::Rc::new(std::cell::Cell::new(0u8));
+    let count = minted.clone();
+    let mint = move || {
+        count.set(count.get() + 1);
+        RequestId::from_bytes([count.get(); 16])
+    };
+    (mint, minted)
+}
+
+/// A-27: after a lost reply, a second press of Keep for the same version of the same
+/// conflict sends the first press's request, so the server answers it with its first reply
+/// and writes nothing more; another choice is a new request.
 #[test]
 fn a_second_press_of_one_choice_sends_the_first_request() {
-    let mut state = ReviewState::at(ReviewTab::Text, None);
-    let mut minted = 0u8;
-    let mut mint = || {
-        minted += 1;
-        RequestId::from_bytes([minted; 16])
-    };
-    let first = state.request_for(&conflict('1'), &change('a'), &mut mint);
-    let again = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    let (mut mint, minted) = minter();
+    let mut keep = KeepPhase::Idle;
+    let first = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
+    keep.reply(
+        in_flight(&keep),
+        KeepReply::Lost("the app's server did not answer".into()),
+    );
+    assert_eq!(
+        keep.outcome(),
+        Some(KeepOutcome::NotKept(
+            "the app's server did not answer".into()
+        )),
+        "a lost reply says why"
+    );
+    assert!(!keep.busy(), "after a lost reply the button is on again");
+    let again = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
     assert_eq!(first, again);
-    let other = state.request_for(&conflict('1'), &change('b'), &mut mint);
+    keep.reply(in_flight(&keep), KeepReply::Lost(String::new()));
+    let other = keep.press(&press_keep('1', 'b'), &mut mint).unwrap();
     assert_ne!(other, first);
-    let elsewhere = state.request_for(&conflict('2'), &change('b'), &mut mint);
+    keep.reply(in_flight(&keep), KeepReply::Lost(String::new()));
+    let elsewhere = keep.press(&press_keep('2', 'b'), &mut mint).unwrap();
     assert_ne!(elsewhere, other);
-    assert_eq!(minted, 3);
+    assert_eq!(minted.get(), 3);
 }
 
 /// Once the server has answered a keep (a refusal such as "another version was kept"), the
@@ -226,21 +264,82 @@ fn a_second_press_of_one_choice_sends_the_first_request() {
 /// a press after a lost reply sends the same request.
 #[test]
 fn a_press_after_an_answer_is_a_new_request() {
-    let mut state = ReviewState::at(ReviewTab::Text, None);
-    let mut minted = 0u8;
-    let mut mint = || {
-        minted += 1;
-        RequestId::from_bytes([minted; 16])
-    };
-    let first = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    let (mut mint, _) = minter();
+    let mut keep = KeepPhase::Idle;
+    let first = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
+    keep.reply(in_flight(&keep), KeepReply::Lost(String::new()));
     assert_eq!(
-        state.request_for(&conflict('1'), &change('a'), &mut mint),
-        first,
+        keep.press(&press_keep('1', 'a'), &mut mint),
+        Some(first),
         "a lost reply: the same request"
     );
-    state.answered();
-    let next = state.request_for(&conflict('1'), &change('a'), &mut mint);
+    keep.reply(
+        in_flight(&keep),
+        KeepReply::Refused("Another version was kept.".into()),
+    );
+    assert_eq!(
+        keep.outcome(),
+        Some(KeepOutcome::NotKept("Another version was kept.".into())),
+        "a refusal is shown as not kept"
+    );
+    let next = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
     assert_ne!(next, first, "answered: a new request");
+    keep.reply(in_flight(&keep), KeepReply::Kept { disk_warning: None });
+    assert_eq!(keep.outcome(), None, "kept with nothing to say");
+    keep.press(&press_keep('1', 'b'), &mut mint).unwrap();
+    keep.reply(
+        in_flight(&keep),
+        KeepReply::Kept {
+            disk_warning: Some("the disk complained".into()),
+        },
+    );
+    assert_eq!(
+        keep.outcome(),
+        Some(KeepOutcome::DiskWarning("the disk complained".into()))
+    );
+}
+
+/// INV-ONE-RESOLVE-PER-PRESS: while a keep is in flight a press sends nothing, and the
+/// review says nothing about an outcome yet; Previous or Next after an answer clears what it
+/// said, but keeps a lost reply's request for the same press.
+#[test]
+fn a_press_while_a_keep_is_in_flight_sends_nothing() {
+    let (mut mint, minted) = minter();
+    let mut keep = KeepPhase::Idle;
+    let first = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
+    assert!(keep.busy());
+    keep.reply(
+        RequestId::from_bytes([9; 16]),
+        KeepReply::Refused("not mine".into()),
+    );
+    assert!(
+        keep.busy() && keep.outcome().is_none(),
+        "a reply to another press answers nothing here"
+    );
+    assert_eq!(keep.press(&press_keep('1', 'a'), &mut mint), None);
+    assert_eq!(keep.press(&press_keep('2', 'b'), &mut mint), None);
+    assert_eq!((keep.outcome(), minted.get()), (None, 1));
+    keep.reply(in_flight(&keep), KeepReply::Refused("no".into()));
+    assert!(keep.outcome().is_some());
+    keep.dismiss();
+    assert_eq!(
+        keep,
+        KeepPhase::Idle,
+        "another conflict: the answer is gone"
+    );
+    let second = keep.press(&press_keep('1', 'a'), &mut mint).unwrap();
+    assert_ne!(second, first);
+    keep.reply(in_flight(&keep), KeepReply::Lost("gone".into()));
+    keep.dismiss();
+    assert_eq!(
+        keep.press(&press_keep('1', 'a'), &mut mint),
+        Some(second),
+        "a lost reply survives a step: the same request goes again"
+    );
+    let mut state = ReviewState::at(ReviewTab::Text, None);
+    state.keep = keep;
+    state.choose_tab(ReviewTab::Alignments);
+    assert_eq!(state.keep, KeepPhase::Idle, "another tab: a new start");
 }
 
 fn counts(text: u32, alignments: u32, notices: u32) -> Vec<TabCount> {
@@ -417,4 +516,126 @@ fn every_notice_has_its_own_sentence() {
     assert!(texts[3].contains("ingredients/TIT.usfm"));
     let unique: std::collections::BTreeSet<&String> = texts.iter().collect();
     assert_eq!(unique.len(), texts.len());
+}
+
+/// INV-EVERY-KIND-HAS-A-CHOICE: every kind of conflict has its choices, from one match with
+/// no wildcard: the Text tab's kinds a choice this version makes, the others `Later`, with
+/// every version kept.
+#[test]
+fn every_kind_has_its_choices() {
+    use ConflictKind as K;
+    let expected = [
+        (K::VerseText, Choices::Candidate),
+        (K::VerseStructure, Choices::JoinedOrSeparate),
+        (K::Passage, Choices::PassageSides),
+        (K::StructureIssue, Choices::Candidate),
+        (K::BookHeader, Choices::Candidate),
+        (K::ChapterFront, Choices::Candidate),
+        (K::BookPresence, Choices::Later),
+        (K::BookRemovedWhileEdited, Choices::Later),
+        (K::LastBookRemoved, Choices::Later),
+        (K::BookLayout, Choices::Later),
+        (K::Alignment, Choices::Later),
+        (K::Check, Choices::Later),
+        (K::CheckMoved, Choices::Later),
+        (K::Comment, Choices::Later),
+        (K::Pins, Choices::Later),
+        (K::Setting, Choices::Later),
+        (K::ProjectMeta, Choices::Later),
+        (K::Versification, Choices::Later),
+        (K::StoryBase, Choices::Candidate),
+        (K::Frame, Choices::Candidate),
+        (K::StoryRef, Choices::Candidate),
+        (K::CarriedFile, Choices::Later),
+        (K::PathCase, Choices::Later),
+        (K::DeviceProfile, Choices::Later),
+        (K::Unknown, Choices::Later),
+    ];
+    assert_eq!(expected.len(), 25, "every variant of ConflictKind");
+    for (kind, offered) in expected {
+        assert_eq!(choices(kind), offered, "{kind:?}");
+    }
+    // A passage's sides are its persons, each once, with their changes as picks; a change
+    // no person made here is no side.
+    let mut entry = three().remove(0);
+    entry.kind = ConflictKind::Passage;
+    entry.versions.push(Version {
+        value: VersionValue::Joined { by: 1 },
+        ..version('c', person(Who::Teammate(2)))
+    });
+    entry.versions.push(version('d', MadeBy::Door43));
+    let sides = persons(&entry);
+    assert_eq!(
+        sides.iter().map(|p| p.who.clone()).collect::<Vec<_>>(),
+        vec![Who::Teammate(2), Who::Mine]
+    );
+    assert_eq!(picks_of(&entry, &sides[0]), vec![change('b'), change('c')]);
+    assert_eq!(picks_of(&entry, &sides[1]), vec![change('a')]);
+    assert_eq!(keep_passage_label(&sides[0]), "Keep Teammate 2’s passage");
+    assert_eq!(keep_passage_label(&sides[1]), "Keep my passage");
+}
+
+/// A refused choice says why in words: "Look again" says another version was kept, a
+/// refusal of the choice gives the store's reason, and a lost reply names what stopped it;
+/// nothing reaches the screen as an error's debug text.
+#[test]
+fn a_look_again_refusal_says_another_version_was_kept() {
+    let api = |e: NotSaved| CallError::Api(ApiError::NotSaved(e));
+    assert_eq!(
+        failure_text(&api(NotSaved::LookAgain)),
+        "Another version of this verse is kept."
+    );
+    assert_eq!(
+        failure_text(&api(NotSaved::Refused(SaveRefusal::Choice {
+            reason: "the chosen version is not one of the conflict's versions".into()
+        }))),
+        "the chosen version is not one of the conflict's versions"
+    );
+    let every = [
+        api(NotSaved::Refused(SaveRefusal::IncoherentView)),
+        api(NotSaved::Refused(SaveRefusal::LastBook)),
+        api(NotSaved::Disk("the disk is full".into())),
+        api(NotSaved::ReadOnly(
+            tc_api::write::ReadOnlyReason::SecondWriter,
+        )),
+        api(NotSaved::PlanStale),
+        api(NotSaved::StaleScope),
+        api(NotSaved::BadToken),
+        CallError::Dropped,
+        CallError::Transport(Transport::Status(503)),
+    ];
+    for error in &every {
+        let text = failure_text(error);
+        assert!(
+            !text.is_empty() && !text.contains('{') && !text.contains("Refused("),
+            "{error:?}: {text}"
+        );
+    }
+    let mut keep = KeepPhase::Idle;
+    let (mut mint, _) = minter();
+    keep.press(&keep_press(), &mut mint).unwrap();
+    keep.reply(
+        in_flight(&keep),
+        tc_ui::app::review::keep_reply::<()>(Err(api(NotSaved::LookAgain)), |()| KeepReply::Kept {
+            disk_warning: None,
+        }),
+    );
+    assert_eq!(
+        keep.outcome(),
+        Some(KeepOutcome::NotKept(
+            "Another version of this verse is kept.".into()
+        ))
+    );
+}
+
+/// The request of the press in flight.
+fn in_flight(keep: &KeepPhase) -> RequestId {
+    match keep {
+        KeepPhase::InFlight(sent) => sent.request,
+        other => panic!("{other:?} has no press in flight"),
+    }
+}
+
+fn keep_press() -> Press {
+    press_keep('1', 'a')
 }

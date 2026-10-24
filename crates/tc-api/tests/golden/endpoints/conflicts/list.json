@@ -58,6 +58,14 @@
             "versions": [
               {
                 "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "place": {
+                  "type": "verse",
+                  "value": {
+                    "book": "TIT",
+                    "chapter": 1,
+                    "verse": 1
+                  }
+                },
                 "by": {
                   "type": "person",
                   "value": {
@@ -78,6 +86,14 @@
               },
               {
                 "change": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "place": {
+                  "type": "verse",
+                  "value": {
+                    "book": "TIT",
+                    "chapter": 1,
+                    "verse": 1
+                  }
+                },
                 "by": {
                   "type": "person",
                   "value": {

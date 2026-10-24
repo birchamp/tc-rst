@@ -117,6 +117,34 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   keeps the 28 words the import placed at open and at the next verse save, where tC4's text
   drops 11.
 
+Under the same rule, in the conflict review (B11 and C7a, 2026-10-23):
+
+- The Text tab's conflict says when one set of changes made other conflicts ("Changed together
+  with 2 other conflicts"), when some earlier changes of a teammate have not arrived, and when
+  a version cannot be read on this computer yet. tC4's review has none of these lines; each
+  names a reason a choice should wait.
+- A passage conflict (one person joined, renumbered or moved verses while another changed one
+  of them) is one conflict over every verse of the passage, with *Keep <person>'s passage* for
+  each side: every verse of the passage as that person left it, written in one batch over one
+  token per verse, so no verse of the passage is written over a version the screen did not
+  show. A conflict of verses joined or split differently offers *Keep the joined verses* and
+  *Keep the verses separate*, with the version clicked as the pick where a verse holds several.
+  tC4 reviews verse text only and keeps the newest structure unasked.
+- History has *Restore this version* on every version but the one shown: the old version is
+  kept over every version of the record, as a choice on the conflict, so the conflict is
+  settled on it and every other version stays in History. tC4 has no History (#78).
+- A version of a passage conflict names its verse when it is not the conflict's ("Titus 1:5"
+  on the card). *Keep this version* is also offered on a book header, a chapter opening and
+  a story's text, frame and reference line, which tC4 does not review; the line over the
+  versions names the kind ("Passage · 3 versions") where tC4 always counts "versions of this
+  verse"; and a passage's version cards cannot be clicked, since a passage is kept by side.
+- *Keep all of <person>'s* keeps one person's version over every conflict of the tab where
+  that person's computers hold exactly one of its versions; a conflict where they hold two, or
+  none, is left for a choice of its own, and the result says how many. There is no "keep the
+  newest" bulk choice: it would hand the decision to the clock.
+- A refused choice says why in words ("Another version of this verse is kept.", the store's
+  reason), never as an error code.
+
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:
 
