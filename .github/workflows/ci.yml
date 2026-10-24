@@ -93,6 +93,7 @@ jobs:
       - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
       - run: scripts/gates.sh --step test
+      - run: scripts/gates.sh --step ignored
 
   # The Windows tests, nightly or on request, until CHK-5 makes them a push gate.
   nightly-windows:
