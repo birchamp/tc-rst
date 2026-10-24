@@ -116,6 +116,21 @@ function tc4Pids(dir) {
     .map((l) => Number(l.trim().split(/\s+/)[0]));
 }
 
+// The electron and tc4 processes with their parents, for a failure's output.
+function processTree() {
+  if (process.platform === 'win32') {
+    return execFileSync('powershell.exe', [
+      '-NoProfile', '-Command',
+      'Get-CimInstance Win32_Process | Where-Object { $_.Name -match "electron|tc4" } | ForEach-Object { "$($_.ProcessId) <- $($_.ParentProcessId) $($_.Name) $($_.CommandLine.Substring(0, [Math]::Min(160, $_.CommandLine.Length)))" }',
+    ], { encoding: 'utf8' });
+  }
+  return execFileSync('ps', ['-eo', 'pid=,ppid=,args='], { encoding: 'utf8' })
+    .split('\n')
+    .filter((l) => /electron|tc4/.test(l))
+    .map((l) => l.slice(0, 200))
+    .join('\n');
+}
+
 function hardKill(pid) {
   if (process.platform === 'win32') execFileSync('taskkill', ['/F', '/PID', String(pid)], { stdio: 'ignore' });
   else process.kill(pid, 'SIGKILL');
@@ -167,6 +182,6 @@ async function finish(app) {
 }
 
 module.exports = {
-  REPO, alive, appDataDir, dispatched, finish, hardKill, home, launch, launchPlain, logOf, setup, shellArgs, shellTest,
+  REPO, alive, appDataDir, processTree, dispatched, finish, hardKill, home, launch, launchPlain, logOf, setup, shellArgs, shellTest,
   sleep, started, tc4Pids, until,
 };

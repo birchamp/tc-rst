@@ -87,7 +87,12 @@ h.shellTest('ending_the_shell_ends_tc4_within_5s', async () => {
     const killed = Date.now();
     h.hardKill(app.pid);
     // tc4 sees its stdin close (SHELL.md item 3). The bound catches a hang only.
-    await h.until('tc4 to end', () => !h.alive(pid), 60000);
+    try {
+      await h.until('tc4 to end', () => !h.alive(pid), 60000);
+    } catch (error) {
+      console.log(`# still running after the shell was killed:\n${h.processTree()}`);
+      throw error;
+    }
     console.log(`# tc4 ended ${Date.now() - killed} ms after the shell was killed`);
     // The next launch starts.
     const next = await h.launch(dir);
