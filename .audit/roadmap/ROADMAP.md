@@ -45,6 +45,8 @@ runs. If the owner wants more, it is a new H row, not a card.
    starts.
 2. **CI is the gate.** One gate list (INT-3) runs in CI and in every local runner. A red main
    stops every merge until it is green.
+   One merge into main at a time: the orchestrator hands out turns, and main's CI finishes green
+   before the next (owner rule, 2026-10-23; `TRACKING.md` "Checklist: merge an item").
 3. **Build once, then reuse.** Where the remaining units would copy a pattern again, the shared
    structure is built first (M1). This is the Code layer of the funnel, and it gets the most
    effort.
@@ -71,6 +73,7 @@ finished unit took 2.8 h, `ASSESSMENT.md`).
 | INT-5 | Converge the trackers onto this roadmap | integration | INT-4 | 0.5 d |
 | INT-6 | Rescue stray work and free the disk | integration | INT-4, owner OK for deletions | 0.5 d |
 | INT-7 | Prepare the Track B hand-off: freeze the shell contract | integration | INT-4 | 1 d |
+| INT-8 | CI runs are the gate receipt | checks | INT-3; the owner asked for it on 2026-10-23 | 0.5 d |
 
 **Exit:** main holds every built unit and S2; CI on main is green; the gate list is one script;
 every unpushed branch has an off-PC copy; the board is the only tracker.
@@ -84,7 +87,8 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4 | 1 d |
 | CHK-4 | Deterministic and fast tests | checks | INT-4 | 2-3 d |
 | CHK-5 | Nightly, Windows and no-network jobs; the mutation executor runs nightly | checks | S2, INT-3 | 1-2 d |
-| CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4 | 1 d |
+| CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4, CHK-6a | 1 d |
+| CHK-6a | Release builds without the test server, every ignored test named, PLAN's reference checked | checks | INT-4 | 0.5 d |
 | UI-1 | Typed jobs and one job follower | app | INT-4, C7a | 1 d |
 | UI-2 | Ports for sync, share, exchange and import | app | UI-1 | 1-2 d |
 | UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced | app | UI-1 | 2 d |

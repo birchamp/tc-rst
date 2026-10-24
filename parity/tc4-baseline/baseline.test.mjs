@@ -256,3 +256,10 @@ test('every screen where a shared OBS card reads "Upload changes" cites Q2', () 
   assert.ok(uploads.length > 0, 'no screen records a card with Upload changes (homeCards)');
   for (const s of uploads) assert.equal(s.rebuildDiffers?.ruling, 'Q2', `${s.name} shows Upload changes but does not cite Q2`);
 });
+
+test("PLAN's reference commit is the baseline's", () => {
+  const named = plan.match(/the reference is tC4 `main` at\s+commit `([0-9a-f]{7,40})`/)?.[1];
+  assert.ok(named, 'PLAN names no reference commit ("the reference is tC4 `main` at commit `<sha>`")');
+  const captured = manifest.tc4.commit;
+  assert.ok(captured.startsWith(named), `P7/INV-CAPTURES-FRESH: PLAN names reference ${named}; the baseline was captured at ${captured}`);
+});
