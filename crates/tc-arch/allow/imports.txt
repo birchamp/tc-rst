@@ -1,5 +1,4 @@
 # INV-ONE-PARSER-OWNER: low-level internals stay in their owning crate.
 # One line per rule: path<TAB>items (comma list, or * for the whole module)<TAB>owner crate<TAB>allowed readers (comma list of crates or files, or -)<TAB>why
 # An allowed reader that no longer names an item fails as stale.
-tc_usfm	Document,Node,Marker,Milestone,Span	tc-usfm	tc-align	tc-align walks tc-usfm's tree until DOM-2 step 8 moves the raw types behind tc_usfm::raw
 tc_journal::pack	*	tc-store	tc-corpus,crates/tc-app/src/backend/seed.rs,crates/tc-app/src/backend/scenario_store.rs	tc-corpus is a test corpus crate; the two tc-app files are fixture-backend only, until F1 step 5 deletes seed.rs and INT-7/CHK-6 put scenario_store behind test-hooks

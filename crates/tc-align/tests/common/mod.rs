@@ -4,9 +4,12 @@
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, dead_code)]
 
-use serde_json::Value;
+use serde_json::{Map, Value};
+use std::io::Read;
 use std::path::PathBuf;
-use tc_align::{AlignmentValue, Basis, SourceVerse, SourceWord, TargetWord, record};
+use tc_align::{
+    Alignment as _, AlignmentValue, Basis, SourceVerse, SourceWord, TargetVerse, TargetWord,
+};
 use tc_core::VerseSpan;
 use tc_journal::ids::VerseNo;
 use tc_journal::json::{Json, JsonMap};
@@ -80,7 +83,7 @@ pub fn sample_alignments() -> Value {
 
 /// tC4's conformance sample TIT 1:1: its record, as a value, and the verse's content.
 pub fn sample_tit_1_1() -> (AlignmentValue, String) {
-    let value = record::from_record(&sample_alignments()["chapters"]["1"]["1"], basis(1)).unwrap();
+    let value = tc4_record(&sample_alignments()["chapters"]["1"]["1"]).unwrap();
     (value, verse_body(SAMPLE_TIT, "1:1"))
 }
 
@@ -137,7 +140,22 @@ pub fn word(text: &str, occurrence: u32, occurrences: u32) -> TargetWord {
 
 /// A tC4 §5.1 record read as a value.
 pub fn value_of(record_json: &Value) -> AlignmentValue {
-    record::from_record(record_json, basis(1)).unwrap()
+    tc4_record(record_json).unwrap()
+}
+
+/// A tC3 or tC4 record of TIT 1:1 as an import reads it, held to the rules every edit keeps.
+pub fn tc4_record(record: &Value) -> Result<AlignmentValue, tc_align::Error> {
+    let (_, _, value) = tc_journal::fold::decode_alignment_record(
+        record,
+        "1:1",
+        1,
+        1,
+        1,
+        tc_journal::fold::Writer::Tc4,
+    )
+    .map_err(|e| tc_align::Error::Record(e.to_string()))?;
+    value.well_formed()?;
+    Ok(value)
 }
 
 /// A word list of a tC4 record (`topWords`, `bottomWords` or `wordBank`) as target words.
@@ -233,4 +251,128 @@ pub fn show(words: &[TargetWord]) -> Vec<String> {
         .iter()
         .map(|w| format!("{}/{}/{}", w.word, w.occurrence, w.occurrences))
         .collect()
+}
+
+/// tC4's tC3 import fixture: translationCore 3's alignment data of Titus.
+pub const TC3_ZIP: &str = "fixtures/tc4/conformance-fixtures/import/tc3/cfm_fbt_tit_book.zip";
+const TC3_APP: &str = "apps/translationCore";
+
+fn zip_entry(archive: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Value {
+    let mut text = String::new();
+    archive
+        .by_name(name)
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+/// tC4's `normalizeOccurrences`: occurrences as integers, every other field kept.
+pub fn normalized(word: &Value) -> Value {
+    let mut word = word.clone();
+    for key in ["occurrence", "occurrences"] {
+        if let Some(Value::String(s)) = word.get(key) {
+            word[key] = Value::from(s.parse::<u64>().unwrap());
+        }
+    }
+    word
+}
+
+/// tC4's `unmergeWord`: a placed word without tC3's `type`.
+pub fn unmerged(word: &Value) -> Value {
+    let mut word = normalized(word);
+    word.as_object_mut().unwrap().remove("type");
+    word
+}
+
+/// One TIT verse of the fixture: its record as tC4's `alignmentFile` makes it, and its
+/// text.
+pub struct Imported {
+    pub reference: String,
+    pub record: Value,
+    pub verse: TargetVerse,
+}
+
+pub fn imported() -> Vec<Imported> {
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(fixture(TC3_ZIP)).unwrap()).unwrap();
+    let mut out = Vec::new();
+    for chapter in 1..=3 {
+        let alignments = zip_entry(
+            &mut archive,
+            &format!("{TC3_APP}/alignmentData/tit/{chapter}.json"),
+        );
+        let texts = zip_entry(&mut archive, &format!("tit/{chapter}.json"));
+        // tC3's `front` holds no verse, and tC4 keys no record to it.
+        let mut verses: Vec<_> = alignments
+            .as_object()
+            .unwrap()
+            .iter()
+            .filter_map(|(v, data)| Some((v.parse::<u16>().ok()?, v, data)))
+            .collect();
+        verses.sort_by_key(|(n, _, _)| *n);
+        for (_, verse, data) in verses {
+            let text = texts[verse.as_str()].as_str().unwrap();
+            let target = TargetVerse::new(text);
+            let words = |list: &Value, f: fn(&Value) -> Value| {
+                Value::Array(list.as_array().unwrap().iter().map(f).collect())
+            };
+            let mut record = Map::new();
+            record.insert(
+                "alignments".into(),
+                Value::Array(
+                    data["alignments"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|a| {
+                            serde_json::json!({
+                                "topWords": words(&a["topWords"], normalized),
+                                "bottomWords": words(&a["bottomWords"], unmerged),
+                            })
+                        })
+                        .collect(),
+                ),
+            );
+            record.insert("wordBank".into(), words(&data["wordBank"], normalized));
+            record.insert("invalid".into(), Value::Bool(false));
+            record.insert(
+                "targetVerseMd5".into(),
+                Value::from(target.md5().to_string()),
+            );
+            record.insert("sourceVersion".into(), Value::from(SOURCE_NT));
+            out.push(Imported {
+                reference: format!("{chapter}:{verse}"),
+                record: Value::Object(record),
+                verse: target,
+            });
+        }
+    }
+    out
+}
+
+/// Cards in the order tC4 saves them after reading aligned USFM with the original verse
+/// (word-aligner's `orderAlignments`): a card goes where its first source word stands, a
+/// phrase's other words take no place of their own, a source word nothing is aligned to gets
+/// an empty card, and a card whose first word the verse does not have goes last.
+pub fn in_tc4_source_order(
+    source: &SourceVerse,
+    mut unordered: Vec<tc_align::AlignmentGroup>,
+) -> Vec<tc_align::AlignmentGroup> {
+    let same = |a: &SourceWord, b: &SourceWord| a.word == b.word && a.occurrence == b.occurrence;
+    let mut ordered: Vec<tc_align::AlignmentGroup> = Vec::new();
+    for word in source.words() {
+        if let Some(at) = unordered
+            .iter()
+            .position(|g| g.top_words.first().is_some_and(|s| same(s, word)))
+        {
+            ordered.push(unordered.remove(at));
+            continue;
+        }
+        let holds = |g: &tc_align::AlignmentGroup| g.top_words.iter().any(|s| same(s, word));
+        if !unordered.iter().any(holds) && !ordered.iter().any(holds) {
+            ordered.push(tc_align::edit::card(word.clone()));
+        }
+    }
+    ordered.extend(unordered);
+    ordered
 }

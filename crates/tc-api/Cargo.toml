@@ -16,7 +16,7 @@ server = []
 test-hooks = ["dep:serde_json"]
 # `proptest::arbitrary::Arbitrary` for every wire type, for property tests here and in the
 # crates that use these types.
-proptest = ["dep:proptest", "dep:proptest-derive"]
+proptest = ["dep:proptest", "dep:proptest-derive", "tc-core/proptest"]
 
 [dependencies]
 tc-core = { path = "../tc-core" }

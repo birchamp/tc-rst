@@ -6,15 +6,15 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use tc_align::frame::{NoSourceVerse, RESOURCE_FRAME, source_reference};
-use tc_core::{BookId, Reference, VerseSpan};
+use tc_core::{BookId, ChapterNo, Reference, VerseNo, VerseSpan};
 use tc_versification::{MapOutcome, RowReference, StandardScheme, Unplaceable, map_reference};
 
 fn reference(book: BookId, chapter: u16, verse: u16) -> Reference {
-    Reference {
+    Reference::new(
         book,
-        chapter,
-        verses: VerseSpan::single(verse),
-    }
+        ChapterNo::new(chapter).unwrap(),
+        VerseSpan::single(VerseNo::new(verse).unwrap()),
+    )
 }
 
 fn source(

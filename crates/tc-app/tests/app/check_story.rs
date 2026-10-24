@@ -247,7 +247,7 @@ async fn a_frame_edit_that_drops_the_tapped_word_invalidates_the_mark_and_keeps_
     .await
     .unwrap();
     leave(&t, &at).await;
-    let frame = RecordKey::Frame(tc_journal::StoryNo::new(1).unwrap(), FrameNo(1));
+    let frame = RecordKey::Frame(tc_journal::StoryNo::new(1).unwrap(), FrameNo::new(1));
     store
         .teammates_edit_verse(
             &folder(OBS),

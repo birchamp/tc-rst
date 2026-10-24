@@ -12,6 +12,14 @@
     }
   },
   {
+    "type": "refused",
+    "value": {
+      "choice": {
+        "reason": "the chosen version is not one of the conflict's versions"
+      }
+    }
+  },
+  {
     "type": "disk",
     "value": "The disk is full."
   },

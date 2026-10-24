@@ -7,7 +7,8 @@
 
 use std::path::Path;
 use std::time::{Duration, Instant};
-use tc_usfm::{Book, Document};
+use tc_usfm::Book;
+use tc_usfm::raw::Document;
 
 /// Psalms: 150 chapters, 2461 verses, built from the aligned ULT verses of Titus (about
 /// 3 KB of USFM per verse, as in the aligned ULT), so about 7.7 MB in all.

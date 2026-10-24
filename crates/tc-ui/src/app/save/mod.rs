@@ -1210,7 +1210,13 @@ impl SaveMachine {
     /// save in flight does.
     pub fn gate(&self) -> GateState {
         let fields = || self.fields.values().filter(|f| f.sendable_by_gate());
-        if fields().any(|f| matches!(f.state, FieldSave::Failed(_)) && f.gate_retried) {
+        // A failure no retry in this open can fix (a newer change arrived under a merged
+        // verse) keeps its text and its reason, and does not keep the person from Home
+        // (INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR, tC4 #801).
+        if fields().any(|f| match &f.state {
+            FieldSave::Failed(error) => f.gate_retried && classify::save_error_can_be_fixed(error),
+            _ => false,
+        }) {
             return GateState::Blocked;
         }
         if self.fields.values().any(Field::is_saving) || fields().any(Field::awaits_open) {

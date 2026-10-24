@@ -327,15 +327,28 @@ impl App {
     ) {
         if let RecordKey::Frame(story, _) | RecordKey::StoryRef(story) = shown.key() {
             let frame = match shown.key() {
-                RecordKey::Frame(_, frame) => frame.0,
+                RecordKey::Frame(_, frame) => frame.get(),
                 _ => 0,
             };
             self.record_story_edit(session, *story, frame, text, at);
             return;
         }
         let (book, chapter, verse) = match shown.key() {
+            // The verse as it now stands: a span names its range (tC4 #576).
             RecordKey::Verse(book, chapter, verse) => {
-                (*book, chapter.get(), verse.get().to_string())
+                let last = match session.read().projected(shown.key()) {
+                    Some(tc_journal::Record::Verse {
+                        value: tc_journal::record::VerseValue::Text { last, .. },
+                        ..
+                    }) => last.get(),
+                    _ => verse.get(),
+                };
+                let label = if last > verse.get() {
+                    format!("{}-{last}", verse.get())
+                } else {
+                    verse.get().to_string()
+                };
+                (*book, chapter.get(), label)
             }
             RecordKey::ChapterFront(book, chapter) => (*book, chapter.get(), "front".to_owned()),
             _ => return,
@@ -344,7 +357,13 @@ impl App {
             return;
         };
         let folder = session.scope().project.clone();
-        // A Resume preview is bounded by this field, never by the project or its history.
+        // A Resume preview is bounded by this field, never by the project or its history; the
+        // stub is no text (tC4 #831).
+        let text = if crate::drafted::words_drafted(text) {
+            text
+        } else {
+            ""
+        };
         let snippet = tc_usfm::plain_text_v1(text)
             .split_whitespace()
             .collect::<Vec<_>>()

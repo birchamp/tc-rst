@@ -22,6 +22,9 @@ mod loss;
 #[path = "store/opcount.rs"]
 mod opcount;
 
+#[path = "store/platform.rs"]
+mod platform;
+
 #[path = "store/progress.rs"]
 mod progress;
 

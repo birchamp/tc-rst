@@ -64,7 +64,6 @@ pub use client::{Door43Client, Limits};
 pub use download::{DownloadTo, DownloadWatch, DownloadedZip, Unwatched};
 pub use error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 pub use git::{FastForwardRefspec, GitRemote};
-pub use git_tree::ObjectId;
 pub use http::{
     Http, HttpError, HttpResponse, HttpSpec, ProxyAnswer, ProxyFinder, RedirectRule,
     system_proxy_finder,

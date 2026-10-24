@@ -922,15 +922,13 @@
       "value": {
         "type": "updateCheckFailed",
         "value": {
-          "reason": "the catalog answered 502"
+          "why": "unreachable"
         }
       }
     },
     "code": null,
-    "key": "upgrade.checkFailed",
-    "vars": {
-      "reason": "the catalog answered 502"
-    },
+    "key": "upgrade.checkFailedUnreachable",
+    "vars": {},
     "detail": null
   },
   {
