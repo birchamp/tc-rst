@@ -404,6 +404,18 @@ impl Saves {
         self.machine(|m| m.state(key).cloned())
     }
 
+    /// The field's text while its save has not landed: typed, on its way, failed or held
+    /// (INV-NEVER-HIDE-UNSAVED-TEXT). `None` for a clean field or one the machine does not hold.
+    pub fn unsaved_text(&self, key: &BufferKey) -> Option<String> {
+        self.machine(|m| match m.state(key)? {
+            FieldSave::Clean | FieldSave::SavedWithWarning(_) => None,
+            FieldSave::Dirty { .. }
+            | FieldSave::Saving { .. }
+            | FieldSave::Failed(_)
+            | FieldSave::Held(_) => m.text(key).map(str::to_owned),
+        })
+    }
+
     pub fn notice(&self, key: &BufferKey) -> Option<Notice> {
         self.machine(|m| m.notice(key).cloned())
     }

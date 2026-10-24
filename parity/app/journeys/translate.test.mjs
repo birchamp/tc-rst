@@ -174,6 +174,38 @@ browserTest('a_failed_verse_save_keeps_the_text_and_retry_stores_it', async () =
   });
 });
 
+// FIX-HIDE (never hide a translator's text): a verse whose save keeps failing, then "Switch
+// project". The leave is held, and the typed text stays on the page, with the failure and
+// Retry, until Retry stores it.
+browserTest('a_held_leave_keeps_a_failed_verse_text_on_the_page', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTranslate(page);
+    await openVerse(page, 3);
+    const original = await box(page, 3).inputValue();
+    const wanted = `${original} escrito y no guardado`;
+    let refuse = true;
+    await page.route('**/api/v1/editor/saveVerse', async (route) => {
+      if (refuse) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'err', value: { type: 'notSaved', value: { type: 'disk', value: 'fixture write refused' } } }) });
+      }
+      return route.continue();
+    });
+    await box(page, 3).fill(wanted);
+    await until('error', async () => (await indicator(page).getAttribute('data-state')) === 'error', 5_000);
+    await page.getByTestId('project-switch').click();
+    await sleep(1000);
+    assert.equal(await page.getByTestId(`project-${BIBLE}`).count(), 0, 'the leave is held');
+    const shownInBox = (await box(page, 3).count()) > 0 && (await box(page, 3).inputValue()) === wanted;
+    const shownInGrid = (await page.locator('main').innerText()).includes(wanted);
+    assert.ok(shownInBox || shownInGrid, 'the typed text is on the page');
+    assert.equal(await indicator(page).getAttribute('data-state'), 'error', 'the failure is shown');
+    refuse = false;
+    await indicator(page).getByRole('button', { name: 'Retry' }).click();
+    await until('retry saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    assert.equal((await verse(env, 3)).words.value, wanted);
+  });
+});
+
 // AD37: a card with no input takes a teammate's change whole, value and token together.
 browserTest('refresh_under_open_clean_editor_swaps_value_and_token_together', async () => {
   await withApp(async ({ page, env }) => {
