@@ -369,6 +369,26 @@ impl RepoPath {
         Ok(Self(text.into()))
     }
 
+    /// The path of `metadata.json`, which no ingredient list names and no record may hold as
+    /// a path. It is the one file outside `ingredients/` an outside edit comes from, so it is
+    /// readable as the file of an `External` cause (`parse_source`) and as nothing else.
+    pub fn metadata_json() -> Self {
+        Self("metadata.json".into())
+    }
+
+    /// Whether this is [`RepoPath::metadata_json`].
+    pub fn is_metadata_json(&self) -> bool {
+        &*self.0 == "metadata.json"
+    }
+
+    /// A path as the file of an `External` cause: any [`RepoPath`], or `metadata.json`.
+    pub fn parse_source(text: &str) -> Result<Self, PathError> {
+        if text == "metadata.json" {
+            return Ok(Self::metadata_json());
+        }
+        Self::parse(text)
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }

@@ -4,7 +4,7 @@
 //! out, so the server never parses a request type and the application never sees HTTP.
 //! `tc-app` implements the same shape (`App::call`, `events().subscribe`, `quit`,
 //! `quitting`), and the program crate joins the two with a thin adapter; neither crate
-//! depends on the other. [`Stub`](crate::stub::Stub) is the backend of this crate's own tests.
+//! depends on the other. `stub::Stub` is the backend of this crate's own tests.
 
 use std::future::Future;
 

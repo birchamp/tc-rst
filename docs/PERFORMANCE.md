@@ -115,6 +115,25 @@ show that a budget is met.
 | App | Repeat launch | the installed bundle | no read and no write of a resource content file (a count test); proposed: a usable Home in 3 s |
 | App | Window on screen: from the shortcut click to a painted window | every launch, the first included | 1 s; no splash screen (owner ruling, 2026-10-18); see "Start-up" |
 
+## Rows of the project store that are open (unit S2, 2026-10-18)
+
+Unit S2 measured the store's rows on the owner's Linux machine
+(`docs/evidence/storage-materialize-2026-10-18.md`; STORAGE.md section 14 has the figures). The
+reference laptop was not available, so a row is called met only when the machine's figure and the
+laptop estimate both meet it. These rows are **not met or not shown**, and the owner decides what
+to do with each:
+
+| Row | State | What would change it |
+|---|---|---|
+| Checkpoint, whole Bible: 500 ms | **missed** by the estimate (0.8 to 1.3 s with the materialization already done, 1.3 to 2.4 s with Psalms dirty) | write one checkpoint's git objects into one pack (about 3 flushes in place of about 24) and accept libgit2's search for deltas between the new versions of the large files, or relax the row |
+| Save during a checkpoint: 25 ms p95 | at the edge: 19.7 to 26.8 ms in ten rounds of thirteen, 29.8 to 44.9 ms in three; 190 to 244 ms in two rounds whose jobs the drive stalled | fewer flushes per checkpoint (the same remedy); the month-end consolidation of a month's packs is still one actor step, and a save made during it waits for that step (it runs once a month); the reference move at the end is an actor step of about 8 ms |
+| Materialize one book: 1 s p95 | **not shown**: the laptop estimate is 0.5 to 1.3 s | a measurement on the laptop with Defender on |
+| Close a project: 3 s | **not shown**: the laptop estimate is 2.7 to 4.2 s | a measurement on the laptop; |
+| Project store memory: 400 MiB steady, 450 MiB peak | met with one heap (`MALLOC_ARENA_MAX=1`: 302 to 305 MiB, peak 321 to 326 MiB); with glibc's default heap 403 to 405 MiB steady and 457 to 461 MiB at the close, which misses by 3 to 5 and 7 to 11 MiB. One heap makes the whole-project job 3.5 times slower (7.9 to 10.7 s against 2.4 to 3.1 s) | Windows' heap is not glibc's; a measurement on the laptop decides |
+
+The rows of saving, progress and a book's materializing touching only that book's files are met
+and have count tests.
+
 ## Start-up
 
 The shell shows its window within 1 s of the click, before `tc4` is ready, painted in the

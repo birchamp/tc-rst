@@ -4,18 +4,18 @@ title: Deterministic and fast tests
 track: A
 lane: checks
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: done
+owner: checks lane (Claude Code 2198ee19)
+branch: chk-4-fix2
+worktree: .worktrees/chk-4-fix2
 depends: [INT-4]
 needs_owner: []
 proves: []
 no_loss: false
-size: 2-3 d
-merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+size: 0.5 d (cut to the flaky waits by the ruling of 2026-10-23)
+merged: bb45f868
+updated: 2026-10-23
+next: none
 blocked_by: none
 ---
 
@@ -23,9 +23,11 @@ blocked_by: none
 
 ## Goal
 
-A gate run gives the same verdict every time on the same tree: property tests use a fixed seed,
-no test asserts a wall-clock window, and no test sleeps and then asserts. No test binary takes
-more than 300 s, and a gate step fails when one does.
+Cut by the ruling `rulings/2026-10-23-tests-prove-behavior-not-speed.md`: a test asserts what the
+app does, never how fast. This card raises or removes the short waits in the tests that have
+flaked under load, so a wait only catches a hang (about a minute) and says so, and nothing more
+until a real flake appears. Virtual time, fixed seeds and per-binary time budgets are not built.
+The steps below the ruling line are the old plan, kept as history.
 
 ## Why it matters to a translator
 
@@ -61,8 +63,8 @@ test teaches people to rerun until green, and a slow suite makes people skip it.
 - **Invariants**:
   - INV-DETERMINISTIC: a gate run's verdict depends only on the tree: proptest runs from the
     fixed `PROPTEST_RNG_SEED` the gate script sets; no test compares elapsed real time with a
-    window; no test sleeps and then asserts a state it could wait for.
-  - INV-FAST: no test binary in the gate step `test` runs longer than 300 s.
+    window; no test sleeps and then asserts a state it could wait for. (retired by the ruling of 2026-10-23, tests prove behavior, not speed)
+  - INV-FAST: no test binary in the gate step `test` runs longer than 300 s. (retired by the ruling of 2026-10-23, tests prove behavior, not speed)
 - **Wrong states**:
   - CI fails on a busy runner because the first progress report came at 421 ms.
   - A census assert fails one run in forty and people learn to rerun.
@@ -83,7 +85,7 @@ test teaches people to rerun until green, and a slow suite makes people skip it.
   - Gate step `test-budget` (to create): `.audit/tools/test-budget.mjs` reads the `test` step's log
     and fails on a binary over 300 s; its tests `.audit/tools/test-budget.test.mjs` (to create;
     the gate step `node` runs them); kind: lint over a run.
-  - `the_gates_fix_the_proptest_seed` in `.audit/tools/test-budget.test.mjs` (to create, step 1):
+  - (retired by the ruling of 2026-10-23: no fixed seed) `the_gates_fix_the_proptest_seed` in `.audit/tools/test-budget.test.mjs` (to create, step 1):
     reads `scripts/gates.sh` and `.audit/tools/winvm/gates.ps1` and fails unless each sets
     `PROPTEST_RNG_SEED` before any `cargo test` line (INV-DETERMINISTIC's seed half); kind:
     lint over a file; runs in: the gate step `node`.
@@ -242,3 +244,20 @@ fixed seed.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-23 14:11 EDT | checks lane (Claude Code 2198ee19) | ruling | 3cd1ac6a | The owner's ruling of 2026-10-23 cuts this card to the flaky waits: no virtual time, no fixed seed, no per-binary budget; a wait only catches a hang, about a minute, and says "hung" | .audit/roadmap/rulings/2026-10-23-tests-prove-behavior-not-speed.md
+- 2026-10-23 14:11 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-4 in .worktrees/track-CHK-4 from main 3cd1ac6a, ahead of INT-8's merge on the orchestrator's word, because main stays red on these waits. Scope: the two app-e2e journeys that flaked (a_focused_help_lights_its_words_in_the_passage, a_section_card_opened_after_a_reload_during_its_save_saves_each_verse), kit.mjs's 10 s default wait, upgrades.test.mjs's Settings wait, plan_cost_follows_affected_books' 120 s, the reset-hold and job-reporter waits, the HomeCard 5 s wait, and op_counts::story's record drift if it is a wait | python3 -I .audit/tools/board.py
+- 2026-10-23 14:13 EDT | checks lane (Claude Code 2198ee19) | step A | none | Waits raised to hang-only bounds that say "hung": kit.mjs until() default 10 s to 60 s (covers the two app-e2e journeys and upgrades.test.mjs's Settings wait) and browserTest's per-test timeout 120 s to 600 s; plans.rs plan wait 120 s to 600 s; home.rs HomeCard 5 s to 60 s; jobs.rs reporter test steps paused time until the first report (60 s bound) instead of a fixed 300 ms and no longer asserts the report's time. op-count drift: the harness settle() now also waits for the app's jobs to end (60 s bound), since a job's record read entered a save's count under load; op-count asserts unchanged. The reset-hold test is not a wait but a race in the Reset test hook: minor recorded, test unchanged | git diff e47f5bba -- parity crates
+- 2026-10-23 14:20 EDT | checks lane (Claude Code 2198ee19) | step B | none | ci.yml and app-e2e.yml: cancel-in-progress is false on main, true elsewhere. Main's runs on 3cd1ac6a (40001100232, 40001100230) and d293375a were cancelled by the next push, so main had no finished result while every merge waited for one | gh api repos/{owner}/{repo}/actions/runs?head_sha=3cd1ac6a
+- 2026-10-23 14:25 EDT | checks lane (Claude Code 2198ee19) | interrupt | a156a38c | Usage limit. Targeted runs on 0e15cabd (shared target of .worktrees/track-INT-4): app home:: 21 ok, jobs::the_reporter ok, op_counts story 8 ok, plans ok, section ok, comments 3 ok; op_counts translate: 4 FAILED, all panicking at corpus.rs:190 (the shared corpus setup, not the settle change; check whether another run rebuilt the corpus in that target at the same time). Next: rerun `cargo test --locked -p tc-app --test op_counts translate` alone in this worktree's own target; if it passes, run scripts/gates.sh --wait-ci CHK-4 after INT-8 lands (or scripts/gates.sh), then merge. Main's runs on eaf809d1 were in progress | .enjoy-logs/chk4-tests.log
+- 2026-10-23 16:48 EDT | checks lane (Claude Code 2198ee19) | step C | none | Main's ci on eaf809d1 failed on app::check_item::a_check_comment_typed_before_the_app_ended_is_offered_and_kept_beside_the_mark ("the comment is offered: OfferedDrafts { offers: [] }"). Not a short wait: the Draft reply comes before the draft writer puts the draft in the file (handle.rs submit), and STORAGE §5.14 calls a draft best effort, so a crash right after typing may lose it (allowed by the 2-minute ruling). The four check_item tests that crash after typing a comment now wait for the store, draft writer included (drafts_written, which calls wait_idle), before the crash; one replaced a 1.5 s sleep. In this worktree's own target: check_item:: 20 ok; op_counts translate 4 ok (the earlier 4 failures came from two runs sharing one target's corpus folder); fmt and clippy -p tc-app --all-targets clean. Owner rule recorded: one merge into main at a time (TRACKING.md, ROADMAP.md) | .enjoy-logs/chk4-tests-2.log
+- 2026-10-23 16:58 EDT | checks lane (Claude Code 2198ee19) | verify | a5f87180 | Independent review (a fresh general-purpose agent, read only, ran the node tests). 1 Code: bounds and messages only, plus settle() and drafts_written. 2 Checks: no assertion weakened beyond the ruling; the 300 ms rule stays proven by two other jobs.rs tests. 3 Reach: test code and CI only. 4 Siblings: drafts.rs already waits after each draft; no other Draft-then-crash test can flake toward failure. 5 No loss: no product code changed. 6 Prose: comments give reasons. One blocker: settle() waited for every live job, so op_counts::align::align_save_costs_one_verse_while_model_training_is_held, which holds a Train job during cost(), would hang 60 s and fail; no majors; minors recorded | .audit/minors.tsv
+- 2026-10-23 16:58 EDT | checks lane (Claude Code 2198ee19) | fix | none | settle() waits while live jobs exceed the test's held ones (App::holding), so a job held at a hold point on purpose is not waited for; relaunch's doc comment back on relaunch. op_counts align 5 ok (the held-training test among them), op_counts home 3 ok, app check_item:: 20 ok; fmt and clippy clean | .enjoy-logs/chk4-tests-3.log
+- 2026-10-23 16:58 EDT | checks lane (Claude Code 2198ee19) | merge | a522eadd | Merge commit `Merge CHK-4: tests wait for what the app does, not for a deadline`, on the orchestrator's turn; gated by scripts/gates.sh --journeys in .worktrees/chk-4-merge and by CI on gate/CHK-4, then main fast-forwards and its CI must finish green before the turn passes | scripts/gates.sh --check-receipt
+- 2026-10-23 18:22 EDT | checks lane (Claude Code 2198ee19) | fix | none | Main's own CI on 9982556a (runs 40030654585, 40030654998) failed on two races, not slowness, under the new 60 s bounds: (1) app::home::one_summary_job_runs_at_a_time waited for a_copy's HomeCard event, then b_copy's, but its helper discards other frames, so when the job finished b_copy first the second wait hung ("hung: no HomeCard event for b_copy in 60 s"); now cards_event waits for both in any order (the app promises no order). (2) section.test.mjs a_section_card_opened_after_a_reload_during_its_save_saves_each_verse checked the pill's visibility once while the reloaded page still loaded, found nothing, and went looking for Home's Titus button while the app restored Translate (Playwright's 30 s click timeout); it now waits for either before it chooses. No sibling of either race found (grep). home:: 21 ok; clippy clean. INT-8's local gate run was stopped; its merge is redone on this fix | gh run view 40030654585 --log-failed
+- 2026-10-23 19:02 EDT | checks lane (Claude Code 2198ee19) | fix | none | CI on the fix merge e4914b59 (run 40033229973) still drifted three op-counts on the store by 1-2 app record reads (align_save_costs_one_verse 0 vs 1; story saving_a_reference 1 vs 2; translate save_layout 2 vs 4); local gates passed. Cause found in code: the session's event pump (session.rs pump) handles each store commit after the action returns and reads records to label it (writer_of, comment_target), on the counter op-counts read, so on a slow runner its reads fell on either side of the count. The harness settle() now also waits until the session's view has reached the store's newest seq (60 s bound, "hung"). All 45 op_counts pass with 8 test threads beside a 12-job workspace build | .enjoy-logs/opc-under-load.log (chk-4-fix-merge)
+- 2026-10-23 19:36 EDT | checks lane (Claude Code 2198ee19) | fix | none | CI on the fix merge 16ff363a (run 40037285872) failed on app::hooks::reset_keeps_a_write_in_flight_so_its_retry_still_waits_for_it; local gates passed (receipt). Cause in the Reset test hook (hooks.rs, test-hooks only): it released the holds first and forgot settled replies later, so the held write could finish in between and be forgotten, and its retry ran again. Its own doc says a write still running at the reset is kept; forget_settled now runs before release_all. hooks:: 18 ok five times beside a 12-job build; replies:: 17 ok; clippy (all targets and the release-like lib) clean | crates/tc-app/src/hooks.rs
+- 2026-10-23 20:13 EDT | checks lane (Claude Code 2198ee19) | fix | none | On merge 5afdc631 CI was fully green (ci 40040632243, app-e2e 40040632067), but the local journeys failed home.test.mjs a_card_reads_again_on_a_new_home_visit_not_on_a_redraw ("a preview reads no card", 1 !== 0): the Home summary job can finish after the tiles show and its card event makes the page read the card, inside the counted window. The journey now waits for the server's test/quiet (live jobs) and then the page before it counts, as internet-consent.test.mjs does | .enjoy-logs/gates-3.log (chk-4-fix-merge)
+- 2026-10-23 20:13 EDT | checks lane (Claude Code 2198ee19) | merge | c327fea4 | Merge commit `Merge CHK-4 fix: the test races that kept main red`, gated by scripts/gates.sh --journeys here and by CI on gate/CHK-4-fix | scripts/gates.sh --check-receipt
+- 2026-10-23 21:48 EDT | checks lane (Claude Code 2198ee19) | fix | none | Main's ci on INT-8's merge 646d38c9 (run 40049770850) failed app::check_story::a_frame_edit_that_drops_the_tapped_word_invalidates_the_mark_and_keeps_it: the teammate's edit through the store found the project locked ("already open: process 4242"). A test race, not a lock bug: after the screen leaves, a side user (a background read) keeps the session open by design, settled() returns for an open session that is not leaving, and the lock goes only when that user lets go. check_story's leave() now loops settled() until no open session names the project (60 s bound, "hung"). check_story:: 3 ok four times beside a 12-job build; clippy clean | gh run view 40049770850 --log-failed
+- 2026-10-23 21:49 EDT | checks lane (Claude Code 2198ee19) | merge | bb45f868 | Merge commit `Merge CHK-4 fix: a story test waits for the project's lock`, the first merge gated by the CI route alone: scripts/gates.sh --wait-ci CHK-4-fix2 (INT-8) | scripts/gates.sh --check-receipt
+- 2026-10-23 23:48 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: the funnel card's INV-DETERMINISTIC, INV-FAST and the_gates_fix_the_proptest_seed are marked "(retired by the ruling of 2026-10-23 ...)": the ruling cut them, nothing was built for them, and the claims check skips a marked line | node --test .audit/tools/claims.test.mjs

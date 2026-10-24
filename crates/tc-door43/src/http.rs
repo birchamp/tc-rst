@@ -22,6 +22,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
@@ -74,7 +75,7 @@ pub struct HttpSpec {
     pub connect_timeout: Duration,
     /// The longest wait for the next bytes of an answer.
     pub read_timeout: Duration,
-    pub redirects: reqwest::redirect::Policy,
+    pub redirects: RedirectRule,
     /// Every origin the client sends to, or may be redirected to.
     pub origins: Vec<Url>,
     /// The origins are a test server on this computer: plain http is allowed, and no proxy
@@ -82,12 +83,134 @@ pub struct HttpSpec {
     pub loopback: bool,
 }
 
+/// Which redirects a client follows: to one of `origins`, or over https to one of
+/// `https_hosts` (any port), at most `max` in a row. A redirect that carries a user name or
+/// a password is never followed.
+#[derive(Clone, Debug)]
+pub struct RedirectRule {
+    pub origins: Vec<Url>,
+    pub https_hosts: Vec<String>,
+    pub max: usize,
+}
+
+impl RedirectRule {
+    fn allows(&self, url: &Url) -> bool {
+        let named = self.origins.iter().any(|o| o.origin() == url.origin())
+            || (url.scheme() == "https"
+                && url
+                    .host_str()
+                    .is_some_and(|h| self.https_hosts.iter().any(|a| h.eq_ignore_ascii_case(a))));
+        named && url.username().is_empty() && url.password().is_none()
+    }
+
+    fn policy(self) -> reqwest::redirect::Policy {
+        reqwest::redirect::Policy::custom(move |attempt| {
+            if attempt.previous().len() >= self.max {
+                attempt.error("too many redirects")
+            } else if self.allows(attempt.url()) {
+                attempt.follow()
+            } else {
+                attempt.error("a redirect this client does not follow")
+            }
+        })
+    }
+}
+
+/// Why a request did not get an answer, or its body could not be read.
+#[derive(Debug, thiserror::Error)]
+pub enum HttpError {
+    #[error("the internet is off")]
+    Offline,
+    #[error("the server did not answer in time")]
+    Timeout,
+    #[error("the server could not be reached")]
+    Connect,
+    #[error("the answer broke off")]
+    Interrupted,
+    #[error("the server redirected the request where this client does not follow")]
+    Redirect,
+    #[error("the answer is larger than {limit} bytes")]
+    TooLarge { limit: u64 },
+    #[error("{0}")]
+    Other(String),
+}
+
+impl From<Offline> for HttpError {
+    fn from(_: Offline) -> Self {
+        Self::Offline
+    }
+}
+
+impl From<reqwest::Error> for HttpError {
+    fn from(error: reqwest::Error) -> Self {
+        if error.is_redirect() {
+            Self::Redirect
+        } else if error.is_timeout() {
+            Self::Timeout
+        } else if error.is_connect() {
+            Self::Connect
+        } else if error.is_body() || error.is_decode() {
+            Self::Interrupted
+        } else {
+            Self::Other(error.without_url().to_string())
+        }
+    }
+}
+
+/// An answer whose status and headers have arrived; its body is read with
+/// [`HttpResponse::body`], which stops when the internet switch goes off.
+pub struct HttpResponse {
+    response: reqwest::Response,
+    internet: InternetSwitch,
+}
+
+impl fmt::Debug for HttpResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HttpResponse")
+            .field("status", &self.status())
+            .finish_non_exhaustive()
+    }
+}
+
+impl HttpResponse {
+    pub fn status(&self) -> u16 {
+        self.response.status().as_u16()
+    }
+
+    /// The header's value, when it is present and readable as text.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.response.headers().get(name)?.to_str().ok()
+    }
+
+    /// The whole body, refused as soon as it is known to exceed `limit` bytes.
+    pub async fn body(mut self, limit: u64) -> Result<Vec<u8>, HttpError> {
+        if self
+            .response
+            .content_length()
+            .is_some_and(|len| len > limit)
+        {
+            return Err(HttpError::TooLarge { limit });
+        }
+        let mut body = Vec::new();
+        while let Some(chunk) = self.response.chunk().await? {
+            self.internet.check()?;
+            if (body.len() + chunk.len()) as u64 > limit {
+                return Err(HttpError::TooLarge { limit });
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body)
+    }
+}
+
 /// A reqwest client behind the internet switch. Clones share their proxy answers.
 #[derive(Clone)]
 pub struct Http {
     client: reqwest::Client,
-    internet: InternetSwitch,
+    pub(crate) internet: InternetSwitch,
     routes: Option<Arc<Routes>>,
+    /// `None` for a server on this computer, which no proxy serves.
+    system: Option<Arc<SystemProxy>>,
 }
 
 impl fmt::Debug for Http {
@@ -107,26 +230,28 @@ impl Http {
         spec: HttpSpec,
         internet: InternetSwitch,
         finder: Option<Arc<dyn ProxyFinder>>,
-    ) -> Result<Self, reqwest::Error> {
+    ) -> Result<Self, HttpError> {
         let mut builder = reqwest::Client::builder()
             .user_agent(spec.user_agent)
             .connect_timeout(spec.connect_timeout)
             .read_timeout(spec.read_timeout)
-            .redirect(spec.redirects)
+            .redirect(spec.redirects.policy())
             .referer(false);
         let mut routes = None;
+        let mut system = None;
         if spec.loopback {
             builder = builder.no_proxy();
         } else {
             builder = builder.https_only(true);
+            let settings = Arc::new(SystemProxy::from_system());
+            system = Some(settings.clone());
             if let Some(finder) = finder {
                 let found = Arc::new(RwLock::new(Found::default()));
                 let lookup = found.clone();
                 // Any proxy of its own makes reqwest leave out the system's, so the
                 // closure falls back to it.
-                let system = SystemProxy::from_system();
                 builder = builder.proxy(reqwest::Proxy::custom(move |url| {
-                    choose(&lookup, &system, url)
+                    choose(&lookup, &settings, url)
                 }));
                 routes = Some(Arc::new(Routes {
                     finder,
@@ -140,12 +265,59 @@ impl Http {
             client: builder.build()?,
             internet,
             routes,
+            system,
+        })
+    }
+
+    /// The proxy a request to `url` goes through: the one the finder names for its origin,
+    /// else the system's, and `None` for going directly or for a server on this computer.
+    /// It is what every request of [`Http::get`] uses, for the git calls ([`crate::git`]),
+    /// which libgit2 sends. This blocks while the finder looks (seconds, maybe the network),
+    /// so it runs on a blocking thread, and only while the internet switch is on.
+    pub fn proxy_for(&self, url: &Url) -> Result<Option<Url>, Offline> {
+        let Some(system) = &self.system else {
+            self.internet.check()?;
+            return Ok(None);
+        };
+        let Some(routes) = &self.routes else {
+            self.internet.check()?;
+            return Ok(system.proxy_for(url));
+        };
+        loop {
+            let turn_on = self.internet.turn_on_count()?;
+            routes.find_blocking(turn_on);
+            // As in `client`: the switch may have moved during the lookup.
+            if self.internet.turn_on_count()? == turn_on {
+                return Ok(choose(&routes.found, system, url));
+            }
+        }
+    }
+
+    /// Sends a GET with `accept` and `headers`. The answer comes back whatever its status;
+    /// the caller checks it.
+    pub async fn get(
+        &self,
+        url: Url,
+        accept: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<HttpResponse, HttpError> {
+        let mut request = self
+            .client()
+            .await?
+            .get(url)
+            .header(reqwest::header::ACCEPT, accept);
+        for (name, value) in headers {
+            request = request.header(*name, *value);
+        }
+        Ok(HttpResponse {
+            response: request.send().await?,
+            internet: self.internet.clone(),
         })
     }
 
     /// The client to send with, or [`Offline`] while the internet switch is off. The
     /// proxies are found here, so nothing looks for one while the switch is off.
-    pub async fn client(&self) -> Result<&reqwest::Client, Offline> {
+    pub(crate) async fn client(&self) -> Result<&reqwest::Client, Offline> {
         let Some(routes) = &self.routes else {
             self.internet.check()?;
             return Ok(&self.client);
@@ -237,7 +409,19 @@ const FIND_LIMIT_PER_ORIGIN: Duration = Duration::from_secs(15);
 impl Routes {
     /// Asks the finder about every origin, unless it was asked since the switch was last
     /// turned on. Two requests that start together may both ask; the answers are the same.
-    async fn find(&self, turn_on: u64) {
+    async fn find(self: &Arc<Self>, turn_on: u64) {
+        let routes = self.clone();
+        match tokio::task::spawn_blocking(move || routes.find_blocking(turn_on)).await {
+            Ok(()) => {}
+            // A panic in the finder is raised here, as if it had run on this task.
+            Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+            // The runtime is shutting down.
+            Err(_) => {}
+        }
+    }
+
+    /// [`Routes::find`] on this thread, which waits at most the limit for the finder.
+    fn find_blocking(&self, turn_on: u64) {
         let asked = self
             .found
             .read()
@@ -250,21 +434,23 @@ impl Routes {
         let limit = self
             .limit_per_origin
             .saturating_mul(u32::try_from(origins.len()).unwrap_or(u32::MAX));
-        let task = tokio::task::spawn_blocking(move || {
-            origins
+        let (send, answers) = mpsc::channel();
+        let lookup = std::thread::spawn(move || {
+            let proxies = origins
                 .iter()
                 .filter_map(|origin| Some((origin_key(origin), finder.proxy_for(origin)?)))
-                .collect::<BTreeMap<_, _>>()
+                .collect::<BTreeMap<_, _>>();
+            let _ = send.send(proxies);
         });
-        let proxies = match tokio::time::timeout(limit, task).await {
-            Ok(Ok(proxies)) => proxies,
-            // A panic in the finder is raised here, as if it had run on this task.
-            Ok(Err(e)) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
-            // The runtime is shutting down.
-            Ok(Err(_)) => return,
+        let proxies = match answers.recv_timeout(limit) {
+            Ok(proxies) => proxies,
+            Err(RecvTimeoutError::Disconnected) => match lookup.join() {
+                Err(panic) => std::panic::resume_unwind(panic),
+                Ok(()) => return,
+            },
             // A lookup that never ends: the system's own settings serve every origin, and it is
             // not started again for each request. Its thread finishes on its own.
-            Err(_) => BTreeMap::new(),
+            Err(RecvTimeoutError::Timeout) => BTreeMap::new(),
         };
         *self.found.write().unwrap_or_else(PoisonError::into_inner) = Found {
             for_turn_on: Some(turn_on),
@@ -327,7 +513,11 @@ mod tests {
             user_agent: "test",
             connect_timeout: Duration::from_secs(5),
             read_timeout: Duration::from_secs(5),
-            redirects: reqwest::redirect::Policy::none(),
+            redirects: RedirectRule {
+                origins: Vec::new(),
+                https_hosts: Vec::new(),
+                max: 0,
+            },
             origins: origins.iter().map(|o| o.parse().unwrap()).collect(),
             loopback,
         }

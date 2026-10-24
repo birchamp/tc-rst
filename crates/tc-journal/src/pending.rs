@@ -187,7 +187,7 @@ fn parse_header(line: &RawLine<'_>) -> Result<PendingHeader, PackError> {
         Some(inner) => {
             let mut r = HeaderReader::new(inner).map_err(malformed)?;
             Some(Reconciles {
-                path: r.req("path").map_err(malformed)?,
+                path: r.req_source_path("path").map_err(malformed)?,
                 seen_md5: r.req("seenMd5").map_err(malformed)?,
             })
         }

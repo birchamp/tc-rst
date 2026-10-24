@@ -23,7 +23,7 @@ pub struct SidecarError {
     pub problem: String,
 }
 
-fn fail(at: impl Into<String>, problem: impl Into<String>) -> SidecarError {
+pub(super) fn fail(at: impl Into<String>, problem: impl Into<String>) -> SidecarError {
     SidecarError {
         at: at.into(),
         problem: problem.into(),

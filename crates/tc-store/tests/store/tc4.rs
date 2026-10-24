@@ -1,6 +1,7 @@
 //! tC4's tests ported (`docs/TC4-DELTA-2026-10-16.md` §3.10 and §4 "tc-store"): the staging
 //! rename, the start cleanup, the training snapshot, and the open's power-loss scenarios that
-//! need no git (the rest are unit S2's).
+//! need no git; the ones that do (a reopen after packs and stale files, an out-of-band edit
+//! that is still recorded) are here too, since the store records outside edits (§11.1).
 
 use crate::common::*;
 use std::path::{Path, PathBuf};
@@ -180,12 +181,12 @@ fn a_file_that_is_not_utf8_never_stops_an_open() {
 /// Packs written and derived files stale, then a kill or a power cut: the reopen
 /// materializes forward and records no outside edit.
 #[test]
-fn a_reopen_after_packs_and_stale_files_materializes_forward_and_holds_nothing() {
+fn a_reopen_after_packs_and_stale_files_materializes_forward_and_records_no_outside_edit() {
     let (rig, folder) = titus();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     save_verse(&handle, 2, 1, "speak what fits sound teaching").unwrap();
     // A checkpoint whose seal ran and whose materialization did not: kill before the
-    // first write of the materialization, found by its intent file.
+    // first write of the materialization, the heads of the first file it writes (§5.10 M3).
     handle.wait_idle();
     let probe = rig.fs.copy();
     let probe_rig = rig_as(probe.clone(), APP, "host-1");
@@ -203,7 +204,7 @@ fn a_reopen_after_packs_and_stale_files_materializes_forward_and_holds_nothing()
     let intent = probe
         .log()
         .iter()
-        .find(|op| op.path.to_string_lossy().contains("materialize.intent"))
+        .find(|op| slashed(&op.path).contains(".tc/heads"))
         .map(|op| op.index - start)
         .unwrap();
     drop(probe_handle);
@@ -221,9 +222,11 @@ fn a_reopen_after_packs_and_stale_files_materializes_forward_and_holds_nothing()
         assert!(
             !notices.iter().any(|n| matches!(
                 n.notice,
-                Notice::OutsideEditHeld { .. } | Notice::StorageDamage { .. }
+                Notice::OutsideEditHeld { .. }
+                    | Notice::StorageDamage { .. }
+                    | Notice::OutsideEditRecorded { .. }
             )),
-            "{notices:?}"
+            "the app's own stale files are no outside edit: {notices:?}"
         );
         let usfm =
             String::from_utf8(rig2.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap()).unwrap();
@@ -316,9 +319,8 @@ fn the_start_cleanup_reports_a_join_it_removed_and_hands_out_no_staging_folder_b
 
 /// `test/sync/syncOperation.test.ts` power-loss scenarios: packs written and derived files
 /// stale, then a crash, plus a real edit of the book made outside the app before the reopen.
-/// The reopen materializes forward everything but that file, which it holds unchanged with a
-/// notice (unit S1 holds rather than records an outside edit, §6.2, §11.1): the edit is never
-/// written over, and the save stays in the project.
+/// The reopen records the edit against the verse the stale file showed, keeps the file's bytes
+/// in a copy, and writes the book forward: the edit and the save both stay in the project.
 #[test]
 fn a_reopen_after_packs_and_stale_files_keeps_an_outside_edit_of_the_book() {
     let (rig, folder) = titus();
@@ -332,6 +334,18 @@ fn a_reopen_after_packs_and_stale_files_keeps_an_outside_edit_of_the_book() {
     let mut edited = fs.peek(&usfm).unwrap();
     let at = edited.windows(3).position(|w| w == b"___").unwrap();
     edited[at..at + 3].copy_from_slice(b"Pau");
+    // The verse the edit is in: the last `\c` and `\v` before it.
+    let before = String::from_utf8_lossy(&edited[..at]).into_owned();
+    let number = |marker: &str| -> u16 {
+        let from = before.rfind(marker).unwrap() + marker.len();
+        before[from..]
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap()
+    };
+    let (chapter, verse) = (number("\\c "), number("\\v "));
     fs.put(&usfm, &edited, None);
     let rig2 = rig_as(fs.clone(), APP, "host-1");
     let handle = rig2.store.open(&folder, &OpenOptions::default()).unwrap();
@@ -339,27 +353,36 @@ fn a_reopen_after_packs_and_stale_files_keeps_an_outside_edit_of_the_book() {
     assert!(
         handle.notices().iter().any(|n| matches!(
             &n.notice,
-            Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. }
-                if path.as_str() == "ingredients/TIT.usfm"
+            Notice::OutsideEditRecorded { path, .. } if path.as_str() == "ingredients/TIT.usfm"
         )),
         "{:?}",
         handle.notices()
     );
+    let copies = copies_of(&handle, "ingredients/TIT.usfm");
+    assert_eq!(copies.len(), 1);
     assert_eq!(
-        fs.peek(&usfm).as_deref(),
+        fs.peek(&folder.join(&copies[0])).as_deref(),
         Some(edited.as_slice()),
-        "never written over"
+        "the person's bytes are kept"
     );
     assert_eq!(
         words(&handle, 2, 1).as_deref(),
         Some("speak what fits sound teaching")
     );
+    assert_eq!(words(&handle, chapter, verse).as_deref(), Some("Pau"));
+    let written = String::from_utf8(fs.peek(&usfm).unwrap()).unwrap();
+    assert!(
+        written.contains("speak what fits sound teaching"),
+        "{written}"
+    );
+    assert!(written.contains("Pau"));
     handle.close().unwrap();
     assert_valid_burrito(&fs, &folder);
 }
 
 /// `syncOperation.test.ts`, a file that is not UTF-8: a derived file replaced by bytes that
-/// are not text still lets the project open and save, and is held, not read as an edit.
+/// are not text still lets the project open and save. The person is told the file could not
+/// be read, the bytes are kept in a copy, and the file is written again from the project.
 #[test]
 fn a_derived_file_that_is_not_utf8_never_stops_the_project() {
     let (rig, folder) = titus();
@@ -372,12 +395,24 @@ fn a_derived_file_that_is_not_utf8_never_stops_the_project() {
     assert_eq!(handle.facts().mode, tc_store::Mode::Writable);
     save_verse(&handle, 1, 1, "still saves").unwrap();
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
-    assert_eq!(
-        fs.peek(&usfm),
-        Some(garbage),
-        "held: never written over unread"
+    handle.wait_idle();
+    assert!(
+        handle.notices().iter().any(|n| matches!(
+            &n.notice,
+            Notice::OutsideEditUnreadable { path, .. } if path.as_str() == "ingredients/TIT.usfm"
+        )),
+        "{:?}",
+        handle.notices()
     );
-    assert!(!handle.notices().is_empty());
+    let copies = copies_of(&handle, "ingredients/TIT.usfm");
+    assert_eq!(copies.len(), 1);
+    assert_eq!(
+        fs.peek(&folder.join(&copies[0])),
+        Some(garbage),
+        "the bytes are kept whole"
+    );
+    let written = String::from_utf8(fs.peek(&usfm).unwrap()).unwrap();
+    assert!(written.contains("still saves"), "{written}");
     handle.close().unwrap();
     assert_valid_burrito(&fs, &folder);
 }

@@ -67,19 +67,6 @@ browserTest('an_open_held_on_the_server_keeps_the_overlay_until_released', async
   });
 });
 
-browserTest('a_quick_open_never_shows_the_overlay', async () => {
-  await withApp(async ({ page }) => {
-    let seen = false;
-    await page.exposeFunction('__overlaySeen', () => { seen = true; });
-    await page.evaluate(() => new MutationObserver(() => {
-      if (document.querySelector('[data-testid="open-progress"]')) window.__overlaySeen();
-    }).observe(document.body, { childList: true, subtree: true }));
-    await openTitus(page);
-    await sleep(400);
-    assert.equal(seen, false, 'an open under 300 ms shows no bar');
-  });
-});
-
 // tC4 #507 and #603: a tile opens Understand at chapter 1; each rail row's share has its tooltip.
 browserTest('a_tile_opens_understand_at_chapter_1_with_the_rails_tooltips', async () => {
   await withApp(async ({ page }) => {

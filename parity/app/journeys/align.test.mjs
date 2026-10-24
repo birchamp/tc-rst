@@ -462,13 +462,24 @@ browserTest('align_placement_paints_within_30_ms_on_a_psalms_sized_rail', async 
         channel.port2.postMessage(0);
       }));
       const progress = () => document.querySelector('[data-testid="align-progress"]').textContent;
+      // Waits catch a hang only (ruling 2026-10-23): a minute, then the failure names the step.
+      const HANG_MS = 60000;
+      const hung = (what) => new Error(`align_placement_paints_within_30_ms_on_a_psalms_sized_rail: ${what}: the step hung`);
+      const waitUntil = async (ok, what) => {
+        const end = performance.now() + HANG_MS;
+        while (!ok()) {
+          if (performance.now() > end) throw hung(what);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      };
       const step = async (act) => {
         const before = progress();
         const start = performance.now();
         act();
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => { watch.disconnect(); reject(hung('the progress line never changed after the click')); }, HANG_MS);
           const watch = new MutationObserver(() => {
-            if (progress() !== before) { watch.disconnect(); resolve(); }
+            if (progress() !== before) { watch.disconnect(); clearTimeout(timer); resolve(); }
           });
           watch.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
         });
@@ -477,8 +488,9 @@ browserTest('align_placement_paints_within_30_ms_on_a_psalms_sized_rail', async 
       };
       const out = [];
       for (let n = 0; n < 25; n += 1) {
-        document.querySelector('[data-testid="align-bank"] > button[data-word="fe"]').click();
-        await new Promise((resolve) => setTimeout(resolve, 80));
+        const chip = () => document.querySelector('[data-testid="align-bank"] > button[data-word="fe"]');
+        chip().click();
+        await waitUntil(() => chip()?.getAttribute('data-armed') === '1', 'the word "fe" was never armed');
         const card = [...document.querySelectorAll('[data-testid^="align-card-"]')].find((c) => c.textContent.includes('πίστιν'));
         out.push(await step(() => card.click()));
         const placedWord = [...document.querySelectorAll('[data-testid^="align-card-"]')].find((c) => c.textContent.includes('πίστιν')).querySelector('button[data-word="fe"]');
