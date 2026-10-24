@@ -44,7 +44,9 @@ pub fn retry_can_fix(reason: &NotSaved) -> bool {
             true
         }
         NotSaved::Refused(
-            tc_api::write::SaveRefusal::IncoherentView | tc_api::write::SaveRefusal::LastBook,
+            tc_api::write::SaveRefusal::IncoherentView
+            | tc_api::write::SaveRefusal::LastBook
+            | tc_api::write::SaveRefusal::Choice { .. },
         )
         | NotSaved::LookAgain
         | NotSaved::PlanStale
