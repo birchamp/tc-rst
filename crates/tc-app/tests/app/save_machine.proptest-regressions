@@ -8,3 +8,4 @@ cc 10b627dbb3f4ff6c02d65295b1a209f4c00cd59f20f9e5f8abed76c4a15a792b # shrinks to
 cc fcd0f8f625a09efd5aa205d9ca590e1df0043202855bcdeb8f7085aff21a389d # shrinks to kind = Comment, mut steps = [Type(0), Reload]
 cc 5b22aca925aadc075378ef7687ce8bedfa3924531164e38a35cdc0f44f8f5502 # shrinks to kind = Reference, mut steps = [Type(0)]
 cc c2223623597c34180daa2a83db09ebdde1731a831f931ab32db25fe5af8ad380 # shrinks to kind = Reference, steps = [Type(0), Blur, Type(1)]
+cc 9a23896e47b2fd085a07b8b246fc41bd483a998d01d7b1c3836afdee2ed836cf # shrinks to kind = Reference, steps = [Type(2), Blur, Type(0), Deliver(false), Blur, Type(2), Cut]

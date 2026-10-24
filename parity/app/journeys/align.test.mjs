@@ -599,3 +599,37 @@ for (const lostReply of [false, true]) {
     }, { init: installCloseBridge });
   });
 }
+
+/** tC4 #830: the words placed on a card are the translation's and read in its direction, even
+ * on an Old Testament verse whose original reads right to left (the server's `origDir`). */
+browserTest('an_ot_card_shows_placed_words_in_the_translation_direction', async () => {
+  await withApp(async ({ page }) => {
+    await page.route('**/api/v1/align/open', async (route) => {
+      const reply = await (await route.fetch()).json();
+      // `align/open` answers an `Opened` enum: the view is inside its `ready` envelope.
+      if (reply.type === 'ok' && reply.value.type === 'ready') reply.value.value.origDir = 'rtl';
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
+    });
+    await openAlign(page);
+    const placed = page.locator('[data-testid^="align-card-"] button[data-word]');
+    await placed.first().waitFor();
+    const directions = await placed.evaluateAll((els) => els.map((e) => getComputedStyle(e).direction));
+    assert.ok(directions.length > 0 && directions.every((d) => d === 'ltr'), `placed words read in the translation's direction: ${directions.join(' ')}`);
+  });
+});
+
+/** Owner answer Q30 (a), tC4 #825: a link a save or an open sent back to the word bank is listed
+ * on the Align screen with its word (the server's `dropped`); nothing goes back silently. */
+browserTest('a_link_sent_back_to_the_bank_is_listed', async () => {
+  await withApp(async ({ page }) => {
+    await page.route('**/api/v1/align/open', async (route) => {
+      const reply = await (await route.fetch()).json();
+      if (reply.type === 'ok' && reply.value.type === 'ready') reply.value.value.dropped = [{ card: 1, top: [{ word: 'Παῦλος', occurrence: 1, occurrences: 1 }], word: { word: 'Pablo', occurrence: 1, occurrences: 1 } }];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
+    });
+    await openAlign(page);
+    const listed = page.getByTestId('align-dropped');
+    await listed.waitFor();
+    assert.match(await listed.textContent(), /word bank.*Pablo/);
+  });
+});

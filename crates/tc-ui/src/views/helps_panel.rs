@@ -669,7 +669,7 @@ fn words_tab(
                             on_mouse_enter=enter
                             on_mouse_leave=leave
                             title=title
-                            body=Box::new(move || slug.clone().into_any())
+                            body=Box::new(move || view! { <span dir="auto">{slug.clone()}</span> }.into_any())
                             action_label=t(keys::understand::WORD_LINK, &[])
                             on_action=Callback::new(move |()| actions.load_help_article(link.clone()))
                             attr:data-focused=move || lit.get().then_some("true")
@@ -742,10 +742,14 @@ fn questions_tab(
             view! {
                 <div data-testid="understand-question" dir=dir data-frame=q.verse.as_str().to_owned()
                     data-focused=move || is_active.get().then_some("true") style=style>
-                    <p style=q_style.clone()>{q.question.clone()}</p>
+                    // The pane's `dir` lays the cards out; each text reads in its own
+                    // direction, so an English question under an Arabic set is not
+                    // laid out backwards (tC4 #836).
+                    <p dir="auto" style=q_style.clone()>{q.question.clone()}</p>
+                    // The interface's "Answer" label must not decide the answer's direction.
                     <p style=a_style.clone()>
                         <span style=answer.clone()>{t(keys::understand::ANSWER, &[])}" · "</span>
-                        {q.response.clone()}
+                        <span dir="auto">{q.response.clone()}</span>
                     </p>
                 </div>
             }
@@ -977,8 +981,9 @@ pub(crate) fn note_blocks(blocks: &[ArticleBlock]) -> AnyView {
 
 /// A note, cut to a preview with "Show more" when long (tC4's `ExpandableNote`).
 pub(crate) fn expandable_note(blocks: Vec<ArticleBlock>) -> impl IntoView {
+    // A note reads in its own direction, short or long, wherever it shows (tC4 #836).
     if blocks_len(&blocks) <= PREVIEW_CHARS {
-        return note_blocks(&blocks);
+        return view! { <div dir="auto">{note_blocks(&blocks)}</div> }.into_any();
     }
     let expanded = RwSignal::new(false);
     let preview = preview_blocks(&blocks, PREVIEW_CHARS);
@@ -994,7 +999,7 @@ pub(crate) fn expandable_note(blocks: Vec<ArticleBlock>) -> impl IntoView {
         "padding": 0,
     };
     view! {
-        {move || if expanded.get() { note_blocks(&blocks) } else { note_blocks(&preview) }}
+        <div dir="auto">{move || if expanded.get() { note_blocks(&blocks) } else { note_blocks(&preview) }}</div>
         <button
             type="button"
             data-testid="note-expand"

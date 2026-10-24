@@ -247,7 +247,6 @@ impl Aligner {
         self.value.settle(&self.verse);
         self.proposals = suggest::rebind(&self.value, &self.proposals);
         self.changed = true;
-        self.stale = false;
         Ok(out)
     }
 

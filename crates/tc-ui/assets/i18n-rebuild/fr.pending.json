@@ -2,6 +2,7 @@
   "addBook.notAdded",
   "addBook.usfmDamaged",
   "addBook.usfmReading",
+  "align.droppedLinks",
   "align.unavailable.alignedInText.body",
   "align.unavailable.alignedInText.title",
   "check.markLookAgain",
@@ -167,6 +168,9 @@
   "syncResult.receivedKept",
   "translate.changedWhileTyping",
   "translate.changedWhileTypingUnnamed",
+  "upgrade.checkFailedRefused",
+  "upgrade.checkFailedServer",
+  "upgrade.checkFailedUnreachable",
   "upload.notWritten",
   "wizard.codeNotHeld"
 ]
