@@ -4,7 +4,7 @@ title: Aquifer helps in the app (P6)
 track: A
 lane: app
 milestone: M3
-state: todo
+state: parked
 owner: none
 branch: none
 worktree: none
@@ -15,8 +15,8 @@ proves: [P6]
 no_loss: false
 size: 3-5 sessions (estimate; basis B9a for the download job and B3 for helps panes)
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges; step 1 prepares the H6 packet; later steps wait for the ruling.
+updated: 2026-10-24
+next: Parked until after the first release (rulings/2026-10-24-H3-H4-H7-fast-release.md).
 blocked_by: none
 ---
 
@@ -276,3 +276,4 @@ no test touches the network (the fakes listen on loopback only).
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
