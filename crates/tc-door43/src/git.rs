@@ -193,10 +193,15 @@ fn callbacks<'a>(http: &'a Http, remote: &'a GitRemote) -> RemoteCallbacks<'a> {
             Some(session) if !offered.replace(true) => {
                 Cred::userpass_plaintext(session.username.as_str(), session.token.expose_secret())
             }
-            _ => Err(git2::Error::new(
+            Some(_) => Err(git2::Error::new(
                 ErrorCode::Auth,
                 ErrorClass::Http,
                 "Door43 refused the account's token",
+            )),
+            None => Err(git2::Error::new(
+                ErrorCode::Auth,
+                ErrorClass::Http,
+                "Door43 asks for an account",
             )),
         }
     });
@@ -212,20 +217,34 @@ fn failed(http: &Http, route: &str, error: git2::Error) -> Door43Error {
         return Door43Error::Offline { route };
     }
     let message = error.message().to_owned();
+    let status = message
+        .rsplit_once("status code: ")
+        .and_then(|(_, code)| code.trim().parse::<u16>().ok());
     match error.code() {
+        // libgit2 checks a push against the advertisement it just read: another push moved
+        // the branch, and sync fetches and tries again (STORAGE.md §9.5).
+        ErrorCode::NotFastForward => Door43Error::RefMoved {
+            route,
+            server_message: message,
+        },
         ErrorCode::Auth => Door43Error::AuthFailed {
             route,
             status: AuthStatus::Unauthorized,
             message,
         },
-        _ if message.ends_with("status code: 403") => Door43Error::AuthFailed {
+        _ if status == Some(403) => Door43Error::AuthFailed {
             route,
             status: AuthStatus::Forbidden,
             message,
         },
-        _ if message.ends_with("status code: 404") || error.code() == ErrorCode::NotFound => {
+        _ if status == Some(404) || error.code() == ErrorCode::NotFound => {
             Door43Error::NotFound { route, message }
         }
+        _ if status.is_some_and(|code| (500..=599).contains(&code)) => Door43Error::Server {
+            route,
+            status: status.unwrap_or(500),
+            message,
+        },
         _ => Door43Error::Unreachable {
             route,
             cause: match error.class() {

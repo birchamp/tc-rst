@@ -179,3 +179,79 @@ async fn a_fetch_stops_when_the_switch_goes_off() {
     );
     assert_eq!(refs, 0, "the stopped fetch wrote no ref");
 }
+
+/// A signed-in client for a new public repository `synced` of the seeded user.
+async fn new_repo(fake: &FakeDoor43) -> (Door43Client, Session) {
+    let client = client(fake);
+    let session = client
+        .mint_token(&credentials(), &token_name(), &TokenScope::FOR_SHARING)
+        .await
+        .unwrap();
+    client
+        .create_repo(
+            &session,
+            &NewRepoOwner::SignedInUser,
+            &"synced".parse().unwrap(),
+            Visibility::Public,
+        )
+        .await
+        .unwrap();
+    (client, session)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_push_that_does_not_build_on_the_branch_reads_as_ref_moved() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let (client, session) = new_repo(&fake).await;
+    let target = remote(&client, &format!("{}/synced", seeded::USER), Some(session));
+    let http = client.http().clone();
+    let error = in_repo(move |first| {
+        commit(first, "a teammate's work");
+        git::push(&http, first, &target, &["refs/heads/main:refs/heads/main"]).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let second = git2::Repository::init_bare(dir.path()).unwrap();
+        commit(&second, "this device's work");
+        git::push(
+            &http,
+            &second,
+            &target,
+            &["refs/heads/main:refs/heads/main"],
+        )
+        .unwrap_err()
+    })
+    .await;
+    assert!(matches!(&error, Door43Error::RefMoved { .. }), "{error:?}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_refused_token_is_auth_failed_and_offered_once() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let (client, _) = new_repo(&fake).await;
+    let wrong = Session {
+        username: seeded::USER.parse().unwrap(),
+        token: Token::new("not-the-token".to_owned()).unwrap(),
+    };
+    let target = remote(&client, &format!("{}/synced", seeded::USER), Some(wrong));
+    let http = client.http().clone();
+    let error = in_repo(move |local| {
+        commit(local, "work");
+        git::push(&http, local, &target, &["refs/heads/main:refs/heads/main"]).unwrap_err()
+    })
+    .await;
+    assert!(
+        matches!(
+            &error,
+            Door43Error::AuthFailed {
+                status: tc_door43::AuthStatus::Unauthorized,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    let pack_requests = fake
+        .requests()
+        .iter()
+        .filter(|r| r.path.contains("synced.git"))
+        .count();
+    assert!(pack_requests <= 2, "{pack_requests} requests");
+}

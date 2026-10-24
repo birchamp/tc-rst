@@ -4,7 +4,7 @@ title: One network gate: all network code behind tc-door43
 track: A
 lane: domain
 milestone: M1
-state: building
+state: gating
 owner: domain lane (Claude Code 9f599c21)
 branch: track-DOM-1
 worktree: .worktrees/track-DOM-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 1-2 d
 merged: none
 updated: 2026-10-24
-next: Step 7, run scripts/gates.sh (or --wait-ci DOM-1) on the branch.
+next: Ask the orchestrator for a merge turn; on it, merge main, scripts/gates.sh --wait-ci DOM-1, fast-forward main.
 blocked_by: none
 ---
 
@@ -304,3 +304,5 @@ no-network job exists (it proves no test reaches past the fakes).
 - 2026-10-24 07:37 EDT | domain lane (Claude Code 9f599c21) | step 6 | none | docs/STORAGE.md §9's crate line, S3, §9.5, the crate table and the dependency list say TLS and the proxy come from tc-door43 (`Http::proxy_for`), with the switch checked before and in the callbacks; `grep -n proxy_auto docs/STORAGE.md` prints nothing. tc-door43's crate doc says it is the only crate that uses the network | grep -n proxy_auto docs/STORAGE.md
 - 2026-10-24 07:37 EDT | domain lane (Claude Code 9f599c21) | note | none | crates/tc-arch does not exist yet: CHK-1 must hold INV-ONE-NETWORK-GATE with no exception for tc-resources (its card's table row "`tc-resources` until DOM-1" and the "until DOM-1" exception at CHK-1.md:115, :169, :265 are void once DOM-1 merges). Proof mutation (3) waits for that test | .audit/roadmap/units/CHK-1.md
 - 2026-10-24 07:39 EDT | domain lane (Claude Code 9f599c21) | note | 178ab069 | The times of the step 1 to step 6 lines were written ahead of the clock; they now are the commits' times (git log). No other text changed | git log --format='%h %ci %s' 29048562..track-DOM-1
+- 2026-10-24 07:40 EDT | domain lane (Claude Code 9f599c21) | verify | 178ab069 | Independent review (fresh subagent, read-only, ran the git/proxy/switch/get tests). 1 Code: yes, typed Http::get, RedirectRule, HttpError, private http module, git calls as the one entry. 2 Checks: invariant tests exist and run in CI rust; mutations (1)(2) recorded; (3) waits for CHK-1 (note logged); git error mapping untested (finding 2). 3 Reach: Aquifer and REST reachable now; git calls reachable once X calls them. 4 Siblings: no other crate has reqwest/hyper as a normal dependency; no proxy_auto left; tc-store sends nothing. 5 No loss: n/a. 6 Prose: two nits. Findings: major, NotFastForward read as Unreachable (sync would not retry, STORAGE §9.5); minor, 5xx not Server and auth paths untested; minor, anonymous credentials message; minor, STORAGE S3 snippet silent on the one offer; minor, Http::get doc contradicts itself. Aquifer: no regression (redirect with user info now refused, stricter) | review report quoted in this line
+- 2026-10-24 07:40 EDT | domain lane (Claude Code 9f599c21) | fix | none | All five findings fixed: NotFastForward reads as RefMoved, a smart-HTTP 5xx as Server, 403/404 by the parsed status; anonymous credentials say Door43 asks for an account; STORAGE S3 says the token is offered once; Http::get's doc says any status comes back. New tests a_push_that_does_not_build_on_the_branch_reads_as_ref_moved and a_refused_token_is_auth_failed_and_offered_once. Mutations: without the NotFastForward arm the first fails (`Unreachable … Other("cannot push because a reference … contains commits that are not present locally.")`); offering the token every time fails the second (`Unreachable … "too many redirects or authentication replays"`) | cargo test -p tc-door43 --test git

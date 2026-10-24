@@ -3716,6 +3716,7 @@ S2  attempt = 1.
 S3  Fetch:
       let mut cb = RemoteCallbacks::new();
       cb.credentials(|_url, _user, _allowed| Cred::userpass_plaintext(&username, token.expose()));
+      // tc_door43::git offers the token once: libgit2 asks again after a refusal, forever.
       cb.transfer_progress(|p| { progress(p.received_objects(), p.total_objects()); true });
       let mut fo = FetchOptions::new();
       fo.remote_callbacks(cb).download_tags(AutotagOption::None).proxy_options(/* Http::proxy_for */);

@@ -293,9 +293,8 @@ impl Http {
         }
     }
 
-    /// Sends a GET with `accept` and `headers`. Only a success status (2xx) comes back as
-    /// an answer the caller reads the body of; any other status comes back too, for the
-    /// caller to read its headers.
+    /// Sends a GET with `accept` and `headers`. The answer comes back whatever its status;
+    /// the caller checks it.
     pub async fn get(
         &self,
         url: Url,
