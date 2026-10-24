@@ -14,7 +14,6 @@ use std::sync::Arc;
 use crate::app::jobs::JobEnd;
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
-use tc_api::ApiError;
 use tc_api::account::{
     CancelSignIn, HelpLink, Orgs, ProfileLink, RepoLink, Resume, SignOut, WebUrl,
 };
@@ -26,8 +25,11 @@ use tc_api::net::Set as NetSet;
 use tc_api::prefs::SetLocale;
 use tc_api::refusal::FeedbackRefusal;
 use tc_api::refusal::Message;
+use tc_api::{ApiError, Endpoint};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
+
+use super::leave::LeaveTo;
 
 use super::{Runtime, ServerState, bridge, js};
 use crate::app::account::{SignInFlow, SignInForm, SignInNext};
@@ -36,6 +38,7 @@ use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
 use crate::app::forms::{AddBookForm, ImportForm, ImportKind, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
 use crate::app::latest::Latest;
+pub(crate) use crate::app::net::NetEnd;
 use crate::app::open_door43::OpenForm;
 use crate::app::save::indicator::Retry;
 use crate::app::share::{ShareForm, ShareProject, ShareStep, Target};
@@ -281,7 +284,7 @@ impl Actions {
     pub fn go(&self, view: View) {
         let this = self.clone();
         spawn_local(async move {
-            if !this.0.runtime.saves().gate().await {
+            if !this.leave(LeaveTo::Tab(view)).await {
                 return;
             }
             let s = this.s();
@@ -303,7 +306,7 @@ impl Actions {
     pub fn back_to_projects(&self) {
         let this = self.clone();
         spawn_local(async move {
-            if !this.0.runtime.saves().gate().await {
+            if !this.leave(LeaveTo::Home).await {
                 return;
             }
             this.leave_project(true);
@@ -513,6 +516,53 @@ impl Actions {
         self.carry_out(step);
     }
 
+    /// INV-NET-REFUSALS-HANDLED-ONCE (UI-3): the one place `NeedsInternet` and `NeedsSignIn`
+    /// become the internet question and the sign-in step, each resuming `pending` after. Any
+    /// other refusal comes back for the screen to show. Every variant is named, so a new one is
+    /// decided here.
+    pub(super) fn net_refusal(&self, pending: Pending, error: ApiError) -> Option<ApiError> {
+        match error {
+            ApiError::NeedsInternet(_) => {
+                self.ask_again(pending);
+                None
+            }
+            ApiError::NeedsSignIn(_) => {
+                self.needs_sign_in(pending);
+                None
+            }
+            error @ (ApiError::Version { .. }
+            | ApiError::BadRequest { .. }
+            | ApiError::StaleScope { .. }
+            | ApiError::StaleSession
+            | ApiError::ToolNotReady
+            | ApiError::RequestReused
+            | ApiError::NotSaved(_)
+            | ApiError::Refused(_)
+            | ApiError::Busy(_)
+            | ApiError::Unavailable(_)
+            | ApiError::Internal { .. }) => Some(error),
+        }
+    }
+
+    /// One call that may need the internet or a sign-in: those two refusals are handled by
+    /// [`Self::net_refusal`]; a failure below the API stays a transport failure, never a
+    /// refusal the server did not make.
+    pub(super) async fn run_net<E: Endpoint>(
+        &self,
+        pending: Pending,
+        request: &E,
+    ) -> NetEnd<E::Ok> {
+        match self.0.runtime.api().call(request).await {
+            Ok(ok) => NetEnd::Ok(ok),
+            Err(CallError::Api(error)) => match self.net_refusal(pending, error) {
+                None => NetEnd::Asked,
+                Some(error) => NetEnd::Failed(error),
+            },
+            Err(CallError::Transport(transport)) => NetEnd::Transport(transport),
+            Err(CallError::Dropped) => NetEnd::Dropped,
+        }
+    }
+
     /// A page of another site that the person chose (tC4 `openDoor43Page`): an internet task
     /// with no gate, because the browser opens it, not tC4.
     pub fn open_door43_page(&self, kind: LinkKind, url: WebUrl) {
@@ -522,17 +572,20 @@ impl Actions {
     fn open_link(&self, kind: LinkKind, url: WebUrl) {
         let this = self.clone();
         spawn_local(async move {
-            let api = this.0.runtime.api();
+            let pending = Pending::Link(kind, url.clone());
             let answer = match kind {
-                LinkKind::Help => api.call(&HelpLink { url: url.clone() }).await,
-                LinkKind::Repo => api.call(&RepoLink { url: url.clone() }).await,
+                LinkKind::Help => this.run_net(pending, &HelpLink { url }).await,
+                LinkKind::Repo => this.run_net(pending, &RepoLink { url }).await,
             };
             match answer {
-                Ok(link) => bridge::open_external(link.url.as_str()),
-                Err(CallError::Api(ApiError::NeedsInternet(_))) => {
-                    this.ask_again(Pending::Link(kind, url));
+                NetEnd::Ok(link) => bridge::open_external(link.url.as_str()),
+                NetEnd::Asked | NetEnd::Dropped => {}
+                NetEnd::Failed(error) => {
+                    console_error(&format!("tc4: a link did not open: {error}"))
                 }
-                Err(error) => console_error(&format!("tc4: a link did not open: {error}")),
+                NetEnd::Transport(error) => {
+                    console_error(&format!("tc4: a link did not open: {error}"))
+                }
             }
         });
     }
@@ -879,13 +932,17 @@ impl Actions {
                 repo,
                 name: name.clone(),
             };
-            let ended = match this.0.runtime.api().call(&request).await {
-                Ok(job) => this.follow::<OpenDoor43>(job, |_| {}, || true).await,
-                Err(CallError::Api(error)) => JobEnd::Failed(error),
-                Err(other) => JobEnd::Failed(ApiError::BadRequest {
-                    field: "door43/open".into(),
-                    reason: other.to_string(),
-                }),
+            let ended = match this.run_net(Pending::OpenDoor43, &request).await {
+                NetEnd::Ok(job) => this.follow::<OpenDoor43>(job, |_| {}, || true).await,
+                NetEnd::Asked | NetEnd::Dropped => {
+                    this.patch_od(|od| od.busy = false);
+                    return;
+                }
+                NetEnd::Failed(error) => JobEnd::Failed(error),
+                NetEnd::Transport(error) => {
+                    this.open_refused(None, error.to_string());
+                    return;
+                }
             };
             match ended {
                 JobEnd::Done(project) => {
@@ -905,21 +962,19 @@ impl Actions {
                     this.patch_od(|od| od.busy = false);
                     this.refresh_projects();
                 }
-                JobEnd::Failed(ApiError::NeedsInternet(_)) => this.ask_again(Pending::OpenDoor43),
-                JobEnd::Failed(ApiError::NeedsSignIn(_)) => {
-                    this.patch_od(|od| od.busy = false);
-                    this.needs_sign_in(Pending::OpenDoor43);
-                }
-                JobEnd::Failed(ApiError::Refused(refusal)) => {
-                    let reason = refusal
-                        .vars()
-                        .into_iter()
-                        .map(|(_, v)| v)
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    this.open_refused(refusal.code(), reason);
-                }
-                JobEnd::Failed(other) => this.open_refused(None, other.to_string()),
+                JobEnd::Failed(error) => match this.net_refusal(Pending::OpenDoor43, error) {
+                    None => this.patch_od(|od| od.busy = false),
+                    Some(ApiError::Refused(refusal)) => {
+                        let reason = refusal
+                            .vars()
+                            .into_iter()
+                            .map(|(_, v)| v)
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        this.open_refused(refusal.code(), reason);
+                    }
+                    Some(other) => this.open_refused(None, other.to_string()),
+                },
             }
         });
     }
@@ -949,22 +1004,31 @@ impl Actions {
                 request: js::random_request_id(),
                 project: project.clone(),
             };
-            let ended = match this.0.runtime.api().call(&request).await {
-                Ok(job) => this.follow::<SyncProject>(job, |_| {}, || true).await,
-                Err(CallError::Api(error)) => JobEnd::Failed(error),
-                Err(other) => JobEnd::Failed(ApiError::BadRequest {
-                    field: "door43/sync".into(),
-                    reason: other.to_string(),
-                }),
+            let started = this.run_net(Pending::Sync(project.clone()), &request).await;
+            let ended = match started {
+                NetEnd::Ok(job) => this.follow::<SyncProject>(job, |_| {}, || true).await,
+                NetEnd::Failed(error) => JobEnd::Failed(error),
+                NetEnd::Asked | NetEnd::Dropped => {
+                    this.s().syncing.try_set(None);
+                    return;
+                }
+                NetEnd::Transport(_) => {
+                    this.s().syncing.try_set(None);
+                    let end = SyncEnd::Unreached;
+                    this.s()
+                        .sync_result
+                        .try_set(Some(SyncToast { project, end }));
+                    return;
+                }
             };
             // The button comes back whatever the sync did.
             this.s().syncing.try_set(None);
             let end = match ended {
-                JobEnd::Failed(ApiError::NeedsInternet(_)) => {
-                    return this.ask_again(Pending::Sync(project));
-                }
-                JobEnd::Failed(ApiError::NeedsSignIn(_)) => {
-                    return this.needs_sign_in(Pending::Sync(project));
+                JobEnd::Failed(error) => {
+                    match this.net_refusal(Pending::Sync(project.clone()), error) {
+                        None => return,
+                        Some(error) => SyncEnd::Failed(error),
+                    }
                 }
                 JobEnd::Done(view) => SyncEnd::Synced(view),
                 // The sync ended without a word on how (cancelled, or the server restarted): no
@@ -972,7 +1036,6 @@ impl Actions {
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
                     return this.refresh_projects();
                 }
-                JobEnd::Failed(error) => SyncEnd::Failed(error),
             };
             this.s()
                 .sync_result
@@ -1019,27 +1082,25 @@ impl Actions {
                 return;
             }
             let dialog = this.s().layers.dialog.get_untracked();
-            match reply {
-                Err(CallError::Api(ApiError::NeedsInternet(_))) => {
-                    this.end_share();
-                    this.ask_again(Pending::Share(Box::new(project)));
-                }
-                Err(CallError::Api(ApiError::NeedsSignIn(_))) => {
-                    this.end_share();
-                    this.needs_sign_in(Pending::Share(Box::new(project)));
-                }
-                reply => {
-                    // The answer goes to this flow's dialog only; one that opened meanwhile
-                    // over Home takes its place only when nothing else is open.
-                    match (opened, dialog) {
-                        (true, Some(Dialog::Share)) => {}
-                        (false, None) => this.open_share(&project),
-                        _ => return,
+            let reply = match reply {
+                Err(CallError::Api(error)) => {
+                    match this.net_refusal(Pending::Share(Box::new(project.clone())), error) {
+                        // The internet question or the sign-in step takes the dialog's place.
+                        None => return this.end_share(),
+                        Some(error) => Err(CallError::Api(error)),
                     }
-                    let read = reply.map_err(|error| share_problem(&error));
-                    this.patch_sh(|sh| sh.choices_read(read));
                 }
+                reply => reply,
+            };
+            // The answer goes to this flow's dialog only; one that opened meanwhile over Home
+            // takes its place only when nothing else is open.
+            match (opened, dialog) {
+                (true, Some(Dialog::Share)) => {}
+                (false, None) => this.open_share(&project),
+                _ => return,
             }
+            let read = reply.map_err(|error| share_problem(&error));
+            this.patch_sh(|sh| sh.choices_read(read));
         });
     }
 
@@ -1222,14 +1283,15 @@ impl Actions {
             let request = Resume {
                 request: js::random_request_id(),
             };
-            match this.0.runtime.api().call(&request).await {
-                Ok(resumed) => {
+            match this.run_net(Pending::CheckSignIn, &request).await {
+                NetEnd::Ok(resumed) => {
                     this.s().server.account.try_set(resumed.account);
                 }
-                Err(CallError::Api(ApiError::NeedsInternet(_))) => {
-                    this.ask_again(Pending::CheckSignIn);
+                NetEnd::Asked | NetEnd::Dropped => {}
+                NetEnd::Failed(error) => {
+                    console_warn(&format!("tc4: the saved sign-in was not checked: {error}"))
                 }
-                Err(error) => {
+                NetEnd::Transport(error) => {
                     console_warn(&format!("tc4: the saved sign-in was not checked: {error}"))
                 }
             }
@@ -1245,15 +1307,15 @@ impl Actions {
     fn profile_now(&self) {
         let this = self.clone();
         spawn_local(async move {
-            match this.0.runtime.api().call(&ProfileLink {}).await {
-                Ok(link) => bridge::open_external(link.url.as_str()),
-                Err(CallError::Api(ApiError::NeedsInternet(_))) => {
-                    this.ask_again(Pending::Profile);
+            match this.run_net(Pending::Profile, &ProfileLink {}).await {
+                NetEnd::Ok(link) => bridge::open_external(link.url.as_str()),
+                NetEnd::Asked | NetEnd::Dropped => {}
+                NetEnd::Failed(error) => {
+                    console_warn(&format!("tc4: the Door43 page did not open: {error}"))
                 }
-                Err(CallError::Api(ApiError::NeedsSignIn(_))) => {
-                    this.needs_sign_in(Pending::Profile);
+                NetEnd::Transport(error) => {
+                    console_warn(&format!("tc4: the Door43 page did not open: {error}"))
                 }
-                Err(error) => console_warn(&format!("tc4: the Door43 page did not open: {error}")),
             }
         });
     }

@@ -18,6 +18,7 @@ use tc_api::{ApiError, NotSaved};
 use tc_core::BookId;
 
 use crate::app::client::CallError;
+use crate::app::net::NetEnd;
 use crate::app::sync::person_label;
 use crate::i18n::{keys, t};
 
@@ -187,59 +188,56 @@ impl KeepPhase {
 }
 
 /// What a choice that was not made says after "The version was not kept.": a refusal in the
-/// API's words, else what stopped the call. One arm per variant, so a new kind of answer does
-/// not reach the screen as its debug text.
-pub fn failure_text(error: &CallError) -> String {
+/// API's words. One arm per variant, so a new kind of answer does not reach the screen as its
+/// debug text.
+pub fn failure_text(error: &ApiError) -> String {
     match error {
-        CallError::Api(ApiError::NotSaved(NotSaved::LookAgain)) => {
-            t(keys::conflicts::OTHER_KEPT, &[])
-        }
-        CallError::Api(ApiError::NotSaved(NotSaved::Refused(
+        ApiError::NotSaved(NotSaved::LookAgain) => t(keys::conflicts::OTHER_KEPT, &[]),
+        ApiError::NotSaved(NotSaved::Refused(
             SaveRefusal::Choice { reason } | SaveRefusal::InvalidText { reason },
-        ))) => reason.clone(),
-        CallError::Api(ApiError::NotSaved(NotSaved::Refused(SaveRefusal::IncoherentView))) => {
+        )) => reason.clone(),
+        ApiError::NotSaved(NotSaved::Refused(SaveRefusal::IncoherentView)) => {
             t(keys::review::refused::INCOHERENT, &[])
         }
-        CallError::Api(ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook))) => {
+        ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook)) => {
             t(keys::review::refused::LAST_BOOK, &[])
         }
-        CallError::Api(ApiError::NotSaved(NotSaved::Disk(reason))) => {
+        ApiError::NotSaved(NotSaved::Disk(reason)) => {
             t(keys::review::refused::DISK, &[("reason", reason)])
         }
-        CallError::Api(ApiError::NotSaved(NotSaved::ReadOnly(reason))) => {
+        ApiError::NotSaved(NotSaved::ReadOnly(reason)) => {
             t(crate::app::offer::banner(*reason).sentence, &[])
         }
-        CallError::Api(ApiError::NotSaved(
-            NotSaved::PlanStale | NotSaved::StaleScope | NotSaved::BadToken,
-        )) => t(keys::review::refused::LOOK_AGAIN, &[]),
-        CallError::Api(
-            api @ (ApiError::Version { .. }
-            | ApiError::BadRequest { .. }
-            | ApiError::StaleScope { .. }
-            | ApiError::StaleSession
-            | ApiError::ToolNotReady
-            | ApiError::RequestReused
-            | ApiError::Refused(_)
-            | ApiError::NeedsInternet(_)
-            | ApiError::NeedsSignIn(_)
-            | ApiError::Busy(_)
-            | ApiError::Unavailable(_)
-            | ApiError::Internal { .. }),
-        ) => api.to_string(),
-        CallError::Dropped => error.to_string(),
-        CallError::Transport(transport) => transport.to_string(),
+        ApiError::NotSaved(NotSaved::PlanStale | NotSaved::StaleScope | NotSaved::BadToken) => {
+            t(keys::review::refused::LOOK_AGAIN, &[])
+        }
+        api @ (ApiError::Version { .. }
+        | ApiError::BadRequest { .. }
+        | ApiError::StaleScope { .. }
+        | ApiError::StaleSession
+        | ApiError::ToolNotReady
+        | ApiError::RequestReused
+        | ApiError::Refused(_)
+        | ApiError::NeedsInternet(_)
+        | ApiError::NeedsSignIn(_)
+        | ApiError::Busy(_)
+        | ApiError::Unavailable(_)
+        | ApiError::Internal { .. }) => api.to_string(),
     }
 }
 
 /// What the server's reply came to: an answer, or no usable one. Only a reply from the API
-/// is an answer; a failed connection or a closed project may hide a choice that was made.
-pub fn keep_reply<T>(reply: Result<T, CallError>, kept: impl FnOnce(T) -> KeepReply) -> KeepReply {
+/// is an answer; a failed connection or a closed project may hide a choice that was made, so
+/// the same press sends the same request again (A-27).
+pub fn keep_reply<T>(reply: NetEnd<T>, kept: impl FnOnce(T) -> KeepReply) -> KeepReply {
     match reply {
-        Ok(value) => kept(value),
-        Err(error @ CallError::Api(_)) => KeepReply::Refused(failure_text(&error)),
-        Err(error @ (CallError::Dropped | CallError::Transport(_))) => {
-            KeepReply::Lost(failure_text(&error))
-        }
+        NetEnd::Ok(value) => kept(value),
+        NetEnd::Failed(error) => KeepReply::Refused(failure_text(&error)),
+        NetEnd::Transport(transport) => KeepReply::Lost(transport.to_string()),
+        NetEnd::Dropped => KeepReply::Lost(CallError::Dropped.to_string()),
+        // A choice needs neither the internet nor a sign-in; were it asked, the press is
+        // open to go again with the same request.
+        NetEnd::Asked => KeepReply::Lost(String::new()),
     }
 }
 

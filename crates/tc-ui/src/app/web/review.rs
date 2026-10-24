@@ -139,7 +139,7 @@ impl Actions {
         spawn_local(async move {
             let answer = this.runtime().api().call(&req).await;
             let kept_it = answer.is_ok();
-            let reply = keep_reply(answer, reply);
+            let reply = keep_reply(answer.into(), reply);
             this.update_review(|r| {
                 r.keep.reply(request, reply);
                 if kept_it && made {

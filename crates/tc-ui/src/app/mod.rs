@@ -35,6 +35,7 @@ pub mod jobs;
 pub mod language;
 pub mod latest;
 pub mod load;
+pub mod net;
 pub mod offer;
 pub mod open_door43;
 pub mod print;

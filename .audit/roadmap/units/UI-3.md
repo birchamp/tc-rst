@@ -4,18 +4,18 @@ title: One leave path, one network-call helper, one refusal text, Submit, dialog
 track: A
 lane: app
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: building
+owner: checks lane (Claude Code 2198ee19)
+branch: track-UI-3
+worktree: .worktrees/track-UI-3
 depends: [UI-1]
 needs_owner: []
 proves: []
 no_loss: true
 size: 2 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after UI-1 merges, then do step 1.
+updated: 2026-10-24
+next: step 1
 blocked_by: none
 ---
 
@@ -337,3 +337,4 @@ save_props` must pass unchanged.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-app.md
+- 2026-10-24 15:03 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on the orchestrator's assignment (UI-3 is on the critical path for D1, E1a and E2), on branch track-UI-3 from origin/track-UI-1 at efe271cd (UI-1 done, in merge batch 2). UI files only; the app lane does UI-2 in server files at the same time | python3 -I .audit/tools/board.py

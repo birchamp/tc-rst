@@ -18,6 +18,8 @@ use tc_api::session::{Close, Open, OpenUnit, OpenedProject};
 use tc_core::BookId;
 use wasm_bindgen_futures::spawn_local;
 
+use super::leave::LeaveTo;
+
 use super::app_ctx::{Actions, HomeBanner, OpenTarget};
 use super::js;
 use crate::app::client::CallError;
@@ -118,9 +120,9 @@ fn view_of(mode: PlaceMode) -> View {
 }
 
 /// The words of a refused open on Home, with the "Ask for help" it offers (tC4 #378).
-fn refused_banner(error: &ApiError) -> HomeBanner {
+fn refused_banner(error: &CallError) -> HomeBanner {
     let (code, text, report) = match error {
-        ApiError::Refused(refusal) => {
+        CallError::Api(ApiError::Refused(refusal)) => {
             let owned = refusal.vars();
             let vars: Vec<(&str, &dyn std::fmt::Display)> = owned
                 .iter()
@@ -134,7 +136,9 @@ fn refused_banner(error: &ApiError) -> HomeBanner {
             };
             (refusal.code().unwrap_or("open").to_owned(), text, None)
         }
-        ApiError::Internal { report } => ("internal".to_owned(), error.to_string(), Some(*report)),
+        CallError::Api(ApiError::Internal { report }) => {
+            ("internal".to_owned(), error.to_string(), Some(*report))
+        }
         other => ("open".to_owned(), other.to_string(), None),
     };
     HomeBanner {
@@ -289,7 +293,7 @@ impl Actions {
         s.book_error.try_set(None);
         let this = self.clone();
         spawn_local(async move {
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Open).await {
                 if OPENS.with(|l| l.is_current(attempt)) {
                     this.s().u.opening.try_set(None);
                 }
@@ -314,17 +318,11 @@ impl Actions {
                         .await
                     {
                         JobEnd::Done(opened) => Some(Ok(*opened)),
-                        JobEnd::Failed(error) => Some(Err(error)),
+                        JobEnd::Failed(error) => Some(Err(CallError::Api(error))),
                         JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => None,
                     }
                 }
-                Err(error) => Some(Err(match error {
-                    CallError::Api(error) => error,
-                    other => ApiError::BadRequest {
-                        field: "open".to_owned(),
-                        reason: other.to_string(),
-                    },
-                })),
+                Err(error) => Some(Err(error)),
             };
             if !OPENS.with(|l| l.is_current(attempt)) {
                 return;
@@ -453,7 +451,7 @@ impl Actions {
     pub fn open_book(&self, book: BookId) {
         let this = self.clone();
         spawn_local(async move {
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Book(book)).await {
                 return;
             }
             let u = &this.s().u;
@@ -472,7 +470,7 @@ impl Actions {
     pub fn set_chapter(&self, chapter: u16) {
         let this = self.clone();
         spawn_local(async move {
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Chapter(chapter)).await {
                 return;
             }
             let s = this.s();
@@ -507,7 +505,7 @@ impl Actions {
         }
         let this = self.clone();
         spawn_local(async move {
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Story(story)).await {
                 return;
             }
             if this.s().editing.with_untracked(|editing| editing.is_open()) {

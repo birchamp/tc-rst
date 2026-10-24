@@ -14,7 +14,7 @@ use tc_api::settings::ViewFromHome;
 use tc_core::BookId;
 use wasm_bindgen_futures::spawn_local;
 
-use super::app_ctx::{Actions, Dialog};
+use super::app_ctx::{Actions, Dialog, NetEnd};
 use super::js;
 use crate::app::client::CallError;
 use crate::app::internet::Pending;
@@ -40,13 +40,25 @@ pub(super) fn said(error: &ApiError) -> String {
     }
 }
 
-pub(super) fn api_error(error: CallError) -> ApiError {
+/// What a failed call says: a refusal in tC4's words; a failure below the API in its own
+/// words, never as a refusal the server did not make.
+pub(super) fn said_call(error: &CallError) -> String {
     match error {
-        CallError::Api(error) => error,
-        other => ApiError::BadRequest {
-            field: "call".into(),
-            reason: other.to_string(),
-        },
+        CallError::Api(error) => said(error),
+        other => other.to_string(),
+    }
+}
+
+impl<T> NetEnd<T> {
+    /// The answer, or what its failure says; `Err(None)` when the internet question or the
+    /// sign-in step took over, or the reply was dropped with the project it was for.
+    pub(super) fn said(self) -> Result<T, Option<String>> {
+        match self {
+            NetEnd::Ok(ok) => Ok(ok),
+            NetEnd::Asked | NetEnd::Dropped => Err(None),
+            NetEnd::Failed(error) => Err(Some(said(&error))),
+            NetEnd::Transport(error) => Err(Some(error.to_string())),
+        }
     }
 }
 
@@ -69,7 +81,7 @@ impl Actions {
                 let Some(st) = st else { return };
                 match read {
                     Ok(view) => st.read(&project, view),
-                    Err(error) => st.failed(&project, said(&api_error(error))),
+                    Err(error) => st.failed(&project, said_call(&error)),
                 }
             });
         });
@@ -207,11 +219,10 @@ impl Actions {
                 gateway: gateway.gateway.clone(),
                 book,
             };
-            match this.runtime().api().call(&request).await.map_err(api_error) {
+            match this.run_net(Pending::Catalog, &request).await.said() {
                 Ok(view) => this.patch_src(|src| src.rows_read(&gateway, book, view.rows)),
-                Err(ApiError::NeedsInternet(_)) => this.ask_again(Pending::Catalog),
-                Err(error) => {
-                    let reason = said(&error);
+                Err(None) => {}
+                Err(Some(reason)) => {
                     this.patch_src(|src| src.rows_failed(&gateway, book, reason));
                 }
             }
@@ -254,13 +265,10 @@ impl Actions {
                 book,
                 repos,
             };
-            let job = match this.runtime().api().call(&request).await.map_err(api_error) {
+            let job = match this.run_net(Pending::Download, &request).await.said() {
                 Ok(job) => job,
-                Err(ApiError::NeedsInternet(_)) => return this.ask_again(Pending::Download),
-                Err(error) => {
-                    let reason = said(&error);
-                    return this.patch_src(|src| src.error = Some(reason));
-                }
+                Err(None) => return,
+                Err(Some(reason)) => return this.patch_src(|src| src.error = Some(reason)),
             };
             this.patch_src(|src| {
                 src.error = None;
@@ -302,16 +310,12 @@ impl Actions {
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
                     this.patch_src(|src| src.dl = None);
                 }
-                JobEnd::Failed(ApiError::NeedsInternet(_)) => {
-                    this.patch_src(|src| src.dl = None);
-                    this.ask_again(Pending::Download);
-                }
                 JobEnd::Failed(error) => {
-                    let reason = said(&error);
-                    this.patch_src(|src| {
-                        src.dl = None;
-                        src.error = Some(reason);
-                    });
+                    this.patch_src(|src| src.dl = None);
+                    if let Some(error) = this.net_refusal(Pending::Download, error) {
+                        let reason = said(&error);
+                        this.patch_src(|src| src.error = Some(reason));
+                    }
                 }
             }
         });

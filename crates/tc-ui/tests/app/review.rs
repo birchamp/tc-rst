@@ -15,7 +15,8 @@ use tc_api::shown::{Computer, PersonLabel, Who};
 use tc_api::write::SaveRefusal;
 use tc_api::{ApiError, NotSaved};
 use tc_core::BookId;
-use tc_ui::app::client::{CallError, Transport};
+use tc_ui::app::client::Transport;
+use tc_ui::app::net::NetEnd;
 use tc_ui::app::review::{
     BackTo, Choices, KeepOutcome, KeepPhase, KeepReply, Owner, Press, ReviewState, back_label,
     choices, consequence, failure_text, group_others, keep_passage_label, kept_name, made_by,
@@ -580,7 +581,7 @@ fn every_kind_has_its_choices() {
 /// nothing reaches the screen as an error's debug text.
 #[test]
 fn a_look_again_refusal_says_another_version_was_kept() {
-    let api = |e: NotSaved| CallError::Api(ApiError::NotSaved(e));
+    let api = |e: NotSaved| ApiError::NotSaved(e);
     assert_eq!(
         failure_text(&api(NotSaved::LookAgain)),
         "Another version of this verse is kept."
@@ -601,8 +602,6 @@ fn a_look_again_refusal_says_another_version_was_kept() {
         api(NotSaved::PlanStale),
         api(NotSaved::StaleScope),
         api(NotSaved::BadToken),
-        CallError::Dropped,
-        CallError::Transport(Transport::Status(503)),
     ];
     for error in &every {
         let text = failure_text(error);
@@ -611,13 +610,25 @@ fn a_look_again_refusal_says_another_version_was_kept() {
             "{error:?}: {text}"
         );
     }
+    // No usable answer: the reply is lost, in words, never as a refusal.
+    for lost in [
+        NetEnd::<()>::Dropped,
+        NetEnd::Transport(Transport::Status(503)),
+    ] {
+        let reply =
+            tc_ui::app::review::keep_reply(lost, |()| KeepReply::Kept { disk_warning: None });
+        assert!(
+            matches!(&reply, KeepReply::Lost(text) if !text.is_empty() && !text.contains('{')),
+            "{reply:?}"
+        );
+    }
     let mut keep = KeepPhase::Idle;
     let (mut mint, _) = minter();
     keep.press(&keep_press(), &mut mint).unwrap();
     keep.reply(
         in_flight(&keep),
-        tc_ui::app::review::keep_reply::<()>(Err(api(NotSaved::LookAgain)), |()| KeepReply::Kept {
-            disk_warning: None,
+        tc_ui::app::review::keep_reply::<()>(NetEnd::Failed(api(NotSaved::LookAgain)), |()| {
+            KeepReply::Kept { disk_warning: None }
         }),
     );
     assert_eq!(
