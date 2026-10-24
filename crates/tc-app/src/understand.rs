@@ -559,6 +559,29 @@ impl Handle<tc_api::session::RetryCheckpoint> for App {
     }
 }
 
+/// A mode switch (D1, tC4 `go`): the checkpoint of the mode left, when the policy says so.
+impl Handle<tc_api::session::LeaveMode> for App {
+    async fn handle(&self, req: tc_api::session::LeaveMode) -> Result<(), ApiError> {
+        use crate::backend::CheckpointReason;
+        use tc_api::session::ScreenMode;
+        let session = self.read(&req.at)?;
+        let reason = match req.from {
+            ScreenMode::Translate => CheckpointReason::LeavingTranslate,
+            ScreenMode::Understand => CheckpointReason::LeavingMode("Understand".to_owned()),
+            ScreenMode::Check => CheckpointReason::LeavingMode("Check".to_owned()),
+            ScreenMode::CommunityChecking => {
+                CheckpointReason::LeavingMode("Community Checking".to_owned())
+            }
+        };
+        let sessions = self.inner.sessions.clone();
+        // The switch does not wait for the commit: tC4 starts it and moves on.
+        tokio::spawn(async move {
+            sessions.mode_switch(&session, reason).await;
+        });
+        Ok(())
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // editor/book, editor/sources
 // ---------------------------------------------------------------------------------------

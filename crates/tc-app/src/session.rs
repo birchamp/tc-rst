@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex, Weak};
 use serde_json::json;
 use tc_api::app::{OpenSession, SessionRole};
 use tc_api::event::{CheckpointOutcome, Event, SessionEvent, SessionMode};
-use tc_api::ids::{Epoch, ProjectId, ProjectRef, Scope, ViewSeq};
+use tc_api::ids::{Epoch, ProjectId, ProjectRef, Scope, ViewSeq, WallMs};
 use tc_api::{ApiError, Message};
 use tc_journal::record::CommentTarget;
 use tc_journal::{Record, RecordKey};
@@ -243,6 +243,38 @@ impl Slot {
     }
 }
 
+/// When a mode switch checkpoints (D1, Q-5): every switch (R17, once P measures R9), or at most
+/// once in a span, the fallback used until then.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckpointPolicy {
+    EveryModeSwitch,
+    AtMostEvery(std::time::Duration),
+}
+
+/// The policy in force: at most once every two minutes, so a checker who switches mode after
+/// every decision does not wait behind a checkpoint each time (Q-5's fallback).
+pub const MODE_SWITCH_POLICY: CheckpointPolicy =
+    CheckpointPolicy::AtMostEvery(std::time::Duration::from_secs(120));
+
+/// Whether a checkpoint for `reason` runs now: leaving the project always checks for changes;
+/// a mode switch follows `policy`, from the start of the folder's last mode-switch checkpoint.
+pub fn checkpoint_due(
+    policy: CheckpointPolicy,
+    last: Option<WallMs>,
+    now: WallMs,
+    reason: &CheckpointReason,
+) -> bool {
+    match reason {
+        CheckpointReason::LeavingProject | CheckpointReason::Other(_) => true,
+        CheckpointReason::LeavingTranslate | CheckpointReason::LeavingMode(_) => match policy {
+            CheckpointPolicy::EveryModeSwitch => true,
+            CheckpointPolicy::AtMostEvery(span) => last.is_none_or(|last| {
+                u128::try_from(now.0.saturating_sub(last.0)).unwrap_or(0) >= span.as_millis()
+            }),
+        },
+    }
+}
+
 /// Where a folder's last checkpoint stands (D1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckpointState {
@@ -265,6 +297,8 @@ struct RegistryInner {
     slots: Mutex<BTreeMap<ProjectRef, Slot>>,
     /// Each folder's last checkpoint, kept after its session closes so a reload finds it (D1).
     checkpoints: Mutex<BTreeMap<ProjectRef, CheckpointState>>,
+    /// When each folder's last mode-switch checkpoint started (D1, the policy's clock).
+    switched: Mutex<BTreeMap<ProjectRef, WallMs>>,
     /// Woken whenever an open, a leave checkpoint or a close ends.
     changed: tokio::sync::Notify,
 }
@@ -365,6 +399,7 @@ impl SessionRegistry {
                 slot_ids: AtomicU64::new(1),
                 slots: Mutex::new(BTreeMap::new()),
                 checkpoints: Mutex::new(BTreeMap::new()),
+                switched: Mutex::new(BTreeMap::new()),
                 changed: tokio::sync::Notify::new(),
             }),
         }
@@ -381,7 +416,7 @@ impl SessionRegistry {
         let folder = session.scope.project.clone();
         let label = match &reason {
             CheckpointReason::LeavingProject => "leavingProject",
-            CheckpointReason::LeavingTranslate => "leavingTranslate",
+            CheckpointReason::LeavingTranslate | CheckpointReason::LeavingMode(_) => "leavingMode",
             CheckpointReason::Other(_) => "other",
         };
         lock(&self.inner.checkpoints).insert(folder.clone(), CheckpointState::Running);
@@ -405,6 +440,25 @@ impl SessionRegistry {
             event: SessionEvent::Checkpoint(outcome.clone()),
         });
         outcome
+    }
+
+    /// A mode switch (`session/leave`): the checkpoint runs when the policy says it is due.
+    pub async fn mode_switch(
+        &self,
+        session: &ProjectSession,
+        reason: CheckpointReason,
+    ) -> Option<CheckpointOutcome> {
+        let folder = session.scope.project.clone();
+        let now = self.inner.clock.now();
+        {
+            let mut switched = lock(&self.inner.switched);
+            let last = switched.get(&folder).copied();
+            if !checkpoint_due(MODE_SWITCH_POLICY, last, now, &reason) {
+                return None;
+            }
+            switched.insert(folder, now);
+        }
+        Some(self.checkpoint(session, reason).await)
     }
 
     /// The projects whose last checkpoint failed, for `hello`.

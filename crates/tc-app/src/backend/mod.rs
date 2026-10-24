@@ -1038,6 +1038,8 @@ pub enum CheckpointReason {
     LeavingProject,
     /// tC4's "leaving Translate" checkpoint, at a mode switch (D1).
     LeavingTranslate,
+    /// A mode switch from another mode: its words name it ("leaving Check").
+    LeavingMode(String),
     Other(String),
 }
 

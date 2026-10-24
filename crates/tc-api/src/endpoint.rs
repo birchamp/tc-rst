@@ -174,6 +174,7 @@ scoped!(
     crate::prefs::RecordPlace,
     crate::session::Close,
     crate::session::RetryCheckpoint,
+    crate::session::LeaveMode,
     crate::session::Drafts,
     crate::session::KeepDraft,
     crate::session::DiscardDraft,

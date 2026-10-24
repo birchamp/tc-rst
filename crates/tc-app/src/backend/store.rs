@@ -1444,6 +1444,9 @@ impl ProjectHandle for StoreHandle {
             handle.checkpoint(match reason {
                 CheckpointReason::LeavingProject => tc_store::CheckpointReason::LeavingProject,
                 CheckpointReason::LeavingTranslate => tc_store::CheckpointReason::LeavingTranslate,
+                CheckpointReason::LeavingMode(mode) => {
+                    tc_store::CheckpointReason::Other(format!("leaving {mode}"))
+                }
                 CheckpointReason::Other(why) => tc_store::CheckpointReason::Other(why),
             })
         }) else {

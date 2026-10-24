@@ -104,6 +104,29 @@ pub struct Close {
     pub at: Scope,
 }
 
+/// A mode of a project's screens, as a checkpoint's message names it (tC4 `MODE_NAME`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum ScreenMode {
+    Understand,
+    Translate,
+    Check,
+    CommunityChecking,
+}
+
+/// `session/leave` (D1, tC4 `go`): the person left a mode for another. The server checkpoints
+/// when its policy says a mode switch is due (at most every two minutes today); its outcome is
+/// the session's `Checkpoint` event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LeaveMode {
+    pub request: RequestId,
+    pub at: Scope,
+    pub from: ScreenMode,
+}
+
 /// `session/retryCheckpoint` (D1, tC4 `retryCheckpoint`): the save indicator's Retry after a
 /// checkpoint failed. The project's checkpoint runs again; its outcome is the reply and the
 /// session's `Checkpoint` event.
