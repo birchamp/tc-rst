@@ -82,7 +82,8 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 
 | ID | Item | Lane | Depends on | Size |
 |---|---|---|---|---|
-| CHK-1 | Architecture and I/O boundary checks | checks | INT-4 | 0.5-1 d |
+| CHK-1 | Architecture and I/O boundary checks | checks | INT-4, CHK-1a | 0.5-1 d |
+| CHK-1a | Architecture, I/O and network checks in tc-arch, and ARCHITECTURE.md matching the code | checks | INT-4 | 0.5 d |
 | CHK-2 | Every written project is validated (P5) | checks | S2 | 1-2 d |
 | CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4, CHK-3a | 1 d |
 | CHK-3a | Claimed tests must exist: TC4-ISSUES, the done cards, the P-ledger and the tC4 journey map | checks | INT-4 | 0.5 d |
