@@ -38,7 +38,8 @@ pub struct GitRemote {
 }
 
 impl GitRemote {
-    fn url(&self) -> Url {
+    /// The repository's smart HTTP address, with no credentials in it.
+    pub fn url(&self) -> Url {
         let name = format!("{}.git", self.repo.name);
         self.server
             .url_with_path([self.repo.owner.as_str(), name.as_str()])

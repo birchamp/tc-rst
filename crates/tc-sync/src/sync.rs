@@ -403,6 +403,9 @@ impl Run<'_> {
         match read {
             Ok(Some((equal, head))) => {
                 if equal {
+                    // "Your work up to 14:32 is on Door43" reads this; a file that cannot be
+                    // written leaves the sync confirmed, and the next one writes it.
+                    let _ = self.project.confirm_sync(head.clone()).await;
                     self.report.confirmed = Some(head);
                 }
                 SyncEvent::Confirmed { equal }

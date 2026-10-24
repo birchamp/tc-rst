@@ -211,6 +211,7 @@ impl Actor {
                 }
             }
             Msg::Sync { reply } => reply.resolve(()),
+            Msg::SyncFile { write, reply } => reply.resolve(self.sync_file(write)),
             Msg::Close { reply } => {
                 let result = self.close();
                 reply.resolve(result);
@@ -311,6 +312,50 @@ impl Actor {
             return self.send_checkpoint(reason, taken, sealed, device, resolver, at_seal, marks);
         };
         self.send_checkpoint(reason, taken, sealed, device, reply, at_seal, marks);
+    }
+
+    /// `.tc/sync.json`: read, then written whole when asked (§3.6).
+    fn sync_file(
+        &mut self,
+        write: Option<crate::handle::SyncFileWrite>,
+    ) -> Result<Option<crate::handle::SyncFile>, StoreError> {
+        use crate::handle::{Confirmed, SyncFile, SyncFileWrite};
+        let path = self.project.folder.path(crate::layout::SYNC);
+        let current: Option<SyncFile> = match self.project.vfs.read(&path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).ok(),
+            Err(_) => None,
+        };
+        let next = match write {
+            None => return Ok(current),
+            Some(SyncFileWrite::File(file)) => file,
+            Some(SyncFileWrite::Confirmed(commit)) => {
+                let Some(mut file) = current else {
+                    return Ok(None);
+                };
+                file.confirmed = Some(Confirmed {
+                    commit,
+                    at: crate::appdata::rfc3339(self.project.clock.now()),
+                });
+                file
+            }
+        };
+        if self.read_only().is_some() {
+            return Err(StoreError::Other("the project is read-only".into()));
+        }
+        let mut bytes =
+            serde_json::to_vec_pretty(&next).map_err(|e| StoreError::Other(e.to_string()))?;
+        bytes.push(b'\n');
+        let (dir, name) = self.project.folder.dir_and_name(crate::layout::SYNC);
+        crate::atomic::atomic_create_dirs(&*self.project.vfs, &dir)?;
+        crate::atomic::atomic_write(
+            &*self.project.vfs,
+            &dir,
+            name,
+            &bytes,
+            crate::atomic::SyncDir::Now,
+        )
+        .map_err(|e| e.into_inner())?;
+        Ok(Some(next))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -586,6 +631,9 @@ impl Actor {
                     copy,
                 }) => self.record_outside(rel, seen, *plan, derived, copy),
                 Ok(Msg::Sync { reply }) => reply.resolve(()),
+                Ok(Msg::SyncFile { reply, .. }) => {
+                    reply.resolve(Err(StoreError::Other("the project is closing".into())));
+                }
                 Ok(Msg::Materialize { reply }) => {
                     if let Some(reply) = reply {
                         reply.resolve(Ok(()));

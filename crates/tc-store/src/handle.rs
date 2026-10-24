@@ -597,6 +597,26 @@ pub struct CheckpointReport {
     pub intake: IntakeReport,
 }
 
+/// `.tc/sync.json` (§3.6, §9.5): the address and branch a share, join or connect set, and
+/// the last commit Door43's branch was read back at. The address carries no credentials.
+/// A damaged `.git` is rebuilt with `origin` from it (§6.4 G4).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncFile {
+    pub remote_url: String,
+    pub branch: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed: Option<Confirmed>,
+}
+
+/// "Your work up to 14:32 is on Door43" (§9.5).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Confirmed {
+    pub commit: String,
+    /// RFC 3339, by the store's clock.
+    pub at: String,
+}
+
 /// A pack of a teammate's work, read from the tree fetched from Door43 (§9.2 N3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReceivedPack {
@@ -605,6 +625,13 @@ pub struct ReceivedPack {
     pub bytes: Vec<u8>,
     /// Its blob, which the repository holds since the fetch.
     pub blob: GitOid,
+}
+
+/// What [`ProjectHandle::sync_file`]'s job writes.
+#[derive(Debug, Clone)]
+pub(crate) enum SyncFileWrite {
+    File(SyncFile),
+    Confirmed(String),
 }
 
 /// What an intake took (§9.2, §9.3).
@@ -652,6 +679,11 @@ pub(crate) enum Msg {
     },
     Materialize {
         reply: Option<Resolver<Result<(), StoreError>>>,
+    },
+    /// `.tc/sync.json`: read it, write it, or record a confirmed commit in it.
+    SyncFile {
+        write: Option<SyncFileWrite>,
+        reply: Resolver<Result<Option<SyncFile>, StoreError>>,
     },
     Checkpoint {
         reason: CheckpointReason,
@@ -983,6 +1015,34 @@ impl ProjectHandle {
         self.send(Msg::Checkpoint {
             reason,
             intake: Vec::new(),
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// `.tc/sync.json`, when the project was shared, joined or connected.
+    pub fn sync_file(&self) -> Pending<Result<Option<SyncFile>, StoreError>> {
+        self.sync_file_job(None)
+    }
+
+    /// Writes `.tc/sync.json` atomically: share, join and connect.
+    pub fn set_sync_file(&self, file: SyncFile) -> Pending<Result<Option<SyncFile>, StoreError>> {
+        self.sync_file_job(Some(SyncFileWrite::File(file)))
+    }
+
+    /// Records that Door43's branch was read back at `commit`, now (§9.5 Confirm).
+    pub fn confirm_sync(&self, commit: String) -> Pending<Result<Option<SyncFile>, StoreError>> {
+        self.sync_file_job(Some(SyncFileWrite::Confirmed(commit)))
+    }
+
+    fn sync_file_job(
+        &self,
+        write: Option<SyncFileWrite>,
+    ) -> Pending<Result<Option<SyncFile>, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send(Msg::SyncFile {
+            write,
             reply: resolver,
         });
         pending

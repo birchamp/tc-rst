@@ -203,16 +203,16 @@ pub fn connect(handle: &ProjectHandle, door43: &Door43, name: &str) {
 }
 
 pub fn connect_to(handle: &ProjectHandle, door43: &Door43, owner: &str, name: &str) {
-    let git_dir = handle.facts().git_dir.unwrap();
-    let repo = git2::Repository::open(git_dir).unwrap();
-    let url = format!(
-        "{}/{owner}/{name}.git",
-        door43.fake.url().trim_end_matches('/'),
-    );
-    if repo.find_remote("origin").is_err() {
-        repo.remote("origin", &url).unwrap();
-    }
-    repo.config().unwrap().set_str("tc.branch", "main").unwrap();
+    let repo: tc_door43::RepoRef = format!("{owner}/{name}").parse().unwrap();
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(tc_sync::connect(
+            handle,
+            door43.client.server(),
+            &repo,
+            "main",
+        ))
+    })
+    .unwrap();
 }
 
 pub async fn sync(handle: &ProjectHandle, door43: &Door43) -> SyncReport {
@@ -287,6 +287,14 @@ async fn a_first_sync_pushes_the_project_and_confirms_it() {
     let head = git.head().unwrap().target().unwrap();
     assert_eq!(branch_on_door43(&door43, "titus-first"), Some(head));
     assert_eq!(report.confirmed, Some(head.to_string()));
+    let file = handle.sync_file().await.unwrap().expect(".tc/sync.json");
+    assert_eq!(file.branch, "main");
+    assert!(file.remote_url.ends_with("/titus-first.git"), "{file:?}");
+    assert_eq!(
+        file.confirmed.map(|c| c.commit),
+        Some(head.to_string()),
+        "the confirmed commit is recorded"
+    );
     handle.close().unwrap();
 }
 
