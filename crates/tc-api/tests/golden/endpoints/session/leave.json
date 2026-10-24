@@ -1,0 +1,26 @@
+{
+  "path": "session/leave",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "21212121212121212121212121212121",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "from": "translate"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
