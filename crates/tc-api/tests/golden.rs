@@ -115,10 +115,10 @@ use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ReviewToken, ShownToken};
 use tc_core::BookId;
 
 use tc_api::conflicts::{
-    BulkConflict, BulkKept, CheckPart, ConflictEntry, ConflictKind, DecisionValue, DetachedEntry,
-    DetachedKind, History, HistoryVersion, HistoryView, KeepChoice, List as ConflictList, MadeBy,
-    NoticeEntry, NoticeView, PartPick, Resolve, ResolveBulk, ReviewEntries, ReviewPlace, ReviewTab,
-    ReviewView, TabCount, Version, VersionCause, VersionValue,
+    BulkConflict, BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History,
+    HistoryVersion, HistoryView, KeepChoice, List as ConflictList, MadeBy, NoticeEntry, NoticeView,
+    Resolve, ResolveBulk, ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version,
+    VersionCause, VersionValue,
 };
 
 /// An example value for a golden file.
@@ -2675,7 +2675,6 @@ impl Example for ReviewView {
                 )],
                 incomplete_history: false,
                 unreadable: 0,
-                disputed: Vec::new(),
             }]),
         }
     }
@@ -2838,55 +2837,7 @@ fn review_values() -> Vec<VersionValue> {
         VersionValue::Text("Pablo, siervo de Dios".into()),
         VersionValue::Joined { by: 4 },
         VersionValue::Absent,
-        VersionValue::Decision(DecisionValue {
-            selected: vec!["Gracia".into(), "paz".into()],
-            nothing_to_select: false,
-            status: Some(DecisionStatus::Valid),
-            comment: Some("Usar “gracia”.".into()),
-            bookmarked: true,
-        }),
-        VersionValue::MovedTo {
-            to: review_places()[3].clone(),
-        },
         VersionValue::NotShown,
-    ]
-}
-
-/// Every choice of the review, the check's parts among them.
-fn review_choices() -> Vec<KeepChoice> {
-    let change = |c: char| ChangeRef::parse(&c.to_string().repeat(64)).unwrap();
-    vec![
-        KeepChoice::Candidate {
-            change: change('a'),
-        },
-        KeepChoice::Passage {
-            picks: vec![change('a')],
-        },
-        KeepChoice::Separate {
-            picks: vec![change('a')],
-        },
-        KeepChoice::Joined {
-            picks: vec![change('b')],
-        },
-        KeepChoice::Restore { from: change('a') },
-        KeepChoice::ApplyToMovedCheck,
-        KeepChoice::PerUnit {
-            picks: [
-                CheckPart::Judgement,
-                CheckPart::Comment,
-                CheckPart::Bookmark,
-                CheckPart::Dismissed,
-                CheckPart::Basis,
-                CheckPart::Field("/decision/extra/gatewayLanguageQuote".into()),
-            ]
-            .into_iter()
-            .map(|part| PartPick {
-                part,
-                change: change('b'),
-            })
-            .collect(),
-        },
-        KeepChoice::KeepBothComments,
     ]
 }
 
@@ -3603,7 +3554,6 @@ fn shared_types_have_golden_json() {
                 "notices": wire_samples(&review_notices()),
                 "places": wire_samples(&review_places()),
                 "values": wire_samples(&review_values()),
-                "choices": wire_samples(&review_choices()),
                 "makers": wire_samples(&review_makers()),
                 "entries": wire_samples(&review_entries()),
             }),

@@ -296,10 +296,6 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
     },
     /** Teammate 1 joins Titus 1:4-5 into one verse on Door43's copy, in one batch (C7a): the
      * next sync receives the join, a passage conflict when this computer changed 1:5. */
-    /** Teammates 1 and 2 each change one record of each of `kinds` from one version on Door43's
-     * copy (C7b, `tc_api::test::TeammatesKind`, such as 'check' or 'checkMoved'): the next
-     * sync receives a conflict of each kind. */
-    teammatesChangeKinds: (repo, kinds) => scriptSync(repo, synced({ kinds })),
     teammatesJoinVerses: (repo) => scriptSync(repo, synced({ joined: { book: 'TIT', chapter: 1, first: 4, last: 5 } })),
     loseFromDoor43: (repo, segment) => {
       if (!/^teammate-\d+$/.test(segment)) throw new Error(`${segment} is not a teammate's change of teammatesChangeOneVerse`);

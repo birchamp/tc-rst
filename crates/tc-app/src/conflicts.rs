@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde_json::json;
 use tc_api::conflicts::{
-    BulkKept, CheckPart, ConflictEntry, ConflictKind, DecisionValue, DetachedEntry, DetachedKind, History, HistoryVersion,
+    BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion,
     HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk,
     ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version, VersionCause,
     VersionValue,
@@ -21,11 +21,8 @@ use tc_api::shown::{Computer, PersonLabel, Who};
 use tc_api::write::{Ack, SaveRefusal};
 use tc_api::{ApiError, NotSaved};
 use tc_journal::command::Choice;
-use tc_journal::fold::{
-    Anomaly, Conflict, ConflictId, ConflictKind as Kind, Notice, ResolveError, UnitName,
-};
-use tc_api::check::DecisionStatus;
-use tc_journal::record::{BookPresence, ChapterFront, CheckValue, UserStatus, VerseValue};
+use tc_journal::fold::{Anomaly, Conflict, ConflictId, ConflictKind as Kind, Notice};
+use tc_journal::record::{BookPresence, ChapterFront, VerseValue};
 use tc_journal::{Cause, ChangeId, DeviceId, DeviceKind, Record, RecordKey, WallTime};
 
 use crate::app::App;
@@ -197,28 +194,6 @@ fn value_of(record: &Record) -> VersionValue {
             value: BookPresence::Removed { .. },
             ..
         } => VersionValue::Absent,
-        Record::Check { value, .. } => match value {
-            CheckValue::Decision(d) => VersionValue::Decision(DecisionValue {
-                selected: d
-                    .judgement
-                    .selections
-                    .iter()
-                    .flatten()
-                    .map(|s| s.text.clone())
-                    .collect(),
-                nothing_to_select: d.judgement.nothing_to_select,
-                status: d.judgement.status.map(|status| match status {
-                    UserStatus::Valid => DecisionStatus::Valid,
-                    UserStatus::Invalid => DecisionStatus::Invalid,
-                    UserStatus::Todo => DecisionStatus::Todo,
-                }),
-                comment: d.comment.clone().filter(|c| !c.is_empty()),
-                bookmarked: d.bookmarked,
-            }),
-            CheckValue::MovedTo { to } => VersionValue::MovedTo {
-                to: place_of(&RecordKey::Check(to.clone())),
-            },
-        },
         _ => VersionValue::NotShown,
     }
 }
@@ -513,10 +488,6 @@ impl App {
                 review,
                 incomplete_history: conflict.incomplete_history,
                 unreadable: count(conflict.unreadable.len()),
-                disputed: match conflict.kind {
-                    Kind::Check => conflict.disputed.iter().map(part_of).collect(),
-                    _ => Vec::new(),
-                },
             });
         }
         Ok(entries)
@@ -619,43 +590,6 @@ impl Handle<History> for App {
     }
 }
 
-/// A unit of a decision as the review names it (`units_for` in tc-journal's merge).
-fn part_of(unit: &UnitName) -> CheckPart {
-    match &*unit.0 {
-        "/decision/judgement" => CheckPart::Judgement,
-        "/decision/comment" => CheckPart::Comment,
-        "/decision/bookmarked" => CheckPart::Bookmark,
-        "/decision/dismissed" => CheckPart::Dismissed,
-        "/decision/basis" => CheckPart::Basis,
-        other => CheckPart::Field(other.to_owned()),
-    }
-}
-
-fn unit_of(part: &CheckPart) -> UnitName {
-    UnitName(
-        match part {
-            CheckPart::Judgement => "/decision/judgement",
-            CheckPart::Comment => "/decision/comment",
-            CheckPart::Bookmark => "/decision/bookmarked",
-            CheckPart::Dismissed => "/decision/dismissed",
-            CheckPart::Basis => "/decision/basis",
-            CheckPart::Field(name) => name,
-        }
-        .into(),
-    )
-}
-
-/// A record a fold builder made for a choice, or why the choice cannot be made now.
-fn built(made: Result<Record, ResolveError>) -> Result<Choice, ApiError> {
-    match made {
-        Ok(record) => Ok(Choice::Values(vec![record])),
-        Err(ResolveError::UnknownConflict) => Err(ApiError::NotSaved(NotSaved::LookAgain)),
-        Err(other) => Err(ApiError::NotSaved(NotSaved::Refused(SaveRefusal::Choice {
-            reason: other.to_string(),
-        }))),
-    }
-}
-
 fn bad_token() -> ApiError {
     ApiError::NotSaved(NotSaved::BadToken)
 }
@@ -702,15 +636,6 @@ fn choose(
             })?;
             Choice::Values(vec![body.record])
         }
-        KeepChoice::ApplyToMovedCheck => Choice::ApplyToMovedCheck,
-        KeepChoice::PerUnit { picks } => {
-            let picks = picks
-                .iter()
-                .map(|p| Ok((unit_of(&p.part), change_id(&p.change)?)))
-                .collect::<Result<BTreeMap<_, _>, ApiError>>()?;
-            built(read.per_unit(&conflict, &picks))?
-        }
-        KeepChoice::KeepBothComments => built(read.keep_both_comments(&conflict))?,
     };
     Ok(StoreCommand::resolve(conflict, review, choice))
 }

@@ -232,25 +232,6 @@ impl CountingSnapshot {
         self.snapshot.fold().conflict(id).cloned()
     }
 
-    /// *Choose per line*'s record for conflict `id` ([`FoldState::per_unit`]).
-    pub fn per_unit(
-        &self,
-        id: &ConflictId,
-        picks: &BTreeMap<tc_journal::fold::UnitName, ChangeId>,
-    ) -> Result<Record, tc_journal::fold::ResolveError> {
-        self.count(AppCounter::RecordsRead, 1);
-        self.snapshot.fold().per_unit(id, picks)
-    }
-
-    /// *Keep both*'s record for two check comments ([`FoldState::keep_both_comments`]).
-    pub fn keep_both_comments(
-        &self,
-        id: &ConflictId,
-    ) -> Result<Record, tc_journal::fold::ResolveError> {
-        self.count(AppCounter::RecordsRead, 1);
-        self.snapshot.fold().keep_both_comments(id)
-    }
-
     /// An edit token for `key` as this snapshot shows it ([`Snapshot::mint`]).
     pub fn mint(
         &self,

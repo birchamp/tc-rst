@@ -81,7 +81,6 @@ fn entry(id: char, verse: u16, group: u32, versions: Vec<Version>) -> ConflictEn
         review: Vec::new(),
         incomplete_history: false,
         unreadable: 0,
-        disputed: Vec::new(),
     }
 }
 
@@ -537,8 +536,8 @@ fn every_kind_has_its_choices() {
         (K::LastBookRemoved, Choices::Later),
         (K::BookLayout, Choices::Later),
         (K::Alignment, Choices::Later),
-        (K::Check, Choices::CheckVersions),
-        (K::CheckMoved, Choices::MovedCheck),
+        (K::Check, Choices::Later),
+        (K::CheckMoved, Choices::Later),
         (K::Comment, Choices::Later),
         (K::Pins, Choices::Later),
         (K::Setting, Choices::Later),
@@ -667,122 +666,4 @@ fn the_packet_draws_every_screen_and_the_carried_card_offers_two_choices() {
     assert!(card.hint.contains("jon_01-Juan.wav"), "{}", card.hint);
     let every = format!("{card:?}");
     assert!(!every.contains("Keep the other"), "{every}");
-}
-
-fn decision(comment: &str) -> VersionValue {
-    VersionValue::Decision(tc_api::conflicts::DecisionValue {
-        selected: vec!["Gracia".to_owned()],
-        nothing_to_select: false,
-        status: None,
-        comment: Some(comment.to_owned()),
-        bookmarked: false,
-    })
-}
-
-/// STORAGE §8.3 for a check, as the H5 packet drew it: *Keep mine* and *Keep Teammate 1’s*
-/// on the versions, *Choose per line* while parts differ, *Keep both* while the comments do;
-/// *Choose per line* is a choice only once every part that differs has a version.
-#[test]
-fn a_check_offers_a_keep_per_version_choose_per_line_and_keep_both() {
-    use tc_api::conflicts::{CheckPart, PartPick};
-    use tc_ui::app::review::{CheckButton, check_buttons, decision_lines, per_line_choice};
-
-    let mut entry = entry(
-        'c',
-        1,
-        0,
-        vec![
-            Version {
-                value: decision("uno"),
-                ..version('a', person(Who::Teammate(1)))
-            },
-            Version {
-                value: decision("mío"),
-                ..version('b', person(Who::Mine))
-            },
-        ],
-    );
-    entry.kind = ConflictKind::Check;
-    entry.disputed = vec![CheckPart::Comment];
-    assert_eq!(
-        check_buttons(&entry),
-        vec![
-            CheckButton::Keep {
-                label: "Keep Teammate 1’s".to_owned(),
-                change: change('a'),
-            },
-            CheckButton::Keep {
-                label: "Keep mine".to_owned(),
-                change: change('b'),
-            },
-            CheckButton::PerLine,
-            CheckButton::KeepBoth,
-        ]
-    );
-    assert_eq!(
-        decision_lines(&entry.versions[0].value),
-        vec!["Selected: “Gracia”".to_owned(), "Comment: uno".to_owned()]
-    );
-    assert_eq!(per_line_choice(&entry, &[]), None);
-    let picks = vec![PartPick {
-        part: CheckPart::Comment,
-        change: change('a'),
-    }];
-    assert_eq!(
-        per_line_choice(&entry, &picks),
-        Some(KeepChoice::PerUnit { picks })
-    );
-    entry.disputed = vec![CheckPart::Judgement];
-    assert_eq!(
-        check_buttons(&entry).last(),
-        Some(&CheckButton::PerLine),
-        "no Keep both while the comments agree"
-    );
-    entry.disputed.clear();
-    assert!(
-        check_buttons(&entry)
-            .iter()
-            .all(|b| matches!(b, CheckButton::Keep { .. })),
-        "no Choose per line with nothing to choose"
-    );
-}
-
-/// STORAGE §8.3 for a moved check: both choices name the person who changed it, and *Keep
-/// … where it was* keeps their version.
-#[test]
-fn a_moved_check_offers_apply_and_keep_where_it_was_by_the_person_who_changed_it() {
-    use tc_ui::app::review::moved_choices;
-
-    let mut moved = entry(
-        'd',
-        1,
-        0,
-        vec![
-            Version {
-                value: decision("Revisar"),
-                ..version('e', person(Who::Teammate(2)))
-            },
-            Version {
-                value: VersionValue::MovedTo {
-                    to: ReviewPlace::Verse {
-                        book: BookId::Titus,
-                        chapter: 1,
-                        verse: 2,
-                    },
-                },
-                ..version('f', person(Who::Teammate(1)))
-            },
-        ],
-    );
-    moved.kind = ConflictKind::CheckMoved;
-    assert_eq!(
-        moved_choices(&moved),
-        Some((
-            "Apply Teammate 2’s change to the moved check".to_owned(),
-            "Keep Teammate 2’s check where it was".to_owned(),
-            change('e'),
-        ))
-    );
-    moved.versions.truncate(1);
-    assert_eq!(moved_choices(&moved), None, "nothing moved");
 }

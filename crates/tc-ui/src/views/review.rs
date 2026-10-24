@@ -13,9 +13,8 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 use tc_api::conflicts::{
-    CheckPart, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, KeepChoice,
-    List, NoticeEntry, PartPick, ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version,
-    VersionValue,
+    ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, List, NoticeEntry,
+    ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version, VersionValue,
 };
 use tc_api::editor::{PaneText, SourceFrame, Sources};
 use tc_api::ids::Scope;
@@ -25,10 +24,9 @@ use wasm_bindgen::JsValue;
 use super::draft_chrome::HAIR;
 use crate::app::q9::{Q9Body, Q9Conflict, Q9Question, Q9Review, Q9Row, Q9Screen, Q9Version};
 use crate::app::review::{
-    BackTo, CheckButton, Choices, KeepOutcome, Owner, back_label, cause_label, check_buttons,
-    choices, consequence, decision_lines, group_others, keep_all_label, keep_passage_label,
-    kept_all_text, kept_name, made_by, moved_choices, notice_text, part_label, per_line_choice,
-    persons, place_label, tab_label, tabs_shown,
+    BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
+    group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
+    notice_text, persons, place_label, tab_label, tabs_shown,
 };
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::attrs::Attrs;
@@ -271,12 +269,10 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
     let footer = {
         let actions = actions.clone();
         move || {
-            shown.get().map(|(i, entry, _)| match offered(&entry) {
+            shown.get().map(|(i, entry, _)| match offered(tab, &entry) {
                 Choices::Candidate => keep_bar(&actions, &entry, i, busy).into_any(),
                 Choices::PassageSides => passage_bar(&actions, &entry, i, busy).into_any(),
                 Choices::JoinedOrSeparate => structure_bar(&actions, &entry, i, busy).into_any(),
-                Choices::CheckVersions => check_bar(&actions, &entry, i, busy),
-                Choices::MovedCheck => moved_bar(&actions, &entry, i, busy),
                 Choices::Later => later_bar().into_any(),
             })
         }
@@ -302,10 +298,11 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
     .into_any()
 }
 
-/// What the review offers for `entry` now: its kind's choices, with every version readable
-/// (no choice replaces a version this computer cannot read yet).
-fn offered(entry: &ConflictEntry) -> Choices {
-    if entry.unreadable == 0 {
+/// What the Text tab offers for `entry` now: its kind's choices, with every version readable
+/// (no choice replaces a version this computer cannot read yet). The other tabs' choices are
+/// unit C7b's.
+fn offered(tab: ReviewTab, entry: &ConflictEntry) -> Choices {
+    if tab == ReviewTab::Text && entry.unreadable == 0 {
         choices(entry.kind)
     } else {
         Choices::Later
@@ -588,11 +585,10 @@ fn conflict_versions(
         Memo::new(move |_| review.with(|r| r.as_ref().and_then(|r| r.selected.clone())))
     };
     let choosable = matches!(
-        offered(entry),
+        offered(tab, entry),
         Choices::Candidate | Choices::JoinedOrSeparate
     );
-    // A bulk keep is the Text tab's (STORAGE §5.9 step 3); the packet drew none elsewhere.
-    let bulk = (tab == ReviewTab::Text && all.len() > 1 && offered(entry) != Choices::Later)
+    let bulk = (all.len() > 1 && offered(tab, entry) != Choices::Later)
         .then(|| bulk_row(actions, entry, all, busy));
     let dir = dir_of(s);
     let cards = entry
@@ -849,9 +845,6 @@ fn version_card(
         VersionValue::Text(text) => Some(text.trim().to_owned()),
         VersionValue::Joined { by } => Some(t(keys::review::value::JOINED, &[("by", by)])),
         VersionValue::Absent => Some(t(keys::review::value::ABSENT, &[])),
-        VersionValue::Decision(_) | VersionValue::MovedTo { .. } => {
-            Some(decision_lines(&version.value).join("\n"))
-        }
         VersionValue::NotShown => None,
     };
     let text = text.map(|text| {
@@ -1106,234 +1099,6 @@ fn structure_bar(
     )
 }
 
-/// A check's footer (STORAGE §8.3): *Keep mine* and *Keep Ana's* on each version, *Choose
-/// per line* while parts differ, which opens a row of versions for each part, and *Keep both*
-/// while the comments differ.
-fn check_bar(
-    actions: &Actions,
-    entry: &ConflictEntry,
-    position: usize,
-    busy: Signal<bool>,
-) -> AnyView {
-    let picks: RwSignal<Option<Vec<PartPick>>> = RwSignal::new(None);
-    let send = {
-        let (actions, entry) = (actions.clone(), entry.clone());
-        move |choice: KeepChoice| actions.keep_choice(entry.clone(), position, choice)
-    };
-    let buttons = check_buttons(entry)
-        .into_iter()
-        .map(|button| match button {
-            CheckButton::Keep { label, change } => {
-                let send = send.clone();
-                let ts = change.as_str().to_owned();
-                let on_click =
-                    Callback::new(move |_| send(KeepChoice::Candidate { change: change.clone() }));
-                view! {
-                    <Button variant=ButtonVariant::Secondary disabled=busy on_click=on_click
-                        attrs=Attrs::new().with("data-testid", "conflict-keep-check").with("data-ts", ts)>
-                        {label}
-                    </Button>
-                }
-                .into_any()
-            }
-            CheckButton::PerLine => {
-                let on_click = Callback::new(move |_| {
-                    picks.update(|p| *p = if p.is_some() { None } else { Some(Vec::new()) });
-                });
-                view! {
-                    <Button variant=ButtonVariant::Secondary disabled=busy on_click=on_click
-                        attrs=Attrs::new().with("data-testid", "conflict-per-line")>
-                        {t(keys::review::PER_LINE, &[])}
-                    </Button>
-                }
-                .into_any()
-            }
-            CheckButton::KeepBoth => {
-                let send = send.clone();
-                let on_click = Callback::new(move |_| send(KeepChoice::KeepBothComments));
-                view! {
-                    <Button variant=ButtonVariant::Secondary disabled=busy on_click=on_click
-                        attrs=Attrs::new().with("data-testid", "conflict-keep-both")>
-                        {t(keys::review::KEEP_BOTH, &[])}
-                    </Button>
-                }
-                .into_any()
-            }
-        })
-        .collect_view()
-        .into_any();
-    let hint = if entry.disputed.contains(&CheckPart::Comment) {
-        t(keys::review::KEEP_BOTH_HINT, &[])
-    } else {
-        t(keys::review::CHECK_HINT, &[])
-    };
-    let panel = {
-        let entry = entry.clone();
-        move || {
-            picks.get().map(|current| per_line_panel(&entry, &current, picks, busy, send.clone()))
-        }
-    };
-    view! {
-        <div style="flex: none;">
-            {panel}
-            {footer_frame(hint, buttons, "conflict-check-bar")}
-        </div>
-    }
-    .into_any()
-}
-
-/// *Choose per line*: for each part the versions set differently, a button per version, and
-/// *Keep these* once every part has one.
-fn per_line_panel(
-    entry: &ConflictEntry,
-    current: &[PartPick],
-    picks: RwSignal<Option<Vec<PartPick>>>,
-    busy: Signal<bool>,
-    send: impl Fn(KeepChoice) + Clone + Send + Sync + 'static,
-) -> AnyView {
-    let style = crate::css! {
-        "box-sizing": "border-box",
-        "padding": "12px 24px",
-        "background": "var(--surface-card)",
-        "border-top": HAIR,
-    };
-    let inner = measure().merge(&crate::css! {
-        "display": "flex",
-        "flex-direction": "column",
-        "gap": 8,
-    });
-    let rows = entry
-        .disputed
-        .iter()
-        .map(|part| {
-            let versions = entry
-                .versions
-                .iter()
-                .map(|v| {
-                    let chosen = current
-                        .iter()
-                        .any(|p| &p.part == part && p.change == v.change);
-                    let label = match Owner::of(&v.by) {
-                        Owner::Mine => t(keys::review::PER_LINE_PICK_MINE, &[]),
-                        Owner::Teammate => t(
-                            keys::review::PER_LINE_PICK,
-                            &[("person", &made_by(&v.by))],
-                        ),
-                    };
-                    let pick = PartPick {
-                        part: part.clone(),
-                        change: v.change.clone(),
-                    };
-                    let on_click = Callback::new(move |_| {
-                        let pick = pick.clone();
-                        picks.update(|p| {
-                            if let Some(p) = p {
-                                p.retain(|old| old.part != pick.part);
-                                p.push(pick);
-                            }
-                        });
-                    });
-                    let variant = if chosen {
-                        ButtonVariant::Ocean
-                    } else {
-                        ButtonVariant::Secondary
-                    };
-                    view! {
-                        <Button variant=variant size=Size::Sm disabled=busy on_click=on_click
-                            attrs=Attrs::new().with("data-testid", "conflict-part-pick")
-                                .with("aria-pressed", chosen.to_string())
-                                .with("data-ts", v.change.as_str().to_owned())>
-                            {label}
-                        </Button>
-                    }
-                })
-                .collect_view();
-            view! {
-                <div data-testid="conflict-part" style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
-                    <strong style="min-width: 120px; font-size: var(--fs-ui-sm); color: var(--text-heading);">{part_label(part)}</strong>
-                    {versions}
-                </div>
-            }
-        })
-        .collect_view();
-    let choice = per_line_choice(entry, current);
-    let off = Signal::derive({
-        let ready = choice.is_some();
-        move || busy.get() || !ready
-    });
-    let on_keep = Callback::new(move |_| {
-        if let Some(choice) = choice.clone() {
-            send(choice);
-        }
-    });
-    view! {
-        <div data-testid="conflict-per-line-panel" style=style.to_style()>
-            <div style=inner.to_style()>
-                <span style="font-size: var(--fs-ui-sm); color: var(--uw-slate);">{t(keys::review::PER_LINE_HINT, &[])}</span>
-                {rows}
-                <span style="display: flex; justify-content: flex-end;">
-                    <Button disabled=off on_click=on_keep attrs=Attrs::new().with("data-testid", "conflict-per-line-keep")>
-                        {t(keys::review::PER_LINE_KEEP, &[])}
-                    </Button>
-                </span>
-            </div>
-        </div>
-    }
-    .into_any()
-}
-
-/// A moved check's footer (STORAGE §8.3): *Keep Pedro's check where it was* and *Apply
-/// Pedro's change to the moved check*.
-fn moved_bar(
-    actions: &Actions,
-    entry: &ConflictEntry,
-    position: usize,
-    busy: Signal<bool>,
-) -> AnyView {
-    let Some((apply, keep, change)) = moved_choices(entry) else {
-        return later_bar();
-    };
-    let person = entry
-        .versions
-        .iter()
-        .find(|v| v.change == change)
-        .map(|v| made_by(&v.by))
-        .unwrap_or_default();
-    let on_keep = {
-        let (actions, entry) = (actions.clone(), entry.clone());
-        Callback::new(move |_| {
-            actions.keep_choice(
-                entry.clone(),
-                position,
-                KeepChoice::Candidate {
-                    change: change.clone(),
-                },
-            );
-        })
-    };
-    let on_apply = {
-        let (actions, entry) = (actions.clone(), entry.clone());
-        Callback::new(move |_| {
-            actions.keep_choice(entry.clone(), position, KeepChoice::ApplyToMovedCheck);
-        })
-    };
-    let buttons = view! {
-        <Button variant=ButtonVariant::Secondary disabled=busy on_click=on_keep
-            attrs=Attrs::new().with("data-testid", "conflict-keep-where-it-was")>
-            {keep}
-        </Button>
-        <Button disabled=busy on_click=on_apply attrs=Attrs::new().with("data-testid", "conflict-apply-to-moved")>
-            {apply}
-        </Button>
-    }
-    .into_any();
-    footer_frame(
-        t(keys::review::MOVED_HINT, &[("person", &person)]),
-        buttons,
-        "conflict-moved-bar",
-    )
-}
-
 /// *Keep all of Maria's* for each person with a version here, over every conflict the tab
 /// lists (STORAGE §5.9 step 3); the reply says how many were left for a choice of their own.
 fn bulk_row(
@@ -1482,9 +1247,6 @@ fn history_list(
                                 t(keys::review::value::JOINED, &[("by", by)])
                             }
                             VersionValue::Absent => t(keys::review::value::ABSENT, &[]),
-                            VersionValue::Decision(_) | VersionValue::MovedTo { .. } => {
-                                decision_lines(&v.version.value).join("\n")
-                            }
                             VersionValue::NotShown => String::new(),
                         };
                         let meta = format!(

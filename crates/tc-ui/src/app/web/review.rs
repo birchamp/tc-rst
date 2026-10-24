@@ -171,12 +171,6 @@ impl Actions {
         );
     }
 
-    /// A choice the footer's button names in full: a check's keep, *Choose per line*, *Keep
-    /// both*, *Apply Pedro's change to the moved check*.
-    pub fn keep_choice(&self, entry: ConflictEntry, position: usize, choice: KeepChoice) {
-        self.choose(&entry, position, choice);
-    }
-
     /// Keep this version: the version clicked.
     pub fn keep_version(&self, entry: ConflictEntry, position: usize) {
         let Some(change) = self
