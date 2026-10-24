@@ -7,9 +7,10 @@
 //! every teammate's version cream (owner ruling 2026-10-13, #679). One label function names a
 //! person here and on the sync result (#680, [`crate::app::sync::person_label`]).
 
+use tc_api::check::DecisionStatus;
 use tc_api::conflicts::{
-    ConflictEntry, ConflictKind, KeepChoice, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount,
-    Version, VersionCause,
+    CheckPart, ConflictEntry, ConflictKind, KeepChoice, MadeBy, NoticeView, PartPick, ReviewPlace,
+    ReviewTab, TabCount, Version, VersionCause, VersionValue,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, RecordRef, RequestId};
 use tc_api::shown::{PersonLabel, Who};
@@ -254,6 +255,12 @@ pub enum Choices {
     /// *Keep the joined verses* or *Keep the verses separate*, with the version clicked as
     /// the pick where a verse holds several.
     JoinedOrSeparate,
+    /// A check's versions (STORAGE §8.3): *Keep mine*, *Keep Ana's*, *Choose per line*, and
+    /// *Keep both* when the comments differ.
+    CheckVersions,
+    /// A check an upgrade moved while someone changed it: *Apply Pedro's change to the moved
+    /// check* or *Keep Pedro's check where it was*.
+    MovedCheck,
     /// No choice in this version of translationCore (C7b): every version is kept.
     Later,
 }
@@ -269,13 +276,13 @@ pub fn choices(kind: ConflictKind) -> Choices {
         | ConflictKind::StoryRef => Choices::Candidate,
         ConflictKind::Passage => Choices::PassageSides,
         ConflictKind::VerseStructure => Choices::JoinedOrSeparate,
+        ConflictKind::Check => Choices::CheckVersions,
+        ConflictKind::CheckMoved => Choices::MovedCheck,
         ConflictKind::BookPresence
         | ConflictKind::BookRemovedWhileEdited
         | ConflictKind::LastBookRemoved
         | ConflictKind::BookLayout
         | ConflictKind::Alignment
-        | ConflictKind::Check
-        | ConflictKind::CheckMoved
         | ConflictKind::Comment
         | ConflictKind::Pins
         | ConflictKind::Setting
@@ -650,5 +657,139 @@ pub fn notice_text(notice: &NoticeView) -> String {
             t(n::INCOMPLETE_CHANGES, &[("have", have), ("of", of)])
         }
         NoticeView::KeptApart { changes } => t(n::KEPT_APART, &[("changes", changes)]),
+    }
+}
+
+/// A button of a check's footer (STORAGE §8.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckButton {
+    /// *Keep mine* or *Keep Ana's*: that version, as a candidate.
+    Keep { label: String, change: ChangeRef },
+    /// *Choose per line*: a version picked for each part that differs.
+    PerLine,
+    /// *Keep both*: the two comments joined.
+    KeepBoth,
+}
+
+/// What a check conflict's footer offers: a keep for each version, newest first, then *Choose
+/// per line* while parts differ, then *Keep both* while the comments do.
+pub fn check_buttons(entry: &ConflictEntry) -> Vec<CheckButton> {
+    let mut buttons: Vec<CheckButton> = entry
+        .versions
+        .iter()
+        .map(|v| CheckButton::Keep {
+            label: keep_label(v),
+            change: v.change.clone(),
+        })
+        .collect();
+    if !entry.disputed.is_empty() {
+        buttons.push(CheckButton::PerLine);
+    }
+    if entry.disputed.contains(&CheckPart::Comment) {
+        buttons.push(CheckButton::KeepBoth);
+    }
+    buttons
+}
+
+/// "Keep mine", or "Keep Ana’s".
+pub fn keep_label(version: &Version) -> String {
+    match Owner::of(&version.by) {
+        Owner::Mine => t(keys::review::KEEP_MINE, &[]),
+        Owner::Teammate => t(
+            keys::review::KEEP_PERSON,
+            &[("person", &made_by(&version.by))],
+        ),
+    }
+}
+
+/// The two choices of a moved check, by the person who changed it: *Apply Pedro's change to
+/// the moved check*, then *Keep Pedro's check where it was* with Pedro's version. `None`
+/// unless one version moved the check and exactly one changed it.
+pub fn moved_choices(entry: &ConflictEntry) -> Option<(String, String, ChangeRef)> {
+    let mut changed = entry
+        .versions
+        .iter()
+        .filter(|v| matches!(v.value, VersionValue::Decision(_)));
+    let editor = changed.next()?;
+    if changed.next().is_some()
+        || !entry
+            .versions
+            .iter()
+            .any(|v| matches!(v.value, VersionValue::MovedTo { .. }))
+    {
+        return None;
+    }
+    let person = made_by(&editor.by);
+    Some((
+        t(keys::review::APPLY_TO_MOVED, &[("person", &person)]),
+        t(keys::review::KEEP_WHERE_IT_WAS, &[("person", &person)]),
+        editor.change.clone(),
+    ))
+}
+
+/// A part of a decision, in words.
+pub fn part_label(part: &CheckPart) -> String {
+    use keys::review::part as p;
+    match part {
+        CheckPart::Judgement => t(p::JUDGEMENT, &[]),
+        CheckPart::Comment => t(p::COMMENT, &[]),
+        CheckPart::Bookmark => t(p::BOOKMARK, &[]),
+        CheckPart::Dismissed => t(p::DISMISSED, &[]),
+        CheckPart::Basis => t(p::BASIS, &[]),
+        CheckPart::Field(name) => t(p::FIELD, &[("name", name)]),
+    }
+}
+
+/// *Choose per line*'s choice once every part that differs has a version picked, in the
+/// entry's order of parts; `None` while one has none.
+pub fn per_line_choice(entry: &ConflictEntry, picks: &[PartPick]) -> Option<KeepChoice> {
+    let picks = entry
+        .disputed
+        .iter()
+        .map(|part| picks.iter().find(|p| &p.part == part).cloned())
+        .collect::<Option<Vec<_>>>()?;
+    (!picks.is_empty()).then_some(KeepChoice::PerUnit { picks })
+}
+
+/// What a version of a decision holds, a line per part the Check screen shows.
+pub fn decision_lines(value: &VersionValue) -> Vec<String> {
+    use keys::review::value as v;
+    match value {
+        VersionValue::Decision(d) => {
+            let mut lines = Vec::new();
+            if d.nothing_to_select {
+                lines.push(t(v::NOTHING_TO_SELECT, &[]));
+            } else if !d.selected.is_empty() {
+                let words = d
+                    .selected
+                    .iter()
+                    .map(|w| format!("“{w}”"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                lines.push(t(v::SELECTED, &[("words", &words)]));
+            }
+            if let Some(status) = d.status {
+                lines.push(t(
+                    match status {
+                        DecisionStatus::Valid => v::VALID,
+                        DecisionStatus::Invalid => v::INVALID,
+                        DecisionStatus::Todo => v::TODO,
+                    },
+                    &[],
+                ));
+            }
+            if let Some(comment) = &d.comment {
+                lines.push(t(v::COMMENT, &[("text", comment)]));
+            }
+            if d.bookmarked {
+                lines.push(t(v::BOOKMARKED, &[]));
+            }
+            lines
+        }
+        VersionValue::MovedTo { to } => {
+            vec![t(v::MOVED_TO, &[("place", &place_label(to))])]
+        }
+        VersionValue::Text(_) | VersionValue::Joined { .. } | VersionValue::Absent => Vec::new(),
+        VersionValue::NotShown => Vec::new(),
     }
 }

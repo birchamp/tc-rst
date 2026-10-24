@@ -162,7 +162,120 @@
       "type": "absent"
     },
     {
+      "type": "decision",
+      "value": {
+        "selected": [
+          "Gracia",
+          "paz"
+        ],
+        "nothingToSelect": false,
+        "status": "valid",
+        "comment": "Usar “gracia”.",
+        "bookmarked": true
+      }
+    },
+    {
+      "type": "movedTo",
+      "value": {
+        "to": {
+          "type": "check",
+          "value": {
+            "tool": "translationNotes",
+            "place": "TIT 1:4"
+          }
+        }
+      }
+    },
+    {
       "type": "notShown"
+    }
+  ],
+  "choices": [
+    {
+      "type": "candidate",
+      "value": {
+        "change": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "type": "passage",
+      "value": {
+        "picks": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "type": "separate",
+      "value": {
+        "picks": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "type": "joined",
+      "value": {
+        "picks": [
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ]
+      }
+    },
+    {
+      "type": "restore",
+      "value": {
+        "from": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "type": "applyToMovedCheck"
+    },
+    {
+      "type": "perUnit",
+      "value": {
+        "picks": [
+          {
+            "part": {
+              "type": "judgement"
+            },
+            "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "part": {
+              "type": "comment"
+            },
+            "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "part": {
+              "type": "bookmark"
+            },
+            "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "part": {
+              "type": "dismissed"
+            },
+            "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "part": {
+              "type": "basis"
+            },
+            "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "part": {
+              "type": "field",
+              "value": "/decision/extra/gatewayLanguageQuote"
+            },
+            "change": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      }
+    },
+    {
+      "type": "keepBothComments"
     }
   ],
   "makers": [

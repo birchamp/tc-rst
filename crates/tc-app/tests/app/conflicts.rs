@@ -1157,3 +1157,217 @@ async fn align_and_check_show_the_two_versions_marker() {
         }]
     );
 }
+
+/// The one version `who` made in `entry`, whatever it holds.
+fn by(entry: &ConflictEntry, who: &Who) -> Version {
+    let mut found = entry
+        .versions
+        .iter()
+        .filter(|v| matches!(&v.by, MadeBy::Person(p) if &p.who == who));
+    let version = found
+        .next()
+        .unwrap_or_else(|| panic!("{who:?} in {entry:?}"));
+    assert!(found.next().is_none(), "{who:?} has one version");
+    version.clone()
+}
+
+/// The Checks tab's one conflict after Teammates 1 and 2 changed one decision as `kind` says.
+async fn check_conflict(kind: TeammatesKind) -> (super::sync::World, Scope, ConflictEntry) {
+    let (w, at) = synced_kinds(vec![kind]).await;
+    let entry = only_entry(&w.t.app, &at, ReviewTab::Checks).await;
+    (w, at, entry)
+}
+
+async fn resolve(
+    app: &App,
+    at: &Scope,
+    entry: &ConflictEntry,
+    n: u8,
+    choice: KeepChoice,
+) -> Result<tc_api::write::Ack, tc_api::ApiError> {
+    post(
+        app,
+        &Resolve {
+            at: at.clone(),
+            request: rid(n),
+            conflict: entry.conflict.clone(),
+            review: entry.review.clone(),
+            choice,
+        },
+    )
+    .await
+}
+
+/// The comment of the decision a version holds.
+fn comment_of(value: &VersionValue) -> Option<String> {
+    match value {
+        VersionValue::Decision(d) => d.comment.clone(),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// STORAGE §8.3 *Choose per line*: the part the versions set differently takes the version
+/// picked for it, the parts they agree on keep their value, and the conflict is settled with
+/// every version in History.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn choose_per_line_keeps_the_version_picked_for_each_part() {
+    use tc_api::conflicts::{CheckPart, PartPick};
+
+    let (w, at, entry) = check_conflict(TeammatesKind::Check).await;
+    let app = &w.t.app;
+    assert_eq!(entry.kind, ConflictKind::Check);
+    assert_eq!(entry.disputed, vec![CheckPart::Comment]);
+    let second = by(&entry, &Who::Teammate(2));
+    let ack = resolve(
+        app,
+        &at,
+        &entry,
+        110,
+        KeepChoice::PerUnit {
+            picks: vec![PartPick {
+                part: CheckPart::Comment,
+                change: second.change.clone(),
+            }],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert_eq!(kinds_on(app, &at, ReviewTab::Checks).await, vec![]);
+    let history = history(app, &at, &entry.record).await;
+    assert_eq!(history[0].cause, VersionCause::Kept);
+    assert_eq!(
+        comment_of(&history[0].version.value).as_deref(),
+        Some("Comentario del compañero 2.")
+    );
+    assert_eq!(
+        history[0].version.value,
+        VersionValue::Decision(tc_api::conflicts::DecisionValue {
+            comment: Some("Comentario del compañero 2.".to_owned()),
+            ..match &second.value {
+                VersionValue::Decision(d) => d.clone(),
+                other => panic!("{other:?}"),
+            }
+        }),
+        "every other part as both versions have it"
+    );
+    assert!(history.len() >= 3, "both versions stay in History");
+}
+
+/// STORAGE §8.3: *Keep both* on two check comments keeps both texts in the one comment.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn keep_both_keeps_both_check_comments() {
+    let (w, at, entry) = check_conflict(TeammatesKind::Check).await;
+    let app = &w.t.app;
+    let ack = resolve(app, &at, &entry, 111, KeepChoice::KeepBothComments)
+        .await
+        .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert_eq!(kinds_on(app, &at, ReviewTab::Checks).await, vec![]);
+    let history = history(app, &at, &entry.record).await;
+    assert_eq!(history[0].cause, VersionCause::Kept);
+    let kept = comment_of(&history[0].version.value).unwrap();
+    for text in ["Comentario del compañero 1.", "Comentario del compañero 2."] {
+        assert!(kept.contains(text), "{kept}");
+    }
+}
+
+/// STORAGE §8.3 *Apply Pedro's change to the moved check*: the check the decision moved to
+/// takes the comment Teammate 2 changed, and the old check keeps its move.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn apply_to_the_moved_check_puts_the_change_on_the_check_it_moved_to() {
+    let (w, at, entry) = check_conflict(TeammatesKind::CheckMoved).await;
+    let app = &w.t.app;
+    assert_eq!(entry.kind, ConflictKind::CheckMoved);
+    let moved = by(&entry, &Who::Teammate(1));
+    let VersionValue::MovedTo { to } = &moved.value else {
+        panic!("{moved:?}")
+    };
+    let changed = by(&entry, &Who::Teammate(2));
+    assert_eq!(
+        comment_of(&changed.value).as_deref(),
+        Some("Revisar el tiempo.")
+    );
+    let ack = resolve(app, &at, &entry, 112, KeepChoice::ApplyToMovedCheck)
+        .await
+        .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert_eq!(kinds_on(app, &at, ReviewTab::Checks).await, vec![]);
+    let old = history(app, &at, &entry.record).await;
+    assert!(
+        matches!(&old[0].version.value, VersionValue::MovedTo { to: kept } if kept == to),
+        "the old check keeps its move: {:?}",
+        old[0]
+    );
+    // The scripted move names the same note's check at another occurrence.
+    let tc_journal::RecordKey::Check(mut key) =
+        tc_app::wire::scope::record_key(&entry.record).unwrap()
+    else {
+        panic!()
+    };
+    key.occurrence += 1000;
+    let new = record_ref(&tc_journal::RecordKey::Check(key)).unwrap();
+    let new = history(app, &at, &new).await;
+    assert_eq!(
+        comment_of(&new[0].version.value).as_deref(),
+        Some("Revisar el tiempo.")
+    );
+}
+
+/// INV-A-CHOICE-NEVER-OVERWRITES-AN-UNSEEN-VERSION: a check choice made on the versions the
+/// review showed, after a sync brought versions it did not show, writes nothing and asks the
+/// person to look again.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_check_choice_over_versions_it_did_not_show_writes_nothing() {
+    use tc_api::conflicts::{CheckPart, PartPick};
+
+    let (w, at, entry) = check_conflict(TeammatesKind::Check).await;
+    let app = &w.t.app;
+    post(
+        app,
+        &Close {
+            at,
+            request: rid(113),
+        },
+    )
+    .await
+    .unwrap();
+    app.sessions().settled(&folder("sample_burrito")).await;
+    script(
+        app,
+        114,
+        ScriptedSync::Synced {
+            teammates: None,
+            joined: None,
+            kinds: vec![TeammatesKind::Check],
+            restored: 0,
+        },
+    )
+    .await;
+    synced(app, 115).await;
+    let at = app
+        .sessions()
+        .open_screen(&folder("sample_burrito"), open_progress())
+        .await
+        .unwrap()
+        .at;
+    let before = history(app, &at, &entry.record).await;
+    let second = by(&entry, &Who::Teammate(2));
+    let choices = [
+        KeepChoice::PerUnit {
+            picks: vec![PartPick {
+                part: CheckPart::Comment,
+                change: second.change.clone(),
+            }],
+        },
+        KeepChoice::KeepBothComments,
+    ];
+    for (n, choice) in (116..).zip(choices) {
+        assert_eq!(
+            resolve(app, &at, &entry, n, choice.clone()).await,
+            Err(tc_api::ApiError::NotSaved(tc_api::NotSaved::LookAgain)),
+            "{choice:?}"
+        );
+    }
+    assert_eq!(history(app, &at, &entry.record).await, before, "nothing written");
+}

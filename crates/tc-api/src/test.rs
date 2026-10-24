@@ -414,6 +414,9 @@ pub enum ScriptedSync {
 pub enum TeammatesKind {
     /// A Translation Notes decision's comment.
     Check,
+    /// The same decision: Teammate 1 moves it to another check, as an upgrade does, while
+    /// Teammate 2 changes its comment.
+    CheckMoved,
     /// A new comment on Titus 1:1, which both write under one id.
     Comment,
     /// The first alignment of the project: one marks it done, the other invalid.

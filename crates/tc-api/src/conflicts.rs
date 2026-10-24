@@ -107,6 +107,31 @@ pub struct ConflictEntry {
     /// Versions this computer could not read; they are kept, and no version can be kept
     /// over them until they can be read.
     pub unreadable: u32,
+    /// The parts of a check decision its versions set differently, which *Choose per line*
+    /// picks one by one; empty for every other kind.
+    pub disputed: Vec<CheckPart>,
+}
+
+/// A part of a check decision that merges on its own (STORAGE §7.3).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum CheckPart {
+    /// The words selected and the status.
+    Judgement,
+    Comment,
+    Bookmark,
+    Dismissed,
+    /// The note the decision was made for.
+    Basis,
+    /// A field of a newer translationCore, by its name in the record.
+    Field(String),
 }
 
 /// tc-journal's conflict kinds (STORAGE §8.1).
@@ -235,8 +260,25 @@ pub enum VersionValue {
     Joined { by: u16 },
     /// The record holds nothing: an absent verse, a removed book.
     Absent,
-    /// A value the review does not draw (an alignment, a decision, a setting).
+    /// A check decision, as the Check screen shows it.
+    Decision(DecisionValue),
+    /// A decision an upgrade moved to the check at `to`.
+    MovedTo { to: ReviewPlace },
+    /// A value the review does not draw (an alignment, a setting).
     NotShown,
+}
+
+/// What a version of a check decision holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionValue {
+    /// The words selected, in order.
+    pub selected: Vec<String>,
+    pub nothing_to_select: bool,
+    pub status: Option<crate::check::DecisionStatus>,
+    pub comment: Option<String>,
+    pub bookmarked: bool,
 }
 
 /// A record left with no place on any screen (STORAGE §7.7): a decision whose check left
@@ -396,6 +438,23 @@ pub enum KeepChoice {
     /// every version of its record, so the conflict is settled on it and every other version
     /// stays in History.
     Restore { from: ChangeRef },
+    /// *Apply Pedro's change to the moved check*: the units Pedro changed, on the check the
+    /// decision moved to.
+    ApplyToMovedCheck,
+    /// *Choose per line*: one version picked for each part the versions set differently;
+    /// every part they agree on keeps its value.
+    PerUnit { picks: Vec<PartPick> },
+    /// *Keep both* on two check comments: the texts joined with their authors' names.
+    KeepBothComments,
+}
+
+/// The version picked for one part of a check decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PartPick {
+    pub part: CheckPart,
+    pub change: ChangeRef,
 }
 
 /// `conflicts/resolve`: one choice on a conflict (C7a; B11 on scripted outcomes). The tokens

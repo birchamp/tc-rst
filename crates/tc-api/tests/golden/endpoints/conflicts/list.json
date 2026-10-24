@@ -117,7 +117,8 @@
               "rt1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
             ],
             "incompleteHistory": false,
-            "unreadable": 0
+            "unreadable": 0,
+            "disputed": []
           }
         ]
       }

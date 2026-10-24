@@ -983,6 +983,21 @@ pub mod teammates {
                     .filter_map(|key| fold.projected(key))
                     .find(|record| pick(record))
             };
+            let tn_decision = || {
+                first(
+                    fold.decisions_of(ToolId::TranslationNotes, BookId::Titus),
+                    &|r| {
+                        matches!(
+                            r,
+                            Record::Check {
+                                value: CheckValue::Decision(_),
+                                ..
+                            }
+                        )
+                    },
+                )
+                .ok_or_else(|| missing("Translation Notes decision"))
+            };
             let carried = |path: &str, text: &str| -> Result<Record, MemoryError> {
                 Ok(Record::CarriedFile {
                     path: RepoPath::parse(path).map_err(|e| bad(&e))?,
@@ -999,19 +1014,7 @@ pub mod teammates {
             };
             let changes = match kind {
                 Kind::Check => {
-                    let record = first(
-                        fold.decisions_of(ToolId::TranslationNotes, BookId::Titus),
-                        &|r| {
-                            matches!(
-                                r,
-                                Record::Check {
-                                    value: CheckValue::Decision(_),
-                                    ..
-                                }
-                            )
-                        },
-                    )
-                    .ok_or_else(|| missing("Translation Notes decision"))?;
+                    let record = tn_decision()?;
                     let with = |n: u8| {
                         let mut record = record.clone();
                         if let Record::Check {
@@ -1024,6 +1027,29 @@ pub mod teammates {
                         record
                     };
                     two(&mut next, with(1), with(2))?
+                }
+                Kind::CheckMoved => {
+                    let record = tn_decision()?;
+                    let Record::Check {
+                        key,
+                        value: CheckValue::Decision(mut decision),
+                    } = record
+                    else {
+                        return Err(missing("Translation Notes decision"));
+                    };
+                    // A check no list derives: the note an upgrade would have moved it to.
+                    let mut to = key.clone();
+                    to.occurrence += 1000;
+                    let moved = Record::Check {
+                        key: key.clone(),
+                        value: CheckValue::MovedTo { to },
+                    };
+                    decision.comment = Some("Revisar el tiempo.".to_owned());
+                    let changed = Record::Check {
+                        key,
+                        value: CheckValue::Decision(decision),
+                    };
+                    two(&mut next, moved, changed)?
                 }
                 Kind::Comment => {
                     let mut id = [0u8; 16];
