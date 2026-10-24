@@ -147,14 +147,17 @@ hands out turns; only the session whose turn it is moves main, and it waits for 
 finish green before it hands the turn back. A roadmap-only change never goes to main on its own:
 it rides with the next card's merge.
 
-1. Make the merge commit, with the card's `done` edit, in a separate worktree; run
-   `scripts/gates.sh` there; main moves only when `scripts/gates.sh --check-receipt` exits 0 on
-   that commit. A fix after a failed gate is a new commit, gated again. The card's log holds a
+1. Make the merge commit, with the card's `done` edit, in a separate worktree; then either run
+   `scripts/gates.sh` there or `scripts/gates.sh --wait-ci <card>` (it pushes the commit to
+   `gate/<card>` and waits for GitHub's `ci` and `app-e2e` runs, about 30 minutes, with no
+   local run needed); main moves only when `scripts/gates.sh --check-receipt` exits 0 on that
+   commit. A fix after a failed gate is a new commit, gated again. The card's log holds a
    `verify` line per `FUNNEL.md` §8 (who reviewed, the six questions answered in order, the
    evidence path) and a `fix` line for every blocker and every major that harms a translator's
    data or view. A no-loss item has three `verify` lines, one per lens (`GLOSSARY.md`
    "Verification lenses").
-2. The full gate list passes on the exact tree you will merge (INT-3's `scripts/gates.sh`).
+2. The full gate list passes on the exact tree you will merge: `scripts/gates.sh` here, or
+   GitHub's `ci` and `app-e2e` push runs (step 1, INT-8).
 3. Merge into main in a separate worktree, with a merge commit titled `Merge <ID>: <what the
    translator gets>` and a trailer line `Unit: <ID>`.
 4. In the same merge commit: card `state: done`, `merged: <the work's tip sha>`, a log line

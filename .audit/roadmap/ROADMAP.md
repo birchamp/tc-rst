@@ -73,6 +73,7 @@ finished unit took 2.8 h, `ASSESSMENT.md`).
 | INT-5 | Converge the trackers onto this roadmap | integration | INT-4 | 0.5 d |
 | INT-6 | Rescue stray work and free the disk | integration | INT-4, owner OK for deletions | 0.5 d |
 | INT-7 | Prepare the Track B hand-off: freeze the shell contract | integration | INT-4 | 1 d |
+| INT-8 | CI runs are the gate receipt | checks | INT-3; the owner asked for it on 2026-10-23 | 0.5 d |
 
 **Exit:** main holds every built unit and S2; CI on main is green; the gate list is one script;
 every unpushed branch has an off-PC copy; the board is the only tracker.
