@@ -4,18 +4,18 @@ title: Lint ratchet and fresh P7 captures
 track: A
 lane: checks
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: checks lane (Claude Code 2198ee19)
+branch: track-CHK-6
+worktree: .worktrees/track-CHK-6
 depends: [INT-4]
 needs_owner: []
 proves: [P7]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: step 1
 blocked_by: none
 ---
 
@@ -265,3 +265,4 @@ Plus: the gate step `ignored`; the recapture of step 5 on this PC; every journey
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-23 23:50 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-6 from main 325244a1. Order decided: steps 1, 4 and 6 now (their files overlap no active branch); step 2's lint pass edits nearly every crate while C7a and FIX-R change tc-api, tc-app and tc-ui and S2 changes tc-store and tc-journal, so it waits for those merges; step 3 needs crates/tc-arch (CHK-1, parked); step 5 recaptures the screens and waits for the app lane's UI merges, or its trees go stale at once | git diff --name-only claude/focused-ride-5uzj7p...track-C7a
