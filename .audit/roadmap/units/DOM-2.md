@@ -4,7 +4,7 @@ title: One reader per job and one set of identifiers
 track: A
 lane: domain
 milestone: M1
-state: fixing
+state: gating
 owner: domain lane (Claude Code 9f599c21)
 branch: track-DOM-2
 worktree: .worktrees/track-DOM-2
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 d
 merged: none
 updated: 2026-10-24
-next: Push the fixes and read CI on track-DOM-2 (ci and app-e2e); when green, set gating and ask the orchestrator for a merge turn.
+next: Integration lane merges it in batch 1 (rulings/2026-10-24-H3-H4-H7-fast-release.md); in the merge commit set state done and merged to this branch's tip.
 blocked_by: none
 ---
 
@@ -368,3 +368,5 @@ Plus:
 - 2026-10-24 09:35 EDT | domain lane (Claude Code 9f599c21) | verify | 245e0ad1 | Lens races and protocol (fresh subagent, ran tc-api golden and ids, tc-journal canonical, versioning, outside): no blocker, no major. Wire and stored forms unchanged; the deleted story converters' failure branches could never run, so tokens, scopes and conflict places name the same records; this app's sidecar cannot be refused by the stricter reader (the projection writes only booleans and strings); a retried Add books gives the same records. Minors: the bad-story refusal text changed; a hand-edited `"1"` occurrence in this app's sidecar reads as 1 and is rewritten as a number; a non-boolean dismissed or markedInvalid kept as extra by Writer::Tc4 would be refused on read-back (no production caller of Tc4) | review report quoted in this line
 - 2026-10-24 09:35 EDT | domain lane (Claude Code 9f599c21) | verify | 245e0ad1 | Lens browser and parity (fresh subagent, read tC4 d310bf3 and the journeys): BLOCKER, the wasm app build failed, tc-ui web/query.rs:330 and :359 still called StoryNo::new(n).ok() (app-e2e run 40097524494 red, no journey ran). tC4 4.0's Add books keeps aligned USFM in the text, so splitting it out is the rebuild's §13.5 design; within it tc4_cards matches word-aligner's addAlignment grouping. Bible questions keep any Reference as written; Reference parsing refuses only a sign. Minors: a bad-ID questions row and an OBS `1:2:3` row are dropped where tC4 shows them, undeclared; imported cards stand in first-run order, which the aligner re-sorts on open as tC4 does | review report quoted in this line
 - 2026-10-24 09:35 EDT | domain lane (Claude Code 9f599c21) | fix | none | Blocker: web/query.rs lists stories with StoryNo::all(); all five wasm clippy gates (tc-ui plain, gallery, app, test-hooks; tc-api) pass. Major: split_aligned keeps a verse as written unless the cards make exactly the runs' links, source words compared with every attribute (so the other-lemma minor is refused too); test an_aligned_verse_whose_cards_would_change_its_links_is_kept_as_written (crossed runs and other lemma kept as written; en_ult's shape still one card); with the guard removed it fails, `left: Some(("x y", … top_words: [α, β, γ] …)) right: None`. The doc comment now says what holds. A `null` flag reads as false, so a tC4 `"done": null` no longer refuses an open. The two question-row differences are declared in docs/APP-DESIGN.md (beside the shared helps reads) and in tsv.rs's doc. The other minors are in .audit/minors.tsv | cargo test -p tc-journal --test shared_rules
+- 2026-10-24 14:26 EDT | domain lane (Claude Code 9f599c21) | gate | fa955ad3 | Branch CI green on fa955ad3: app-e2e run 40098778816; ci run 40098778867 green on its rerun (attempt 2; attempt 1 failed only tc-store's review::a_held_file_deleted_while_the_project_is_open_is_rebuilt, the race the orchestrator gave the storage lane, which also failed DOM-1's first gate run) | gh run view 40098778867
+- 2026-10-24 14:26 EDT | domain lane (Claude Code 9f599c21) | note | none | Main 0189cee4 merged into track-DOM-2 so the batch starts from a tree that builds: tc-door43's client.rs and lib.rs conflicts resolved to DOM-1's imports less ObjectId (tc_core::GitOid now). crates/tc-arch is on main, so step 8.3's allow line goes: the tc_usfm Document,Node,… line of crates/tc-arch/allow/imports.txt is removed; tc-arch's edge table lets tc-obs depend on tc-core, as step 5 adds. cargo test -p tc-arch passes; the claims check passes with this card marked done | node --test .audit/tools/claims.test.mjs
