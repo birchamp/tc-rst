@@ -743,3 +743,56 @@ async fn a_door43_edit_by_another_tool_is_reported_once() {
     assert!(again.other_tools.is_empty(), "said once: {again:?}");
     a.close().unwrap();
 }
+
+/// INV-OWN-WORK-NEVER-REVERTED: both computers change one verse; the sync keeps both
+/// versions as a conflict, lists it as new, and says who sent the changes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn two_versions_of_one_verse_are_a_listed_conflict_after_sync() {
+    let door43 = door43("titus-both").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-both");
+    synced(&sync(&a, &door43).await);
+    a.close().unwrap();
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    let a = open(&ana, &folder_a);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    save(&b, 1, 1, "Paul, as Juan has it");
+    synced(&sync(&b, &door43).await);
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert_eq!(report.new_conflicts.len(), 1, "{report:?}");
+    assert!(report.received_by.values().sum::<u32>() > 0, "{report:?}");
+    let snapshot = a.snapshot();
+    let conflict = snapshot
+        .fold()
+        .conflicts()
+        .next()
+        .expect("a conflict")
+        .clone();
+    let texts: Vec<String> = conflict
+        .candidates
+        .iter()
+        .filter_map(|c| match &c.value {
+            Record::Verse {
+                value: VerseValue::Text { words, .. },
+                ..
+            } => Some(words.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.contains(&"Paul, as Ana has it".to_owned()),
+        "{texts:?}"
+    );
+    assert!(
+        texts.contains(&"Paul, as Juan has it".to_owned()),
+        "{texts:?}"
+    );
+    a.close().unwrap();
+    b.close().unwrap();
+}

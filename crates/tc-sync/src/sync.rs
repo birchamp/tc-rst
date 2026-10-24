@@ -33,6 +33,11 @@ pub struct SyncReport {
     pub confirmed: Option<String>,
     /// Rounds that lost a race to a teammate's push.
     pub raced: u8,
+    /// New changes received, by the person who made them (§9.7 `received`; devices grouped by
+    /// Door43 username).
+    pub received_by: std::collections::BTreeMap<tc_journal::fold::PersonLabel, u32>,
+    /// Conflicts the sync brought that were not listed before it (§9.7 `new_conflicts`).
+    pub new_conflicts: Vec<tc_journal::fold::ConflictId>,
     /// Commits on Door43 made by another tool that changed the project's files (§9.2 N4,
     /// `rulings/2026-10-22-H18.md` B): the project kept its own text, and each is said once.
     pub other_tools: Vec<OtherToolCommit>,
@@ -107,12 +112,22 @@ pub async fn sync(
             confirmed: None,
             raced: 0,
             other_tools: Vec::new(),
+            received_by: Default::default(),
+            new_conflicts: Vec::new(),
         },
+        conflicts_before: project
+            .snapshot()
+            .fold()
+            .conflicts()
+            .map(|c| c.id)
+            .collect(),
+        received_from: Default::default(),
     };
     let (mut state, mut actions) = next(&SyncState::Idle, &SyncEvent::Start);
     while let Some(action) = actions.pop() {
         if let SyncAction::Report(ended) = action {
             run.report.ended = ended;
+            run.tally();
             break;
         }
         let event = run.act(&action, pause).await;
@@ -145,9 +160,48 @@ struct Run<'a> {
     /// The merge's answer: the take-in and the commit come back together.
     merged: Option<Result<CheckpointReport, String>>,
     report: SyncReport,
+    conflicts_before: std::collections::BTreeSet<tc_journal::fold::ConflictId>,
+    /// New changes in the received packs, by the device that made them.
+    received_from: std::collections::BTreeMap<tc_journal::DeviceId, u32>,
 }
 
 impl Run<'_> {
+    /// §9.7: who sent what, and which conflicts are new, read from the fold after the sync.
+    /// It costs the received devices and the listed conflicts, not the project.
+    fn tally(&mut self) {
+        let snapshot = self.project.snapshot();
+        let fold = snapshot.fold();
+        let me = self.project.facts().device;
+        let labels = fold.person_labels(me);
+        for (device, count) in &self.received_from {
+            let label = labels
+                .get(device)
+                .cloned()
+                .unwrap_or(tc_journal::fold::PersonLabel::Teammate(0));
+            *self.report.received_by.entry(label).or_insert(0) += count;
+        }
+        self.report.new_conflicts = fold
+            .conflicts()
+            .map(|c| c.id)
+            .filter(|id| !self.conflicts_before.contains(id))
+            .collect();
+    }
+
+    /// The new changes of the received packs, by device: those the fold does not hold yet.
+    fn count_received(&mut self, packs: &[ReceivedPack]) {
+        let snapshot = self.project.snapshot();
+        let project = self.project.facts().id;
+        for pack in packs {
+            for line in tc_journal::pack::read_pack(&pack.path, &pack.bytes, project).entries {
+                if let tc_journal::change::Verified::Change(change) = line
+                    && snapshot.fold().change(&change.id()).is_none()
+                {
+                    *self.received_from.entry(change.body().device).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+
     async fn act(&mut self, action: &SyncAction, pause: &impl Pause) -> SyncEvent {
         match action {
             SyncAction::Gate => self.gate().await,
@@ -305,6 +359,7 @@ impl Run<'_> {
         let read = tokio::task::spawn_blocking(move || read_tree(&target.git_dir, remote)).await;
         match read {
             Ok(Ok(Intake::Packs(packs, other_tools))) => {
+                self.count_received(&packs);
                 self.packs = packs;
                 for commit in other_tools {
                     if !self.report.other_tools.contains(&commit) {
