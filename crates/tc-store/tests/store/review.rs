@@ -248,7 +248,8 @@ fn a_carried_file_edited_outside_is_recorded_and_listed_as_it_is() {
     assert_valid_burrito(&rig.fs, &folder);
 
     let edited = b"sixteen bytes!!!".to_vec();
-    rig.fs.put(&folder.join(AUDIO), &edited, None);
+    // Unseen, as above: the focus below is the look that finds it.
+    rig.fs.put_unseen(&folder.join(AUDIO), &edited, None);
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
@@ -317,7 +318,9 @@ fn a_held_file_that_changes_again_is_recorded_and_both_copies_stay() {
     assert_eq!(hold_notices(&handle).len(), 1, "{:?}", notices(&handle));
     let mut second = first.clone();
     second.extend_from_slice(b"\\rem second, and longer\n");
-    rig.fs.put(&usfm, &second, None);
+    // Unseen: told of it, the watcher may finish another job before it looks, and the burrito
+    // check after that job would see another program's bytes the app has not looked at yet.
+    rig.fs.put_unseen(&usfm, &second, None);
     save_verse(&handle, 1, 3, "grace and peace").unwrap();
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
