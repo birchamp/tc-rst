@@ -4,7 +4,7 @@ title: Ports for sync, share, exchange and import
 track: A
 lane: app
 milestone: M1
-state: gating
+state: verifying
 owner: C7a session (Claude Code 3058c665)
 branch: track-UI-2
 worktree: .worktrees/track-UI-2
@@ -15,7 +15,7 @@ no_loss: false
 size: 1-2 d
 merged: none
 updated: 2026-10-24
-next: Merge after UI-1: merge main, gate the merge commit (batch or --wait-ci UI-2), fast-forward main.
+next: Reviewed and ready; the merge waits for its dependencies. Merge after UI-1: merge main, gate the merge commit (batch or --wait-ci UI-2), fast-forward main.
 blocked_by: none
 ---
 
