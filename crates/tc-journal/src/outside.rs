@@ -1060,33 +1060,48 @@ impl FoldState {
                 }),
                 RecordKey::Verse(_, c, v) => {
                     let project = self.projected(&key);
+                    let heads = self.heads(&key);
                     let project_has = verse_has_words(project.as_ref());
                     let file_has = verse_has_words(Some(&change.record));
-                    // A verse the file lacks is a conflict (U3); only a verse the file holds
-                    // empty is left as it was (H20).
-                    let file_holds = matches!(
-                        change.record,
-                        Record::Verse {
-                            value: VerseValue::Text { .. },
+                    let shape = |r: Option<&Record>| match r {
+                        Some(Record::Verse {
+                            value: VerseValue::Text { last, .. },
                             ..
-                        }
-                    );
-                    if !file_holds {
-                        // A verse the file lacks, or holds inside a span: never a removal or a
-                        // change of structure. A removal would win over an empty stub (§7.3),
-                        // and as a conflict it takes the verses around it into one passage, so
-                        // the file's other verses would not show. It is listed instead.
+                        }) => Some(*last),
+                        _ => None,
+                    };
+                    let (file_shape, project_shape) =
+                        (shape(Some(&change.record)), shape(project.as_ref()));
+                    // Filled with no question only when the project holds one version of
+                    // the verse, an empty stub of the same shape: a verse in conflict keeps
+                    // every side (§7.3), and a span, a covered or a removed verse is the
+                    // translator's structure.
+                    let fillable = !project_has && heads.len() == 1 && project_shape.is_some();
+                    let wanted = compare_key(&change.record, true);
+                    let in_history = self.history(&key).into_iter().any(|id| {
+                        self.body(&id)
+                            .is_some_and(|b| compare_key(&b.record, true) == wanted)
+                    });
+                    if file_shape.is_none() || file_shape != project_shape {
+                        // A verse the file lacks, or holds in another structure (a span, a
+                        // covered verse): never a removal or a change of structure. A removal
+                        // would win over an empty stub (§7.3), and as a conflict a change of
+                        // structure takes the verses around it into one passage, so the
+                        // file's other verses would not show. It is listed instead.
                         plan.left_as_it_was.push(key);
                     } else if project_has && !file_has {
                         plan.left_as_it_was.push(key);
-                    } else if !project_has && file_has {
+                    } else if fillable && file_has {
                         verse_imported.insert((*c, *v));
                         plan.imported.push(key.clone());
                         plan.changes.push(PlannedChange {
-                            parents: self.heads(&key),
+                            parents: heads,
                             cause: cause(false),
                             record: change.record,
                         });
+                    } else if in_history {
+                        // The file's version is already one of the verse's: an update run
+                        // again, or a review batch replayed, adds no second copy.
                     } else {
                         verse_review.insert((*c, *v));
                         plan.to_review.push(key);

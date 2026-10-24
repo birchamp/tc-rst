@@ -295,3 +295,68 @@ proptest::proptest! {
         handle.close().unwrap();
     }
 }
+
+/// A verse already in conflict is never filled, even when the side shown is empty: every side
+/// stays a head (§7.3), and the file's words join them as one more to review.
+#[test]
+fn a_verse_in_conflict_is_never_filled() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &Default::default()).unwrap();
+    let stale = handle.mint(&verse(1, 1), None).unwrap();
+    for words in ["Paul, a servant of God and apostle", ""] {
+        handle
+            .submit(Command::SaveVerse {
+                shown: stale.clone(),
+                words: words.to_owned(),
+            })
+            .wait()
+            .unwrap();
+    }
+    let before = handle.snapshot().fold().heads(&verse(1, 1));
+    assert!(before.len() >= 2, "two windows saved the verse: {before:?}");
+    let file = book_file(&handle).replacen("\\v 1 ", "\\v 1 Paul from the file", 1);
+    update(&handle, &file).unwrap();
+    let after = handle.snapshot().fold().heads(&verse(1, 1));
+    for head in &before {
+        assert!(
+            after.contains(head),
+            "a side of the conflict was merged away"
+        );
+    }
+    assert!(conflicted(&handle, &verse(1, 1)));
+    handle.close().unwrap();
+}
+
+/// A bridge in the file over verses the project keeps apart changes no structure: both verses
+/// are left as they were and listed.
+#[test]
+fn a_bridge_in_the_file_restructures_nothing() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &Default::default()).unwrap();
+    let shown = book_file(&handle);
+    let file = shown.replacen("\\v 1 ___\n\\v 2 ___", "\\v 1-2 Paul and the hope", 1);
+    assert_ne!(file, shown);
+    let reply = update(&handle, &file).unwrap();
+    assert!(reply.kept.contains(&verse(1, 1)) && reply.kept.contains(&verse(1, 2)));
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("___"));
+    assert_eq!(words(&handle, 1, 2).as_deref(), Some("___"));
+    handle.close().unwrap();
+}
+
+/// Running the update again with the same file, or replaying its review batch, adds no second
+/// copy of a version the verse already holds.
+#[test]
+fn updating_twice_with_one_file_adds_nothing() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &Default::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    let file = book_file(&handle)
+        .replace("Paul, a servant of God", "Paul, a slave of God")
+        .replacen("\\v 2 ___", "\\v 2 in hope", 1);
+    update(&handle, &file).unwrap();
+    let once = handle.snapshot().fold().heads(&verse(1, 1));
+    let again = update(&handle, &file).unwrap();
+    assert_eq!(handle.snapshot().fold().heads(&verse(1, 1)), once);
+    assert!(again.changes.is_empty(), "{:?}", again.changes);
+    handle.close().unwrap();
+}

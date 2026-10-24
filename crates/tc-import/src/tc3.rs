@@ -248,6 +248,15 @@ fn content(parts: &BookParts, chapter: u16, verse: u16) -> Option<String> {
     }
 }
 
+/// The text a decision of `chapter:verse` was made on: its verse's, or the span's that
+/// covers it.
+fn decision_text(parts: &BookParts, chapter: u16, verse: u16) -> Option<String> {
+    match parts.chapters.get(&chapter)?.verses.get(&verse)? {
+        VersePart::Text(_) => content(parts, chapter, verse),
+        VersePart::Covered { by } => content(parts, chapter, *by),
+    }
+}
+
 /// The word, occurrence and occurrences of each word, as a multiset.
 fn word_set<'a>(
     words: impl Iterator<Item = (&'a str, u32, u32)>,
@@ -426,7 +435,7 @@ fn decisions(
                     continue;
                 }
                 let text = match (number("chapter"), number("verse")) {
-                    (Some(c), Some(v)) => content(parts, c, v).unwrap_or_default(),
+                    (Some(c), Some(v)) => decision_text(parts, c, v).unwrap_or_default(),
                     _ => String::new(),
                 };
                 let group = context.get("groupId").map(js_string).unwrap_or_default();
