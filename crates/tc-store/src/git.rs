@@ -513,6 +513,20 @@ impl Git {
         self.repo.path()
     }
 
+    /// Whether `commit`'s history holds `ancestor`. An error (a shallow history, a missing
+    /// object) counts as "no", so a merge is made rather than skipped (§9.1 S4).
+    pub fn descends_from(&self, commit: GitOid, ancestor: GitOid) -> bool {
+        let (Ok(commit), Ok(ancestor)) = (
+            git2::Oid::from_bytes(commit.as_bytes()),
+            git2::Oid::from_bytes(ancestor.as_bytes()),
+        ) else {
+            return false;
+        };
+        self.repo
+            .graph_descendant_of(commit, ancestor)
+            .unwrap_or(false)
+    }
+
     /// HEAD's commit; `None` on a branch with no commit yet.
     pub fn head(&self) -> Result<Option<Head>, GitError> {
         let reference = match self.repo.head() {

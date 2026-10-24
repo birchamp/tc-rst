@@ -222,6 +222,9 @@ pub struct ProjectFacts {
     pub device: DeviceId,
     pub folder: PathBuf,
     pub mode: Mode,
+    /// The project's git repository, for the sync's network calls (§9); `None` when the
+    /// project has none this session.
+    pub git_dir: Option<PathBuf>,
 }
 
 /// What happened in a project (R4, R16).
@@ -558,6 +561,11 @@ pub enum CheckpointReason {
     AfterImport,
     Periodic,
     Other(String),
+    /// §9.1 S7: a sync's merge commit, whose second parent is the commit fetched from
+    /// Door43. It is made even when the tree is HEAD's, so the push fast-forwards Door43.
+    SyncMerge {
+        remote: tc_journal::GitOid,
+    },
 }
 
 impl CheckpointReason {
@@ -571,6 +579,7 @@ impl CheckpointReason {
             Self::AfterImport => "after import".into(),
             Self::Periodic => "every 30 minutes".into(),
             Self::Other(words) => words.clone(),
+            Self::SyncMerge { .. } => "sync with Door43".into(),
         }
     }
 }
@@ -584,6 +593,31 @@ pub struct CheckpointReport {
     pub sealed: Vec<String>,
     /// Why no commit was made, when none was.
     pub skipped: Option<CheckpointSkip>,
+    /// What a sync's merge took in before it sealed (§9.3).
+    pub intake: IntakeReport,
+}
+
+/// A pack of a teammate's work, read from the tree fetched from Door43 (§9.2 N3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReceivedPack {
+    /// Its path in the tree, under `ingredients/tc/changes/`.
+    pub path: String,
+    pub bytes: Vec<u8>,
+    /// Its blob, which the repository holds since the fetch.
+    pub blob: GitOid,
+}
+
+/// What an intake took (§9.2, §9.3).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IntakeReport {
+    /// Packs written and folded.
+    pub packs: u32,
+    /// Damaged packs whose readable changes were salvaged into a pending batch.
+    pub salvaged: u32,
+    /// Packs the project had already.
+    pub held: u32,
+    /// Paths another program wrote other bytes to, left as they are (§5.10 M1).
+    pub left: Vec<String>,
 }
 
 /// Why a checkpoint made no commit. Each is a state, not a failure: the work is saved and the
@@ -621,6 +655,8 @@ pub(crate) enum Msg {
     },
     Checkpoint {
         reason: CheckpointReason,
+        /// A sync's received packs, taken in before the seal (§9.3).
+        intake: Vec<ReceivedPack>,
         reply: Resolver<Result<CheckpointReport, StoreError>>,
     },
     /// The writer examined a changed file and plans to record it (§11.1 X4): the actor
@@ -946,6 +982,27 @@ impl ProjectHandle {
             pending(|| Err(StoreError::Other("the project is closed".into())));
         self.send(Msg::Checkpoint {
             reason,
+            intake: Vec::new(),
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// A sync's merge (§9.3, §9.1 S7): takes the received packs in, each written whole
+    /// beside the project's own and folded, then seals, materializes and commits with
+    /// `remote`, the commit fetched from Door43, as the second parent. A pack already held is
+    /// skipped; a damaged one's readable changes are salvaged; a path another program wrote
+    /// is left as it is. Saves go on meanwhile.
+    pub fn sync_merge(
+        &self,
+        remote: GitOid,
+        packs: Vec<ReceivedPack>,
+    ) -> Pending<Result<CheckpointReport, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send(Msg::Checkpoint {
+            reason: CheckpointReason::SyncMerge { remote },
+            intake: packs,
             reply: resolver,
         });
         pending

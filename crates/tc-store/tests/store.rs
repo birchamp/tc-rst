@@ -84,3 +84,6 @@ mod last_look;
 
 #[path = "store/carried_last_look.rs"]
 mod carried_last_look;
+
+#[path = "store/intake.rs"]
+mod intake;

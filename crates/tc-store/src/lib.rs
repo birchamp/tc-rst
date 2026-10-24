@@ -70,8 +70,8 @@ pub use counters::StoreCounters;
 pub use drafts::OfferedDraft;
 pub use error::StoreError;
 pub use handle::{
-    BookRead, CheckpointReason, CheckpointReport, CheckpointSkip, Leave, Mode, Pending,
-    ProjectFacts, ProjectHandle, Snapshot, StoreEvent, Work,
+    BookRead, CheckpointReason, CheckpointReport, CheckpointSkip, IntakeReport, Leave, Mode,
+    Pending, ProjectFacts, ProjectHandle, ReceivedPack, Snapshot, StoreEvent, Work,
 };
 pub use hooks::{Failure, Hooks, Point};
 pub use notices::StoreNotice;
