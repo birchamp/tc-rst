@@ -1036,6 +1036,8 @@ pub enum StoreError {
 pub enum CheckpointReason {
     /// tC4's "leaving the project" checkpoint, when the person goes Home.
     LeavingProject,
+    /// tC4's "leaving Translate" checkpoint, at a mode switch (D1).
+    LeavingTranslate,
     Other(String),
 }
 

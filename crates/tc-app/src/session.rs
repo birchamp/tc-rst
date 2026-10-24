@@ -243,6 +243,15 @@ impl Slot {
     }
 }
 
+/// Where a folder's last checkpoint stands (D1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckpointState {
+    /// None has run in this server run.
+    Never,
+    Running,
+    Ended(CheckpointOutcome),
+}
+
 struct RegistryInner {
     store: Arc<dyn ProjectStore>,
     bus: EventBus,
@@ -254,6 +263,8 @@ struct RegistryInner {
     epochs: AtomicU64,
     slot_ids: AtomicU64,
     slots: Mutex<BTreeMap<ProjectRef, Slot>>,
+    /// Each folder's last checkpoint, kept after its session closes so a reload finds it (D1).
+    checkpoints: Mutex<BTreeMap<ProjectRef, CheckpointState>>,
     /// Woken whenever an open, a leave checkpoint or a close ends.
     changed: tokio::sync::Notify,
 }
@@ -353,9 +364,55 @@ impl SessionRegistry {
                 epochs: AtomicU64::new(1),
                 slot_ids: AtomicU64::new(1),
                 slots: Mutex::new(BTreeMap::new()),
+                checkpoints: Mutex::new(BTreeMap::new()),
                 changed: tokio::sync::Notify::new(),
             }),
         }
+    }
+
+    /// INV-A-LEAVE-WITH-CHANGES-MAKES-ONE-COMMIT (D1): the one caller of
+    /// `ProjectHandle::checkpoint`. It keeps the folder's state, reports a failure, and tells
+    /// the screens the outcome.
+    pub async fn checkpoint(
+        &self,
+        session: &ProjectSession,
+        reason: CheckpointReason,
+    ) -> CheckpointOutcome {
+        let folder = session.scope.project.clone();
+        let label = match &reason {
+            CheckpointReason::LeavingProject => "leavingProject",
+            CheckpointReason::LeavingTranslate => "leavingTranslate",
+            CheckpointReason::Other(_) => "other",
+        };
+        lock(&self.inner.checkpoints).insert(folder.clone(), CheckpointState::Running);
+        let started = self.inner.clock.now();
+        let outcome = session.handle.checkpoint(reason).await;
+        lock(&self.inner.checkpoints)
+            .insert(folder.clone(), CheckpointState::Ended(outcome.clone()));
+        if let CheckpointOutcome::Failed { reason } = &outcome {
+            self.inner.reports.add(
+                ReportOp::Checkpoint,
+                ReportOutcome::Failed {
+                    reason: reason.clone(),
+                },
+                facts(json!({"project": folder.as_str(), "reason": label})),
+                started,
+                self.inner.clock.now(),
+            );
+        }
+        self.inner.bus.publish(Event::Session {
+            at: session.scope.clone(),
+            event: SessionEvent::Checkpoint(outcome.clone()),
+        });
+        outcome
+    }
+
+    /// Where `folder`'s last checkpoint stands.
+    pub fn checkpoint_state(&self, folder: &ProjectRef) -> CheckpointState {
+        lock(&self.inner.checkpoints)
+            .get(folder)
+            .cloned()
+            .unwrap_or(CheckpointState::Never)
     }
 
     /// The project store every session is opened from (Home lists its projects through it).
@@ -719,26 +776,9 @@ impl SessionRegistry {
                     session.scope.project.as_str(),
                 )
                 .await;
-            let started = registry.inner.clock.now();
-            let outcome = session
-                .handle
-                .checkpoint(CheckpointReason::LeavingProject)
+            registry
+                .checkpoint(&session, CheckpointReason::LeavingProject)
                 .await;
-            if let CheckpointOutcome::Failed { reason } = &outcome {
-                registry.inner.reports.add(
-                    ReportOp::Checkpoint,
-                    ReportOutcome::Failed {
-                        reason: reason.clone(),
-                    },
-                    facts(json!({"project": session.scope.project.as_str(), "reason": "leavingProject"})),
-                    started,
-                    registry.inner.clock.now(),
-                );
-            }
-            registry.inner.bus.publish(Event::Session {
-                at: session.scope.clone(),
-                event: SessionEvent::Checkpoint(outcome),
-            });
             // Home is already showing: its card was read before this checkpoint wrote the
             // files its counts come from (a kept verse's conflict among them, J18).
             registry.inner.bus.publish(Event::HomeCard {

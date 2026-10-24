@@ -1352,6 +1352,38 @@ fn close_off_thread(handle: tc_store::ProjectHandle) -> oneshot::Receiver<Result
     rx
 }
 
+/// What a checkpoint came to, for the screens (D1): a commit is `Committed`; no changes, a
+/// read-only project and a second writer are `Unchanged` (the last two have their own banner or
+/// notice); every other skip and every store error is `Failed`, which stays on Home until a
+/// later checkpoint of the project ends otherwise. One arm per skip, so a new one is decided.
+pub fn checkpoint_outcome(
+    report: Result<tc_store::CheckpointReport, tc_store::StoreError>,
+) -> CheckpointOutcome {
+    use tc_store::CheckpointSkip;
+    let failed = |reason: &str| CheckpointOutcome::Failed {
+        reason: reason.to_owned(),
+    };
+    match report {
+        Ok(report) if report.commit.is_some() => CheckpointOutcome::Committed,
+        Ok(report) => match report.skipped {
+            None
+            | Some(
+                CheckpointSkip::NoChanges | CheckpointSkip::ReadOnly | CheckpointSkip::SecondWriter,
+            ) => CheckpointOutcome::Unchanged,
+            Some(CheckpointSkip::NoHistory) => failed("the project has no history to commit to"),
+            Some(CheckpointSkip::SealFailed) => failed("the saved changes could not be sealed"),
+            Some(CheckpointSkip::PackMissing) => failed("a saved pack is missing or unreadable"),
+            Some(CheckpointSkip::TreeInvalid) => {
+                failed("the project's files are not a valid Scripture Burrito")
+            }
+            Some(CheckpointSkip::HeadMoved) => {
+                failed("the history moved while the checkpoint was made")
+            }
+        },
+        Err(error) => failed(&error.to_string()),
+    }
+}
+
 impl ProjectHandle for StoreHandle {
     fn facts(&self) -> ProjectFacts {
         match self.inner().as_ref() {
@@ -1411,6 +1443,7 @@ impl ProjectHandle for StoreHandle {
         let Some(pending) = self.inner().as_ref().map(|handle| {
             handle.checkpoint(match reason {
                 CheckpointReason::LeavingProject => tc_store::CheckpointReason::LeavingProject,
+                CheckpointReason::LeavingTranslate => tc_store::CheckpointReason::LeavingTranslate,
                 CheckpointReason::Other(why) => tc_store::CheckpointReason::Other(why),
             })
         }) else {
@@ -1420,15 +1453,7 @@ impl ProjectHandle for StoreHandle {
                 }
             });
         };
-        Box::pin(async move {
-            match pending.await {
-                Ok(report) if report.commit.is_some() => CheckpointOutcome::Committed,
-                Ok(_) => CheckpointOutcome::Unchanged,
-                Err(error) => CheckpointOutcome::Failed {
-                    reason: error.to_string(),
-                },
-            }
-        })
+        Box::pin(async move { checkpoint_outcome(pending.await) })
     }
 
     fn counters(&self) -> StoreCounters {
