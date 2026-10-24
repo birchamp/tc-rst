@@ -17,7 +17,7 @@ merged: none
 updated: 2026-10-25
 next: step 5 rest (N4 notice for commits by another tool, the no-main-branch refusal, .tc/sync.json confirmed, ExchangeReport, repack after sync, the five loss_g names and the §15 list, saves at every step, nightly job), then step 6 (share, join, connect) and step 7 (USB).
 blocked_by: none
-later: ["S3 from step 4"]
+later: []
 ---
 
 # X: Door43 sync and USB exchange (tc-sync)
