@@ -4,18 +4,18 @@ title: Move the rebuild to the MIT licence, as tC4 did
 track: A
 lane: integration
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: integration lane (Claude Code 3d07d5f8)
+branch: track-LIC-1
+worktree: .worktrees/track-LIC-1
 depends: [SWEEP]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d (basis: a manifest line, two text files, ten catalog lines and one recapture)
 merged: none
-updated: 2026-10-23
-next: Claim this card after SWEEP merges, then do step 1.
+updated: 2026-10-24
+next: Step 1: the licence files.
 blocked_by: none
 ---
 
@@ -125,3 +125,4 @@ moves to.
 ## Log
 
 - 2026-10-23 | integration lane (Claude Code 3d07d5f8) | created | none | from the owner's licence answers of 2026-10-23 | rulings/2026-10-23-tokenizer-relicense.md
+- 2026-10-24 14:21 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-LIC-1, cut from track-SWEEP (the card and its rulings are there); SWEEP is not merged yet, so the merge waits for it (batch 2) | python3 -I -B .audit/tools/board.py
