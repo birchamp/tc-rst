@@ -459,7 +459,7 @@ the rebuild fixed it or does as tC4 does:
 | #58 | Pilot program | not applicable | — | — | Process. |
 | #832 | Home badge keeps left to right after Settings says right to left; empty language name | rebuild bug | tc-app; FIX-R step 1 | `a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart`; `an_imported_project_shows_its_metadata_language_name_in_settings` (to create) | See §1 row 20. |
 | #833 | rc.2 polish: offline update error, Save dialog title, import codes, right-click, source text version | rebuild bug | .1 FIX-R step 2; .2 G1, D2; .3 F1; .4 G1; .5 FIX-R step 5 | .1 `an_offline_update_check_shows_one_plain_sentence`; .2 `export_save_dialog_has_a_readable_title`; .3 `an_import_refusal_shows_a_sentence_not_a_code`; .4 `a_text_field_right_click_offers_cut_copy_paste`; .5 `source_texts_lists_the_installed_version` (all to create) | .1 is §1 row 21; .2 to .5 are unit todos. |
-| #838 | About says "License: MIT" (D111) | not applicable | — | — | tC4 is now MIT; the rebuild stays GPL-2.0-or-later. A licence choice for the owner, not a translator question (`TC4-DELTA-2026-10-23.md` §5). |
+| #838 | About says "License: MIT" (D111) | unit todo | REF1 | `parity/app/journeys/about.test.mjs` (asserts MIT after REF1) | The rebuild is MIT since LIC-1 (owner rulings of 2026-10-23); About's line and dialog follow with REF1's re-vendor from tC4 release/4.0. |
 | #839 | The single-instance guard is only in the packaged app | not applicable | G1 | `new_tc4_waits_for_the_old_one_then_names_the_holder` | tC4 rig machinery; the rebuild's guard is the app-data lock. |
 
 ## 7. Not triaged yet
