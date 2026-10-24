@@ -94,6 +94,7 @@ pub fn synced_view(
         alignments: tally.alignments,
         restored,
         missing_pins: missing_pins(snapshot, installed),
+        recreated: false,
     }
 }
 
@@ -171,6 +172,8 @@ impl App {
             let snapshot = session.read();
             let resources = &self.inner.resources;
             let mut view = synced_view(&snapshot, me, &[], 0, &|pin| resources.has_dcs(pin));
+            // shortcut: X's report does not yet say that the sync put a deleted branch back, so
+            // `recreated` stays false until the storage lane's `SyncReport.recreated` lands.
             // Unit X counts what came in, by the person who made it (§9.7 `received`).
             view.received = received_by.values().sum();
             view.from = received_by

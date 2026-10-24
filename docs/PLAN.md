@@ -184,6 +184,10 @@ And these (unit B10):
   two alignments to review."), and Review opens them. tC4 4.0 keeps the newest alignment and
   counts it among the conflicts that kept the newest version, so a teammate's alignment can
   disappear unannounced (#791).
+- When Door43 no longer has a project's branch (its owner deleted it), the next sync puts this
+  computer's copy back and says so: "The project was missing from Door43, so tC4 put your copy
+  back. Ask your teammates to sync." tC4 4.0 pushes the branch again and says nothing (owner
+  ruling of 2026-10-24; evidence/2026-10-21/gap-tc4-straggler-sync-safety.md state 3b).
 - A sync that stops for a reason no sentence names says so in one fixed sentence. Door43's
   words and the reason, which can name a file on the translator's computer, stay in the
   problem report. tC4 4.0 shows "The sync stopped: {reason}" (#724, Q36).

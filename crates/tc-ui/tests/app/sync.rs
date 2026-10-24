@@ -37,6 +37,7 @@ fn ok_sync() -> SyncResultView {
         alignments: 0,
         restored: 1,
         missing_pins: 0,
+        recreated: false,
     }
 }
 
@@ -102,6 +103,7 @@ fn a_sync_with_no_teammate_change_still_gives_all_three_as_0_and_no_restored_lin
         alignments: 0,
         restored: 0,
         missing_pins: 0,
+        recreated: false,
     });
     assert_eq!(
         counts(&toast),
@@ -167,12 +169,42 @@ fn a_version_this_computer_lacks_offers_download() {
         alignments: 0,
         restored: 0,
         missing_pins: 5,
+        recreated: false,
     });
     assert_eq!(only_pins.dot(), Dot::Kindle);
     assert_eq!(
         only_pins.notes()[0].text,
         "This project now uses 5 resource versions that are not on this computer."
     );
+}
+
+/// Owner ruling of 2026-10-24: a sync that put the project back on Door43 says so in one
+/// sentence, first under the line, with a Kindle dot and nothing to press (tC4 says nothing).
+#[test]
+fn a_project_put_back_on_door43_says_so_with_a_kindle_dot_and_no_button() {
+    let toast = synced(SyncResultView {
+        received: 0,
+        from: Vec::new(),
+        kept_newest: 0,
+        verse_conflicts: 0,
+        alignments: 0,
+        restored: 0,
+        missing_pins: 0,
+        recreated: true,
+    });
+    assert_eq!(notes(&toast), [("sync-recreated", 1)]);
+    assert_eq!(
+        toast.notes()[0].text,
+        "The project was missing from Door43, so tC4 put your copy back. Ask your teammates to sync."
+    );
+    assert_eq!(toast.dot(), Dot::Kindle);
+    assert!(!toast.review() && !toast.download(), "nothing to press");
+    let plain = synced(SyncResultView {
+        recreated: false,
+        ..toast.synced().unwrap().clone()
+    });
+    assert!(notes(&plain).is_empty());
+    assert_eq!(plain.dot(), Dot::Valid);
 }
 
 /// The closed set of what a sync can end with: a match with no catch-all, so a new variant

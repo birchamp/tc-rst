@@ -105,7 +105,8 @@
             "verseConflicts": 1,
             "alignments": 0,
             "restored": 0,
-            "missingPins": 5
+            "missingPins": 5,
+            "recreated": false
           }
         }
       }

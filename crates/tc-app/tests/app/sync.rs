@@ -274,6 +274,7 @@ async fn teammates_a_sync_receives_stand_as_one_verse_conflict_on_the_toast_the_
             alignments: 0,
             restored: 0,
             missing_pins: 5,
+            recreated: false,
         }
     );
 
@@ -289,6 +290,7 @@ async fn teammates_a_sync_receives_stand_as_one_verse_conflict_on_the_toast_the_
             alignments: 0,
             restored: 0,
             missing_pins: 5,
+            recreated: false,
         }
     );
     let card = card_with_counts(app).await;

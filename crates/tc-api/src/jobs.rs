@@ -187,6 +187,9 @@ pub struct SyncResultView {
     pub restored: u32,
     /// The project's pinned resource versions that this computer does not have (D88 point 6).
     pub missing_pins: u32,
+    /// Door43 no longer had the project's branch, and this sync put this computer's copy back
+    /// (owner ruling of 2026-10-24; tC4 says nothing).
+    pub recreated: bool,
 }
 
 /// `jobs/get`: a job's state, or `None` when no job has this id or its outcome expired.

@@ -3350,6 +3350,7 @@ fn events() -> Vec<Event> {
                 alignments: 0,
                 restored: 0,
                 missing_pins: 5,
+                recreated: false,
             })),
         }),
         Event::Job(JobView {

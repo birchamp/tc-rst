@@ -166,6 +166,7 @@
   "syncResult.error.tc4TeamRepository",
   "syncResult.error.unexpected",
   "syncResult.receivedKept",
+  "syncResult.recreated",
   "translate.changedWhileTyping",
   "translate.changedWhileTypingUnnamed",
   "upload.notWritten",
