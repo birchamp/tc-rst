@@ -9,13 +9,14 @@ const PROBE_PX = 32;
 
 // G0 at 32 px (docs/evidence/electronite-spike-linux-2026-10-17.md §5 and the Windows file):
 // Electronite 37.1.0 on Linux and Windows width 302.9, ascent 61.0, descent 13.2; Chromium 141
-// without Graphite width 639.8, ascent 46. The vertical limits are estimates around those values
-// until each platform's run has been measured.
+// without Graphite width 639.8, ascent 46. G4 measured the shell on all three (shell.yml run
+// 40121642886): width 302.9 everywhere, ascent 61 / 61 / 60.7, descent 13.2 / 13.2 / 12.6 on
+// Linux, Windows and macOS; Playwright's Chromium 633, 46, 18. Each limit keeps 4 px to spare.
 const JOINED_MAX_WIDTH = 480;
 const ASCENT_MIN = 55;
 const ASCENT_MAX = 70;
 const DESCENT_MIN = 8;
-const DESCENT_MAX = 20;
+const DESCENT_MAX = 17.5;
 
 // { ok, broken: ['<measure> <value> outside <limit>', ...] } for one measurement.
 function graphiteVerdict({ fontLoaded, boxWidth, ascent, descent }) {

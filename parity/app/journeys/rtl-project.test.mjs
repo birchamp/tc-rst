@@ -89,6 +89,7 @@ browserTest('rtl_project_drafts_checks_and_aligns', async () => {
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     await leave(page, env, project);
     const saved = fs.readFileSync(usfm).toString('utf8').split('\n').find((line) => line.startsWith('\\v 1 '));
+    assert.ok(saved, 'Titus 1:1 is in the file');
     assert.deepEqual(Buffer.from(saved.slice('\\v 1 '.length)), Buffer.from(TYPED), 'the verse on disk is the typed bytes');
 
     // J4: a tapped word marked valid is one decision record on disk.
@@ -102,6 +103,7 @@ browserTest('rtl_project_drafts_checks_and_aligns', async () => {
     await page.locator('[data-testid="check-list"] [data-rail-index="0"]').click();
     const target = page.getByTestId('check-target');
     await until('the drafted verse shows', async () => (await target.getAttribute('data-drafted')) === '1');
+    assert.equal(await direction(target), 'rtl', 'the checked verse reads right to left');
     const word = target.locator('[data-testid^="tw-"]', { hasText: 'يسوع' }).first();
     await word.click();
     assert.equal(await word.getAttribute('aria-pressed'), 'true');
@@ -130,10 +132,10 @@ browserTest('rtl_project_drafts_checks_and_aligns', async () => {
     const before = await placed(page);
     await first.click();
     await until('the word is chosen', async () => (await first.getAttribute('data-armed')) === '1');
-    const greek = await page.locator('[data-testid^="align-card-"] span[lang="el"]').first().textContent();
+    const greek = await page.locator('[data-testid^="align-card-"] span[lang]').first().textContent();
     await page.locator('[data-testid^="align-card-"]').first().click();
     await until('one more word placed', async () => (await placed(page)) !== before);
-    await until('the link saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved', 8000);
+    await until('the link saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     await leave(page, env, project);
     const alignment = json(env, project, 'ingredients', 'checking', 'alignments', 'TIT.json').chapters['1']['1'];
     assert.ok(alignment.alignments.some((group) => group.topWords.some((w) => w.word === greek)
