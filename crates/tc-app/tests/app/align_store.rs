@@ -223,19 +223,19 @@ async fn a_save_ack_restores_the_draft_of_links_changed_while_it_waited() {
     let placed = link(&rig, &at, &view).await;
     let hooks = rig.hooks.clone();
     tokio::time::timeout(
-        Duration::from_secs(10),
+        Duration::from_secs(60),
         tokio::task::spawn_blocking(move || {
             hooks.wait_reached(Point::BeforeDurablePending, 1);
         }),
     )
     .await
-    .unwrap()
+    .expect("hung: the save reaching its hold")
     .unwrap();
     let newer = place(&rig.t.app, &at, &placed, 63, "verdad", "ἀληθείας").await;
     assert_eq!(newer.save, AlignSave::Saving);
     rig.hooks.release(Point::BeforeDurablePending);
     // Read the actor until its first save has replied; the newer links have a fresh timer.
-    for _ in 0..1000 {
+    for () in crate::store_world::for_a_minute() {
         if ready(&rig.t.app, &at, 1, 1).await.save == AlignSave::Unsaved {
             break;
         }

@@ -150,7 +150,7 @@ pub(super) async fn synced(app: &App, n: u8) -> SyncResultView {
 
 /// The card once its summary is computed, after the sync told Home it changed.
 pub(super) async fn card_with_counts(app: &App) -> HomeCard {
-    for _ in 0..1000 {
+    for () in crate::store_world::for_a_minute() {
         let card: HomeCard = post(
             app,
             &Card {
@@ -164,7 +164,7 @@ pub(super) async fn card_with_counts(app: &App) -> HomeCard {
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    panic!("the card's summary never came");
+    panic!("hung: the card's summary never came");
 }
 
 pub(super) fn teammate(n: u16) -> PersonLabel {

@@ -238,10 +238,16 @@ async fn the_reporter_reports_while_the_job_thread_is_blocked() {
         go_rx.recv().unwrap();
         Ok(JobOutcome::Finished)
     });
-    while ready_rx.try_recv().is_err() {
+    let mut ready = false;
+    for () in crate::store_world::for_a_minute() {
+        if ready_rx.try_recv().is_ok() {
+            ready = true;
+            break;
+        }
         std::thread::sleep(Duration::from_millis(1));
         tokio::task::yield_now().await;
     }
+    assert!(ready, "hung: the job never began its slow read");
     // The first report must come while the thread is still blocked; its exact time is not
     // asserted, and the bound only catches a hang (ruling 2026-10-23: behavior, not speed).
     let mut seen = Vec::new();
@@ -259,7 +265,7 @@ async fn the_reporter_reports_while_the_job_thread_is_blocked() {
         other => panic!("{other:?}"),
     }
     go_tx.send(()).unwrap();
-    for _ in 0..5000 {
+    for () in crate::store_world::for_a_minute() {
         std::thread::sleep(Duration::from_millis(1));
         settle().await;
         drain_jobs(&mut reader, 300, &mut seen);
@@ -307,9 +313,9 @@ async fn cancel_stops_at_next_chunk() {
     assert_eq!(states.last(), Some(&JobState::Cancelling), "{states:?}");
     go_tx.send(()).unwrap();
     loop {
-        match tokio::time::timeout(Duration::from_secs(5), reader.next())
+        match tokio::time::timeout(Duration::from_secs(60), reader.next())
             .await
-            .unwrap()
+            .expect("hung: the next job event")
         {
             Next::Frame(frame) => {
                 if let tc_api::event::Event::Job(view) = frame.event {
@@ -345,13 +351,13 @@ async fn cancel_stops_at_next_chunk() {
 }
 
 async fn wait_until(mut condition: impl FnMut() -> bool) {
-    for _ in 0..5000 {
+    for () in crate::store_world::for_a_minute() {
         if condition() {
             return;
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("the condition never held");
+    panic!("hung: the condition never held");
 }
 
 #[tokio::test(start_paused = true)]
@@ -428,7 +434,7 @@ async fn a_job_that_panics_fails_with_an_internal_report() {
             panic!("the disk fell out");
         });
     let mut seen = Vec::new();
-    for _ in 0..5000 {
+    for () in crate::store_world::for_a_minute() {
         std::thread::sleep(Duration::from_millis(1));
         settle().await;
         drain_jobs(&mut reader, 0, &mut seen);
