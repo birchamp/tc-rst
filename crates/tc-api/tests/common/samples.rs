@@ -87,6 +87,7 @@ pub fn sync_blocks() -> Vec<SyncBlock> {
             min_reader_minor: 0,
         },
         SyncBlock::Tc4TeamRepository,
+        SyncBlock::BranchMissing,
     ]
 }
 

@@ -141,6 +141,7 @@
   "settings.fontNotSavedAfterDirection",
   "syncResult.alignmentsMany",
   "syncResult.alignmentsOne",
+  "syncResult.error.branchMissing",
   "syncResult.error.keptStopped",
   "syncResult.error.needsNewerApp",
   "syncResult.error.notSent",

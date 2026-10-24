@@ -111,6 +111,9 @@ struct Target {
     git_dir: PathBuf,
     remote: GitRemote,
     branch: String,
+    /// Door43 said the repository has no commits: a missing branch is a first push, not a
+    /// deleted one.
+    empty: bool,
 }
 
 struct Run<'a> {
@@ -196,15 +199,15 @@ impl Run<'_> {
         let Some(session) = self.session.clone() else {
             return refuse(SyncRefusal::NotSignedIn);
         };
-        match self.client.repo(&repo, Some(&session)).await {
+        let empty = match self.client.repo(&repo, Some(&session)).await {
             Ok(info) if !info.can_push => {
                 return refuse(SyncRefusal::NoWriteAccess {
                     server_message: String::new(),
                 });
             }
-            Ok(_) => {}
+            Ok(info) => info.empty,
             Err(e) => return refuse(refusal_of(&e)),
-        }
+        };
         self.target = Some(Target {
             git_dir,
             remote: GitRemote {
@@ -213,6 +216,7 @@ impl Run<'_> {
                 session: Some(session),
             },
             branch,
+            empty,
         });
         SyncEvent::GatePassed
     }
@@ -226,11 +230,25 @@ impl Run<'_> {
         let fetched = tokio::task::spawn_blocking(move || {
             let repo = open(&target.git_dir)?;
             let tracking = format!("refs/remotes/origin/{}", target.branch);
-            let refspec = format!("+refs/heads/{}:{tracking}", target.branch);
+            // A fetch does not prune: Door43's list says whether the branch is there. A
+            // missing one is a first push only for an empty repository this project never
+            // fetched from; else its owner deleted it (gap-tc4-straggler-sync-safety, 3b).
+            let advertised = tc_door43::git::ls_remote(&http, &repo, &target.remote)
+                .map_err(|e| refusal_of(&e))?;
+            let name = format!("refs/heads/{}", target.branch);
+            if !advertised.iter().any(|(n, _)| *n == name) {
+                let fetched_before = repo.refname_to_id(&tracking).is_ok();
+                return Ok(if target.empty && !fetched_before {
+                    None
+                } else {
+                    Some(None)
+                });
+            }
+            let refspec = format!("+{name}:{tracking}");
             tc_door43::git::fetch(&http, &repo, &target.remote, &[refspec.as_str()])
                 .map_err(|e| refusal_of(&e))?;
             let Ok(remote) = repo.refname_to_id(&tracking) else {
-                return Ok(None);
+                return Ok(Some(None));
             };
             let new = match repo.head().ok().and_then(|h| h.target()) {
                 Some(head) => {
@@ -238,14 +256,15 @@ impl Run<'_> {
                 }
                 None => true,
             };
-            Ok(Some((remote, new)))
+            Ok(Some(Some((remote, new))))
         })
         .await;
         match fetched {
-            Ok(Ok(Some((remote, new)))) => {
+            Ok(Ok(Some(Some((remote, new))))) => {
                 self.fetched = Some(remote);
                 SyncEvent::Fetched(if new { Remote::New } else { Remote::NothingNew })
             }
+            Ok(Ok(Some(None))) => SyncEvent::Fetched(Remote::BranchMissing),
             Ok(Ok(None)) => {
                 self.fetched = None;
                 SyncEvent::Fetched(Remote::NothingNew)

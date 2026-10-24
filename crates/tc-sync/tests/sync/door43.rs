@@ -511,3 +511,37 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+/// gap-tc4-straggler-sync-safety state 3b: Door43's branch was deleted by its owner. The sync
+/// pushes nothing, so no branch made from this computer replaces the team's, and the person
+/// is told to ask the owner to restore it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state() {
+    let door43 = door43("titus-gone").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-gone");
+    synced(&sync(&a, &door43).await);
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, "titus-gone")).unwrap();
+    bare.find_reference("refs/heads/main")
+        .unwrap()
+        .delete()
+        .unwrap();
+    save(&a, 1, 1, "Paul, a servant of God");
+    let report = sync(&a, &door43).await;
+    assert_eq!(
+        report.ended,
+        Ended::Failed(tc_api::refusal::SyncFailure::Blocked(
+            tc_api::refusal::SyncBlock::BranchMissing
+        )),
+        "{report:?}"
+    );
+    assert_eq!(
+        branch_on_door43(&door43, "titus-gone"),
+        None,
+        "nothing pushed"
+    );
+    a.close().unwrap();
+}
