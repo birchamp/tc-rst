@@ -209,7 +209,7 @@ fn verify(path: &Path, id: tc_journal::ProjectId) -> Result<(), ExchangeError> {
         return Err(ExchangeError::NotVerified(format!("{first:?}")));
     }
     for (name, bytes) in &zip.files {
-        if name.starts_with(PACKS) && !tc_journal::pack::read_pack(name, bytes, id).is_valid() {
+        if name.starts_with(PACKS) && !tc_store::read_received_pack(name, bytes, id).valid {
             return Err(ExchangeError::NotVerified(format!(
                 "{name} does not verify"
             )));
@@ -427,13 +427,11 @@ fn read_received(
     let mut all_valid = zip.damaged.is_empty();
     for (name, bytes) in &zip.files {
         if name.starts_with(PACKS) {
-            let read = tc_journal::pack::read_pack(name, bytes, id);
-            all_valid &= read.is_valid();
-            for line in read.entries {
-                if let tc_journal::change::Verified::Change(change) = line {
-                    changes.push((change.body().device, change.id()));
-                    inputs.push(tc_journal::fold::FoldInput::from(change));
-                }
+            let read = tc_store::read_received_pack(name, bytes, id);
+            all_valid &= read.valid;
+            for change in read.changes {
+                changes.push((change.body().device, change.id()));
+                inputs.push(tc_journal::fold::FoldInput::from(change));
             }
             packs.push(ReceivedPack {
                 path: name.clone(),
@@ -571,10 +569,7 @@ pub fn receive_new(
         }
         Ok(())
     })();
-    if let Err(e) = written {
-        let _ = std::fs::remove_dir_all(&staging);
-        return Err(e);
-    }
+    written?;
     store.place(&staging, name).map_err(io)
 }
 

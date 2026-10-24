@@ -37,6 +37,16 @@ const EDGES: &[(&str, &[&str])] = &[
     ("tc-ui", &["tc-api", "tc-core"]),
     ("tc-door43-fake", &[]),
     (
+        "tc-sync",
+        &[
+            "tc-api",
+            "tc-burrito",
+            "tc-door43",
+            "tc-journal",
+            "tc-store",
+        ],
+    ),
+    (
         "tc-resources",
         &["tc-core", "tc-door43", "tc-helps", "tc-journal"],
     ),

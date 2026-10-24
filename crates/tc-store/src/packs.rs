@@ -393,3 +393,27 @@ impl Project {
         Ok(())
     }
 }
+
+/// A pack from another computer (a sync's fetch, an exchange file), read as the store reads
+/// its own: whether it passes P2 to P4, and the changes whose lines verify.
+#[derive(Debug, Clone)]
+pub struct PackRead {
+    pub valid: bool,
+    pub changes: Vec<tc_journal::Change>,
+}
+
+/// Reads `bytes` as the pack at `path` of `project`.
+pub fn read_received_pack(path: &str, bytes: &[u8], project: tc_journal::ProjectId) -> PackRead {
+    let read = read_pack(path, bytes, project);
+    PackRead {
+        valid: read.is_valid(),
+        changes: read
+            .entries
+            .into_iter()
+            .filter_map(|line| match line {
+                Verified::Change(change) => Some(change),
+                Verified::Quarantined(_) => None,
+            })
+            .collect(),
+    }
+}

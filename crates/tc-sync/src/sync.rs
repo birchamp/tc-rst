@@ -195,10 +195,8 @@ impl Run<'_> {
         let snapshot = self.project.snapshot();
         let project = self.project.facts().id;
         for pack in packs {
-            for line in tc_journal::pack::read_pack(&pack.path, &pack.bytes, project).entries {
-                if let tc_journal::change::Verified::Change(change) = line
-                    && snapshot.fold().change(&change.id()).is_none()
-                {
+            for change in tc_store::read_received_pack(&pack.path, &pack.bytes, project).changes {
+                if snapshot.fold().change(&change.id()).is_none() {
                     *self.received_from.entry(change.body().device).or_insert(0) += 1;
                     self.received_ids.push(change.id());
                 }

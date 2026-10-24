@@ -53,13 +53,8 @@ pub async fn join(
         tokio::task::spawn_blocking(move || fetch(&http, &outside, &remote, &fetch_branch))
             .await
             .map_err(|e| JoinError::Io(e.to_string()))?;
-    let (url, files) = match fetched {
-        Ok(found) => found,
-        Err(e) => {
-            let _ = std::fs::remove_dir_all(&staging);
-            return Err(e);
-        }
-    };
+    // A failure leaves the staging folder, which the store removes at its next start (§6.4 N1).
+    let (url, files) = fetched?;
     let written = write_tree(&*vfs, &staging, &files).and_then(|()| {
         let mut bytes = serde_json::to_vec_pretty(&SyncFile {
             remote_url: url,
@@ -71,10 +66,7 @@ pub async fn join(
         bytes.push(b'\n');
         write_file(&*vfs, &staging, ".tc/sync.json", &bytes)
     });
-    if let Err(e) = written {
-        let _ = std::fs::remove_dir_all(&staging);
-        return Err(e);
-    }
+    written?;
     Ok(store.place(&staging, name)?)
 }
 
