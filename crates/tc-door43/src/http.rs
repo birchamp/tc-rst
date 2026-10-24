@@ -22,6 +22,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
@@ -206,8 +207,10 @@ impl HttpResponse {
 #[derive(Clone)]
 pub struct Http {
     client: reqwest::Client,
-    internet: InternetSwitch,
+    pub(crate) internet: InternetSwitch,
     routes: Option<Arc<Routes>>,
+    /// `None` for a server on this computer, which no proxy serves.
+    system: Option<Arc<SystemProxy>>,
 }
 
 impl fmt::Debug for Http {
@@ -235,18 +238,20 @@ impl Http {
             .redirect(spec.redirects.policy())
             .referer(false);
         let mut routes = None;
+        let mut system = None;
         if spec.loopback {
             builder = builder.no_proxy();
         } else {
             builder = builder.https_only(true);
+            let settings = Arc::new(SystemProxy::from_system());
+            system = Some(settings.clone());
             if let Some(finder) = finder {
                 let found = Arc::new(RwLock::new(Found::default()));
                 let lookup = found.clone();
                 // Any proxy of its own makes reqwest leave out the system's, so the
                 // closure falls back to it.
-                let system = SystemProxy::from_system();
                 builder = builder.proxy(reqwest::Proxy::custom(move |url| {
-                    choose(&lookup, &system, url)
+                    choose(&lookup, &settings, url)
                 }));
                 routes = Some(Arc::new(Routes {
                     finder,
@@ -260,7 +265,32 @@ impl Http {
             client: builder.build()?,
             internet,
             routes,
+            system,
         })
+    }
+
+    /// The proxy a request to `url` goes through: the one the finder names for its origin,
+    /// else the system's, and `None` for going directly or for a server on this computer.
+    /// It is what every request of [`Http::get`] uses, for the git calls ([`crate::git`]),
+    /// which libgit2 sends. This blocks while the finder looks (seconds, maybe the network),
+    /// so it runs on a blocking thread, and only while the internet switch is on.
+    pub fn proxy_for(&self, url: &Url) -> Result<Option<Url>, Offline> {
+        let Some(system) = &self.system else {
+            self.internet.check()?;
+            return Ok(None);
+        };
+        let Some(routes) = &self.routes else {
+            self.internet.check()?;
+            return Ok(system.proxy_for(url));
+        };
+        loop {
+            let turn_on = self.internet.turn_on_count()?;
+            routes.find_blocking(turn_on);
+            // As in `client`: the switch may have moved during the lookup.
+            if self.internet.turn_on_count()? == turn_on {
+                return Ok(choose(&routes.found, system, url));
+            }
+        }
     }
 
     /// Sends a GET with `accept` and `headers`. Only a success status (2xx) comes back as
@@ -380,7 +410,19 @@ const FIND_LIMIT_PER_ORIGIN: Duration = Duration::from_secs(15);
 impl Routes {
     /// Asks the finder about every origin, unless it was asked since the switch was last
     /// turned on. Two requests that start together may both ask; the answers are the same.
-    async fn find(&self, turn_on: u64) {
+    async fn find(self: &Arc<Self>, turn_on: u64) {
+        let routes = self.clone();
+        match tokio::task::spawn_blocking(move || routes.find_blocking(turn_on)).await {
+            Ok(()) => {}
+            // A panic in the finder is raised here, as if it had run on this task.
+            Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+            // The runtime is shutting down.
+            Err(_) => {}
+        }
+    }
+
+    /// [`Routes::find`] on this thread, which waits at most the limit for the finder.
+    fn find_blocking(&self, turn_on: u64) {
         let asked = self
             .found
             .read()
@@ -393,21 +435,23 @@ impl Routes {
         let limit = self
             .limit_per_origin
             .saturating_mul(u32::try_from(origins.len()).unwrap_or(u32::MAX));
-        let task = tokio::task::spawn_blocking(move || {
-            origins
+        let (send, answers) = mpsc::channel();
+        let lookup = std::thread::spawn(move || {
+            let proxies = origins
                 .iter()
                 .filter_map(|origin| Some((origin_key(origin), finder.proxy_for(origin)?)))
-                .collect::<BTreeMap<_, _>>()
+                .collect::<BTreeMap<_, _>>();
+            let _ = send.send(proxies);
         });
-        let proxies = match tokio::time::timeout(limit, task).await {
-            Ok(Ok(proxies)) => proxies,
-            // A panic in the finder is raised here, as if it had run on this task.
-            Ok(Err(e)) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
-            // The runtime is shutting down.
-            Ok(Err(_)) => return,
+        let proxies = match answers.recv_timeout(limit) {
+            Ok(proxies) => proxies,
+            Err(RecvTimeoutError::Disconnected) => match lookup.join() {
+                Err(panic) => std::panic::resume_unwind(panic),
+                Ok(()) => return,
+            },
             // A lookup that never ends: the system's own settings serve every origin, and it is
             // not started again for each request. Its thread finishes on its own.
-            Err(_) => BTreeMap::new(),
+            Err(RecvTimeoutError::Timeout) => BTreeMap::new(),
         };
         *self.found.write().unwrap_or_else(PoisonError::into_inner) = Found {
             for_turn_on: Some(turn_on),

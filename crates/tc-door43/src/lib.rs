@@ -45,6 +45,7 @@ mod catalog;
 mod client;
 pub mod download;
 mod error;
+pub mod git;
 mod git_tree;
 mod http;
 mod internet;
@@ -62,6 +63,7 @@ pub use catalog::{CatalogEntry, CatalogQuery, CatalogRef, Ingredient, Stage};
 pub use client::{Door43Client, Limits};
 pub use download::{DownloadTo, DownloadWatch, DownloadedZip, Unwatched};
 pub use error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
+pub use git::GitRemote;
 pub use git_tree::ObjectId;
 pub use http::{
     Http, HttpError, HttpResponse, HttpSpec, ProxyAnswer, ProxyFinder, RedirectRule,

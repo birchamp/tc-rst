@@ -9,6 +9,8 @@ rust-version.workspace = true
 [dependencies]
 tc-core = { path = "../tc-core" }
 base64.workspace = true
+# Sync's fetch, push and ls-remote (src/git.rs), the only crate that turns on libgit2's TLS.
+git2 = { workspace = true, features = ["https"] }
 httpdate = "1.0.3"
 hyper-util = { workspace = true, features = ["client-proxy", "client-proxy-system"] }
 icu_normalizer = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
@@ -27,12 +29,14 @@ url.workspace = true
 zip.workspace = true
 
 # Windows' own proxy lookup (WPAD and PAC through WinHTTP): see src/winproxy.rs.
+# libgit2's TLS on Linux is OpenSSL, built from source, for the fetch and push of sync.
+[target.'cfg(target_os = "linux")'.dependencies]
+git2 = { workspace = true, features = ["vendored-openssl"] }
+
 [target.'cfg(windows)'.dependencies]
 proxy-watch = { workspace = true, features = ["pac-windows-native"] }
 
 [dev-dependencies]
-# The libgit2 that STORAGE.md §9 names for the sync's push.
-git2.workspace = true
 proptest.workspace = true
 tc-door43-fake = { path = "../tc-door43-fake" }
 tempfile.workspace = true

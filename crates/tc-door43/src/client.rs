@@ -214,6 +214,11 @@ impl Door43Client {
         })
     }
 
+    /// The gate this client sends through, for sync's git calls ([`crate::git`]).
+    pub fn http(&self) -> &Http {
+        &self.http
+    }
+
     pub fn server(&self) -> &ServerUrl {
         &self.server
     }
