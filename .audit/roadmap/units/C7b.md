@@ -4,18 +4,18 @@ title: Conflict choices: every other kind
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: shell lane (Claude Code e1bb3a0c)
+branch: track-C7b
+worktree: .worktrees/track-C7b
 depends: [C7a, S2]
 needs_owner: []
 proves: [P2, P3, P7]
 no_loss: true
 size: 4.5-6.5 sessions plus the owner's wait (basis: B11 and C8; carried choices shrink to two, about -0.5 session, docs/STORAGE-DELTA-2026-10-21.md §6)
 merged: none
-updated: 2026-10-22
-next: Claim this card after C7a and S2 merge; steps 1-2 need no ruling; step 3 waits for H5. H19 and H22 are ruled (rulings/2026-10-22-H19.md, -H22.md).
+updated: 2026-10-24
+next: Step 1, the scripted teammates' changes for every kind group and the tab tests.
 blocked_by: none
 later: ["H5 from step 3"]
 ---
@@ -353,3 +353,4 @@ Plus:
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | ruling | none | Step 6 and the funnel card follow H19 (carried files stay) and H22 part 2 (*Keep both* is `jon_01-Juan.wav`); the STOP lines are gone | rulings/2026-10-22-H19.md, rulings/2026-10-22-H22.md
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | note | none | Step 7b gives PLAN P2 J26's check-decision step an owner whichever of C7b and E1a lands last; `later` names H5 from step 3 | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
+- 2026-10-24 15:03 EDT | shell lane (Claude Code e1bb3a0c) | claim | none | The orchestrator gave C7b to this lane (owner ruling 2026-10-24, finish in days); cut from origin/track-C7a d07d6612 with main 0189cee4 merged in, because C7a is in merge batch 1 and not on main yet (depends C7a: the merge waits for it). Kept to the review and conflict screens: the app lane does UI-1 meanwhile. One review, per the ruling | git log -2 track-C7b
