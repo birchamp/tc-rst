@@ -250,7 +250,7 @@ fn a_chapter_projects_alone() {
 fn a_story_splices_its_frames_and_reference_into_the_template() {
     let mut ana = Dev::new(1);
     let story = tc_journal::StoryNo::new(1).expect("story");
-    let frame = tc_journal::FrameNo;
+    let frame = tc_journal::FrameNo::new;
     let template = "# The Creation\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)\n\nThis is how God made everything.\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg)\n\nBut the earth was empty.\n\n_A Bible story from: Genesis 1-2_\n";
     let changes = vec![
         ana.one(
@@ -312,7 +312,7 @@ fn story_one_with(template: &str, frame_zero: Option<&str>) -> String {
         changes.push(ana.one(
             Record::Frame {
                 story,
-                frame: tc_journal::FrameNo(0),
+                frame: tc_journal::FrameNo::TITLE,
                 value: title.into(),
             },
             vec![],
@@ -370,7 +370,7 @@ fn a_story_titles_check_text_has_no_number() {
     let texts = seed.check_texts(tc_journal::pins::Collection::Stories);
     let target = tc_journal::CheckTarget::Frame {
         story,
-        frame: tc_journal::FrameNo(0),
+        frame: tc_journal::FrameNo::TITLE,
     };
     let title = texts.text(&target).expect("the title has a text");
     assert_eq!(title.content(), "How God made it");
@@ -449,7 +449,7 @@ fn a_story_reads_its_own_decisions_and_comments() {
         check_id: CheckId::parse(id).expect("id"),
         target: CheckTarget::Frame {
             story: story(n),
-            frame: FrameNo(1),
+            frame: FrameNo::new(1),
         },
         occurrence: 1,
     };
@@ -461,7 +461,7 @@ fn a_story_reads_its_own_decisions_and_comments() {
     }
     let on_frame = |n: u8| CommentTarget::Frame {
         story: story(n),
-        frame: FrameNo(1),
+        frame: FrameNo::new(1),
     };
     changes.push(ana.one(comment(1, on_frame(1), "uno"), vec![]));
     changes.push(ana.one(comment(2, on_frame(2), "dos"), vec![]));

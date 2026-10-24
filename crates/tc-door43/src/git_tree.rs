@@ -10,52 +10,18 @@ use crate::error::VerificationError;
 use crate::unpack::{FileMode, UnpackedFile};
 use sha1::{Digest, Sha1};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt;
-use std::str::FromStr;
+use tc_core::GitOid;
 
-/// A SHA-1 git object id.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ObjectId([u8; 20]);
-
-impl ObjectId {
-    fn hash(kind: &str, content: &[u8]) -> Self {
-        let mut hasher = Sha1::new();
-        hasher.update(format!("{kind} {}\0", content.len()).as_bytes());
-        hasher.update(content);
-        Self(hasher.finalize().into())
-    }
-}
-
-impl fmt::Display for ObjectId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.iter().try_for_each(|b| write!(f, "{b:02x}"))
-    }
-}
-
-impl fmt::Debug for ObjectId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ObjectId({self})")
-    }
-}
-
-impl FromStr for ObjectId {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, ()> {
-        // `from_str_radix` alone would also take a sign, as in `+a`.
-        if s.len() != 40 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(());
-        }
-        let mut out = [0u8; 20];
-        for (i, byte) in out.iter_mut().enumerate() {
-            *byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).map_err(|_| ())?;
-        }
-        Ok(Self(out))
-    }
+/// The id git gives an object of `kind` holding `content`.
+fn object_id(kind: &str, content: &[u8]) -> GitOid {
+    let mut hasher = Sha1::new();
+    hasher.update(format!("{kind} {}\0", content.len()).as_bytes());
+    hasher.update(content);
+    GitOid::from_bytes(hasher.finalize().into())
 }
 
 enum Node {
-    Blob { mode: FileMode, id: ObjectId },
+    Blob { mode: FileMode, id: GitOid },
     Tree(BTreeMap<String, Node>),
 }
 
@@ -65,7 +31,7 @@ enum Node {
 pub(crate) fn tree_id(
     files: &[UnpackedFile],
     folders: &BTreeSet<String>,
-) -> Result<ObjectId, VerificationError> {
+) -> Result<GitOid, VerificationError> {
     let mut root = BTreeMap::new();
     for file in files {
         insert(&mut root, file)?;
@@ -105,7 +71,7 @@ fn insert(root: &mut BTreeMap<String, Node>, file: &UnpackedFile) -> Result<(), 
     }
     let blob = Node::Blob {
         mode: file.mode,
-        id: ObjectId::hash("blob", &file.bytes),
+        id: object_id("blob", &file.bytes),
     };
     if tree.insert(name.to_owned(), blob).is_some() {
         return Err(clash());
@@ -113,8 +79,8 @@ fn insert(root: &mut BTreeMap<String, Node>, file: &UnpackedFile) -> Result<(), 
     Ok(())
 }
 
-fn hash_tree(tree: &BTreeMap<String, Node>) -> ObjectId {
-    let mut entries: Vec<(Vec<u8>, &'static str, ObjectId, &str)> = tree
+fn hash_tree(tree: &BTreeMap<String, Node>) -> GitOid {
+    let mut entries: Vec<(Vec<u8>, &'static str, GitOid, &str)> = tree
         .iter()
         .map(|(name, node)| {
             let (mode, id, sort_suffix) = match node {
@@ -133,9 +99,9 @@ fn hash_tree(tree: &BTreeMap<String, Node>) -> ObjectId {
         content.push(b' ');
         content.extend_from_slice(name.as_bytes());
         content.push(0);
-        content.extend_from_slice(&id.0);
+        content.extend_from_slice(id.as_bytes());
     }
-    ObjectId::hash("tree", &content)
+    object_id("tree", &content)
 }
 
 fn blob_mode(mode: FileMode) -> &'static str {
@@ -162,7 +128,7 @@ mod tests {
     #[test]
     fn a_blob_hashes_like_git() {
         assert_eq!(
-            ObjectId::hash("blob", b"hello\n").to_string(),
+            object_id("blob", b"hello\n").to_string(),
             "ce013625030ba8dba906f756967f9e9ca394464a"
         );
     }
@@ -205,19 +171,5 @@ mod tests {
         assert_ne!(regular, exec);
         assert_ne!(regular, link);
         assert_ne!(exec, link);
-    }
-
-    #[test]
-    fn object_ids_round_trip_through_hex() {
-        let id: ObjectId = "4b825dc642cb6eb9a060e54bf8d69288fbee4904".parse().unwrap();
-        assert_eq!(id.to_string(), "4b825dc642cb6eb9a060e54bf8d69288fbee4904");
-        assert!("4b825dc6".parse::<ObjectId>().is_err());
-        assert!(
-            "zz825dc642cb6eb9a060e54bf8d69288fbee4904"
-                .parse::<ObjectId>()
-                .is_err()
-        );
-        assert!("+a".repeat(20).parse::<ObjectId>().is_err());
-        assert!("-a".repeat(20).parse::<ObjectId>().is_err());
     }
 }

@@ -11,7 +11,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::path::PathBuf;
-use tc_usfm::{Document, Node, codec, shown_text_v1};
+use tc_usfm::raw::{Document, Node};
+use tc_usfm::{codec, shown_text_v1};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")

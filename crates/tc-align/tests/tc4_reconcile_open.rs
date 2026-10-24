@@ -164,7 +164,10 @@ fn one_edit_on_a_reconciled_verse_saves_exactly_the_verse_words_and_the_export_w
     let mut aligner = open(Some(&unplaced_pablo()), &t2);
     aligner.place(0, &banked(&aligner, "Pablo")).unwrap();
     assert!(aligner.is_changed());
-    assert!(!aligner.is_stale(), "the first edit clears the notice");
+    assert!(
+        aligner.is_stale(),
+        "an edit keeps the notice until Mark valid (Q37)"
+    );
     let after = aligner.value();
     assert_eq!(
         multiset(after.all_target_words()),
@@ -212,7 +215,7 @@ fn a_record_that_matches_its_text_opens_as_it_is() {
     for (chapter, verses) in file["chapters"].as_object().unwrap() {
         for (verse, record) in verses.as_object().unwrap() {
             let at = format!("{chapter}:{verse}");
-            let stored = tc_align::record::from_record(record, basis(1)).unwrap();
+            let stored = tc4_record(record).unwrap();
             let source = SourceVerse::new(
                 stored
                     .alignments

@@ -1,5 +1,6 @@
-//! Identifiers shared by every crate: books, chapters, verse spans and references, and the
-//! two digests every layer records (a git object id and an MD5).
+//! Identifiers shared by every crate: books, chapter, verse, story and frame numbers, verse
+//! spans and references, and the two digests every layer records (a git object id and an
+//! MD5).
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -7,9 +8,12 @@ use std::str::FromStr;
 
 mod books;
 mod digest;
+mod ids;
+pub mod js;
 
 pub use books::{BookId, Testament};
 pub use digest::{DigestError, GitOid, Md5, Md5Stream};
+pub use ids::{ChapterNo, FrameNo, NotAStory, StoryNo, VerseNo};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {
@@ -29,10 +33,10 @@ pub struct VerseSpan {
 }
 
 impl VerseSpan {
-    pub fn single(verse: u16) -> Self {
+    pub fn single(verse: VerseNo) -> Self {
         Self {
-            start: verse,
-            end: verse,
+            start: verse.get(),
+            end: verse.get(),
         }
     }
 
@@ -109,9 +113,31 @@ impl<'de> Deserialize<'de> for VerseSpan {
 /// A book, chapter and verse span, written `TIT 1:2` or `TIT 1:1-2`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Reference {
-    pub book: BookId,
-    pub chapter: u16,
-    pub verses: VerseSpan,
+    book: BookId,
+    chapter: ChapterNo,
+    verses: VerseSpan,
+}
+
+impl Reference {
+    pub fn new(book: BookId, chapter: ChapterNo, verses: VerseSpan) -> Self {
+        Self {
+            book,
+            chapter,
+            verses,
+        }
+    }
+
+    pub fn book(&self) -> BookId {
+        self.book
+    }
+
+    pub fn chapter(&self) -> ChapterNo {
+        self.chapter
+    }
+
+    pub fn verses(&self) -> VerseSpan {
+        self.verses
+    }
 }
 
 impl fmt::Display for Reference {
@@ -127,10 +153,15 @@ impl FromStr for Reference {
         let bad = || ParseError::InvalidReference(s.to_owned());
         let (book, rest) = s.split_once(' ').ok_or_else(bad)?;
         let (chapter, verses) = rest.split_once(':').ok_or_else(bad)?;
-        let chapter: u16 = chapter.parse().map_err(|_| bad())?;
-        if chapter == 0 {
+        // Digits only, as `VerseSpan` reads them: `u16::parse` alone would take `+1`.
+        if chapter.is_empty() || !chapter.bytes().all(|b| b.is_ascii_digit()) {
             return Err(bad());
         }
+        let chapter = chapter
+            .parse()
+            .ok()
+            .and_then(ChapterNo::new)
+            .ok_or_else(bad)?;
         Ok(Self {
             book: book.parse()?,
             chapter,
@@ -158,7 +189,10 @@ mod tests {
 
     #[test]
     fn verse_spans_parse_and_print() {
-        assert_eq!("3".parse::<VerseSpan>().unwrap(), VerseSpan::single(3));
+        assert_eq!(
+            "3".parse::<VerseSpan>().unwrap(),
+            VerseSpan::single(VerseNo::new(3).unwrap())
+        );
         let span: VerseSpan = "9-10".parse().unwrap();
         assert_eq!((span.start(), span.end()), (9, 10));
         assert_eq!(span.to_string(), "9-10");

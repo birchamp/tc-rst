@@ -3,7 +3,6 @@ use crate::download::{
     DownloadTo, DownloadWatch, DownloadedZip, STOP_CHECK_INTERVAL, Writing, disk,
 };
 use crate::error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
-use crate::git_tree::ObjectId;
 use crate::http::{Http, HttpError, HttpSpec, ProxyFinder, RedirectRule, system_proxy_finder};
 use crate::internet::InternetSwitch;
 use crate::listing::Listing;
@@ -552,7 +551,7 @@ impl Door43Client {
             .map_err(|e| unexpected(&route, format!("the account login: {e}")))
     }
 
-    async fn commit_tree(&self, repo: &RepoRef, commit: &GitOid) -> Result<ObjectId, Door43Error> {
+    async fn commit_tree(&self, repo: &RepoRef, commit: &GitOid) -> Result<GitOid, Door43Error> {
         let mut url = self.repo_api(repo, &["git", "commits", &commit.to_hex()]);
         url.query_pairs_mut()
             .append_pair("stat", "false")
@@ -566,11 +565,8 @@ impl Door43Client {
                 format!("asked for commit {commit}, Door43 answered {:?}", raw.sha),
             ));
         }
-        raw.commit
-            .tree
-            .sha
-            .parse()
-            .map_err(|()| unexpected(&route, "the commit's tree id is not a sha"))
+        GitOid::parse_any_case(&raw.commit.tree.sha)
+            .ok_or_else(|| unexpected(&route, "the commit's tree id is not a sha"))
     }
 
     /// GET `url` into a new file in `to`'s folder. See [`crate::download`].

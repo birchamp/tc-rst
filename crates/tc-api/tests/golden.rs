@@ -818,7 +818,7 @@ impl Example for UpdatesView {
                     published: None,
                 },
             }],
-            texts_error: Some("Door43 did not answer".into()),
+            texts_error: Some(tc_api::refusal::UpdateCheckFailure::Unreachable),
         }
     }
 }

@@ -15,12 +15,12 @@
 //!   invariants: the [`Alignment`] trait on the journal's value.
 //! - [`selection`]: which bank words a click, Ctrl or Cmd click, Shift click or drag
 //!   selects, for placing several on one card in one edit.
-//! - [`usfm`]: cards to and from aligned USFM through `tc-usfm`, for the aligned USFM
-//!   export in en_ult's layout.
+//! - [`usfm`]: cards to aligned USFM through `tc-usfm`, for the aligned USFM export in
+//!   en_ult's layout. Reading aligned USFM is `tc_journal::alignment::split_aligned`.
 //! - [`reflow`]: carrying an alignment over an edit of its verse text, each link following
 //!   its own word, reporting every link it drops.
-//! - [`record`]: reading tC3's and tC4's §5.1 record JSON, for imports. The derived
-//!   sidecar is the journal's projection (STORAGE.md §7.7).
+//! - tC3's and tC4's §5.1 record JSON is read by `tc_journal::fold::decode_alignment_record`
+//!   (`Writer::Tc4`), the reader of the journal's own sidecar.
 //! - [`frame`]: which original-language verse stands behind a project verse.
 //! - [`suggest`]: links proposed from the project's own alignments with tC4's engine
 //!   (wordMAP 0.6.2 and uw-wordmapbooster 1.0.5's `MorphJLBoostWordMap`).
@@ -36,7 +36,6 @@
 pub mod aligner;
 pub mod edit;
 pub mod frame;
-pub mod record;
 pub mod reflow;
 pub mod selection;
 pub mod suggest;

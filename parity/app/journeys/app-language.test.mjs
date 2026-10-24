@@ -449,3 +449,24 @@ browserTest('h. (Home half) Home in Arabic reads right to left: the card\'s head
     assert.equal(await order(), 'share-first');
   });
 });
+
+// tC4 #612: Hindi labels keep normal letter spacing on Home and in the top bar, as in the
+// Feedback dialog above: tracking a Devanagari word breaks its conjuncts apart.
+browserTest('hindi_home_and_top_bar_keep_normal_letter_spacing', async () => {
+  await withApp(async ({ page }) => {
+    await page.getByTestId('project-sample_burrito').waitFor();
+    const spaced = await page.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('body *')) {
+        const own = Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+        if (!/[ऀ-ॿ]/.test(own) || !el.getClientRects().length) continue;
+        const ls = getComputedStyle(el).letterSpacing;
+        if (ls !== 'normal' && ls !== '0px') out.push(`${own}: ${ls}`);
+      }
+      return out;
+    });
+    assert.deepEqual(spaced, [], 'no Devanagari text on Home or in the top bar is tracked');
+    const seen = await page.evaluate(() => /[ऀ-ॿ]/.test(document.body.innerText));
+    assert.ok(seen, 'Home shows Hindi text');
+  }, { locale: 'hi' });
+});

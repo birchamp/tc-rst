@@ -4,6 +4,7 @@
 //! replicates can get a second writer; a network drive answers sizes and times from a cache,
 //! §6.2).
 
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 /// Why a folder opens read-only before anything is read (§5.0).
@@ -61,7 +62,7 @@ impl Platform for StdPlatform {
                 name: fs_name.clone(),
             })
         } else {
-            cloud_client(&path).map(|client| UnsafeFolder::CloudSynced { client })
+            synced_by(&process_env, &path).map(|client| UnsafeFolder::CloudSynced { client })
         };
         let network = matches!(
             fs_name.as_str(),
@@ -101,26 +102,61 @@ fn is_unc(path: &Path) -> bool {
     text.starts_with(r"\\") && !text.starts_with(r"\\?\") || text.starts_with(r"\\?\UNC\")
 }
 
+/// The client that copies `path` to other computers (§5.0), with the environment variables
+/// `env` names: under a known sync root, an ancestor holding a sync marker, or a folder with a
+/// cloud placeholder attribute. The path may not exist yet: only its existing ancestors are
+/// looked at then. The one rule of the store and of the app's first-launch check.
+pub fn synced_by(env: &dyn Fn(&str) -> Option<OsString>, path: &Path) -> Option<String> {
+    cloud_client(env, &resolve(path))
+}
+
+/// The process's own environment, as [`synced_by`] reads it: an empty variable is none.
+fn process_env(name: &str) -> Option<OsString> {
+    std::env::var_os(name).filter(|value| !value.is_empty())
+}
+
+/// `path` with every symbolic link that exists resolved, and the part that does not exist
+/// yet kept as it is. A temporary or home folder can sit behind a link (macOS `/var` is
+/// `/private/var`), and the sync roots are compared as paths.
+fn resolve(path: &Path) -> PathBuf {
+    let mut missing: Vec<&OsStr> = Vec::new();
+    let mut existing = path;
+    loop {
+        if let Ok(mut real) = std::fs::canonicalize(existing) {
+            real.extend(missing.iter().rev());
+            return real;
+        }
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name);
+                existing = parent;
+            }
+            _ => return path.to_owned(),
+        }
+    }
+}
+
 /// The cloud client that replicates `path`, if any (§5.0): under a known sync root, an
 /// ancestor holding a sync marker, or a folder with a cloud placeholder attribute.
-fn cloud_client(path: &Path) -> Option<String> {
+fn cloud_client(env: &dyn Fn(&str) -> Option<OsString>, path: &Path) -> Option<String> {
+    let under = |root: &Path| path.starts_with(resolve(root));
     for (var, client) in [
         ("OneDrive", "OneDrive"),
         ("OneDriveConsumer", "OneDrive"),
         ("OneDriveCommercial", "OneDrive"),
     ] {
-        if let Some(root) = std::env::var_os(var).filter(|r| !r.is_empty())
-            && path.starts_with(PathBuf::from(root))
+        if let Some(root) = env(var)
+            && under(Path::new(&root))
         {
             return Some(client.to_owned());
         }
     }
-    for root in dropbox_roots() {
-        if path.starts_with(&root) {
+    for root in dropbox_roots(env) {
+        if under(&root) {
             return Some("Dropbox".to_owned());
         }
     }
-    if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+    if let Some(home) = env("HOME").or_else(|| env("USERPROFILE")) {
         let home = PathBuf::from(home);
         for (rel, client) in [
             ("Library/Mobile Documents", "iCloud Drive"),
@@ -128,13 +164,16 @@ fn cloud_client(path: &Path) -> Option<String> {
             ("Google Drive", "Google Drive"),
             ("My Drive", "Google Drive"),
         ] {
-            if path.starts_with(home.join(rel)) {
+            if under(&home.join(rel)) {
                 return Some(client.to_owned());
             }
         }
     }
     for ancestor in path.ancestors() {
-        if ancestor.join(".dropbox").exists() {
+        // Dropbox keeps its settings in `~/.dropbox` on macOS and Linux; that folder holds
+        // `info.json` and marks no sync root (INV-SYNCED-FOLDER-DETECTION-IS-EXACT).
+        let marker = ancestor.join(".dropbox");
+        if marker.exists() && !marker.join("info.json").is_file() {
             return Some("Dropbox".to_owned());
         }
         if ancestor.join(".stfolder").exists() {
@@ -145,10 +184,10 @@ fn cloud_client(path: &Path) -> Option<String> {
 }
 
 /// The Dropbox folders its `info.json` names.
-fn dropbox_roots() -> Vec<PathBuf> {
+fn dropbox_roots(env: &dyn Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
     let mut places = Vec::new();
     for var in ["HOME", "APPDATA", "LOCALAPPDATA"] {
-        if let Some(dir) = std::env::var_os(var) {
+        if let Some(dir) = env(var) {
             let dir = PathBuf::from(dir);
             places.push(dir.join(".dropbox").join("info.json"));
             places.push(dir.join("Dropbox").join("info.json"));

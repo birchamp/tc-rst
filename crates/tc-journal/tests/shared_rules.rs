@@ -378,7 +378,7 @@ fn obs_changes() -> Vec<Change> {
     out.push(dev.one(
         Record::Frame {
             story,
-            frame: FrameNo(1),
+            frame: FrameNo::new(1),
             value: "Así es como Dios hizo todo.".into(),
         },
         vec![],
@@ -397,7 +397,7 @@ fn obs_changes() -> Vec<Change> {
             check_id: CheckId::parse(id).unwrap(),
             target: CheckTarget::Frame {
                 story,
-                frame: FrameNo(frame),
+                frame: FrameNo::new(frame),
             },
             occurrence: 1,
         };
@@ -426,7 +426,7 @@ fn obs_changes() -> Vec<Change> {
             5,
             CommentTarget::Frame {
                 story,
-                frame: FrameNo(2),
+                frame: FrameNo::new(2),
             },
             "Falta traducir",
         ),
@@ -537,7 +537,7 @@ fn decisions_against_another_resource_and_unplaced_frame_comments_are_detached()
         check_id: CheckId::parse("f3").unwrap(),
         target: CheckTarget::Frame {
             story,
-            frame: FrameNo(1),
+            frame: FrameNo::new(1),
         },
         occurrence: 1,
     };
@@ -545,7 +545,7 @@ fn decisions_against_another_resource_and_unplaced_frame_comments_are_detached()
     // The story's template holds two frames: a comment on a ninth has no place.
     let nowhere = CommentTarget::Frame {
         story,
-        frame: FrameNo(9),
+        frame: FrameNo::new(9),
     };
     changes.push(dev.one(comment(6, nowhere, "¿Dónde?"), vec![]));
     let state = assert_converges_as(ProjectKind::Stories, &changes);
@@ -773,7 +773,7 @@ fn aligned_titus_verses_split_into_text_and_alignment() {
         .join("../../fixtures/tc4/test-fixtures/en_ult/TIT.usfm");
     let text = std::fs::read_to_string(path).unwrap();
     let book = tc_usfm::Book::parse(&text);
-    let mut split = 0;
+    let (mut split, mut identical) = (0, 0);
     for unit in book.verses() {
         let content = unit.body();
         let last = VerseNo::new(1).unwrap();
@@ -791,13 +791,36 @@ fn aligned_titus_verses_split_into_text_and_alignment() {
                     .count()
         );
         assert_eq!(value.target_verse_md5, verse_text_md5_v1(&plain));
-        assert_eq!(
-            tc_usfm::weave(&plain, &value.usfm_groups()).unwrap(),
-            content
-        );
+        // tC4's cards write en_ult's bytes, or, where en_ult writes one source word over
+        // two runs, the same links with the card's words in one run.
+        let woven = tc_usfm::weave(&plain, &value.usfm_groups()).unwrap();
+        let links = |text: &str| -> std::collections::BTreeSet<(String, u32, String, u32)> {
+            tc_usfm::parse_aligned(text)
+                .unwrap()
+                .groups
+                .iter()
+                .flat_map(|g| {
+                    g.sources.iter().flat_map(move |s| {
+                        g.targets.iter().map(move |t| {
+                            (
+                                s.content.clone(),
+                                s.occurrence,
+                                t.text.clone(),
+                                t.occurrence,
+                            )
+                        })
+                    })
+                })
+                .collect()
+        };
+        assert_eq!(links(&woven), links(content));
+        if woven == content {
+            identical += 1;
+        }
         assert!(value.source.is_none() && !value.marked_invalid);
         split += 1;
     }
+    assert_eq!(identical, 41);
     assert_eq!(split, 46);
     // Unaligned text is not split.
     assert!(split_aligned("Paul, a servant of God", VerseNo::new(1).unwrap()).is_none());
@@ -962,4 +985,69 @@ fn a_split_verse_weaves_back_byte_for_byte() {
         split.get(),
         kept.get()
     );
+}
+
+fn greek(content: &str, lemma: &str) -> tc_usfm::SourceWord {
+    tc_usfm::SourceWord {
+        content: content.to_owned(),
+        strong: None,
+        lemma: Some(lemma.to_owned()),
+        morph: None,
+        occurrence: 1,
+        occurrences: 1,
+        extra: Vec::new(),
+    }
+}
+
+fn english(text: &str) -> tc_usfm::TargetWord {
+    tc_usfm::TargetWord {
+        text: text.to_owned(),
+        occurrence: 1,
+        occurrences: 1,
+    }
+}
+
+/// Aligned USFM as an aligner writes it: `plain` with each run's source words over its
+/// target words.
+fn woven(plain: &str, runs: &[(&[tc_usfm::SourceWord], &[&str])]) -> String {
+    let groups: Vec<tc_usfm::AlignmentGroup> = runs
+        .iter()
+        .map(|(sources, targets)| tc_usfm::AlignmentGroup {
+            sources: sources.to_vec(),
+            targets: targets.iter().map(|t| english(t)).collect(),
+        })
+        .collect();
+    tc_usfm::weave(plain, &groups).unwrap()
+}
+
+/// INV-ONE-READER-PER-JOB keeps no-loss: tC4's cards join runs under one outermost source word,
+/// and a verse whose cards would make a link its runs do not (or lose a source word's
+/// attributes) is kept as written.
+#[test]
+fn an_aligned_verse_whose_cards_would_change_its_links_is_kept_as_written() {
+    let (a, b, c) = (greek("α", "α"), greek("β", "β"), greek("γ", "γ"));
+    let last = VerseNo::new(1).unwrap();
+    // `A B: x` and `A C: y`: one card would link x to C and y to B.
+    let crossed = woven(
+        "x y",
+        &[(&[a.clone(), b.clone()], &["x"]), (&[a.clone(), c], &["y"])],
+    );
+    assert_eq!(split_aligned(&crossed, last), None);
+    // The same outer word with another lemma in the second run: one card would drop it.
+    let relemma = woven(
+        "x y",
+        &[
+            (std::slice::from_ref(&a), &["x"]),
+            (&[greek("α", "ζ")], &["y"]),
+        ],
+    );
+    assert_eq!(split_aligned(&relemma, last), None);
+    // `A B: x` and `A B: y`, en_ult's TIT 1:1 shape: one card, the same links.
+    let joined = woven(
+        "x y",
+        &[(&[a.clone(), b.clone()], &["x"]), (&[a, b], &["y"])],
+    );
+    let (_, value) = split_aligned(&joined, last).unwrap();
+    assert_eq!(value.alignments.len(), 1);
+    assert_eq!(value.alignments[0].bottom_words.len(), 2);
 }

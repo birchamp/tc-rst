@@ -37,7 +37,10 @@ pub use ranges::{ChapterKeys, DeviceStat};
 pub use reads::{BookView, ChangeView, Placement};
 pub use resolve::ResolveError;
 pub use scope::ScopeDigest;
-pub use sidecar::{SidecarError, decode_alignments, decode_decisions, records_from_usfm};
+pub use sidecar::{
+    SidecarError, Writer, decode_alignment_record, decode_alignments, decode_decisions,
+    records_from_usfm,
+};
 pub use state::{FoldInput, FoldState, MergeHow, ProjectKind};
 pub use value::{ValueAt, ValueSource};
 

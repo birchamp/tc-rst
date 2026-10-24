@@ -117,7 +117,7 @@ impl Parts {
             CheckTarget::Verse { book, .. } => CheckUnit::Book(*book),
             CheckTarget::Frame { story, .. } => {
                 self.stories.insert(story.get());
-                CheckUnit::Story(StoryNo::new(story.get()).map_err(|_| Everything)?)
+                CheckUnit::Story(*story)
             }
         };
         let tool = match check.tool {
@@ -135,7 +135,7 @@ impl Parts {
     /// the story's lists may have rows that changed, as a verse's do (`text`).
     fn story_text(&mut self, story: tc_journal::StoryNo) -> Result<(), Everything> {
         self.stories.insert(story.get());
-        let unit = CheckUnit::Story(StoryNo::new(story.get()).map_err(|_| Everything)?);
+        let unit = CheckUnit::Story(story);
         for tool in [Tool::TranslationNotes, Tool::TranslationWords] {
             self.checks.insert(CheckListRef { tool, unit });
         }
@@ -244,11 +244,11 @@ pub fn change_scope(
             by: by(key),
         });
     }
-    let Ok(stories) = parts
+    let Some(stories) = parts
         .stories
         .iter()
         .map(|s| StoryNo::new(*s))
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<Option<Vec<_>>>()
     else {
         return ChangeScope::Everything;
     };

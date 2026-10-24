@@ -165,12 +165,16 @@ fn unseen(
         // A comment id held by changes that target several books (§8.1) is a record of
         // each, by the changes that target it.
         let comment = matches!(state.entry(k).key, crate::keys::RecordKey::Comment(_));
-        let changes: Vec<ChangeIdx> = state
+        let all: Vec<ChangeIdx> = state
             .entry(k)
             .changes
             .iter()
             .copied()
             .filter(|c| state.meta(*c).active())
+            .collect();
+        let changes: Vec<ChangeIdx> = all
+            .iter()
+            .copied()
             .filter(|c| {
                 !comment
                     || super::meta::book_of(&state.entry(k).key, &state.shape(*c)) == Some(book)
@@ -179,13 +183,15 @@ fn unseen(
         if changes.is_empty() {
             continue;
         }
-        state.count(Counter::ChangesVisited, changes.len() as u64);
-        // closure_r(k): the changes on k whose short id r saw, and their ancestors.
+        state.count(Counter::ChangesVisited, all.len() as u64);
+        // closure_r(k): the changes on k whose short id r saw, and their ancestors. A comment
+        // change the remover saw may target another book (§8.1), and what it continues was
+        // still seen.
         let closures: Vec<BTreeSet<ChangeIdx>> = seen_lists
             .iter()
             .map(|seen| {
                 let mut closure = BTreeSet::new();
-                for c in &changes {
+                for c in &all {
                     if seen.contains(&state.meta(*c).id.short()) {
                         closure.extend(ancestors_or_self(state, *c));
                     }

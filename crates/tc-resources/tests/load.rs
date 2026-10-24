@@ -7,6 +7,7 @@
 mod common;
 
 use common::{aquifer_pin, aquifer_zip, fixture, install_fixture, repo_path};
+use md5::{Digest, Md5};
 use tc_core::{BookId, Reference};
 use tc_helps::metadata::HelpsSource;
 use tc_helps::{CheckBlocker as ItemBlocker, CheckReadiness, HelpsPart, ObsRef, Occurrence};
@@ -611,4 +612,138 @@ fn open_bible_stories_helps_load_from_door43() {
         loaded.stories_status,
         PartStatus::Missing(Missing::NotPinned)
     );
+}
+
+/// en_obs-tq v10 with one row's Occurrence made `x`, and a Titus questions table with the
+/// same bad row, both under en_obs-tq's metadata (the fixtures hold no Bible tQ).
+fn install_questions_with_a_bad_row(store: &ResourceStore) -> (ResourcePin, usize) {
+    let dir = "en_obs-tq@v10";
+    let base = format!("tc4/test-fixtures/resources/{dir}");
+    let obs = String::from_utf8(fixture(&format!("{base}/OBS.tsv"))).unwrap();
+    let rows = obs.lines().filter(|l| !l.trim().is_empty()).count() - 1;
+    let obs = obs.replacen("1:1\tes4e\t\t\t\t", "1:1\tes4e\t\t\tx\t", 1);
+    let tit = "Reference\tID\tTags\tQuote\tOccurrence\tQuestion\tResponse\n\
+        1:1\taaaa\t\t\tx\tWho wrote the letter?\tPaul.\n\
+        1:2\tbbbb\t\t\t\tWhat did God promise?\tEternal life.\n\
+        1:3\tcccc\t\t\t\tHow did God reveal his word?\tThrough preaching.\n";
+    // The edited table is declared as it now is, as Door43's export would declare it.
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fixture(&format!("{base}/metadata.json"))).unwrap();
+    for (path, text) in [
+        ("ingredients/OBS.tsv", &obs[..]),
+        ("ingredients/TIT.tsv", tit),
+    ] {
+        let md5: String = Md5::digest(text.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        metadata["ingredients"][path] = serde_json::json!({
+            "checksum": { "md5": md5 },
+            "mimeType": "text/tab-separated-values",
+            "size": text.len(),
+        });
+    }
+    let metadata = serde_json::to_vec(&metadata).unwrap();
+    let export = common::zip(&[
+        ("en_obs-tq/metadata.json", &metadata),
+        ("en_obs-tq/ingredients/OBS.tsv", obs.as_bytes()),
+        ("en_obs-tq/ingredients/TIT.tsv", tit.as_bytes()),
+    ]);
+    let pin = common::fixture_pin(dir, "unfoldingWord/en_obs-tq", "v10");
+    tc_resources::install_dcs_zip(store, &pin, &export, 1 << 30).unwrap();
+    (pin, rows)
+}
+
+#[test]
+fn questions_with_one_bad_row_still_load() {
+    let (_dir, store) = store();
+    let (tq, rows) = install_questions_with_a_bad_row(&store);
+    let english = set("en", "unfoldingWord")
+        .with(SetSlot::ObsQuestions, tq.clone())
+        .with(SetSlot::TranslationQuestions, tq);
+    let pins = ProjectPins {
+        primary: Some(english.clone()),
+        fallback: Some(english),
+        ..ProjectPins::default()
+    };
+
+    let obs = load_obs(&store, &pins);
+    assert!(obs.parts[&HelpsPart::ObsQuestions].is_loaded());
+    assert_eq!(
+        obs.helps.questions().len(),
+        rows,
+        "every question, the bad row's too"
+    );
+    let first = obs
+        .helps
+        .obs_questions_for(ObsRef::new(1, 1).unwrap())
+        .next()
+        .unwrap();
+    assert_eq!(first.item.occurrence, Occurrence::Unrecorded);
+
+    let book = load_book(&store, &pins, &HelpsChoice::Dcs, BookId::Titus);
+    assert!(
+        book.parts[&HelpsPart::Questions].is_loaded(),
+        "{:?}",
+        book.parts[&HelpsPart::Questions]
+    );
+    assert_eq!(book.helps.questions().len(), 3);
+}
+
+/// tC4 reads past a bad row of the OBS questions: one row the strict reader refuses (a cell
+/// past the seventh, an Occurrence that is not a count) hides no other question.
+#[test]
+fn one_bad_obs_question_row_hides_no_other_question() {
+    let (_dir, store) = store();
+    let en = install_fixtures(&store);
+    let dir = "en_obs-tq@v10";
+    let mut tsv = String::from_utf8(fixture(&format!(
+        "tc4/test-fixtures/resources/{dir}/OBS.tsv"
+    )))
+    .unwrap();
+    let good = tsv.lines().count() - 1;
+    tsv.push_str("1:2\tbad1\t\t\tx\tA bad row?\tStill read.\textra\n");
+    // The export's metadata records each file's size and md5; the edited table gets its own.
+    let mut metadata: serde_json::Value = serde_json::from_slice(&fixture(&format!(
+        "tc4/test-fixtures/resources/{dir}/metadata.json"
+    )))
+    .unwrap();
+    let digest = {
+        use md5::Digest;
+        md5::Md5::digest(tsv.as_bytes())
+    };
+    let record = &mut metadata["ingredients"]["ingredients/OBS.tsv"];
+    record["size"] = tsv.len().into();
+    record["checksum"]["md5"] = digest
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
+        .into();
+    let metadata = serde_json::to_vec(&metadata).unwrap();
+    let zip = common::zip(&[
+        ("en_obs-tq/metadata.json", &metadata),
+        ("en_obs-tq/ingredients/OBS.tsv", tsv.as_bytes()),
+    ]);
+    let obs_tq = common::fixture_pin(dir, "unfoldingWord/en_obs-tq", "v10");
+    tc_resources::install_dcs_zip(&store, &obs_tq, &zip, 1 << 30).unwrap();
+    let english = set("en", "unfoldingWord")
+        .with(SetSlot::ObsQuestions, obs_tq)
+        .with(SetSlot::TranslationWords, en.tw.clone())
+        .with(SetSlot::TranslationAcademy, en.ta.clone());
+    let pins = ProjectPins {
+        primary: Some(english.clone()),
+        fallback: Some(english),
+        ..ProjectPins::default()
+    };
+    let loaded = load_obs(&store, &pins);
+    assert!(
+        loaded.parts[&HelpsPart::ObsQuestions].is_loaded(),
+        "{:?}",
+        loaded.parts[&HelpsPart::ObsQuestions]
+    );
+    let read: usize = (1..=50)
+        .flat_map(|story| (0..=20).filter_map(move |frame| ObsRef::new(story, frame)))
+        .map(|frame| loaded.helps.obs_questions_for(frame).count())
+        .sum();
+    assert!(read >= good, "{read} questions read of {good} good rows");
 }

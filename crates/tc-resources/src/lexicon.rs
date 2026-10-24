@@ -696,7 +696,6 @@ impl<'de> Visitor<'de> for FilesVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tc_door43::ObjectId;
 
     fn file(path: &str, bytes: &[u8]) -> UnpackedFile {
         UnpackedFile {
@@ -712,7 +711,7 @@ mod tests {
         VerifiedArchive {
             commit: "72df5ac25acf9d51e826b20e3ad883a5a657ef4e".parse().unwrap(),
             tree: "ad07f5e41f7052598d90eb8dc2b9ecad811b0b17"
-                .parse::<ObjectId>()
+                .parse::<GitOid>()
                 .unwrap(),
             files,
         }

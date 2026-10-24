@@ -185,7 +185,8 @@ fn summary_work(name: &str, project: MemoryProject, runs: usize) {
         .add(f.clone(), project)
         .expect("the project is added");
     let peek = backend.peek(&f).expect("a peek");
-    let facts = tc_app::home::card_facts(&peek.metadata, &f, tc_api::home::ProjectKind::Bible);
+    let facts =
+        tc_app::home::card_facts(&peek.metadata, None, &f, tc_api::home::ProjectKind::Bible);
     let books = facts.books.expect("the books");
     let mut samples = Vec::new();
     for _ in 0..runs {

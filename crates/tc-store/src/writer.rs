@@ -587,8 +587,13 @@ impl Writer {
             // Looked at after a later job, when the group is closed.
             return;
         }
-        self.wrote_group = false;
-        self.shared.hooks.probe_burrito(self.folder.root());
+        let begun = self.shared.groups_begun();
+        let shared = &self.shared;
+        let looked = shared.hooks.probe_burrito(self.folder.root(), || {
+            !shared.group_open() && shared.groups_begun() == begun
+        });
+        // A seal on the actor may begin its group while the probe reads the folder.
+        self.wrote_group = !looked;
     }
 
     fn work(mut self, rx: Receiver<Job>) {

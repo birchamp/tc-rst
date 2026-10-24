@@ -41,7 +41,7 @@
           }
         }
       ],
-      "textsError": "Door43 did not answer"
+      "textsError": "unreachable"
     }
   },
   "error": {
