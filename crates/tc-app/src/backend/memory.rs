@@ -21,7 +21,7 @@ use tc_api::write::ReadOnlyReason;
 use tc_journal::command::{Command, DraftField};
 use tc_journal::fold::{Delta, FoldInput, FoldState, ProjectKind};
 use tc_journal::token::TokenError;
-use tc_journal::{Change, ChangeId, DeviceId, GitOid, RecordKey, ShownToken, TokenKey};
+use tc_journal::{BookId, Change, ChangeId, DeviceId, GitOid, RecordKey, ShownToken, TokenKey};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use super::seed::StateSeed;
@@ -314,6 +314,23 @@ impl MemoryBackend {
         let mut live = lock(&state.live);
         let fold = live.current.clone();
         live.teammates.edit_verse(&fold, key, texts)
+    }
+
+    /// Teammate 1's join of verses in `folder`'s project as it is now
+    /// ([`teammates::Teammates::join_verses`]). Not folded, as [`Self::teammates_edit_verse`].
+    pub fn teammates_join_verses(
+        &self,
+        folder: &ProjectRef,
+        book: BookId,
+        chapter: tc_journal::ChapterNo,
+        first: tc_journal::VerseNo,
+        last: tc_journal::VerseNo,
+    ) -> Result<Vec<Change>, MemoryError> {
+        let state = self.state(folder)?;
+        let mut live = lock(&state.live);
+        let fold = live.current.clone();
+        live.teammates
+            .join_verses(&fold, book, chapter, first, last)
     }
 
     /// Adds teammates' changes to `folder`'s fold, as an intake would. An open handle
@@ -772,8 +789,10 @@ impl ProjectHandle for MemoryHandle {
 
 /// Teammates' changes, made by tc-journal's encoder (AD36).
 pub mod teammates {
-    use tc_journal::record::VerseValue;
-    use tc_journal::{BatchId, BatchRef, Cause, ChangeBody, DeviceSeq, Record, WallTime};
+    use tc_journal::record::{DeviceProfileValue, Door43Username, VerseValue};
+    use tc_journal::{
+        BatchId, BatchRef, Cause, ChangeBody, ChapterNo, DeviceSeq, Record, VerseNo, WallTime,
+    };
 
     use super::*;
 
@@ -834,7 +853,7 @@ pub mod teammates {
                 (None, _) => return Err(not_text()),
             };
             let parents = fold.heads(key);
-            let mut last = self.last.clone();
+            let mut next = self.clone();
             let changes = texts
                 .iter()
                 .zip(1u8..)
@@ -848,42 +867,179 @@ pub mod teammates {
                         Record::Frame { value, .. } => *value = (*text).to_owned(),
                         _ => return Err(not_text()),
                     }
-                    let seq = last.get(&n).map_or(1, |seq| seq + 1);
-                    last.insert(n, seq);
-                    let device = device(n);
-                    let digest = ring::digest::digest(
-                        &ring::digest::SHA256,
-                        &[
-                            b"tc4-teammate-batch\0".as_slice(),
-                            device.as_bytes().as_slice(),
-                            seq.to_be_bytes().as_slice(),
-                        ]
-                        .concat(),
-                    );
-                    let mut batch = [0u8; 16];
-                    batch.copy_from_slice(&digest.as_ref()[..16]);
-                    let batch = BatchRef::new(BatchId::from_bytes(batch), 1)
-                        .ok_or_else(|| MemoryError::Change("an empty batch".to_owned()))?;
-                    let days = i64::try_from(seq - 1).unwrap_or(i64::MAX);
-                    Change::new(ChangeBody {
-                        v: 0,
-                        record,
-                        parents: parents.clone(),
-                        device,
-                        seq: DeviceSeq(seq),
-                        at: WallTime(
-                            TEAMMATE_TIME
-                                .saturating_add(days.saturating_mul(DAY))
-                                .saturating_add(i64::from(n) * MINUTE),
-                        ),
-                        batch,
-                        cause: Cause::Edit,
-                    })
-                    .map_err(|e| MemoryError::Change(e.to_string()))
+                    next.change(n, record, parents.clone(), None)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            self.last = last;
+            *self = next;
             Ok(changes)
         }
+
+        /// Teammate 1's join of the verses `first` to `last` of `chapter` of `book`, as one
+        /// batch over the verses' current heads in `fold` (STORAGE §8.3's "Maria joined
+        /// verses 4 and 5"): verse `first` holds every verse's words in order, with the last
+        /// verse's layout, and each other verse is covered by it. Every verse must show text
+        /// of its own. Nothing is counted when the join cannot be made.
+        pub fn join_verses(
+            &mut self,
+            fold: &FoldState,
+            book: BookId,
+            chapter: ChapterNo,
+            first: VerseNo,
+            last: VerseNo,
+        ) -> Result<Vec<Change>, MemoryError> {
+            let not_text = |v: VerseNo| {
+                MemoryError::NotATextVerse(format!("{book:?} {}:{}", chapter.get(), v.get()))
+            };
+            if last <= first {
+                return Err(MemoryError::Change(format!(
+                    "{}-{} is not a span",
+                    first.get(),
+                    last.get()
+                )));
+            }
+            let verses: Vec<VerseNo> = (first.get()..=last.get())
+                .filter_map(VerseNo::new)
+                .collect();
+            let mut words = Vec::with_capacity(verses.len());
+            let mut parents = Vec::with_capacity(verses.len());
+            let mut shape = None;
+            for verse in &verses {
+                let key = RecordKey::Verse(book, chapter, *verse);
+                let Some(Record::Verse {
+                    value:
+                        VerseValue::Text {
+                            marker,
+                            words: text,
+                            layout,
+                            last: own,
+                            ..
+                        },
+                    ..
+                }) = fold.projected(&key)
+                else {
+                    return Err(not_text(*verse));
+                };
+                if own != *verse {
+                    return Err(not_text(*verse));
+                }
+                words.push(text);
+                parents.push(fold.heads(&key));
+                shape = Some((marker, layout));
+            }
+            let Some((marker, layout)) = shape else {
+                return Err(not_text(first));
+            };
+            let mut next = self.clone();
+            let n = u32::try_from(verses.len()).unwrap_or(u32::MAX);
+            let seq = next.last.get(&1).map_or(1, |seq| seq + 1);
+            let batch = (batch_ref(device(1), seq, n)?, at_of(1, seq));
+            let mut changes = Vec::with_capacity(verses.len());
+            for (i, verse) in verses.iter().enumerate() {
+                let value = if i == 0 {
+                    VerseValue::Text {
+                        marker: marker.clone(),
+                        words: words.join(" "),
+                        layout: layout.clone(),
+                        last,
+                        from: None,
+                    }
+                } else {
+                    VerseValue::Covered { by: first }
+                };
+                let record = Record::Verse {
+                    book,
+                    chapter,
+                    verse: *verse,
+                    value,
+                };
+                changes.push(next.change(1, record, parents[i].clone(), Some(batch))?);
+            }
+            *self = next;
+            Ok(changes)
+        }
+
+        /// Teammate `n` signed in to Door43 as `username`: their device's profile, so the
+        /// screens name them by it, and two teammates with one username are one person's
+        /// computers (STORAGE §8.5).
+        pub fn sign_in(
+            &mut self,
+            fold: &FoldState,
+            n: u8,
+            username: &str,
+        ) -> Result<Change, MemoryError> {
+            let device = device(n);
+            let value = DeviceProfileValue {
+                display_name: None,
+                door43_username: Some(
+                    Door43Username::parse(username)
+                        .map_err(|e| MemoryError::Change(e.to_string()))?,
+                ),
+                legacy: None,
+            };
+            let parents = fold.heads(&RecordKey::DeviceProfile(device));
+            let record = Record::DeviceProfile { device, value };
+            let mut next = self.clone();
+            let change = next.change(n, record, parents, None)?;
+            *self = next;
+            Ok(change)
+        }
+
+        /// The next change of teammate `n`: `record` over `parents`, in `batch` with its
+        /// time, or in a batch of its own dated a day after the teammate's last change.
+        fn change(
+            &mut self,
+            n: u8,
+            record: Record,
+            parents: Vec<ChangeId>,
+            batch: Option<(BatchRef, WallTime)>,
+        ) -> Result<Change, MemoryError> {
+            let seq = self.last.get(&n).map_or(1, |seq| seq + 1);
+            let device = device(n);
+            let (batch, at) = match batch {
+                Some(batch) => batch,
+                None => (batch_ref(device, seq, 1)?, at_of(n, seq)),
+            };
+            let change = Change::new(ChangeBody {
+                v: 0,
+                record,
+                parents,
+                device,
+                seq: DeviceSeq(seq),
+                at,
+                batch,
+                cause: Cause::Edit,
+            })
+            .map_err(|e| MemoryError::Change(e.to_string()))?;
+            self.last.insert(n, seq);
+            Ok(change)
+        }
+    }
+
+    /// A batch of `n` changes whose id is derived from its device and the number of its
+    /// first change.
+    fn batch_ref(device: DeviceId, seq: u64, n: u32) -> Result<BatchRef, MemoryError> {
+        let digest = ring::digest::digest(
+            &ring::digest::SHA256,
+            &[
+                b"tc4-teammate-batch\0".as_slice(),
+                device.as_bytes().as_slice(),
+                seq.to_be_bytes().as_slice(),
+            ]
+            .concat(),
+        );
+        let mut batch = [0u8; 16];
+        batch.copy_from_slice(&digest.as_ref()[..16]);
+        BatchRef::new(BatchId::from_bytes(batch), n)
+            .ok_or_else(|| MemoryError::Change("an empty batch".to_owned()))
+    }
+
+    /// When teammate `n` made their change number `seq`.
+    fn at_of(n: u8, seq: u64) -> WallTime {
+        let days = i64::try_from(seq - 1).unwrap_or(i64::MAX);
+        WallTime(
+            TEAMMATE_TIME
+                .saturating_add(days.saturating_mul(DAY))
+                .saturating_add(i64::from(n) * MINUTE),
+        )
     }
 }

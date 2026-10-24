@@ -563,6 +563,30 @@ impl StoreCommand {
         )
     }
 
+    /// `ResolveBulk` (STORAGE §5.9 step 3): one batch over every listed conflict, each with
+    /// one review token per record; the store leaves out the conflicts the devices cannot
+    /// decide alone.
+    pub fn resolve_bulk(
+        devices: std::collections::BTreeSet<DeviceId>,
+        conflicts: Vec<(ConflictId, Vec<ReviewToken>)>,
+    ) -> Self {
+        let listed = conflicts
+            .iter()
+            .flat_map(|(_, tokens)| tokens.iter())
+            .map(|t| (t.key().clone(), t.heads().to_vec()))
+            .collect();
+        Self::new(
+            Command::ResolveBulk {
+                devices,
+                conflicts: conflicts
+                    .into_iter()
+                    .map(|(id, tokens)| (id, tokens.into_iter().map(|t| t.0).collect()))
+                    .collect(),
+            },
+            listed,
+        )
+    }
+
     /// The records the command writes, each with the heads its token named.
     #[cfg(feature = "fixture-backend")]
     pub(in crate::backend) fn shown(&self) -> &[(RecordKey, Vec<ChangeId>)] {
@@ -1091,6 +1115,22 @@ pub trait ProjectStore: Send + Sync + 'static {
         texts: &[&str],
     ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
         let _ = (folder, key, texts);
+        Err(StoreError::Other("this store has no teammates".to_owned()))
+    }
+
+    /// Teammate 1's join of the verses `first` to `last` of `chapter` of `book` in `folder`,
+    /// one batch over the verses' current versions, written as a sync's intake would: the
+    /// changes' ids. A store with no teammates refuses.
+    #[cfg(feature = "test-hooks")]
+    fn teammates_join_verses(
+        &self,
+        folder: &ProjectRef,
+        book: BookId,
+        chapter: tc_journal::ChapterNo,
+        first: tc_journal::VerseNo,
+        last: tc_journal::VerseNo,
+    ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
+        let _ = (folder, book, chapter, first, last);
         Err(StoreError::Other("this store has no teammates".to_owned()))
     }
 

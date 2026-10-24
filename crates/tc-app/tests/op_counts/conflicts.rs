@@ -119,3 +119,192 @@ async fn a_verses_history_costs_its_versions() {
         }
     }
 }
+
+/// C7a: *Restore this version* costs its record: one command, the old version read once,
+/// the record's own changes indexed, and no walk of the list or projection of a chapter, on
+/// both corpora.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_restore_costs_its_record() {
+    use tc_api::conflicts::{HistoryView, KeepChoice, Resolve};
+    use tc_api::write::Stored;
+    use tc_app::backend::memory::Scripted;
+
+    for backing in [Backing::Memory, Backing::Store] {
+        let inputs = std::sync::Mutex::new(Vec::new());
+        let (small, large) = costs_on_both(
+            backing,
+            async |s: &super::harness::Scale| {
+                opened(s).await;
+                let view: ReviewView = post(
+                    &s.app,
+                    &List {
+                        at: s.scope(),
+                        tab: ReviewTab::Text,
+                    },
+                )
+                .await
+                .unwrap();
+                let ReviewEntries::Conflicts(entries) = view.entries else {
+                    panic!()
+                };
+                let entry = entries[0].clone();
+                let history: HistoryView = post(
+                    &s.app,
+                    &History {
+                        at: s.scope(),
+                        record: entry.record.clone(),
+                    },
+                )
+                .await
+                .unwrap();
+                let from = history
+                    .versions
+                    .iter()
+                    .rev()
+                    .find(|v| !v.version.shown)
+                    .expect("a version to restore")
+                    .version
+                    .change
+                    .clone();
+                inputs.lock().unwrap().push((entry, from));
+                if let Some(memory) = s.memory() {
+                    memory.script(&s.folder, Scripted::Written).unwrap();
+                }
+            },
+            async |s: &super::harness::Scale| {
+                let (entry, from) = inputs.lock().unwrap().pop().unwrap();
+                let ack = post(
+                    &s.app,
+                    &Resolve {
+                        at: s.scope(),
+                        request: crate::common::rid(1),
+                        conflict: entry.conflict,
+                        review: entry.review,
+                        choice: KeepChoice::Restore { from },
+                    },
+                )
+                .await
+                .unwrap();
+                assert_eq!(ack.stored, Stored::Written);
+            },
+        )
+        .await;
+        for (cost, scale) in [(small, "Psalms"), (large, "ten times")] {
+            // The old version's body, the token checks and the reply's token: a constant.
+            assert!(
+                cost.app.records_read <= 2 * READS_PER_CONFLICT,
+                "{backing:?} {scale}: {} records read for one restore",
+                cost.app.records_read
+            );
+            assert_eq!(cost.app.conflict_walks, 0, "{backing:?} {scale}");
+            assert_eq!(cost.app.chapters_projected, 0, "{backing:?} {scale}");
+            if backing == Backing::Store {
+                assert!(cost.store.commands > 0, "{backing:?} {scale}");
+                assert!(
+                    0 < cost.fold.changes_indexed
+                        && cost.fold.changes_indexed <= READS_PER_CONFLICT,
+                    "{backing:?} {scale}: {} changes for one restore",
+                    cost.fold.changes_indexed
+                );
+            }
+        }
+    }
+}
+
+/// C7a: *Keep all of <person>'s* costs the conflicts it was given, ten times as many on the
+/// larger corpus: one command, a bounded number of records read per conflict, the resolved
+/// records' keys updated, and no walk of the list or projection of a chapter.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_bulk_keep_costs_its_conflicts() {
+    use tc_api::conflicts::{BulkConflict, MadeBy, ResolveBulk};
+    use tc_api::write::Stored;
+    use tc_app::backend::memory::Scripted;
+
+    for backing in [Backing::Memory, Backing::Store] {
+        let inputs = std::sync::Mutex::new(Vec::new());
+        let listed = std::sync::Mutex::new(Vec::new());
+        let (small, large) = costs_on_both(
+            backing,
+            async |s: &super::harness::Scale| {
+                opened(s).await;
+                let view: ReviewView = post(
+                    &s.app,
+                    &List {
+                        at: s.scope(),
+                        tab: ReviewTab::Text,
+                    },
+                )
+                .await
+                .unwrap();
+                let ReviewEntries::Conflicts(entries) = view.entries else {
+                    panic!()
+                };
+                let MadeBy::Person(label) = &entries[0].versions[0].by else {
+                    panic!("{:?}", entries[0])
+                };
+                inputs.lock().unwrap().push((label.who.clone(), entries));
+                if let Some(memory) = s.memory() {
+                    memory.script(&s.folder, Scripted::Written).unwrap();
+                }
+            },
+            async |s: &super::harness::Scale| {
+                let (person, entries) = inputs.lock().unwrap().pop().unwrap();
+                let kept = post(
+                    &s.app,
+                    &ResolveBulk {
+                        at: s.scope(),
+                        request: crate::common::rid(2),
+                        person,
+                        conflicts: entries
+                            .iter()
+                            .map(|e| BulkConflict {
+                                conflict: e.conflict.clone(),
+                                review: e.review.clone(),
+                            })
+                            .collect(),
+                    },
+                )
+                .await
+                .unwrap();
+                assert_eq!(kept.ack.stored, Stored::Written);
+                listed
+                    .lock()
+                    .unwrap()
+                    .push((entries.len() as u64, kept.left.len() as u64));
+            },
+        )
+        .await;
+        let listed = listed.lock().unwrap().clone();
+        for (cost, (n, left), scale) in [
+            (small, listed[0], "Psalms"),
+            (large, listed[1], "ten times"),
+        ] {
+            assert!(
+                n > 0 && left < n,
+                "{backing:?} {scale}: {n} conflicts, {left} left"
+            );
+            assert!(
+                cost.app.records_read <= READS_PER_CONFLICT * n + 64,
+                "{backing:?} {scale}: {} records read for {n} conflicts",
+                cost.app.records_read
+            );
+            assert_eq!(cost.app.conflict_walks, 0, "{backing:?} {scale}");
+            assert_eq!(cost.app.chapters_projected, 0, "{backing:?} {scale}");
+            if backing == Backing::Store {
+                assert!(cost.store.commands > 0, "{backing:?} {scale}");
+                // One resolving change per record kept; a passage's records count as one
+                // conflict each way.
+                assert!(
+                    0 < cost.fold.changes_indexed && cost.fold.changes_indexed <= 4 * (n - left),
+                    "{backing:?} {scale}: {} changes for {} conflicts kept",
+                    cost.fold.changes_indexed,
+                    n - left
+                );
+            }
+        }
+        assert!(
+            listed[1].0 > listed[0].0,
+            "{backing:?}: ten times the conflicts: {listed:?}"
+        );
+    }
+}
