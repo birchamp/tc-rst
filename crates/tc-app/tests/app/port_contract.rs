@@ -79,6 +79,11 @@ async fn script_synced(w: &World, n: u8, project: &ProjectRef) {
 
 /// Titus 1:1 of `project`, opened for the screens, saved as `words`; then closed.
 async fn save_titus_1_1(app: &App, project: &ProjectRef, n: u8, words: &str) {
+    save_titus(app, project, 1, n, words).await;
+}
+
+/// Titus 1:`verse` of `project`, opened for the screens, saved as `words`; then closed.
+async fn save_titus(app: &App, project: &ProjectRef, verse: u16, n: u8, words: &str) {
     let at = app
         .sessions()
         .open_screen(project, open_progress())
@@ -90,7 +95,7 @@ async fn save_titus_1_1(app: &App, project: &ProjectRef, n: u8, words: &str) {
         .reader(&at)
         .unwrap()
         .read()
-        .mint(&tit(1, 1), None)
+        .mint(&tit(1, verse), None)
         .unwrap();
     let ack = post(
         app,
@@ -558,4 +563,154 @@ async fn a_failed_branch_lookup_is_a_failed_sync() {
         other => panic!("a failed lookup is a failed sync: {other:?}"),
     }
     assert_eq!(card_with_counts(app).await, before, "nothing changed");
+}
+
+/// A second computer (B) on the same fake Door43: its own app data and device, the parity
+/// user signed in, the sample opened from Door43 as `titus-b`.
+struct Teammate {
+    t: super::common::TestApp,
+    project: ProjectRef,
+    _dir: tempfile::TempDir,
+}
+
+async fn teammate_b(w: &World) -> Teammate {
+    use tc_app::StoreChoice;
+    use tc_app::config::ProjectsFolder;
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join("projects");
+    std::fs::create_dir_all(&projects).unwrap();
+    let backend = crate::store_world::backend_over(
+        &tc_store::fault::FaultFs::new(),
+        crate::store_world::APP,
+        tc_store::FakePlatform {
+            host: "computer-b".to_owned(),
+            machine: "machine-of-b".to_owned(),
+            ..tc_store::FakePlatform::default()
+        },
+        Arc::default(),
+    );
+    let url = w.fake.url().to_owned();
+    let t = super::common::TestApp::start_with(
+        dir.path(),
+        &super::common::Parts::new(),
+        |config, deps| {
+            config.projects = ProjectsFolder::Given(projects.clone());
+            config.door43 = url.parse().unwrap();
+            deps.store = StoreChoice::Given(Arc::new(backend));
+            deps.sync = Arc::new(tc_app::ports::door43::Door43Sync);
+        },
+    )
+    .await;
+    internet_on(&t.app).await;
+    sign_in(&t.app).await;
+    let job = post(&t.app, &open(40, "titus-b")).await.unwrap();
+    let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) = ended(&t.app, job).await
+    else {
+        panic!("B opens the sample from Door43");
+    };
+    Teammate {
+        t,
+        project,
+        _dir: dir,
+    }
+}
+
+fn git_path(service: &str) -> String {
+    format!("/{PARITY_USER}/{REPO}.git/git-{service}")
+}
+
+/// R13, INV-A-SYNC-NEVER-LOSES-A-SAVE: a connection cut after the teammates' work came in keeps
+/// that work and says so; one cut before it changes nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_dropped_connection_keeps_received_work_and_says_so() {
+    let w = <Door43 as SyncPortFixture>::world().await;
+    let a = &w.t.app;
+    internet_on(a).await;
+    sign_in(a).await;
+    synced(a, 41).await;
+    let b = teammate_b(&w).await;
+    const FROM_A: &str = "Pablo, siervo de Dios, como A lo escribio";
+    save_titus_1_1(a, &folder(SAMPLE), 42, FROM_A).await;
+    // Both computers sign in as the parity user, and a sign-in replaces the user's token: each
+    // signs in again before it syncs.
+    sign_in_again(a, 43).await;
+    synced(a, 44).await;
+    save_titus(
+        &b.t.app,
+        &b.project,
+        2,
+        45,
+        "Lo que B escribio en el versiculo dos",
+    )
+    .await;
+    let before_b = titus_1_1(&b.t.app, &b.project).await;
+
+    sign_in_again(&b.t.app, 46).await;
+    // Cut before intake: the fetch's pack stops part way.
+    w.fake.inject(FaultRule::once(
+        "POST",
+        &git_path("upload-pack"),
+        Fault::BreakOff { after: 0 },
+    ));
+    let job = post(
+        &b.t.app,
+        &SyncProject {
+            request: rid(47),
+            project: b.project.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    match ended(&b.t.app, job).await {
+        JobState::Failed(ApiError::Refused(Refusal::Sync(SyncFailure::BeforeIntake(_)))) => {}
+        other => panic!("a cut fetch fails before intake: {other:?}"),
+    }
+    assert_eq!(
+        titus_1_1(&b.t.app, &b.project).await,
+        before_b,
+        "nothing changed"
+    );
+
+    // Cut after intake: the push's reply never arrives.
+    w.fake.inject(FaultRule::once(
+        "POST",
+        &git_path("receive-pack"),
+        Fault::BreakOff { after: 0 },
+    ));
+    let job = post(
+        &b.t.app,
+        &SyncProject {
+            request: rid(48),
+            project: b.project.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let ended_b = ended(&b.t.app, job).await;
+    assert_eq!(
+        titus_1_1(&b.t.app, &b.project).await.as_deref(),
+        Some(FROM_A),
+        "INV-A-SYNC-NEVER-LOSES-A-SAVE: A's work came in and stays ({ended_b:?})"
+    );
+    match ended_b {
+        JobState::Failed(ApiError::Refused(Refusal::Sync(SyncFailure::AfterIntake(_)))) => {}
+        other => panic!(
+            "INV-A-SYNC-NEVER-LOSES-A-SAVE: a push cut after intake says the work came in: {other:?}"
+        ),
+    }
+}
+
+/// A sign-in with its own request id, so it is not the reply of an earlier one.
+async fn sign_in_again(app: &App, n: u8) {
+    post(
+        app,
+        &tc_api::account::SignIn {
+            request: rid(n),
+            login: PARITY_USER.to_owned(),
+            password: tc_door43_fake::seeded::PARITY_PASSWORD.to_owned(),
+            stay: false,
+        },
+    )
+    .await
+    .unwrap();
 }

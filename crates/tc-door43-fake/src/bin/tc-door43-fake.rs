@@ -158,10 +158,21 @@ struct FaultBody {
     deny_unknown_fields
 )]
 enum FaultKind {
-    Status { status: u16, message: String },
-    Delay { ms: u64 },
-    RateLimited { retry_after_secs: u64 },
+    Status {
+        status: u16,
+        message: String,
+    },
+    Delay {
+        ms: u64,
+    },
+    RateLimited {
+        retry_after_secs: u64,
+    },
     Hold,
+    /// A download or a git reply sends `after` bytes, then the connection breaks (R13).
+    BreakOff {
+        after: usize,
+    },
 }
 
 fn bad(reason: String) -> Response {
@@ -182,6 +193,7 @@ async fn add_fault(State(fake): Fake, body: axum::body::Bytes) -> Response {
         FaultKind::Delay { ms } => Fault::Delay(Duration::from_millis(ms)),
         FaultKind::RateLimited { retry_after_secs } => Fault::RateLimited { retry_after_secs },
         FaultKind::Hold => Fault::Hold,
+        FaultKind::BreakOff { after } => Fault::BreakOff { after },
     };
     fake.inject(FaultRule {
         method: body.method,
