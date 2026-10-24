@@ -150,6 +150,9 @@ fn a_held_file_deleted_while_the_project_is_open_is_rebuilt() {
         "held by the compare-and-swap"
     );
     assert_valid_burrito(&rig.fs, &folder);
+    // The writer looks at the folder after its last job; on a slow run that look would come
+    // after the deletion below and blame the store for the file the test took away.
+    handle.wait_idle();
     rig.fs.delete(&usfm).unwrap();
     save_verse(&handle, 1, 3, "grace and peace").unwrap();
     leave(&handle);
