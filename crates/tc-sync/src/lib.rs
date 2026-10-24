@@ -5,3 +5,6 @@
 //! one place.
 
 pub mod machine;
+pub mod sync;
+
+pub use sync::{Backoff, Pause, SyncReport, sync};

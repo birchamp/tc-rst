@@ -5,3 +5,6 @@
 
 #[path = "sync/model.rs"]
 mod model;
+
+#[path = "sync/door43.rs"]
+mod door43;

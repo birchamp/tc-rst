@@ -8,11 +8,25 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+git2.workspace = true
+serde_json.workspace = true
 tc-api = { path = "../tc-api" }
+tc-door43 = { path = "../tc-door43" }
+tc-journal = { path = "../tc-journal" }
+tc-store = { path = "../tc-store" }
 thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "time"] }
+url.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+tc-door43-fake = { path = "../tc-door43-fake" }
+tc-store = { path = "../tc-store", features = ["test-hooks"] }
+tempfile.workspace = true
+tc-api = { path = "../tc-api" }
+tc-burrito = { path = "../tc-burrito" }
+tc-versification = { path = "../tc-versification" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "test-util"] }
 
 [lints]
 workspace = true
