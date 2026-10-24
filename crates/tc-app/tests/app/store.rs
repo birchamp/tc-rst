@@ -319,7 +319,7 @@ async fn a_staging_folder_removed_at_start_is_reported() {
         ReportOp::OpenDoor43,
         ReportOp::StagingRemoved,
     ];
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
     let mut removed = loop {
         let removed: Vec<_> = t
             .app

@@ -63,8 +63,8 @@ test teaches people to rerun until green, and a slow suite makes people skip it.
 - **Invariants**:
   - INV-DETERMINISTIC: a gate run's verdict depends only on the tree: proptest runs from the
     fixed `PROPTEST_RNG_SEED` the gate script sets; no test compares elapsed real time with a
-    window; no test sleeps and then asserts a state it could wait for.
-  - INV-FAST: no test binary in the gate step `test` runs longer than 300 s.
+    window; no test sleeps and then asserts a state it could wait for. (retired by the ruling of 2026-10-23, tests prove behavior, not speed)
+  - INV-FAST: no test binary in the gate step `test` runs longer than 300 s. (retired by the ruling of 2026-10-23, tests prove behavior, not speed)
 - **Wrong states**:
   - CI fails on a busy runner because the first progress report came at 421 ms.
   - A census assert fails one run in forty and people learn to rerun.
@@ -85,7 +85,7 @@ test teaches people to rerun until green, and a slow suite makes people skip it.
   - Gate step `test-budget` (to create): `.audit/tools/test-budget.mjs` reads the `test` step's log
     and fails on a binary over 300 s; its tests `.audit/tools/test-budget.test.mjs` (to create;
     the gate step `node` runs them); kind: lint over a run.
-  - `the_gates_fix_the_proptest_seed` in `.audit/tools/test-budget.test.mjs` (to create, step 1):
+  - (retired by the ruling of 2026-10-23: no fixed seed) `the_gates_fix_the_proptest_seed` in `.audit/tools/test-budget.test.mjs` (to create, step 1):
     reads `scripts/gates.sh` and `.audit/tools/winvm/gates.ps1` and fails unless each sets
     `PROPTEST_RNG_SEED` before any `cargo test` line (INV-DETERMINISTIC's seed half); kind:
     lint over a file; runs in: the gate step `node`.
@@ -260,3 +260,4 @@ fixed seed.
 - 2026-10-23 20:13 EDT | checks lane (Claude Code 2198ee19) | merge | c327fea4 | Merge commit `Merge CHK-4 fix: the test races that kept main red`, gated by scripts/gates.sh --journeys here and by CI on gate/CHK-4-fix | scripts/gates.sh --check-receipt
 - 2026-10-23 21:48 EDT | checks lane (Claude Code 2198ee19) | fix | none | Main's ci on INT-8's merge 646d38c9 (run 40049770850) failed app::check_story::a_frame_edit_that_drops_the_tapped_word_invalidates_the_mark_and_keeps_it: the teammate's edit through the store found the project locked ("already open: process 4242"). A test race, not a lock bug: after the screen leaves, a side user (a background read) keeps the session open by design, settled() returns for an open session that is not leaving, and the lock goes only when that user lets go. check_story's leave() now loops settled() until no open session names the project (60 s bound, "hung"). check_story:: 3 ok four times beside a 12-job build; clippy clean | gh run view 40049770850 --log-failed
 - 2026-10-23 21:49 EDT | checks lane (Claude Code 2198ee19) | merge | bb45f868 | Merge commit `Merge CHK-4 fix: a story test waits for the project's lock`, the first merge gated by the CI route alone: scripts/gates.sh --wait-ci CHK-4-fix2 (INT-8) | scripts/gates.sh --check-receipt
+- 2026-10-23 23:48 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: the funnel card's INV-DETERMINISTIC, INV-FAST and the_gates_fix_the_proptest_seed are marked "(retired by the ruling of 2026-10-23 ...)": the ruling cut them, nothing was built for them, and the claims check skips a marked line | node --test .audit/tools/claims.test.mjs

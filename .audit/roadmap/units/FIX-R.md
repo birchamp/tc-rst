@@ -15,7 +15,7 @@ proves: [P1, P8]
 no_loss: true
 size: 2-3 d
 merged: none
-updated: 2026-10-22
+updated: 2026-10-23
 next: Claim this card after INT-4 merges, then do step 1.
 blocked_by: none
 ---
@@ -324,3 +324,4 @@ the log. This item is no-loss: the review uses three lenses (FUNNEL.md §8).
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-bugs.md
+- 2026-10-23 23:43 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3 (claims ledger): docs/TC4-ISSUES.md rows #795, #507 and #765 now read (pending: FIX-R), and 29 unit-todo rows that wait only on finished units end their unit cell with "FIX-R reconciles". .audit/tools/claims.test.mjs fails once FIX-R is done if any of them still waits: write each test and replace the marker with its name in the same commit (step 5) | node --test .audit/tools/claims.test.mjs

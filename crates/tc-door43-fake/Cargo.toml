@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 axum = { workspace = true, features = ["http1", "json", "query", "tokio"] }
 base64.workspace = true
-futures-util = { version = "0.3.34", default-features = false }
+futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha1.workspace = true
