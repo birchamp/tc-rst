@@ -792,6 +792,7 @@ impl ProjectHandle {
                 changes: Vec::new(),
                 skipped: Vec::new(),
                 kept: Vec::new(),
+                dropped_links: Vec::new(),
             }));
         }
         let (pending, resolver) = pending(|| Err(CommandError::Closed));

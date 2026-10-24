@@ -53,6 +53,8 @@ tempfile.workspace = true
 git2.workspace = true
 tc-corpus = { path = "../tc-corpus" }
 tc-versification = { path = "../tc-versification" }
+# The tests read the bundled ULT (tC4 #812).
+zip.workspace = true
 
 [lints]
 workspace = true

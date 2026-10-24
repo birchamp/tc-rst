@@ -91,10 +91,11 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
 - Align, across a verse edit, moves each link with its own word, by position: deleting or
   adding an earlier copy of a repeated word leaves the link on the word it was on. A link
   whose word cannot be followed for sure goes back to the word bank and is listed, and the
-  verse is not marked for review (#789, Q30 (a)). The reference d310bf3 moves the link to
-  another copy of the word, unannounced. Since #815 (D106, in rc.2) tC4 also follows a link by
-  position, but where an edit before a linked repeated word is not clear it marks the verse for
-  review instead of listing the link (#789, #820).
+  verse is not marked for review (#789, Q30 (a)); so when one copy of a repeated linked word
+  is replaced, both links go back (#820). The reference d310bf3 moves the link to another copy
+  of the word, unannounced. Since #815 (D106, in rc.2) tC4 also follows a link by position, but
+  where an edit before a linked repeated word is not clear it marks the verse for review
+  instead of listing the link (#789, #820).
 - Align opens a verse with a card for every word of the pinned original-language verse,
   comparing words in NFC; a link to a word the pin lacks goes back to the word bank and is
   listed, and the verse needs review on the rail and when it opens (#790). The reference
@@ -105,11 +106,12 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   the pinned UHB.
 - Align's "The draft changed" notice and the rail's Invalid follow one rule: the text, the
   words, the span or the original-language text changed, or the alignment is marked for
-  re-review (#787, #796). The reference d310bf3 shows the notice only for a changed text or
-  changed words, and its rail calls an alignment valid when only its words are wrong. Since
-  #814 (D105, in rc.2) tC4 uses one rule too. Only Mark valid clears "needs review", in tC4 and,
-  by the owner's ruling of 2026-10-23 (Q37), in the rebuild; the rebuild still clears it at the
-  first edit until FIX-R changes it (`docs/TC4-ISSUES.md` §1 row 23).
+  re-review (#787, #796). The alignment files' `invalid` follows the same rule, so a teammate
+  on tC4 reads such an alignment as needing re-review too. The reference d310bf3 shows the
+  notice only for a changed text or changed words, its rail calls an alignment valid when only
+  its words are wrong, and its files write `invalid: false` there. Since #814 (D105, in rc.2)
+  tC4 uses one rule too. Only Mark valid clears "needs review", in tC4 and, by the owner's
+  ruling of 2026-10-23 (Q37), in the rebuild (FIX-R).
 - A note's quote is marked in the original-language text as well as in the gateway text: in
   Draft's Greek or Hebrew tab and in the original row of the check card, at the note's
   occurrence; a quote that does not match in full marks nothing. tC4 4.0 marks only the

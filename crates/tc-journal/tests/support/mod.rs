@@ -308,12 +308,7 @@ pub fn alignment(c: u16, v: u16, span_end: u16, words: &str) -> Record {
         value: AlignmentValue {
             span_end: vn(span_end),
             alignments: vec![],
-            word_bank: vec![tc_journal::record::TargetWord {
-                word: words.into(),
-                occurrence: 1,
-                occurrences: 1,
-                extra: JsonMap::new(),
-            }],
+            word_bank: tc_journal::alignment::verse_words(words),
             target_verse_md5: md5(words),
             source_version: "dcs::unfoldingWord/el-x-koine_ugnt@v0.34".into(),
             source: None,
