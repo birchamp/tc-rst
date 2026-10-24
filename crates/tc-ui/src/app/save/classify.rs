@@ -34,6 +34,38 @@ impl SaveError {
     }
 }
 
+/// Whether sending the same text again in this open can succeed (tC4 #801): a refusal of the
+/// text or of its token answers the same way every time, so a field holds its text for the
+/// next open instead of blocking Home. One arm per reason, no wildcard.
+pub fn retry_can_fix(reason: &NotSaved) -> bool {
+    match reason {
+        // The person fixes these in the field: the reason is shown beside it.
+        NotSaved::Disk(_) | NotSaved::Refused(tc_api::write::SaveRefusal::InvalidText { .. }) => {
+            true
+        }
+        NotSaved::Refused(
+            tc_api::write::SaveRefusal::IncoherentView
+            | tc_api::write::SaveRefusal::LastBook
+            | tc_api::write::SaveRefusal::Choice { .. },
+        )
+        | NotSaved::LookAgain
+        | NotSaved::PlanStale
+        | NotSaved::BadToken
+        | NotSaved::StaleScope => false,
+        // Held before any retry (A-10); never retried.
+        NotSaved::ReadOnly(_) => false,
+    }
+}
+
+/// Whether a save error may go away on a retry in this open: every error but a `NotSaved`
+/// reason [`retry_can_fix`] rules out.
+pub fn save_error_can_be_fixed(error: &SaveError) -> bool {
+    match error {
+        SaveError::NotSaved(reason) => retry_can_fix(reason),
+        SaveError::Api(_) | SaveError::Transport(_) | SaveError::BadAck(_) => true,
+    }
+}
+
 /// What the save machine does with an answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Answered {

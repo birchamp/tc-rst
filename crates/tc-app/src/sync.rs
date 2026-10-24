@@ -155,7 +155,7 @@ impl App {
     ) -> Result<JobOutcome, JobEnd> {
         use serde_json::json;
         use tc_api::test::ScriptedSync as Scripted;
-        let (teammates, restored) = match outcome {
+        let (teammates, joined, restored) = match outcome {
             Scripted::Failed(failure) => {
                 return Err(JobEnd::Failed(ApiError::Refused(tc_api::Refusal::Sync(
                     failure,
@@ -163,13 +163,14 @@ impl App {
             }
             Scripted::Synced {
                 teammates,
+                joined,
                 restored,
-            } => (teammates, restored),
+            } => (teammates, joined, restored),
         };
         let failed = |what: &str, reason: String| {
             JobEnd::Failed(self.internal(what, crate::reports::facts(json!({ "reason": reason }))))
         };
-        let received = match teammates {
+        let mut received = match teammates {
             None => Vec::new(),
             Some(edit) => {
                 let (Some(chapter), Some(verse)) = (
@@ -194,6 +195,29 @@ impl App {
                     .map_err(|e| failed("the teammates' changes were not written", e.to_string()))?
             }
         };
+        if let Some(join) = joined {
+            let (Some(chapter), Some(first), Some(last)) = (
+                tc_journal::ChapterNo::new(join.chapter),
+                tc_journal::VerseNo::new(join.first),
+                tc_journal::VerseNo::new(join.last),
+            ) else {
+                return Err(JobEnd::Failed(ApiError::BadRequest {
+                    field: "joined".to_owned(),
+                    reason: "no such verse".to_owned(),
+                }));
+            };
+            let at = folder.clone();
+            let written = self
+                .with_store(move |store| {
+                    store.teammates_join_verses(&at, join.book, chapter, first, last)
+                })
+                .await
+                .map_err(JobEnd::Failed)?;
+            received.extend(
+                written
+                    .map_err(|e| failed("the teammates' join was not written", e.to_string()))?,
+            );
+        }
         // Read the project again as a sync's intake does: the fold takes the received changes
         // in and its files are written, so Home counts the conflicts they make.
         let progress =

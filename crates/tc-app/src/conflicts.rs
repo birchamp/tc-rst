@@ -1,6 +1,7 @@
-//! The conflict review (unit B11; STORAGE §8.5; tC4 `ConflictReview.jsx`, #679): a tab's
-//! entries with every tab's count, one record's History (#78), and the resolution that keeps
-//! one version.
+//! The conflict review (units B11 and C7a; STORAGE §8.5; tC4 `ConflictReview.jsx`, #679): a
+//! tab's entries with every tab's count, one record's History (#78), and the choices: one on
+//! a conflict ([`choose`], the only way a choice becomes a store command), *Restore this
+//! version* from History, and a bulk keep of one person's versions.
 //!
 //! A tab costs the conflict list it reviews, never the project: the counts come from the
 //! fold's counts by kind, the entries from one counted walk of the conflict list that decodes
@@ -10,13 +11,14 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde_json::json;
 use tc_api::conflicts::{
-    ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion, HistoryView,
-    List, MadeBy, NoticeEntry, NoticeView, Resolve, ReviewEntries, ReviewPlace, ReviewTab,
-    ReviewView, TabCount, Version, VersionCause, VersionValue,
+    BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion,
+    HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk,
+    ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version, VersionCause,
+    VersionValue,
 };
-use tc_api::ids::{ChangeRef, ConflictRef, StoryNo, WallMs};
+use tc_api::ids::{ChangeRef, ConflictRef, WallMs};
 use tc_api::shown::{Computer, PersonLabel, Who};
-use tc_api::write::Ack;
+use tc_api::write::{Ack, SaveRefusal};
 use tc_api::{ApiError, NotSaved};
 use tc_journal::command::Choice;
 use tc_journal::fold::{Anomaly, Conflict, ConflictId, ConflictKind as Kind, Notice};
@@ -24,7 +26,7 @@ use tc_journal::record::{BookPresence, ChapterFront, VerseValue};
 use tc_journal::{Cause, ChangeId, DeviceId, DeviceKind, Record, RecordKey, WallTime};
 
 use crate::app::App;
-use crate::backend::{StoreCommand, StoreNotice};
+use crate::backend::{CommandError, ReviewToken, StoreCommand, StoreNotice, StoreReply};
 use crate::counters::CountingSnapshot;
 use crate::dispatch::Handle;
 use crate::wire;
@@ -121,10 +123,6 @@ fn kind_view(kind: &Kind) -> ConflictKind {
     }
 }
 
-fn story(n: tc_journal::StoryNo) -> Option<StoryNo> {
-    StoryNo::new(n.get()).ok()
-}
-
 /// Where a record is, as the review names it.
 fn place_of(key: &RecordKey) -> ReviewPlace {
     match key {
@@ -149,16 +147,13 @@ fn place_of(key: &RecordKey) -> ReviewPlace {
             },
             Err(_) => ReviewPlace::Project,
         },
-        RecordKey::Frame(n, frame) => match story(*n) {
-            Some(story) => ReviewPlace::Story {
-                story,
-                frame: Some(frame.0),
-            },
-            None => ReviewPlace::Project,
+        RecordKey::Frame(story, frame) => ReviewPlace::Story {
+            story: *story,
+            frame: Some(frame.get()),
         },
-        RecordKey::StoryBase(n) | RecordKey::StoryRef(n) => match story(*n) {
-            Some(story) => ReviewPlace::Story { story, frame: None },
-            None => ReviewPlace::Project,
+        RecordKey::StoryBase(story) | RecordKey::StoryRef(story) => ReviewPlace::Story {
+            story: *story,
+            frame: None,
         },
         _ => ReviewPlace::Project,
     }
@@ -414,6 +409,7 @@ fn versions(
                 c.device,
                 Version {
                     change: ChangeRef::parse(&c.head.to_hex()).ok()?,
+                    place: place_of(&c.value.key()),
                     by: made_by(&c.device, labels),
                     at: WallMs(c.at.0),
                     clock_ahead: clock_ahead(c.at, now),
@@ -559,6 +555,7 @@ impl Handle<History> for App {
                 let body = read.body(&id)?;
                 let version = Version {
                     change: ChangeRef::parse(&id.to_hex()).ok()?,
+                    place: place_of(&key),
                     by: made_by(&body.device, &labels),
                     at: WallMs(body.at.0),
                     clock_ahead: clock_ahead(body.at, now),
@@ -586,61 +583,169 @@ impl Handle<History> for App {
     }
 }
 
-impl Handle<Resolve> for App {
-    /// *Keep this version*: one `Resolve` batch whose change names every version the review
-    /// showed (STORAGE §5.9). Versions that changed since answer `LookAgain`, and the reply
-    /// cache gives a second send of one request its first reply (A-27).
-    async fn handle(&self, req: Resolve) -> Result<Ack, ApiError> {
-        let session = self
-            .inner
+fn bad_token() -> ApiError {
+    ApiError::NotSaved(NotSaved::BadToken)
+}
+
+fn change_id(change: &ChangeRef) -> Result<ChangeId, ApiError> {
+    ChangeId::parse(change.as_str()).ok_or_else(bad_token)
+}
+
+/// The one way a choice of the review becomes a store command: every [`KeepChoice`] to its
+/// journal [`Choice`], over the review's tokens, one per record of the conflict. A choice
+/// with no token writes nothing, and the store refuses one that lacks a record's token
+/// (`check_review_tokens`), so no record is written over a version the screen did not show.
+/// A Restore is the old version's value kept over every head of its record (`Values`): a
+/// restore over the shown head only would let the fold settle the conflict on the other side.
+fn choose(
+    read: &CountingSnapshot,
+    conflict: &ConflictRef,
+    review: Vec<ReviewToken>,
+    choice: &KeepChoice,
+) -> Result<StoreCommand, ApiError> {
+    let conflict = ConflictId::parse(conflict.as_str()).ok_or_else(bad_token)?;
+    if review.is_empty() {
+        return Err(bad_token());
+    }
+    let heads = |picks: &[ChangeRef]| picks.iter().map(change_id).collect::<Result<Vec<_>, _>>();
+    let choice = match choice {
+        KeepChoice::Candidate { change } => Choice::Candidate {
+            head: change_id(change)?,
+        },
+        KeepChoice::Passage { picks } => Choice::KeepPassage {
+            heads: heads(picks)?,
+        },
+        KeepChoice::Separate { picks } => Choice::KeepSeparate {
+            heads: heads(picks)?,
+        },
+        KeepChoice::Joined { picks } => Choice::KeepJoined {
+            heads: heads(picks)?,
+        },
+        KeepChoice::Restore { from } => {
+            let body = read.body(&change_id(from)?).ok_or_else(|| {
+                ApiError::NotSaved(NotSaved::Refused(SaveRefusal::Choice {
+                    reason: "this version cannot be read on this computer yet".to_owned(),
+                }))
+            })?;
+            Choice::Values(vec![body.record])
+        }
+    };
+    Ok(StoreCommand::resolve(conflict, review, choice))
+}
+
+impl App {
+    /// A resolution's or a restore's reply as its `Ack`.
+    fn ack(&self, reply: &StoreReply) -> Result<Ack, ApiError> {
+        let (stored, disk_warning) = wire::error::stored(&reply.stored);
+        let tokens = reply
+            .tokens
+            .iter()
+            .map(|(key, token)| wire::token::token_update(key, token))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                self.internal(
+                    "a resolution's reply could not be written",
+                    crate::reports::facts(json!({"reason": e.to_string()})),
+                )
+            })?;
+        Ok(Ack {
+            view: wire::scope::view(reply.seq),
+            stored,
+            tokens,
+            new_conflicts: Vec::new(),
+            saved: Vec::new(),
+            rows: Vec::new(),
+            disk_warning,
+        })
+    }
+
+    /// Why the store wrote nothing, in the API's words; a refusal no screen has words for is
+    /// reported.
+    fn not_written(&self, error: CommandError) -> ApiError {
+        match wire::error::command_error(error) {
+            Ok(api) => api,
+            Err(unworded) => self.internal(
+                "the store refused a resolution no screen has words for yet",
+                crate::reports::facts(json!({"reason": unworded.0})),
+            ),
+        }
+    }
+
+    /// The handle of the open project a write names, or `StaleScope`.
+    fn writer(
+        &self,
+        at: &tc_api::ids::Scope,
+    ) -> Result<std::sync::Arc<crate::session::ProjectSession>, ApiError> {
+        self.inner
             .sessions
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+            .reader(at)
+            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))
+    }
+}
+
+impl Handle<Resolve> for App {
+    /// One choice (STORAGE §5.9): one `Resolve` batch whose changes name every version the
+    /// review showed. Versions that changed since answer `LookAgain`, and the reply cache
+    /// gives a second send of one request its first reply (A-27).
+    async fn handle(&self, req: Resolve) -> Result<Ack, ApiError> {
+        let session = self.writer(&req.at)?;
         let handle = session.handle().clone();
-        let bad = || ApiError::NotSaved(NotSaved::BadToken);
-        let conflict = ConflictId::parse(req.conflict.as_str()).ok_or_else(bad)?;
-        let keep = ChangeId::parse(req.keep.as_str()).ok_or_else(bad)?;
-        let shown = req
+        let review = req
             .review
             .iter()
             .map(|token| wire::token::review_token(handle.as_ref(), token))
             .collect::<Result<Vec<_>, _>>()?;
-        if shown.is_empty() {
-            return Err(bad());
-        }
-        let command = StoreCommand::resolve(conflict, shown, Choice::Candidate { head: keep })
-            .requested_by(req.request);
+        let command =
+            choose(&session.read(), &req.conflict, review, &req.choice)?.requested_by(req.request);
         match handle.submit(command).await {
-            Ok(reply) => {
-                let (stored, disk_warning) = wire::error::stored(&reply.stored);
-                let tokens = reply
-                    .tokens
+            Ok(reply) => self.ack(&reply),
+            Err(error) => Err(self.not_written(error)),
+        }
+    }
+}
+
+impl Handle<ResolveBulk> for App {
+    /// *Keep all of Maria's* (STORAGE §5.9 step 3): the person's computers are the devices
+    /// the fold labels as that person; the store keeps their version where a conflict holds
+    /// exactly one from them, and leaves the rest, which the reply names.
+    async fn handle(&self, req: ResolveBulk) -> Result<BulkKept, ApiError> {
+        let session = self.writer(&req.at)?;
+        let handle = session.handle().clone();
+        let me = handle.facts().device;
+        let devices: BTreeSet<DeviceId> = session
+            .read()
+            .person_labels(me)
+            .iter()
+            .filter(|(_, label)| wire::scope::person_label(label).who == req.person)
+            .map(|(device, _)| *device)
+            .collect();
+        let conflicts = req
+            .conflicts
+            .iter()
+            .map(|entry| {
+                let id = ConflictId::parse(entry.conflict.as_str()).ok_or_else(bad_token)?;
+                let review = entry
+                    .review
                     .iter()
-                    .map(|(key, token)| wire::token::token_update(key, token))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| {
-                        self.internal(
-                            "a resolution's reply could not be written",
-                            crate::reports::facts(json!({"reason": e.to_string()})),
-                        )
-                    })?;
-                Ok(Ack {
-                    view: wire::scope::view(reply.seq),
-                    stored,
-                    tokens,
-                    new_conflicts: Vec::new(),
-                    saved: Vec::new(),
-                    rows: Vec::new(),
-                    disk_warning,
-                })
-            }
-            Err(error) => Err(match wire::error::command_error(error) {
-                Ok(api) => api,
-                Err(unworded) => self.internal(
-                    "the store refused a resolution no screen has words for yet",
-                    crate::reports::facts(json!({"reason": unworded.0})),
-                ),
+                    .map(|token| wire::token::review_token(handle.as_ref(), token))
+                    .collect::<Result<Vec<_>, _>>()?;
+                if review.is_empty() {
+                    return Err(bad_token());
+                }
+                Ok((id, review))
+            })
+            .collect::<Result<Vec<_>, ApiError>>()?;
+        let command = StoreCommand::resolve_bulk(devices, conflicts).requested_by(req.request);
+        match handle.submit(command).await {
+            Ok(reply) => Ok(BulkKept {
+                ack: self.ack(&reply)?,
+                left: reply
+                    .skipped
+                    .iter()
+                    .filter_map(|id| ConflictRef::parse(&id.to_hex()).ok())
+                    .collect(),
             }),
+            Err(error) => Err(self.not_written(error)),
         }
     }
 }

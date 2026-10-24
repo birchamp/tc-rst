@@ -50,11 +50,14 @@ pub enum Computer {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+// A bulk keep names its person by this, so it refuses what it does not know, as every
+// request does.
 #[serde(
     tag = "type",
     content = "value",
     rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum Who {
     /// The person at this computer.

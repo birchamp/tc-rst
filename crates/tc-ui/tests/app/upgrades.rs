@@ -111,12 +111,14 @@ fn a_text_that_door43_could_not_answer_for_is_said_beside_the_set_offers() {
             moves: vec![change("es-419_tn")],
         }],
         texts: Vec::new(),
-        texts_error: Some("Door43 did not answer".into()),
+        texts_error: Some(tc_api::refusal::UpdateCheckFailure::Unreachable),
     };
     up.offers_read(&project("alef"), &project("alef"), view);
     assert_eq!(
         up.error.as_deref(),
-        Some("Could not check for updates: Door43 did not answer")
+        Some(
+            "Could not check for updates: Door43 cannot be reached. Check the connection and try again."
+        )
     );
     assert_eq!(
         up.offers.as_ref().unwrap().view.sets.len(),

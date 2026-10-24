@@ -442,3 +442,181 @@ async fn mark_valid_survives_quit_and_reopen_on_the_store() {
     rig.t.app.quit().await;
     rig.assert_burrito();
 }
+
+/// INV-TEXT-DIRECTION-HAS-ONE-SOURCE (tC4 #832.1): a direction changed in Project settings is
+/// the direction Home's card, the open project, Align and Settings show, in this app and in a
+/// new app on the same folders: Settings writes the metadata field every reader reads first.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart() {
+    use tc_api::align::{Open, Opened};
+    use tc_api::home::{Card, HomeCard};
+    use tc_api::settings::{Save, SettingsView, ShownValues, ViewFromHome};
+    use tc_api::shown::Direction;
+    let mut rig = Rig::new().await;
+    let project = folder(SAMPLE);
+    let settings = |t: &TestApp| {
+        let (app, project) = (t.app.clone(), project.clone());
+        async move {
+            post::<ViewFromHome>(&app, &ViewFromHome { project })
+                .await
+                .unwrap()
+        }
+    };
+    let view: SettingsView = settings(&rig.t).await;
+    assert_eq!(view.direction, Direction::Ltr);
+    post(
+        &rig.t.app,
+        &Save {
+            request: request(230),
+            project: project.clone(),
+            shown: ShownValues {
+                direction: view.direction,
+                font: view.font.clone(),
+            },
+            direction: Direction::Rtl,
+            font: view.font.clone().unwrap_or_else(|| "Noto Sans".to_owned()),
+        },
+    )
+    .await
+    .unwrap();
+    for restarted in [false, true] {
+        if restarted {
+            rig.restart(false).await;
+        }
+        let where_ = if restarted {
+            "after a restart"
+        } else {
+            "in this app"
+        };
+        let card: HomeCard = post(
+            &rig.t.app,
+            &Card {
+                project: project.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(card.dir, Direction::Rtl, "Home's card {where_}");
+        let opened = super::super::understand::opened(&rig.t.app).await;
+        assert_eq!(opened.dir, Direction::Rtl, "the open project {where_}");
+        let align = post(
+            &rig.t.app,
+            &Open {
+                at: opened.session.at.clone(),
+                request: request(231),
+                book: BookId::Titus,
+                verse: None,
+            },
+        )
+        .await
+        .unwrap();
+        let Opened::Ready(align) = align else {
+            panic!("{align:?}")
+        };
+        assert_eq!(align.target_dir, Direction::Rtl, "Align {where_}");
+        post(
+            &rig.t.app,
+            &tc_api::session::Close {
+                at: opened.session.at,
+                request: request(232),
+            },
+        )
+        .await
+        .unwrap();
+        rig.t.app.sessions().settled(&project).await;
+        assert_eq!(
+            settings(&rig.t).await.direction,
+            Direction::Rtl,
+            "Settings {where_}"
+        );
+    }
+}
+
+/// tC4 #832.2: a project imported from tC4 names no language in settings.json; Settings then
+/// shows the name the metadata gives the language, not an empty field.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_imported_project_shows_its_metadata_language_name_in_settings() {
+    use tc_api::settings::{SettingsView, ViewFromHome};
+    let rig = Rig::new().await;
+    let view: SettingsView = post(
+        &rig.t.app,
+        &ViewFromHome {
+            project: folder(SAMPLE),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(view.language_name, "Español (Latinoamérica)");
+}
+
+/// tC4 #795: a verse typed in decomposed (NFD) form, aligned and marked valid in the same
+/// session, is still valid after a restart. The aligner and the stored alignment hash the same
+/// text: the stored verse, in NFC.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen() {
+    use tc_api::editor::SaveVerse;
+    let mut rig = Rig::new().await;
+    let session = rig.open().await;
+    let at = session.scope().clone();
+    let key = RecordKey::Verse(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    );
+    let token = session.read().mint(&key, None).unwrap();
+    // "apóstol" with its accent as a combining mark, as some keyboards type it.
+    let nfd = "Pablo, siervo de Dios y apo\u{301}stol de Jesucristo";
+    post(
+        &rig.t.app,
+        &SaveVerse {
+            at: at.clone(),
+            request: request(240),
+            shown: tc_app::wire::token::shown(&token).unwrap(),
+            words: nfd.to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    let view = ready(&rig.t.app, &at, 1, 1).await;
+    let marked = edit(&rig.t.app, &at, &view, 241, AlignEdit::MarkValid)
+        .await
+        .unwrap();
+    assert_eq!(marked.status.state, RailState::Valid);
+    drop(session);
+    rig.t.app.quit().await;
+    rig.assert_burrito();
+
+    rig.restart(false).await;
+    let session = rig.open().await;
+    let reopened = ready(&rig.t.app, session.scope(), 1, 1).await;
+    assert_eq!(
+        reopened.status.state,
+        RailState::Valid,
+        "the alignment made for the NFD-typed verse stays valid"
+    );
+    // The fold's own check (§7.7): the hash the alignment recorded is the stored verse's, so
+    // the alignment files and the export keep it too.
+    let read = session.read();
+    let Some(Record::Verse {
+        value: tc_journal::record::VerseValue::Text { words, layout, .. },
+        ..
+    }) = read.projected(&key)
+    else {
+        panic!("Titus 1:1 holds text")
+    };
+    let Some(Record::Alignment { value, .. }) = read.projected(&RecordKey::Alignment(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    )) else {
+        panic!("Titus 1:1 is aligned")
+    };
+    assert_eq!(
+        value.target_verse_md5,
+        tc_journal::decision::verse_text_md5_v1(&format!("{words}{layout}")),
+        "one hash for the aligner and the alignment files"
+    );
+    drop(read);
+    drop(session);
+    rig.t.app.quit().await;
+}

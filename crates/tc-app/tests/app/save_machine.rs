@@ -203,10 +203,8 @@ fn snapshot_text(snapshot: &tc_app::backend::Snapshot, key: &RecordKey) -> Strin
         .unwrap();
     let rendered = tc_obs::story::parse_story(std::str::from_utf8(&bytes).unwrap()).unwrap();
     match key {
-        RecordKey::Frame(_, FrameNo(0)) => rendered.title,
-        RecordKey::Frame(_, FrameNo(frame)) => {
-            rendered.frames[usize::from(*frame) - 1].text.clone()
-        }
+        RecordKey::Frame(_, FrameNo::TITLE) => rendered.title,
+        RecordKey::Frame(_, frame) => rendered.frames[usize::from(frame.get()) - 1].text.clone(),
         RecordKey::StoryRef(_) => rendered.reference.unwrap_or_default(),
         _ => unreachable!(),
     }
@@ -270,8 +268,8 @@ impl World {
         let story = tc_journal::StoryNo::new(1).unwrap();
         let record = match kind {
             ProductionKind::Verse => tit(1, 12),
-            ProductionKind::Frame => RecordKey::Frame(story, FrameNo(1)),
-            ProductionKind::Title => RecordKey::Frame(story, FrameNo(0)),
+            ProductionKind::Frame => RecordKey::Frame(story, FrameNo::new(1)),
+            ProductionKind::Title => RecordKey::Frame(story, FrameNo::TITLE),
             ProductionKind::Reference => RecordKey::StoryRef(story),
             ProductionKind::Comment => {
                 let ack = post(
@@ -1213,19 +1211,36 @@ async fn play_world(mut w: World, steps: Vec<Step>) {
         )
     {
         // A refused old edit can finish after the person corrected it. FR-32 still
-        // waits for explicit Retry; this sends the correction with a fresh identity.
+        // waits for explicit Retry; this sends the correction with a fresh identity, or,
+        // when the store already holds it (an earlier save stored it and its reply was
+        // lost), sends nothing and lets the field go as saved.
         let key = w.key();
         assert_eq!(
             buffer::read(&w.page.store, &key).unwrap().text,
             w.last_typed
         );
+        let stored = buffer::same_text(&w.log().await.current.value, &w.last_typed);
         let old_requests = &w.production.as_ref().unwrap().requests;
         let commands = w.page.m.retry(w.now);
-        assert!(commands.iter().any(|command| matches!(command,
-            Command::Send { sent, .. }
-                if buffer::same_text(&sent.text, &w.last_typed)
-                    && !old_requests.contains_key(&sent.request)
-        )));
+        let resent = commands.iter().any(|command| {
+            matches!(command,
+                Command::Send { sent, .. }
+                    if buffer::same_text(&sent.text, &w.last_typed)
+                        && !old_requests.contains_key(&sent.request)
+            )
+        });
+        if stored {
+            assert!(
+                !commands.iter().any(|c| matches!(c, Command::Send { .. })),
+                "the stored correction is not sent again: {commands:?}"
+            );
+            assert_eq!(w.page.m.state(&key), Some(&FieldSave::Clean));
+        } else {
+            assert!(
+                resent,
+                "the correction is sent with a fresh request: {commands:?}"
+            );
+        }
         w.run(commands).await;
         w.settle().await;
     }

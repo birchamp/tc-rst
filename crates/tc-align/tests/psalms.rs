@@ -13,10 +13,10 @@ mod common;
 use tc_align::Alignment;
 use tc_align::bootstrap;
 
-use common::{basis, read};
+use common::{basis, in_tc4_source_order, read};
 use std::time::{Duration, Instant};
-use tc_align::usfm::from_aligned;
 use tc_align::{Aligner, AlignmentValue, SourceVerse, TargetVerse, TargetWord, reflow};
+use tc_journal::alignment::tc4_cards;
 use tc_usfm::Book;
 
 const ULT_PSA: &str = "fixtures/scale/psa/en_ult/19-PSA.usfm";
@@ -52,10 +52,16 @@ fn psalms(file: &str) -> Vec<Verse> {
 fn stored(verse: &Verse) -> (AlignmentValue, TargetVerse) {
     let aligned = tc_usfm::parse_aligned(&verse.body).unwrap();
     let target = TargetVerse::new(&aligned.plain);
-    let extracted = from_aligned(&aligned, Some(&verse.source));
     let mut value = bootstrap(&verse.source, &target, basis(1));
-    value.alignments = extracted.alignments;
-    value.word_bank = extracted.word_bank;
+    let cards = tc4_cards(&aligned.groups);
+    let placed: Vec<&TargetWord> = cards.iter().flat_map(|c| &c.bottom_words).collect();
+    value.word_bank = target
+        .words()
+        .iter()
+        .filter(|w| !placed.contains(w))
+        .cloned()
+        .collect();
+    value.alignments = in_tc4_source_order(&verse.source, cards);
     value.word_bank.reverse();
     for group in &mut value.alignments {
         group.bottom_words.reverse();

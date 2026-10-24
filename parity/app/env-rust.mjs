@@ -294,6 +294,9 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
       await scriptSync(repo, synced({ teammates: { book: 'TIT', chapter: 1, verse: 1, texts: TEAMMATE_TEXTS } }));
       return TEAMMATE_TEXTS.map((_, i) => `teammate-${i + 1}`);
     },
+    /** Teammate 1 joins Titus 1:4-5 into one verse on Door43's copy, in one batch (C7a): the
+     * next sync receives the join, a passage conflict when this computer changed 1:5. */
+    teammatesJoinVerses: (repo) => scriptSync(repo, synced({ joined: { book: 'TIT', chapter: 1, first: 4, last: 5 } })),
     loseFromDoor43: (repo, segment) => {
       if (!/^teammate-\d+$/.test(segment)) throw new Error(`${segment} is not a teammate's change of teammatesChangeOneVerse`);
       return scriptSync(repo, synced({ restored: 1 }));

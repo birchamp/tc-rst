@@ -3,20 +3,7 @@
 
 use std::cmp::Ordering;
 
-/// JavaScript's `\s` and `String.prototype.trim` whitespace.
-pub(crate) fn is_whitespace(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r' | ' ' | '\u{A0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200A}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202F}'
-                | '\u{205F}'
-                | '\u{3000}'
-                | '\u{FEFF}'
-    )
-}
+pub(crate) use tc_core::js::is_space as is_whitespace;
 
 /// `Number(text)`.
 pub(crate) fn to_number(text: &str) -> f64 {
