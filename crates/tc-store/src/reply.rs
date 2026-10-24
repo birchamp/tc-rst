@@ -5,7 +5,7 @@
 use crate::platform::UnsafeFolder;
 use tc_journal::fold::ConflictId;
 use tc_journal::token::TokenError;
-use tc_journal::{ChangeId, DeviceId, RecordKey, ShownToken};
+use tc_journal::{BookId, ChangeId, ChapterNo, DeviceId, RecordKey, ShownToken, VerseNo};
 
 /// How far a save got.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +37,19 @@ pub struct StoreReply {
     pub skipped: Vec<ConflictId>,
     /// Records an undo could not take back (a new comment, a decision, a book the edit added).
     pub kept: Vec<RecordKey>,
+    /// The links a verse or section save could not follow into the new text: they went
+    /// back to the bank (Q30 (a)), and Align says which.
+    pub dropped_links: Vec<DroppedLinks>,
+}
+
+/// The links of one verse's alignment that a save sent back to the bank.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DroppedLinks {
+    /// The verse the person saved.
+    pub book: BookId,
+    pub chapter: ChapterNo,
+    pub verse: VerseNo,
+    pub links: Vec<tc_align::DroppedLink>,
 }
 
 /// Why a project is read-only (§5.0, §6.1).

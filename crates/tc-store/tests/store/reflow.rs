@@ -284,3 +284,90 @@ fn crash_a_verse_save_and_its_reflow_are_one_batch() {
         },
     );
 }
+
+/// TIT 1:1 as "Dios Dios", each copy on its own card, before tC4 #820's edit.
+fn dios_dios(handle: &ProjectHandle) {
+    aligned(
+        handle,
+        "Dios Dios",
+        &[
+            ("θεοῦ", vec![target("Dios", 1, 2)]),
+            ("θεὸς", vec![target("Dios", 2, 2)]),
+        ],
+    );
+}
+
+/// The verse and the (card, occurrence) of each link a save's reply lists.
+fn listed(reply: &tc_store::StoreReply) -> Vec<(u16, u16, Vec<(usize, u32)>)> {
+    reply
+        .dropped_links
+        .iter()
+        .map(|d| {
+            assert_eq!(d.book, TIT);
+            (
+                d.chapter.get(),
+                d.verse.get(),
+                d.links
+                    .iter()
+                    .map(|l| (l.card, l.word.occurrence))
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+/// Q30 (a): a link a verse save cannot follow goes back to the bank, and the save's reply
+/// lists it, so Align can say which links went.
+#[test]
+fn a_translate_save_that_drops_an_unclear_link_lists_it() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    dios_dios(&handle);
+    let reply = save_verse(&handle, 1, 1, "Dios Pablo").unwrap();
+    assert_eq!(listed(&reply), [(1, 1, vec![(0, 1), (1, 2)])]);
+    assert!(placed(&alignment(&handle)).is_empty());
+    handle.close().unwrap();
+}
+
+/// The same through a section save (§5.2).
+#[test]
+fn a_section_save_that_drops_an_unclear_link_lists_it() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    dios_dios(&handle);
+    let Some(Record::Verse {
+        value:
+            tc_journal::record::VerseValue::Text {
+                marker,
+                layout,
+                last,
+                from,
+                ..
+            },
+        ..
+    }) = handle.snapshot().fold().projected(&verse(1, 1))
+    else {
+        panic!("1:1 is text");
+    };
+    let reply = handle
+        .submit(Command::SaveSection {
+            book: TIT,
+            shown: vec![(
+                handle.mint(&verse(1, 1), None).unwrap(),
+                Some(tc_journal::command::SectionValue::Verse(
+                    tc_journal::record::VerseValue::Text {
+                        marker,
+                        words: "Dios Pablo".into(),
+                        layout,
+                        last,
+                        from,
+                    },
+                )),
+            )],
+            layout: None,
+        })
+        .wait()
+        .unwrap();
+    assert_eq!(listed(&reply), [(1, 1, vec![(0, 1), (1, 2)])]);
+    handle.close().unwrap();
+}

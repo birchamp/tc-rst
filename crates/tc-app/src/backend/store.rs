@@ -2014,6 +2014,7 @@ mod tests {
             changes: vec![change],
             skipped: Vec::new(),
             kept: Vec::new(),
+            dropped_links: Vec::new(),
         }
     }
 

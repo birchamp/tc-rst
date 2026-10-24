@@ -371,6 +371,7 @@ impl Project {
                 changes: Vec::new(),
                 skipped: plan.skipped,
                 kept: plan.kept,
+                dropped_links: plan.dropped_links,
             });
         }
         let changes = self.build(&plan.changes)?;
@@ -409,6 +410,7 @@ impl Project {
             changes: ids,
             skipped: plan.skipped,
             kept: plan.kept,
+            dropped_links: plan.dropped_links,
         })
     }
 
@@ -559,6 +561,7 @@ impl Project {
             changes: planned,
             skipped: Vec::new(),
             kept: Vec::new(),
+            dropped_links: Vec::new(),
         };
         let reconciles = tc_journal::pending::Reconciles {
             path,

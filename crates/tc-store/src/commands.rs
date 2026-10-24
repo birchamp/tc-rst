@@ -6,7 +6,7 @@
 //! from the record's current heads (I4): a teammate's version that arrived after the screen
 //! was drawn stays a head beside the new change, and the record is a visible conflict.
 
-use crate::reply::{CommandError, Refusal};
+use crate::reply::{CommandError, DroppedLinks, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
 use tc_align::TargetVerse;
 use tc_journal::command::{
@@ -33,6 +33,8 @@ pub(crate) struct Plan {
     pub skipped: Vec<ConflictId>,
     /// Records an undo left as they are.
     pub kept: Vec<RecordKey>,
+    /// The links a verse or section save sent back to the bank.
+    pub dropped_links: Vec<DroppedLinks>,
 }
 
 /// What the planner reads.
@@ -137,13 +139,14 @@ impl Ctx<'_> {
 
 /// B1 for one command.
 pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
+    let mut dropped = Vec::new();
     let changes = match command {
-        Command::SaveVerse { shown, words } => save_verse(ctx, shown, |v| {
+        Command::SaveVerse { shown, words } => save_verse(ctx, shown, &mut dropped, |v| {
             if let VerseValue::Text { words: w, .. } = v {
                 *w = nfc(words);
             }
         })?,
-        Command::SaveLayout { shown, layout } => save_verse(ctx, shown, |v| {
+        Command::SaveLayout { shown, layout } => save_verse(ctx, shown, &mut dropped, |v| {
             if let VerseValue::Text { layout: l, .. } = v {
                 *l = nfc(layout);
             }
@@ -152,7 +155,7 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             book,
             shown,
             layout,
-        } => save_section(ctx, *book, shown, layout.as_ref(), false)?,
+        } => save_section(ctx, *book, shown, layout.as_ref(), false, &mut dropped)?,
         Command::SaveAlignment {
             shown,
             verse_shown,
@@ -238,13 +241,14 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
         } => set_book_scope(ctx, presence_shown, scope)?,
         Command::ReleaseBatch { batch } => release_batch(ctx, *batch)?,
         Command::Dismiss { shown } => dismiss(ctx, shown)?,
-        Command::KeepDraft { draft, section } => keep_draft(ctx, draft, section)?,
+        Command::KeepDraft { draft, section } => keep_draft(ctx, draft, section, &mut dropped)?,
         Command::Draft { .. } => Vec::new(),
     };
     Ok(Plan {
         changes,
         skipped: Vec::new(),
         kept: Vec::new(),
+        dropped_links: dropped,
     })
 }
 
@@ -269,6 +273,7 @@ fn unchanged_or(
 fn save_verse(
     ctx: &Ctx<'_>,
     shown: &ShownToken,
+    dropped: &mut Vec<DroppedLinks>,
     edit: impl FnOnce(&mut VerseValue),
 ) -> R<Vec<PlannedChange>> {
     let shown = ctx.edit(shown)?;
@@ -296,7 +301,7 @@ fn save_verse(
         shown.heads(),
         Cause::Edit,
     )];
-    out.extend(reflow(ctx, book, chapter, verse, &old, &new));
+    out.extend(reflow(ctx, book, chapter, verse, &old, &new, dropped));
     Ok(out)
 }
 
@@ -325,6 +330,7 @@ fn reflow(
     verse: VerseNo,
     old: &VerseValue,
     new: &VerseValue,
+    dropped: &mut Vec<DroppedLinks>,
 ) -> Option<PlannedChange> {
     let VerseValue::Text {
         words,
@@ -366,6 +372,14 @@ fn reflow(
     let before = TargetVerse::new(&format!("{old_words}{old_layout}"));
     let target = TargetVerse::new(&format!("{words}{layout}"));
     let reflowed = tc_align::reflow_edit(&value, &before, &target).ok()?;
+    if !reflowed.dropped.is_empty() {
+        dropped.push(DroppedLinks {
+            book,
+            chapter,
+            verse,
+            links: reflowed.dropped,
+        });
+    }
     Some(change(
         Record::Alignment {
             book,
@@ -409,6 +423,7 @@ fn save_section(
     shown: &[(ShownToken, Option<SectionValue>)],
     layout: Option<&ShownToken>,
     unverified: bool,
+    dropped: &mut Vec<DroppedLinks>,
 ) -> R<Vec<PlannedChange>> {
     ctx.require_kind(ProjectKind::Bible)?;
     let mut verses: BTreeMap<(u16, u16), Displayed<VerseValue>> = BTreeMap::new();
@@ -543,7 +558,7 @@ fn save_section(
         if let Some(old) = old
             && !unverified
         {
-            out.extend(reflow(ctx, book, chapter, verse, old, new));
+            out.extend(reflow(ctx, book, chapter, verse, old, new, dropped));
         }
     }
     if !added.is_empty()
@@ -1364,6 +1379,7 @@ fn resolve_bulk(
         changes,
         skipped,
         kept: Vec::new(),
+        dropped_links: Vec::new(),
     })
 }
 
@@ -1413,6 +1429,7 @@ fn undo_outside_edit(ctx: &Ctx<'_>, batch: tc_journal::BatchId) -> R<Plan> {
         changes,
         skipped: Vec::new(),
         kept,
+        dropped_links: Vec::new(),
     })
 }
 
@@ -1452,6 +1469,7 @@ fn resolve_outside_edit(
         changes,
         skipped,
         kept: Vec::new(),
+        dropped_links: Vec::new(),
     })
 }
 
@@ -1582,12 +1600,13 @@ fn keep_draft(
     ctx: &Ctx<'_>,
     draft: &Draft,
     section: &[(ShownToken, Option<SectionValue>)],
+    dropped: &mut Vec<DroppedLinks>,
 ) -> R<Vec<PlannedChange>> {
     let verifies = |t: &ShownToken| ShownToken::parse(ctx.signing, &t.to_text()).is_ok();
     let verified = draft.shown.iter().all(verifies);
     if let DraftField::Section { book } = &draft.field {
         let verified = verified && section.iter().all(|(t, _)| verifies(t));
-        return save_section(ctx, *book, section, None, !verified);
+        return save_section(ctx, *book, section, None, !verified, dropped);
     }
     if verified {
         let token = draft.shown.first();
@@ -1620,7 +1639,9 @@ fn keep_draft(
             }
             _ => return Err(refused(Refusal::WrongRecord("a draft with its token"))),
         };
-        return Ok(plan(ctx, &command)?.changes);
+        let plan = plan(ctx, &command)?;
+        dropped.extend(plan.dropped_links);
+        return Ok(plan.changes);
     }
     // R20: unverifiable. What the token says is read, never trusted as a base.
     let token = draft
