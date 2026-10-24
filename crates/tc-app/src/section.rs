@@ -247,10 +247,13 @@ pub fn section_values(
         let body = texts.get(&group.key).map_or("", String::as_str);
         let at_head = olds.iter().find(|o| o.head == head);
         let holding = olds.iter().find(|o| (o.head..=o.last).contains(&head));
+        // The card shows poem lines as tabs and breaks as empty lines (tC4 #810, REF1b): a
+        // verse's text goes back to its words by the words it was shown from.
         let words = match at_head {
-            Some(o) if shown_body(&o.words) == body => o.words.clone(),
+            Some(o) if tc_usfm::poem::editor_text(shown_body(&o.words)) == body => o.words.clone(),
             _ if body.is_empty() => "___".to_owned(),
-            _ => body.to_owned(),
+            Some(o) => tc_usfm::poem::words_from_editor_text(body, shown_body(&o.words)),
+            None => tc_usfm::poem::words_from_editor_text(body, ""),
         };
         let layout = layout_after.get(&last).copied().unwrap_or("\n");
         let layout = match formats.get(&group.key) {

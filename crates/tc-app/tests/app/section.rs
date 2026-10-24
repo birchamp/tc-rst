@@ -255,8 +255,9 @@ fn reopened(after: &[(u16, VerseValue)]) -> (Vec<String>, String) {
                 verse.to_string()
             },
             drafted,
+            // As the app shows the words: poem lines as tabs (tC4 #810, REF1b).
             body: if drafted {
-                body.to_owned()
+                tc_usfm::poem::editor_text(body)
             } else {
                 String::new()
             },
@@ -790,7 +791,7 @@ async fn a_poem_comes_back_byte_for_byte(chapter: &str) {
         view.chapters[2]
             .verses
             .iter()
-            .any(|v| v.words.value.contains("\n\\q")),
+            .any(|v| v.words.value.contains("\n\t")),
         "a verse of the poem holds several lines"
     );
     let mut request = 0;
@@ -848,6 +849,70 @@ async fn a_poem_comes_back_byte_for_byte(chapter: &str) {
         }
     }
     rig.finish().await;
+}
+
+/// REF1b, INV-EVERY-POEM-LINE-STAYS: the cards show poem lines as tabs (tC4 #810), and what a
+/// person saves from them is written to the book as `\q` markers, every other line kept.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn tabs_saved_from_a_card_are_written_as_q_markers() {
+    let rig = Rig::over(&with_titus_3(GENESIS_3_14)).await;
+    let view = rig.chapters().await;
+    let fifteen = row(&view, 3, "15");
+    assert_eq!(
+        fifteen.words.value,
+        "I will put hostility between you and the woman,\n\t\tand between your offspring and her offspring.\n\tHe will bruise your head,\n\t\tand you will bruise his heel.\""
+    );
+    // The verse card: one line changed, one line added at the third level.
+    let typed =
+        fifteen.words.value.replace("his heel.\"", "his heel,") + "\n\t\t\tand it will be so.\"";
+    let ack = post(
+        &rig.t.app,
+        &SaveVerse {
+            at: rig.at.clone(),
+            request: rid(70),
+            shown: fifteen.words.token.clone(),
+            words: typed.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert_eq!(
+        ack.saved[0].text, typed,
+        "the card's text comes back as it was typed"
+    );
+    // The section card: verse 16's second line moves to the first level.
+    let after = rig.chapters().await;
+    let sixteen = row(&after, 3, "16").words.value.clone();
+    assert!(sixteen.contains("\n\t\tin pain"), "{sixteen:?}");
+    let verses: Vec<SectionVerse> = ["16"]
+        .iter()
+        .map(|key| SectionVerse {
+            key: (*key).to_owned(),
+            drafted: true,
+            body: sixteen.replace("\n\t\tin pain", "\n\tin pain"),
+            format: row(&after, 3, key).format,
+        })
+        .collect();
+    let text = initial_text(&verses, &expand_keys(&["16".to_owned()]));
+    let ack = rig.save(71, &after, 3, &["16"], &text).await.unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    rig.finish().await;
+    let book = rig
+        .fs
+        .files_under(&Path::new(PROJECTS).join(SAMPLE))
+        .into_iter()
+        .find(|(path, _)| path.ends_with("ingredients/TIT.usfm"))
+        .map(|(_, bytes)| String::from_utf8(bytes).unwrap())
+        .expect("the book is written");
+    assert!(!book.contains('\t'), "no tab reaches the book");
+    assert!(book.contains(
+        "\\v 15 I will put hostility between you and the woman,\n\\q2 and between your offspring and her offspring.\n\\q1 He will bruise your head,\n\\q2 and you will bruise his heel,\n\\q3 and it will be so.\"\n"
+    ), "{book}");
+    assert!(
+        book.contains("\\q1 in pain you will give birth to children."),
+        "{book}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

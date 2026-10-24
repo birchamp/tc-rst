@@ -79,8 +79,9 @@ async fn every_chapter_comes_in_one_read_with_each_verses_words_and_token() {
     assert_eq!(view.conflicts, 0);
 }
 
-/// tC4 #786 (Q-20): the box edits the verse's whole words, every poem line with its markers,
-/// and a verse that opens on its own poem line has its text. The grid reads each line's level.
+/// tC4 #786 (Q-20), #810: the box edits the verse's whole words, every poem line after its
+/// first with one tab per level (tC4 rc.2), and a verse that opens on its own poem line has its
+/// text. The grid reads each line's level.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn verse_editor_shows_every_poem_line() {
     let (_dir, t) = start_with_titus(|usfm| {
@@ -93,7 +94,7 @@ async fn verse_editor_shows_every_poem_line() {
     .await;
     let view = chapters(&t, BookId::Titus).await;
     let one = row(&view, 3, "1");
-    assert_eq!(one.words.value, "Recuérdales\n\\q2 que se sujeten");
+    assert_eq!(one.words.value, "Recuérdales\n\t\tque se sujeten");
     assert_eq!(one.text, "Recuérdales que se sujeten");
     let two = row(&view, 3, "2");
     assert!(

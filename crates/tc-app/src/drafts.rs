@@ -81,7 +81,8 @@ fn field_text(kind: DraftKind, record: Option<Record>) -> Option<String> {
                 value: VerseValue::Text { words, .. },
                 ..
             },
-        ) => Some(words),
+            // A draft holds the editor text the card showed (tC4 #810, REF1b).
+        ) => Some(tc_usfm::poem::editor_text(&words)),
         (
             DraftKind::Layout,
             Record::Verse {

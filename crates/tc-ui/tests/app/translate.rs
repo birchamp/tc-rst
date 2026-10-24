@@ -135,11 +135,12 @@ fn target_paragraphs_open_at_a_marker_with_its_poetry_indent() {
     );
 }
 
-/// #786: the box holds every line of a poem verse, markers included; only the stub of an
-/// undrafted verse shows as an empty box.
+/// #786, #810: the box holds every line of a poem verse as the server sends it (poem lines as
+/// tabs since tC4 rc.2, a first line's own marker as written); only the stub of an undrafted
+/// verse shows as an empty box.
 #[test]
 fn verse_editor_shows_every_poem_line() {
-    let poem = "Recuérdales\n\\q2 que se sujeten";
+    let poem = "Recuérdales\n\t\tque se sujeten";
     assert_eq!(box_text(poem), poem);
     assert_eq!(box_text("\\q2 que no hablen mal"), "\\q2 que no hablen mal");
     assert_eq!(box_text("___"), "");

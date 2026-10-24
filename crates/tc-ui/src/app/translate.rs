@@ -250,8 +250,9 @@ pub fn shown_words(text: &str) -> Vec<&str> {
         .collect()
 }
 
-/// What the verse box shows of a verse's words: all of them, every poem line with its markers
-/// (#786, Q-20); the stub `___` of an undrafted verse shows as an empty box.
+/// What the verse box shows of a verse's words: all of them, as the server sends them (poem
+/// lines as tabs since tC4 rc.2, #786, #810, Q-20); the stub `___` of an undrafted verse shows as
+/// an empty box.
 pub fn box_text(words: &str) -> &str {
     if js_trim(words) == "___" { "" } else { words }
 }
