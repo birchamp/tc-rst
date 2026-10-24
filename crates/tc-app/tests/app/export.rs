@@ -9,7 +9,7 @@ use tc_api::export::{self, PrintFrame, PrintItem, PrintStoryItem};
 use tc_api::ids::Scope;
 use tc_core::BookId;
 
-use super::common::repo_root;
+use super::common::{post, repo_root};
 use super::understand::{ok, opened, start};
 
 fn vectors() -> &'static Value {
@@ -377,4 +377,48 @@ async fn the_preview_prints_the_words_inside_nested_alignments() {
         words,
         "In the beginning God created the heavens and the earth."
     );
+}
+
+/// The export menu asks first while conflicts are open (STORAGE §8.5): two teammates' versions
+/// of Titus 1:1 are one conflict of one verse in Titus, and none in another book or in the
+/// stories.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn preflight_counts_open_conflicts() {
+    let (w, at) = super::conflicts::two_versions().await;
+    let preflight = |subject| export::Preflight {
+        at: at.clone(),
+        subject,
+    };
+    let titus = post(
+        &w.t.app,
+        &preflight(export::Subject::Book {
+            book: BookId::Titus,
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        titus,
+        export::PreflightView {
+            conflicts: 1,
+            verses: 1
+        }
+    );
+    let none = export::PreflightView {
+        conflicts: 0,
+        verses: 0,
+    };
+    let jonah = post(
+        &w.t.app,
+        &preflight(export::Subject::Book {
+            book: BookId::Jonah,
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(jonah, none);
+    let stories = post(&w.t.app, &preflight(export::Subject::Stories))
+        .await
+        .unwrap();
+    assert_eq!(stories, none);
 }

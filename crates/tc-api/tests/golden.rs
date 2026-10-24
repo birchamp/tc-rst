@@ -68,9 +68,9 @@ use tc_api::home::{
     StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
 };
 use tc_api::ids::{
-    AlignerId, ChangeRef, CheckSessionId, ConflictRef, Epoch, JobId, LocaleId, ProjectId,
-    ProjectRef, RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId,
-    ViewSeq, WallMs,
+    AlignerId, ChangeRef, CheckSessionId, ConflictRef, DownloadId, Epoch, JobId, LocaleId,
+    ProjectId, ProjectRef, RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo,
+    UploadId, ViewSeq, WallMs,
 };
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
@@ -2977,6 +2977,39 @@ impl Example for export::StoriesPrint {
     }
 }
 
+impl Example for export::Preflight {
+    fn example() -> Self {
+        export::Preflight {
+            at: scope(),
+            subject: export::Subject::Book {
+                book: BookId::Titus,
+            },
+        }
+    }
+}
+
+impl Example for export::PreflightView {
+    fn example() -> Self {
+        export::PreflightView {
+            conflicts: 4,
+            verses: 3,
+        }
+    }
+}
+
+impl Example for export::RunExport {
+    fn example() -> Self {
+        export::RunExport {
+            request: request(41),
+            at: scope(),
+            producer: export::Producer::AlignedUsfm,
+            subject: export::Subject::Book {
+                book: BookId::Titus,
+            },
+        }
+    }
+}
+
 fn golden_dir() -> PathBuf {
     common::crate_dir().join("tests/golden")
 }
@@ -3138,6 +3171,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "story/saveFrame",
             "story/saveRef",
             "editor/saveVerse",
+            "export/run",
             "editor/saveLayout",
             "editor/draft",
             "editor/discardDraft",
@@ -3357,6 +3391,23 @@ fn events() -> Vec<Event> {
             kind: JobKind::GatewayPlan,
             project: Some(ProjectRef::parse("sample_burrito").unwrap()),
             state: JobState::Done(JobOutcome::PlanReady(Box::new(gateway_plan()))),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(13),
+            kind: JobKind::Export,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::ExportReady(export::Exported {
+                download: DownloadId::parse("0123456789abcdef0123456789abcdef").unwrap(),
+                file_name: "tit-aligned-2026-10-24.usfm".into(),
+                facts: export::ExportFacts {
+                    skipped: vec![export::SkippedVerse {
+                        chapter: 1,
+                        verse: RefPart::parse("4-5").unwrap(),
+                        why: export::SkipReason::NeedsReview,
+                    }],
+                    skipped_total: 1,
+                },
+            })),
         }),
         Event::ProjectsChanged,
         Event::HomeCard {

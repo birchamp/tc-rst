@@ -14,7 +14,7 @@ test-hooks = ["tc-api/test-hooks", "tc-store/test-hooks"]
 # the parity projects, checked against their files, the memory backend that holds them, and the
 # loader of a parity scenario, which zips each sideloaded resource to install it. Release builds
 # never enable it.
-fixture-backend = ["dep:zip"]
+fixture-backend = []
 
 [dependencies]
 tc-api = { path = "../tc-api", features = ["server"] }
@@ -45,7 +45,8 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
 unicode-general-category.workspace = true
 unicode-normalization.workspace = true
-zip = { workspace = true, optional = true }
+# The Story Markdown export is a zip of the stories (D2).
+zip.workspace = true
 
 [dev-dependencies]
 # The integration tests use the test hooks and the fixture backend's seed, as tc-api's own

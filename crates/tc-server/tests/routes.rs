@@ -146,6 +146,61 @@ fn every_endpoint_is_routed_once() {
     );
 }
 
+/// Serves the print document of job 7, a finished print export, and nothing else: job 8 is
+/// still running and job 9 made a USFM file, so both are `None`, as is any other job.
+struct Prints;
+
+impl Backend for Prints {
+    type Events = tc_server::stub::StubEvents;
+
+    async fn call(&self, _path: &'static str, _body: tc_server::Bytes) -> Answer {
+        Answer::NotFound
+    }
+    fn subscribe(&self, _: u64) -> Self::Events {
+        tc_server::stub::StubEvents
+    }
+    async fn quit(&self) {}
+    async fn quitting(&self) {
+        std::future::pending::<()>().await;
+    }
+    async fn print_page(&self, job: &str) -> Option<tc_server::MediaFile> {
+        (job == "7").then(|| tc_server::MediaFile {
+            bytes: b"<!doctype html><title>Tito</title>".to_vec(),
+            content_type: "text/html; charset=utf-8",
+        })
+    }
+}
+
+#[test]
+fn the_print_route_serves_a_finished_job_and_404s_any_other() {
+    let server = TestServer::start(Arc::new(Prints));
+    let page = server.get("/print/7");
+    assert_eq!(page.status, 200);
+    assert_eq!(page.body, b"<!doctype html><title>Tito</title>");
+    assert_eq!(
+        page.header("content-type"),
+        Some("text/html; charset=utf-8")
+    );
+    assert_eq!(page.header("cache-control"), Some("no-store"));
+    for path in [
+        "/print/8",
+        "/print/9",
+        "/print/x",
+        "/print/7/more",
+        "/print/",
+    ] {
+        assert_eq!(server.get(path).status, 404, "{path}");
+    }
+    assert_eq!(
+        TestServer::start(stub()).get("/print/7").status,
+        404,
+        "a backend with no prints"
+    );
+    let bare =
+        common::Req::new("GET", "/print/7").with("Host", &format!("127.0.0.1:{}", server.port));
+    assert_eq!(server.send(&bare).status, 401, "the page needs the token");
+}
+
 #[test]
 fn a_get_on_an_api_path_is_not_routed() {
     let recorder = Arc::new(Recorder::default());

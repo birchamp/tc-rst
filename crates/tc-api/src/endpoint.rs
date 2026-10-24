@@ -194,6 +194,7 @@ scoped!(
     crate::align::Close,
     crate::conflicts::Resolve,
     crate::conflicts::ResolveBulk,
+    crate::export::RunExport,
 );
 unscoped!(
     crate::app::Quit,

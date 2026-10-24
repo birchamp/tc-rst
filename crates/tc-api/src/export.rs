@@ -2,15 +2,18 @@
 //! preview prints of the open book or of the open story project. The server answers them with
 //! tc-export's and tc-obs' print rules (A10), the rules D2's PDF prints with, so the preview and
 //! the PDF state the same verses, frames and lines the same way. The page setup is the
-//! preview's own view state; the UI applies it ([`crate::model::print`]). D2 adds the export
-//! jobs (`preflight`, `run`) to this service.
+//! preview's own view state; the UI applies it ([`crate::model::print`]).
 //!
-//! Reading either writes nothing.
+//! D2's exports: [`Preflight`] says what is in conflict before an export, and [`RunExport`] starts
+//! the export's job, which checkpoints first and ends with the file to download
+//! ([`crate::jobs::JobOutcome::ExportReady`]).
+//!
+//! Reading writes nothing, and no export writes into the project folder.
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
-use crate::ids::{RefPart, Scope, StoryNo};
+use crate::ids::{DownloadId, RefPart, RequestId, Scope, StoryNo};
 
 /// `export/book`: the printed items of a book of the open project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,4 +153,112 @@ pub struct DraftedFrame {
     pub text: String,
     /// The picture's address under `/media/obs/`.
     pub picture: Option<String>,
+}
+
+/// What an export reads: a book of a Bible project, or the stories of a story project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum Subject {
+    Book {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+        book: BookId,
+    },
+    Stories,
+}
+
+/// `export/preflight`: the open conflicts of what an export would read, so the menu can say
+/// "3 verses have two versions" before it runs (STORAGE §8.5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Preflight {
+    pub at: Scope,
+    pub subject: Subject,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightView {
+    /// The open conflicts of the subject's records, of every kind.
+    pub conflicts: u32,
+    /// The verses (for stories, the frames, titles and reference lines) with two versions:
+    /// the export uses the version shown.
+    pub verses: u32,
+}
+
+/// What an export makes (tC4 `src/data/export/producers.ts`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum Producer {
+    AlignedUsfm,
+    PlainUsfm,
+    StoryMarkdown,
+    /// The print document `GET /print/{job}` serves for the PDF.
+    PrintHtml,
+}
+
+/// `export/run` (job `Export`): checkpoints, makes the file and registers it for download.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunExport {
+    pub request: RequestId,
+    pub at: Scope,
+    pub producer: Producer,
+    pub subject: Subject,
+}
+
+/// A finished export: the file to download and the verses whose alignment it left out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct Exported {
+    pub download: DownloadId,
+    /// `<subject>-<YYYY-MM-DD>.<ext>`, as tC4's `exportFilename` names it.
+    pub file_name: String,
+    pub facts: ExportFacts,
+}
+
+/// The verses an aligned export kept as stored, without their alignment (tC4 e2bfd8c3, #796).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct ExportFacts {
+    /// At most 20 of them, in book order.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub skipped: Vec<SkippedVerse>,
+    /// All of them.
+    pub skipped_total: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedVerse {
+    pub chapter: u16,
+    /// `4`, or `4-5` for a span.
+    pub verse: RefPart,
+    pub why: SkipReason,
+}
+
+/// Why an aligned export kept a verse as stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum SkipReason {
+    /// The alignment no longer matches the verse's words.
+    NeedsReview,
+    /// The verse holds the alignment markup of the file it was added from.
+    InlineAlignment,
+    /// The verse holds markup the weave cannot place words in.
+    WeaveRefused,
 }

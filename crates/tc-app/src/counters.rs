@@ -411,6 +411,16 @@ impl CountingSnapshot {
         self.snapshot.fold().render_book(book)
     }
 
+    /// A whole book's parts, as `book_usfm` composes them: what an export reads.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the one counted projection of a whole book into its parts"
+    )]
+    pub fn book_parts(&self, book: BookId) -> Option<tc_usfm::codec::BookParts> {
+        self.count(AppCounter::BookUsfm, 1);
+        self.snapshot.fold().book_parts(book)
+    }
+
     /// A whole book's USFM.
     #[expect(
         clippy::disallowed_methods,

@@ -347,6 +347,7 @@ fn router<B: Backend>(state: AppState<B>) -> Router {
             post(uploads::upload).layer(DefaultBodyLimit::disable()),
         )
         .route("/download/{id}/{name}", get(downloads::download))
+        .route("/print/{job}", get(statics::print_page::<B>))
         .route("/media/obs/{pack}/{*path}", get(statics::obs_picture::<B>))
         .route(
             "/api/v1/{service}/{name}",

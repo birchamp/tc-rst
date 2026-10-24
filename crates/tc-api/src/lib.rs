@@ -207,6 +207,9 @@ macro_rules! endpoint_table {
 
             query "export/book": $crate::export::Book => $crate::export::BookPrint;
             query "export/stories": $crate::export::Stories => $crate::export::StoriesPrint;
+            query "export/preflight": $crate::export::Preflight
+                => $crate::export::PreflightView;
+            job "export/run": $crate::export::RunExport => $crate::ids::JobId;
         }
     };
 }

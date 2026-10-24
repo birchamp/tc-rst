@@ -1,0 +1,32 @@
+{
+  "path": "export/run",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "29292929292929292929292929292929",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "producer": "alignedUsfm",
+    "subject": {
+      "type": "book",
+      "value": {
+        "book": "TIT"
+      }
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

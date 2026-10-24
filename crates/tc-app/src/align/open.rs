@@ -115,7 +115,7 @@ pub(super) enum Original {
 impl super::AlignCache {
     /// The original-language book cut into verses, once for the session: the first verse
     /// opened pays for the cut, the next ones for themselves.
-    async fn original(&self, loaded: &Arc<LoadedBook>, book: BookId) -> Original {
+    pub(super) async fn original(&self, loaded: &Arc<LoadedBook>, book: BookId) -> Original {
         let sha = match loaded.resources.text(&TextRole::OriginalLanguage) {
             Some(TextStatus::Loaded { pin, .. }) => pin.sha.to_string(),
             None | Some(TextStatus::Missing(Missing::NotPinned)) => {

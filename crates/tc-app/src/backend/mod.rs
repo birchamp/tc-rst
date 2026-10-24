@@ -1036,6 +1036,8 @@ pub enum StoreError {
 pub enum CheckpointReason {
     /// tC4's "leaving the project" checkpoint, when the person goes Home.
     LeavingProject,
+    /// tC4's "before export" checkpoint: an export reads the project as committed (D2).
+    BeforeExport,
     Other(String),
 }
 

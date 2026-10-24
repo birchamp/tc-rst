@@ -1411,6 +1411,7 @@ impl ProjectHandle for StoreHandle {
         let Some(pending) = self.inner().as_ref().map(|handle| {
             handle.checkpoint(match reason {
                 CheckpointReason::LeavingProject => tc_store::CheckpointReason::LeavingProject,
+                CheckpointReason::BeforeExport => tc_store::CheckpointReason::BeforeExport,
                 CheckpointReason::Other(why) => tc_store::CheckpointReason::Other(why),
             })
         }) else {

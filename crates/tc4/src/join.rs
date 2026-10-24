@@ -83,3 +83,23 @@ impl tc_app::UploadedFiles for ServerUploads {
         })
     }
 }
+
+/// The server's downloads, as the application registers an export's file there.
+pub struct ServerDownloads(pub Arc<tc_server::Downloads>);
+
+impl tc_app::DownloadFiles for ServerDownloads {
+    fn dir(&self) -> std::path::PathBuf {
+        self.0.dir().to_owned()
+    }
+
+    fn add(
+        &self,
+        written: &std::path::Path,
+        file_name: &str,
+        content_type: &'static str,
+    ) -> Result<tc_api::ids::DownloadId, String> {
+        self.0
+            .add(written, file_name, content_type)
+            .map_err(|e| e.to_string())
+    }
+}
