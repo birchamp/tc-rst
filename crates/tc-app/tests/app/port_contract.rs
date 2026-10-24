@@ -22,12 +22,16 @@ const SAMPLE: &str = "sample_burrito";
 pub(super) trait SyncPortFixture {
     /// The shared project's world, the internet off and nobody signed in.
     async fn world() -> World;
-    /// The next sync of the sample fails before anything is taken in.
-    async fn sync_fails_before_intake(w: &World);
+    /// Whether a successful open writes the project it answers. The scripted port answers a
+    /// project the scenario already holds; a real port writes a new one, which the contract
+    /// then checks was not listed before.
+    const OPEN_WRITES: bool;
+    /// The next sync of the sample fails before anything is taken in; the job's error.
+    async fn sync_fails_before_intake(w: &World) -> ApiError;
     /// The next open from Door43 succeeds; the project it adds.
     async fn open_succeeds(w: &World) -> ProjectRef;
-    /// The next open from Door43 is refused.
-    async fn open_refused(w: &World);
+    /// The next open from Door43 is refused; the job's error.
+    async fn open_refused(w: &World) -> ApiError;
     /// How many syncs and opens reached the port.
     fn calls(w: &World) -> usize;
 }
@@ -35,13 +39,16 @@ pub(super) trait SyncPortFixture {
 pub(super) struct Scripted;
 
 impl SyncPortFixture for Scripted {
+    const OPEN_WRITES: bool = false;
+
     async fn world() -> World {
         shared().await
     }
 
-    async fn sync_fails_before_intake(w: &World) {
+    async fn sync_fails_before_intake(w: &World) -> ApiError {
         let failure = SyncFailure::BeforeIntake(SyncRefusal::Unreachable);
-        script(&w.t.app, 90, ScriptedSync::Failed(failure)).await;
+        script(&w.t.app, 90, ScriptedSync::Failed(failure.clone())).await;
+        ApiError::Refused(Refusal::Sync(failure))
     }
 
     async fn open_succeeds(w: &World) -> ProjectRef {
@@ -50,15 +57,17 @@ impl SyncPortFixture for Scripted {
         project
     }
 
-    async fn open_refused(w: &World) {
-        w.t.app
-            .script_open_door43(Err(ApiError::Refused(Refusal::OpenDoor43(
-                OpenDoor43Refusal::NoJournal,
-            ))));
+    async fn open_refused(w: &World) -> ApiError {
+        let refused = ApiError::Refused(Refusal::OpenDoor43(OpenDoor43Refusal::NoJournal));
+        w.t.app.script_open_door43(Err(refused.clone()));
+        refused
     }
 
     fn calls(w: &World) -> usize {
-        w.t.app.scripted_sync_port().map_or(0, |p| p.calls())
+        w.t.app
+            .scripted_sync_port()
+            .expect("the scripted port")
+            .calls()
     }
 }
 
@@ -107,12 +116,9 @@ macro_rules! sync_port_contract {
                 internet_on(app).await;
                 sign_in(app).await;
                 let before = card_with_counts(app).await;
-                <$fixture>::sync_fails_before_intake(&w).await;
+                let error = <$fixture>::sync_fails_before_intake(&w).await;
                 let job = post(app, &sync(1)).await.unwrap();
-                assert!(
-                    matches!(ended(app, job).await, JobState::Failed(_)),
-                    "the sync fails"
-                );
+                assert_eq!(ended(app, job).await, JobState::Failed(error));
                 assert_eq!(
                     card_with_counts(app).await,
                     before,
@@ -125,7 +131,11 @@ macro_rules! sync_port_contract {
                 let w = <$fixture>::world().await;
                 let app = &w.t.app;
                 internet_on(app).await;
+                let before = listed(app).await;
                 let project = <$fixture>::open_succeeds(&w).await;
+                if <$fixture>::OPEN_WRITES {
+                    assert!(!before.contains(&project), "{project:?} is new");
+                }
                 let job = post(app, &open(2, "contract-open")).await.unwrap();
                 match ended(app, job).await {
                     JobState::Done(tc_api::jobs::JobOutcome::Created { project: added }) => {
@@ -142,9 +152,9 @@ macro_rules! sync_port_contract {
                 let app = &w.t.app;
                 internet_on(app).await;
                 let before = listed(app).await;
-                <$fixture>::open_refused(&w).await;
+                let error = <$fixture>::open_refused(&w).await;
                 let job = post(app, &open(4, "contract-refused")).await.unwrap();
-                assert!(matches!(ended(app, job).await, JobState::Failed(_)));
+                assert_eq!(ended(app, job).await, JobState::Failed(error));
                 assert_eq!(listed(app).await, before, "no project was added");
             }
 
@@ -170,3 +180,29 @@ macro_rules! sync_port_contract {
 
 sync_port_contract!(scripted, Scripted);
 // E1a: sync_port_contract!(door43, Door43Port);
+
+/// A script sent to an app whose sync port is not the scripted one is refused, so a test can
+/// never pass on a script that went nowhere.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn scripting_a_port_that_is_not_scripted_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = super::common::TestApp::start_in(dir.path(), |_, deps| {
+        deps.sync = std::sync::Arc::new(tc_app::ports::UnavailableSync);
+    })
+    .await;
+    let answer = post(
+        &t.app,
+        &tc_api::test::Script {
+            request: rid(7),
+            next: tc_api::test::Scripted::Sync {
+                project: folder(SAMPLE),
+                outcome: ScriptedSync::Failed(SyncFailure::BeforeIntake(SyncRefusal::Unreachable)),
+            },
+        },
+    )
+    .await;
+    assert!(
+        matches!(answer, Err(ApiError::BadRequest { .. })),
+        "{answer:?}"
+    );
+}

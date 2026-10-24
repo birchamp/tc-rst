@@ -37,11 +37,11 @@ fn sources() -> Vec<(String, String)> {
         .collect()
 }
 
-/// The in-body test branches each file may still hold, and why. The numbers may only fall.
+/// The in-body test branches each file holds, and why. Each count is exact and may only fall.
 const ALLOWED: &[(&str, usize, &str)] = &[
     (
         "app.rs",
-        15,
+        14,
         "builds the test service's state and its hooks",
     ),
     ("dispatch.rs", 8, "routes the test service's endpoints"),
@@ -57,11 +57,10 @@ const ALLOWED: &[(&str, usize, &str)] = &[
 ];
 
 fn is_branch(line: &str) -> bool {
-    let indent = line.len() - line.trim_start_matches(' ').len();
+    let test_feature = line.contains("test-hooks") || line.contains("fixture-backend");
+    let indent = line.len() - line.trim_start_matches([' ', '\t']).len();
     let rest = line.trim_start();
-    indent >= 8
-        && rest.starts_with("#[cfg(")
-        && (rest.contains("test-hooks") || rest.contains("fixture-backend"))
+    test_feature && ((indent >= 8 && rest.starts_with("#[cfg(")) || rest.contains("cfg!("))
 }
 
 /// INV-RELEASE-AND-TESTS-RUN-THE-SAME-CODE: a `cfg` test branch inside a function body makes a
@@ -80,9 +79,10 @@ fn no_test_hook_branch_inside_a_business_function() {
             .iter()
             .find(|(f, ..)| *f == file)
             .map_or(0, |(_, n, _)| *n);
-        if lines.len() > allowed {
+        // An exact count: a branch that goes away lowers the list, so none can come back.
+        if lines.len() != allowed {
             over.push(format!(
-                "src/{file}: {} in-body test branches (lines {lines:?}), {allowed} allowed",
+                "src/{file}: {} in-body test branches (lines {lines:?}), the list says {allowed}",
                 lines.len()
             ));
         }
