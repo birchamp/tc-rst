@@ -25,6 +25,7 @@ STEPS=(
 )
 NIGHTLY=(
   "model-long|TC_MODEL_ROWS=1 cargo test --locked -p tc-store --test store model::random_histories_lose_no_work_long -- --ignored --exact --nocapture"
+  "sync-model-long|cargo test --locked -p tc-sync --test sync model::random_syncs_lose_no_work_long -- --ignored --exact"
 )
 
 # A gate checks; it never blesses a snapshot or rewrites a file (INV-GATES-NEVER-BLESS).

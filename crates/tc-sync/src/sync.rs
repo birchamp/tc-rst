@@ -122,6 +122,7 @@ pub async fn sync(
             .map(|c| c.id)
             .collect(),
         received_from: Default::default(),
+        received_ids: Vec::new(),
     };
     let (mut state, mut actions) = next(&SyncState::Idle, &SyncEvent::Start);
     while let Some(action) = actions.pop() {
@@ -163,6 +164,8 @@ struct Run<'a> {
     conflicts_before: std::collections::BTreeSet<tc_journal::fold::ConflictId>,
     /// New changes in the received packs, by the device that made them.
     received_from: std::collections::BTreeMap<tc_journal::DeviceId, u32>,
+    /// Their ids.
+    received_ids: Vec<tc_journal::ChangeId>,
 }
 
 impl Run<'_> {
@@ -197,6 +200,7 @@ impl Run<'_> {
                     && snapshot.fold().change(&change.id()).is_none()
                 {
                     *self.received_from.entry(change.body().device).or_insert(0) += 1;
+                    self.received_ids.push(change.id());
                 }
             }
         }
@@ -408,10 +412,25 @@ impl Run<'_> {
                     SyncEvent::TakenIn
                 }
             },
+            // The store's job takes the packs in pack by pack before it seals and commits:
+            // a failure after some were folded leaves received work in the project, so the
+            // sync must not say nothing changed (PLAN Q8).
+            Err(e) if self.some_received_is_held() => {
+                self.merged = Some(Err(e.to_string()));
+                SyncEvent::TakenIn
+            }
             Err(e) => SyncEvent::TakeInFailed {
                 reason: e.to_string(),
             },
         }
+    }
+
+    /// Whether the project holds any change of the received packs now.
+    fn some_received_is_held(&self) -> bool {
+        let snapshot = self.project.snapshot();
+        self.received_ids
+            .iter()
+            .any(|id| snapshot.fold().change(id).is_some())
     }
 
     /// S8: HEAD onto Door43's branch, a fast-forward or nothing.

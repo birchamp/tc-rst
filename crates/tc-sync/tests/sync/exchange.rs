@@ -1,6 +1,6 @@
 //! Exchange by file (`docs/STORAGE.md` §10): two computers that never meet Door43.
 
-use crate::door43::{computer, copy_to, open, save, titus, words};
+use crate::door43::{computer, computer_on, copy_to, open, save, titus, words};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tc_sync::exchange::{ExchangeError, export, receive};
@@ -260,5 +260,42 @@ async fn loss_usb_one_bad_pack_rest_taken() {
     assert_eq!(words(&b, 1, 2).as_deref(), Some("in hope, as Ana has it"));
     assert!(report.hand_edited.is_empty(), "{report:?}");
     a.close().unwrap();
+    b.close().unwrap();
+}
+
+/// A file received into a project that cannot be written (here, a folder a cloud client syncs)
+/// is refused, and the report never names work that was not taken.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_file_received_into_a_read_only_project_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let stick = usb(dir.path());
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    let exported = export(&a, &stick, "Ana").await.unwrap();
+    a.close().unwrap();
+    let juan = computer_on(
+        dir.path(),
+        "juan",
+        tc_store::FakePlatform {
+            host: "juan".into(),
+            machine: "machine-of-juan".into(),
+            facts: tc_store::FolderFacts {
+                unsafe_folder: Some(tc_store::UnsafeFolder::CloudSynced {
+                    client: "OneDrive".into(),
+                }),
+                network: false,
+            },
+            ..tc_store::FakePlatform::default()
+        },
+    );
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    let result = receive(&b, &exported, "Ana").await;
+    assert!(
+        matches!(result, Err(ExchangeError::NotCommitted(_))),
+        "{result:?}"
+    );
     b.close().unwrap();
 }
