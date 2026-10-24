@@ -1,0 +1,1886 @@
+{
+  "tc4": {
+    "commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e",
+    "commitDate": "2026-10-16T01:51:20Z",
+    "version": "4.0.0-rc.1",
+    "dirtyWorkingTree": false
+  },
+  "client": "the tC4 commit built as `npm run build` builds it (release build: base /clients/uw-tc4/, DEV false), with the help pages of its pinned tc-website commit, served by the mock server",
+  "browser": "Chromium 141.0.7390.37 (Playwright 1.56.1), headless",
+  "machine": {
+    "platform": "linux-x64",
+    "chromium": "141.0.7390.37",
+    "fonts": {
+      "count": 535,
+      "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+    }
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 800,
+    "deviceScaleFactor": 1
+  },
+  "scenarios": {
+    "sample": "the conformance samples exactly as tC4 ships them (es-419 primary set, English fallback)",
+    "en-pins": "both samples pinned to the installed English suite on both rungs (sample_burrito: tC4 J4 journey setup, decision records restated as English; sample_burrito_obs: primary set = its English fallback set)",
+    "shared": "the scenario sample, with both samples shared on Door43 by the fake user (remote origin on git.door43.org)"
+  },
+  "resources": [
+    {
+      "dir": "en_ult",
+      "repoPath": "git.door43.org/unfoldingWord/en_ult",
+      "version": "v91",
+      "sha": "35d215957f3203fd2e2fac5702ce14902d417f9d",
+      "substitute": "tC4 vendors en_ult v89 (84c73ba), not the pinned v91; v89 Titus is served under the v91 identity"
+    },
+    {
+      "dir": "en_ust",
+      "repoPath": "git.door43.org/unfoldingWord/en_ust",
+      "version": "v91",
+      "sha": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+      "substitute": "tC4 vendors en_ust v89 Titus (37ec223) with no metadata.json; the metadata is the en_ult v89 export metadata renamed to en_ust, under the v91 identity"
+    },
+    {
+      "dir": "el-x-koine_ugnt",
+      "repoPath": "git.door43.org/unfoldingWord/el-x-koine_ugnt",
+      "version": "v0.34",
+      "sha": "fc95b2b8aad08bb65ab54628ab685413a1139e97",
+      "substitute": "tC4 vendors no Greek New Testament. The text is the pinned release, v0.34, from translationCore 3's bundle (verse-object JSON written back to USFM by usfm-js); every word agrees both ways with the ULT v89 alignment of Titus. The file is rebuilt, not the export's bytes, and the metadata is the en_ult v89 export metadata renamed"
+    },
+    {
+      "dir": "en_tn",
+      "repoPath": "git.door43.org/unfoldingWord/en_tn",
+      "version": "v91",
+      "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a"
+    },
+    {
+      "dir": "en_twl",
+      "repoPath": "git.door43.org/unfoldingWord/en_twl",
+      "version": "v91",
+      "sha": "7cbb3419f79780ce84b92ad7d42bd476cc5d8a64"
+    },
+    {
+      "dir": "en_tw",
+      "repoPath": "git.door43.org/unfoldingWord/en_tw",
+      "version": "v91",
+      "sha": "ff5b3852c27c3a0d01b109e482eb26047dcd20e2",
+      "substitute": "TIT.tsv and kt/god.md are the v91 bytes; the other 92 articles that the Titus words link are en_tw v88 from translationCore 3's bundle; all but kt/evil, kt/good, kt/save and other/courage have the md5 the v91 metadata records (provenance.json)"
+    },
+    {
+      "dir": "en_ta",
+      "repoPath": "git.door43.org/unfoldingWord/en_ta",
+      "version": "v91",
+      "sha": "ce9a1bb9431317ca888e8c1f9620caa7f5fe45fd",
+      "substitute": "tC4 vendors en_ta v86 (c7caddf: the translate toc and one article), not the pinned v91; the other 30 translate articles that the Titus notes name are v88 from translationCore 3's bundle; all served under the v91 identity with the v86 export metadata"
+    },
+    {
+      "dir": "es-419_tn",
+      "repoPath": "git.door43.org/es-419_gl/es-419_tn",
+      "version": "v66",
+      "sha": "22f3d0c61e2ab4701cb869547de9c3c43da07208"
+    },
+    {
+      "dir": "en_obs",
+      "repoPath": "git.door43.org/unfoldingWord/en_obs",
+      "version": "v9",
+      "sha": "d39a1dc7a7557ac54e4a8fecc3462147fe7eec3b",
+      "substitute": "tC4 vendors no English OBS text; story 1 only, from the example story of open-bible-stories@0.0.5 (release unknown), served under the v9 identity; the metadata is the en_obs-tn v13 export metadata renamed"
+    },
+    {
+      "dir": "en_obs-tn",
+      "repoPath": "git.door43.org/unfoldingWord/en_obs-tn",
+      "version": "v13",
+      "sha": "e86138ea13f619f09f7a6dcaa60592716d407fe4"
+    },
+    {
+      "dir": "en_obs-twl",
+      "repoPath": "git.door43.org/unfoldingWord/en_obs-twl",
+      "version": "v3",
+      "sha": "44ebc9fafe8101665f985007d566f5036a2be85b"
+    },
+    {
+      "dir": "en_obs-tq",
+      "repoPath": "git.door43.org/unfoldingWord/en_obs-tq",
+      "version": "v10",
+      "sha": "01b92fe8793d62cff3a2221f5174c768cbad3dc1"
+    }
+  ],
+  "absentResources": [
+    "git.door43.org/unfoldingWord/en_tq v91 (the Questions tab of a Bible project)",
+    "git.door43.org/es-419_gl/es-419_twl v18, es-419_tw v37, es-419_ta v4 (primary set of sample_burrito)",
+    "git.door43.org/es-419_gl/es-419_obs v2, es-419_obs-tn v2, es-419_obs-twl v2 (primary set of sample_burrito_obs)",
+    "git.door43.org/unfoldingWord/en_obs v9: stories 2-50 (only story 1 is served)",
+    "git.door43.org/uW/obs_images_360 (the OBS pictures)",
+    "git.door43.org/unfoldingWord/en_ugl v0.5 and hbo_uhb v3.0.0 / en_uhl (no captured screen reads them; the sync toasts count hbo_uhb v3.0.0 as a missing version)",
+    "every resource is a Titus slice: Jonah, the Bible sample's second book, has no helps, and only the tW and tA articles that the Titus helps link are served",
+    "en_ta translate/figs-inclusive, which es-419_tn v66 names; en_ta v86 and v88 do not carry it either"
+  ],
+  "refusedExternalRequests": [],
+  "totals": {
+    "screens": 62,
+    "complete": 49,
+    "incomplete": 13,
+    "failed": 0,
+    "bytes": 8058301
+  },
+  "screens": [
+    {
+      "name": "home",
+      "file": "screens/home.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Launch tC4"
+      ],
+      "shows": "Home: \"Your projects\" with the OBS sample (story tiles, 1% drafted) and the Bible sample (Jonah and Titus tiles, \"+ Add a book\")",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 67842,
+      "sha256": "32893eee72bafcd3fb29915193f83a3e2bab1c56102c470587744f47e9197793",
+      "dom": "dom/home.json",
+      "domSha256": "1b8b22ea71720d5d2db4fc8d6494a724105d22449aa37d324845adb8924ce341"
+    },
+    {
+      "name": "understand-tit1",
+      "file": "screens/understand-tit1.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "read",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile"
+      ],
+      "shows": "Understand, Titus 1, Section view: book rail, ULT source units with the comment box, helps panel on Notes (es-419 Translation Notes of the primary set)",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 187988,
+      "sha256": "4b0909eb72838734562c4b54c3fd259bc738f6c19a3ec4541bd68ea89974ac5e",
+      "dom": "dom/understand-tit1.json",
+      "domSha256": "fa61fa956cbdeb41197a29f0f0a631084b6ec52a98c5ba2a54a8a4c343cf22ee"
+    },
+    {
+      "name": "translate-tit1",
+      "file": "screens/translate-tit1.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "draft",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Translate"
+      ],
+      "shows": "Translate, Titus 1, Section mode: ULT beside the es-419 draft, each \"Draft section\" a pill in the accent colour at the end of its row, helps panel with the Comments tab",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 237781,
+      "sha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
+      "dom": "dom/translate-tit1.json",
+      "domSha256": "3e27eb9e669b3cf153ed6418ca4a7e7ddb19bc88bbec2d03b415730c91075a7e"
+    },
+    {
+      "name": "check-picker",
+      "file": "screens/check-picker.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check"
+      ],
+      "shows": "Check tool picker for Titus: Translation Words \"Needs downloading\", Translation Notes ready (1 of 112), Align, Community Checking",
+      "status": "incomplete",
+      "incomplete": "Translation Words reads \"Needs downloading\": the sample pins es-419_twl v18 / es-419_tw v37 for its primary set and tC4 vendors neither (see en-check-picker for the ready card).",
+      "absentReads": [],
+      "bytes": 100872,
+      "sha256": "692ff5ca2aa65e5924045a7e8f9bb64ee1b534d3a99a2e8c29a3e53bcc177ebc",
+      "dom": "dom/check-picker.json",
+      "domSha256": "87f8929b4d1c3ea2dcabb9fa8997e66eb0ff338393bce03844b95fbaa0119e49"
+    },
+    {
+      "name": "check-tn-session",
+      "file": "screens/check-tn-session.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Notes card: Continue"
+      ],
+      "shows": "Translation Notes session on the es-419 notes, resumed at item 2 (\"knowledge\", 1:1) after the decided item 1: check rail (filters, sort, list), the quote, WHAT TO CHECK with Show more, the compare card (Greek, ULT highlight, the es-419 draft), the marking row (\"← Previous\", the triage buttons, \"Next →\") below the fold; the header shows only \"Item 2 of 112\"",
+      "status": "incomplete",
+      "incomplete": "The link under WHAT TO CHECK reads \"Learn more: Translation Academy\" instead of the article title: the sample pins es-419_ta v4 for its primary set and tC4 vendors no copy (en-check-tn-session shows the titled link).",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=checking/figs-abstractnouns/01.md -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=intro/figs-abstractnouns/01.md -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=process/figs-abstractnouns/01.md -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=translate/figs-abstractnouns/01.md -> 400"
+      ],
+      "bytes": 167362,
+      "sha256": "07ad4e490db11161a113349fba1d84b62518c3a451286bb51b31b22f1f02a191",
+      "dom": "dom/check-tn-session.json",
+      "domSha256": "5bca731316468791d28941e6aa84ef2287c2824d7af61dc2555a51dc4f5f86ec"
+    },
+    {
+      "name": "align-workspace",
+      "file": "screens/align-workspace.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Align card"
+      ],
+      "shows": "Align, Titus 1:1, Gateway · ULT mode: the align rail (46 verses, 5 drafted), the ULT verse, Suggest links (off), the word bank of the es-419 draft in verse order, with an occurrence number on each repeated word (6 of 27 placed), and the ULT word cards with their Greek and their target words in verse order, the sample's six links placed",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 160634,
+      "sha256": "4806f0b5818dfca6f5ff87043f71475e88fe43d4816564aafab68d96f8d610b0",
+      "dom": "dom/align-workspace.json",
+      "domSha256": "9fe56c2fe5e44a7ad57d244c225371aabab9eb0f33f050611c5210fdd35a6a0d"
+    },
+    {
+      "name": "align-original",
+      "file": "screens/align-original.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Align card",
+        "Align mode: Original · Greek"
+      ],
+      "shows": "Align, Titus 1:1, Original · Greek mode: the Greek verse and one word card per Greek word, the six placed links, an occurrence number on each repeated word (Θεοῦ¹, Dios¹), the word bank in verse order, and the top of the marking row (\"← Previous\", Mark valid, \"Next →\") at the bottom edge",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 156537,
+      "sha256": "e0019b625ec7e70a1209de728765e61535a565c4b69c3145d8151066e7e7da47",
+      "dom": "dom/align-original.json",
+      "domSha256": "650ef40cba639e131f6168814af2cf15ebb962a56f305b58085d31afc04448fb"
+    },
+    {
+      "name": "align-workspace-row",
+      "file": "screens/align-workspace-row.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "markingRow": "align",
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Align card",
+        "Scroll the marking row into view"
+      ],
+      "shows": "align-workspace scrolled to the marking row: the word cards, then \"← Previous\", Mark valid and \"Next →\" under the card",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 159614,
+      "sha256": "d0314087f33005433c559588d7124bd0e3e2eb59a2207db0ac94a3090749c775",
+      "dom": "dom/align-workspace-row.json",
+      "domSha256": "943124b6d160acc80a041b3d7218fa1db6e08a873779f8f0a541194197577eee"
+    },
+    {
+      "name": "ar-align-workspace-row",
+      "file": "screens/ar-align-workspace-row.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "markingRow": "align",
+      "steps": [
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Align card",
+        "Scroll the marking row into view"
+      ],
+      "shows": "align-workspace with the interface in Arabic, scrolled to the marking row: the chrome and the marking row run right to left (\"→ السابق\", Mark valid, \"التالي ←\", with the arrows turned); the ULT, the Greek and the draft stay left to right",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 156867,
+      "sha256": "cef41294a8f07aec9867b55e62a85ce919c06a2fda5f4d1b6158fbb7526fa62d",
+      "dom": "dom/ar-align-workspace-row.json",
+      "domSha256": "bf307f76c2299caf949e2c89772c14de1f7a614d3fca5299a3d8117fd95d2422"
+    },
+    {
+      "name": "align-workspace-620",
+      "file": "screens/align-workspace-620.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "align",
+      "steps": [
+        "Window 620 px wide",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Align card",
+        "Scroll the marking row into view"
+      ],
+      "shows": "align-workspace in a window 620 px wide, scrolled to the marking row, which wraps onto two lines (\"Next →\" alone on the second); at this width the project button in the header lies over the mode switch",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 91615,
+      "sha256": "dee7d41db6dddba12e2dbc9ca5d74ec38b443d0ee5e64e4b938abb8d9fadc7a6",
+      "dom": "dom/align-workspace-620.json",
+      "domSha256": "0c8312f3eea1c8bf9368fce860b7502d96100264bb2a049295651e94080d0a9e"
+    },
+    {
+      "name": "ar-align-workspace-620",
+      "file": "screens/ar-align-workspace-620.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "align",
+      "steps": [
+        "Window 620 px wide",
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Align card",
+        "Scroll the marking row into view"
+      ],
+      "shows": "ar-align-workspace-row in a window 620 px wide: the marking row wraps onto two lines, right to left (\"التالي ←\" alone on the second)",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 86671,
+      "sha256": "f0ad20d4b4a5876cedfe24dfb89f57d917aed5593130a4a934ca69970b7ebd6e",
+      "dom": "dom/ar-align-workspace-620.json",
+      "domSha256": "969b26d67e6a1dc4d86337f5737e83dcd7dbf35c6bfceaf66a5377c51f721437"
+    },
+    {
+      "name": "project-settings",
+      "file": "screens/project-settings.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "settings"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Settings"
+      ],
+      "shows": "Project settings dialog: read-only name/language/code, text direction chips, checking language card (English package offered), script font",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 104691,
+      "sha256": "892d98da3c6522ccbb882bd30263c0ef006d4437a257d048e1ec31e87ef0583c",
+      "dom": "dom/project-settings.json",
+      "domSha256": "378f418fa179da485b3181c2e1cc7da46bebc56843e380f234566aa8576b7d58"
+    },
+    {
+      "name": "add-project",
+      "file": "screens/add-project.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "addProject"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project"
+      ],
+      "shows": "Add a project chooser with four cards: New Bible, New Open Bible Stories, Import a project, Open a project from Door43",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 99634,
+      "sha256": "13eb313397adb2535a15accd4b94259377e88516879c63d580c8e0a32eddeafb",
+      "dom": "dom/add-project.json",
+      "domSha256": "94e798799f28b17d23dffaf76b70e351002ac220a41254f6edb241e88d15399f"
+    },
+    {
+      "name": "new-bible",
+      "file": "screens/new-bible.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "newProject"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "New Bible"
+      ],
+      "shows": "New Bible dialog, empty: name, language name, code, text direction, checking language (English, Recommended), script font, Versification disclosure",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 108910,
+      "sha256": "ba14b01111c3045ea55f89ddb65369431b1a9600097ac594f449ea859a6c42d7",
+      "dom": "dom/new-bible.json",
+      "domSha256": "c5b5e763f34d9cff9d31a4669b00a717130de2a667eacce6cfbbca8782631c7f"
+    },
+    {
+      "name": "import",
+      "file": "screens/import.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "import"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "Import a project"
+      ],
+      "shows": "Import a project, step 1 of 3: tC3 project, USFM files, Scripture Burrito",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 88396,
+      "sha256": "c67132b97754b830b89ed475df02d82cd1a571064febe97bf4520d191b4943c7",
+      "dom": "dom/import.json",
+      "domSha256": "ce5360f4eac51efe619470873177b1ef8e4f3a756ee725c3f9de583d099e97ae"
+    },
+    {
+      "name": "share-internet-consent",
+      "file": "screens/share-internet-consent.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "netAsk"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Share on Door43"
+      ],
+      "shows": "\"Turn on the internet?\" consent dialog that every internet step asks first while the internet is off",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 92500,
+      "sha256": "8e93917981fec334d52421d983b1cbe1fe856617230b50fdf9f833af3951381d",
+      "dom": "dom/share-internet-consent.json",
+      "domSha256": "3ff17019d92c2f01201e24a5a5933ce8a85cb4e40c9549127650e8d92b32d39b"
+    },
+    {
+      "name": "share-signin",
+      "file": "screens/share-signin.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "signIn"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Share on Door43",
+        "Turn on internet"
+      ],
+      "shows": "Sign in to Door43 dialog (signs in to git.door43.org), empty fields, and the notice that the Door43 username goes into the project, stays in it, and goes into each Scripture Burrito export",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 98551,
+      "sha256": "64054d2ff8d9e82c0dbe5082d98757d7455747f57dbd535d3276280667b87ff3",
+      "dom": "dom/share-signin.json",
+      "domSha256": "50ce0b62fdbbba09090d0cd2a1723dd2279a4be58558ac618f686ca847fa25c5"
+    },
+    {
+      "name": "share-dialog",
+      "file": "screens/share-dialog.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "share"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Share on Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq"
+      ],
+      "shows": "Share on Door43, step \"where it goes\": your account (selected), an organization marked Recommended, one you cannot create in",
+      "status": "incomplete",
+      "incomplete": "Door43 is faked in the browser (mock-server/fake-door43.mjs): the account facilitator-zq and the organizations Equipo-Ejemplo, es-419_gl are invented.",
+      "absentReads": [],
+      "bytes": 96065,
+      "sha256": "6ba06b02b5c5f13a0cc1a645aa328d749d8f6178aa8c27be86b45162d2bc4e45",
+      "dom": "dom/share-dialog.json",
+      "domSha256": "58ad2209f14abb71c19a8aecf655590088bc0d9f630c47875083084b8da589ab"
+    },
+    {
+      "name": "share-dialog-check",
+      "file": "screens/share-dialog-check.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "share"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Share on Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq",
+        "Next"
+      ],
+      "shows": "Share on Door43, step \"Check what will be shared\": target, repository name, books shared",
+      "status": "incomplete",
+      "incomplete": "Door43 is faked in the browser (see share-dialog). Nothing is created or pushed.",
+      "absentReads": [],
+      "bytes": 91515,
+      "sha256": "47134d59f40f981739da209fcfb95bd56f6499cd8cbda1dbf49c7d061630ae32",
+      "dom": "dom/share-dialog-check.json",
+      "domSha256": "05d3b8913a0389c3a198127ed7fa26b48c2e0cddacb2835adaefb7c6c4bcff2a"
+    },
+    {
+      "name": "account-menu",
+      "file": "screens/account-menu.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "account menu (popover)"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "Account button (top right)"
+      ],
+      "shows": "Account menu: Sign in to Door43, Use the internet (off), Help and guides, App language, Report a problem, About translationCore",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 82318,
+      "sha256": "c4c368d76cf9b1f1dfaea68a5a5bfde89b55d5f681faa448af970c5175211699",
+      "dom": "dom/account-menu.json",
+      "domSha256": "4100164bf99c99ea1c5c5e261cacef98d26a8fc198dad8351b783aa41643080f"
+    },
+    {
+      "name": "app-language",
+      "file": "screens/app-language.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "app language"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "Account button",
+        "App language"
+      ],
+      "shows": "App language dialog with English selected",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 84169,
+      "sha256": "81622a506fdd40cb265927abe2a1b1de390e49ea4184888b06c152589679cc69",
+      "dom": "dom/app-language.json",
+      "domSha256": "7523ea5a6320acccf059e220730146e28d3f4b58081cdc47403d233f43b22d6a"
+    },
+    {
+      "name": "help",
+      "file": "screens/help.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "help and guides (full-window panel)"
+      },
+      "steps": [
+        "Home",
+        "Account button",
+        "Help and guides"
+      ],
+      "shows": "Help and guides: the full-window panel with the help pages of the build (tc-website tc-help/ at the commit tC4 pins) open on their index",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 145514,
+      "sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
+      "dom": "dom/help.json",
+      "domSha256": "70cbde356b4399aa75d1e10c76ba6a789330f0de89438413045c6f4c97496751"
+    },
+    {
+      "name": "about",
+      "file": "screens/about.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "about"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "Account button",
+        "About translationCore"
+      ],
+      "shows": "About translationCore: version and commit of the build, copyright line, license name and Read the license",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 88432,
+      "sha256": "5c89cf6c07230a4fa45d799b65ca0289c1111c3a6c0adc618e32024c1040ca50",
+      "dom": "dom/about.json",
+      "domSha256": "bdb34c05fd77d1f129490346b90f5003a6a97eb81aa58c06e5208b3117d0768b"
+    },
+    {
+      "name": "feedback",
+      "file": "screens/feedback.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "feedback"
+      },
+      "steps": [
+        "Home",
+        "Account button",
+        "Report a problem"
+      ],
+      "shows": "Report a problem dialog, empty message",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 89025,
+      "sha256": "dba64f1bc9ad562113b1a63f16fd01635ba67831e98afe6eeb7f13f6edecc318",
+      "dom": "dom/feedback.json",
+      "domSha256": "cde6f3aacb3ae32801aaa5594a359e29b68b51ba39957506142d26270cf8582f"
+    },
+    {
+      "name": "new-obs",
+      "file": "screens/new-obs.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "newObs"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "New Open Bible Stories"
+      ],
+      "shows": "New Open Bible Stories dialog, empty",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 110867,
+      "sha256": "c2a46c3fa775c7bda99152a21dbcec6ea793b7358c7d4aa4dbd3e75f91876065",
+      "dom": "dom/new-obs.json",
+      "domSha256": "0f61298f0df998e2563954fc1487912632ab2859315d5dfbc533ec3175b8ed28"
+    },
+    {
+      "name": "add-book",
+      "file": "screens/add-book.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "addBook"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: + Add a book"
+      ],
+      "shows": "Add a book to the Bible sample: Start a blank book, or Add books from USFM files",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 92230,
+      "sha256": "2953a757c65fa799441b59b81345b78da9e7604f23df61f974ef1eed5364d59e",
+      "dom": "dom/add-book.json",
+      "domSha256": "6b1cb42fcde976264c558753a00e143d1927aaee41b7d4abdf6ae01ff7405854"
+    },
+    {
+      "name": "source-texts",
+      "file": "screens/source-texts.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "sources"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Settings",
+        "Manage source texts"
+      ],
+      "shows": "Get source texts: Pinned resources (Check for updates) and the gateway-language packages to choose from. Opening it opens the project, so Understand (Jonah) is behind it",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_ult?ipath=JON.usfm -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_ust?ipath=JON.usfm -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_tn?ipath=JON.tsv -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/unfoldingword--hbo_uhb?ipath=JON.usfm -> 400"
+      ],
+      "bytes": 97445,
+      "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+      "dom": "dom/source-texts.json",
+      "domSha256": "80291d855a07f2ae56032bd02c847e4b9d5a6ea08e8d4b4f3f4a9b9e1b5e726b"
+    },
+    {
+      "name": "guided-fix",
+      "file": "screens/guided-fix.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": "fix"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Words card: Fix this"
+      ],
+      "shows": "Guided fix for the Translation Words tool: what is missing (the es-419 TWL/tW pins) and the ways to get it",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 139045,
+      "sha256": "496ab122c8706c18616e009bb96e8c106c52bf6e7fede22279bf6227d74afec2",
+      "dom": "dom/guided-fix.json",
+      "domSha256": "62f3d06f979463ec74b8f5d74e53d3bc60182c1865c03ff489905cfc2ec96ad3"
+    },
+    {
+      "name": "obs-understand",
+      "file": "screens/obs-understand.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "read",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "OBS sample card: story tile \"1 · La Creación\""
+      ],
+      "shows": "OBS Understand, story 1: story rail with the frame grid, one unit per frame with the comment box, helps panel",
+      "status": "incomplete",
+      "incomplete": "Every gateway frame reads \"Gateway text is unavailable.\" and the helps say \"The pinned resource is not on this computer yet\": the sample pins the es-419 OBS set (es-419_obs, es-419_obs-tn, es-419_obs-twl) for its primary set, and no copy is available. No picture pack (uW/obs_images_360) either. en-obs-understand shows the English set.",
+      "absentReads": [],
+      "bytes": 103986,
+      "sha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee",
+      "dom": "dom/obs-understand.json",
+      "domSha256": "7c41a81c882c24b395fe013375d7e648d974db0a07cc68ab24e22628d3c1b642"
+    },
+    {
+      "name": "obs-translate",
+      "file": "screens/obs-translate.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "draft",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "OBS sample card: story tile \"1 · La Creación\"",
+        "Mode switch: Translate"
+      ],
+      "shows": "OBS Translate, story 1: the gateway-story and picture notices, the title and frames 1-2 drafted in Spanish, \"Draft frame N\" pills",
+      "status": "incomplete",
+      "incomplete": "The source column reads \"Gateway text is unavailable.\" under the \"pinned gateway story … is not on this machine / Get source\" notice, and there are no pictures: no copy of the pinned es-419_obs v2 or of the picture pack uW/obs_images_360 is available. en-obs-translate shows the English gateway story.",
+      "absentReads": [],
+      "bytes": 138469,
+      "sha256": "6784d065c0768d6f0c65d827d74f7dca2f6e06ad02a2c92bad23d63223daf5b2",
+      "dom": "dom/obs-translate.json",
+      "domSha256": "6ec6f45963a5bc0d19c0de3ee2d8baf0347aaa48e3be593c709e1a115a4d58c4"
+    },
+    {
+      "name": "obs-check-picker",
+      "file": "screens/obs-check-picker.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "OBS sample card: story tile \"1 · La Creación\"",
+        "Mode switch: Check"
+      ],
+      "shows": "OBS Check tool picker: Translation Words and Translation Notes \"Needs downloading\", Community Checking (no Align for OBS)",
+      "status": "incomplete",
+      "incomplete": "Both helps tools read \"Needs downloading\": es-419_obs-twl / es-419_obs-tn are not vendored (see en-obs-check-tn-session for a ready session).",
+      "absentReads": [],
+      "bytes": 80496,
+      "sha256": "165976fe5621165d4c2265af2165c1af46dd58747622b4761fec41f605d5d414",
+      "dom": "dom/obs-check-picker.json",
+      "domSha256": "1d69259b1f1c9d83e821d03302c77cf5148b0db17713a6feeecab056477ff58a"
+    },
+    {
+      "name": "open-door43",
+      "file": "screens/open-door43.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "openDoor43"
+      },
+      "rebuildDiffers": {
+        "ruling": "Q3",
+        "rebuild": "The note has no sentence that only public repositories can be opened: a new key replaces openDoor43.where in all 10 languages. A private repository opens after sign-in."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "Open a project from Door43"
+      ],
+      "shows": "Open a project from Door43 dialog, empty: the note \"The project opens from git.door43.org. Only public repositories can be opened.\", Door43 repository, Project name, the note that tC4 checks every file before it adds the project, Cancel / Open project (disabled)",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 103250,
+      "sha256": "1421eac5e9fd29f49483be96419df6f283cc1d3c9096faae1b11d21a5d6a9f0a",
+      "dom": "dom/open-door43.json",
+      "domSha256": "278e06ceb1bc8ca07d678bce8808a04af3880ecdb9be575d8f5222a88922e327"
+    },
+    {
+      "name": "open-door43-internet-consent",
+      "file": "screens/open-door43-internet-consent.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "netAsk"
+      },
+      "rebuildDiffers": {
+        "ruling": "Q3",
+        "rebuild": "Behind the scrim, the note of the Open a project from Door43 dialog has no sentence that only public repositories can be opened (see open-door43)."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "Open a project from Door43",
+        "Repository: facilitator-zq/es-419_tit_equipo",
+        "Open project"
+      ],
+      "shows": "\"Turn on the internet?\" asked for an open from Door43 (kind `open`): get a full copy of the project and check its files; nothing from your projects is sent",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 109650,
+      "sha256": "46d3c864d5315b453fb3a6e6059ca9582a46eea96789f41c06e7555b0486ef56",
+      "dom": "dom/open-door43-internet-consent.json",
+      "domSha256": "f793cb83a00d4bb75a4c19ea1daa158225584ed4ad00100d895130e6b6f58bb1"
+    },
+    {
+      "name": "open-door43-refused",
+      "file": "screens/open-door43-refused.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "openDoor43"
+      },
+      "rebuildDiffers": {
+        "ruling": "Q3",
+        "rebuild": "The refusal sentence (openDoor43.refused.other) says \"Make sure that the repository is public\". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only openDoor43.where, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "Open a project from Door43",
+        "Repository: facilitator-zq/es-419_tit_equipo",
+        "Open project",
+        "Turn on internet"
+      ],
+      "shows": "Open a project from Door43 dialog with the refusal callout \"This project cannot be opened.\" for a clone that failed (code sync.clone-failed), \"No project was added.\" and Ask for help. The clone fails because Door43 has no repository of that name",
+      "status": "complete",
+      "absentReads": [
+        "POST /git/clone-repo/git.door43.org/facilitator-zq/es-419_tit_equipo -> 400",
+        "POST /git/delete/_local_/_archive_/tc4-open--_local_-s_local_-ses-d419_tit_equipo -> 400"
+      ],
+      "bytes": 118853,
+      "sha256": "b0b464938b644360ba68430e8b13eb2e3936b49e0b834597769798ff818738f2",
+      "dom": "dom/open-door43-refused.json",
+      "domSha256": "853b8faa7d58888cae07d6249ebb77041f73a811e52eacf92a68f7180a05f882"
+    },
+    {
+      "name": "en-understand-tit1",
+      "file": "screens/en-understand-tit1.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "read",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile"
+      ],
+      "shows": "Understand, Titus 1, Section view, helps panel on Notes with the English Translation Notes v91 (intro note, abstract-nouns note)",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 192914,
+      "sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
+      "dom": "dom/en-understand-tit1.json",
+      "domSha256": "318827605f6f48208421dd272fb87561ec9e34ea8ae7e637ee0e2fcdaf7225a8"
+    },
+    {
+      "name": "en-understand-tw-article",
+      "file": "screens/en-understand-tw-article.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "read",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Helps tab: Words",
+        "Card \"of God\": Read the article"
+      ],
+      "shows": "Understand with the Words tab (Key word cards) and the Translation Words article pane open on \"God\" (kt/god.md)",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 164813,
+      "sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
+      "dom": "dom/en-understand-tw-article.json",
+      "domSha256": "25e035f09f11dae2548cc040e5d5c2f07df0d39b8f54024c9e15d1662bcc900e"
+    },
+    {
+      "name": "en-understand-questions",
+      "file": "screens/en-understand-questions.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "read",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Helps tab: Questions"
+      ],
+      "shows": "Understand with the Questions tab selected",
+      "status": "incomplete",
+      "incomplete": "The tab shows its absent state \"The pinned resource is not on this computer yet\": tC4 does not vendor en_tq v91.",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 129538,
+      "sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
+      "dom": "dom/en-understand-questions.json",
+      "domSha256": "e864d513658ebc23c4a97a67a7fedaca20110f8bd17ef5d390b081ce978ce569"
+    },
+    {
+      "name": "en-translate-tit1",
+      "file": "screens/en-translate-tit1.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "draft",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Translate"
+      ],
+      "shows": "Translate, Titus 1, Section mode, English helps, each \"Draft section\" a pill in the accent colour at the end of its row",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 242012,
+      "sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
+      "dom": "dom/en-translate-tit1.json",
+      "domSha256": "8252bdeb4bb17728b64be6834f74ddc0db7492dc1bb26e3466a73db46b105f9e"
+    },
+    {
+      "name": "en-translate-section-editor",
+      "file": "screens/en-translate-section-editor.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "draft",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Translate",
+        "Draft section 1–3"
+      ],
+      "shows": "Section editor open on Titus 1:1-3 (Type mode): one \"N body\" line per verse, Save section / Cancel; while it is open, the Understand and Check tabs, the book rail and the other \"Draft section\" pills are disabled",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 214390,
+      "sha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
+      "dom": "dom/en-translate-section-editor.json",
+      "domSha256": "b4da7276d8343c2e3f25179752d5720d9e486c342f9656216701443371fc1e2b"
+    },
+    {
+      "name": "en-translate-verse-editor",
+      "file": "screens/en-translate-verse-editor.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "draft",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Translate",
+        "Unit switch: Verse",
+        "Verse 2 (drafted text)",
+        "Scroll the editor to the middle of the pane"
+      ],
+      "shows": "Verse mode with the verse editor open on Titus 1:2 (\"Editing below\" marker, \"DRAFTING 2\" card with Save verse / Cancel); while it is open, the Understand and Check tabs and the book rail are disabled",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 213885,
+      "sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
+      "dom": "dom/en-translate-verse-editor.json",
+      "domSha256": "4eadd4501bc0afaf5835272e9a343f38c7273091f49c825608fdc22187d5db82"
+    },
+    {
+      "name": "en-check-picker",
+      "file": "screens/en-check-picker.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check"
+      ],
+      "shows": "Check tool picker with every tool ready: Translation Words (2 of 182), Translation Notes (0 of 157), Align (0 of 5 verses), Community Checking",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 81060,
+      "sha256": "9395146f7af942dd33e3c7b0329cf6e220bd55fea8a44289fe3c2c2dd42e6439",
+      "dom": "dom/en-check-picker.json",
+      "domSha256": "e63dee6ef5db074ad19fc1259180bfbf30ee88fa2fbfe09a86bbbda473d38563"
+    },
+    {
+      "name": "en-check-tw-session",
+      "file": "screens/en-check-tw-session.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "markingRow": "translationWords",
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Words card: Start checking"
+      ],
+      "shows": "Translation Words session (sorted By word), item \"Paul\" 1:1: rail, \"Learn more: Paul, Saul\", compare card (Greek, ULT highlight, the es-419 draft), the marking row (\"← Previous\", Mark valid, Invalid, To do, \"Next →\"), Bookmark / Add a comment; the header shows only \"Item 1 of 182\"",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 137968,
+      "sha256": "278a4f03c5814c009d70db396de28cecaa7040a9faf161ad4a00879e8713fa3e",
+      "dom": "dom/en-check-tw-session.json",
+      "domSha256": "42722932a2449308f770f2601b28c0619ede8136cd072b4fbc70e05f6cb59ed7"
+    },
+    {
+      "name": "en-check-tw-article",
+      "file": "screens/en-check-tw-article.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": "academy drawer"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Words card: Start checking",
+        "Rail item \"of God\" (1:1)",
+        "Learn more: God"
+      ],
+      "shows": "Translation Words session on the decided item \"of God\" with the article drawer open on \"God\" (kt/god.md)",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 217971,
+      "sha256": "3a9da9304caea4441a70665ea5a3e9ffc35e037a6b50a16df7d351c09b536d7b",
+      "dom": "dom/en-check-tw-article.json",
+      "domSha256": "b4d49169a9a0a6d40226ab420d409fb597085e7d11af5e5d24ce1c5f14f9e0ce"
+    },
+    {
+      "name": "en-check-tn-session",
+      "file": "screens/en-check-tn-session.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Notes card: Start checking"
+      ],
+      "shows": "Translation Notes session on the English notes v91, item 1 (figs-abstractnouns, 1:1): the Greek verse, the quote highlighted in the ULT, the es-419 draft",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 184747,
+      "sha256": "e55099cf15f3f2dbc441e511aa4ffec480c0556040aed9a45e86009abd3ce5d8",
+      "dom": "dom/en-check-tn-session.json",
+      "domSha256": "5f4b3bfdca2e9687025a74e8582134971aeea09a376513f0c96285d5f7a500ce"
+    },
+    {
+      "name": "en-check-ta-drawer",
+      "file": "screens/en-check-ta-drawer.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": "academy drawer"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Notes card: Start checking",
+        "Learn more: Abstract Nouns"
+      ],
+      "shows": "Translation Academy drawer on \"Abstract Nouns\" (translate/figs-abstractnouns) over the Translation Notes session",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 277249,
+      "sha256": "0aba39a0233cfbf39d367d087ddb04b2f3273372e9a605b2a1533f00a7e8b3b6",
+      "dom": "dom/en-check-ta-drawer.json",
+      "domSha256": "599addd7dd4e404cbe3fcaf7c4f4fae03d61b290d60a670ad368d88cbd7b9087"
+    },
+    {
+      "name": "en-community-checking",
+      "file": "screens/en-community-checking.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "publish",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Community Checking card: Open"
+      ],
+      "shows": "Community Checking: the typeset A4 preview of Titus (drop-cap chapter, \"[ verse not yet drafted ]\" runs) and the side panel with Export and Page setup",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 160700,
+      "sha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
+      "dom": "dom/en-community-checking.json",
+      "domSha256": "141e41e06def03a80fbab1ad4f720700a57846192ef8736c093aa8a00841ac5d"
+    },
+    {
+      "name": "en-obs-understand",
+      "file": "screens/en-obs-understand.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "read",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "OBS sample card: story tile \"1 · La Creación\""
+      ],
+      "shows": "OBS Understand, story 1: the English gateway frames with a comment box each, helps panel with the English OBS notes (en_obs-tn v13)",
+      "status": "incomplete",
+      "incomplete": "No frame shows its picture: no copy of the picture pack uW/obs_images_360 is available.",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 156361,
+      "sha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346",
+      "dom": "dom/en-obs-understand.json",
+      "domSha256": "baa40c8df8cb08d84f0004fa1e03d48a5d4ed34c3c595ede8c20659de3b7e5fa"
+    },
+    {
+      "name": "en-obs-translate",
+      "file": "screens/en-obs-translate.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "draft",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "OBS sample card: story tile \"1 · La Creación\"",
+        "Mode switch: Translate"
+      ],
+      "shows": "OBS Translate, story 1: the English gateway story beside the Spanish title and frames, English OBS helps",
+      "status": "incomplete",
+      "incomplete": "No picture shows, and a notice lists why: no copy of the picture pack uW/obs_images_360 is available.",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 205217,
+      "sha256": "c26e72b482a96237b495cd889ce89b992b635706c16104ebd74dad2f79445fff",
+      "dom": "dom/en-obs-translate.json",
+      "domSha256": "d5e57147b904caf2c5373f9ea7245f64c3d0117e1b3edfb7c262685334432a64"
+    },
+    {
+      "name": "en-obs-check-tn-session",
+      "file": "screens/en-obs-check-tn-session.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "markingRow": "translationNotes",
+      "steps": [
+        "Home",
+        "OBS sample card: story tile \"1 · La Creación\"",
+        "Mode switch: Check",
+        "Translation Notes card: Start checking"
+      ],
+      "shows": "OBS Translation Notes session, story 1 (sorted By frame), item \"The Creation\" 1:0: the title note, the English gateway title highlighted, the Spanish title, the marking row with \"← Previous\" and \"Next →\"",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_local_/sample_burrito_obs?ipath=checking/translationNotes/OBS.json -> 400",
+        "GET /burrito/ingredient/raw/_local_/_local_/sample_burrito_obs?ipath=checking/translationWords/OBS.json -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 109668,
+      "sha256": "493e46a7b85805ed7e9e53c4572d98a26d6a0e21eac2b40466df606ab31b1908",
+      "dom": "dom/en-obs-check-tn-session.json",
+      "domSha256": "f273aad7f66d88cd953a16040cb275be9c4115964eee2da901d4a20ac335fdd6"
+    },
+    {
+      "name": "ar-check-tw-session",
+      "file": "screens/ar-check-tw-session.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "markingRow": "translationWords",
+      "steps": [
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Translation Words card: Start checking"
+      ],
+      "shows": "en-check-tw-session with the interface in Arabic: the whole chrome right to left, and the marking row \"→ السابق\", the triage buttons, \"التالي ←\", with the arrows turned for right to left",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 142463,
+      "sha256": "5c7b8d085a48e1f4c93b20ab28626d68f5d3637172be5223cef948a408b1cfaa",
+      "dom": "dom/ar-check-tw-session.json",
+      "domSha256": "5335857c6c9d47166c5ddb2036690bb1067a96f4599da2ef32aceb946f31b216"
+    },
+    {
+      "name": "en-check-tw-session-620",
+      "file": "screens/en-check-tw-session-620.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "translationWords",
+      "steps": [
+        "Window 620 px wide",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Words card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "en-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 97392,
+      "sha256": "f19896cc9ea4649a4b9ce3071eac92a048991f0fd615928660040607f011755f",
+      "dom": "dom/en-check-tw-session-620.json",
+      "domSha256": "9873f927c42a7cee097216deb8b414e00dbf466b2a43d8278612382c20c30971"
+    },
+    {
+      "name": "ar-check-tw-session-620",
+      "file": "screens/ar-check-tw-session-620.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "translationWords",
+      "steps": [
+        "Window 620 px wide",
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Translation Words card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "ar-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines, right to left",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 95248,
+      "sha256": "ee47a0f3f72874972a0a4a9977a945f71d6d9b76823bcae06ed99c371346d9b0",
+      "dom": "dom/ar-check-tw-session-620.json",
+      "domSha256": "76e62fefed2aa0fb22a309bb984ac0ad5abdb5375b5cee8dd0fba5e7d45d38cf"
+    },
+    {
+      "name": "en-check-tn-session-row",
+      "file": "screens/en-check-tn-session-row.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "markingRow": "translationNotes",
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Notes card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "en-check-tn-session scrolled to the marking row: the end of WHAT TO CHECK, \"Learn more: Abstract Nouns\", the compare card, then \"← Previous\", Mark valid, Invalid, To do, \"Next →\", and Bookmark / Add a comment",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 175308,
+      "sha256": "0f5e62bcd951a4092b25f47a1ad32a0396eefe2d8915cd69684aa86e0c383a3a",
+      "dom": "dom/en-check-tn-session-row.json",
+      "domSha256": "0784e877e880d7087ca29abc7ccb5711ddb03aca0ce96c26edbe32a4ce98ef88"
+    },
+    {
+      "name": "ar-check-tn-session-row",
+      "file": "screens/ar-check-tn-session-row.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "markingRow": "translationNotes",
+      "steps": [
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Translation Notes card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "en-check-tn-session-row with the interface in Arabic: the chrome and the marking row run right to left (\"→ السابق\", the triage buttons, \"التالي ←\", with the arrows turned)",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 173637,
+      "sha256": "91c56b63b44a56edc174cb4a3c28f69abb7a71c4e1d8467bcaee646699ad7402",
+      "dom": "dom/ar-check-tn-session-row.json",
+      "domSha256": "a80aa7b5dd6443598f909aa04811988149616f367494cf8cadd9bb4ee3892de3"
+    },
+    {
+      "name": "en-check-tn-session-620",
+      "file": "screens/en-check-tn-session-620.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "translationNotes",
+      "steps": [
+        "Window 620 px wide",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Notes card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "en-check-tn-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 109973,
+      "sha256": "22f577c2692653fb04ab53ebc54d96bfa39c385878c6312ed14fb13f3a952b64",
+      "dom": "dom/en-check-tn-session-620.json",
+      "domSha256": "06e81cf07db937d02e57869547cd86b9a4b5733c2867ee76cd5a6db676524647"
+    },
+    {
+      "name": "ar-check-tn-session-620",
+      "file": "screens/ar-check-tn-session-620.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "translationNotes",
+      "steps": [
+        "Window 620 px wide",
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Translation Notes card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "ar-check-tn-session-row in a window 620 px wide: the marking row wraps onto three lines, right to left",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 108789,
+      "sha256": "7cd38212ff8871f115033e457c3634f0fcdc8d34ae788054bad80c8499ba5959",
+      "dom": "dom/ar-check-tn-session-620.json",
+      "domSha256": "e0475064415c34699c39081b338ee882e94fd7af16308595cfdb86bd9fe70b4d"
+    },
+    {
+      "name": "shared-home",
+      "file": "screens/shared-home.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "steps": [
+        "Launch tC4"
+      ],
+      "shows": "Home with both samples shared on Door43: \"On Door43\" beside each name; the Bible card reads \"Sync with Door43\", the OBS card \"Upload changes\" (tC4 4.0 syncs Bible projects only)",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 72551,
+      "sha256": "c78f2bacdab899a9c7ff2810a42b788a3ff458a24c158cef32693dd1952bd00d",
+      "dom": "dom/shared-home.json",
+      "domSha256": "68fada25af73568dd6dcd2396f409970e002f12d12b559bf08701e9e9659b64f"
+    },
+    {
+      "name": "sync-internet-consent",
+      "file": "screens/sync-internet-consent.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "netAsk"
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Sync with Door43"
+      ],
+      "shows": "\"Turn on the internet?\" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project. Behind the scrim, the OBS card reads \"Upload changes\"",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 93953,
+      "sha256": "b5fa1c58f7192dc0bcf87fd68684f66b005f9ca2c0372d4643d9ec461ce862a1",
+      "dom": "dom/sync-internet-consent.json",
+      "domSha256": "db3fd86171d31f6bb125af94b71d35fac6b59fd350f986d7ba26899a58ba0f87"
+    },
+    {
+      "name": "sync-failed",
+      "file": "screens/sync-failed.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": false,
+        "code": "sync.clone-failed",
+        "text": "The sync did not complete. tC4 could not get the project from Door43. Nothing changed. Try again.",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 0,
+        "from": null,
+        "restored": 0,
+        "missingPins": 0,
+        "links": []
+      },
+      "steps": [
+        "Home",
+        "Door43 main: the Bible sample as it is now (the push of its first share)",
+        "Door43: the connection drops at the next clone of the Bible sample's repository",
+        "Bible sample card: Sync with Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq"
+      ],
+      "shows": "Home with the sync result toast of a sync that did not complete: red dot, \"The sync did not complete.\" and the sentence of code sync.clone-failed, the dismiss button. Door43 has main, so the sync starts, and then the clone of main fails because the connection to git.door43.org drops",
+      "status": "complete",
+      "absentReads": [
+        "POST /git/clone-repo/git.door43.org/facilitator-zq/sample_burrito -> 400",
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
+      ],
+      "bytes": 83596,
+      "sha256": "6f2438fd358bb7cd386b615e62c4ee22b3ae91f08d0cff3cfe6feb1b90136b68",
+      "dom": "dom/sync-failed.json",
+      "domSha256": "aa5bed6dff1d4c21266ca6260597407c50a870452b14333abe6bce3c36477a54"
+    },
+    {
+      "name": "sync-ok",
+      "file": "screens/sync-ok.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review This project now uses 5 resource versions that are not on this computer. Download",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 0,
+        "from": null,
+        "restored": 0,
+        "missingPins": 5,
+        "links": [
+          "download"
+        ],
+        "missingVersions": [
+          "git.door43.org/es-419_gl/es-419_twl v18",
+          "git.door43.org/es-419_gl/es-419_tw v37",
+          "git.door43.org/es-419_gl/es-419_ta v4",
+          "git.door43.org/unfoldingWord/en_tq v91",
+          "git.door43.org/unfoldingWord/hbo_uhb v3.0.0"
+        ]
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Home",
+        "Door43 main: the Bible sample as it is now (the push of its first share)",
+        "Bible sample card: Sync with Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq"
+      ],
+      "shows": "Home with the toast of a sync that completed with no change from teammates: kindle dot, \"Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review\", the note \"This project now uses 5 resource versions that are not on this computer.\", Download and the dismiss button",
+      "status": "incomplete",
+      "incomplete": "The note on missing resource versions counts the 5 versions that the Bible sample pins and the mock does not have: es-419_twl v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. With every pinned version on the computer, the toast shows no such note and no Download. Its dot is then green.",
+      "absentReads": [
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
+      ],
+      "bytes": 88257,
+      "sha256": "a18ee79d4176c0a2240fb882329d82e973acb160ff2ceddb0c6f6987c20d3fd0",
+      "dom": "dom/sync-ok.json",
+      "domSha256": "9bb43af701a303f5c82c6100319ca7eee7fc0b41fda0c7d1f499e60622409b4b"
+    },
+    {
+      "name": "sync-ok-teammates",
+      "file": "screens/sync-ok-teammates.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: Teammate 1 · Teammate 2 This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 2,
+        "newestWins": 0,
+        "verseConflicts": 1,
+        "from": "Changes from: Teammate 1 · Teammate 2",
+        "restored": 0,
+        "missingPins": 5,
+        "links": [
+          "review",
+          "download"
+        ],
+        "missingVersions": [
+          "git.door43.org/es-419_gl/es-419_twl v18",
+          "git.door43.org/es-419_gl/es-419_tw v37",
+          "git.door43.org/es-419_gl/es-419_ta v4",
+          "git.door43.org/unfoldingWord/en_tq v91",
+          "git.door43.org/unfoldingWord/hbo_uhb v3.0.0"
+        ]
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Home",
+        "Door43 main: the Bible sample as it is now (the push of its first share)",
+        "Door43 main: two teammates change Titus 1:1 from the same version",
+        "Bible sample card: Sync with Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq"
+      ],
+      "shows": "Home with the toast of a sync that brought two teammates' changes to Titus 1:1: kindle dot, \"Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review\", \"Changes from: Teammate 1 · Teammate 2\", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip \"1 conflict · Review\" and the Titus tile \"1 conflict\"",
+      "status": "incomplete",
+      "incomplete": "The note on missing resource versions counts the 5 versions that the Bible sample pins and the mock does not have: es-419_twl v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. With every pinned version on the computer, the toast shows no such note and no Download.",
+      "absentReads": [
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
+      ],
+      "bytes": 94676,
+      "sha256": "0910d21244995a259b69876e04c6ade16a8296414b04e46fe299471a58b563a6",
+      "dom": "dom/sync-ok-teammates.json",
+      "domSha256": "a01069bc139151d47812a1d8b0706c14687eb6d5ac41e375521ea33ffff000e1"
+    },
+    {
+      "name": "sync-ok-restored",
+      "file": "screens/sync-ok-restored.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Door43 did not have 1 change from a teammate. tC4 sent it again. This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 1,
+        "from": null,
+        "restored": 1,
+        "missingPins": 5,
+        "links": [
+          "review",
+          "download"
+        ],
+        "missingVersions": [
+          "git.door43.org/es-419_gl/es-419_twl v18",
+          "git.door43.org/es-419_gl/es-419_tw v37",
+          "git.door43.org/es-419_gl/es-419_ta v4",
+          "git.door43.org/unfoldingWord/en_tq v91",
+          "git.door43.org/unfoldingWord/hbo_uhb v3.0.0"
+        ]
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Home",
+        "Door43 main: the Bible sample as it is now (the push of its first share)",
+        "Door43 main: two teammates change Titus 1:1 from the same version",
+        "Bible sample card: Sync with Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq",
+        "Sync result: dismiss",
+        "Door43 main: the second teammate's change is gone, as when someone replaces main with an older copy",
+        "Bible sample card: Sync with Door43"
+      ],
+      "shows": "Home with the toast of a second sync, after Door43 main lost a teammate's change that the first sync brought to this computer: kindle dot, \"Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review\", the note \"Door43 did not have 1 change from a teammate. tC4 sent it again.\", the note on the 5 missing resource versions, Review, Download and the dismiss button",
+      "status": "incomplete",
+      "incomplete": "The note on missing resource versions counts the 5 versions that the Bible sample pins and the mock does not have: es-419_twl v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. With every pinned version on the computer, the toast shows no such note and no Download.",
+      "absentReads": [
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
+      ],
+      "bytes": 96171,
+      "sha256": "79183c1b8105b97bec2b3ff79071306cbd292a923a453220759c28a5ca0c0d39",
+      "dom": "dom/sync-ok-restored.json",
+      "domSha256": "35e4ede29d07ee4426b6e7e78385e8ff8d960a9153b455ef8a5a5b2baca173fe"
+    }
+  ]
+}

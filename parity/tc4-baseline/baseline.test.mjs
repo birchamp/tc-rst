@@ -171,6 +171,15 @@ test('the README lists every screen of the manifest in order, with its scenario,
   }
 });
 
+test('the screens changed since d310bf3 are in the manifest, and each keeps its old image', () => {
+  const changed = screenRows(section(readme, 'Changes since d310bf3'));
+  assert.ok(changed.length > 0);
+  for (const { name } of changed) {
+    assert.ok(byName.has(name), `${name} is not in the manifest`);
+    assert.ok(fs.existsSync(path.join(HERE, 'history', 'd310bf3', `${name}.png`)), `history/d310bf3/${name}.png is missing`);
+  }
+});
+
 test('the README states the tC4 commit and the totals of the manifest', () => {
   const text = flat(readme);
   const t = manifest.totals;
