@@ -153,7 +153,7 @@ fn section_7_6_names_every_baseline_screen_with_its_units() {
             "§10 has no {unit}"
         );
     }
-    assert_eq!(design.units.len(), 48);
+    assert_eq!(design.units.len(), 51);
 }
 
 /// A gallery group named for a screen or dialog of the screen map (`S4`, `M18`) is built by the

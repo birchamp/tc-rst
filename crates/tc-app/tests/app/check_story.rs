@@ -65,9 +65,24 @@ async fn open_obs(t: &TestApp) -> Scope {
         .at
 }
 
+/// Leaves the story project and waits until no session holds it: a side user (a background
+/// read) keeps it open after the screen leaves, and its close lets go of the project's lock,
+/// which a teammate's edit through the store needs.
 async fn leave(t: &TestApp, at: &Scope) {
     t.app.sessions().leave_screen(at).unwrap();
-    t.app.sessions().settled(&folder(OBS)).await;
+    let started = std::time::Instant::now();
+    loop {
+        t.app.sessions().settled(&folder(OBS)).await;
+        let open = t.app.sessions().open_sessions();
+        if !open.iter().any(|s| s.at.project == folder(OBS)) {
+            return;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(60),
+            "hung: the story project is still open 60 s after the screen left"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
 }
 
 async fn rail(t: &TestApp, at: &Scope, tool: Tool) -> Vec<RailRow> {
