@@ -33,6 +33,7 @@ function fakeCtx(over = {}) {
   const ctx = {
     calls,
     origin: () => ORIGIN,
+    served: () => new Set(['http://127.0.0.1:4099', ORIGIN]),
     window: () => 'win',
     log: () => {},
     downloads: () => '/home/p/Downloads',
@@ -157,6 +158,9 @@ test('feedback_send_with_a_key_sends_from_the_main_process', async () => {
 test('only_the_app_page_may_call_the_bridge', () => {
   const ctx = fakeCtx();
   assert.equal(bridge.trusted(ctx, { senderFrame: { url: `${ORIGIN}/` } }), true);
+  // The page of the run before a tc4 restart, still on screen until Home reloads.
+  assert.equal(bridge.trusted(ctx, { senderFrame: { url: 'http://127.0.0.1:4099/?probe=fields' } }), true);
+  assert.equal(bridge.trusted(ctx, { senderFrame: { url: 'http://127.0.0.1:4098/' } }), false);
   assert.equal(bridge.trusted(ctx, { senderFrame: { url: 'https://door43.org/' } }), false);
   assert.equal(bridge.trusted(ctx, { senderFrame: null }), false);
   const handled = {};

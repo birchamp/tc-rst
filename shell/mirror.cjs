@@ -129,26 +129,51 @@ async function openMirror(appData, { fsp = fs.promises, onError = () => {} } = {
   const reduction = new Reduction();
   for (const line of text.split('\n')) reduction.add(line);
   const kept = reduction.lines();
-  await replaceAtomically(file, kept.map((line) => `${line}\n`).join(''), fsp);
+  // A file whose last line was cut gets a newline before the next line, so the two never fuse.
+  let torn = text !== '' && !text.endsWith('\n');
+  try {
+    await replaceAtomically(file, kept.map((line) => `${line}\n`).join(''), fsp);
+    torn = false;
+  } catch (error) {
+    // Another program holds the log, or the disk is full: the old file still holds every line
+    // read above, so this run appends to it as it is.
+    onError(error);
+  }
   const handle = await fsp.open(file, 'a');
 
   let queued = [];
   let writing = null;
+  let failing = false;
+  let retry = null;
   let dirty = false;
   let syncing = null;
   let closed = false;
 
-  // One write at a time keeps the lines in order; lines that come meanwhile go out together.
+  // One write at a time keeps the lines in order; lines that come meanwhile go out together. A
+  // write that fails (a full disk) may have left part of its chunk: the chunk goes back to the
+  // front of the queue, and is tried again a second later after a newline.
   const drain = () => {
-    if (writing || queued.length === 0) return;
-    const chunk = queued.join('');
+    if (writing || retry || queued.length === 0) return;
+    const chunk = (torn ? '\n' : '') + queued.join('');
     queued = [];
     writing = handle
       .appendFile(chunk, 'utf8')
       .then(() => {
         dirty = true;
+        torn = false;
+        failing = false;
       })
-      .catch((error) => onError(error))
+      .catch((error) => {
+        onError(error);
+        queued.unshift(chunk.replace(/^\n/, ''));
+        torn = true;
+        failing = true;
+        retry = setTimeout(() => {
+          retry = null;
+          drain();
+        }, SYNC_MS);
+        retry.unref();
+      })
       .finally(() => {
         writing = null;
         drain();
@@ -189,15 +214,24 @@ async function openMirror(appData, { fsp = fs.promises, onError = () => {} } = {
     // Every line written and synced: before the shell ends.
     async flush() {
       while (writing || queued.length > 0) {
-        drain();
+        if (!writing) {
+          clearTimeout(retry);
+          retry = null;
+          drain();
+        }
         await writing;
+        // A write that just failed again: what it holds stays queued, and the flush ends.
+        if (failing) break;
       }
+      // A sync already running may have begun before the last write: wait for it, then sync again.
+      if (syncing) await syncing;
       await sync();
     },
     async close() {
       await this.flush();
       closed = true;
       clearInterval(timer);
+      clearTimeout(retry);
       await handle.close();
     },
   };

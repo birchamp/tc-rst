@@ -146,10 +146,13 @@ const BRIDGE = Object.freeze({
   takeBuffered: { kind: 'invoke', channel: 'shell:takeBuffered', handle: (ctx) => ctx.mirrorTake() },
 });
 
-// Only the app's own page, in the shell's own window, may call the bridge.
+// Only a page of an origin this shell's tc4 served may call the bridge. Not only the current
+// one: after tc4 restarts on a new port, the page still on screen is of the old origin, and the
+// lines it sends before Home reloads must reach the mirror.
 function trusted(ctx, event) {
   const url = event.senderFrame ? event.senderFrame.url : '';
-  return lib.sameOrigin(url, ctx.origin());
+  const origin = lib.originOf(url);
+  return origin !== null && ctx.served().has(origin);
 }
 
 // Registers every entry with ipcMain.

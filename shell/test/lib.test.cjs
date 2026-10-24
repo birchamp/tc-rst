@@ -76,7 +76,8 @@ test('token_is_redacted_from_every_log_line', () => {
 test('links_on_the_app_origin_stay_in_the_app', () => {
   assert.equal(lib.linkTarget(`${ORIGIN}/help/x.html`, ORIGIN), 'app');
   assert.equal(lib.linkTarget('https://door43.org/u/x', ORIGIN), 'browser');
-  assert.equal(lib.linkTarget('http://127.0.0.1:4101/', ORIGIN), 'browser');
+  assert.equal(lib.linkTarget('http://127.0.0.1:4101/help/x.html', ORIGIN), 'refuse', 'an old run of tc4');
+  assert.equal(lib.linkTarget('http://localhost:4100/', ORIGIN), 'refuse');
   for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'tc4://app/', 'not a url']) {
     assert.equal(lib.linkTarget(url, ORIGIN), 'refuse', url);
   }

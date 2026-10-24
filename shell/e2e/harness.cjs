@@ -105,9 +105,9 @@ function tc4Pids(dir) {
   if (process.platform === 'win32') {
     const out = execFileSync('powershell.exe', [
       '-NoProfile', '-Command',
-      'Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*serve*" } | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }',
+      'Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*serve*" -and $_.CommandLine -notlike "*main.cjs*" } | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }',
     ], { encoding: 'utf8' });
-    return out.split(/\r?\n/).filter((l) => l.includes(marker) && /tc4(\.exe)?["\s]/.test(l)).map((l) => Number(l.split('\t')[0]));
+    return out.split(/\r?\n/).filter((l) => l.includes(marker) && / serve /.test(l) && !/electron|main\.cjs/i.test(l)).map((l) => Number(l.split('\t')[0]));
   }
   const out = execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8' });
   return out

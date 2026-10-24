@@ -19,7 +19,10 @@ const mirrorFile = require('./mirror.cjs');
 const bridge = require('./bridge.cjs');
 
 const ASK_PAGE_MS = 5000;
-const QUIT_MS = 5000;
+// tc4 closes within 5 s (SHELL.md item 3); the kill comes a second later, so it never cuts a
+// close that keeps its promise.
+const QUIT_MS = 6000;
+const QUERY_MS = 5000;
 
 let options;
 try {
@@ -59,6 +62,8 @@ fs.mkdirSync(path.resolve(options.appData), { recursive: true });
 let machine = lib.initial();
 let win = null;
 let server = null; // { child, origin, token }
+let spawned = null; // the tc4 process, from its spawn on, before and after its address
+const served = new Set(); // every origin this shell's tc4 has had
 let canClose = true;
 let closeHandler = null; // the page's webContents once it called onCloseRequested
 let closeAsk = 0;
@@ -97,7 +102,12 @@ async function query(name) {
   const s = server;
   if (!s) return null;
   try {
-    const response = await fetch(`${s.origin}/api/v1/${name}`, { method: 'POST', headers: headers(s), body: '{}' });
+    const response = await fetch(`${s.origin}/api/v1/${name}`, {
+      method: 'POST',
+      headers: headers(s),
+      body: '{}',
+      signal: AbortSignal.timeout(QUERY_MS),
+    });
     const reply = await response.json();
     return reply && reply.type === 'ok' ? reply.value : null;
   } catch (_) {
@@ -124,29 +134,33 @@ function spawnServer() {
     // stdin closes.
     detached: true,
   });
+  spawned = child;
   child.stdin.on('error', () => {});
   child.stderr.on('data', (chunk) => log('tc4 stderr', { text: String(chunk).slice(0, 2000) }));
   let addressed = false;
   let refusal = null;
   let reported = false;
+  let held = false;
   const failed = (reason) => {
     if (reported) return;
     reported = true;
     startError = reason;
-    dispatch({ type: 'startError', reason });
+    dispatch({ type: 'startError', reason, held });
   };
   readline.createInterface({ input: child.stdout }).on('line', (line) => {
     if (addressed || refusal) return;
     const parsed = lib.parseAddress(line);
     if (parsed.error) {
       // tc4 exits after an error line; the exit reports it.
-      refusal = parsed.error.type === 'appLockHeld' ? lib.exitReason(3, null) : parsed.error.message;
+      held = parsed.error.type === 'appLockHeld';
+      refusal = held ? lib.exitReason(3, null) : parsed.error.message;
       log('tc4 refused to start', parsed.error);
       return;
     }
     addressed = true;
     secrets.push(parsed.address.token);
     server = { child, ...parsed.address };
+    served.add(server.origin);
     log('tc4 started', { pid: child.pid, port: parsed.address.port });
     installFilter(server);
     query('app/hello').then((hello) => {
@@ -180,8 +194,10 @@ function load(url) {
 }
 
 function showWindow() {
-  win = new BrowserWindow(lib.windowOptions({ platform: process.platform, preload: path.join(__dirname, 'preload.cjs') }));
+  // Maximized before it shows, as tC4's window, in the same moment.
+  win = new BrowserWindow(lib.windowOptions({ platform: process.platform, preload: path.join(__dirname, 'preload.cjs'), show: false }));
   win.maximize();
+  win.show();
   log('window shown', { visible: win.isVisible() });
   win.on('close', (event) => {
     if (exiting) return;
@@ -215,7 +231,10 @@ function askPage() {
   }
   closeHandler.send('shell:closeRequested', id);
   pageTimer = setTimeout(() => {
-    if (id === closeAsk) dispatch({ type: 'pageTimeout' });
+    if (id !== closeAsk) return;
+    // A late answer belongs to this round, which the person now answers.
+    closeAsk++;
+    dispatch({ type: 'pageTimeout' });
   }, ASK_PAGE_MS);
 }
 
@@ -235,19 +254,20 @@ function askUser() {
       title: 'Unsaved changes',
       message: 'You have unsaved changes. Are you sure you want to close the application?',
       buttons: ['Yes', 'No'],
-      defaultId: 1,
-      cancelId: 1,
     })
     .then(({ response }) => dispatch({ type: 'userAnswered', close: response === 0 }));
 }
 
 function sendQuit() {
-  const s = server;
-  if (!s) return;
-  try {
-    s.child.stdin.write('{"quit":true}\n');
-  } catch (_) {
-    // The pipe is gone: tc4 sees its stdin closed, which quits it too.
+  const child = spawned;
+  if (child && child.exitCode === null && child.signalCode === null) {
+    try {
+      // Before its address line tc4 reads no message yet; its stdin closing quits it too.
+      if (server && server.child === child) child.stdin.write('{"quit":true}\n');
+      else child.stdin.end();
+    } catch (_) {
+      // The pipe is gone: tc4 sees its stdin closed, which quits it too.
+    }
   }
   clearTimeout(quitTimer);
   quitTimer = setTimeout(() => dispatch({ type: 'quitTimeout' }), QUIT_MS);
@@ -289,7 +309,7 @@ const ACTIONS = {
   askUser,
   sendQuit,
   killServer: () => {
-    if (server) server.child.kill('SIGKILL');
+    if (spawned) spawned.kill('SIGKILL');
   },
   exitApp,
   showStartError: () => load(lib.startErrorPage(startError)),
@@ -304,6 +324,7 @@ const ctx = {
   log,
   fetch: (...args) => fetch(...args),
   origin,
+  served: () => served,
   window: () => win,
   windowOptions: (o) => lib.windowOptions({ platform: process.platform, ...o }),
   downloads: () => app.getPath('downloads'),

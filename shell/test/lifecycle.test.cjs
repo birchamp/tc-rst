@@ -96,6 +96,15 @@ test('three_quick_exits_stop_restarting_and_show_the_start_error', () => {
     { type: 'serverExit', at: 21000 },
   ]);
   assert.equal(slow.state, State.Restarting);
+  // An hour's run, then three quick exits: the third stops.
+  const afterLong = [{ type: 'ready' }, { type: 'address', startup: 'ready', at: 0 }, { type: 'serverExit', at: 3600000 }];
+  for (let i = 1; i <= 2; i++) afterLong.push({ type: 'address', startup: 'ready', at: 3600000 + i * 1000 }, { type: 'serverExit', at: 3600500 + i * 1000 });
+  assert.equal(run(afterLong).state, State.Restarting, 'two quick exits after a long run restart');
+  afterLong.push({ type: 'address', startup: 'ready', at: 3610000 }, { type: 'serverExit', at: 3610500 });
+  assert.equal(run(afterLong).state, State.Stopped);
+  // A held app lock on a restart shows the start error at once.
+  const held = run([{ type: 'ready' }, { type: 'address', startup: 'ready', at: 0 }, { type: 'serverExit', at: 60000 }, { type: 'startError', held: true, at: 70000 }]);
+  assert.equal(held.state, State.Stopped);
 });
 
 test('a_close_while_running_asks_the_page_then_the_person', () => {
@@ -162,6 +171,7 @@ function simulate(seed, steps) {
   let quitTimer = false;
   let maxAlive = 0;
   let serverless = null;
+  let stuck = null;
   const trace = [];
   const alive = () => servers.filter((s) => s.phase !== 'gone');
   const current = () => alive()[alive().length - 1];
@@ -190,6 +200,8 @@ function simulate(seed, steps) {
     // A page that shows as Home or Prepare has a tc4 behind it.
     const live = [State.Preparing, State.Running].includes(machine.state);
     if (live && !alive().some((x) => x.phase === 'up') && serverless === null) serverless = trace.length;
+    // A tc4 that never answers must not keep the app open: quitting always has its kill timer.
+    if (machine.state === State.Quitting && alive().length > 0 && !quitTimer && stuck === null) stuck = trace.length;
   };
 
   dispatch({ type: 'ready' });
@@ -207,6 +219,11 @@ function simulate(seed, steps) {
         dispatch({ type: 'startError', reason: 'exit 4' });
       });
     }
+    // A tc4 still starting, whose stdin closed, ends.
+    if (s && s.phase === 'starting' && s.asked) options.push(() => {
+      s.phase = 'gone';
+      dispatch({ type: 'startError', reason: 'stdin closed' });
+    });
     if (s && s.phase === 'up') {
       options.push(() => {
         s.phase = 'gone';
@@ -240,7 +257,7 @@ function simulate(seed, steps) {
     });
     pick(options)();
   }
-  return { ended, alive: alive().length, maxAlive, serverless, state: machine.state, trace };
+  return { ended, alive: alive().length, maxAlive, serverless, stuck, state: machine.state, trace };
 }
 
 test('random_lifecycles_end_with_no_tc4_running', () => {
@@ -250,6 +267,7 @@ test('random_lifecycles_end_with_no_tc4_running', () => {
     const result = simulate(seed, 60);
     const where = `seed ${seed} (SHELL_MODEL_SEED=${seed}): ${result.trace.join(', ')}`;
     assert.ok(result.maxAlive <= 1, `two tc4 at once, ${where}`);
+    assert.equal(result.stuck, null, `quitting with tc4 alive and no kill timer, ${where}`);
     assert.equal(result.serverless, null, `Preparing or Running with no tc4, ${where}`);
     if (result.ended) assert.equal(result.alive, 0, `tc4 left running after the end, ${where}`);
   }

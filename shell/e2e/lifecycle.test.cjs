@@ -52,7 +52,15 @@ h.shellTest('ending_tc4_restarts_it_and_reloads_home', async () => {
   try {
     const page = await h.home(app);
     const [first] = h.started(dir);
+    const line = require('../../fixtures/shell/buffer-vectors.json').vectors[0].lines[1];
     h.hardKill(first.data.pid);
+    // Typed while tc4 is gone, on the page of the old port: the mirror must still take it.
+    await h.until('tc4 ended', () => h.logOf(dir).some((l) => l.ev === 'tc4 ended'));
+    const from = await page.evaluate((line) => {
+      window.tc4Shell.bufferChanged(line);
+      return location.port;
+    }, line);
+    console.log(`# a line sent from port ${from} while tc4 was gone (the old port: ${first.data.port})`);
     await h.until('a new tc4', () => h.started(dir).length === 2);
     const second = h.started(dir)[1];
     assert.notEqual(second.data.pid, first.data.pid);
@@ -61,6 +69,8 @@ h.shellTest('ending_tc4_restarts_it_and_reloads_home', async () => {
       return Number(port) === second.data.port && (await page.getByTestId('account-menu').count()) > 0;
     });
     assert.ok(h.logOf(dir).some((l) => l.ev === 'dispatch' && l.data.actions.includes('reloadHome')));
+    assert.ok((await page.evaluate(() => window.tc4Shell.takeBuffered())).includes(line), 'the line typed during the restart is kept');
+    assert.ok(!h.logOf(dir).some((l) => l.ev === 'bridge call refused'), 'no bridge call was refused');
     assert.deepEqual(h.tc4Pids(dir), [second.data.pid]);
   } finally {
     await h.finish(app);

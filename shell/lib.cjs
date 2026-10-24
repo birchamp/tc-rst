@@ -39,11 +39,11 @@ const stay = (machine) => ({ machine, actions: [] });
 const go = (machine, state, actions, extra) => ({ machine: { ...machine, ...extra, state }, actions });
 const focus = (machine) => ({ machine, actions: ['focusWindow'] });
 
-// A tc4 that ends within 10 s of its start counts toward the stop; one that ran longer starts
-// the count again.
+// A tc4 that ends within 10 s of its start counts toward the stop; one that ran longer does not,
+// and starts the count again.
 function afterExit(machine, at) {
   const quick = machine.startedAt !== null && at - machine.startedAt < QUICK_EXIT_MS;
-  const quickExits = quick ? machine.quickExits + 1 : 1;
+  const quickExits = quick ? machine.quickExits + 1 : 0;
   if (quickExits >= QUICK_EXITS_TO_STOP) {
     return go(machine, State.Stopped, ['showStartError'], { quickExits, startedAt: null });
   }
@@ -64,8 +64,8 @@ const TRANSITIONS = Object.freeze({
     startError: (m) => go(m, State.Stopped, ['showStartError']),
     // tc4 ended after its address line, before it said whether it prepares.
     serverExit: (m, e) => afterExit(m, e.at),
-    // tc4 is starting: it gets the quit message once its address line comes.
-    closeRequested: (m) => go(m, State.Quitting, []),
+    // tc4 is starting: its stdin closes, which quits it, and the 5 s count starts.
+    closeRequested: (m) => go(m, State.Quitting, ['sendQuit']),
     pageAnswered: stay,
     pageTimeout: stay,
     userAnswered: stay,
@@ -103,10 +103,11 @@ const TRANSITIONS = Object.freeze({
     ready: stay,
     address: (m, e) => onAddress(m, e, 'reloadHome'),
     homeShown: stay,
-    startError: (m, e) => afterExit(m, e.at),
+    // Another tc4 holds the app data folder: starting again cannot help.
+    startError: (m, e) => (e.held ? go(m, State.Stopped, ['showStartError']) : afterExit(m, e.at)),
     serverExit: (m, e) => afterExit(m, e.at),
     // The old page cannot reach the new port, so it holds nothing the mirror does not.
-    closeRequested: (m) => go(m, State.Quitting, []),
+    closeRequested: (m) => go(m, State.Quitting, ['sendQuit']),
     pageAnswered: stay,
     pageTimeout: stay,
     userAnswered: stay,
@@ -291,7 +292,9 @@ function isWebUrl(url) {
 // anything else nowhere.
 function linkTarget(url, origin) {
   if (sameOrigin(url, origin)) return 'app';
-  if (isWebUrl(url)) return 'browser';
+  // This computer's own address is never a page for the system browser: an old run's port, or
+  // another program's.
+  if (isWebUrl(url) && !['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname)) return 'browser';
   return 'refuse';
 }
 
@@ -306,7 +309,6 @@ function windowOptions({ platform, preload, show = true, print = false }) {
     nodeIntegration: false,
     nodeIntegrationInSubFrames: false,
     webviewTag: false,
-    spellcheck: false,
   };
   if (print) return { show: false, webPreferences: { ...webPreferences, javascript: false } };
   const frame =
@@ -321,7 +323,8 @@ function windowOptions({ platform, preload, show = true, print = false }) {
     minWidth: 900,
     minHeight: 600,
     show,
-    backgroundColor: '#ffffff',
+    // The app's own background, so the first paint before the page is not a white flash.
+    backgroundColor: '#F7FAFC',
     title: 'translationCore4',
     ...frame,
     webPreferences: { ...webPreferences, preload },

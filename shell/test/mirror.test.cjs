@@ -189,3 +189,89 @@ test('a_launch_rewrites_the_log_reduced_and_keeps_a_torn_tail_out', async () => 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// fs.promises whose appends fail `failures` times, each after writing half its bytes, as a full
+// disk does; and whose rename fails when `renameFails`, as on Windows while another program holds
+// the log.
+function fullDiskFs({ failures = 0, renameFails = false }) {
+  let left = failures;
+  return {
+    mkdir: (...a) => fs.promises.mkdir(...a),
+    readFile: (...a) => fs.promises.readFile(...a),
+    rename: async (...a) => {
+      if (renameFails) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return fs.promises.rename(...a);
+    },
+    open: async (file, flags) => {
+      const handle = await fs.promises.open(file, flags);
+      return {
+        writeFile: (text) => handle.writeFile(text),
+        appendFile: async (text) => {
+          if (left > 0) {
+            left--;
+            const bytes = Buffer.from(text, 'utf8');
+            await handle.appendFile(bytes.subarray(0, Math.floor(bytes.length / 2)));
+            throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' });
+          }
+          return handle.appendFile(text);
+        },
+        sync: () => handle.sync(),
+        close: () => handle.close(),
+      };
+    },
+  };
+}
+
+const lineOf = (place, text, at) =>
+  JSON.stringify({
+    type: 'changed',
+    value: { key: key(place), entry: { api: 1, instance: RUNS[0], base: [], text, sent: null, at, draft: null } },
+  });
+
+test('a_full_disk_keeps_the_lines_and_writes_them_when_space_returns', async () => {
+  const dir = tempDir();
+  try {
+    const errors = [];
+    const m = await mirror.openMirror(dir, { fsp: fullDiskFs({ failures: 2 }), onError: (e) => errors.push(e.code) });
+    m.append(lineOf('TIT 1:1', 'old one', 1));
+    await m.flush();
+    m.append(lineOf('TIT 1:1', 'newer words', 2));
+    m.append(lineOf('TIT 1:2', 'other verse', 3));
+    // The retry comes a second later; flush does not wait for space that never comes.
+    await mirror_settle(m);
+    await m.close();
+    assert.deepEqual(errors, ['ENOSPC', 'ENOSPC']);
+    const again = await mirror.openMirror(dir);
+    const texts = again.take().map((l) => JSON.parse(l).value.entry.text).sort();
+    await again.close();
+    assert.deepEqual(texts, ['newer words', 'other verse']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Flushes until every queued line is written, as space comes back.
+async function mirror_settle(m) {
+  for (let i = 0; i < 10; i++) await m.flush();
+}
+
+test('a_launch_whose_rewrite_fails_still_offers_and_mirrors', async () => {
+  const dir = tempDir();
+  try {
+    const file = path.join(dir, mirror.LOG);
+    const kept = lineOf('TIT 1:1', 'from the last run', 1);
+    fs.writeFileSync(file, `${kept}\n${kept.slice(0, 30)}`);
+    const errors = [];
+    const m = await mirror.openMirror(dir, { fsp: fullDiskFs({ renameFails: true }), onError: (e) => errors.push(e.code) });
+    assert.deepEqual(errors, ['EBUSY']);
+    assert.deepEqual(m.take(), [kept]);
+    const typed = lineOf('TIT 1:2', 'typed this run', 2);
+    m.append(typed);
+    await m.close();
+    const again = await mirror.openMirror(dir);
+    assert.deepEqual(sorted(again.take()), sorted([kept, typed]));
+    await again.close();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
