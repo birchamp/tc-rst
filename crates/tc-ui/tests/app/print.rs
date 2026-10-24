@@ -1,20 +1,27 @@
 //! Community Checking's pure parts (unit B8): each preview page's flow is the markup tC4's
 //! `PrintParts` renders, byte for byte, on every preview page of
 //! `fixtures/export/print-vectors.json`; the sheets have tC4's measures; the export menu lists
-//! the producers tC4's table gives the open project.
+//! the producers tC4's table gives the open project; a press asks first while verses are in
+//! conflict, and a finished export names at most 20 of the verses it left out.
 
 use serde_json::Value;
+use tc_api::export::{
+    ExportFacts, Exported, ExportedFile, PrintWords, Producer, SkipReason, SkippedVerse, Subject,
+};
 use tc_api::export::{PrintVerse, Run};
 use tc_api::home::ProjectKind;
 use tc_api::ids::RefPart;
+use tc_api::ids::{DownloadId, Epoch, ProjectRef, RequestId, Scope};
 use tc_api::model::print::{
     ChapterOpening, ChapterPart, PageSetup, Paper, Piece, PrintPart, VerseNumbers, print_parts,
 };
 use tc_api::shown::Direction;
+use tc_core::BookId;
 use tc_ui::app::print::{
-    Sheet, export_items, flow_markup, flow_style, page_number_style, px, sheet_style,
+    ExportOf, Sheet, conflict_question, export_items, export_notice, flow_markup, flow_style,
+    page_number_style, print_words, producer_of, px, sheet_style,
 };
-use tc_ui::i18n::t;
+use tc_ui::i18n::{t, t_dyn};
 
 fn vectors() -> Value {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -223,4 +230,134 @@ fn the_export_menu_lists_the_producers_that_apply() {
             "Scripture Burrito (.zip)"
         ]
     );
+}
+
+#[test]
+fn every_export_item_but_the_burrito_zip_runs_its_producer() {
+    let runs = |kind| -> Vec<(String, Option<Producer>)> {
+        export_items(kind, true)
+            .into_iter()
+            .map(|key| (t(key, &[]), producer_of(key)))
+            .collect()
+    };
+    assert_eq!(
+        runs(ProjectKind::Bible),
+        [
+            ("Export PDF".to_owned(), Some(Producer::PrintHtml)),
+            ("USFM, aligned".to_owned(), Some(Producer::AlignedUsfm)),
+            ("USFM, plain".to_owned(), Some(Producer::PlainUsfm)),
+            ("Scripture Burrito (.zip)".to_owned(), None),
+        ]
+    );
+    assert_eq!(
+        runs(ProjectKind::Stories),
+        [
+            ("Export PDF".to_owned(), Some(Producer::PrintHtml)),
+            (
+                "Story Markdown (.zip)".to_owned(),
+                Some(Producer::StoryMarkdown)
+            ),
+            ("Scripture Burrito (.zip)".to_owned(), None),
+        ]
+    );
+}
+
+#[test]
+fn a_press_with_verses_in_conflict_asks_first() {
+    assert_eq!(conflict_question(0), None);
+    assert_eq!(
+        conflict_question(1).as_deref(),
+        Some("1 verse has two versions. The export uses the version shown. Review first?")
+    );
+    assert_eq!(
+        conflict_question(3).as_deref(),
+        Some("3 verses have two versions. The export uses the version shown. Review first?")
+    );
+}
+
+#[test]
+fn a_press_sends_one_request_and_only_a_print_carries_the_page_setup() {
+    let of = ExportOf {
+        at: Scope {
+            project: ProjectRef::parse("en_ult_tit_book").unwrap(),
+            epoch: Epoch::new(1),
+        },
+        subject: Subject::Book {
+            book: BookId::Titus,
+        },
+        title: "Titus".to_owned(),
+    };
+    let request = RequestId::from_bytes([7; 16]);
+    let setup = PageSetup {
+        paper: Paper::Letter,
+        ..PageSetup::default()
+    };
+    let usfm = of.run(request, Producer::AlignedUsfm, setup);
+    assert_eq!(usfm.request, request);
+    assert_eq!(usfm.print, None);
+    let print = of.run(request, Producer::PrintHtml, setup).print.unwrap();
+    assert_eq!((print.setup, print.title.as_str()), (setup, "Titus"));
+    // The words are the catalog's, placeholders and all, so the server words the PDF as the
+    // preview does.
+    for key in PrintWords::KEYS {
+        assert_eq!(
+            print.words.message(key),
+            Some(t_dyn(key, &[], None).as_str())
+        );
+    }
+    assert_eq!(print.words, print_words());
+}
+
+fn exported(skipped: u16, total: u32) -> Exported {
+    Exported {
+        file: ExportedFile::Download {
+            download: DownloadId::parse(&"a".repeat(32)).unwrap(),
+            file_name: "TIT-2026-10-24.usfm".to_owned(),
+        },
+        facts: ExportFacts {
+            skipped: (1..=skipped)
+                .map(|v| SkippedVerse {
+                    chapter: 1,
+                    verse: RefPart::parse(&v.to_string()).unwrap(),
+                    why: SkipReason::NeedsReview,
+                })
+                .collect(),
+            skipped_total: total,
+        },
+    }
+}
+
+#[test]
+fn the_toast_names_at_most_20_skipped_verses() {
+    let none = export_notice(&exported(0, 0));
+    assert_eq!(none.ready, "Export ready: TIT-2026-10-24.usfm");
+    assert_eq!(
+        none.download,
+        Some(("a".repeat(32), "TIT-2026-10-24.usfm".to_owned()))
+    );
+    assert_eq!(none.skipped, None);
+
+    let two = export_notice(&exported(2, 2));
+    assert_eq!(
+        two.skipped.as_deref(),
+        Some("Your alignment of these verses is not in the file. Check them in Align: 1:1, 1:2")
+    );
+
+    let many = export_notice(&exported(20, 23)).skipped.unwrap();
+    assert!(many.ends_with("1:19, 1:20, …"), "{many}");
+    assert_eq!(many.matches("1:").count(), 20, "{many}");
+
+    // Facts that kept more than 20 still show 20.
+    let over = export_notice(&exported(25, 25)).skipped.unwrap();
+    assert_eq!(over.matches("1:").count(), 20, "{over}");
+    assert!(over.ends_with("1:20, …"), "{over}");
+
+    let print = export_notice(&Exported {
+        file: ExportedFile::Print {
+            file_name: "TIT-2026-10-24.pdf".to_owned(),
+        },
+        facts: ExportFacts::default(),
+    });
+    assert_eq!(print.ready, "Export ready: TIT-2026-10-24.pdf");
+    assert_eq!(print.download, None);
 }

@@ -18,6 +18,8 @@
 //!   the Feedback report (Q-2) once the page asked the internet question; `category` is the
 //!   help desk's English name. A reason the page does not know, or a call that throws, is
 //!   `refused`, as in tC4 (`tC4:src/state.jsx:4155-4161`).
+//! - `printPdf(url): Promise`: the shell prints the `/print/<job>` page at `url` to a PDF and
+//!   saves it; a rejected promise is a failed print.
 
 use js_sys::{Array, Function, Object, Promise, Reflect};
 use tc_api::refusal::FeedbackRefusal;
@@ -106,6 +108,21 @@ pub(crate) fn open_external(url: &str) {
 /// Whether the shell can print a PDF: without it there is no PDF export (`tC4:src/data/export/pdf.ts:120`).
 pub(crate) fn has_print_pdf() -> bool {
     method("printPdf").is_some()
+}
+
+/// Asks the shell to print `url`, a `/print/<job>` page, to a PDF; true once it answers
+/// without an error. Without the shell, false: the PDF item exists only with it.
+pub(crate) async fn print_pdf(url: &str) -> bool {
+    let Some((shell, function)) = method("printPdf") else {
+        return false;
+    };
+    let Ok(answer) = function.call1(&shell, &JsValue::from_str(url)) else {
+        return false;
+    };
+    match answer.dyn_into::<Promise>() {
+        Ok(promise) => JsFuture::from(promise).await.is_ok(),
+        Err(_) => true,
+    }
 }
 
 /// Whether the shell can send a Feedback report.

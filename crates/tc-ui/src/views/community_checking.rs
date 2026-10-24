@@ -8,7 +8,7 @@
 //! overflow, a verse that does not fit is split between the browser's word breaks
 //! (`Intl.Segmenter`), and each page is measured again when a web font arrives
 //! (`tc_api::model::print::paginate`). The export menu lists what the project can be exported
-//! as; the exports are D2's, so until then each item is listed and off.
+//! as; each item but the Burrito zip, which E2 turns on, runs its export (D2).
 
 use std::sync::Arc;
 
@@ -16,7 +16,8 @@ use js_sys::{Array, Object, Reflect};
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 use tc_api::export::{
-    Book as PrintBookRead, BookPrint, PrintFrame, PrintStory, PrintStoryItem, Stories, StoriesPrint,
+    Book as PrintBookRead, BookPrint, PrintFrame, PrintStory, PrintStoryItem, Stories,
+    StoriesPrint, Subject,
 };
 use tc_api::home::ProjectKind;
 use tc_api::ids::Scope;
@@ -30,18 +31,19 @@ use wasm_bindgen::prelude::Closure;
 
 use crate::app::load::Load;
 use crate::app::print::{
-    Sheet, export_items, flow_markup, flow_style, frame_gap_text, page_number_style, sheet_style,
-    story_gap_text,
+    ExportOf, ExportPanel, Sheet, export_items, flow_markup, flow_style, frame_gap_text,
+    page_number_style, producer_of, sheet_style, story_gap_text,
 };
 use crate::app::shell::{ProjectFlavor, View};
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::attrs::Attrs;
 use crate::css::Css;
 use crate::ds::{
-    Button, ButtonVariant, Callout, CalloutTone, FilterChip, Menu, MenuItem, Overline, Toggle,
+    Button, ButtonVariant, Callout, CalloutTone, FilterChip, Menu, MenuItem, Overline, Toast,
+    ToastProps, Toggle,
 };
 use crate::i18n::{Key, keys, t};
-use crate::tokens::Size;
+use crate::tokens::{Size, ToastTone};
 
 /// tC4's `CommunityChecking`.
 #[component]
@@ -50,14 +52,15 @@ pub fn CommunityChecking() -> impl IntoView {
         return ().into_any();
     };
     let setup = RwSignal::new(PageSetup::default());
-    let project = s
-        .project
-        .with_untracked(|p| p.as_ref().map(|p| (p.at.clone(), p.flavor, p.dir)));
-    let Some((at, flavor, dir)) = project else {
+    let project = s.project.with_untracked(|p| {
+        p.as_ref()
+            .map(|p| (p.at.clone(), p.flavor, p.dir, p.name.clone()))
+    });
+    let Some((at, flavor, dir, name)) = project else {
         return ().into_any();
     };
     match flavor {
-        ProjectFlavor::TextStories => story_checking(&actions, at, dir, setup).into_any(),
+        ProjectFlavor::TextStories => story_checking(&actions, at, dir, setup, name).into_any(),
         ProjectFlavor::TextTranslation => book_checking(&s, &actions, at, dir, setup).into_any(),
     }
 }
@@ -139,13 +142,23 @@ fn book_checking(
         });
         let actions = actions.clone();
         let title = book.english_name().to_owned();
+        let of = ExportOf {
+            at: at.clone(),
+            subject: Subject::Book { book },
+            title: title.clone(),
+        };
         (move || {
             read.with(|loaded| match loaded {
                 Load::Loading => note(t(keys::draft::LOADING, &[])),
                 Load::Failed(error) => note(format!("{} {error}", t(keys::draft::LOAD_ERROR, &[]))),
-                Load::Ready(print) | Load::Refreshing(print) => {
-                    book_screen(&actions, print.clone(), title.clone(), dir, setup)
-                }
+                Load::Ready(print) | Load::Refreshing(print) => book_screen(
+                    &actions,
+                    print.clone(),
+                    title.clone(),
+                    dir,
+                    setup,
+                    of.clone(),
+                ),
             })
         })
         .into_any()
@@ -158,13 +171,14 @@ fn book_screen(
     title: String,
     dir: Direction,
     setup: RwSignal<PageSetup>,
+    of: ExportOf,
 ) -> AnyView {
     let undrafted = print.undrafted;
     view! {
         <div style=root_style().to_style() data-testid="community-checking">
             <main style=main_style().to_style()>{print_pages(print, title, dir, setup)}</main>
             <aside style=aside_style().to_style()>
-                {side_head(actions, ProjectKind::Bible)}
+                {side_head(actions, ProjectKind::Bible, of, setup)}
                 {setup_box(book_rows(setup))}
                 {undrafted.then(|| incomplete(keys::cc::INCOMPLETE_BODY))}
             </aside>
@@ -454,7 +468,12 @@ fn book_rows(setup: RwSignal<PageSetup>) -> AnyView {
 // ---------------------------------------------------------------------------------------------
 
 /// Back to the checking tools, the title and the export menu.
-fn side_head(actions: &Actions, kind: ProjectKind) -> impl IntoView + use<> {
+fn side_head(
+    actions: &Actions,
+    kind: ProjectKind,
+    of: ExportOf,
+    setup: RwSignal<PageSetup>,
+) -> impl IntoView + use<> {
     let back = {
         let actions = actions.clone();
         Callback::new(move |_| actions.go(View::Check))
@@ -469,32 +488,127 @@ fn side_head(actions: &Actions, kind: ProjectKind) -> impl IntoView + use<> {
             {t(keys::cc::BACK, &[])}
         </Button>
         <h2 style=h2.to_style()>{t(keys::cc::TITLE, &[])}</h2>
-        {export_menu(kind)}
+        {export_menu(actions, kind, of, setup)}
     }
 }
 
-/// tC4's `ExportMenu`: one item for each producer that applies to the project. The exports
-/// are D2's; until then each item is listed and off, so no click can promise a file.
-fn export_menu(kind: ProjectKind) -> impl IntoView + use<> {
+/// tC4's `ExportMenu`: one item for each producer that applies to the project, and under it
+/// the conflicts question, the "Export ready" toast with the verses the file left out, or why
+/// the export failed. The Burrito zip stays off until E2 builds the exchange file.
+fn export_menu(
+    actions: &Actions,
+    kind: ProjectKind,
+    of: ExportOf,
+    setup: RwSignal<PageSetup>,
+) -> impl IntoView + use<> {
+    let panel = RwSignal::new(ExportPanel::Idle);
+    let running = Signal::derive(move || panel.get() == ExportPanel::Running);
     let items = export_items(kind, crate::app::web::bridge::has_print_pdf())
         .into_iter()
-        .map(|key| MenuItem {
-            label: t(key, &[]),
-            disabled: true,
-            ..MenuItem::default()
+        .map(|key| {
+            let producer = producer_of(key);
+            let on_click = producer.map(|producer| {
+                let (actions, of) = (actions.clone(), of.clone());
+                Callback::new(move |()| {
+                    actions.export_press(panel, &of, producer, setup.get_untracked());
+                })
+            });
+            MenuItem {
+                label: t(key, &[]),
+                disabled: on_click.is_none(),
+                on_click,
+                ..MenuItem::default()
+            }
         })
         .collect::<Vec<_>>();
-    let trigger: crate::ds::Slot = Box::new(|| {
+    let trigger: crate::ds::Slot = Box::new(move || {
         view! {
-            <Button size=Size::Lg attrs=Attrs::from([("data-testid", "export-menu-trigger")])>
+            <Button
+                size=Size::Lg
+                disabled=running
+                attrs=Attrs::from([("data-testid", "export-menu-trigger")])
+            >
                 {t(keys::cc::EXPORT, &[])}
             </Button>
         }
         .into_any()
     });
+    let actions = actions.clone();
+    let below = move || match panel.get() {
+        ExportPanel::Idle | ExportPanel::Running => ().into_any(),
+        ExportPanel::Ask { question, run } => {
+            let review = {
+                let actions = actions.clone();
+                Callback::new(move |_| {
+                    panel.set(ExportPanel::Idle);
+                    actions.open_review(tc_api::conflicts::ReviewTab::Text, None);
+                })
+            };
+            let anyway = {
+                let actions = actions.clone();
+                Callback::new(move |_| actions.export_run(panel, (*run).clone()))
+            };
+            view! {
+                <Callout
+                    tone=CalloutTone::Warn
+                    style=crate::css! { "margin-top": 10 }
+                    attrs=Attrs::from([("data-testid", "export-conflicts")])
+                >
+                    <p style="margin: 0 0 8px">{question}</p>
+                    <Button size=Size::Sm on_click=review>{t(keys::export::REVIEW, &[])}</Button>
+                    " "
+                    <Button size=Size::Sm variant=ButtonVariant::Ghost on_click=anyway>
+                        {t(keys::export::ANYWAY, &[])}
+                    </Button>
+                </Callout>
+            }
+            .into_any()
+        }
+        ExportPanel::Ready(notice) => {
+            let download = notice.download.map(|(id, name)| {
+                Callback::new(move |_| crate::app::web::export::deliver(&id, &name))
+            });
+            let action_label = download.is_some().then(|| t(keys::export::DOWNLOAD, &[]));
+            // The side panel is narrower than the toast's 300px minimum width (tC4).
+            let toast = Toast(ToastProps {
+                tone: ToastTone::Info,
+                message: notice.ready,
+                action: download,
+                action_label,
+                on_dismiss: Some(Callback::new(move |_| panel.set(ExportPanel::Idle))),
+                dismiss_label: Some(t(keys::common::DISMISS, &[])),
+                style: crate::css! { "margin-top": 10, "--toast-w-min": "0px" },
+                attrs: Attrs::from([("data-testid", "export-toast")]),
+            });
+            view! {
+                {toast}
+                {notice.skipped.map(|skipped| view! {
+                    <Callout
+                        tone=CalloutTone::Warn
+                        style=crate::css! { "margin-top": 10 }
+                        attrs=Attrs::from([("data-testid", "export-skipped")])
+                    >
+                        {skipped}
+                    </Callout>
+                })}
+            }
+            .into_any()
+        }
+        ExportPanel::Failed(why) => view! {
+            <Callout
+                tone=CalloutTone::Warn
+                style=crate::css! { "margin-top": 10 }
+                attrs=Attrs::from([("data-testid", "export-failure")])
+            >
+                {why}
+            </Callout>
+        }
+        .into_any(),
+    };
     view! {
         <div data-testid="export-menu">
             <Menu trigger=trigger items=items />
+            {below}
         </div>
     }
 }
@@ -623,9 +737,15 @@ fn story_checking(
     at: Scope,
     dir: Direction,
     setup: RwSignal<PageSetup>,
+    title: String,
 ) -> impl IntoView + use<> {
     let Some(runtime) = use_runtime() else {
         return ().into_any();
+    };
+    let of = ExportOf {
+        at: at.clone(),
+        subject: Subject::Stories,
+        title,
     };
     let read = runtime.cache().read(Stories { at });
     let actions = actions.clone();
@@ -638,7 +758,7 @@ fn story_checking(
                     .to_owned(),
             ),
             Load::Ready(print) | Load::Refreshing(print) => {
-                stories_screen(&actions, print.clone(), dir, setup)
+                stories_screen(&actions, print.clone(), dir, setup, of.clone())
             }
         })
     })
@@ -650,6 +770,7 @@ fn stories_screen(
     print: Arc<StoriesPrint>,
     dir: Direction,
     setup: RwSignal<PageSetup>,
+    of: ExportOf,
 ) -> AnyView {
     let d = dir_attr(dir);
     let incomplete_note = (print.undrafted && !print.items.is_empty())
@@ -729,7 +850,7 @@ fn stories_screen(
         <div style=root_style().to_style() data-testid="community-checking">
             <main style=main_style().to_style()>{pages}</main>
             <aside style=aside_style().to_style()>
-                {side_head(actions, ProjectKind::Stories)}
+                {side_head(actions, ProjectKind::Stories, of, setup)}
                 {setup_box(rows)}
                 {incomplete_note}
             </aside>

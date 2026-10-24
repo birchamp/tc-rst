@@ -6,8 +6,11 @@
 //! `PrintParts` to static markup in its measuring sheet, and the sheets show the same markup,
 //! so what was measured is what shows. The parts come from `tc_api::model::print`.
 
-use tc_api::export::{Run, StoryRun};
+use tc_api::export::{
+    Exported, ExportedFile, PrintRequest, PrintWords, Producer, Run, RunExport, StoryRun, Subject,
+};
 use tc_api::home::ProjectKind;
+use tc_api::ids::{RequestId, Scope};
 use tc_api::model::print::{FlowBlock, Opening, PAGE_MARGIN_MM, PageSetup, VerseLine};
 use tc_api::shown::Direction;
 
@@ -248,4 +251,127 @@ pub fn export_items(kind: ProjectKind, pdf_bridge: bool) -> Vec<Key> {
     }
     items.push(keys::cc::EXPORT_BURRITO_ZIP);
     items
+}
+
+/// The producer behind an export menu item; `None` for the Burrito zip, which stays off until
+/// E2 builds the exchange file.
+pub fn producer_of(item: Key) -> Option<Producer> {
+    Some(match item {
+        keys::cc::EXPORT_PDF => Producer::PrintHtml,
+        keys::cc::EXPORT_USFM_ALIGNED => Producer::AlignedUsfm,
+        keys::cc::EXPORT_USFM_PLAIN => Producer::PlainUsfm,
+        keys::cc::EXPORT_STORY_MARKDOWN => Producer::StoryMarkdown,
+        _ => return None,
+    })
+}
+
+/// The print's lines in the shown language, each with its placeholders still in it: the
+/// server fills them, so the PDF words what the preview words.
+pub fn print_words() -> PrintWords {
+    PrintWords {
+        chapter_heading: t(keys::cc::CHAPTER_HEADING, &[]),
+        chapter_not_drafted: t(keys::cc::CHAPTER_NOT_DRAFTED, &[]),
+        chapters_not_drafted: t(keys::cc::CHAPTERS_NOT_DRAFTED, &[]),
+        not_yet_drafted: t(keys::cc::NOT_YET_DRAFTED, &[]),
+        frame_not_drafted: t(keys::cc::FRAME_NOT_DRAFTED, &[]),
+        frames_not_drafted: t(keys::cc::FRAMES_NOT_DRAFTED, &[]),
+        story_not_drafted: t(keys::cc::STORY_NOT_DRAFTED, &[]),
+        stories_not_drafted: t(keys::cc::STORIES_NOT_DRAFTED, &[]),
+        story_number: t(keys::story_draft::STORY_NUMBER, &[]),
+        image_alt: t(keys::story_draft::IMAGE_ALT, &[]),
+        nothing_drafted_obs: t(keys::cc::NOTHING_DRAFTED_OBS, &[]),
+    }
+}
+
+/// What an export of the open screen names: the project, the book or the stories, and the
+/// print's title.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportOf {
+    pub at: Scope,
+    pub subject: Subject,
+    pub title: String,
+}
+
+impl ExportOf {
+    /// The request of one press; a print carries the preview's page setup and words.
+    pub fn run(&self, request: RequestId, producer: Producer, setup: PageSetup) -> RunExport {
+        RunExport {
+            request,
+            at: self.at.clone(),
+            producer,
+            subject: self.subject,
+            print: (producer == Producer::PrintHtml).then(|| PrintRequest {
+                setup,
+                title: self.title.clone(),
+                words: print_words(),
+            }),
+        }
+    }
+}
+
+/// "3 verses have two versions. The export uses the version shown. Review first?" (STORAGE
+/// §8.5), or `None` when no verse the export reads is in conflict.
+pub fn conflict_question(verses: u32) -> Option<String> {
+    match verses {
+        0 => None,
+        1 => Some(t(keys::export::CONFLICTS_ONE, &[])),
+        n => Some(t(keys::export::CONFLICTS_MANY, &[("n", &n)])),
+    }
+}
+
+/// What a finished export says under the menu: tC4's "Export ready" toast, and, as tC4
+/// e2bfd8c3 does, the verses whose alignment the file left out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportNotice {
+    pub ready: String,
+    /// `/download/<id>/<name>`, unescaped; a print has none, since the shell saves it.
+    pub download: Option<(String, String)>,
+    pub skipped: Option<String>,
+}
+
+pub fn export_notice(exported: &Exported) -> ExportNotice {
+    let (file_name, download) = match &exported.file {
+        ExportedFile::Download {
+            download,
+            file_name,
+        } => (
+            file_name,
+            Some((download.as_str().to_owned(), file_name.clone())),
+        ),
+        ExportedFile::Print { file_name } => (file_name, None),
+    };
+    let facts = &exported.facts;
+    let skipped = (!facts.skipped.is_empty()).then(|| {
+        let named = facts
+            .skipped
+            .iter()
+            .take(20)
+            .map(|v| format!("{}:{}", v.chapter, v.verse))
+            .collect::<Vec<_>>();
+        let mut refs = named.join(", ");
+        if facts.skipped_total as usize > named.len() {
+            refs.push_str(", …");
+        }
+        t(keys::export::SKIPPED, &[("refs", &refs)])
+    });
+    ExportNotice {
+        ready: t(keys::cc::EXPORT_READY, &[("filename", file_name)]),
+        download,
+        skipped,
+    }
+}
+
+/// What the export menu shows under itself.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ExportPanel {
+    #[default]
+    Idle,
+    Running,
+    /// The conflicts question; "Export anyway" runs `run`, the press's own request.
+    Ask {
+        question: String,
+        run: Box<RunExport>,
+    },
+    Ready(ExportNotice),
+    Failed(String),
 }
