@@ -47,9 +47,17 @@ fn the_buffer_reduction_matches_the_shell_contract_vectors() {
             })
             .collect();
         let got: BTreeSet<String> = current_lines(&lines).into_iter().collect();
+        // Each vector proves one rule of the contract; its failure names that rule.
+        let rule = if name.contains("removal") {
+            "INV-BUFFER-REMOVAL-NAMES-TEXT"
+        } else if name.contains("skipped") {
+            "INV-TORN-LINE-SKIPPED"
+        } else {
+            "INV-SHELL-CONTRACT-PINNED"
+        };
         assert_eq!(
             got, want,
-            "INV-SHELL-CONTRACT-PINNED: vector {name:?}: current_lines kept {got:?}, the contract keeps {want:?}"
+            "{rule}: vector {name:?}: current_lines kept {got:?}, the contract keeps {want:?}"
         );
     }
 }

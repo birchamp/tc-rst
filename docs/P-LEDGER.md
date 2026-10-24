@@ -10,7 +10,7 @@ workflow, and each pending card is not done.
 | P1 | Every live tC4 journey has an automated end-to-end test | `journeys`, `parity-baseline` | `parity/app/journeys/coverage.json` maps each journey and spec (`parity/app/journeys/coverage.test.mjs`); `j4_a_mark_on_dragged_words_a_comment_and_a_bookmark_are_one_decision_record_on_disk`, `j5_align_steps_that_do_not_save` (pending: D1, D2, F1, E1a, E1b, FIX-J, C7a, G4, REF1) |
 | P2 | Team work: sync, share, open, exchange and conflicts end to end | — | (pending: X, E1a, E1b, E2, C7b) |
 | P3 | No silent loss across random concurrent histories | `test` | `fold_converges_under_any_union`, `properties::conservation`, `concurrent_differences_are_visible`, `merge_units_sound`, `resolution_always_possible` (`crates/tc-journal/tests/properties.rs`) |
-| P4 | Crash safety at every write point | `test` | `crates/tc-store/tests/store/crash.rs` (pending: S2) |
+| P4 | Crash safety at every write point | `test` | `crates/tc-store/tests/store/crash.rs` |
 | P5 | Every project state written by a test is a valid Scripture Burrito | `test` | `assert_valid_burrito` (`crates/tc-store/tests/store/common.rs`) (pending: CHK-2) |
 | P6 | The helps screens work with Door43 and Aquifer resources | `test` | `crates/tc-helps/tests/aquifer.rs`, `crates/tc-resources/tests/aquifer_install.rs` (pending: AQ1) |
 | P7 | The key screens look like tC4's | `test` | `the_committed_record_passes_the_gate` (`crates/tc-ui/tests/screen_record.rs`) (pending: CHK-6, G2) |

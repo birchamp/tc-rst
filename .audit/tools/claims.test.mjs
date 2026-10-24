@@ -74,7 +74,11 @@ function bullet(card, label) {
 /** A bullet's items, without those marked "(not in code: <why>)" (a one-time step, such as a
  * backup or a merge, that a command checked) or "(retired <by what>)"; each mark names its reason. */
 function claimed(text) {
-  return text.split(/\n(?= {2}- )/).filter((item) => !/\((?:not in code|retired)\b[^)]*\S[^)]*\)/.test(item));
+  // "Proof it can fail" names the product code a mutation breaks, not a test.
+  return text
+    .split(/\n(?= {2}- )/)
+    .filter((item) => !/\((?:not in code|retired)\b[^)]*\S[^)]*\)/.test(item))
+    .filter((item) => !/^\s*- Proof it can fail:/.test(item));
 }
 
 /** Every file of the trees an invariant's name may be printed or tested in, read once. */

@@ -31,6 +31,10 @@ export function testNames(repo) {
     for (const name of testFns(fs.readFileSync(file, 'utf8'), testFile)) exact.add(name);
     if (rel.length === 4 && rel[2] === 'tests') exact.add(path.basename(file, '.rs'));
   }
+  // The audit tools' Python tests (`def test_...` in `.audit/tools/*_test.py`).
+  for (const file of walk(path.join(repo, '.audit/tools'), (n) => n.endsWith('_test.py'))) {
+    for (const m of fs.readFileSync(file, 'utf8').matchAll(/\bdef (test_\w+)/g)) exact.add(m[1]);
+  }
   // A journey file is named by its stem ("journey `create`").
   for (const file of walk(path.join(repo, 'parity/app/journeys'), (n) => n.endsWith('.test.mjs'))) exact.add(path.basename(file, '.test.mjs'));
   for (const file of walk(path.join(repo, 'parity'), (n) => n.endsWith('.mjs'))) {
