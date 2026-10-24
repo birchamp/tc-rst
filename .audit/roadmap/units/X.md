@@ -14,8 +14,8 @@ proves: [P2, P3, P4, P5]
 no_loss: true
 size: 4-6 d (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; H18 unsupported removes the Door43 intake walk, docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d)
 merged: none
-updated: 2026-10-25
-next: the "Left for X" list in the last fix line, then scripts/gates.sh, then hand track-X to the integration lane for a batch after T.
+updated: 2026-10-26
+next: local scripts/gates.sh on track-X, then hand it to the integration lane for a batch after T.
 blocked_by: none
 later: []
 ---
