@@ -15,7 +15,10 @@ on:
         default: false
   push:
     tags: ['v*']
-    # A change to the pipeline itself runs it, unsigned and unpublished, on its own branch.
+    # A change to the pipeline itself runs it, unsigned and unpublished, on its own branch. A
+    # trigger that names only tags never fires for a branch, so branches are named too; the paths
+    # do not filter tag pushes.
+    branches: ['**']
     paths: ['.github/workflows/release.yml', 'scripts/release/**']
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
