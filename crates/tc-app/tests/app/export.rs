@@ -430,10 +430,12 @@ async fn preflight_counts_open_conflicts() {
     assert_eq!(stories, none);
 }
 
-/// The server's downloads, kept in memory: each file registered, by its name.
+/// The server's downloads, kept in memory: each file registered, by its name, and where the
+/// app wrote it.
 struct Downloads {
     dir: tempfile::TempDir,
     files: Mutex<Vec<(String, Vec<u8>)>>,
+    written: Mutex<Vec<PathBuf>>,
 }
 
 impl tc_app::DownloadFiles for Downloads {
@@ -448,6 +450,7 @@ impl tc_app::DownloadFiles for Downloads {
         _content_type: &'static str,
     ) -> Result<DownloadId, String> {
         let bytes = std::fs::read(written).map_err(|e| e.to_string())?;
+        self.written.lock().unwrap().push(written.to_owned());
         let mut files = self.files.lock().unwrap();
         files.push((file_name.to_owned(), bytes));
         Ok(DownloadId::parse(&format!("{:032x}", files.len())).unwrap())
@@ -458,6 +461,7 @@ fn give_downloads(app: &tc_app::App) -> Arc<Downloads> {
     let downloads = Arc::new(Downloads {
         dir: tempfile::tempdir().unwrap(),
         files: Mutex::default(),
+        written: Mutex::default(),
     });
     app.provide_downloads(downloads.clone());
     downloads
@@ -661,4 +665,232 @@ async fn the_print_page_is_a_finished_print_exports_and_no_other_jobs() {
         "a job still running"
     );
     running.finish(Err(tc_app::jobs::JobEnd::Cancelled));
+}
+
+/// The sample scenario's Bible and story projects written by tc-store on this computer's files,
+/// as `tc4 serve --scenario` writes them, and an app over that store with Titus 1:2 saved.
+struct OnDiskExports {
+    t: super::common::TestApp,
+    // Kept: the folders live as long as the case.
+    _dir: tempfile::TempDir,
+    projects: PathBuf,
+    downloads: Arc<Downloads>,
+}
+
+const BIBLE: &str = "sample_burrito";
+const STORIES: &str = "sample_burrito_obs";
+
+/// Opens `name` on the screen, which leaves the project open before.
+async fn open_on_screen(app: &tc_app::App, name: &str) -> Scope {
+    app.sessions()
+        .open_screen(&super::common::folder(name), super::common::open_progress())
+        .await
+        .unwrap()
+        .at
+}
+
+async fn on_disk_exports() -> OnDiskExports {
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join("projects");
+    std::fs::create_dir_all(&projects).unwrap();
+    let backend = tc_app::backend::store::StoreBackend::start(
+        tc_store::StoreConfig {
+            app_data: dir.path().join("app-data"),
+            projects: projects.clone(),
+            vfs: Arc::new(tc_store::StdFs),
+            platform: Arc::new(tc_store::StdPlatform),
+            clock: Arc::new(tc_store::SystemClock),
+            threads: 2,
+            watch_debounce: Duration::from_millis(20),
+        },
+        Arc::default(),
+    )
+    .unwrap();
+    backend.store().wait_cleanup();
+    let (store, _) = tc_app::backend::scenario_store::ScenarioStore::write(
+        backend,
+        super::scenario::scenario("sample"),
+    )
+    .unwrap();
+    let t = super::store_scenario::app_over(dir.path(), Arc::new(store)).await;
+    let downloads = give_downloads(&t.app);
+    let at = open_on_screen(&t.app, BIBLE).await;
+    let session = t.app.sessions().reader(&at).unwrap();
+    let minted = session
+        .read()
+        .mint(&super::common::tit(1, 2), None)
+        .unwrap();
+    let ack = post(
+        &t.app,
+        &tc_api::editor::SaveVerse {
+            at,
+            request: rid(80),
+            shown: tc_app::wire::token::shown(&minted).unwrap(),
+            words: "saved before the export".to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, tc_api::write::Stored::Written);
+    OnDiskExports {
+        t,
+        _dir: dir,
+        projects,
+        downloads,
+    }
+}
+
+/// An export to run: what makes it, of what, and whether it is a print.
+type ExportOf = (export::Producer, export::Subject, bool);
+
+/// Every export the menu offers, of Titus and of the stories, by project.
+fn every_export() -> [(&'static str, Vec<ExportOf>); 2] {
+    let titus = export::Subject::Book {
+        book: BookId::Titus,
+    };
+    [
+        (
+            BIBLE,
+            vec![
+                (export::Producer::AlignedUsfm, titus, false),
+                (export::Producer::PlainUsfm, titus, false),
+                (export::Producer::PrintHtml, titus, true),
+            ],
+        ),
+        (
+            STORIES,
+            vec![
+                (
+                    export::Producer::StoryMarkdown,
+                    export::Subject::Stories,
+                    false,
+                ),
+                (export::Producer::PrintHtml, export::Subject::Stories, true),
+            ],
+        ),
+    ]
+}
+
+/// Every file of the project folder but git's own.
+fn project_files(folder: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let mut files = super::store::files_on_disk(folder);
+    files.retain(|rel, _| !rel.starts_with(".git/"));
+    files
+}
+
+/// Runs each of `exports` of the project open at `at` once, each to its end, with requests from
+/// `base` on, and returns what each made.
+async fn run_exports(
+    w: &OnDiskExports,
+    at: &Scope,
+    exports: &[ExportOf],
+    base: u8,
+) -> Vec<(JobId, export::Exported)> {
+    let mut made = Vec::new();
+    for (&(producer, subject, print), request) in exports.iter().zip(base..) {
+        let print = print.then(|| export::PrintRequest {
+            setup: tc_api::model::print::PageSetup {
+                pictures: tc_api::model::print::Pictures::Hidden,
+                ..Default::default()
+            },
+            title: "Título".into(),
+            words: english_words(),
+        });
+        let req = export::RunExport {
+            request: rid(request),
+            at: at.clone(),
+            producer,
+            subject,
+            print,
+        };
+        let (job, state) = run(&w.t.app, &req).await;
+        made.push((job, exported(state)));
+    }
+    made
+}
+
+/// INV-AN-EXPORT-NEVER-WRITES-THE-PROJECT (tC4 J7): after the checkpoint each export runs
+/// first, an export changes no byte of the project folder, and its file lands in the downloads
+/// folder (a print stays with its job).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_export_never_writes_the_project() {
+    let w = on_disk_exports().await;
+    let mut made = Vec::new();
+    for ((project, exports), base) in every_export().into_iter().zip([90, 110]) {
+        let folder = w.projects.join(project);
+        let at = open_on_screen(&w.t.app, project).await;
+        run_exports(&w, &at, &exports, base).await;
+        let before = project_files(&folder);
+        made.extend(run_exports(&w, &at, &exports, base + 10).await);
+        let after = project_files(&folder);
+        let changed: Vec<&String> = before
+            .keys()
+            .chain(after.keys())
+            .filter(|rel| before.get(*rel) != after.get(*rel))
+            .collect();
+        assert!(
+            changed.is_empty(),
+            "an export wrote into {project}: {changed:?}"
+        );
+    }
+
+    let downloads_dir = w.downloads.dir.path();
+    let written = w.downloads.written.lock().unwrap().clone();
+    let files = w.downloads.files.lock().unwrap().clone();
+    // Both runs' three downloads: two USFM files and the stories zip.
+    assert_eq!(written.len(), 6, "{written:?}");
+    for (path, (_, bytes)) in written.iter().zip(&files) {
+        assert_eq!(path.parent(), Some(downloads_dir), "{}", path.display());
+        assert_eq!(&std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+    let in_projects: Vec<String> = [BIBLE, STORIES]
+        .iter()
+        .flat_map(|p| project_files(&w.projects.join(p)).into_keys())
+        .collect();
+    for (job, done) in made {
+        match done.file {
+            export::ExportedFile::Download { file_name, .. } => {
+                assert!(
+                    files.iter().any(|(name, _)| *name == file_name),
+                    "{file_name}"
+                );
+                assert!(
+                    in_projects.iter().all(|rel| !rel.ends_with(&file_name)),
+                    "{file_name} is in a project"
+                );
+            }
+            export::ExportedFile::Print { .. } => {
+                assert!(w.t.app.print_page(&job.get().to_string()).await.is_some());
+            }
+        }
+    }
+}
+
+/// Each USFM export reads back with tc-usfm, the saved verse in it, and the projects stay valid
+/// Scripture Burritos through the exports and the checkpoints before them (PLAN P5).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn every_export_validates() {
+    let w = on_disk_exports().await;
+    for ((project, exports), base) in every_export().into_iter().zip([90, 110]) {
+        let at = open_on_screen(&w.t.app, project).await;
+        run_exports(&w, &at, &exports, base).await;
+    }
+    let files = w.downloads.files.lock().unwrap().clone();
+    let usfm: Vec<&(String, Vec<u8>)> = files
+        .iter()
+        .filter(|(name, _)| name.ends_with(".usfm"))
+        .collect();
+    assert_eq!(usfm.len(), 2, "aligned and plain");
+    for (name, bytes) in usfm {
+        let text = std::str::from_utf8(bytes).unwrap();
+        let parts = tc_usfm::codec::decompose(text)
+            .unwrap_or_else(|e| panic!("{name} does not parse: {e}"));
+        assert_eq!(tc_usfm::codec::recompose(&parts).usfm, text, "{name}");
+        let plain = tc_usfm::strip_alignment(text).unwrap();
+        assert!(plain.contains("saved before the export"), "{name}");
+    }
+    for project in [BIBLE, STORIES] {
+        let problems = tc_burrito::validate_dir(&w.projects.join(project));
+        assert!(problems.is_empty(), "{project}: {problems:#?}");
+    }
 }
