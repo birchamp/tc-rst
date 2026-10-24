@@ -14,3 +14,7 @@ crates/tc-server/src/applock.rs	the app lock that keeps one instance per compute
 crates/tc-server/src/lib.rs	empties and creates the server's per-run folders in app data
 crates/tc-server/src/uploads.rs	uploaded files in app data, renamed into place and removed
 crates/tc4/src/lib.rs	creates the app data folder at start
+crates/tc-store/src/fault.rs	FaultFs's mirror: the real folder beside the model where libgit2 keeps a test project's .git, made, copied and removed for tests
+crates/tc-store/src/git.rs	removes git's stale lock and temporary pack files: git's own files, not a project file
+crates/tc-store/src/history.rs	moves a broken .git aside into .tc (G4 rebuild): git's own files, kept, not a project file
+crates/tc-store/src/repack.rs	removes loose git objects a pack now holds, and their empty folders: git's own files, not a project file

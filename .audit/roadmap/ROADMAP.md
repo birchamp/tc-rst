@@ -85,11 +85,13 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | CHK-1 | Architecture and I/O boundary checks | checks | INT-4, CHK-1a | 0.5-1 d |
 | CHK-1a | Architecture, I/O and network checks in tc-arch, and ARCHITECTURE.md matching the code | checks | INT-4 | 0.5 d |
 | CHK-2 | Every written project is validated (P5) | checks | S2 | 1-2 d |
-| CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4 | 1 d |
+| CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4, CHK-3a | 1 d |
+| CHK-3a | Claimed tests must exist: TC4-ISSUES, the done cards, the P-ledger and the tC4 journey map | checks | INT-4 | 0.5 d |
 | CHK-4 | Deterministic and fast tests | checks | INT-4 | 2-3 d |
 | CHK-5 | Nightly, Windows and no-network jobs; the mutation executor runs nightly | checks | S2, INT-3 | 1-2 d |
 | CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4, CHK-6a | 1 d |
 | CHK-6a | Release builds without the test server, every ignored test named, PLAN's reference checked | checks | INT-4 | 0.5 d |
+| CHK-4b | tc-app's tests wait for events, never for a short clock | checks | CHK-4 | 0.5 d |
 | UI-1 | Typed jobs and one job follower | app | INT-4, C7a | 1 d |
 | UI-2 | Ports for sync, share, exchange and import | app | UI-1 | 1-2 d |
 | UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced | app | UI-1 | 2 d |

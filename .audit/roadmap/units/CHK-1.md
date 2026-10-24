@@ -119,7 +119,7 @@ from writing a project file directly or calling the network around the switch.
     `scenario_store.rs`; DOM-3 gives them a token instead.
 - **Checks** (all to create; kind: architecture or lint; runs in: the CI job that runs
   `cargo test --workspace`, and the clippy gates):
-  - `crate_edges_follow_the_architecture_table`, `network_libraries_only_in_door43_and_resources`,
+  - `crate_edges_follow_the_architecture_table`, `network_libraries_only_in_door43`,
     `git_https_only_in_door43`, `pure_crates_have_no_io_dependency`,
     `every_member_uses_the_workspace_edition_and_lints`,
     `shared_dependency_versions_come_from_the_workspace` in `crates/tc-arch/tests/architecture.rs`.

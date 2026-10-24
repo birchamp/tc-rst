@@ -1,3 +1,5 @@
+History: superseded by .audit/roadmap/ on 2026-10-21; do not update.
+
 # Continue the rebuild
 
 The owner requested, after the verified C2 checkpoint: "I need you to keep going. Get this

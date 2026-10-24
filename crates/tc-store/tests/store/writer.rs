@@ -151,7 +151,7 @@ fn the_compare_and_swap_reads_a_file_whose_size_and_mtime_are_unchanged() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// I8 at the rename: the file is looked at again once the temp file is complete. A program
+/// INV-OUTSIDE-EDIT-NEVER-OVERWRITTEN (I8) at the rename: the file is looked at again once the temp file is complete. A program
 /// that saves the file in the window between the compare-and-swap and the rename is not
 /// written over: its bytes are kept whole in a copy before anything replaces them.
 #[test]

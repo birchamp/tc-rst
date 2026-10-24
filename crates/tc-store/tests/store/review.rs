@@ -458,9 +458,14 @@ fn metadata_json_the_app_wrote_is_not_copied_as_an_outside_edit() {
 fn an_open_goes_on_when_a_derived_file_cannot_be_read() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
+    // Held, so the materialization a save starts three seconds later cannot run first.
+    rig.store.hooks().hold(tc_store::Point::BeforeMaterialize);
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
     // The process stops before the materialization.
     let fs = rig.fs.crash(false);
+    rig.store
+        .hooks()
+        .release(tc_store::Point::BeforeMaterialize);
     drop(handle);
     let rig = rig_as(fs, APP, "host-1");
     let usfm = usfm_path(&folder);
