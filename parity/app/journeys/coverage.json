@@ -446,7 +446,11 @@
       "pending": "F1"
     },
     "j10-rtl.spec.ts": {
-      "pending": "G4"
+      "file": "parity/app/journeys/rtl-project.test.mjs",
+      "tests": [
+        "rtl_project_drafts_checks_and_aligns",
+        "hebrew_original_aligns_right_to_left_on_jonah"
+      ]
     },
     "j11-share.spec.ts": [
       {
