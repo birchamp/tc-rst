@@ -47,13 +47,34 @@ use crate::app::submit::Submit;
 use crate::app::sync::{SyncEnd, SyncToast};
 use crate::i18n::show_locale;
 
-/// The dialogs `s.modal` names (tC4 `tC4:src/state.jsx:476`). The units that port the others
-/// add theirs: ProjectSettings, SourceTexts (B9a), GuidedFix (B5a).
+/// Which dialog shows (tC4 `s.modal`, `tC4:src/state.jsx:476`): what the modal host switches
+/// on, so typing in a form never rebuilds its dialog (a rebuilt input loses focus).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DialogKind {
+    Feedback,
+    SignIn,
+    AddProject,
+    NewProject,
+    NewObs,
+    AddBook,
+    Import,
+    OpenDoor43,
+    Share,
+    GuidedFix,
+    Settings,
+    Sources,
+}
+
+/// The dialog that shows, with its form (UI-3): a form lives exactly as long as its dialog, so
+/// two forms are never set at once and none is left behind when its dialog closes.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Dialog {
     Feedback,
-    /// The Door43 sign-in step (M12), which unit A8 draws.
-    SignIn,
+    /// The Door43 sign-in step (M12), which unit A8 draws. `under` is the dialog it covers,
+    /// which shows again after it with its form as the person left it.
+    SignIn {
+        under: Option<Box<Dialog>>,
+    },
     /// "+ Add a project" (M1).
     AddProject,
     /// New Bible (M2); its form is `np`.
@@ -62,18 +83,49 @@ pub enum Dialog {
     NewObs,
     /// Add a book (M4); its form is `ab`.
     AddBook,
-    /// Import (M5); its form is `im`.
-    Import,
-    /// Open a project from Door43 (M6); its form is `od`.
-    OpenDoor43,
-    /// Share on Door43; its form is `sh`.
-    Share,
+    /// Import (M5).
+    Import(ImportForm),
+    /// Open a project from Door43 (M6).
+    OpenDoor43(OpenForm),
+    /// Share on Door43.
+    Share(ShareForm),
     /// The guided fix (M11, B5a); its state is `c.fix`.
     GuidedFix,
     /// Project settings (M7); its form is `st`.
     Settings,
-    /// Get source texts (M8); its form is `src`.
+    /// Get source texts (M8); its form is `src`, kept across openings as tC4 keeps it.
     Sources,
+}
+
+/// Open from Door43's form, in the dialog that shows or under the sign-in step that covers it.
+fn open_form(dialog: &mut Option<Dialog>) -> Option<&mut OpenForm> {
+    match dialog.as_mut()? {
+        Dialog::OpenDoor43(od) => Some(od),
+        Dialog::SignIn { under } => match under.as_deref_mut()? {
+            Dialog::OpenDoor43(od) => Some(od),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+impl Dialog {
+    pub fn kind(&self) -> DialogKind {
+        match self {
+            Self::Feedback => DialogKind::Feedback,
+            Self::SignIn { .. } => DialogKind::SignIn,
+            Self::AddProject => DialogKind::AddProject,
+            Self::NewProject => DialogKind::NewProject,
+            Self::NewObs => DialogKind::NewObs,
+            Self::AddBook => DialogKind::AddBook,
+            Self::Import(_) => DialogKind::Import,
+            Self::OpenDoor43(_) => DialogKind::OpenDoor43,
+            Self::Share(_) => DialogKind::Share,
+            Self::GuidedFix => DialogKind::GuidedFix,
+            Self::Settings => DialogKind::Settings,
+            Self::Sources => DialogKind::Sources,
+        }
+    }
 }
 
 /// A banner on Home: its text, and the "Ask for help" it offers (tC4 #378).
@@ -122,12 +174,6 @@ pub struct AppState {
     pub np: ArcRwSignal<Option<NewProjectForm>>,
     /// Add a book's form (tC4 `ab`).
     pub ab: ArcRwSignal<Option<AddBookForm>>,
-    /// Import's form (tC4 `im`).
-    pub im: ArcRwSignal<Option<ImportForm>>,
-    /// The share dialog's form (tC4 `sh`, B9b).
-    pub sh: ArcRwSignal<Option<ShareForm>>,
-    /// Open a project from Door43's form (tC4 `od`, B9b).
-    pub od: ArcRwSignal<Option<OpenForm>>,
     /// Project settings' form (tC4 `st`, B9a).
     pub st: ArcRwSignal<Option<crate::app::sources::SettingsForm>>,
     /// Get source texts' form (tC4 `src`, B9a), kept across the dialog's openings as tC4
@@ -166,6 +212,39 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// The form of the dialog that shows, when `pick` finds it there.
+    fn form<T: Clone + Send + Sync + 'static>(
+        &self,
+        pick: fn(&Dialog) -> Option<&T>,
+    ) -> Signal<Option<T>> {
+        let dialog = self.layers.dialog.clone();
+        Signal::derive(move || dialog.with(|d| d.as_ref().and_then(pick).cloned()))
+    }
+
+    /// Import's form while its dialog shows (tC4 `im`).
+    pub fn import_form(&self) -> Signal<Option<ImportForm>> {
+        self.form(|d| match d {
+            Dialog::Import(im) => Some(im),
+            _ => None,
+        })
+    }
+
+    /// Open from Door43's form while its dialog shows (tC4 `od`).
+    pub fn open_door43_form(&self) -> Signal<Option<OpenForm>> {
+        self.form(|d| match d {
+            Dialog::OpenDoor43(od) => Some(od),
+            _ => None,
+        })
+    }
+
+    /// The share dialog's form while it shows (tC4 `sh`).
+    pub fn share_form(&self) -> Signal<Option<ShareForm>> {
+        self.form(|d| match d {
+            Dialog::Share(sh) => Some(sh),
+            _ => None,
+        })
+    }
+
     pub fn new(
         base: &str,
         server: ServerState,
@@ -187,9 +266,6 @@ impl AppState {
             view_error: ArcRwSignal::new(view_error),
             np: ArcRwSignal::new(None),
             ab: ArcRwSignal::new(None),
-            im: ArcRwSignal::new(None),
-            sh: ArcRwSignal::new(None),
-            od: ArcRwSignal::new(None),
             st: ArcRwSignal::new(None),
             src: ArcRwSignal::new(crate::app::sources::SourcesForm::default()),
             up: ArcRwSignal::new(crate::app::upgrades::UpgradeState::default()),
@@ -763,7 +839,6 @@ impl Actions {
     pub fn open_add_project(&self) {
         let s = self.s();
         s.np.try_set(None);
-        s.im.try_set(None);
         s.layers.dialog.try_set(Some(Dialog::AddProject));
     }
 
@@ -795,9 +870,8 @@ impl Actions {
 
     /// Import, at its kind step (tC4 `openImport`).
     pub fn open_import(&self) {
-        let s = self.s();
-        s.im.try_set(Some(ImportForm::open(js::random_request_id())));
-        s.layers.dialog.try_set(Some(Dialog::Import));
+        let form = ImportForm::open(js::random_request_id());
+        self.s().layers.dialog.try_set(Some(Dialog::Import(form)));
     }
 
     /// Add a book, at its method step (tC4 `openAddBook`).
@@ -828,8 +902,8 @@ impl Actions {
     }
 
     pub fn patch_im(&self, patch: impl FnOnce(&mut ImportForm)) {
-        self.s().im.try_update(|im| {
-            if let Some(im) = im {
+        self.s().layers.dialog.try_update(|dialog| {
+            if let Some(Dialog::Import(im)) = dialog {
                 patch(im);
             }
         });
@@ -842,9 +916,6 @@ impl Actions {
         s.layers.dialog.try_set(None);
         s.np.try_set(None);
         s.ab.try_set(None);
-        s.im.try_set(None);
-        s.sh.try_set(None);
-        s.od.try_set(None);
         s.c.fix.try_set(None);
         s.st.try_set(None);
         self.0.share_flows.begin();
@@ -878,14 +949,26 @@ impl Actions {
 
     /// "Open a project from Door43", the fourth card of Add a project (tC4 `openDoor43Dialog`).
     pub fn open_door43_dialog(&self) {
-        let s = self.s();
-        s.od.try_set(Some(OpenForm::new(js::random_request_id())));
-        s.layers.dialog.try_set(Some(Dialog::OpenDoor43));
+        let form = OpenForm::new(js::random_request_id());
+        self.s()
+            .layers
+            .dialog
+            .try_set(Some(Dialog::OpenDoor43(form)));
     }
 
+    /// A field of Open from Door43 changed: the next Open sends another body, so it is a new
+    /// attempt, even after a lost reply (UI-3).
+    pub fn edit_od(&self, change: impl FnOnce(&mut OpenForm)) {
+        self.patch_od(|od| {
+            change(od);
+            od.submit.edited(js::random_request_id());
+        });
+    }
+
+    /// Changes Open from Door43's form, shown or under the sign-in step that covers it.
     pub fn patch_od(&self, patch: impl FnOnce(&mut OpenForm)) {
-        self.s().od.try_update(|od| {
-            if let Some(od) = od {
+        self.s().layers.dialog.try_update(|dialog| {
+            if let Some(od) = open_form(dialog) {
                 patch(od);
             }
         });
@@ -894,8 +977,8 @@ impl Actions {
     /// "Open project" (tC4 `openDoor43Run`): the name check is the dialog's and comes first;
     /// then, with the internet off, the question; Not now sends nothing.
     pub fn open_door43_run(&self) {
-        let ready = self.s().od.try_update(|od| {
-            let od = od.as_mut()?;
+        let ready = self.s().layers.dialog.try_update(|dialog| {
+            let od = open_form(dialog)?;
             od.submit.press()?;
             od.error = None;
             Some(())
@@ -910,23 +993,25 @@ impl Actions {
     fn open_door43_now(&self) {
         let host = self.s().server.account.with_untracked(|a| a.server.clone());
         // After a sign-in step took its place, the dialog shows again for the open's end, as
-        // the same attempt.
-        self.patch_od(|od| {
+        // the same attempt, with the form as the person left it.
+        let form = self.s().layers.dialog.try_update(|dialog| {
+            if let Some(Dialog::SignIn { under }) = dialog
+                && matches!(under.as_deref(), Some(Dialog::OpenDoor43(_)))
+            {
+                *dialog = under.take().map(|under| *under);
+            }
+            let od = open_form(dialog)?;
             od.submit.press();
+            Some((
+                od.source(&host)?,
+                tc_api::door43::ProjectName::parse(&od.name).ok()?,
+                od.submit.request(),
+            ))
         });
-        let Some(Some((repo, name, attempt))) = self.s().od.with_untracked(|od| {
-            od.as_ref().map(|od| {
-                Some((
-                    od.source(&host)?,
-                    tc_api::door43::ProjectName::parse(&od.name).ok()?,
-                    od.submit.request(),
-                ))
-            })
-        }) else {
+        let Some(Some((repo, name, attempt))) = form else {
             self.drop_pending(Pending::OpenDoor43);
             return;
         };
-        self.s().layers.dialog.try_set(Some(Dialog::OpenDoor43));
         let this = self.clone();
         spawn_local(async move {
             let request = OpenDoor43 {
@@ -1111,7 +1196,11 @@ impl Actions {
             if !this.0.share_flows.is_current(flow) {
                 return;
             }
-            let dialog = this.s().layers.dialog.get_untracked();
+            let dialog = this
+                .s()
+                .layers
+                .dialog
+                .with_untracked(|dialog| dialog.as_ref().map(Dialog::kind));
             let reply = match reply {
                 Err(CallError::Api(error)) => {
                     match this.net_refusal(Pending::Share(Box::new(project.clone())), error) {
@@ -1125,7 +1214,7 @@ impl Actions {
             // The answer goes to this flow's dialog only; one that opened meanwhile over Home
             // takes its place only when nothing else is open.
             match (opened, dialog) {
-                (true, Some(Dialog::Share)) => {}
+                (true, Some(DialogKind::Share)) => {}
                 (false, None) => this.open_share(&project),
                 _ => return,
             }
@@ -1135,25 +1224,22 @@ impl Actions {
     }
 
     fn open_share(&self, project: &ShareProject) {
-        let s = self.s();
-        s.sh.try_set(Some(ShareForm::open(project.clone())));
-        s.layers.dialog.try_set(Some(Dialog::Share));
+        let form = ShareForm::open(project.clone());
+        self.s().layers.dialog.try_set(Some(Dialog::Share(form)));
     }
 
     /// The share dialog closes for a step that takes its place.
     fn end_share(&self) {
-        let s = self.s();
-        s.layers.dialog.try_update(|dialog| {
-            if *dialog == Some(Dialog::Share) {
+        self.s().layers.dialog.try_update(|dialog| {
+            if matches!(dialog, Some(Dialog::Share(_))) {
                 *dialog = None;
             }
         });
-        s.sh.try_set(None);
     }
 
     pub fn patch_sh(&self, patch: impl FnOnce(&mut ShareForm)) {
-        self.s().sh.try_update(|sh| {
-            if let Some(sh) = sh {
+        self.s().layers.dialog.try_update(|dialog| {
+            if let Some(Dialog::Share(sh)) = dialog {
                 patch(sh);
             }
         });
@@ -1175,8 +1261,12 @@ impl Actions {
     pub fn change_sign_in(&self) {
         let Some(project) = self
             .s()
-            .sh
-            .with_untracked(|sh| sh.as_ref().map(|sh| sh.project.clone()))
+            .layers
+            .dialog
+            .with_untracked(|dialog| match dialog {
+                Some(Dialog::Share(sh)) => Some(sh.project.clone()),
+                _ => None,
+            })
         else {
             return;
         };
@@ -1214,7 +1304,14 @@ impl Actions {
         let flow = self.0.sign_in_flows.get() + 1;
         self.0.sign_in_flows.set(flow);
         self.s().sign_in.try_update(|step| step.open(flow, then));
-        self.s().layers.dialog.try_set(Some(Dialog::SignIn));
+        // The step covers the dialog under it; Open from Door43 shows again after it with its
+        // form as it was, since the open goes on once the person is signed in.
+        self.s().layers.dialog.try_update(|dialog| {
+            let under = dialog.take().filter(|d| matches!(d, Dialog::OpenDoor43(_)));
+            *dialog = Some(Dialog::SignIn {
+                under: under.map(Box::new),
+            });
+        });
     }
 
     /// A change in one of the step's fields.
@@ -1261,9 +1358,10 @@ impl Actions {
                 .unwrap_or(SignInNext::Nothing);
             match next {
                 SignInNext::SignedIn(then) => {
+                    // The dialog it covered shows again, for the step that goes on now.
                     this.s().layers.dialog.try_update(|dialog| {
-                        if *dialog == Some(Dialog::SignIn) {
-                            *dialog = None;
+                        if let Some(Dialog::SignIn { under }) = dialog {
+                            *dialog = under.take().map(|under| *under);
                         }
                     });
                     if let Some(then) = then {
@@ -1281,7 +1379,7 @@ impl Actions {
     pub fn cancel_sign_in(&self) {
         let sending = self.s().sign_in.try_update(SignInFlow::cancel).flatten();
         self.s().layers.dialog.try_update(|dialog| {
-            if *dialog == Some(Dialog::SignIn) {
+            if matches!(dialog, Some(Dialog::SignIn { .. })) {
                 *dialog = None;
             }
         });

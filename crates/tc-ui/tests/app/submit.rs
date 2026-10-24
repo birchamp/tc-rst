@@ -46,3 +46,22 @@ fn a_second_press_in_flight_sends_nothing() {
         "an answered attempt sends nothing more"
     );
 }
+
+#[test]
+fn a_changed_form_after_a_lost_reply_is_a_new_attempt() {
+    let mut submit = Submit::new(id(1));
+    assert_eq!(submit.press(), Some(id(1)));
+    submit.lost("the app's server did not answer".into());
+    submit.edited(id(2));
+    assert_eq!(
+        submit.press(),
+        Some(id(2)),
+        "another body is another request"
+    );
+    submit.edited(id(3));
+    assert_eq!(
+        submit.press(),
+        None,
+        "an edit while in flight changes nothing"
+    );
+}
