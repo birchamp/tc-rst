@@ -9,7 +9,7 @@
 //! while it closes.
 //!
 //! The server knows nothing of projects. Parsing a request, running it and writing the reply
-//! are the backend's: `tc-app` in the product, [`stub::Stub`] in this crate's tests.
+//! are the backend's: `tc-app` in the product, `stub::Stub` in this crate's tests.
 
 mod applock;
 mod backend;
@@ -23,6 +23,7 @@ mod routes;
 mod security;
 mod state;
 mod statics;
+#[cfg(feature = "test-hooks")]
 pub mod stub;
 mod token;
 mod uploads;

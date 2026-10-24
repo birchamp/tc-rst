@@ -9,11 +9,12 @@ use common::links;
 use proptest::prelude::*;
 use proptest::test_runner::FileFailurePersistence;
 use std::collections::HashMap;
+use tc_usfm::raw::Document;
 use tc_usfm::text::normalize_whitespace;
 use tc_usfm::words::{TokenKind, classify, words};
 use tc_usfm::{
-    AlignmentGroup, Book, Document, Error, SourceWord, TargetWord, display_text, parse_aligned,
-    target_words, weave,
+    AlignmentGroup, Book, Error, SourceWord, TargetWord, display_text, parse_aligned, target_words,
+    weave,
 };
 
 /// Pieces that exercise the lexer: markers of every shape, separators, attributes,

@@ -103,7 +103,7 @@ fn project_id(fs: &FaultFs, folder: &Path) -> ProjectId {
 
 /// A teammate's batch put into `.tc/pending/` as a cloud client or an intake would leave it:
 /// `records` written by device `device`, `n` the batch's declared size.
-fn teammate_batch(
+pub(crate) fn teammate_batch(
     fs: &FaultFs,
     folder: &Path,
     device: DeviceId,
@@ -193,7 +193,7 @@ fn teammate() -> DeviceId {
 /// and removed, a conflict of two of this device's versions of 1:3, a conflict of this
 /// device's and a teammate's versions of 1:4, and a teammate's batch of two of which only
 /// one change arrived.
-fn rich() -> (FaultFs, PathBuf) {
+pub(crate) fn rich() -> (FaultFs, PathBuf) {
     static BASE: std::sync::OnceLock<(FaultFs, PathBuf)> = std::sync::OnceLock::new();
     let (fs, folder) = BASE.get_or_init(|| {
         let (rig, folder) = titus();
@@ -358,7 +358,7 @@ fn rich() -> (FaultFs, PathBuf) {
     (fs.copy(), folder.clone())
 }
 
-fn open(fs: &FaultFs, folder: &Path) -> (Rig, ProjectHandle) {
+pub(crate) fn open(fs: &FaultFs, folder: &Path) -> (Rig, ProjectHandle) {
     let rig = rig_as(fs.clone(), APP, "host-1");
     let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
@@ -374,7 +374,7 @@ fn conflict_of(fold: &FoldState, key: &RecordKey) -> tc_journal::fold::Conflict 
 
 /// One command of each kind of §2.7, built from what `handle` shows now. `None` when the
 /// command does not apply to the project.
-fn every_command(handle: &ProjectHandle) -> Vec<(&'static str, Command)> {
+pub(crate) fn every_command(handle: &ProjectHandle) -> Vec<(&'static str, Command)> {
     let snapshot = handle.snapshot();
     let fold = snapshot.fold();
     let mut out: Vec<(&'static str, Command)> = Vec::new();
@@ -1085,7 +1085,7 @@ fn aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records() {
     for id in &reply.changes {
         let body = fold.body(id).unwrap();
         assert!(
-            matches!(&body.cause, Cause::Import(ImportSource::Usfm { file_name }) if &**file_name == "2JN.usfm"),
+            matches!(&body.cause, Cause::Import(ImportSource::Usfm { file_name, unknown_base: false }) if &**file_name == "2JN.usfm"),
             "{:?}",
             body.cause
         );
@@ -1467,6 +1467,94 @@ fn what_was_recovered_of_a_batch_is_applied_by_a_release() {
     handle.close().unwrap();
 }
 
+/// §7.4: a conflict marked as incomplete history is a warning, never a reason to hide a
+/// choice. Juan's batch of two lost one of its changes on the way; Ana continued the change
+/// that arrived, and this device edited the verse from the same base: the conflict is marked,
+/// and *Keep this version* works beside *Apply what was recovered*.
+#[test]
+fn release_batch_is_accepted_beside_the_other_choices() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let base = handle.snapshot().fold().heads(&verse(1, 1));
+    let shown = token(&handle, &verse(1, 1));
+    submit(
+        &handle,
+        Command::SaveVerse {
+            shown,
+            words: "My version of one".into(),
+        },
+    )
+    .unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    let words = |text: &str| Record::Verse {
+        book: TIT,
+        chapter: ChapterNo::new(1).unwrap(),
+        verse: VerseNo::new(1).unwrap(),
+        value: VerseValue::Text {
+            marker: tc_journal::record::MarkerWs::canonical(),
+            words: text.into(),
+            layout: "\n".into(),
+            last: VerseNo::new(1).unwrap(),
+            from: None,
+        },
+    };
+    let lost = teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([2u8; 15]),
+        2,
+        vec![(words("Juan's first"), base)],
+    );
+    teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([3u8; 15]),
+        1,
+        vec![(words("Ana continues"), vec![lost[0]])],
+    );
+    let (_rig, handle) = open(&rig.fs, &folder);
+    let fold = handle.snapshot().fold().clone();
+    let conflict = conflict_of(&fold, &verse(1, 1));
+    assert!(conflict.incomplete_history, "{conflict:?}");
+    let held = fold
+        .anomalies()
+        .find_map(|a| match a {
+            Anomaly::IncompleteBatch { batch, .. } => Some(*batch),
+            _ => None,
+        })
+        .expect("Juan's batch is held");
+    // Every version can be kept, whatever the history lacks.
+    for candidate in &conflict.candidates {
+        assert!(
+            tc_journal::fold::FoldState::resolution(
+                &fold,
+                &conflict.id,
+                &Choice::Candidate {
+                    head: candidate.head
+                }
+            )
+            .is_ok(),
+            "{candidate:?} cannot be kept"
+        );
+    }
+    let kept = conflict.candidates[0].clone();
+    submit(
+        &handle,
+        Command::Resolve {
+            conflict: conflict.id,
+            shown: vec![review(&handle, &verse(1, 1))],
+            choice: Choice::Candidate { head: kept.head },
+        },
+    )
+    .unwrap();
+    assert_eq!(projected(&handle, &verse(1, 1)), Some(kept.value));
+    // And what was recovered of the batch can still be applied.
+    let reply = submit(&handle, Command::ReleaseBatch { batch: held }).unwrap();
+    assert_eq!(reply.changes.len(), 1);
+    handle.close().unwrap();
+}
+
 #[test]
 fn a_dismissed_alignment_is_kept_with_its_flag() {
     let (fs, folder) = rich();
@@ -1505,13 +1593,15 @@ fn a_dismissed_alignment_is_kept_with_its_flag() {
 #[test]
 fn read_only_refuses_every_command_and_writes_nothing() {
     let (fs, folder) = rich();
-    let (_rig, writer) = open(&fs, &folder);
-    // The folder on another computer, whose open finds the lock naming this one.
-    let other = rig_as(fs.other_machine(), "/app-desktop", "host-2");
-    let reader = other.store.open(&folder, &OpenOptions::default()).unwrap();
+    let (rig, writer) = open(&fs, &folder);
+    writer.close().unwrap();
+    drop(rig);
+    // The projects folder is found to be cloud-synced: the next open is read-only.
+    let cloud = cloud_synced_rig(fs.clone());
+    let reader = cloud.store.open(&folder, &OpenOptions::default()).unwrap();
     assert!(matches!(
         reader.facts().mode,
-        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::OpenOnAnotherComputer { .. })
+        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::UnsafeFolder(_))
     ));
     let before = files(&fs, &folder);
     for (name, command) in every_command(&reader) {
@@ -1542,12 +1632,11 @@ fn read_only_refuses_every_command_and_writes_nothing() {
         .filter(|k| *k != ".tc/lock" && before.get(*k) != after.get(*k))
         .collect();
     assert!(changed.is_empty(), "a read-only open wrote {changed:?}");
-    writer.close().unwrap();
 }
 
 /// An Open Bible Stories project made as a new one is (§3.2): its details and each story's
 /// template base, seeded from the shipped template.
-fn stories() -> (FaultFs, PathBuf) {
+pub(crate) fn stories() -> (FaultFs, PathBuf) {
     let fs = FaultFs::new();
     let rig = rig(fs.clone());
     let mut records: Vec<Record> = first_records()
@@ -1575,7 +1664,7 @@ fn stories() -> (FaultFs, PathBuf) {
 fn frame(story: u8, frame: u16) -> RecordKey {
     RecordKey::Frame(
         tc_journal::StoryNo::new(story).unwrap(),
-        tc_journal::FrameNo(frame),
+        tc_journal::FrameNo::new(frame),
     )
 }
 
@@ -1671,6 +1760,166 @@ fn an_obs_frame_is_saved_by_tc4s_text_rules_and_whole_or_not_at_all() {
         },
     );
     assert!(points >= 4);
+}
+
+// ---------------------------------------------------------------------------------------
+// A pins choice with its carry-over (§8.3, APP-DESIGN R7)
+// ---------------------------------------------------------------------------------------
+
+fn pin(sha: u8) -> PinGroupValue {
+    PinGroupValue(BTreeMap::from([(
+        SlotName::parse("ugl").unwrap(),
+        SlotValue(Json::Obj(JsonMap::from([
+            (
+                "repoPath".to_owned(),
+                Json::from("git.door43.org/unfoldingWord/en_ugl"),
+            ),
+            ("sha".to_owned(), Json::from(oid(sha).to_hex())),
+            ("version".to_owned(), Json::from("v1")),
+        ]))),
+    )]))
+}
+
+/// Two computers pinned the lexicon differently. Choosing one pin and moving a decision to the
+/// check the other pin's resource makes of it is one batch, one pending file: the conflict is
+/// gone and the decision is where the choice put it. A plan that leaves a pin group of the
+/// conflict out, or was made from heads that moved, writes nothing.
+#[test]
+fn a_pins_choice_and_its_carry_over_are_one_batch() {
+    let (fs, folder) = rich();
+    let group = RecordKey::Pins(PinGroup::Lexicon);
+    let (rig, handle) = open(&fs, &folder);
+    let before_heads = handle.snapshot().fold().heads(&group);
+    submit(
+        &handle,
+        Command::SetPins {
+            shown: token(&handle, &group),
+            value: pin(1),
+        },
+    )
+    .unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([8u8; 15]),
+        1,
+        vec![(
+            Record::Pins {
+                group: PinGroup::Lexicon,
+                value: pin(2),
+            },
+            before_heads,
+        )],
+    );
+    let (rig, handle) = open(&rig.fs, &folder);
+    let conflict = handle
+        .snapshot()
+        .fold()
+        .conflicts_of(tc_journal::fold::ConflictKind::Pins)
+        .next()
+        .cloned()
+        .expect("two pins of one group");
+    let heads = handle.snapshot().fold().heads(&group);
+    assert_eq!(heads.len(), 2);
+
+    // The carry-over: the decision on 1:2 moves to the check the chosen pin gives it.
+    let (from, to) = (tn_key(1, 2, 1), tn_key(1, 2, 2));
+    let Some(Record::Check {
+        value: CheckValue::Decision(decision),
+        ..
+    }) = projected(&handle, &RecordKey::Check(from.clone()))
+    else {
+        panic!("1:2 has a decision");
+    };
+    let fold = handle.snapshot().fold().clone();
+    let plan = |parents_of_from: Vec<ChangeId>| UpgradePlan {
+        changes: vec![
+            PlannedChange {
+                record: Record::Pins {
+                    group: PinGroup::Lexicon,
+                    value: pin(2),
+                },
+                parents: heads.clone(),
+                cause: Cause::Resolve,
+            },
+            PlannedChange {
+                record: Record::Check {
+                    key: from.clone(),
+                    value: CheckValue::MovedTo { to: to.clone() },
+                },
+                parents: parents_of_from,
+                cause: Cause::Edit,
+            },
+            PlannedChange {
+                record: Record::Check {
+                    key: to.clone(),
+                    value: CheckValue::Decision(decision.clone()),
+                },
+                parents: fold.heads(&RecordKey::Check(to.clone())),
+                cause: Cause::Edit,
+            },
+        ],
+    };
+    let files_before = pending_files(&rig.fs, &folder).len();
+    // Made from heads that moved: stale, nothing written.
+    let stale = submit(
+        &handle,
+        Command::ResolvePins {
+            conflict: conflict.id,
+            shown: vec![review(&handle, &group)],
+            plan: plan(vec![ChangeId::of(b"not a head of the decision")]),
+        },
+    );
+    assert!(matches!(stale, Err(CommandError::PlanStale)), "{stale:?}");
+    // A plan that does not settle the group: refused.
+    let left_out = submit(
+        &handle,
+        Command::ResolvePins {
+            conflict: conflict.id,
+            shown: vec![review(&handle, &group)],
+            plan: UpgradePlan {
+                changes: plan(fold.heads(&RecordKey::Check(from.clone()))).changes[1..].to_vec(),
+            },
+        },
+    );
+    assert!(
+        matches!(left_out, Err(CommandError::Refused(Refusal::Resolve(_)))),
+        "{left_out:?}"
+    );
+    assert_eq!(pending_files(&rig.fs, &folder).len(), files_before);
+
+    let reply = submit(
+        &handle,
+        Command::ResolvePins {
+            conflict: conflict.id,
+            shown: vec![review(&handle, &group)],
+            plan: plan(fold.heads(&RecordKey::Check(from.clone()))),
+        },
+    )
+    .unwrap();
+    assert_eq!(reply.changes.len(), 3);
+    assert_eq!(
+        pending_files(&rig.fs, &folder).len(),
+        files_before + 1,
+        "one batch, one pending file"
+    );
+    let fold = handle.snapshot().fold().clone();
+    assert_eq!(
+        fold.conflicts_of(tc_journal::fold::ConflictKind::Pins)
+            .count(),
+        0
+    );
+    assert_eq!(fold.heads(&group).len(), 1);
+    assert!(matches!(
+        fold.projected(&RecordKey::Check(to)),
+        Some(Record::Check {
+            value: CheckValue::Decision(_),
+            ..
+        })
+    ));
+    handle.close().unwrap();
 }
 
 /// A small USFM book of generated chapters, paragraphs, verses, spans and words.

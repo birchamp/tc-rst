@@ -136,7 +136,7 @@ pub fn sample(rel: &str) -> String {
 /// The content of a verse of a book (its USFM after `\v N `), as a verse record holds it.
 pub fn verse_content(usfm: &str, chapter: u16, verse: u16) -> String {
     Book::parse(usfm)
-        .verse(chapter, VerseSpan::single(verse))
+        .verse(chapter, VerseSpan::range(verse, verse).unwrap())
         .unwrap()
         .body()
         .to_owned()

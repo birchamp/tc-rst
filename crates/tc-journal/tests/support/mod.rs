@@ -231,6 +231,7 @@ pub fn imported_book(dev: &mut Dev, chapters: &[u16]) -> Vec<Change> {
         items,
         Cause::Import(tc_journal::ImportSource::Usfm {
             file_name: "TIT.usfm".into(),
+            unknown_base: false,
         }),
     )
 }

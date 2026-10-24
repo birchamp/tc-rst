@@ -203,10 +203,8 @@ fn snapshot_text(snapshot: &tc_app::backend::Snapshot, key: &RecordKey) -> Strin
         .unwrap();
     let rendered = tc_obs::story::parse_story(std::str::from_utf8(&bytes).unwrap()).unwrap();
     match key {
-        RecordKey::Frame(_, FrameNo(0)) => rendered.title,
-        RecordKey::Frame(_, FrameNo(frame)) => {
-            rendered.frames[usize::from(*frame) - 1].text.clone()
-        }
+        RecordKey::Frame(_, FrameNo::TITLE) => rendered.title,
+        RecordKey::Frame(_, frame) => rendered.frames[usize::from(frame.get()) - 1].text.clone(),
         RecordKey::StoryRef(_) => rendered.reference.unwrap_or_default(),
         _ => unreachable!(),
     }
@@ -270,8 +268,8 @@ impl World {
         let story = tc_journal::StoryNo::new(1).unwrap();
         let record = match kind {
             ProductionKind::Verse => tit(1, 12),
-            ProductionKind::Frame => RecordKey::Frame(story, FrameNo(1)),
-            ProductionKind::Title => RecordKey::Frame(story, FrameNo(0)),
+            ProductionKind::Frame => RecordKey::Frame(story, FrameNo::new(1)),
+            ProductionKind::Title => RecordKey::Frame(story, FrameNo::TITLE),
             ProductionKind::Reference => RecordKey::StoryRef(story),
             ProductionKind::Comment => {
                 let ack = post(
@@ -668,7 +666,7 @@ impl World {
         let Some(flight) = self.page.inflight.pop_front() else {
             return Delivered::Answered;
         };
-        for _ in 0..200 {
+        for () in crate::store_world::for_a_minute() {
             if flight.handle.is_finished() || self.t.app.holding() > 0 {
                 break;
             }
@@ -788,7 +786,7 @@ impl World {
                 })
                 .await;
             // A crash point may end it while this waits: an ended app runs nothing either.
-            for _ in 0..5000 {
+            for () in crate::store_world::for_a_minute() {
                 match self.t.app.request(&tc_api::test::Quiet {}).await {
                     Ok(Reply::Ok(quiet)) if quiet.busy => {
                         tokio::time::sleep(Duration::from_millis(1)).await;
@@ -1077,7 +1075,7 @@ multi! {
         let mut w = World::new().await;
         w.type_text("A draft").await;
         w.advance(1000.0).await;
-        for _ in 0..1000 {
+        for () in crate::store_world::for_a_minute() {
             if w.log().await.drafts == 1 {
                 break;
             }
@@ -1290,9 +1288,11 @@ proptest! {
             .build()
             .unwrap()
             .block_on(async {
-                tokio::time::timeout(Duration::from_secs(30), async {
+                // A hang limit, not a speed limit (rulings/2026-10-23-tests-prove-behavior-not-speed.md):
+                // 48 cases on a loaded Windows runner took over 30 s each.
+                tokio::time::timeout(Duration::from_secs(120), async {
                     play_world(World::verse().await, steps).await;
-                }).await.expect("the production save/reload scenario finishes");
+                }).await.expect("the production save/reload scenario hung");
             });
     }
 }
@@ -1307,9 +1307,10 @@ proptest! {
     ) {
         tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap()
             .block_on(async {
-                tokio::time::timeout(Duration::from_secs(30), async {
+                // The bound only catches a hang (ruling 2026-10-23): CI's runner took over 30 s.
+                tokio::time::timeout(Duration::from_secs(120), async {
                     play_world(World::project_field(kind).await, steps).await;
-                }).await.expect("the C3 field reload scenario finishes");
+                }).await.expect("hung: the C3 field reload scenario did not finish in 120 s");
             });
     }
 }
@@ -1406,7 +1407,7 @@ multi! {
         let retry = tokio::spawn(async move { retry_app.call("editor/addComment", &retry_body).await });
         first.abort();
         drop(held);
-        let reply = tokio::time::timeout(Duration::from_secs(5), retry).await.unwrap().unwrap();
+        let reply = tokio::time::timeout(Duration::from_secs(60), retry).await.expect("hung: the retried comment add").unwrap();
         let again = w.t.app.call("editor/addComment", &body).await;
         assert_eq!(reply, again, "the identical Ack includes the identical comment token");
         let Answer::Reply { body, .. } = reply else { panic!("{reply:?}") };

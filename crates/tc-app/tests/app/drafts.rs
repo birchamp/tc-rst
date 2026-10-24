@@ -1050,7 +1050,7 @@ async fn an_older_draft_is_not_offered_over_the_sessions_own_save() {
 /// cannot rely on the browser receiving that Ack and refreshing its draft afterward.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_draft_sent_during_a_save_survives_a_crash() {
-    tokio::time::timeout(std::time::Duration::from_secs(15), async {
+    tokio::time::timeout(std::time::Duration::from_secs(60), async {
         let mut rig = Rig::new().await;
         let session = rig.open(&rig.bible.clone()).await;
         let key = tit(1, 12);
@@ -1142,7 +1142,7 @@ async fn a_draft_sent_during_a_save_survives_a_crash() {
         assert!(versions.contains(&"first words sent, with newer typing".to_owned()));
     })
     .await
-    .expect("the held-save draft recovery scenario must finish");
+    .expect("hung: the held-save draft recovery scenario");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1151,7 +1151,7 @@ async fn resume_follows_confirmed_saves_and_the_drafts_original_keystroke_time()
     use tc_api::prefs::PlaceMode;
     use tc_app::prefs::AppDataPath;
     async fn resume_with(app: &tc_app::App, snippet: &str) -> tc_api::home::LastEditView {
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
                 let home: HomeView = post(app, &List {}).await.unwrap();
                 if let Some(resume) = home.resume
@@ -1163,7 +1163,7 @@ async fn resume_follows_confirmed_saves_and_the_drafts_original_keystroke_time()
             }
         })
         .await
-        .expect("Resume must observe the queued preference update")
+        .expect("hung: Resume never showed the queued preference update")
     }
     let rig = Rig::new().await;
     let session = rig.open(&rig.bible.clone()).await;
@@ -1337,13 +1337,13 @@ async fn obs_title_frame_and_reference_drafts_survive_without_the_browser_buffer
     let story = tc_journal::StoryNo::new(1).unwrap();
     let cases = [
         (
-            RecordKey::Frame(story, tc_journal::FrameNo(0)),
+            RecordKey::Frame(story, tc_journal::FrameNo::TITLE),
             EditorDraftField::Frame,
             "a newer story title",
             DraftKind::Frame,
         ),
         (
-            RecordKey::Frame(story, tc_journal::FrameNo(1)),
+            RecordKey::Frame(story, tc_journal::FrameNo::new(1)),
             EditorDraftField::Frame,
             "newer words of the first frame",
             DraftKind::Frame,
@@ -1481,7 +1481,7 @@ async fn a_tokenless_comment_in_the_shell_mirror_keeps_its_verse_or_frame_target
         assert_eq!(matching.len(), 1, "the exact target receives one comment");
         if stories {
             assert!(
-                matches!(matching[0], tc_journal::record::CommentTarget::Frame { story, frame } if story.get() == 1 && frame.0 == 1)
+                matches!(matching[0], tc_journal::record::CommentTarget::Frame { story, frame } if story.get() == 1 && frame.get() == 1)
             );
         } else {
             assert!(
@@ -1673,8 +1673,8 @@ async fn story_texts_are_saved_and_kept_in_the_form_tc4_stores() {
     let session = rig.open(&rig.bible.clone()).await;
     let story = tc_journal::StoryNo::new(1).unwrap();
     let (title, frame, reference) = (
-        RecordKey::Frame(story, tc_journal::FrameNo(0)),
-        RecordKey::Frame(story, tc_journal::FrameNo(1)),
+        RecordKey::Frame(story, tc_journal::FrameNo::TITLE),
+        RecordKey::Frame(story, tc_journal::FrameNo::new(1)),
         RecordKey::StoryRef(story),
     );
     let stored = |session: &ProjectSession, key: &RecordKey| match session

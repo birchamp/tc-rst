@@ -80,6 +80,15 @@ pub enum Command {
         usfm: String,
         file_name: String,
     },
+    /// "Update a book from USFM" with a file chosen from anywhere (§13.6, H20): the
+    /// file's bytes as read, compared with the project with no base. Two batches, one per
+    /// part, the `Fill` first (`crate::outside::UpdatePlan`).
+    UpdateBook {
+        book: BookId,
+        bytes: Vec<u8>,
+        file_name: String,
+        part: crate::outside::UpdatePart,
+    },
     RemoveBook {
         book: BookId,
         presence_shown: ShownToken,
@@ -110,6 +119,31 @@ pub enum Command {
     /// two or more candidates of the set, or none, come from is left out and stays listed.
     ResolveBulk {
         devices: std::collections::BTreeSet<DeviceId>,
+        conflicts: Vec<(ConflictId, Vec<ShownToken>)>,
+    },
+    /// A pins conflict chosen together with its carry-over (§8.3, APP-DESIGN R7): `plan` holds
+    /// exactly one `Pins` change per record of the conflict, with every current head of the
+    /// record as its parents and cause `Resolve`, and the decisions the choice carries over or
+    /// moves, each with the heads it was planned from. One batch, all or nothing; a record
+    /// that moved since the plan was made is `PlanStale`.
+    ResolvePins {
+        conflict: ConflictId,
+        shown: Vec<ShownToken>,
+        plan: UpgradePlan,
+    },
+    /// *Undo* an outside edit recorded with a known base (§11.1 X7, APP-DESIGN R7): each
+    /// change of `batch` is replaced by the value it replaced, the External change as its
+    /// parent. What cannot be taken back is left, and listed in the reply.
+    UndoOutsideEdit {
+        batch: BatchId,
+    },
+    /// *Accept all from the file* or *Keep translationCore's text* over the rows an outside
+    /// edit of `batch` made (§8.1 `OutsideEditLarge`, APP-DESIGN R7): one batch, with each
+    /// conflict's review tokens; a conflict with no single version to keep is left for
+    /// *Review one by one*.
+    ResolveOutsideEdit {
+        batch: BatchId,
+        keep: OutsideKeep,
         conflicts: Vec<(ConflictId, Vec<ShownToken>)>,
     },
     /// Re-key a decision a carry-over could not place (§8.3, APP-DESIGN R7): the old key
@@ -282,6 +316,22 @@ pub enum Choice {
     ApplyToMovedCheck,
     /// *Rename* one file of a path-case conflict: writes the new path's record too.
     RenameCarried { from: RepoPath, to: RepoPath },
+    /// *Keep both* versions of a carried file in conflict (§8.3): `keep` stays at the
+    /// file's path and `other` becomes a file of its own at `to`.
+    KeepBothCarried {
+        keep: ChangeId,
+        other: ChangeId,
+        to: RepoPath,
+    },
+}
+
+/// Which side of an outside edit's rows a bulk choice keeps (§8.1 `OutsideEditLarge`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutsideKeep {
+    /// *Accept all from the file*: the versions the outside edit wrote.
+    File,
+    /// *Keep translationCore's text*: the versions the project already had.
+    Project,
 }
 
 /// Which editor field a draft belongs to (§5.14).

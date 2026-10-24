@@ -16,7 +16,7 @@ use tc_api::conflicts::{
     ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version, VersionCause,
     VersionValue,
 };
-use tc_api::ids::{ChangeRef, ConflictRef, StoryNo, WallMs};
+use tc_api::ids::{ChangeRef, ConflictRef, WallMs};
 use tc_api::shown::{Computer, PersonLabel, Who};
 use tc_api::write::{Ack, SaveRefusal};
 use tc_api::{ApiError, NotSaved};
@@ -123,10 +123,6 @@ fn kind_view(kind: &Kind) -> ConflictKind {
     }
 }
 
-fn story(n: tc_journal::StoryNo) -> Option<StoryNo> {
-    StoryNo::new(n.get()).ok()
-}
-
 /// Where a record is, as the review names it.
 fn place_of(key: &RecordKey) -> ReviewPlace {
     match key {
@@ -151,16 +147,13 @@ fn place_of(key: &RecordKey) -> ReviewPlace {
             },
             Err(_) => ReviewPlace::Project,
         },
-        RecordKey::Frame(n, frame) => match story(*n) {
-            Some(story) => ReviewPlace::Story {
-                story,
-                frame: Some(frame.0),
-            },
-            None => ReviewPlace::Project,
+        RecordKey::Frame(story, frame) => ReviewPlace::Story {
+            story: *story,
+            frame: Some(frame.get()),
         },
-        RecordKey::StoryBase(n) | RecordKey::StoryRef(n) => match story(*n) {
-            Some(story) => ReviewPlace::Story { story, frame: None },
-            None => ReviewPlace::Project,
+        RecordKey::StoryBase(story) | RecordKey::StoryRef(story) => ReviewPlace::Story {
+            story: *story,
+            frame: None,
         },
         _ => ReviewPlace::Project,
     }
@@ -287,8 +280,20 @@ fn notice_view(
         Notice::StorageDamage { path, .. } => NoticeView::StorageDamage { file: file(path) },
         Notice::OutsideEditHeld { path, .. } => NoticeView::OutsideEditHeld { file: file(path) },
         Notice::MetadataEditedOutside { .. } => NoticeView::DetailsEditedOutside,
-        Notice::WriteBlocked { path } => NoticeView::WriteBlocked { file: file(path) },
-        Notice::WhitespaceOnlyEdit { .. } => return None,
+        Notice::MaterializeBlocked { paths, .. } => NoticeView::WriteBlocked {
+            file: paths.first().map(|p| file(p)).unwrap_or_default(),
+        },
+        Notice::OutsideRemovalKept { path, .. } | Notice::FixedFileRestored { path, .. } => {
+            NoticeView::FileRepaired { file: file(path) }
+        }
+        Notice::DerivedFieldsEdited { .. } => NoticeView::DetailsEditedOutside,
+        // D1 gives these their own words; until then the review lists nothing for them.
+        Notice::WhitespaceOnlyEdit { .. }
+        | Notice::CarriedTooLarge { .. }
+        | Notice::HistoryRebuilt { .. }
+        | Notice::HistoryUnavailable { .. }
+        | Notice::PendingWrittenAgain { .. }
+        | Notice::UnsavedAttemptKept { .. } => return None,
         Notice::SecondWriter { .. } => NoticeView::SecondWriter,
         Notice::SavedWithDiskError { .. } => NoticeView::SavedWithDiskError,
         Notice::ImportUnfinished { .. } => NoticeView::ImportUnfinished,

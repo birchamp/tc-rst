@@ -49,27 +49,14 @@ jobs:
       # --with-deps also installs Chromium's system libraries, which the cache does not hold.
       - run: npx playwright install --with-deps chromium
         working-directory: parity/tc4-baseline
-      - run: cargo build --locked -p tc4 --features test-hooks,fixture-backend
-      - run: cargo build --locked -p tc-door43-fake
-      - run: crates/tc-ui/build-app.sh
-      - run: crates/tc-ui/build-app.sh --test-hooks --out target/tc-ui-app-hooks
-      # A journey that leaves a browser or a tc4 running keeps node from ending (run 39956490017
-      # hung 38 minutes); the full run takes about 5 minutes on this runner.
+      # The one gate list's journeys step (scripts/gates.sh): the builds, every journey, and
+      # no-skips.mjs. A journey that leaves a browser or a tc4 running keeps node from ending
+      # (run 39956490017 hung 38 minutes); builds and journeys take about 10 minutes cold.
       - name: journeys
-        timeout-minutes: 15
-        env:
-          TC4_BIN: ${{ github.workspace }}/target/debug/tc4
-          TC4_UI: ${{ github.workspace }}/target/tc-ui-app
-          TC4_UI_HOOKS: ${{ github.workspace }}/target/tc-ui-app-hooks
-          TC4_DOOR43_FAKE: ${{ github.workspace }}/target/debug/tc-door43-fake
-        run: |
-          set -o pipefail
-          node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee app-e2e.tap
-      - name: no skips
-        if: always()
-        run: node parity/app/journeys/no-skips.mjs app-e2e.tap
+        timeout-minutes: 25
+        run: scripts/gates.sh --step journeys
       - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-e2e-tap
-          path: app-e2e.tap
+          path: target/app-e2e.tap

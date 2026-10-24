@@ -37,7 +37,7 @@ pub fn reference_json(target: &CheckTarget) -> Value {
         }
         CheckTarget::Frame { story, frame } => {
             map.insert("story".into(), story.get().into());
-            map.insert("frame".into(), frame.0.into());
+            map.insert("frame".into(), frame.get().into());
         }
     }
     Value::Object(map)
@@ -47,14 +47,14 @@ pub fn reference_json(target: &CheckTarget) -> Value {
 pub fn frame_target(at: ObsRef) -> Option<CheckTarget> {
     Some(CheckTarget::Frame {
         story: StoryNo::new(at.story())?,
-        frame: FrameNo(at.frame()),
+        frame: FrameNo::new(at.frame()),
     })
 }
 
 /// The frame a story check is on.
 pub fn obs_ref(target: &CheckTarget) -> Option<ObsRef> {
     match target {
-        CheckTarget::Frame { story, frame } => ObsRef::new(story.get(), frame.0),
+        CheckTarget::Frame { story, frame } => ObsRef::new(story.get(), frame.get()),
         CheckTarget::Verse { .. } => None,
     }
 }

@@ -31,6 +31,8 @@ pub(crate) struct Plan {
     pub changes: Vec<PlannedChange>,
     /// Conflicts a bulk choice left for a choice of their own.
     pub skipped: Vec<ConflictId>,
+    /// Records an undo left as they are.
+    pub kept: Vec<RecordKey>,
 }
 
 /// What the planner reads.
@@ -38,6 +40,11 @@ pub(crate) struct Ctx<'a> {
     pub fold: &'a FoldState,
     pub signing: &'a TokenKey,
     pub kind: ProjectKind,
+    /// This folder's device: an undo takes back only what this device recorded.
+    pub device: tc_journal::DeviceId,
+    /// The project's repository, when this session has one: a carried file's bytes are its
+    /// blobs (§11.4).
+    pub git: Option<&'a crate::git::Git>,
 }
 
 type R<T> = Result<T, CommandError>;
@@ -128,6 +135,34 @@ impl Ctx<'_> {
     }
 }
 
+/// One part of "Update a book from USFM" (§13.6, H20). The verses left as they were are
+/// the `Fill` reply's `kept`.
+fn update_book(
+    ctx: &Ctx<'_>,
+    book: BookId,
+    bytes: &[u8],
+    file_name: &str,
+    part: tc_journal::outside::UpdatePart,
+) -> R<Plan> {
+    ctx.require_kind(ProjectKind::Bible)?;
+    let plan = ctx
+        .fold
+        .plan_update_book(book, bytes, file_name)
+        .map_err(|e| refused(Refusal::Book(e)))?;
+    Ok(match part {
+        tc_journal::outside::UpdatePart::Fill => Plan {
+            changes: plan.changes,
+            skipped: Vec::new(),
+            kept: plan.left_as_it_was,
+        },
+        tc_journal::outside::UpdatePart::Review => Plan {
+            changes: plan.review,
+            skipped: Vec::new(),
+            kept: Vec::new(),
+        },
+    })
+}
+
 /// B1 for one command.
 pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
     let changes = match command {
@@ -197,6 +232,23 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
         Command::ResolveBulk { devices, conflicts } => {
             return resolve_bulk(ctx, devices, conflicts);
         }
+        Command::ResolvePins {
+            conflict,
+            shown,
+            plan,
+        } => resolve_pins(ctx, conflict, shown, plan)?,
+        Command::UndoOutsideEdit { batch } => return undo_outside_edit(ctx, *batch),
+        Command::UpdateBook {
+            book,
+            bytes,
+            file_name,
+            part,
+        } => return update_book(ctx, *book, bytes, file_name, *part),
+        Command::ResolveOutsideEdit {
+            batch,
+            keep,
+            conflicts,
+        } => return resolve_outside_edit(ctx, *batch, *keep, conflicts),
         Command::MoveCheck {
             shown,
             to,
@@ -226,6 +278,7 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
     Ok(Plan {
         changes,
         skipped: Vec::new(),
+        kept: Vec::new(),
     })
 }
 
@@ -954,7 +1007,7 @@ fn add_book(ctx: &Ctx<'_>, book: BookId, scope: &Scope, source: &str) -> R<Vec<P
         ))));
     }
     check_scope(ctx, book, scope)?;
-    let seeded = crate::seed::seed_book(
+    let seeded = tc_usfm::seed::seed_book(
         source,
         book.code(),
         book.english_name(),
@@ -1011,6 +1064,7 @@ fn add_book_text(
         .map_err(|e| refused(Refusal::Book(format!("the file does not read: {e}"))))?;
     let cause = Cause::Import(ImportSource::Usfm {
         file_name: file_name.into(),
+        unknown_base: false,
     });
     if parts.chapters.is_empty() {
         return Err(refused(Refusal::Book(
@@ -1214,7 +1268,7 @@ fn save_frame(ctx: &Ctx<'_>, shown: &ShownToken, text: &str) -> R<Vec<PlannedCha
     let text = nfc(text);
     let record = match shown.key().clone() {
         RecordKey::Frame(story, frame) => {
-            let problem = if frame.0 == 0 {
+            let problem = if frame.get() == 0 {
                 tc_obs::story::title_text_problem(&text)
             } else {
                 tc_obs::story::frame_text_problem(&text)
@@ -1341,7 +1395,99 @@ fn resolve_bulk(
             changes.push(p);
         }
     }
-    Ok(Plan { changes, skipped })
+    Ok(Plan {
+        changes,
+        skipped,
+        kept: Vec::new(),
+    })
+}
+
+/// A pins conflict chosen with its carry-over (§8.3): the conflict is a pins conflict, the
+/// plan resolves each of its records exactly once with every head as parent, and everything
+/// else in the plan was planned from the heads the records have now.
+fn resolve_pins(
+    ctx: &Ctx<'_>,
+    id: &ConflictId,
+    shown: &[ShownToken],
+    plan: &UpgradePlan,
+) -> R<Vec<PlannedChange>> {
+    check_review_tokens(ctx, id, shown)?;
+    let conflict = ctx.fold.conflict(id).ok_or(CommandError::LookAgain)?;
+    if conflict.kind != tc_journal::fold::ConflictKind::Pins {
+        return Err(refused(Refusal::Resolve(
+            "this is not a conflict between pins".into(),
+        )));
+    }
+    let keys = conflict_keys(ctx.fold, id).ok_or(CommandError::LookAgain)?;
+    for key in &keys {
+        let ours: Vec<&PlannedChange> = plan
+            .changes
+            .iter()
+            .filter(|c| c.record.key() == *key)
+            .collect();
+        match ours.as_slice() {
+            [one] if matches!(one.cause, Cause::Resolve) => {}
+            _ => {
+                return Err(refused(Refusal::Resolve(
+                    "the choice must settle every pin group of the conflict, once".into(),
+                )));
+            }
+        }
+    }
+    apply_upgrade(ctx, plan)
+}
+
+/// *Undo* an outside edit (§11.1 X7): the values it replaced come back with its own changes
+/// as their parents. What cannot be taken back is listed.
+fn undo_outside_edit(ctx: &Ctx<'_>, batch: tc_journal::BatchId) -> R<Plan> {
+    let (changes, kept) = ctx
+        .fold
+        .undo_outside(batch, ctx.device)
+        .map_err(resolve_error)?;
+    Ok(Plan {
+        changes,
+        skipped: Vec::new(),
+        kept,
+    })
+}
+
+/// *Accept all from the file* or *Keep translationCore's text* over the rows an outside edit
+/// made (§8.1), one batch. A conflict whose tokens are stale is left out with those the fold
+/// leaves for a choice of their own.
+fn resolve_outside_edit(
+    ctx: &Ctx<'_>,
+    batch: tc_journal::BatchId,
+    keep: tc_journal::command::OutsideKeep,
+    conflicts: &[(ConflictId, Vec<ShownToken>)],
+) -> R<Plan> {
+    let mut fresh = Vec::new();
+    let mut skipped = Vec::new();
+    for (id, shown) in conflicts {
+        match check_review_tokens(ctx, id, shown) {
+            Ok(()) => fresh.push(*id),
+            Err(CommandError::LookAgain) => skipped.push(*id),
+            Err(e) => return Err(e),
+        }
+    }
+    let (resolved, left) = ctx.fold.outside_resolution(batch, keep, &fresh);
+    skipped.extend(left);
+    let mut seen = BTreeSet::new();
+    let mut changes = Vec::new();
+    for (id, planned) in resolved {
+        if planned.iter().any(|p| seen.contains(&p.record.key())) {
+            skipped.push(id);
+            continue;
+        }
+        for p in planned {
+            seen.insert(p.record.key());
+            changes.push(p);
+        }
+    }
+    Ok(Plan {
+        changes,
+        skipped,
+        kept: Vec::new(),
+    })
 }
 
 /// Re-keys a decision (R7): `MovedTo` on the old key, the decision on the new one, each with
@@ -1392,6 +1538,15 @@ fn restore(ctx: &Ctx<'_>, shown: &ShownToken, from: ChangeId) -> R<Vec<PlannedCh
     let body = ctx.fold.body(&from).ok_or(refused(Refusal::Unreadable))?;
     if body.record.key() != *shown.key() {
         return Err(refused(Refusal::WrongRecord("a version of this record")));
+    }
+    // A carried file's version whose bytes this computer lacks cannot come back (§5.9).
+    if let Record::CarriedFile {
+        value: CarriedValue::Present { oid, .. },
+        ..
+    } = &body.record
+        && !ctx.git.is_some_and(|git| git.has(*oid))
+    {
+        return Err(refused(Refusal::FileNotOnThisComputer));
     }
     Ok(vec![change(
         body.record,

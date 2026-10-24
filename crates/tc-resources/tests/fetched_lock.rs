@@ -7,7 +7,7 @@ use std::fs;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
-use tc_door43::{Limits, ObjectId, VerificationError};
+use tc_door43::{GitOid, Limits, VerificationError};
 use tc_resources::{FetchedLock, Refusal};
 use zip::write::SimpleFileOptions;
 
@@ -87,7 +87,7 @@ fn the_fixture_folder_matches_its_lock() {
     assert_eq!(
         demo.tree,
         "6e5802a33cc85441708e9d4dc17c71c2b25b6cc0"
-            .parse::<ObjectId>()
+            .parse::<GitOid>()
             .unwrap(),
         "the tree git rev-parse gave when the fixture was made"
     );

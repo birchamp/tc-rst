@@ -104,7 +104,9 @@ fn decisions(tn: &ResourcePin, titus: &str, only: usize) -> Vec<(CheckKey, Decis
             let content = book
                 .verse(
                     chapter.as_str().parse().ok()?,
-                    tc_core::VerseSpan::single(verse.as_str().parse().ok()?),
+                    tc_core::VerseSpan::single(tc_core::VerseNo::new(
+                        verse.as_str().parse().ok()?,
+                    )?),
                 )
                 .ok()?
                 .body()
@@ -257,7 +259,9 @@ fn word_decisions(
             let content = book
                 .verse(
                     chapter.as_str().parse().ok()?,
-                    tc_core::VerseSpan::single(verse.as_str().parse().ok()?),
+                    tc_core::VerseSpan::single(tc_core::VerseNo::new(
+                        verse.as_str().parse().ok()?,
+                    )?),
                 )
                 .ok()?
                 .body()
@@ -668,7 +672,7 @@ async fn ended(app: &tc_app::App, job: JobId) -> JobState {
             .clone()
     })
     .await
-    .expect("the job ends")
+    .expect("hung: the job ends")
 }
 
 async fn open(t: &TestApp, project: &str) -> Scope {

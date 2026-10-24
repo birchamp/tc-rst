@@ -273,16 +273,12 @@ impl App {
     }
 }
 
-pub(crate) fn journal_story(story: StoryNo) -> Result<tc_journal::StoryNo, ApiError> {
-    tc_journal::StoryNo::new(story.get()).ok_or_else(not_a_story_project)
-}
-
 /// A story of the project as its file, parsed: tC4's `readStory`. Costs one derived file.
 pub(crate) fn read_story(
     read: &crate::counters::CountingSnapshot,
     story: StoryNo,
 ) -> Result<ObsStory, ApiError> {
-    let file = DerivedFile::Story(journal_story(story)?);
+    let file = DerivedFile::Story(story);
     let bytes = read.render(&file).ok_or_else(|| ApiError::BadRequest {
         field: "story".to_owned(),
         reason: format!("story {} is not in the project", story.get()),
@@ -309,10 +305,10 @@ impl Handle<List> for App {
             .unwrap_or_default();
         let mut stories = Vec::new();
         for number in story_numbers() {
-            let Ok(story) = StoryNo::new(number) else {
+            let Some(story) = StoryNo::new(number) else {
                 continue;
             };
-            let key = RecordKey::StoryBase(journal_story(story)?);
+            let key = RecordKey::StoryBase(story);
             if read.key_state(&key).is_none() {
                 continue;
             }
@@ -339,7 +335,6 @@ fn comments_of(
     read: &crate::counters::CountingSnapshot,
     story: StoryNo,
 ) -> Result<Vec<FrameComment>, ApiError> {
-    let story = journal_story(story)?;
     let mut out = Vec::new();
     for key in read.story_comments_of(story) {
         let Some(Record::Comment { value, .. }) = read.projected(&key) else {
@@ -350,7 +345,7 @@ fn comments_of(
         };
         out.push(FrameComment {
             token: app.shown_token(read, &key)?,
-            frame: frame.0,
+            frame: frame.get(),
             text: value.text,
             at: WallMs(read.written_at(&key).map_or(0, |at| at.0)),
         });
@@ -452,8 +447,8 @@ impl Handle<Open> for App {
                     token: self.shown_token(
                         &read,
                         &RecordKey::Frame(
-                            journal_story(req.story)?,
-                            tc_journal::FrameNo(
+                            req.story,
+                            tc_journal::FrameNo::new(
                                 u16::try_from(index + 1).map_err(|_| not_a_story_project())?,
                             ),
                         ),
@@ -467,10 +462,9 @@ impl Handle<Open> for App {
             view: wire::scope::view(read.seq()),
             title_token: self.shown_token(
                 &read,
-                &RecordKey::Frame(journal_story(req.story)?, tc_journal::FrameNo(0)),
+                &RecordKey::Frame(req.story, tc_journal::FrameNo::TITLE),
             )?,
-            reference_token: self
-                .shown_token(&read, &RecordKey::StoryRef(journal_story(req.story)?))?,
+            reference_token: self.shown_token(&read, &RecordKey::StoryRef(req.story))?,
             story: req.story,
             title: story.title.clone(),
             reference: story.reference.clone().unwrap_or_default(),
@@ -671,9 +665,6 @@ impl App {
         text: &str,
         at: WallMs,
     ) {
-        let Ok(story) = StoryNo::new(story.get()) else {
-            return;
-        };
         let folder = session.scope().project.clone();
         self.inner.prefs.record_last_used(folder.clone(), at);
         self.inner.prefs.record_last_edit(
@@ -721,7 +712,7 @@ impl App {
         }
         let line = match shown.key() {
             RecordKey::StoryRef(_) => tc_api::story::StoryLine::Reference,
-            RecordKey::Frame(_, tc_journal::FrameNo(0)) => tc_api::story::StoryLine::Title,
+            RecordKey::Frame(_, tc_journal::FrameNo::TITLE) => tc_api::story::StoryLine::Title,
             _ => tc_api::story::StoryLine::Frame,
         };
         let text = tc_api::story::stored_text(line, &text);

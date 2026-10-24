@@ -173,7 +173,7 @@ type ByPart = BTreeMap<u16, Vec<usize>>;
 fn part_of(target: &CheckTarget) -> Option<u16> {
     match target {
         CheckTarget::Verse { chapter, .. } => chapter.number(),
-        CheckTarget::Frame { frame, .. } => Some(frame.0),
+        CheckTarget::Frame { frame, .. } => Some(frame.get()),
     }
 }
 
@@ -860,7 +860,7 @@ fn reassess(
             (RecordKey::Frame(story, frame), CheckUnit::Story(open))
                 if story.get() == open.get() =>
             {
-                parts.insert(frame.0);
+                parts.insert(frame.get());
             }
             (RecordKey::StoryBase(story), CheckUnit::Story(open)) if story.get() == open.get() => {
                 every = true;

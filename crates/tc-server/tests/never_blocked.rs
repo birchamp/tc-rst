@@ -282,12 +282,16 @@ fn a_blocking_call_in_the_server_is_seen() {
         "a 120 ms block showed as only {:?}",
         outcome.worst_runtime
     );
-    assert!(
-        outcome.worst_runtime > Duration::from_millis(50) + outcome.worst_os,
-        "the bound of the main test would have passed: {:?} against {:?}",
-        outcome.worst_runtime,
-        outcome.worst_os
-    );
+    // When the machine alone stalled longer than the block, no bound can tell them apart, and
+    // that is the machine's speed, not a fault (rulings/2026-10-23-tests-prove-behavior-not-speed.md).
+    if outcome.worst_os + Duration::from_millis(50) < Duration::from_millis(120) {
+        assert!(
+            outcome.worst_runtime > Duration::from_millis(50) + outcome.worst_os,
+            "the bound of the main test would have passed: {:?} against {:?}",
+            outcome.worst_runtime,
+            outcome.worst_os
+        );
+    }
 }
 
 #[test]

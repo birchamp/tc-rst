@@ -1,0 +1,26 @@
+[package]
+name = "tc-import"
+description = "Importing projects from other tools into records a new project starts with: translationCore 3 projects (STORAGE.md §13.4)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+tc-journal = { path = "../tc-journal" }
+tc-usfm = { path = "../tc-usfm" }
+serde_json.workspace = true
+thiserror.workspace = true
+unicode-normalization.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+tc-burrito = { path = "../tc-burrito" }
+tc-usfm = { path = "../tc-usfm" }
+zip.workspace = true
+tc-store = { path = "../tc-store", features = ["test-hooks"] }
+
+[lints]
+workspace = true

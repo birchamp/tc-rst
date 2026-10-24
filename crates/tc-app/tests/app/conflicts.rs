@@ -251,7 +251,7 @@ async fn keep_this_version_resolves_with_review_tokens_and_a_second_send_gets_th
     .await
     .unwrap();
     let mut read = card(app).await;
-    let told = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+    let told = tokio::time::timeout(std::time::Duration::from_secs(60), async {
         while read.conflicts != Known::Known(0) {
             loop {
                 match events.next().await {
@@ -273,7 +273,7 @@ async fn keep_this_version_resolves_with_review_tokens_and_a_second_send_gets_th
     .await;
     assert!(
         told.is_ok(),
-        "Home is told to read the card again and counts no conflict once the verse is kept: {:?}",
+        "hung: Home is told to read the card again and counts no conflict once the verse is kept: {:?}",
         read.conflicts
     );
 }

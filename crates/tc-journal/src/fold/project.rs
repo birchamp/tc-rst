@@ -57,6 +57,44 @@ impl DerivedFile {
         }
     }
 
+    /// The file a repository path names, if it is one this format derives (§3.3): the
+    /// inverse of [`Self::path`].
+    pub fn from_path(path: &str) -> Option<DerivedFile> {
+        let rest = path.strip_prefix("ingredients/")?;
+        let book = |name: &str| -> Option<BookId> { name.strip_suffix(".json")?.parse().ok() };
+        let file = match rest {
+            "vrs.json" => Self::Versification,
+            "checking/resources.json" => Self::Resources,
+            "checking/settings.json" => Self::Settings,
+            "tc/conflicts.json" => Self::Conflicts,
+            "tc/comments/OBS.json" => Self::StoryComments,
+            _ => {
+                if let Some(name) = rest.strip_prefix("tc/comments/") {
+                    Self::Comments(book(name)?)
+                } else if let Some(name) = rest.strip_prefix("content/") {
+                    let number: u8 = name.strip_suffix(".md")?.parse().ok()?;
+                    Self::Story(StoryNo::new(number)?)
+                } else if let Some(name) = rest.strip_prefix("checking/alignments/") {
+                    Self::Alignments(book(name)?)
+                } else if let Some(tail) = rest.strip_prefix("checking/") {
+                    let (tool, name) = tail.split_once('/')?;
+                    let tool = ToolId::parse(tool)?;
+                    if name == "OBS.json" {
+                        Self::StoryDecisions(tool)
+                    } else {
+                        Self::Decisions(tool, book(name)?)
+                    }
+                } else if !rest.contains('/') {
+                    Self::Usfm(rest.strip_suffix(".usfm")?.parse().ok()?)
+                } else {
+                    return None;
+                }
+            }
+        };
+        // Only the spelling `path` writes: `content/7.md` is no story file.
+        (file.path() == path).then_some(file)
+    }
+
     /// The repository path of the file.
     pub fn path(&self) -> String {
         match self {
@@ -102,6 +140,17 @@ impl DerivedFile {
         };
         Some(serde_json::json!({ book.code(): [] }))
     }
+}
+
+/// A record and the digest of how a file shows it (`crate::outside`).
+pub type RecordDigest = (RecordKey, crate::outside::ShownDigest);
+
+/// A derived file with its bytes and, for a book's USFM, the digest of each record it shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedFile {
+    pub file: DerivedFile,
+    pub bytes: Vec<u8>,
+    pub digests: Vec<RecordDigest>,
 }
 
 /// Where a carried file's bytes go (§7.7, §11.4).
@@ -520,6 +569,14 @@ impl FoldState {
         for book in self.books.keys() {
             self.book_files_into(*book, &mut out);
         }
+        self.project_files_into(&mut out);
+        let mut files: Vec<DerivedFile> = out.into_iter().collect();
+        files.sort_by_key(DerivedFile::path);
+        files
+    }
+
+    /// The derived files of no book that the projection holds.
+    fn project_files_into(&self, out: &mut BTreeSet<DerivedFile>) {
         if !self.pin_keys.is_empty() {
             out.insert(DerivedFile::Resources);
         }
@@ -553,9 +610,25 @@ impl FoldState {
                 out.insert(DerivedFile::Story(*story));
             }
         }
-        let mut files: Vec<DerivedFile> = out.into_iter().collect();
-        files.sort_by_key(DerivedFile::path);
-        files
+    }
+
+    /// Whether the projection holds `file` now. It costs what that file's book or the
+    /// project's own records hold, never the project: a book's files are found from its own
+    /// records (replaces `derived_files().contains(..)`).
+    pub fn projects_file(&self, file: &DerivedFile) -> bool {
+        let mut set = BTreeSet::new();
+        match file.book() {
+            Some(book) => self.book_files_into(book, &mut set),
+            None => self.project_files_into(&mut set),
+        }
+        set.contains(file)
+    }
+
+    /// The projected parts of a book, as `book_usfm` composes them; `None` when the book
+    /// does not project. A caller that compares a file with the projection decomposes the
+    /// file into the same parts.
+    pub fn book_parts(&self, book: BookId) -> Option<BookParts> {
+        self.book(book).projects().then(|| self.parts(book, None))
     }
 
     /// The derived files of one book: [`Self::derived_files`] of that book, found from its
@@ -624,6 +697,47 @@ impl FoldState {
     /// on up to four threads, and its files share the book's text and render on up to four
     /// threads.
     pub fn render_book(&self, book: BookId) -> Vec<(DerivedFile, Vec<u8>)> {
+        self.render_book_inner(book, false)
+            .into_iter()
+            .map(|r| (r.file, r.bytes))
+            .collect()
+    }
+
+    /// [`Self::render_book`] with the digest of each record of the book's USFM (§11.1: the
+    /// heads file keeps them as the base of an outside edit).
+    pub fn render_book_with_digests(&self, book: BookId) -> Vec<RenderedFile> {
+        self.render_book_inner(book, true)
+    }
+
+    /// [`Self::render`] with the digests of a USFM file's records.
+    pub fn render_with_digests(&self, file: &DerivedFile) -> Option<RenderedFile> {
+        match file {
+            DerivedFile::Usfm(book) => {
+                let (bytes, digests) = self.usfm_with_digests(*book)?;
+                Some(RenderedFile {
+                    file: file.clone(),
+                    bytes,
+                    digests,
+                })
+            }
+            other => Some(RenderedFile {
+                file: other.clone(),
+                bytes: self.render(other)?,
+                digests: Vec::new(),
+            }),
+        }
+    }
+
+    fn usfm_with_digests(&self, book: BookId) -> Option<(Vec<u8>, Vec<RecordDigest>)> {
+        if !self.book(book).projects() {
+            return None;
+        }
+        let parts = self.parts(book, None);
+        let digests = crate::outside::usfm_digests(book, &parts);
+        Some((codec::recompose(&parts).usfm.into_bytes(), digests))
+    }
+
+    fn render_book_inner(&self, book: BookId, digests: bool) -> Vec<RenderedFile> {
         let files = self.book_files(book);
         if files.is_empty() {
             return Vec::new();
@@ -633,13 +747,25 @@ impl FoldState {
         if view.book(book).projects() {
             let _ = text.set(view.book_text(book));
         }
-        let mut out: Vec<(DerivedFile, Vec<u8>)> = on_threads(&files, |f| {
-            view.render_with(f, &text).map(|b| (f.clone(), b))
+        let mut out: Vec<RenderedFile> = on_threads(&files, |f| match f {
+            DerivedFile::Usfm(b) if digests => {
+                view.usfm_with_digests(*b)
+                    .map(|(bytes, digests)| RenderedFile {
+                        file: f.clone(),
+                        bytes,
+                        digests,
+                    })
+            }
+            _ => view.render_with(f, &text).map(|bytes| RenderedFile {
+                file: f.clone(),
+                bytes,
+                digests: Vec::new(),
+            }),
         })
         .into_iter()
         .flatten()
         .collect();
-        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out.sort_by(|a, b| a.file.cmp(&b.file));
         // The decoded records are hundreds of thousands of small allocations: freed on one
         // thread they were a tenth of the projection's time.
         drop(view);
@@ -1135,7 +1261,7 @@ impl FoldState {
             return Some(value);
         }
         match self.projected_record(self.key_idx(&RecordKey::StoryBase(story))?)? {
-            Record::StoryBase { value, .. } => template_frame(&value, frame.0),
+            Record::StoryBase { value, .. } => template_frame(&value, frame.get()),
             _ => None,
         }
     }
@@ -1230,7 +1356,7 @@ impl FoldState {
                 },
             };
             let meta = self.meta(head);
-            let order = place.map_or((0, 0), |(s, f)| (u16::from(s.get()), f.0));
+            let order = place.map_or((0, 0), |(s, f)| (u16::from(s.get()), f.get()));
             let mut out = Map::new();
             out.insert("id".into(), Value::from(id.to_hex()));
             out.insert(
@@ -1244,7 +1370,7 @@ impl FoldState {
                     if let Some(json) = on_check.as_ref().and_then(canon::check_key_json) {
                         p.insert("check".into(), value(&json));
                     }
-                    p.insert("frame".into(), Value::from(frame.0));
+                    p.insert("frame".into(), Value::from(frame.get()));
                     p.insert("story".into(), Value::from(story.get()));
                     Value::Object(p)
                 }),
@@ -1512,7 +1638,7 @@ impl FoldState {
             _ => return None,
         };
         let frame = |n: u16| -> Option<String> {
-            let k = self.key_idx(&RecordKey::Frame(story, crate::ids::FrameNo(n)))?;
+            let k = self.key_idx(&RecordKey::Frame(story, crate::ids::FrameNo::new(n)))?;
             match self.projected_record(k)? {
                 Record::Frame { value, .. } => Some(value),
                 _ => None,
@@ -1567,6 +1693,29 @@ impl FoldState {
         }
         out.sort();
         out
+    }
+
+    /// The blob of every version of every carried file the fold holds, the earlier ones a
+    /// later change replaced included, in blob order (§9.8): the versions `refs/tc/carried`
+    /// keeps reachable, so a repack never prunes one that was replaced before a checkpoint
+    /// committed it (L73).
+    pub fn carried_versions(&self) -> Vec<GitOid> {
+        let mut out = BTreeSet::new();
+        for k in self.carried_keys.iter() {
+            for c in self.entry(*k).changes.iter() {
+                if !self.meta(*c).active() {
+                    continue;
+                }
+                if let Some(Record::CarriedFile {
+                    value: CarriedValue::Present { oid, .. },
+                    ..
+                }) = record_of(self, *c)
+                {
+                    out.insert(oid);
+                }
+            }
+        }
+        out.into_iter().collect()
     }
 }
 
@@ -1927,7 +2076,7 @@ pub(crate) fn derive_key(
     let target = if reference.contains_key("story") && !reference.contains_key("bookId") {
         CheckTarget::Frame {
             story: StoryNo::new(u8::try_from(number("story")?).ok()?)?,
-            frame: crate::ids::FrameNo(u16::try_from(number("frame")?).ok()?),
+            frame: crate::ids::FrameNo::new(u16::try_from(number("frame")?).ok()?),
         }
     } else {
         CheckTarget::Verse {

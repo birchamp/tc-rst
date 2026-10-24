@@ -65,9 +65,14 @@ async fn open_obs(t: &TestApp) -> Scope {
         .at
 }
 
+/// Leaves the story project and waits until no session holds it: a side user (a background
+/// read) keeps it open after the screen leaves, and its close lets go of the project's lock,
+/// which a teammate's edit through the store needs.
 async fn leave(t: &TestApp, at: &Scope) {
     t.app.sessions().leave_screen(at).unwrap();
-    t.app.sessions().settled(&folder(OBS)).await;
+    // A left screen's session closes after its checkpoint; the store opens the folder next in
+    // these tests, so wait for the close itself, not only for the screen to go.
+    t.app.sessions().close_all().await;
 }
 
 async fn rail(t: &TestApp, at: &Scope, tool: Tool) -> Vec<RailRow> {
@@ -242,7 +247,7 @@ async fn a_frame_edit_that_drops_the_tapped_word_invalidates_the_mark_and_keeps_
     .await
     .unwrap();
     leave(&t, &at).await;
-    let frame = RecordKey::Frame(tc_journal::StoryNo::new(1).unwrap(), FrameNo(1));
+    let frame = RecordKey::Frame(tc_journal::StoryNo::new(1).unwrap(), FrameNo::new(1));
     store
         .teammates_edit_verse(
             &folder(OBS),

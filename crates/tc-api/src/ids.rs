@@ -427,39 +427,7 @@ impl fmt::Display for RefPart {
     }
 }
 
-/// An Open Bible Stories story, 1 to 50 (tc-helps `ObsRef`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(try_from = "u8", into = "u8")]
-pub struct StoryNo(u8);
-
-impl StoryNo {
-    pub const COUNT: u8 = 50;
-
-    pub fn new(number: u8) -> Result<Self, IdError> {
-        if (1..=Self::COUNT).contains(&number) {
-            Ok(Self(number))
-        } else {
-            refuse("story", "not a story from 1 to 50")
-        }
-    }
-
-    pub fn get(self) -> u8 {
-        self.0
-    }
-}
-
-impl TryFrom<u8> for StoryNo {
-    type Error = IdError;
-    fn try_from(number: u8) -> Result<Self, IdError> {
-        Self::new(number)
-    }
-}
-
-impl From<StoryNo> for u8 {
-    fn from(story: StoryNo) -> Self {
-        story.0
-    }
-}
+pub use tc_core::StoryNo;
 
 /// The interface languages, in the picker's order: the catalogs tc-ui ships
 /// (`crates/tc-ui/src/i18n.rs` `LOCALES`).
@@ -576,14 +544,6 @@ mod arbitrary {
                 regex("[^:]{1,20}"),
             ];
             forms.prop_map(RefPart).boxed()
-        }
-    }
-
-    impl Arbitrary for StoryNo {
-        type Parameters = ();
-        type Strategy = BoxedStrategy<Self>;
-        fn arbitrary_with((): ()) -> Self::Strategy {
-            (1..=StoryNo::COUNT).prop_map(StoryNo).boxed()
         }
     }
 

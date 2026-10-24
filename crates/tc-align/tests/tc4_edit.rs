@@ -8,7 +8,7 @@ mod common;
 use tc_align::Alignment;
 use tc_align::bootstrap;
 
-use common::{basis, show};
+use common::{basis, show, tc4_record};
 use tc_align::{
     AlignedRun, AlignmentValue, EditError, GitOid, ResourceRef, SourceVerse, SourceWord, Stale,
     TargetVerse, TargetWord, VerseState, verse_status,
@@ -372,7 +372,7 @@ fn a_card_field_from_an_import_is_kept_and_no_edit_loses_it() {
             .map(|w| serde_json::json!({"word": w.word, "occurrence": w.occurrence, "occurrences": w.occurrences}))
             .collect(),
     );
-    let mut read = tc_align::record::from_record(&record, basis(1)).unwrap();
+    let mut read = tc4_record(&record).unwrap();
     let note = tc_journal::json::JsonMap::from([(
         "note".to_owned(),
         tc_journal::json::Json::Obj(tc_journal::json::JsonMap::from([(

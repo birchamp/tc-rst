@@ -45,6 +45,8 @@ runs. If the owner wants more, it is a new H row, not a card.
    starts.
 2. **CI is the gate.** One gate list (INT-3) runs in CI and in every local runner. A red main
    stops every merge until it is green.
+   One merge into main at a time: the orchestrator hands out turns, and main's CI finishes green
+   before the next (owner rule, 2026-10-23; `TRACKING.md` "Checklist: merge an item").
 3. **Build once, then reuse.** Where the remaining units would copy a pattern again, the shared
    structure is built first (M1). This is the Code layer of the funnel, and it gets the most
    effort.
@@ -71,6 +73,7 @@ finished unit took 2.8 h, `ASSESSMENT.md`).
 | INT-5 | Converge the trackers onto this roadmap | integration | INT-4 | 0.5 d |
 | INT-6 | Rescue stray work and free the disk | integration | INT-4, owner OK for deletions | 0.5 d |
 | INT-7 | Prepare the Track B hand-off: freeze the shell contract | integration | INT-4 | 1 d |
+| INT-8 | CI runs are the gate receipt | checks | INT-3; the owner asked for it on 2026-10-23 | 0.5 d |
 
 **Exit:** main holds every built unit and S2; CI on main is green; the gate list is one script;
 every unpushed branch has an off-PC copy; the board is the only tracker.
@@ -79,12 +82,16 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 
 | ID | Item | Lane | Depends on | Size |
 |---|---|---|---|---|
-| CHK-1 | Architecture and I/O boundary checks | checks | INT-4 | 0.5-1 d |
+| CHK-1 | Architecture and I/O boundary checks | checks | INT-4, CHK-1a | 0.5-1 d |
+| CHK-1a | Architecture, I/O and network checks in tc-arch, and ARCHITECTURE.md matching the code | checks | INT-4 | 0.5 d |
 | CHK-2 | Every written project is validated (P5) | checks | S2 | 1-2 d |
-| CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4 | 1 d |
+| CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4, CHK-3a | 1 d |
+| CHK-3a | Claimed tests must exist: TC4-ISSUES, the done cards, the P-ledger and the tC4 journey map | checks | INT-4 | 0.5 d |
 | CHK-4 | Deterministic and fast tests | checks | INT-4 | 2-3 d |
 | CHK-5 | Nightly, Windows and no-network jobs; the mutation executor runs nightly | checks | S2, INT-3 | 1-2 d |
-| CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4 | 1 d |
+| CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4, CHK-6a | 1 d |
+| CHK-6a | Release builds without the test server, every ignored test named, PLAN's reference checked | checks | INT-4 | 0.5 d |
+| CHK-4b | tc-app's tests wait for events, never for a short clock | checks | CHK-4 | 0.5 d |
 | UI-1 | Typed jobs and one job follower | app | INT-4, C7a | 1 d |
 | UI-2 | Ports for sync, share, exchange and import | app | UI-1 | 1-2 d |
 | UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced (split into UI-3a and UI-3b) | app | UI-1 | 2 d |
@@ -136,7 +143,7 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 |---|---|---|---|
 | G5 | Browser journeys in CI, with no skips allowed | INT-2 | 2 d |
 | G1 | The Electronite shell | INT-7 | 20-30 commits |
-| G3 | Release pipeline and installers | G1, owner H3, H4 | 1-2 weeks |
+| G3 | Release pipeline and installers | G1 | 1-2 weeks |
 | G4 | The P8 Graphite probe and right-to-left project journeys | G1 | 2-3 d |
 
 G5 is the most valuable check the project lacks. If Track B has not started it by the end of M0,
@@ -151,6 +158,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path
@@ -247,7 +255,7 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 
 | ID | Action | Why | Needed by |
 |---|---|---|---|
-| A1 | Run once on the Linux PC: `sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm` | Lets this PC run CI's Windows clippy, so a local gate pass means a CI pass (INT-3's receipts) | INT-2 step 7, INT-3 step 5 |
+| A1 | ~~Install MinGW and NASM on the Linux PC~~ Done: both are installed (`x86_64-w64-mingw32-gcc` and `nasm` on PATH, confirmed 2026-10-23) | This PC can run CI's Windows clippy locally | done |
 | A2 | Optional: GitHub Pro, to make the CI check required before main changes | GitHub refuses required checks on a private repository on the free plan (HTTP 403). INT-3's merge receipt guards merges without it | none |
 | A3 | Add `eliaspinero` (Elias, H2) as a collaborator on `birchamp/tc-rst` when the owner says the hand-off starts (not yet, 2026-10-22), and confirm GitHub Actions minutes for Windows and macOS runners | Add the second developer as a collaborator on `birchamp/tc-rst`, and confirm GitHub Actions minutes for Windows and macOS runners | Track B pushes `ext/*` branches and runs installers on those runners | Track B start, G3 |
 | A4 | Create the GitHub environment `windows-signing` (deployment branch: the default branch only) and the repository secrets for the Windows signing identity (H4) and the help-desk key (H15); the secret names go into `docs/RELEASE.md` once H4 and H15 are answered. Creating environments and secrets needs repository admin, which a collaborator lacks (inference about GitHub, not cited) | G3's signed run after merge and G1's help-desk key read need them; nobody was assigned to create them | G1 step 7, G3 step 7 |

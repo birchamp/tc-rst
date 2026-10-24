@@ -20,7 +20,7 @@ use tc_journal::fold::{
     ProjectKind, Resolved, decode_alignments, decode_decisions,
 };
 use tc_journal::json::Json;
-use tc_journal::record::{BookPresence, CheckValue, CommentTarget, VerseValue};
+use tc_journal::record::{BookPresence, CheckValue, CommentTarget, PresentHow, VerseValue};
 use tc_journal::{BookId, Cause, Change, ChangeId, DeviceId, Record, RecordKey, ToolId};
 
 /// Cases per property over team scripts. Each case folds every device's view after every
@@ -550,22 +550,80 @@ fn differences_are_visible(view: &View, census: &Census) -> Result<(), TestCaseE
         })
         .collect();
     for conflict in state.conflicts() {
-        let continues = conflict
+        // The heads the conflict involves (§7.4): its candidates and their equal heads, and
+        // the unreadable heads, never the unreadable bases a merge needed.
+        let mut involved: Vec<ChangeId> = conflict
             .candidates
             .iter()
             .flat_map(|x| std::iter::once(x.head).chain(x.also.iter().copied()))
-            .chain(conflict.unreadable.iter().copied())
-            .any(|h| continuing.contains(&h));
+            .chain(
+                conflict
+                    .unreadable
+                    .iter()
+                    .copied()
+                    .filter(|u| !conflict.bases.contains(u)),
+            )
+            .collect();
+        // A restore race also involves the verse heads its *Start empty* candidate stands for:
+        // the `StartOver` changes still heads of their verses.
+        let mut exact = true;
+        if let RecordKey::BookPresence(book) = &conflict.key {
+            let (mut restored, mut emptied) = (false, false);
+            let mut batches = BTreeSet::new();
+            for head in state.heads(&conflict.key) {
+                match state.body(&head).map(|b| (b.record, b.batch.id)) {
+                    Some((
+                        Record::BookPresence {
+                            value: BookPresence::Present { how, .. },
+                            ..
+                        },
+                        batch,
+                    )) => match how {
+                        PresentHow::RestoredText => restored = true,
+                        PresentHow::StartedEmpty => {
+                            emptied = true;
+                            batches.insert(batch);
+                        }
+                        PresentHow::Added => {}
+                    },
+                    Some(_) => {}
+                    None => exact = false,
+                }
+            }
+            if restored && emptied {
+                for key in state.record_keys() {
+                    if !matches!(&key, RecordKey::Verse(b, ..) if b == book) {
+                        continue;
+                    }
+                    involved.extend(
+                        state.heads(&key).into_iter().filter(|h| {
+                            state.change(h).is_some_and(|v| batches.contains(&v.batch))
+                        }),
+                    );
+                }
+            }
+        }
+        let continues = involved.iter().any(|h| continuing.contains(h));
         if continues {
             census.saw("incomplete history");
         }
-        prop_assert_eq!(
-            conflict.incomplete_history,
-            continues,
-            "{:?} at {:?}",
-            conflict.kind,
-            conflict.key
-        );
+        if exact {
+            prop_assert_eq!(
+                conflict.incomplete_history,
+                continues,
+                "{:?} at {:?}",
+                conflict.kind,
+                conflict.key
+            );
+        } else {
+            // A presence head that cannot be read: only the no-hiding direction holds.
+            prop_assert!(
+                !continues || conflict.incomplete_history,
+                "{:?} at {:?}",
+                conflict.kind,
+                conflict.key
+            );
+        }
     }
     for key in state.record_keys() {
         let heads = state.heads(&key);
@@ -2038,6 +2096,36 @@ fn sidecar_decode_render() {
             Ok(())
         },
     );
+}
+
+/// Fails if the renderer and the decoder disagree about how a file shows a record: the
+/// digests of a rendered book (what the heads file keeps) equal those of its decode, key
+/// for key (§11.1; a key whose digests differ would be looked at again, and an outside edit
+/// would cost more than the verses it changed).
+#[test]
+fn shown_digests_of_a_render_equal_those_of_its_decode() {
+    team(&["book rendered"], |view, census| {
+        for book in view.state.projected_books() {
+            let file = DerivedFile::Usfm(book);
+            let Some(rendered) = view.state.render_with_digests(&file) else {
+                continue;
+            };
+            let path = tc_journal::RepoPath::parse(&file.path()).expect("a derived path");
+            let decoded = tc_journal::outside::decode_file(
+                &tc_journal::outside::OutsideFile::Derived(file),
+                &rendered.bytes,
+                &path,
+            )
+            .map_err(|e| TestCaseError::fail(format!("{} does not decode: {e}", book.code())))?;
+            census.saw("book rendered");
+            let mut shown = rendered.digests.clone();
+            shown.sort();
+            let mut read = decoded.digests.clone();
+            read.sort();
+            prop_assert_eq!(shown, read, "{}", book.code());
+        }
+        Ok(())
+    });
 }
 
 /// A history `mixed_minor_versions_converge` found: in it, section saves leave verses 3

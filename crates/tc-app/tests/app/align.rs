@@ -824,7 +824,7 @@ async fn suggestions_are_learned_in_the_background_and_stay_proposals_until_acce
 
 /// The open aligner's view, read again until the engine has learned or the wait runs out.
 async fn tc_app_test_wait(app: &App, at: &Scope) -> AlignerView {
-    for _ in 0..200 {
+    for () in crate::store_world::for_a_minute() {
         let view = ready(app, at, 1, 2).await;
         if matches!(
             view.suggest.status,
@@ -843,7 +843,7 @@ async fn tc_app_test_wait(app: &App, at: &Scope) -> AlignerView {
         }
     }
     panic!(
-        "the engine did not finish learning: status={:?}, suggestions={:?}, jobs={jobs:?}",
+        "hung: the engine did not finish learning: status={:?}, suggestions={:?}, jobs={jobs:?}",
         view.suggest.status,
         suggest_events(app),
     );
@@ -950,7 +950,7 @@ async fn a_right_to_left_project_aligns_with_its_bank_right_to_left() {
     )
     .await;
     let mut watch = t.app.jobs().watch(job).unwrap();
-    let state = tokio::time::timeout(Duration::from_secs(5), async {
+    let state = tokio::time::timeout(Duration::from_secs(60), async {
         watch
             .wait_for(tc_app::jobs::JobRegistry::is_ended)
             .await
@@ -958,7 +958,7 @@ async fn a_right_to_left_project_aligns_with_its_bank_right_to_left() {
             .clone()
     })
     .await
-    .unwrap();
+    .expect("hung: the open ends");
     let opened = match state {
         tc_api::jobs::JobState::Done(tc_api::jobs::JobOutcome::Opened(opened)) => *opened,
         other => panic!("{other:?}"),

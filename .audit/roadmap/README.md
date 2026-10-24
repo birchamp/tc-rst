@@ -72,10 +72,15 @@ These come from `AGENTS.md` and the owner's rulings. A card never overrides them
   because the resume lane's own instruction says so. Every other branch on the owner's PC may
   be pushed under its own name (H1, answered yes on 2026-10-22; INT-1 does the first pushes).
   Track B's `ext/*` branches live in the developer's clone and are
-  pushed whenever they commit. Never push a branch that holds a token, a password or a
+  pushed whenever they commit. A merge commit may be pushed to `gate/<card>` so that GitHub's
+  `ci` and `app-e2e` runs become its receipt (`scripts/gates.sh --wait-ci <card>`, INT-8); such a
+  branch holds nothing but that commit. Never push a branch that holds a token, a password or a
   machine-local path to a secret; never record one anywhere. `ROADMAP.md`, `.audit/HANDOFF.md`
   and INT-4 point here.
 - Default models for every agent.
+- Speed is judged against tC4 doing the same work on the reference laptop, not Word or Edge.
+- Hours, not days: one verification pass, the simplest change, reuse tested work, and
+  deterministic tests over reading code.
 
 ## When to stop and ask
 

@@ -752,9 +752,7 @@ impl App {
         };
         let unit = match key.target {
             CheckTarget::Verse { book, .. } => Some(CheckUnit::Book(book)),
-            CheckTarget::Frame { story, .. } => tc_api::ids::StoryNo::new(story.get())
-                .ok()
-                .map(CheckUnit::Story),
+            CheckTarget::Frame { story, .. } => Some(CheckUnit::Story(story)),
         };
         let (Some(tool), Some(unit)) = (crate::plans::api_tool(key.tool), unit) else {
             return Err(ApiError::ToolNotReady);
