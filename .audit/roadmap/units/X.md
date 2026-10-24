@@ -4,7 +4,7 @@ title: Door43 sync and USB exchange (tc-sync)
 track: A
 lane: storage
 milestone: M2
-state: claimed
+state: building
 owner: S2 session (Claude Code add49644)
 branch: track-X
 worktree: /home/bot/tc-rst/.worktrees/track-X
@@ -15,7 +15,7 @@ no_loss: true
 size: 4-6 d (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; H18 unsupported removes the Door43 intake walk, docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d)
 merged: none
 updated: 2026-10-25
-next: do step 1 (sweep), then step 2 (crates/tc-sync, the state machine).
+next: do step 2 (crates/tc-sync, the state machine and its matrix test).
 blocked_by: none
 later: ["S3 from step 4"]
 ---
@@ -466,3 +466,4 @@ features and with each of `--features gallery`, `--features app`, `--features te
 - 2026-10-24 00:37 EDT | checks lane (Claude Code 2198ee19) | note | none | Correction to CHK-3's note above: X's only marker is in docs/P-LEDGER.md (P2); docs/TC4-ISSUES.md names X in unit cells, not in (pending: X) markers | grep -n 'pending: X' docs/P-LEDGER.md docs/TC4-ISSUES.md
 - 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
 - 2026-10-25 11:30 EDT | S2 session (Claude Code add49644) | claim | none | claimed on track-X, cut from track-T (e1ffc583) with main 0189cee4 merged in (DOM-1 is on main; T rides in batch 2), as the orchestrator asked under the fast-release ruling (rulings/2026-10-24-H3-H4-H7-fast-release.md): S3 parked, steps 4-8 build on the current store; one review for the card; first report when the sync half works against tc-door43-fake (E1a waits on it) | .audit/roadmap/units/X.md
+- 2026-10-25 11:45 EDT | S2 session (Claude Code add49644) | step 1 | none | docs/TC4-ISSUES.md: the two #791 rows say tC4 shipped D108's per-verse rows in 43164cbe (PR #806), X's report names book, reference and teammate, E1a shows them; the #801 row names 095144ce (PR #803) and e2e/sync-refusal.spec.ts for E1a; a new #813/#821/#822 row says a tC4 team repository is blocked by a plain sync (X step 6) and reaches the rebuild only through the team move, which the fast-release ruling cuts from the first release. tc4-sweep at b86270f lists be58feb4, 095144ce, 43164cbe; release/4.0 adds only merges of those PRs | docs/TC4-ISSUES.md
