@@ -1261,7 +1261,7 @@ impl FoldState {
             return Some(value);
         }
         match self.projected_record(self.key_idx(&RecordKey::StoryBase(story))?)? {
-            Record::StoryBase { value, .. } => template_frame(&value, frame.0),
+            Record::StoryBase { value, .. } => template_frame(&value, frame.get()),
             _ => None,
         }
     }
@@ -1356,7 +1356,7 @@ impl FoldState {
                 },
             };
             let meta = self.meta(head);
-            let order = place.map_or((0, 0), |(s, f)| (u16::from(s.get()), f.0));
+            let order = place.map_or((0, 0), |(s, f)| (u16::from(s.get()), f.get()));
             let mut out = Map::new();
             out.insert("id".into(), Value::from(id.to_hex()));
             out.insert(
@@ -1370,7 +1370,7 @@ impl FoldState {
                     if let Some(json) = on_check.as_ref().and_then(canon::check_key_json) {
                         p.insert("check".into(), value(&json));
                     }
-                    p.insert("frame".into(), Value::from(frame.0));
+                    p.insert("frame".into(), Value::from(frame.get()));
                     p.insert("story".into(), Value::from(story.get()));
                     Value::Object(p)
                 }),
@@ -1638,7 +1638,7 @@ impl FoldState {
             _ => return None,
         };
         let frame = |n: u16| -> Option<String> {
-            let k = self.key_idx(&RecordKey::Frame(story, crate::ids::FrameNo(n)))?;
+            let k = self.key_idx(&RecordKey::Frame(story, crate::ids::FrameNo::new(n)))?;
             match self.projected_record(k)? {
                 Record::Frame { value, .. } => Some(value),
                 _ => None,
@@ -2076,7 +2076,7 @@ pub(crate) fn derive_key(
     let target = if reference.contains_key("story") && !reference.contains_key("bookId") {
         CheckTarget::Frame {
             story: StoryNo::new(u8::try_from(number("story")?).ok()?)?,
-            frame: crate::ids::FrameNo(u16::try_from(number("frame")?).ok()?),
+            frame: crate::ids::FrameNo::new(u16::try_from(number("frame")?).ok()?),
         }
     } else {
         CheckTarget::Verse {

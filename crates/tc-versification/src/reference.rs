@@ -12,7 +12,7 @@ use crate::versification::Absence;
 use std::convert::Infallible;
 use std::fmt;
 use std::str::FromStr;
-use tc_core::{Reference, VerseSpan};
+use tc_core::{ChapterNo, Reference, VerseSpan};
 
 /// The widest span `map_reference` maps. No chapter comes near it (PSA 119 has 176
 /// verses); it bounds the work a malformed resource row can cause.
@@ -155,9 +155,9 @@ pub struct SchemeReference {
 impl From<Reference> for SchemeReference {
     fn from(r: Reference) -> Self {
         Self {
-            book: r.book.into(),
-            chapter: r.chapter,
-            verses: r.verses,
+            book: r.book().into(),
+            chapter: r.chapter().get(),
+            verses: r.verses(),
         }
     }
 }
@@ -165,11 +165,11 @@ impl From<Reference> for SchemeReference {
 impl SchemeReference {
     /// The canonical reference, when the book is one of the 66.
     pub fn to_reference(&self) -> Option<Reference> {
-        Some(Reference {
-            book: self.book.book_id()?,
-            chapter: self.chapter,
-            verses: self.verses,
-        })
+        Some(Reference::new(
+            self.book.book_id()?,
+            ChapterNo::new(self.chapter)?,
+            self.verses,
+        ))
     }
 }
 

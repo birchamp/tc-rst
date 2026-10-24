@@ -112,14 +112,14 @@ fn place_of(key: &RecordKey) -> String {
         }
         RecordKey::ChapterFront(book, chapter) => format!("{} {chapter}", book.code()),
         RecordKey::BookHeader(book) | RecordKey::BookLayout(book) => book.code().to_owned(),
-        RecordKey::Frame(story, frame) => format!("{:02}-{:02}", story.get(), frame.0),
+        RecordKey::Frame(story, frame) => format!("{:02}-{:02}", story.get(), frame.get()),
         RecordKey::StoryRef(story) => format!("{:02}", story.get()),
         RecordKey::Check(check) => match &check.target {
             CheckTarget::Verse { book, .. } => {
                 let (chapter, verse) = check.target.parts();
                 format!("{} {chapter}:{verse}", book.code())
             }
-            CheckTarget::Frame { story, frame } => format!("{:02}-{:02}", story.get(), frame.0),
+            CheckTarget::Frame { story, frame } => format!("{:02}-{:02}", story.get(), frame.get()),
         },
         other => wire::scope::record_ref(other).map_or_else(|| format!("{other:?}"), String::from),
     }
@@ -696,7 +696,7 @@ impl App {
         // A story draft holds the text as typed; it is kept in the form a save stores.
         let line = match (kind, shown.first().map(DraftToken::key)) {
             (DraftKind::StoryRef, _) => Some(tc_api::story::StoryLine::Reference),
-            (DraftKind::Frame, Some(RecordKey::Frame(_, tc_journal::FrameNo(0)))) => {
+            (DraftKind::Frame, Some(RecordKey::Frame(_, tc_journal::FrameNo::TITLE))) => {
                 Some(tc_api::story::StoryLine::Title)
             }
             (DraftKind::Frame, _) => Some(tc_api::story::StoryLine::Frame),

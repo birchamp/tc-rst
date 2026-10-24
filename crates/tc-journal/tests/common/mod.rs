@@ -302,7 +302,7 @@ pub fn arb_check_key() -> impl Strategy<Value = CheckKey> {
         }),
         (arb_story(), any::<u16>()).prop_map(|(story, frame)| CheckTarget::Frame {
             story,
-            frame: FrameNo(frame),
+            frame: FrameNo::new(frame),
         }),
     ];
     (
@@ -609,7 +609,7 @@ pub fn arb_record() -> impl Strategy<Value = Record> {
                 arb_check_key().prop_map(CommentTarget::Check),
                 (arb_story(), any::<u16>()).prop_map(|(story, frame)| CommentTarget::Frame {
                     story,
-                    frame: FrameNo(frame)
+                    frame: FrameNo::new(frame)
                 }),
             ],
             arb_text()
@@ -671,7 +671,7 @@ pub fn arb_record() -> impl Strategy<Value = Record> {
         (arb_story(), any::<u16>(), arb_text()).prop_map(|(story, frame, value)| {
             Record::Frame {
                 story,
-                frame: FrameNo(frame),
+                frame: FrameNo::new(frame),
                 value,
             }
         }),

@@ -14,7 +14,7 @@ use tc_api::conflicts::{
     List, MadeBy, NoticeEntry, NoticeView, Resolve, ReviewEntries, ReviewPlace, ReviewTab,
     ReviewView, TabCount, Version, VersionCause, VersionValue,
 };
-use tc_api::ids::{ChangeRef, ConflictRef, StoryNo, WallMs};
+use tc_api::ids::{ChangeRef, ConflictRef, WallMs};
 use tc_api::shown::{Computer, PersonLabel, Who};
 use tc_api::write::Ack;
 use tc_api::{ApiError, NotSaved};
@@ -121,10 +121,6 @@ fn kind_view(kind: &Kind) -> ConflictKind {
     }
 }
 
-fn story(n: tc_journal::StoryNo) -> Option<StoryNo> {
-    StoryNo::new(n.get()).ok()
-}
-
 /// Where a record is, as the review names it.
 fn place_of(key: &RecordKey) -> ReviewPlace {
     match key {
@@ -149,16 +145,13 @@ fn place_of(key: &RecordKey) -> ReviewPlace {
             },
             Err(_) => ReviewPlace::Project,
         },
-        RecordKey::Frame(n, frame) => match story(*n) {
-            Some(story) => ReviewPlace::Story {
-                story,
-                frame: Some(frame.0),
-            },
-            None => ReviewPlace::Project,
+        RecordKey::Frame(story, frame) => ReviewPlace::Story {
+            story: *story,
+            frame: Some(frame.get()),
         },
-        RecordKey::StoryBase(n) | RecordKey::StoryRef(n) => match story(*n) {
-            Some(story) => ReviewPlace::Story { story, frame: None },
-            None => ReviewPlace::Project,
+        RecordKey::StoryBase(story) | RecordKey::StoryRef(story) => ReviewPlace::Story {
+            story: *story,
+            frame: None,
         },
         _ => ReviewPlace::Project,
     }

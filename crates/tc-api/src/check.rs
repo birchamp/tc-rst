@@ -132,7 +132,7 @@ impl FromStr for CheckPlace {
             let story = canonical_number::<u8>(first).ok_or(refuse("a story is a number"))?;
             let frame = canonical_number::<u16>(second).ok_or(refuse("a frame is a number"))?;
             return Ok(Self::Frame {
-                story: StoryNo::new(story)?,
+                story: StoryNo::new(story).ok_or(refuse("not a story from 1 to 50"))?,
                 frame,
             });
         }

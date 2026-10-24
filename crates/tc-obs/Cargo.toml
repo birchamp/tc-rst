@@ -7,6 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+tc-core = { path = "../tc-core" }
 tc-helps = { path = "../tc-helps" }
 serde_json.workspace = true
 thiserror.workspace = true
