@@ -247,8 +247,10 @@ function exitReason(code, signal) {
 const FILTER_PREFIXES = ['/ui/', '/help/', '/media/', '/download/', '/print/'];
 const FILTER_EXACT = ['/', '/prepare.html'];
 
+// Electron matches a pattern against the path and the query, so an exact path also needs its
+// form with a query (`/?probe=fields`).
 function filterPatterns(origin) {
-  return FILTER_EXACT.map((p) => `${origin}${p}`).concat(FILTER_PREFIXES.map((p) => `${origin}${p}*`));
+  return FILTER_EXACT.flatMap((p) => [`${origin}${p}`, `${origin}${p}?*`]).concat(FILTER_PREFIXES.map((p) => `${origin}${p}*`));
 }
 
 // Node's URL gives `null` as the origin of a scheme it does not know, so it is built by hand.

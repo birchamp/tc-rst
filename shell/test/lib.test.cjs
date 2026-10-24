@@ -51,13 +51,17 @@ test('filter_adds_the_token_only_outside_api_on_the_tc4_origin', () => {
     assert.ok(!lib.wantsToken(url, ORIGIN), url);
   }
   // Electron's patterns decide first: none of them may reach /api/.
-  const patterns = lib.filterPatterns(ORIGIN);
-  assert.equal(patterns.length, 7);
-  for (const pattern of patterns) {
+  // Electron's patterns decide first: each one Electron matches against the path and the query.
+  const patterns = lib.filterPatterns(ORIGIN).map((pattern) => {
     assert.ok(pattern.startsWith(`${ORIGIN}/`), pattern);
-    const re = new RegExp(`^${pattern.replace(/[.?+^$()|[\]\\{}]/g, '\\$&').replace(/\*/g, '.*')}$`);
-    assert.ok(!re.test(`${ORIGIN}/api/v1/app/hello`), pattern);
+    return new RegExp(`^${pattern.replace(/[.?+^$()|[\]\\{}]/g, '\\$&').replace(/\*/g, '.*')}$`);
+  });
+  const matched = (url) => patterns.some((re) => re.test(url));
+  for (const path of yes) {
+    assert.ok(matched(`${ORIGIN}${path}`), path);
+    assert.ok(matched(`${ORIGIN}${path}?probe=fields`), `${path} with a query`);
   }
+  assert.ok(!matched(`${ORIGIN}/api/v1/app/hello`) && !matched(`${ORIGIN}/api/v1/events?after=3`));
 });
 
 test('token_is_redacted_from_every_log_line', () => {

@@ -223,6 +223,7 @@ ipcMain.on('shell:closeAnswer', (event, id, clean) => {
   if (!bridge.trusted(ctx, event) || id !== closeAsk) return;
   clearTimeout(pageTimer);
   closeAsk++;
+  log('page answered', { clean: clean === true });
   dispatch({ type: 'pageAnswered', clean: clean === true });
 });
 

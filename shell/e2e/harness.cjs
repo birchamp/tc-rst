@@ -161,6 +161,8 @@ async function finish(app) {
   } finally {
     if (app.proc.exitCode === null && app.proc.signalCode === null) hardKill(app.pid);
     for (const pid of tc4Pids(app.dir)) hardKill(pid);
+    // Playwright's connection would keep the test process alive.
+    await app.close().catch(() => {});
   }
 }
 
