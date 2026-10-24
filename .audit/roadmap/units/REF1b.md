@@ -4,10 +4,10 @@ title: Poem lines as tabs in the verse editor (tC4 #810)
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: REF1 session (Claude Code 56b3f56d)
+branch: track-REF1b
+worktree: /home/bot/tc-rst/.worktrees/track-REF1
 depends: [REF1]
 needs_owner: []
 proves: [P1, P7]
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 sessions (basis: tC4's change is about 1,300 lines with tests, PR #810 and its pick #826)
 merged: none
 updated: 2026-10-24
-next: Claim this card after REF1 merges, then do step 1.
+next: Step 1: map tC4 #810 (poemLines.ts, indexer.ts, splice.ts, verseEdit.ts) onto the rebuild verse model; port the tests red first.
 blocked_by: none
 ---
 
@@ -117,3 +117,4 @@ blocker and every major that harms a translator's data or view.
 ## Log
 
 - 2026-10-24 15:15 EDT | REF1 session (Claude Code 56b3f56d) | created | none | split from REF1 on the orchestrator's word: the owner chose to match rc.2 for the first release (H7), so poem lines show as tabs; REF1 lands first | rulings/2026-10-24-H3-H4-H7-fast-release.md
+- 2026-10-24 19:06 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed on track-REF1b, cut from track-REF1 1ad7e1f8, on the orchestrator's word (REF1 is queued for batch 3; SWEEP is on main 15dc42e9). Note: REF1 is not done, so the merge waits for it. The branch lives in REF1's worktree (.worktrees/track-REF1) to spare the disk, as the orchestrator asked; REF1's branch there is unchanged | python3 -I -B .audit/tools/board.py
