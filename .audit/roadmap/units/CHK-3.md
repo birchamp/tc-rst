@@ -4,7 +4,7 @@ title: Claimed tests must exist
 track: A
 lane: checks
 milestone: M1
-state: building
+state: parked
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-3
 worktree: .worktrees/track-CHK-3
@@ -14,8 +14,8 @@ proves: [P1, P3]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-23
-next: CI on the pushed branch, then park until S2 merges (step 5, STORAGE.md section 15)
+updated: 2026-10-24
+next: step 5 after S2 merges (docs/STORAGE.md section 15, which S2 rewrites), then the review and a merge turn; branch track-CHK-3
 blocked_by: none
 ---
 
@@ -269,3 +269,5 @@ and each planted failure is in the log.
 - 2026-10-23 23:48 EDT | checks lane (Claude Code 2198ee19) | step 3b | none | claims.test.mjs "INV-CLAIMED-TESTS-EXIST: units" reads the 7 done cards: their Checks names resolve, and every INV- name of their Invariants appears in crates, parity, .audit/tools or scripts. First run: CHK-4 the_gates_fix_the_proptest_seed, INV-DETERMINISTIC, INV-FAST (cut by the ruling); INT-1's three and INT-4's INV-NOTHING-DROPPED (one-time process steps); INT-2's INV-CI-IS-THE-GATE and INV-BUILDS-ON-WINDOWS and G5's INV-JOURNEYS-RUN (nothing tested them). Decided: an item marked "(not in code: <why>)" or "(retired <by what>)" is skipped, and must give its reason; the first two groups are marked so (notes in those cards); the last three are now tests in gates-sync.test.mjs (the pin and --locked on every cargo step and every building CI job; the Windows clippy step in CI; app-e2e on push over every journey). Plants, each reverted: G5's no_skips_passes_a_run_with_no_skip misspelled: "INV-CLAIMED-TESTS-EXIST: units/G5.md names no_skips_passes_a_run_with_no_skipx but no test has that name"; wasm-api without --locked: "INV-CI-IS-THE-GATE: step wasm-api builds without --locked"; app-e2e without push: "INV-JOURNEYS-RUN: app-e2e does not run on push" | node --test .audit/tools/claims.test.mjs .audit/tools/gates-sync.test.mjs
 - 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | step 4 | none | docs/P-LEDGER.md: one row per P1 to P10 with its CI job (journeys, parity-baseline, test; none yet for P2 and P9) and the tests that exist, with (pending: ID) for each card still owed; claims.test.mjs "INV-CLAIMED-TESTS-EXIST: P-LEDGER": every P has a row, every job is a job of a workflow, every named test exists (a pending marker never excuses one here), every pending card is not done. Plant: P8's job as nightlyy: "INV-CLAIMED-TESTS-EXIST: docs/P-LEDGER.md:17 (P8) names CI job nightlyy, but no workflow has that job"; reverted | node --test .audit/tools/claims.test.mjs
 - 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | note | none | Step 6's hand-on: notes in X's and I's logs (FIX-R's was written at step 2): replace each (pending: <ID>) marker with the test's name in the commit that writes it | .audit/roadmap/units/X.md
+- 2026-10-24 00:27 EDT | checks lane (Claude Code 2198ee19) | gate | 04f67580 | CI on the pushed branch: ci 40059874342 and app-e2e 40059874380 both success (the node step runs claims.test.mjs and coverage.test.mjs) | gh run view 40059874342
+- 2026-10-24 00:27 EDT | checks lane (Claude Code 2198ee19) | park | 04f67580 | Parked: step 5 waits for S2 | python3 -I .audit/tools/board.py
