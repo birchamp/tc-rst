@@ -950,7 +950,7 @@ async fn open_of_a_folder_another_program_holds_is_lock_held() {
     // The project open in this installation (pid 4242 on host-1); another installation on
     // the same files asks.
     let handle = world.open(&world.bible);
-    let other = backend_over(
+    let (other, _other_watch) = backend_over(
         &world.fs,
         "/app2",
         FakePlatform {
@@ -1110,7 +1110,8 @@ async fn the_adapter_adds_no_store_work() {
     let path = world.folder(&world.bible);
     let key = tit(1, 11);
 
-    let direct_store = backend_over(&a, APP, FakePlatform::default(), Arc::default());
+    let (direct_store, _direct_store_watch) =
+        backend_over(&a, APP, FakePlatform::default(), Arc::default());
     let direct = direct_store
         .store()
         .open(&path, &tc_store::OpenOptions::default())
@@ -1127,7 +1128,8 @@ async fn the_adapter_adds_no_store_work() {
     direct.wait_idle();
     let through_store = direct.counters().since(&before);
 
-    let seam_store = backend_over(&b, APP, FakePlatform::default(), Arc::default());
+    let (seam_store, _seam_store_watch) =
+        backend_over(&b, APP, FakePlatform::default(), Arc::default());
     let seam = seam_store.open(&world.bible, progress()).unwrap();
     seam.wait_idle();
     let before = seam.counters();
@@ -1438,7 +1440,8 @@ fn check_run(ops: Vec<Op>) -> Result<(), TestCaseError> {
         // 5: after a close and a reopen on the files a killed process leaves, every change
         // a reply listed is there, and so is every head.
         let after = world.fs.crash(false);
-        let backend = backend_over(&after, APP, FakePlatform::default(), Arc::default());
+        let (backend, _backend_watch) =
+            backend_over(&after, APP, FakePlatform::default(), Arc::default());
         let reopened = backend.open(&world.bible, progress()).unwrap();
         for id in &stored {
             prop_assert!(reopened.snapshot().fold().body(id).is_some(), "{id:?} lost");
@@ -1505,7 +1508,8 @@ fn a_crash_at_any_write_point_of_a_save_through_the_seam_keeps_every_durable_sav
 
     let (old, points) = {
         let fs = base.copy();
-        let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+        let (backend, _backend_watch) =
+            backend_over(&fs, APP, FakePlatform::default(), Arc::default());
         let handle = backend.open(&world.bible, progress()).unwrap();
         handle.wait_idle();
         let old = titus(&handle.snapshot());
@@ -1521,7 +1525,8 @@ fn a_crash_at_any_write_point_of_a_save_through_the_seam_keeps_every_durable_sav
     for k in 0..points + 3 {
         for torn in [false, true] {
             let fs = base.copy();
-            let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+            let (backend, _backend_watch) =
+                backend_over(&fs, APP, FakePlatform::default(), Arc::default());
             let handle = backend.open(&world.bible, progress()).unwrap();
             handle.wait_idle();
             fs.kill_before(k, torn);
@@ -1534,7 +1539,8 @@ fn a_crash_at_any_write_point_of_a_save_through_the_seam_keeps_every_durable_sav
                 .or_insert(0) += 1;
             drop(handle);
             let after = fs.crash(true);
-            let backend = backend_over(&after, APP, FakePlatform::default(), Arc::default());
+            let (backend, _backend_watch) =
+                backend_over(&after, APP, FakePlatform::default(), Arc::default());
             let reopened = backend
                 .open(&world.bible, progress())
                 .unwrap_or_else(|e| panic!("k {k} torn {torn}: {e:?}"));

@@ -1,0 +1,29 @@
+{
+  "path": "test/validate",
+  "kind": "query",
+  "net": null,
+  "request": {},
+  "reply": {
+    "type": "ok",
+    "value": {
+      "checked": 1,
+      "invalid": [
+        {
+          "folder": "en_ult_tit_book",
+          "problems": [
+            "ChecksumMismatch { path: \"ingredients/TIT.usfm\", listed: \"00000000000000000000000000000000\", actual: \"1ce94f44dd0f1c4e87fa88a7a80f9216\" }"
+          ]
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

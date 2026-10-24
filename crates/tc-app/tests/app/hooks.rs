@@ -11,7 +11,10 @@ use tc_api::ids::{LocaleId, WallMs};
 use tc_api::jobs::{JobKind, JobOutcome, Phase};
 use tc_api::net::Set;
 use tc_api::prefs::SetLocale;
-use tc_api::test::{Crash, CrashPoint, Echo, EchoView, Hold, HoldPoint, MAX_ECHO, Release, Reset};
+use tc_api::test::{
+    Crash, CrashPoint, Echo, EchoView, Hold, HoldPoint, MAX_ECHO, Release, Reset, Validate,
+    ValidateView,
+};
 use tc_api::{ApiError, Reply};
 use tc_app::Answer;
 use tc_app::events::Next;
@@ -150,6 +153,7 @@ async fn every_endpoint_answers_its_golden_request() {
             "test/reset",
             "test/crash",
             "test/fieldLog",
+            "test/validate",
         ]
         .contains(&info.path)
         {
@@ -485,4 +489,37 @@ async fn a_release_with_nothing_held_does_nothing() {
     .await
     .expect("hung: the call did not come back while the store was not held");
     assert!(stored.is_ok());
+}
+
+/// P5/INV-VALID-BURRITO: `test/validate` checks every folder on disk once the app has
+/// settled, and names a project whose metadata lists a wrong md5 for an ingredient.
+#[tokio::test]
+async fn test_validate_names_a_project_whose_ingredient_md5_is_wrong() {
+    let disk = super::store::OnDisk::new();
+    let folder = super::store::make_project(&disk.app_data(), &disk.projects, "titus_on_disk");
+    let t = disk.start().await;
+    let clean = post(&t.app, &Validate {}).await.unwrap();
+    assert_eq!(
+        clean,
+        ValidateView {
+            checked: 1,
+            invalid: Vec::new()
+        }
+    );
+    let metadata = folder.join("metadata.json");
+    let text = std::fs::read_to_string(&metadata).unwrap();
+    let at = text.find("\"md5\": \"").unwrap() + "\"md5\": \"".len();
+    let planted = format!("{}{}{}", &text[..at], "0".repeat(32), &text[at + 32..]);
+    std::fs::write(&metadata, planted).unwrap();
+    let view = post(&t.app, &Validate {}).await.unwrap();
+    assert_eq!(view.checked, 1);
+    assert_eq!(view.invalid.len(), 1, "{view:?}");
+    assert_eq!(view.invalid[0].folder, "titus_on_disk");
+    assert!(
+        view.invalid[0]
+            .problems
+            .iter()
+            .any(|p| p.contains("ChecksumMismatch")),
+        "{view:?}"
+    );
 }

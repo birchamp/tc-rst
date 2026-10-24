@@ -50,6 +50,8 @@ file lacks, outside work would cost the team its own.
 
 ## Before you start
 
+- Every store your tests build goes through `backend_over` and its `BurritoWatch` (CHK-2); a journey ends with `test/validate`. Do not validate by hand only.
+
 Run these from the repository root on your branch:
 
 - `python3 -I .audit/tools/board.py` shows I **ready** (S2 and DOM-2 are `done`).
