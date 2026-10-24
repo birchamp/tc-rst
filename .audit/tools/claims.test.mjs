@@ -37,6 +37,8 @@ test('the resolver finds fns, journey titles, template titles and parity ids', (
   assert.ok(!resolve('no_test_has_this_name_xyz', names));
   assert.ok(!resolve('retry_delay', names), 'a product fn is no test');
   assert.ok(resolve('create', names), 'a journey file by its stem');
+  assert.ok(resolve('every_state_answers_every_event', names), 'a shell node test');
+  assert.ok(resolve('second_launch_focuses_the_running_window_and_starts_no_server', names), 'a shell e2e test');
   assert.deepEqual(claimsOf('`a_{b,c}_d` and `e`'), ['a_b_d', 'a_c_d', 'e']);
   assert.deepEqual(pendingOf('`x` (pending: I, F1)'), ['I', 'F1']);
 });
@@ -89,10 +91,10 @@ const sources = (() => {
       if (e.name === 'node_modules' || e.name === 'target') continue;
       const p = path.join(dir, e.name);
       if (e.isDirectory()) walk(p);
-      else if (/\.(rs|mjs|js|sh|py)$/.test(e.name)) out.push(fs.readFileSync(p, 'utf8'));
+      else if (/\.(rs|mjs|cjs|js|sh|py)$/.test(e.name)) out.push(fs.readFileSync(p, 'utf8'));
     }
   };
-  for (const d of ['crates', 'parity', '.audit/tools', 'scripts']) if (fs.existsSync(path.join(REPO, d))) walk(path.join(REPO, d));
+  for (const d of ['crates', 'parity', 'shell', '.audit/tools', 'scripts']) if (fs.existsSync(path.join(REPO, d))) walk(path.join(REPO, d));
   return out.join('\n');
 })();
 
