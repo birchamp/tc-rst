@@ -78,6 +78,9 @@ These come from `AGENTS.md` and the owner's rulings. A card never overrides them
   machine-local path to a secret; never record one anywhere. `ROADMAP.md`, `.audit/HANDOFF.md`
   and INT-4 point here.
 - Default models for every agent.
+- Speed is judged against tC4 doing the same work on the reference laptop, not Word or Edge.
+- Hours, not days: one verification pass, the simplest change, reuse tested work, and
+  deterministic tests over reading code.
 
 ## When to stop and ask
 

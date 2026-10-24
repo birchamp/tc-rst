@@ -63,6 +63,26 @@ impl StoreWorld {
     }
 }
 
+/// INV-WAITS-CATCH-HANGS: one turn per poll of a test's wait, for a minute: a wait this long is a hang, never a slow
+/// machine (rulings/2026-10-23-tests-prove-behavior-not-speed.md). The test fails after the
+/// loop, as it did when the wait was a count of short sleeps.
+pub fn for_a_minute() -> impl Iterator<Item = ()> {
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    std::iter::from_fn(move || (std::time::Instant::now() < end).then_some(()))
+}
+
+/// Polls `future` once. An open that joins one already running registers on its first poll,
+/// so a test knows it has joined without sleeping.
+pub async fn poll_once<F: std::future::Future + Unpin>(future: &mut F) -> Option<F::Output> {
+    std::future::poll_fn(|cx| {
+        std::task::Poll::Ready(match std::pin::Pin::new(&mut *future).poll(cx) {
+            std::task::Poll::Ready(out) => Some(out),
+            std::task::Poll::Pending => None,
+        })
+    })
+    .await
+}
+
 /// The open's progress sink of a test that does not watch it.
 pub fn progress() -> tc_app::jobs::ProgressSink {
     tc_app::jobs::ProgressSink::new(tc_api::jobs::Phase::Open(

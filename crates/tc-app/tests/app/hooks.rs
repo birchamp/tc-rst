@@ -342,9 +342,9 @@ async fn reset_restores_default_prefs_clears_reports_releases_holds_and_turns_th
     assert_eq!(hello["internet"], false);
     assert!(t.app.reports().all().is_empty());
     // The held store finished.
-    let stored = tokio::time::timeout(Duration::from_secs(5), waiting)
+    let stored = tokio::time::timeout(Duration::from_secs(60), waiting)
         .await
-        .expect("the held store was released")
+        .expect("hung: the held store was released")
         .unwrap();
     assert!(matches!(stored, Answer::Reply { .. }));
     // The crash is disarmed: a write runs.
@@ -483,11 +483,11 @@ async fn a_release_with_nothing_held_does_nothing() {
     post(&t.app, &release(3, HoldPoint::Save)).await.unwrap();
     let token = field_token(&t.app, "title").await;
     let stored = tokio::time::timeout(
-        Duration::from_secs(5),
+        Duration::from_secs(60),
         store(&t.app, 4, "title", &token, "x"),
     )
     .await
-    .expect("the store was not held");
+    .expect("hung: the call did not come back while the store was not held");
     assert!(stored.is_ok());
 }
 

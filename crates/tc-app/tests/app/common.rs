@@ -123,13 +123,13 @@ impl ManualJob {
             let _ = ctx_tx.send(given);
             end_rx.await.unwrap_or(Err(JobEnd::Cancelled))
         });
-        for _ in 0..100 {
+        for () in crate::store_world::for_a_minute() {
             tokio::task::yield_now().await;
             if let Ok(ctx) = ctx_rx.try_recv() {
                 return ManualJob { id, ctx, end };
             }
         }
-        panic!("the job never started");
+        panic!("hung: the job never started");
     }
 
     pub fn finish(self, result: Result<JobOutcome, JobEnd>) {
@@ -434,13 +434,13 @@ pub async fn store(
 
 /// Waits, in real time, until `cond` holds.
 pub async fn until(what: &str, mut cond: impl FnMut() -> bool) {
-    for _ in 0..5000 {
+    for () in crate::store_world::for_a_minute() {
         if cond() {
             return;
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("never happened: {what}");
+    panic!("hung: never happened: {what}");
 }
 
 pub async fn is_busy(app: &App) -> bool {
@@ -449,13 +449,13 @@ pub async fn is_busy(app: &App) -> bool {
 
 /// Waits until `test/quiet` says nothing is in flight.
 pub async fn until_quiet(app: &App) {
-    for _ in 0..5000 {
+    for () in crate::store_world::for_a_minute() {
         if !is_busy(app).await {
             return;
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("the app never went quiet");
+    panic!("hung: the app never went quiet");
 }
 
 /// The bytes of the test fields' file.

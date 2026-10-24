@@ -669,7 +669,7 @@ async fn ended(app: &tc_app::App, job: JobId) -> JobState {
             .clone()
     })
     .await
-    .expect("the job ends")
+    .expect("hung: the job ends")
 }
 
 async fn open(t: &TestApp, project: &str) -> Scope {

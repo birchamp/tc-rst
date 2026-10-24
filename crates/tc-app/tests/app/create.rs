@@ -4,7 +4,6 @@
 
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
 use tc_api::ApiError;
 use tc_api::Refusal;
@@ -679,19 +678,22 @@ async fn card_click_during_settings_save_shares_the_session() {
         store.opens(&project) == 1
     })
     .await;
-    let click = {
+    let mut click = {
         let sessions = t.app.sessions().clone();
         let project = project.clone();
-        tokio::spawn(async move {
+        Box::pin(async move {
             sessions
                 .open_screen(&project, super::common::open_progress())
                 .await
         })
     };
-    tokio::time::sleep(Duration::from_millis(30)).await;
+    assert!(
+        crate::store_world::poll_once(&mut click).await.is_none(),
+        "the click joins the save's open"
+    );
     store.release_open(&project);
     saving.await.unwrap().unwrap();
-    let open = click.await.unwrap().unwrap();
+    let open = click.await.unwrap();
     assert_eq!(store.opens(&project), 1, "the store opened the folder once");
     let session = t.app.sessions().reader(&open.at).unwrap();
     let held = session.read().projected(&RecordKey::Setting(

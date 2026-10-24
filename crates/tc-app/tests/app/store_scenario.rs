@@ -697,11 +697,11 @@ async fn a_reset_releases_the_store_holds() {
     .unwrap();
     post(&t.app, &Reset { request: rid(4) }).await.unwrap();
     let saved = tokio::time::timeout(
-        Duration::from_secs(20),
+        Duration::from_secs(60),
         save_through_the_app(&t, "not held after the reset"),
     )
     .await;
-    assert!(saved.is_ok(), "the save was held after the reset");
+    assert!(saved.is_ok(), "hung: the save was held after the reset");
     assert_eq!(t.app.holding(), 0);
     t.app.quit().await;
 }
@@ -771,10 +771,11 @@ async fn j15_a_slow_open_reports_from_300_ms_and_counts_up() {
         .position(|(_, p)| *p != initial)
         .expect("the open reported");
     let at = samples[first].0;
-    // tc-store's own test allows 300-400 ms (tests/store/progress.rs); 20 ms more here for
-    // the sampler's 2 ms and the hop to the blocking pool.
+    // Nothing is reported before 300 ms (tests/store/progress.rs). How much later the first
+    // report comes is speed, which a loaded machine stretches: not asserted here (ruling
+    // 2026-10-23).
     assert!(
-        at >= Duration::from_millis(300) && at <= Duration::from_millis(420),
+        at >= Duration::from_millis(300),
         "the first report came at {at:?}"
     );
     let reported = &samples[first..];

@@ -50,7 +50,7 @@ async fn visit(s: &Scale) {
 
 /// Until the summary jobs the visit queued are done.
 async fn settle(app: &App) {
-    for _ in 0..2_000 {
+    for () in crate::store_world::for_a_minute() {
         let Reply::Ok(QuietView { busy }) = app.request(&Quiet {}).await.unwrap() else {
             panic!("test/quiet")
         };
@@ -59,7 +59,7 @@ async fn settle(app: &App) {
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    panic!("the app did not settle");
+    panic!("hung: the app did not settle");
 }
 
 /// A second Home visit renders nothing: its summaries are kept under their stamps.

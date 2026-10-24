@@ -15,7 +15,7 @@ proves: [P4, P5, P9]
 no_loss: true
 size: 4-7 d (basis: B1a's seed took about 2 h; §13.1 is the bulk; +1 to +2 d for Update a book, docs/STORAGE-DELTA-2026-10-21.md §6)
 merged: none
-updated: 2026-10-22
+updated: 2026-10-23
 next: Claim this card after S2 and DOM-2 merge, then do step 1.
 blocked_by: none
 ---
@@ -545,3 +545,4 @@ features, `--features gallery`, `--features app` and `--features test-hooks`;
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
+- 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: your rows in docs/TC4-ISSUES.md and docs/P-LEDGER.md are (pending: I); when you write a test, replace the marker with its name in the same commit. .audit/tools/claims.test.mjs fails once this card is done while a marker remains | node --test .audit/tools/claims.test.mjs

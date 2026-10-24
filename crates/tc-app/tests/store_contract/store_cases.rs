@@ -62,8 +62,8 @@ async fn reads_never_wait_behind_a_long_command() {
         });
     }
     let (seq, chapter, key) = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("the reads came back while the actor is held");
+        .recv_timeout(Duration::from_secs(60))
+        .expect("hung: the reads came back while the actor is held");
     assert_eq!(seq, before);
     assert!(chapter);
     assert_eq!(key, tit(1, 4));
@@ -379,7 +379,7 @@ async fn written_not_durable_is_saved_with_warning() {
     );
     assert_eq!(words_of(&handle.snapshot(), &key).as_deref(), Some("probe"));
     let mut noticed = false;
-    while let Ok(Some(event)) = tokio::time::timeout(Duration::from_secs(5), events.recv()).await {
+    while let Ok(Some(event)) = tokio::time::timeout(Duration::from_secs(60), events.recv()).await {
         match event {
             StoreEvent::Notice(notice) => {
                 noticed |= matches!(notice.notice, Notice::SavedWithDiskError { .. });

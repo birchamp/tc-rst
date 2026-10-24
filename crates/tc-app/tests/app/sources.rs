@@ -74,7 +74,7 @@ where
 
 async fn ended(app: &App, job: JobId) -> JobState {
     let mut watch = app.jobs().watch(job).unwrap();
-    tokio::time::timeout(Duration::from_secs(20), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         watch
             .wait_for(tc_app::jobs::JobRegistry::is_ended)
             .await
@@ -82,7 +82,7 @@ async fn ended(app: &App, job: JobId) -> JobState {
             .clone()
     })
     .await
-    .expect("the job ends")
+    .expect("hung: the job ends")
 }
 
 async fn open_sample(app: &App) -> Scope {
@@ -417,8 +417,8 @@ async fn a_cancelled_download_leaves_no_install_and_no_partial_file() {
             break;
         }
         assert!(
-            started.elapsed() < Duration::from_secs(20),
-            "no bytes arrived"
+            started.elapsed() < Duration::from_secs(60),
+            "hung: no bytes arrived"
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
