@@ -49,9 +49,7 @@ pub fn is_frame_drafted(text: &str) -> bool {
 /// The story an open project shows: its number is kept where tC4 keeps a chapter (the place a
 /// story is remembered under, and the helps panel's chapter).
 pub fn story_of(chapter: u16) -> Option<StoryNo> {
-    u8::try_from(chapter)
-        .ok()
-        .and_then(StoryNo::new)
+    u8::try_from(chapter).ok().and_then(StoryNo::new)
 }
 
 /// "Story 3".

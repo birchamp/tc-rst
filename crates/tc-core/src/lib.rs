@@ -9,6 +9,7 @@ use std::str::FromStr;
 mod books;
 mod digest;
 mod ids;
+pub mod js;
 
 pub use books::{BookId, Testament};
 pub use digest::{DigestError, GitOid, Md5, Md5Stream};
