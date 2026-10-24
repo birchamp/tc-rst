@@ -8,7 +8,7 @@ state: parked
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-3
 worktree: .worktrees/track-CHK-3
-depends: [INT-4]
+depends: [INT-4, CHK-3a]
 needs_owner: []
 proves: [P1, P3]
 no_loss: false
@@ -271,3 +271,4 @@ and each planted failure is in the log.
 - 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | note | none | Step 6's hand-on: notes in X's and I's logs (FIX-R's was written at step 2): replace each (pending: <ID>) marker with the test's name in the commit that writes it | .audit/roadmap/units/X.md
 - 2026-10-24 00:27 EDT | checks lane (Claude Code 2198ee19) | gate | 04f67580 | CI on the pushed branch: ci 40059874342 and app-e2e 40059874380 both success (the node step runs claims.test.mjs and coverage.test.mjs) | gh run view 40059874342
 - 2026-10-24 00:27 EDT | checks lane (Claude Code 2198ee19) | park | 04f67580 | Parked: step 5 waits for S2 | python3 -I .audit/tools/board.py
+- 2026-10-24 00:31 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1-4 and 3b are card CHK-3a, merged on its own; this card keeps the rest and depends on CHK-3a | .audit/roadmap/units/CHK-3a.md
