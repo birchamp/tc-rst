@@ -1,8 +1,14 @@
-//! The export kernel's pure parts. Today this is the print model: what the Community
-//! Checking preview and the PDF show of a Bible book or of an Open Bible Stories project, as
-//! typed values, by tC4's rules at `d310bf3`. It writes no HTML; the producers (aligned and
-//! plain USFM, OBS Markdown, the print HTML for the PDF, the Burrito zip) come later and
-//! read this model (APP-DESIGN §10, units A10 and D2).
+//! The export kernel's pure parts: the print model of a Bible book or of an Open Bible
+//! Stories project, by tC4's rules at `d310bf3`, and the producers [`produce`] runs (aligned
+//! and plain USFM, OBS Markdown, the print HTML for the PDF). Data in, bytes out: the app
+//! reads the project, checkpoints, and writes what a producer returns into the downloads
+//! folder (APP-DESIGN §10, units A10 and D2).
+//!
+//! - [`usfm`]: aligned and plain USFM of one book. A verse's alignment is woven only when
+//!   `tc_align::needs_review` says the record still vouches for it; any other verse with a
+//!   record keeps its stored bytes and is named in [`ExportFacts`] (tC4 e2bfd8c3, #796).
+//! - [`markdown`]: an OBS project's `content/` files, for the app to zip.
+//! - [`html`]: the print document the window prints to PDF.
 //!
 //! - The page setup and the print parts are tc-api's (`tc_api::model::print`), so the preview
 //!   and the PDF print from one model; [`page`] adds what only the PDF reads (margins, the
@@ -22,11 +28,126 @@
 //! reading of the USFM.
 
 pub mod book;
+pub mod html;
+pub mod markdown;
 pub mod page;
 pub mod stories;
 mod text;
+pub mod usfm;
 
+pub use html::{PrintBookInput, PrintStoriesInput};
 pub use text::{PrintText, Run};
+pub use usfm::{BookInput, VerseAlignment};
+
+use tc_core::Reference;
+
+/// An export's producer (tC4 `src/data/export/producers.ts`; the Burrito zip is the app's,
+/// since it reads the project folder).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Producer {
+    AlignedUsfm,
+    PlainUsfm,
+    StoryMarkdown,
+    PrintHtml,
+}
+
+/// What a producer reads. USFM reads a book, Story Markdown an OBS project's files, the print
+/// HTML a book's or a story project's print.
+pub enum ExportInput<'a> {
+    Book(BookInput),
+    /// The project's files as `(path from the project folder, bytes)`.
+    StoryFiles(Vec<(String, Vec<u8>)>),
+    PrintBook(PrintBookInput<'a>),
+    PrintStories(PrintStoriesInput<'a>),
+}
+
+/// What a producer made: one file, or the files of a folder as `(path, bytes)` for the app to
+/// zip (Story Markdown), since this crate does no I/O and holds no archive writer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Produced {
+    File(Vec<u8>),
+    Files(Vec<(String, Vec<u8>)>),
+}
+
+/// Why a verse with an alignment record was exported as stored, without its record woven.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SkipReason {
+    /// The record no longer vouches for the verse (`tc_align::needs_review`).
+    NeedsReview,
+    /// The verse holds the `\zaln` markup of an aligned file it was added from.
+    InlineAlignment,
+    /// The weave refused the verse, such as one with glossary `\w` words.
+    WeaveRefused,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SkippedVerse {
+    pub reference: Reference,
+    pub why: SkipReason,
+}
+
+/// What the export says beside its file: the verses whose alignment it left out.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ExportFacts {
+    /// The first [`ExportFacts::NAMED`] of them, in book order.
+    pub skipped: Vec<SkippedVerse>,
+    /// All of them.
+    pub skipped_total: u32,
+}
+
+impl ExportFacts {
+    /// tC4 names at most 20 verses and counts the rest (50cfec3e), so a book left unaligned
+    /// after an edit still gives a message a person can read.
+    pub const NAMED: usize = 20;
+
+    pub(crate) fn skip(&mut self, verse: SkippedVerse) {
+        if self.skipped.len() < Self::NAMED {
+            self.skipped.push(verse);
+        }
+        self.skipped_total = self.skipped_total.saturating_add(1);
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ExportError {
+    #[error("the {producer:?} export does not read this input")]
+    WrongInput { producer: Producer },
+    /// tC4's `export.nothing-drafted`: a book with no drafted verse prints nothing.
+    #[error("the book has no drafted verse, so the print has nothing to show")]
+    NothingDrafted,
+    #[error("the aligned book does not read back as USFM: {0}")]
+    Strip(#[from] tc_usfm::Error),
+}
+
+/// Run `producer` on `input`.
+pub fn produce(
+    producer: Producer,
+    input: &ExportInput<'_>,
+) -> Result<(Produced, ExportFacts), ExportError> {
+    match (producer, input) {
+        (Producer::AlignedUsfm, ExportInput::Book(book)) => {
+            let (usfm, facts) = usfm::aligned(book);
+            Ok((Produced::File(usfm.into_bytes()), facts))
+        }
+        (Producer::PlainUsfm, ExportInput::Book(book)) => {
+            let (usfm, facts) = usfm::plain(book)?;
+            Ok((Produced::File(usfm.into_bytes()), facts))
+        }
+        (Producer::StoryMarkdown, ExportInput::StoryFiles(files)) => Ok((
+            Produced::Files(markdown::content_files(files)),
+            ExportFacts::default(),
+        )),
+        (Producer::PrintHtml, ExportInput::PrintBook(print)) => Ok((
+            Produced::File(html::book_document(print)?.into_bytes()),
+            ExportFacts::default(),
+        )),
+        (Producer::PrintHtml, ExportInput::PrintStories(print)) => Ok((
+            Produced::File(html::stories_document(print).into_bytes()),
+            ExportFacts::default(),
+        )),
+        (producer, _) => Err(ExportError::WrongInput { producer }),
+    }
+}
 
 /// The direction a print is set in. tC4 sets it from the project's `scriptDirection`:
 /// `rtl` is right to left and every other value left to right (`src/data/export/pdf.ts:125`,

@@ -76,7 +76,7 @@ Every crate lives in `crates/`. Arrows read "is used by".
 | `tc-obs` | Open Bible Stories: stories and frames. |
 | `tc-sync` | Door43 send and receive, and USB exchange. (Unit X; not built yet.) |
 | `tc-import` | tC4 4.0, tC3, raw USFM and Scripture Burrito import. (Unit I; not built yet.) |
-| `tc-export` | The print model of a book or an OBS project, on `tc-api`'s page setup and print parts; aligned and plain USFM, Burrito zip, OBS Markdown, print HTML for PDF. |
+| `tc-export` | The print model of a book or an OBS project, on `tc-api`'s page setup and print parts; the producers behind `produce`: aligned and plain USFM (on `tc-usfm`'s codec, `tc-align`'s one weave and review rule, `tc-journal`'s alignment value), OBS Markdown, print HTML for PDF. Returns bytes; the app zips and writes them. |
 | `tc-api` | Request and response types shared by the server and the UI. Builds for wasm32. |
 | `tc-app` | Application services: the operations behind every screen. |
 | `tc-server` | The axum HTTP server: routes, token check, events to the UI. |

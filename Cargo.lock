@@ -3475,8 +3475,11 @@ version = "0.1.0"
 dependencies = [
  "proptest",
  "serde_json",
+ "tc-align",
  "tc-api",
+ "tc-core",
  "tc-helps",
+ "tc-journal",
  "tc-obs",
  "tc-usfm",
  "thiserror 2.0.21",

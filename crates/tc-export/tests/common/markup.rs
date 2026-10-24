@@ -1,31 +1,15 @@
 //! The print model written as the markup tC4's print components render
-//! (`renderToStaticMarkup` of `PrintBook`, `PrintParts` and `PrintStories`), so a test can
-//! compare the model with tC4's own output byte for byte. It only writes what the model
-//! holds: if the model lost a distinction tC4's markup makes, the markup would differ.
+//! (`renderToStaticMarkup` of `PrintBook`, `PrintParts` and `PrintStories`), by
+//! `tc_export::html`, worded from tC4's English catalog, so a test can compare the print
+//! document's body with tC4's own output byte for byte.
 
 use serde_json::Value;
-use tc_api::model::print::{FlowBlock, ObsLayout, Opening, VerseLine};
+use tc_api::model::print::FlowBlock;
 use tc_export::book::BookView;
-use tc_export::stories::{FrameBlock, Side, StoriesView, StoryBlock, StoryTitle};
-use tc_export::{Direction, PrintText, Run};
+use tc_export::stories::StoriesView;
+use tc_export::{Direction, PrintText, html};
 
 use super::vectors;
-
-/// React's escaping of text and attribute values.
-pub fn escape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#x27;"),
-            c => out.push(c),
-        }
-    }
-    out
-}
 
 /// A line worded from tC4's English catalog, as `t(key, values)` words it.
 pub fn word(text: PrintText) -> String {
@@ -37,150 +21,20 @@ pub fn word(text: PrintText) -> String {
     for (name, value) in text.values() {
         out = out.replace(&format!("{{{name}}}"), &value.to_string());
     }
-    escape(&out)
-}
-
-fn dir(d: Direction) -> &'static str {
-    match d {
-        Direction::Ltr => "ltr",
-        Direction::Rtl => "rtl",
-    }
+    out
 }
 
 /// `PrintParts`.
 pub fn flow(blocks: &[FlowBlock<'_>], d: Direction) -> String {
-    let d = dir(d);
-    let mut out = String::new();
-    for block in blocks {
-        match block {
-            FlowBlock::Gap(run) => {
-                let text = PrintText::ChaptersNotDrafted(Run {
-                    from: run.from,
-                    to: run.to,
-                });
-                out.push_str(&format!(
-                    "<p class=\"print-chapter-gap\" dir=\"{d}\">{}</p>",
-                    word(text)
-                ));
-            }
-            FlowBlock::Chapter(chapter) => {
-                let class = if chapter.continues {
-                    "print-chapter print-chapter-continues"
-                } else {
-                    "print-chapter"
-                };
-                out.push_str(&format!("<section class=\"{class}\" dir=\"{d}\">"));
-                match chapter.opening {
-                    Some(Opening::DropCap) => out.push_str(&format!(
-                        "<span class=\"print-dropcap\">{}</span>",
-                        chapter.chapter
-                    )),
-                    Some(Opening::Heading) => out.push_str(&format!(
-                        "<h2 class=\"print-chapter-heading\">{}</h2>",
-                        word(PrintText::ChapterHeading {
-                            chapter: chapter.chapter
-                        })
-                    )),
-                    None => {}
-                }
-                for verse in &chapter.verses {
-                    match verse {
-                        VerseLine::Text { number, text } => {
-                            out.push_str("<span>");
-                            if let Some(n) = number {
-                                out.push_str(&format!(
-                                    "<sup class=\"print-verse-number\">{}</sup>",
-                                    escape(n)
-                                ));
-                            }
-                            out.push_str(&format!("{} </span>", escape(text)));
-                        }
-                        VerseLine::NotDrafted { number } => out.push_str(&format!(
-                            "<span class=\"print-undrafted\"><sup class=\"print-verse-number\">{}</sup>{} </span>",
-                            escape(number),
-                            word(PrintText::VerseNotDrafted)
-                        )),
-                    }
-                }
-                out.push_str("</section>");
-            }
-        }
-    }
-    out
+    html::flow_markup(blocks, d, &word)
 }
 
 /// `PrintBook`.
 pub fn book(view: &BookView<'_>) -> String {
-    let d = dir(view.dir);
-    format!(
-        "<main class=\"print-book\"><h1 class=\"print-title\" dir=\"{d}\">{}</h1><div class=\"print-flow\" dir=\"{d}\">{}</div></main>",
-        escape(view.title),
-        flow(&view.flow, view.dir)
-    )
+    html::book_markup(view, &word)
 }
 
 /// `PrintStories`.
 pub fn stories(view: &StoriesView<'_>) -> String {
-    let d = dir(view.dir);
-    let mut out = String::from(match view.layout {
-        ObsLayout::Above => "<main class=\"print-book print-stories\">",
-        ObsLayout::Wrapped => "<main class=\"print-book print-stories print-stories-wrapped\">",
-    });
-    if let Some(text) = view.nothing_drafted() {
-        out.push_str(&format!(
-            "<p class=\"print-nothing-drafted\" dir=\"{d}\">{}</p>",
-            word(text)
-        ));
-    }
-    for block in &view.blocks {
-        match block {
-            StoryBlock::Gap(text) => out.push_str(&format!(
-                "<p class=\"print-story-gap\" dir=\"{d}\">{}</p>",
-                word(*text)
-            )),
-            StoryBlock::Story(story) => {
-                let title = match story.title {
-                    StoryTitle::Own(title) => escape(title),
-                    StoryTitle::Numbered(text) => word(text),
-                };
-                out.push_str(&format!(
-                    "<section class=\"print-story\" dir=\"{d}\"><h1 class=\"print-title print-story-title\">{title}</h1>"
-                ));
-                for frame in &story.frames {
-                    match frame {
-                        FrameBlock::Gap(text) => out
-                            .push_str(&format!("<p class=\"print-frame-gap\">{}</p>", word(*text))),
-                        FrameBlock::Frame(frame) => {
-                            out.push_str("<div class=\"print-frame\">");
-                            if let Some(picture) = &frame.picture {
-                                let style = match picture.float {
-                                    None => String::new(),
-                                    Some(Side::Left) => " style=\"float:left\"".into(),
-                                    Some(Side::Right) => " style=\"float:right\"".into(),
-                                };
-                                out.push_str(&format!(
-                                    "<img class=\"print-frame-picture\" src=\"{}\" alt=\"{}\"{style}/>",
-                                    escape(picture.src),
-                                    word(picture.alt)
-                                ));
-                            }
-                            out.push_str(&format!(
-                                "<p class=\"print-frame-text\">{}</p></div>",
-                                escape(frame.text)
-                            ));
-                        }
-                    }
-                }
-                if let Some(reference) = story.reference {
-                    out.push_str(&format!(
-                        "<p class=\"print-story-reference\">{}</p>",
-                        escape(reference)
-                    ));
-                }
-                out.push_str("</section>");
-            }
-        }
-    }
-    out.push_str("</main>");
-    out
+    html::stories_markup(view, &word)
 }
