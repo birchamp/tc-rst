@@ -1094,7 +1094,7 @@ async fn a_draft_never_waits_behind_a_long_command() {
         )),
     )
     .await
-    .expect("hung: the draft did not wait")
+    .expect("hung: the draft waited when it should not")
     .unwrap();
     assert_eq!(draft.stored, Stored::Unchanged);
     world.hooks.release(Point::BeforeDurablePending);

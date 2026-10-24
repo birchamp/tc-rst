@@ -129,7 +129,7 @@ impl ManualJob {
                 return ManualJob { id, ctx, end };
             }
         }
-        panic!("the job never started");
+        panic!("hung: the job never started");
     }
 
     pub fn finish(self, result: Result<JobOutcome, JobEnd>) {
@@ -436,7 +436,7 @@ pub async fn until(what: &str, mut cond: impl FnMut() -> bool) {
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("never happened: {what}");
+    panic!("hung: never happened: {what}");
 }
 
 pub async fn is_busy(app: &App) -> bool {
@@ -451,7 +451,7 @@ pub async fn until_quiet(app: &App) {
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("the app never went quiet");
+    panic!("hung: the app never went quiet");
 }
 
 /// The bytes of the test fields' file.

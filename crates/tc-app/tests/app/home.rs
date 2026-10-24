@@ -125,7 +125,7 @@ async fn quiet(app: &App) {
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    panic!("the app did not settle");
+    panic!("hung: the app did not settle");
 }
 
 fn drafted(card: &HomeCard) -> Vec<(BookId, Known<u8>)> {

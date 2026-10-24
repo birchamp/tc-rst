@@ -37,42 +37,44 @@ async fn learns_the_sent_links() {
         )
         .unwrap();
     tokio::time::pause();
+    // On the paused clock below, a timeout is virtual time: the 1 s bounds check that each
+    // step ends before the 2 s save timer and the 5 s reply, which no machine can stretch.
     let sent = tokio::time::timeout(
-        Duration::from_secs(60),
+        Duration::from_secs(1),
         place(&t.app, &at, &view, 91, "fe", "πίστιν"),
     )
     .await
-    .expect("hung: the first edit must finish before its save timer");
+    .expect("the first edit must finish before its save timer");
     // A Flush holds the aligner slot until the save finishes, so it cannot overlap the
     // next Edit. The timer starts the same sent version without holding that request lock.
     tokio::time::advance(Duration::from_secs(2)).await;
-    tokio::time::timeout(Duration::from_secs(60), async {
+    tokio::time::timeout(Duration::from_secs(1), async {
         while saved_links(&backend).is_empty() {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
     })
     .await
-    .expect("hung: the first save must reach the delayed backend reply");
+    .expect("the first save must reach the delayed backend reply");
     assert_eq!(
         saved_links(&backend).len(),
         1,
         "the first version reached the disk"
     );
     let newer = tokio::time::timeout(
-        Duration::from_secs(60),
+        Duration::from_secs(1),
         place(&t.app, &at, &sent, 94, "verdad", "ἀληθείας"),
     )
     .await
-    .expect("hung: a newer edit must finish while the first save reply waits");
+    .expect("a newer edit must finish while the first save reply waits");
     assert_eq!(
         saved_links(&backend).len(),
         1,
         "the first reply still waits"
     );
     tokio::time::advance(Duration::from_secs(5)).await;
-    let saved = tokio::time::timeout(Duration::from_secs(60), flush(&t.app, &at, 93))
+    let saved = tokio::time::timeout(Duration::from_secs(1), flush(&t.app, &at, 93))
         .await
-        .expect("hung: the newer version's refused save must finish");
+        .expect("the newer version's refused save must finish");
     assert!(matches!(saved, AlignSave::Failed(_)));
     tokio::time::resume();
     assert_eq!(

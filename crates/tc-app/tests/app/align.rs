@@ -843,7 +843,7 @@ async fn tc_app_test_wait(app: &App, at: &Scope) -> AlignerView {
         }
     }
     panic!(
-        "the engine did not finish learning: status={:?}, suggestions={:?}, jobs={jobs:?}",
+        "hung: the engine did not finish learning: status={:?}, suggestions={:?}, jobs={jobs:?}",
         view.suggest.status,
         suggest_events(app),
     );

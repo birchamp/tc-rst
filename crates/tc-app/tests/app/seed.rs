@@ -74,7 +74,7 @@ async fn until_startup_ends(app: &App) -> StartupState {
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("the startup never ended: {:?}", app.startup());
+    panic!("hung: the startup never ended: {:?}", app.startup());
 }
 
 async fn until_job_ends(app: &App, id: JobId) -> JobState {
@@ -86,7 +86,7 @@ async fn until_job_ends(app: &App, id: JobId) -> JobState {
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("job {id:?} never ended");
+    panic!("hung: job {id:?} never ended");
 }
 
 async fn next_frame(subscription: &mut Subscription) -> EventFrame {
@@ -357,13 +357,9 @@ async fn quit_while_seeding_stops_the_seed_and_waits_for_it() {
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
 
-    let began = std::time::Instant::now();
-    first.app.quit().await;
-    assert!(
-        began.elapsed() < Duration::from_secs(60),
-        "hung: the quit did not stop the seed: {:?}",
-        began.elapsed()
-    );
+    tokio::time::timeout(Duration::from_secs(60), first.app.quit())
+        .await
+        .expect("hung: the quit did not stop the seed");
     assert_eq!(
         first.app.jobs().view(id).unwrap().state,
         JobState::Cancelled

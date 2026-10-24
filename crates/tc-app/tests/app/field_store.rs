@@ -793,7 +793,7 @@ multi! {
             store(&t.app, 2, "title", &t0, "Saved"),
         )
         .await
-        .expect("hung: the store did not wait behind the held draft")
+        .expect("hung: the store waited behind the held draft")
         .unwrap();
         assert_eq!(ack.stored, Stored::Written);
 

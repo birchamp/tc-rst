@@ -445,20 +445,23 @@ async fn a_refused_open_reaches_every_caller_and_leaves_nothing_open() {
         f.store.opens(&nowhere) == 1
     })
     .await;
-    let side = {
+    let mut side = {
         let sessions = f.sessions().clone();
         let nowhere = nowhere.clone();
-        tokio::spawn(async move {
+        Box::pin(async move {
             sessions
                 .open_side(&nowhere, open_progress())
                 .await
                 .map(|lease| lease.scope().clone())
         })
     };
-    tokio::time::sleep(Duration::from_millis(30)).await;
+    assert!(
+        crate::store_world::poll_once(&mut side).await.is_none(),
+        "the side open joins the held one"
+    );
     f.store.release_open(&nowhere);
     assert_eq!(screen.await.unwrap().err(), Some(OpenFailure::NotAProject));
-    assert_eq!(side.await.unwrap().err(), Some(OpenFailure::NotAProject));
+    assert_eq!(side.await.err(), Some(OpenFailure::NotAProject));
     assert_eq!(f.store.opens(&nowhere), 1, "one open, shared");
     let reports: Vec<_> =
         f.t.app

@@ -164,7 +164,7 @@ pub(super) async fn card_with_counts(app: &App) -> HomeCard {
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    panic!("the card's summary never came");
+    panic!("hung: the card's summary never came");
 }
 
 pub(super) fn teammate(n: u16) -> PersonLabel {

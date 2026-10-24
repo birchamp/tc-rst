@@ -69,6 +69,18 @@ pub fn for_a_minute() -> impl Iterator<Item = ()> {
     std::iter::from_fn(move || (std::time::Instant::now() < end).then_some(()))
 }
 
+/// Polls `future` once. An open that joins one already running registers on its first poll,
+/// so a test knows it has joined without sleeping.
+pub async fn poll_once<F: std::future::Future + Unpin>(future: &mut F) -> Option<F::Output> {
+    std::future::poll_fn(|cx| {
+        std::task::Poll::Ready(match std::pin::Pin::new(&mut *future).poll(cx) {
+            std::task::Poll::Ready(out) => Some(out),
+            std::task::Poll::Pending => None,
+        })
+    })
+    .await
+}
+
 /// The open's progress sink of a test that does not watch it.
 pub fn progress() -> tc_app::jobs::ProgressSink {
     tc_app::jobs::ProgressSink::new(tc_api::jobs::Phase::Open(

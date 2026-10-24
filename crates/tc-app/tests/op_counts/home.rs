@@ -59,7 +59,7 @@ async fn settle(app: &App) {
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    panic!("the app did not settle");
+    panic!("hung: the app did not settle");
 }
 
 /// A second Home visit renders nothing: its summaries are kept under their stamps.

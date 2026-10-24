@@ -285,7 +285,8 @@ async fn scoped_prefs_land_where_the_session_says() {
         .into_result()
         .unwrap();
     for () in crate::store_world::for_a_minute() {
-        if t.app.prefs().draft_unit(&id).is_some() {
+        // Place is the last of the three in the writer's queue: once it is set, all are.
+        if t.app.prefs().place(&id, "TIT").is_some() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(1)).await;

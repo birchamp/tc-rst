@@ -483,6 +483,6 @@ async fn a_release_with_nothing_held_does_nothing() {
         store(&t.app, 4, "title", &token, "x"),
     )
     .await
-    .expect("hung: the store was not held");
+    .expect("hung: the call did not come back while the store was not held");
     assert!(stored.is_ok());
 }
