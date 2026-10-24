@@ -208,9 +208,18 @@ impl App {
             })?;
         let store = self.inner.sessions.store().clone();
         let joined = store
-            .door43_join(client, Some(session), repo, name.as_str().to_owned())
+            .door43_join(
+                client,
+                Some(session.clone()),
+                repo,
+                name.as_str().to_owned(),
+            )
             .await
             .ok_or(ApiError::Unavailable(tc_api::error::Feature::Sync))?;
+        if let Err(tc_sync::JoinError::Refused(tc_api::refusal::SyncRefusal::AuthFailed)) = &joined
+        {
+            return Err(self.door43_refused(&session).await);
+        }
         let folder = joined.map_err(|e| match e {
             tc_sync::JoinError::Blocked(block) => {
                 ApiError::Refused(Refusal::Sync(tc_api::refusal::SyncFailure::Blocked(block)))

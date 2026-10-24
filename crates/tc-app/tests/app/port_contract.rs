@@ -516,3 +516,46 @@ async fn scripting_a_port_that_is_not_scripted_is_refused() {
         "{answer:?}"
     );
 }
+
+/// INV-NO-REQUEST-WITHOUT-CONSENT: on the real port, nothing reaches Door43 at launch or in a
+/// minute of idle, even with the internet question answered.
+#[tokio::test(start_paused = true)]
+async fn no_door43_request_at_launch_or_60_s_idle() {
+    let w = <Door43 as SyncPortFixture>::world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    // Paused time: a minute passes at once, and every timer due in it fires; then real time,
+    // so a request one of them started reaches the fake.
+    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+    tokio::time::resume();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let heard = w.fake.requests();
+    assert!(
+        heard.is_empty(),
+        "INV-NO-REQUEST-WITHOUT-CONSENT: Door43 heard {heard:?}"
+    );
+}
+
+/// #724: a sync whose branch lookup fails is a failed sync, with nothing changed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_branch_lookup_is_a_failed_sync() {
+    let w = <Door43 as SyncPortFixture>::world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    let before = card_with_counts(app).await;
+    w.fake.inject(FaultRule::once(
+        "GET",
+        &format!("/api/v1/repos/{PARITY_USER}/{REPO}"),
+        Fault::Status {
+            status: 500,
+            message: "Internal Server Error".to_owned(),
+        },
+    ));
+    let job = post(app, &sync(30)).await.unwrap();
+    match ended(app, job).await {
+        JobState::Failed(ApiError::Refused(Refusal::Sync(SyncFailure::BeforeIntake(_)))) => {}
+        other => panic!("a failed lookup is a failed sync: {other:?}"),
+    }
+    assert_eq!(card_with_counts(app).await, before, "nothing changed");
+}

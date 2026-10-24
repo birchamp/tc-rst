@@ -149,7 +149,7 @@ impl App {
                 ))
             })?;
         let handle = lease.session().handle().clone();
-        let report = handle.door43_sync(client, Some(session)).await;
+        let report = handle.door43_sync(client, Some(session.clone())).await;
         let (ended, received_by) = match report {
             Some(report) => (
                 match report.ended {
@@ -184,7 +184,18 @@ impl App {
         self.inner
             .bus
             .publish(tc_api::event::Event::HomeCard { project: folder });
-        ended.map(|()| view).map_err(JobEnd::Failed)
+        match ended {
+            Ok(()) => Ok(view),
+            // Door43 refused the token: both copies are forgotten and the person signs in again
+            // (DELTA §3.15.1 item 6).
+            Err(ApiError::Refused(tc_api::Refusal::Sync(
+                tc_api::refusal::SyncFailure::BeforeIntake(
+                    tc_api::refusal::SyncRefusal::AuthFailed,
+                )
+                | tc_api::refusal::SyncFailure::AfterIntake(tc_api::refusal::SyncRefusal::AuthFailed),
+            ))) => Err(JobEnd::Failed(self.door43_refused(&session).await)),
+            Err(error) => Err(JobEnd::Failed(error)),
+        }
     }
 
     /// Points `folder`'s repository at Door43's `owner/name` and its `branch` (unit X's
