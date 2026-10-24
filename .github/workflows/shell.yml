@@ -1,7 +1,7 @@
 # The Electronite shell's tests (card G1, docs/contracts/SHELL.md): the unit tests, and the
-# end-to-end tests of the real shell in Electronite over a test build of tc4, on Linux and
-# Windows (the platforms of the owner's open H3 answer; macOS waits for it). A skipped
-# end-to-end test fails its job, as in app-e2e.
+# end-to-end tests of the real shell in Electronite over a test build of tc4, on Linux, Windows
+# and macOS (H3, rulings/2026-10-24-H3-H4-H7-fast-release.md). A skipped end-to-end test fails
+# its job, as in app-e2e.
 name: shell
 permissions:
   contents: read
@@ -143,6 +143,48 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shell-e2e-windows
+          path: |
+            shell.tap
+            target/shell-e2e/*/appdata/shell.log
+
+  e2e-macos:
+    needs: builds
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p tc4 --features test-hooks,fixture-backend
+      - uses: actions/download-artifact@v4
+        with:
+          name: shell-builds
+          path: target
+      - name: Electronite
+        run: |
+          zip="electronite-$ELECTRONITE-darwin-arm64.zip"
+          curl -sSfL -o "$RUNNER_TEMP/$zip" "https://github.com/unfoldingWord/electronite/releases/download/$ELECTRONITE/$zip"
+          echo "a3dde44e03a076bc778f952f7a7a5ed6d8e5037d46ea6c1ba2deb6a11df59488  $RUNNER_TEMP/$zip" | shasum -a 256 -c -
+          # ditto keeps the app bundle's symbolic links, which unzip may not.
+          ditto -x -k "$RUNNER_TEMP/$zip" "$RUNNER_TEMP/electronite"
+          ls "$RUNNER_TEMP/electronite"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: parity/tc4-baseline
+      - name: end to end
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          TC4_ELECTRON="$RUNNER_TEMP/electronite/Electron.app/Contents/MacOS/Electron" TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app \
+            TC4_UI_HOOKS=target/tc-ui-app-hooks TC4_BUNDLE=target/shell-bundle \
+            node --test --test-concurrency=1 --test-reporter=tap 'shell/e2e/*.test.cjs' | tee shell.tap
+          node parity/app/journeys/no-skips.mjs shell.tap
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-e2e-macos
           path: |
             shell.tap
             target/shell-e2e/*/appdata/shell.log
