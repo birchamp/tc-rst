@@ -4,7 +4,7 @@ title: A held leave never hides a verse whose save failed
 track: A
 lane: app
 milestone: M1
-state: building
+state: gating
 owner: C7a session (Claude Code 3058c665)
 branch: track-FIX-HIDE
 worktree: .worktrees/track-FIX-HIDE
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5 d (basis: FIX-R's save-gate fix, one view and one journey)
 merged: none
 updated: 2026-10-24
-next: Fix, then the three review lenses, then the integration lane.
+next: The integration lane: gate it on its own or in a batch and merge it.
 blocked_by: none
 ---
 
