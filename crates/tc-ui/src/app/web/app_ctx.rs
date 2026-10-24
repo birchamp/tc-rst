@@ -35,6 +35,7 @@ use super::{Runtime, ServerState, bridge, js};
 use crate::app::account::{SignInFlow, SignInForm, SignInNext};
 use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
+use crate::app::fix::Fix;
 use crate::app::forms::{AddBookForm, ImportForm, ImportKind, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
 use crate::app::latest::Latest;
@@ -43,6 +44,7 @@ use crate::app::open_door43::OpenForm;
 use crate::app::save::indicator::Retry;
 use crate::app::share::{ShareForm, ShareProject, ShareStep, Target};
 use crate::app::shell::{CurrentProject, Editing, View};
+use crate::app::sources::SettingsForm;
 use crate::app::submit::Submit;
 use crate::app::sync::{SyncEnd, SyncToast};
 use crate::i18n::show_locale;
@@ -77,24 +79,60 @@ pub enum Dialog {
     },
     /// "+ Add a project" (M1).
     AddProject,
-    /// New Bible (M2); its form is `np`.
-    NewProject,
-    /// New Open Bible Stories (M3); its form is `np`.
-    NewObs,
-    /// Add a book (M4); its form is `ab`.
-    AddBook,
+    /// New Bible (M2).
+    NewProject(NewProjectForm),
+    /// New Open Bible Stories (M3).
+    NewObs(NewProjectForm),
+    /// Add a book (M4).
+    AddBook(AddBookForm),
     /// Import (M5).
     Import(ImportForm),
     /// Open a project from Door43 (M6).
     OpenDoor43(OpenForm),
     /// Share on Door43.
     Share(ShareForm),
-    /// The guided fix (M11, B5a); its state is `c.fix`.
-    GuidedFix,
-    /// Project settings (M7); its form is `st`.
-    Settings,
+    /// The guided fix (M11, B5a).
+    GuidedFix(Fix),
+    /// Project settings (M7).
+    Settings(SettingsForm),
     /// Get source texts (M8); its form is `src`, kept across openings as tC4 keeps it.
     Sources,
+}
+
+/// A dialog's form seen as the slot it used to be (UI-3): `None` while its dialog does not
+/// show. A value set through it is kept only while its dialog shows; `None` closes the dialog.
+pub struct FormSlot<T> {
+    dialog: ArcRwSignal<Option<Dialog>>,
+    pick: fn(&Dialog) -> Option<&T>,
+    pick_mut: fn(&mut Dialog) -> Option<&mut T>,
+}
+
+impl<T: Clone> FormSlot<T> {
+    pub fn with_untracked<R>(&self, f: impl FnOnce(&Option<T>) -> R) -> R {
+        let pick = self.pick;
+        let form = self
+            .dialog
+            .with_untracked(|d| d.as_ref().and_then(pick).cloned());
+        f(&form)
+    }
+
+    pub fn try_update<R>(&self, f: impl FnOnce(&mut Option<T>) -> R) -> Option<R> {
+        let (pick, pick_mut) = (self.pick, self.pick_mut);
+        self.dialog.try_update(|d| {
+            let mut form = d.as_ref().and_then(pick).cloned();
+            let out = f(&mut form);
+            match (d.as_mut().and_then(pick_mut), form) {
+                (Some(shown), Some(form)) => *shown = form,
+                (Some(_), None) => *d = None,
+                (None, _) => {}
+            }
+            out
+        })
+    }
+
+    pub fn try_set(&self, form: Option<T>) {
+        self.try_update(|slot| *slot = form);
+    }
 }
 
 /// Open from Door43's form, in the dialog that shows or under the sign-in step that covers it.
@@ -115,14 +153,14 @@ impl Dialog {
             Self::Feedback => DialogKind::Feedback,
             Self::SignIn { .. } => DialogKind::SignIn,
             Self::AddProject => DialogKind::AddProject,
-            Self::NewProject => DialogKind::NewProject,
-            Self::NewObs => DialogKind::NewObs,
-            Self::AddBook => DialogKind::AddBook,
+            Self::NewProject(_) => DialogKind::NewProject,
+            Self::NewObs(_) => DialogKind::NewObs,
+            Self::AddBook(_) => DialogKind::AddBook,
             Self::Import(_) => DialogKind::Import,
             Self::OpenDoor43(_) => DialogKind::OpenDoor43,
             Self::Share(_) => DialogKind::Share,
-            Self::GuidedFix => DialogKind::GuidedFix,
-            Self::Settings => DialogKind::Settings,
+            Self::GuidedFix(_) => DialogKind::GuidedFix,
+            Self::Settings(_) => DialogKind::Settings,
             Self::Sources => DialogKind::Sources,
         }
     }
@@ -170,12 +208,6 @@ pub struct AppState {
     pub sign_in: ArcRwSignal<SignInFlow>,
     /// The message of the screen that could not be shown (S15).
     pub view_error: ArcRwSignal<Option<String>>,
-    /// New Bible's and New Open Bible Stories' form (tC4 `np`).
-    pub np: ArcRwSignal<Option<NewProjectForm>>,
-    /// Add a book's form (tC4 `ab`).
-    pub ab: ArcRwSignal<Option<AddBookForm>>,
-    /// Project settings' form (tC4 `st`, B9a).
-    pub st: ArcRwSignal<Option<crate::app::sources::SettingsForm>>,
     /// Get source texts' form (tC4 `src`, B9a), kept across the dialog's openings as tC4
     /// keeps it.
     pub src: ArcRwSignal<crate::app::sources::SourcesForm>,
@@ -221,6 +253,106 @@ impl AppState {
         Signal::derive(move || dialog.with(|d| d.as_ref().and_then(pick).cloned()))
     }
 
+    fn slot<T>(
+        &self,
+        pick: fn(&Dialog) -> Option<&T>,
+        pick_mut: fn(&mut Dialog) -> Option<&mut T>,
+    ) -> FormSlot<T> {
+        FormSlot {
+            dialog: self.layers.dialog.clone(),
+            pick,
+            pick_mut,
+        }
+    }
+
+    /// New Bible's and New Open Bible Stories' form (tC4 `np`).
+    pub fn np_slot(&self) -> FormSlot<NewProjectForm> {
+        self.slot(
+            |d| match d {
+                Dialog::NewProject(np) | Dialog::NewObs(np) => Some(np),
+                _ => None,
+            },
+            |d| match d {
+                Dialog::NewProject(np) | Dialog::NewObs(np) => Some(np),
+                _ => None,
+            },
+        )
+    }
+
+    /// Add a book's form (tC4 `ab`).
+    pub fn ab_slot(&self) -> FormSlot<AddBookForm> {
+        self.slot(
+            |d| match d {
+                Dialog::AddBook(ab) => Some(ab),
+                _ => None,
+            },
+            |d| match d {
+                Dialog::AddBook(ab) => Some(ab),
+                _ => None,
+            },
+        )
+    }
+
+    /// Project settings' form (tC4 `st`).
+    pub fn st_slot(&self) -> FormSlot<SettingsForm> {
+        self.slot(
+            |d| match d {
+                Dialog::Settings(st) => Some(st),
+                _ => None,
+            },
+            |d| match d {
+                Dialog::Settings(st) => Some(st),
+                _ => None,
+            },
+        )
+    }
+
+    /// The guided fix's state (tC4 `c.fix`).
+    pub fn fix_slot(&self) -> FormSlot<Fix> {
+        self.slot(
+            |d| match d {
+                Dialog::GuidedFix(fix) => Some(fix),
+                _ => None,
+            },
+            |d| match d {
+                Dialog::GuidedFix(fix) => Some(fix),
+                _ => None,
+            },
+        )
+    }
+
+    /// New Bible's or New Open Bible Stories' form while it shows.
+    pub fn new_project_form(&self) -> Signal<Option<NewProjectForm>> {
+        self.form(|d| match d {
+            Dialog::NewProject(np) | Dialog::NewObs(np) => Some(np),
+            _ => None,
+        })
+    }
+
+    /// Add a book's form while it shows.
+    pub fn add_book_form(&self) -> Signal<Option<AddBookForm>> {
+        self.form(|d| match d {
+            Dialog::AddBook(ab) => Some(ab),
+            _ => None,
+        })
+    }
+
+    /// Project settings' form while it shows.
+    pub fn settings_form(&self) -> Signal<Option<SettingsForm>> {
+        self.form(|d| match d {
+            Dialog::Settings(st) => Some(st),
+            _ => None,
+        })
+    }
+
+    /// The guided fix while it shows.
+    pub fn fix_form(&self) -> Signal<Option<Fix>> {
+        self.form(|d| match d {
+            Dialog::GuidedFix(fix) => Some(fix),
+            _ => None,
+        })
+    }
+
     /// Import's form while its dialog shows (tC4 `im`).
     pub fn import_form(&self) -> Signal<Option<ImportForm>> {
         self.form(|d| match d {
@@ -264,9 +396,6 @@ impl AppState {
             fb: ArcRwSignal::new(None),
             sign_in: ArcRwSignal::new(SignInFlow::Idle),
             view_error: ArcRwSignal::new(view_error),
-            np: ArcRwSignal::new(None),
-            ab: ArcRwSignal::new(None),
-            st: ArcRwSignal::new(None),
             src: ArcRwSignal::new(crate::app::sources::SourcesForm::default()),
             up: ArcRwSignal::new(crate::app::upgrades::UpgradeState::default()),
             gw: ArcRwSignal::new(crate::app::upgrades::GatewayState::default()),
@@ -837,9 +966,7 @@ impl Actions {
 
     /// "+ Add a project" (tC4 `openAddProject`): the chooser, in place of any dialog.
     pub fn open_add_project(&self) {
-        let s = self.s();
-        s.np.try_set(None);
-        s.layers.dialog.try_set(Some(Dialog::AddProject));
+        self.s().layers.dialog.try_set(Some(Dialog::AddProject));
     }
 
     /// New Bible (tC4 `openNewProject`): the versification list first, then the dialog, which
@@ -855,17 +982,18 @@ impl Actions {
                 .await
                 .map(|view| view.names)
                 .map_err(|error| error.to_string());
-            let s = this.s();
-            s.np.try_set(Some(NewProjectForm::bible(names)));
-            s.layers.dialog.try_set(Some(Dialog::NewProject));
+            let form = NewProjectForm::bible(names);
+            this.s()
+                .layers
+                .dialog
+                .try_set(Some(Dialog::NewProject(form)));
         });
     }
 
     /// New Open Bible Stories (tC4 `openNewObs`).
     pub fn open_new_obs(&self) {
-        let s = self.s();
-        s.np.try_set(Some(NewProjectForm::stories()));
-        s.layers.dialog.try_set(Some(Dialog::NewObs));
+        let form = NewProjectForm::stories();
+        self.s().layers.dialog.try_set(Some(Dialog::NewObs(form)));
     }
 
     /// Import, at its kind step (tC4 `openImport`).
@@ -876,17 +1004,15 @@ impl Actions {
 
     /// Add a book, at its method step (tC4 `openAddBook`).
     pub fn open_add_book(&self, card: &HomeCard) {
-        let s = self.s();
-        s.np.try_set(None);
-        s.ab.try_set(Some(AddBookForm::open(card)));
-        s.layers.dialog.try_set(Some(Dialog::AddBook));
+        let form = AddBookForm::open(card);
+        self.s().layers.dialog.try_set(Some(Dialog::AddBook(form)));
     }
 
     /// A field of New Bible or New Open Bible Stories changed: what the next Create sends is
     /// another request.
     pub fn patch_np(&self, patch: impl FnOnce(&mut NewProjectForm)) {
-        self.s().np.try_update(|np| {
-            if let Some(np) = np {
+        self.s().layers.dialog.try_update(|dialog| {
+            if let Some(Dialog::NewProject(np) | Dialog::NewObs(np)) = dialog {
                 patch(np);
                 np.edited();
             }
@@ -894,8 +1020,8 @@ impl Actions {
     }
 
     pub fn patch_ab(&self, patch: impl FnOnce(&mut AddBookForm)) {
-        self.s().ab.try_update(|ab| {
-            if let Some(ab) = ab {
+        self.s().layers.dialog.try_update(|dialog| {
+            if let Some(Dialog::AddBook(ab)) = dialog {
                 patch(ab);
             }
         });
@@ -912,12 +1038,7 @@ impl Actions {
     /// Cancel, Close, the ✕ and Escape of Home's dialogs (tC4 `closeModal`), which also ends
     /// the share flow: an answer that comes for it later does nothing.
     pub fn close_modal(&self) {
-        let s = self.s();
-        s.layers.dialog.try_set(None);
-        s.np.try_set(None);
-        s.ab.try_set(None);
-        s.c.fix.try_set(None);
-        s.st.try_set(None);
+        self.s().layers.dialog.try_set(None);
         self.0.share_flows.begin();
     }
 

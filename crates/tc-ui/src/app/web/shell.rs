@@ -83,16 +83,12 @@ pub fn App() -> impl IntoView {
         Memo::new(move |_| dialog.with(|d| matches!(d, Some(Dialog::Share(_)))))
     };
     let fix_open = {
-        let (dialog, fix) = (ctx.s.layers.dialog.clone(), ctx.s.c.fix.clone());
-        Memo::new(move |_| {
-            dialog.with(|d| matches!(d, Some(Dialog::GuidedFix))) && fix.with(Option::is_some)
-        })
+        let dialog = ctx.s.layers.dialog.clone();
+        Memo::new(move |_| dialog.with(|d| matches!(d, Some(Dialog::GuidedFix(_)))))
     };
     let settings_open = {
-        let (dialog, st) = (ctx.s.layers.dialog.clone(), ctx.s.st.clone());
-        Memo::new(move |_| {
-            dialog.with(|d| matches!(d, Some(Dialog::Settings))) && st.with(Option::is_some)
-        })
+        let dialog = ctx.s.layers.dialog.clone();
+        Memo::new(move |_| dialog.with(|d| matches!(d, Some(Dialog::Settings(_)))))
     };
     let sources_open = {
         let dialog = ctx.s.layers.dialog.clone();
@@ -122,20 +118,13 @@ pub fn App() -> impl IntoView {
 }
 
 /// Home's dialogs, in tC4's mount order (`tC4:src/App.jsx:138-143`): AddProject, NewBible,
-/// NewObs, AddBook, Import, OpenFromDoor43. Each is mounted while `s.modal` names it and its
-/// form is set.
+/// NewObs, AddBook, Import, OpenFromDoor43. Each is mounted while `s.modal` names it; its form
+/// is in the dialog.
 fn home_dialogs(s: &AppState) -> impl IntoView + use<> {
     // The kind alone, so typing in a form does not draw its dialog again.
     let dialog = {
-        let (dialog, np, ab) = (s.layers.dialog.clone(), s.np.clone(), s.ab.clone());
-        Memo::new(
-            move |_| match dialog.with(|d| d.as_ref().map(Dialog::kind)) {
-                Some(DialogKind::NewProject) if np.with(Option::is_none) => None,
-                Some(DialogKind::NewObs) if np.with(Option::is_none) => None,
-                Some(DialogKind::AddBook) if ab.with(Option::is_none) => None,
-                other => other,
-            },
-        )
+        let dialog = s.layers.dialog.clone();
+        Memo::new(move |_| dialog.with(|d| d.as_ref().map(Dialog::kind)))
     };
     let open = move |which: DialogKind| Memo::new(move |_| dialog.get() == Some(which));
     let (add_project, new_bible, new_obs, add_book, import, open_door43) = (
