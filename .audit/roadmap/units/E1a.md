@@ -4,7 +4,7 @@ title: Sync with Door43 in the app
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: C7a session (Claude Code 3058c665)
 branch: track-E1a
 worktree: .worktrees/track-E1a
@@ -16,7 +16,7 @@ no_loss: true
 size: 5-6 sessions (basis: B10 and C0)
 merged: none
 updated: 2026-10-24
-next: Step 1: the real sync port over tc-sync, red first.
+next: Step 3 (H11 has no ruling, step 2 waits): the sync button flow and its refusals; UI-3's run_net and refusal_text are not here yet, so the Rust half first.
 blocked_by: none
 ---
 
@@ -296,3 +296,5 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/app-remaining.md
 - 2026-10-24 | C7a session (Claude Code 3058c665) | claim | none | on the orchestrator's word under the fast-release ruling, from track-UI-2 (9a630e9d) with track-X's tip merged (c9a833bc, two commits past the 15e01247 named); X, C7a, D1, UI-2 and UI-3 are not done, so the merge waits for them, and the steps that need D1 or UI-3 come last. Plan for step 1: tc-app gains tc-sync; the backend's `ProjectHandle` gets `door43_sync(self: Arc<Self>, ..)` (the tc-store handle runs `tc_sync::sync` on a blocking thread under its read lock; the memory backend answers none); the toast's received changes are the change ids the fold holds after the sync and not before (record keys and their histories), since tc-store's IntakeReport counts packs, not changes | none
+- 2026-10-24 | C7a session (Claude Code 3058c665) | step 1 | none | `ports/door43.rs` `Door43Sync` over unit X: a sync runs `tc_sync::sync` on the project's tc-store handle (new backend seam `ProjectHandle::door43_sync(self: Arc<Self>, ..)`, on a blocking thread under the handle's read lock; the memory backend answers none), and the toast takes its received count and senders from X's `SyncReport.received_by`; an open runs `tc_sync::join` (seam `ProjectStore::door43_join`, StoreBackend and ScenarioStore); `ProjectHandle::door43_connect` and the test hook `App::connect_door43` connect a project for tests. `AppDeps::production()` holds `Door43Sync`; `UnavailableSync` is deleted. `sync_port_contract!(door43, Door43)` runs every case on the real port against the fake (the sample and the story project each connected to an empty repository of the parity user's), plus the new cases `a_save_during_a_sync_is_kept_and_pushed_next` (the sync held at its repository lookup while Titus 1:1 is saved, then Door43's copy opened as a new project holds it) and `a_story_project_syncs_like_a_bible`; `--list` shows each case under scripted and door43 (13 tests). Proof: with tc-sync's push skipped, `INV-A-SYNC-NEVER-LOSES-A-SAVE: the next sync took the save to Door43`. Clippy clean for tc-app (release and test-hooks) and tc4 | cargo test -p tc-app --test app port_contract
+- 2026-10-24 | C7a session (Claude Code 3058c665) | note | none | step 2 waits: `ls .audit/roadmap/rulings | grep -- -H11` prints nothing | ls .audit/roadmap/rulings
