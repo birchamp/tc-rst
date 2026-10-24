@@ -4,7 +4,7 @@ title: One reader per job and one set of identifiers
 track: A
 lane: domain
 milestone: M1
-state: claimed
+state: building
 owner: domain lane (Claude Code 9f599c21)
 branch: track-DOM-2
 worktree: .worktrees/track-DOM-2
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 d
 merged: none
 updated: 2026-10-24
-next: Step 1, write crates/tc-align/tests/one_reader_per_job.rs and log the disagreements.
+next: Step 2, make split_aligned give tC4's cards (crates/tc-journal/src/alignment.rs).
 blocked_by: none
 ---
 
@@ -355,3 +355,4 @@ Plus:
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-domain.md
 - 2026-10-24 07:37 EDT | domain lane (Claude Code 9f599c21) | claim | none | Claimed in .worktrees/track-DOM-2 from main 29048562. Production callers on main: split_aligned in tc-store/src/commands.rs:1052 (Add books); decode_alignments in tc-journal/src/outside.rs:270 (outside edits), tc-app/src/backend/seed/records.rs:415 and seed/check.rs:596. from_aligned, from_aligned_usfm and from_record have only test callers (and tc-app's suggest_tests.rs). parse_story_questions only in tc-obs; load.rs:417 reads questions with the strict parse_questions. Id types at tc-api/src/ids.rs:433, tc-journal/src/ids.rs:289,293,319,333, tc-obs/src/ids.rs:14,46. 27 FromStr impls. S3 not active | python3 -I .audit/tools/board.py
+- 2026-10-24 07:41 EDT | domain lane (Claude Code 9f599c21) | step 1 | none | crates/tc-align/tests/one_reader_per_job.rs (tC3 fixture helpers moved from tc3_import.rs to tests/common). Sidecar: 47 records (the sample's TIT 1:1 and the 46 tC3 records) read the same through decode_alignments and from_record: 0 disagreements. Aligned USFM, en_ult Titus: 46 verses, plain text and links equal in all 46, the bank equal in all 46; card groupings differ in 29 (1:1-1:6, 1:9, 1:10, 1:12, 1:15, 1:16, 2:1, 2:3, 2:5, 2:7, 2:8, 2:10, 2:13-2:15, 3:1, 3:3-3:8, 3:10, 3:14), split_aligned always giving more cards (1:1: 19 vs tC4's 17). The card expected 5: that is the count whose exported bytes differ, not the count whose cards differ. TIT 1:1: split_aligned gives 2 cards naming ἐκλεκτῶν. No plain-text or link disagreement, so no stop | cargo test -p tc-align --test one_reader_per_job -- --nocapture

@@ -4,9 +4,10 @@
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, dead_code)]
 
-use serde_json::Value;
+use serde_json::{Map, Value};
+use std::io::Read;
 use std::path::PathBuf;
-use tc_align::{AlignmentValue, Basis, SourceVerse, SourceWord, TargetWord, record};
+use tc_align::{AlignmentValue, Basis, SourceVerse, SourceWord, TargetVerse, TargetWord, record};
 use tc_core::VerseSpan;
 use tc_journal::ids::VerseNo;
 use tc_journal::json::{Json, JsonMap};
@@ -233,4 +234,101 @@ pub fn show(words: &[TargetWord]) -> Vec<String> {
         .iter()
         .map(|w| format!("{}/{}/{}", w.word, w.occurrence, w.occurrences))
         .collect()
+}
+
+/// tC4's tC3 import fixture: translationCore 3's alignment data of Titus.
+pub const TC3_ZIP: &str = "fixtures/tc4/conformance-fixtures/import/tc3/cfm_fbt_tit_book.zip";
+const TC3_APP: &str = "apps/translationCore";
+
+fn zip_entry(archive: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Value {
+    let mut text = String::new();
+    archive
+        .by_name(name)
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+/// tC4's `normalizeOccurrences`: occurrences as integers, every other field kept.
+pub fn normalized(word: &Value) -> Value {
+    let mut word = word.clone();
+    for key in ["occurrence", "occurrences"] {
+        if let Some(Value::String(s)) = word.get(key) {
+            word[key] = Value::from(s.parse::<u64>().unwrap());
+        }
+    }
+    word
+}
+
+/// tC4's `unmergeWord`: a placed word without tC3's `type`.
+pub fn unmerged(word: &Value) -> Value {
+    let mut word = normalized(word);
+    word.as_object_mut().unwrap().remove("type");
+    word
+}
+
+/// One TIT verse of the fixture: its record as tC4's `alignmentFile` makes it, and its
+/// text.
+pub struct Imported {
+    pub reference: String,
+    pub record: Value,
+    pub verse: TargetVerse,
+}
+
+pub fn imported() -> Vec<Imported> {
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(fixture(TC3_ZIP)).unwrap()).unwrap();
+    let mut out = Vec::new();
+    for chapter in 1..=3 {
+        let alignments = zip_entry(
+            &mut archive,
+            &format!("{TC3_APP}/alignmentData/tit/{chapter}.json"),
+        );
+        let texts = zip_entry(&mut archive, &format!("tit/{chapter}.json"));
+        // tC3's `front` holds no verse, and tC4 keys no record to it.
+        let mut verses: Vec<_> = alignments
+            .as_object()
+            .unwrap()
+            .iter()
+            .filter_map(|(v, data)| Some((v.parse::<u16>().ok()?, v, data)))
+            .collect();
+        verses.sort_by_key(|(n, _, _)| *n);
+        for (_, verse, data) in verses {
+            let text = texts[verse.as_str()].as_str().unwrap();
+            let target = TargetVerse::new(text);
+            let words = |list: &Value, f: fn(&Value) -> Value| {
+                Value::Array(list.as_array().unwrap().iter().map(f).collect())
+            };
+            let mut record = Map::new();
+            record.insert(
+                "alignments".into(),
+                Value::Array(
+                    data["alignments"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|a| {
+                            serde_json::json!({
+                                "topWords": words(&a["topWords"], normalized),
+                                "bottomWords": words(&a["bottomWords"], unmerged),
+                            })
+                        })
+                        .collect(),
+                ),
+            );
+            record.insert("wordBank".into(), words(&data["wordBank"], normalized));
+            record.insert("invalid".into(), Value::Bool(false));
+            record.insert(
+                "targetVerseMd5".into(),
+                Value::from(target.md5().to_string()),
+            );
+            record.insert("sourceVersion".into(), Value::from(SOURCE_NT));
+            out.push(Imported {
+                reference: format!("{chapter}:{verse}"),
+                record: Value::Object(record),
+                verse: target,
+            });
+        }
+    }
+    out
 }
