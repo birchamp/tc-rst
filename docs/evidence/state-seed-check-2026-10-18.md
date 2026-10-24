@@ -214,7 +214,8 @@ timestamp is rewritten in tC4's own form.
   (or has no `/`), as tC4 does; then follow tC4's row order and first-row-per-repository rule.
 - **Done in part (B7, 2026-10-19):** `relationships` skips a pin whose flavor is no scripture,
   parascriptural or peripheral, or has no `/`, as tC4 does, so the OBS pin groups hold no
-  anomaly. The row order and the first-row-per-repository rule are still the storage team's.
+  anomaly. **Done (T step 3, 2026-10-24):** the row order (original languages, extra scripture,
+  primary, fallback, lexicons) and the first row per repository are tC4's.
 
 ## 5. Findings outside the check
 

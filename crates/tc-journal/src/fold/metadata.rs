@@ -174,12 +174,13 @@ pub(crate) fn relationships(value: &PinGroupValue) -> Vec<Value> {
     out
 }
 
+/// tC4's `relationshipsFromPins` order (`journal/relationships.mjs:24-31`).
 const GROUP_ORDER: [PinGroup; 5] = [
     PinGroup::OriginalLanguage,
+    PinGroup::ExtraScripture,
     PinGroup::Primary,
     PinGroup::Fallback,
     PinGroup::Lexicon,
-    PinGroup::ExtraScripture,
 ];
 
 impl FoldState {
@@ -318,8 +319,12 @@ impl FoldState {
         }
         let mut relationships = Vec::new();
         for group in GROUP_ORDER {
+            // One row per repository, the first one wins, as tC4.
             for r in groups.remove(&group).unwrap_or_default() {
-                if !relationships.contains(&r) {
+                if !relationships
+                    .iter()
+                    .any(|seen: &Value| seen["id"] == r["id"])
+                {
                     relationships.push(r);
                 }
             }

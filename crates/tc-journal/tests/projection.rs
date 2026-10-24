@@ -488,6 +488,94 @@ fn a_pin_that_is_no_scripture_has_no_relationship_and_makes_no_anomaly() {
     assert_eq!(ids, ["dcs::uW/en_obs-tn"]);
 }
 
+/// tC4's `relationshipsFromPins` (`journal/relationships.mjs:24-42`): the original
+/// languages, the extra scripture, the primary set, the fallback set, then the lexicons, with
+/// one row per repository where the first one wins (docs/evidence/state-seed-check-2026-10-18.md
+/// §4.3).
+#[test]
+fn relationships_follow_tc4_order_and_keep_the_first_row_per_repository() {
+    let mut ana = Dev::new(1);
+    let slot = |repo: &str, version: &str, flavor: &str| {
+        obj(&[
+            ("repoPath", Json::from(repo)),
+            ("version", Json::from(version)),
+            ("flavor", Json::from(flavor)),
+        ])
+    };
+    let scripture = "scripture/textTranslation";
+    let changes = vec![
+        ana.one(
+            support::pins(
+                PinGroup::Lexicon,
+                &[(
+                    "ugl",
+                    slot("git.door43.org/uW/en_ugl", "v1", "peripheral/x-lexicon"),
+                )],
+            ),
+            vec![],
+        ),
+        ana.one(
+            support::pins(
+                PinGroup::Fallback,
+                &[("ult", slot("git.door43.org/uW/en_ult", "v2", scripture))],
+            ),
+            vec![],
+        ),
+        ana.one(
+            support::pins(
+                PinGroup::Primary,
+                &[
+                    ("ult", slot("git.door43.org/uW/en_ult", "v1", scripture)),
+                    (
+                        "tn",
+                        slot("git.door43.org/uW/en_tn", "v1", "parascriptural/x-tn"),
+                    ),
+                ],
+            ),
+            vec![],
+        ),
+        ana.one(
+            support::pins(
+                PinGroup::ExtraScripture,
+                &[("glt", slot("git.door43.org/uW/fr_glt", "v1", scripture))],
+            ),
+            vec![],
+        ),
+        ana.one(
+            support::pins(
+                PinGroup::OriginalLanguage,
+                &[(
+                    "ugnt",
+                    slot("git.door43.org/uW/el-x-koine_ugnt", "v0.34", scripture),
+                )],
+            ),
+            vec![],
+        ),
+    ];
+    let state = fold(&changes);
+    let source = state.metadata_source((1, 0));
+    let rows: Vec<(&str, &str)> = source
+        .relationships
+        .iter()
+        .map(|r| {
+            (
+                r["id"].as_str().expect("id"),
+                r["revision"].as_str().expect("revision"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("dcs::uW/el-x-koine_ugnt", "v0.34"),
+            ("dcs::uW/fr_glt", "v1"),
+            ("dcs::uW/en_tn", "v1"),
+            ("dcs::uW/en_ult", "v1"),
+            ("dcs::uW/en_ugl", "v1"),
+        ]
+    );
+}
+
 /// A story's check session reads that story's decisions and comments only (R1): the other
 /// forty-nine are never touched, however many they hold.
 #[test]
