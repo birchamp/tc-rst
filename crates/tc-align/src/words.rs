@@ -11,7 +11,6 @@ use tc_core::Md5;
 use tc_core::VerseSpan;
 use tc_journal::alignment::VerseOrder;
 use tc_journal::decision::TargetText;
-use tc_journal::json::JsonMap;
 use tc_journal::record::{SourceWord, TargetWord};
 use tc_usfm::Book;
 
@@ -392,7 +391,7 @@ mod tests {
         assert_eq!(verse.words()[0].strong.as_deref(), Some("G25320"));
         assert_eq!(
             verse.words()[1].extra,
-            JsonMap::from([("x-tw".to_owned(), Json::from("rc://x"))])
+            tc_journal::json::JsonMap::from([("x-tw".to_owned(), Json::from("rc://x"))])
         );
     }
 

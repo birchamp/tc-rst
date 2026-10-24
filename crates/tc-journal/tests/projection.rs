@@ -339,7 +339,7 @@ fn story_with_frames(template: &str, frames: &[(u16, &str)]) -> String {
         changes.push(ana.one(
             Record::Frame {
                 story,
-                frame: tc_journal::FrameNo(frame),
+                frame: tc_journal::FrameNo::new(frame),
                 value: text.into(),
             },
             vec![],
