@@ -119,6 +119,10 @@ wait_ci() {
   local card="$1" sha deadline done_runs
   [[ -z "$(git status --porcelain)" ]] || { echo "gates: --wait-ci needs a clean tree" >&2; return 1; }
   command -v gh > /dev/null || { echo "gates: --wait-ci needs gh on PATH" >&2; return 1; }
+  # Seconds here, before thirty minutes of CI: the cards, the claimed tests and the journey map.
+  python3 -I -B .audit/tools/board.py --check > /dev/null \
+    && node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs > /dev/null \
+    || { echo "gates: --wait-ci stops before pushing: board.py --check or the claims and coverage checks fail; run them to see why" >&2; return 1; }
   sha="$(git rev-parse HEAD)"
   git push origin "+$sha:refs/heads/gate/$card"
   echo "gates: pushed ${sha:0:8} to gate/$card; waiting for the ci and app-e2e runs"
