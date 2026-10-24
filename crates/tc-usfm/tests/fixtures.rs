@@ -8,7 +8,8 @@ mod common;
 use common::links;
 use std::path::{Path, PathBuf};
 use tc_core::VerseSpan;
-use tc_usfm::{Book, Document, Error, SegmentKind, TargetWord, parse_aligned, weave};
+use tc_usfm::raw::Document;
+use tc_usfm::{Book, Error, SegmentKind, TargetWord, parse_aligned, weave};
 
 fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures")

@@ -973,7 +973,7 @@ fn add_book(ctx: &Ctx<'_>, book: BookId, scope: &Scope, source: &str) -> R<Vec<P
         ))));
     }
     check_scope(ctx, book, scope)?;
-    let seeded = crate::seed::seed_book(
+    let seeded = tc_usfm::seed::seed_book(
         source,
         book.code(),
         book.english_name(),
