@@ -51,8 +51,8 @@
             ]
           }
         },
-        "startedAt": "2026-10-19T02:50:41.517Z",
-        "endedAt": "2026-10-19T02:50:41.708Z",
+        "startedAt": "2026-10-24T19:40:25.638Z",
+        "endedAt": "2026-10-24T19:40:25.717Z",
         "code": "open.unexplained-divergence",
         "rule": "R-8.7.5"
       }
@@ -93,7 +93,7 @@
       "message": "Refusal code: open.unexplained-divergence\n\nrefuse to open _local_/_local_/sample_burrito: derived state diverges from the journal projection in a way no journal prefix or §8.8 reconciliation explains — nothing was overwritten. Paths: checking/custom/notes.json (disk b76b51a69363eb7a07ff17d29be921f9 vs projected absent) Another program changed the files listed above, and the app cannot match the changes. Nothing was overwritten. Undo the outside change, or ask for help.",
       "name": "",
       "email": "",
-      "attachment": "translationCore 4.0.0-rc.1 (d310bf3) · Linux x86_64\nReport: open, 2026-10-19T02:50:41.708Z\n{\n  \"op\": \"open\",\n  \"ok\": false,\n  \"facts\": {\n    \"phases\": [],\n    \"error\": \"refuse to open _local_/_local_/sample_burrito: derived state diverges from the journal projection in a way no journal prefix or §8.8 reconciliation explains — nothing was overwritten. Paths: checking/custom/notes.json (disk b76b51a69363eb7a07ff17d29be921f9 vs projected absent)\",\n    \"refusal\": {\n      \"repoPath\": \"_local_/_local_/sample_burrito\",\n      \"paths\": [\n        {\n          \"ipath\": \"checking/custom/notes.json\",\n          \"diskMd5\": \"b76b51a69363eb7a07ff17d29be921f9\",\n          \"projectedMd5\": null\n        }\n      ]\n    }\n  },\n  \"startedAt\": \"2026-10-19T02:50:41.517Z\",\n  \"endedAt\": \"2026-10-19T02:50:41.708Z\",\n  \"code\": \"open.unexplained-divergence\",\n  \"rule\": \"R-8.7.5\"\n}\n",
+      "attachment": "translationCore 4.0.0-rc.2 (d25b787) · Linux x86_64\nReport: open, 2026-10-24T19:40:25.717Z\n{\n  \"op\": \"open\",\n  \"ok\": false,\n  \"facts\": {\n    \"phases\": [],\n    \"error\": \"refuse to open _local_/_local_/sample_burrito: derived state diverges from the journal projection in a way no journal prefix or §8.8 reconciliation explains — nothing was overwritten. Paths: checking/custom/notes.json (disk b76b51a69363eb7a07ff17d29be921f9 vs projected absent)\",\n    \"refusal\": {\n      \"repoPath\": \"_local_/_local_/sample_burrito\",\n      \"paths\": [\n        {\n          \"ipath\": \"checking/custom/notes.json\",\n          \"diskMd5\": \"b76b51a69363eb7a07ff17d29be921f9\",\n          \"projectedMd5\": null\n        }\n      ]\n    }\n  },\n  \"startedAt\": \"2026-10-24T19:40:25.638Z\",\n  \"endedAt\": \"2026-10-24T19:40:25.717Z\",\n  \"code\": \"open.unexplained-divergence\",\n  \"rule\": \"R-8.7.5\"\n}\n",
       "sending": false,
       "result": null
     },
@@ -155,9 +155,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:50:40.175Z#1",
+          "id": "2026-10-24T19:40:23.737Z#1",
           "op": "open",
-          "startedAt": "2026-10-19T02:50:40.175Z",
+          "startedAt": "2026-10-24T19:40:23.737Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -189,19 +189,19 @@
                       "checking/settings.json"
                     ]
                   },
-                  "startedAt": "2026-10-19T02:50:40.291Z",
-                  "endedAt": "2026-10-19T02:50:40.782Z"
+                  "startedAt": "2026-10-24T19:40:23.917Z",
+                  "endedAt": "2026-10-24T19:40:24.586Z"
                 }
               ]
             },
-            "startedAt": "2026-10-19T02:50:40.203Z",
-            "endedAt": "2026-10-19T02:50:40.782Z"
+            "startedAt": "2026-10-24T19:40:23.879Z",
+            "endedAt": "2026-10-24T19:40:24.586Z"
           }
         },
         {
-          "id": "2026-10-19T02:50:41.392Z#2",
+          "id": "2026-10-24T19:40:25.154Z#2",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:50:41.392Z",
+          "startedAt": "2026-10-24T19:40:25.154Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "message": "Checkpoint, leaving the project: TIT checks, settings, sources (tC4)"
@@ -219,16 +219,16 @@
                 ]
               }
             },
-            "startedAt": "2026-10-19T02:50:41.376Z",
-            "endedAt": "2026-10-19T02:50:41.488Z",
+            "startedAt": "2026-10-24T19:40:25.140Z",
+            "endedAt": "2026-10-24T19:40:25.346Z",
             "code": "checkpoint.divergence",
             "rule": "R-8.7.5"
           }
         },
         {
-          "id": "2026-10-19T02:50:41.505Z#3",
+          "id": "2026-10-24T19:40:25.561Z#3",
           "op": "open",
-          "startedAt": "2026-10-19T02:50:41.505Z",
+          "startedAt": "2026-10-24T19:40:25.561Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -249,8 +249,8 @@
                 ]
               }
             },
-            "startedAt": "2026-10-19T02:50:41.517Z",
-            "endedAt": "2026-10-19T02:50:41.708Z",
+            "startedAt": "2026-10-24T19:40:25.638Z",
+            "endedAt": "2026-10-24T19:40:25.717Z",
             "code": "open.unexplained-divergence",
             "rule": "R-8.7.5"
           }
@@ -634,7 +634,7 @@
       "_local_/_local_/sample_burrito": {
         "names": {},
         "actors": [
-          "af23d19c781604de"
+          "a460f48cc9c723be"
         ]
       }
     },
@@ -649,6 +649,7 @@
     "storyFrame": null,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "verses": 0,

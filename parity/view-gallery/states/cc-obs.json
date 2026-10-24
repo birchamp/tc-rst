@@ -1309,9 +1309,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:49:44.987Z#1",
+          "id": "2026-10-24T19:39:47.854Z#1",
           "op": "open",
-          "startedAt": "2026-10-19T02:49:44.987Z",
+          "startedAt": "2026-10-24T19:39:47.854Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito_obs"
           },
@@ -1335,19 +1335,19 @@
                     "seeded": true,
                     "regeneratedPaths": []
                   },
-                  "startedAt": "2026-10-19T02:49:45.218Z",
-                  "endedAt": "2026-10-19T02:49:47.868Z"
+                  "startedAt": "2026-10-24T19:39:48.025Z",
+                  "endedAt": "2026-10-24T19:39:48.582Z"
                 }
               ]
             },
-            "startedAt": "2026-10-19T02:49:45.068Z",
-            "endedAt": "2026-10-19T02:49:47.869Z"
+            "startedAt": "2026-10-24T19:39:47.995Z",
+            "endedAt": "2026-10-24T19:39:48.582Z"
           }
         },
         {
-          "id": "2026-10-19T02:49:48.869Z#2",
+          "id": "2026-10-24T19:39:49.401Z#2",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:49:48.869Z",
+          "startedAt": "2026-10-24T19:39:49.401Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito_obs",
             "message": "Checkpoint, leaving Understand: sources (tC4)"
@@ -1359,8 +1359,8 @@
               "message": "Checkpoint, leaving Understand: sources (tC4)",
               "written": []
             },
-            "startedAt": "2026-10-19T02:49:48.834Z",
-            "endedAt": "2026-10-19T02:49:50.502Z"
+            "startedAt": "2026-10-24T19:39:49.387Z",
+            "endedAt": "2026-10-24T19:39:49.676Z"
           }
         }
       ],
@@ -1373,7 +1373,7 @@
     "checkTool": null,
     "checkSession": null,
     "pickerProgress": {
-      "seq": 2
+      "seq": 1
     },
     "toolPos": {},
     "progressByProject": {
@@ -1749,7 +1749,7 @@
       "_local_/_local_/sample_burrito_obs": {
         "names": {},
         "actors": [
-          "a3b0a80329ec6f51"
+          "ae0c22d16a5fb23f"
         ]
       }
     },
@@ -1757,10 +1757,10 @@
     "syncResult": null,
     "verseConflicts": [],
     "team": {
-      "me": "a3b0a80329ec6f51",
+      "me": "ae0c22d16a5fb23f",
       "names": {},
       "actors": [
-        "a3b0a80329ec6f51"
+        "ae0c22d16a5fb23f"
       ]
     },
     "conflictReview": null,
@@ -1774,13 +1774,14 @@
           "mode": "check",
           "chapter": 1,
           "verse": 1,
-          "at": 1792378189177
+          "at": 1792870789484
         }
       }
     },
     "storyFrame": 1,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "testament": null,
