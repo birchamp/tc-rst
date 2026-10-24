@@ -31,24 +31,9 @@ export function testNames(repo) {
     if (rel.length === 4 && rel[2] === 'tests') exact.add(path.basename(file, '.rs'));
   }
   for (const file of walk(path.join(repo, 'parity'), (n) => n.endsWith('.mjs'))) {
-    const text = fs.readFileSync(file, 'utf8');
-    for (const m of text.matchAll(/\b(?:browserTest|test|it)\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) {
-      const title = m[2];
-      if (m[1] === '`' && title.includes('${')) {
-        const parts = title.split(/\$\{[^}]*\}/);
-        // A title that is mostly interpolation would match any claim; such a test is named by
-        // its file instead.
-        if (parts.join('').length < 12) continue;
-        const re = parts.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[A-Za-z0-9_-]+');
-        patterns.push(new RegExp(`^${re}$`));
-      } else {
-        exact.add(title);
-        // A title may start with its short label ("language-tags: a regional code ..."); a
-        // document may name the test by that label.
-        const label = title.match(/^([A-Za-z0-9_-]+):\s/);
-        if (label) exact.add(label[1]);
-      }
-    }
+    const titles = titlesOf(fs.readFileSync(file, 'utf8'));
+    for (const t of titles.exact) exact.add(t);
+    patterns.push(...titles.patterns);
   }
   const report = path.join(repo, 'parity/app/report.json');
   if (fs.existsSync(report)) {
@@ -59,6 +44,31 @@ export function testNames(repo) {
     for (const m of fs.readFileSync(scenarios, 'utf8').matchAll(/name:\s*'([^']+)'/g)) exact.add(m[1]);
   }
   return { exact, patterns, repo };
+}
+
+/** The test titles of one journey or test file: exact titles (and their leading labels), and
+ * template titles as patterns. */
+export function titlesOf(text) {
+  const exact = new Set();
+  const patterns = [];
+  for (const m of text.matchAll(/\b(?:browserTest|test|it)\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) {
+    const title = m[2];
+    if (m[1] === '`' && title.includes('${')) {
+      const parts = title.split(/\$\{[^}]*\}/);
+      // A title that is mostly interpolation would match any claim; such a test is named by its
+      // file instead.
+      if (parts.join('').length < 12) continue;
+      const re = parts.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[A-Za-z0-9_-]+');
+      patterns.push(new RegExp(`^${re}$`));
+    } else {
+      exact.add(title);
+      // A title may start with its short label ("language-tags: a regional code ..."); a document
+      // may name the test by that label.
+      const label = title.match(/^([A-Za-z0-9_-]+):\s/);
+      if (label) exact.add(label[1]);
+    }
+  }
+  return { exact, patterns };
 }
 
 /** Whether a claimed name names a test that exists. A `mod::fn` path resolves by its last
