@@ -719,8 +719,9 @@ pub fn arb_cause() -> impl Strategy<Value = Cause> {
         prop::option::of(arb_text()).prop_map(|user| ImportSource::Tc3 {
             user: user.map(Into::into)
         }),
-        arb_text().prop_map(|f| ImportSource::Usfm {
-            file_name: f.into()
+        (arb_text(), any::<bool>()).prop_map(|(f, unknown_base)| ImportSource::Usfm {
+            file_name: f.into(),
+            unknown_base
         }),
         arb_text().prop_map(|f| ImportSource::Burrito {
             file_name: f.into()

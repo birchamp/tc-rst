@@ -135,6 +135,21 @@ impl Ctx<'_> {
     }
 }
 
+/// "Update a book from USFM" (§13.6, H20). The verses left as they were, with words in the
+/// project and none in the file, are the reply's `kept`.
+fn update_book(ctx: &Ctx<'_>, book: BookId, bytes: &[u8], file_name: &str) -> R<Plan> {
+    ctx.require_kind(ProjectKind::Bible)?;
+    let plan = ctx
+        .fold
+        .plan_update_book(book, bytes, file_name)
+        .map_err(|e| refused(Refusal::Book(e)))?;
+    Ok(Plan {
+        changes: plan.changes,
+        skipped: Vec::new(),
+        kept: plan.left_as_it_was,
+    })
+}
+
 /// B1 for one command.
 pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
     let changes = match command {
@@ -210,6 +225,11 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             plan,
         } => resolve_pins(ctx, conflict, shown, plan)?,
         Command::UndoOutsideEdit { batch } => return undo_outside_edit(ctx, *batch),
+        Command::UpdateBook {
+            book,
+            bytes,
+            file_name,
+        } => return update_book(ctx, *book, bytes, file_name),
         Command::ResolveOutsideEdit {
             batch,
             keep,
@@ -1030,6 +1050,7 @@ fn add_book_text(
         .map_err(|e| refused(Refusal::Book(format!("the file does not read: {e}"))))?;
     let cause = Cause::Import(ImportSource::Usfm {
         file_name: file_name.into(),
+        unknown_base: false,
     });
     if parts.chapters.is_empty() {
         return Err(refused(Refusal::Book(

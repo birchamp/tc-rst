@@ -444,6 +444,7 @@ fn import_book(dev: &mut Dev, book: BookId, parts: &codec::BookParts) -> Vec<Cha
         items,
         Cause::Import(ImportSource::Usfm {
             file_name: format!("{}.usfm", book.code()).into(),
+            unknown_base: false,
         }),
     )
 }
@@ -831,6 +832,7 @@ fn alignments_follow_their_text_on_the_rail_as_in_the_file() {
             alignments.into_iter().map(|r| (r, vec![])).collect(),
             Cause::Import(ImportSource::Usfm {
                 file_name: format!("{}.usfm", book.code()).into(),
+                unknown_base: false,
             }),
         ));
     }

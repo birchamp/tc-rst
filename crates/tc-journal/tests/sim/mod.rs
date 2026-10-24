@@ -540,6 +540,7 @@ impl Sim {
             titus,
             Cause::Import(ImportSource::Usfm {
                 file_name: "TIT.usfm".into(),
+                unknown_base: false,
             }),
         );
         let ruth = import_items(BookId::Ruth, &[3]);
@@ -548,6 +549,7 @@ impl Sim {
             ruth,
             Cause::Import(ImportSource::Usfm {
                 file_name: "RUT.usfm".into(),
+                unknown_base: false,
             }),
         );
         let seed = seed_items(BookId::Titus, &[5, 4, 2], "___");

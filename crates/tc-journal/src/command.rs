@@ -80,6 +80,13 @@ pub enum Command {
         usfm: String,
         file_name: String,
     },
+    /// "Update a book from USFM" with a file chosen from anywhere (§13.6, H20): the
+    /// file's bytes as read, compared with the project with no base. One batch.
+    UpdateBook {
+        book: BookId,
+        bytes: Vec<u8>,
+        file_name: String,
+    },
     RemoveBook {
         book: BookId,
         presence_shown: ShownToken,

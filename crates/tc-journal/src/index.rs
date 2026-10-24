@@ -809,7 +809,10 @@ fn cause_code(cause: CauseClass) -> u8 {
             unknown_base: false,
         } => 4,
         CauseClass::External { unknown_base: true } => 5,
-        CauseClass::Import => 6,
+        CauseClass::Import {
+            unknown_base: false,
+        } => 6,
+        CauseClass::Import { unknown_base: true } => 11,
         CauseClass::Seed => 7,
         CauseClass::StartOver => 8,
         CauseClass::System => 9,
@@ -827,7 +830,10 @@ fn cause_of(code: u8) -> R<CauseClass> {
             unknown_base: false,
         },
         5 => CauseClass::External { unknown_base: true },
-        6 => CauseClass::Import,
+        6 => CauseClass::Import {
+            unknown_base: false,
+        },
+        11 => CauseClass::Import { unknown_base: true },
         7 => CauseClass::Seed,
         8 => CauseClass::StartOver,
         9 => CauseClass::System,
