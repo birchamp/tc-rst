@@ -69,7 +69,10 @@ pub enum FieldKind {
     StoryTitle,
     /// An OBS story's reference line.
     StoryRef,
-    /// A field of the test service (`test/fieldStore`), which exists only in test builds.
+    /// A field of the test service (`test/fieldStore`). The variant is in every build: cargo
+    /// unifies tc-api's features across the workspace, so a crate built without its own test
+    /// hooks may still see it and must match it. Only a test build reads it off the wire.
+    #[cfg_attr(not(feature = "test-hooks"), serde(skip))]
     Test,
 }
 
