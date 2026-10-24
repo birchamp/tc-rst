@@ -796,3 +796,90 @@ async fn two_versions_of_one_verse_are_a_listed_conflict_after_sync() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+/// Every file under `ingredients/` and `metadata.json`, by path.
+fn project_files(folder: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![folder.join("ingredients")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                let rel = path
+                    .strip_prefix(folder)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.insert(rel, std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    out.insert(
+        "metadata.json".into(),
+        std::fs::read(folder.join("metadata.json")).unwrap(),
+    );
+    out
+}
+
+/// J26: three computers, each with its own saves, converge through Door43 with the same
+/// project files byte for byte (INV-SYNC-CONVERGES).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn three_devices_converge_with_byte_identical_derived_files() {
+    let door43 = door43("titus-three").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-three");
+    synced(&sync(&a, &door43).await);
+    let repo: tc_door43::RepoRef = format!("{}/titus-three", seeded::USER).parse().unwrap();
+    let mut others = Vec::new();
+    for name in ["juan", "maria"] {
+        let computer = computer(dir.path(), name);
+        let folder = tc_sync::join(
+            &computer.store,
+            &door43.client,
+            Some(&door43.session),
+            &repo,
+            "Titus",
+        )
+        .await
+        .unwrap();
+        others.push((computer, folder));
+    }
+    let b = open(&others[0].0, &others[0].1);
+    let c = open(&others[1].0, &others[1].1);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    save(&b, 1, 2, "in hope, as Juan has it");
+    save(&c, 1, 3, "in his time, as Maria has it");
+    for handle in [&a, &b, &c, &a, &b] {
+        synced(&sync(handle, &door43).await);
+    }
+    for handle in [&a, &b, &c] {
+        assert_eq!(words(handle, 1, 1).as_deref(), Some("Paul, as Ana has it"));
+        assert_eq!(
+            words(handle, 1, 2).as_deref(),
+            Some("in hope, as Juan has it")
+        );
+        assert_eq!(
+            words(handle, 1, 3).as_deref(),
+            Some("in his time, as Maria has it")
+        );
+    }
+    a.close().unwrap();
+    b.close().unwrap();
+    c.close().unwrap();
+    let first = project_files(&folder_a);
+    for (_, folder) in &others {
+        let files = project_files(folder);
+        assert_eq!(
+            files.keys().collect::<Vec<_>>(),
+            first.keys().collect::<Vec<_>>()
+        );
+        for (path, bytes) in &first {
+            assert_eq!(&files[path], bytes, "{path} differs");
+        }
+    }
+}
