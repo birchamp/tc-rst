@@ -203,6 +203,10 @@ fn updating_from_an_old_export_reverts_nothing() {
         words(&handle, 1, 1).as_deref(),
         Some("Paul, a slave of God")
     );
+    assert!(
+        conflicted(&handle, &verse(1, 1)),
+        "a file that sets an older text back is a choice to show, never skipped (§13.6 U3)"
+    );
     handle.close().unwrap();
 }
 
