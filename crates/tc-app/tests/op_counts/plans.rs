@@ -149,12 +149,13 @@ async fn plan(s: &Scale) -> PlanView {
         other => panic!("{other:?}"),
     };
     let mut watch = s.app.jobs().watch(job).unwrap();
+    // The bound only catches a hang: GitHub's Windows runner took over 120 s for the plan.
     let state = tokio::time::timeout(
-        std::time::Duration::from_secs(120),
+        std::time::Duration::from_secs(600),
         watch.wait_for(tc_app::jobs::JobRegistry::is_ended),
     )
     .await
-    .expect("the plan ends")
+    .expect("hung: the plan did not end in 600 s")
     .unwrap()
     .clone();
     match state {
