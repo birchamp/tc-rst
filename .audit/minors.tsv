@@ -132,6 +132,12 @@ FIX-R	Settings' language name falls back to the first name listed when the metad
 FIX-R	comments in the helps panel still read in the pane's direction; no decision recorded	crates/tc-ui/src/views/helps_panel.rs comments
 FIX-R	a section save's Resume snippet reads the first verse after the save; if the save made a conflict it may show a teammate's words (unverified)	crates/tc-app/src/section.rs
 SWEEP	No Align test opens or saves a verse whose text starts on the line after its \v marker; PLAN's new declared difference (the rebuild aligns it, tC4 #800 refuses it) rests on reading tc-usfm's indexer_body	docs/PLAN.md; crates/tc-usfm/src/codec.rs indexer_body
+INT-6	quick-timing holds uncommitted work nobody has judged (55 files, the untracked crates/tc-timing/ among them)	refs/wip/quick-timing/2026-10-23
+INT-6	lane-b7 holds uncommitted work nobody has judged (3 files)	refs/wip/lane-b7/2026-10-23
+INT-6	lane-merge holds uncommitted work nobody has judged (2 files)	refs/wip/lane-merge/2026-10-23
+A8	fixed: a cancel after Door43 deleted the old token	2dfa188c
+A8	fixed: FlowRequest::SignIn had no product caller	f5c38d12
+INT-6	When the root drive is the fuller one, the watcher's prune frees build folders on /home, which frees nothing there; it only prints the act warning	.audit/tools/watch-runs.py
 INT-5	union_test.py checks that both appended rows survive a merge but not the header and base row	.audit/tools/union_test.py
 INT-5	HANDOFF's owner section dropped smaller points not carried to README: keep working unless truly blocked; no piles of special cases; build-lane.js tags each finding with its harm	git show eaf809d1:.audit/HANDOFF.md
 INT-5	INV-ONE-LIVE-TRACKER (history first lines) has a grep but no CI check	.audit/roadmap/units/INT-5.md funnel card

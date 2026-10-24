@@ -4,18 +4,18 @@ title: Rescue stray work and free the disk
 track: A
 lane: integration
 milestone: M0
-state: todo
-owner: none
-branch: none
-worktree: none
+state: gating
+owner: integration lane (Claude Code 3d07d5f8)
+branch: track-INT-6
+worktree: .worktrees/track-INT-6
 depends: [INT-4]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: Wait for a merge turn from the orchestrator (local_d49edca7); then merge main in (keep INT-5's watch-runs.py and HANDOFF edits), make the merge commit in a separate worktree, run scripts/gates.sh --journeys there, move main only on --check-receipt.
 blocked_by: none
 ---
 
@@ -292,3 +292,14 @@ files.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/process-integration.md
+- 2026-10-23 17:00 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-INT-6 from main eaf809d1 while INT-7, INT-5 and SWEEP wait for merge turns | python3 -I -B .audit/tools/board.py
+- 2026-10-23 17:00 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | before: `/dev/sda4 905G 295G 565G 35% /` and `/dev/sdb2 916G 637G 233G 74% /home` (the root drive was freed since 2026-10-21). Unowned worktrees with changes are the card's three; saved with a copy of each index: refs/wip/quick-timing/2026-10-23 1aac5ece (55), refs/wip/lane-b7/2026-10-23 9a504201 (3), refs/wip/lane-merge/2026-10-23 ab8f616a (2). Each ref holds exactly the changed and untracked files (the diff check printed nothing) and each status count is unchanged. int-8-main (6) and track-FIX-R (3) are owned by running sessions and were not touched | git for-each-ref refs/wip/
+- 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | step 5 | none | done ahead of steps 2-4 while step 2's tests wait for a heavy-run slot: relocate_idle, its `free < 100` block and the now unused du() deleted; free_gb(path) added; the low-space check watches whichever of / and /home has less room and names it; the prune reuses busy_paths() instead of a second copy; HANDOFF's Build folders row replaced as the card says | grep -nE 'relocate_idle|/var/tmp' .audit/tools/watch-runs.py
+- 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | none | the list (run from the main checkout, with card worktrees read from main and every track-* branch): REMOVE .claude/worktrees/lane-b4b (182 MB; build folder /var/tmp/tc-rst-target/lane-b4b 30 GB) and lane-b5b (186 MB; /var/tmp/tc-rst-target/lane-b5b 43 GB); KEEP-UNMERGED lane-a8, lane-c1a, storage; KEEP-DIRTY lane-b7, lane-merge, quick-timing; KEEP-SESSION s2-verify; no orphan build folders (lane-fproxy-gnu and merge-main-windows-gnu are gone). Total about 73 GB. Asked through the orchestrator session | rulings/2026-10-23-disk-cleanup.md
+- 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner: "yes delete" | rulings/2026-10-23-disk-cleanup.md
+- 2026-10-23 17:02 EDT | integration lane (Claude Code 3d07d5f8) | step 4 | none | probe: `git worktree remove` refused the changed probe (`contains modified or untracked files`, exit 128), then removed it clean. Removed lane-b4b and lane-b5b with `git worktree remove` and their /var/tmp build folders; both branches still listed. df before: `/ 905G 295G 565G 35%`, `/home 916G 654G 217G 76%`; after: `/ 905G 222G 637G 26%`, `/home 916G 655G 215G 76%` | git worktree list; git branch --list lane-b4b lane-b5b
+- 2026-10-23 17:38 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | f5c38d12 | cherry-picked with -x, no conflict: 58aa8a9 as 2dfa188c, 599e516 as f5c38d12; two A8 rows appended. The account test passes; with 2dfa188c's account.rs reverted it fails (`panicked at crates/tc-app/tests/app/account.rs:687:5: assertion left == right failed`), restored; screen_record 48 passed; account-menu, j11-sign-in and share-open journeys: # pass 16, # fail 0, # skipped 0 | cargo test -p tc-app --test app a_cancel_once_the_token_calls_started_forgets_the_token_an_earlier_session_kept
+- 2026-10-23 17:41 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | one pass by a fresh read-only reviewer agent: the three refs hold exactly their worktrees' changes (diff check empty, counts 55/3/2); 2dfa188c and f5c38d12 equal 58aa8a9 and 599e516, touch the seven named files, match tC4 (a cancel during the token calls signs out), no deadlock, no project data touched, account test 1 passed; only lane-b4b and lane-b5b removed, branches kept; watch-runs.py parses with no relocate_idle, /var/tmp or du. §8: code deletes the unused flow and the relocation; checks exist, fail when reverted, run in CI; reach: a translator can cancel a sign-in; siblings: the prune missed .worktrees/*/target; no-loss: stray work saved first; one ruling file. No blocker, no major; two minors | reviewer report in this session
+- 2026-10-23 17:41 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | the prune now also covers .worktrees/*/target, where builds live now; the other minor (pruning /home frees nothing when / is the fuller drive) appended to .audit/minors.tsv | python3 -I -c "import ast; ast.parse(open('.audit/tools/watch-runs.py').read())"
+- 2026-10-24 15:06 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner said "yes delete" to removing about 270 GB of old build folders (to the orchestrator session): the target folders of .worktrees/resume-build-lane, the six .worktrees/s2-* worktrees and .worktrees/rebuild-process-improvements. This session's permission check refused the rm (the yes did not reach this session), so the orchestrator session ran it with the owner's direct yes | message from the orchestrator, 2026-10-24
+- 2026-10-24 15:06 EDT | integration lane (Claude Code 3d07d5f8) | note | none | done by the orchestrator session: only compiler output deleted (debug, release, wasm32-unknown-unknown in the six s2-* worktrees and rebuild-process-improvements; debug, release, wasm32 and tc-ui-app* in resume-build-lane's target; lanes/b11/target); kept resume-patches, parity-rust, store-adapter-bench, tmp and the jsonl, and the b11 worktree itself. /home free went from 257G to 493G (orchestrator's figures); / unchanged at 637G | df -h / /home
