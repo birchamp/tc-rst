@@ -12,9 +12,7 @@ use common::*;
 use serde_json::Value;
 use tc_align::Aligner;
 use tc_align::usfm::{usfm_groups, weave_verse};
-use tc_align::{
-    AlignedRun, AlignmentValue, Malformed, TargetVerse, VerseState, record, verse_status,
-};
+use tc_align::{AlignedRun, AlignmentValue, Malformed, TargetVerse, VerseState, verse_status};
 use tc_journal::alignment::split_aligned;
 use tc_journal::ids::VerseNo;
 use tc_journal::json::Json;
@@ -263,7 +261,7 @@ fn the_sample_projects_record_reads_and_is_valid() {
     ))
     .unwrap();
     let stored = &file["chapters"]["1"]["1"];
-    let value = record::from_record(stored, basis(1)).unwrap();
+    let value = tc4_record(stored).unwrap();
     assert_eq!(value.alignments.len(), 10);
     assert_eq!(value.word_bank.len(), 21);
     assert!(!value.done && !value.marked_invalid);
@@ -301,7 +299,7 @@ fn a_record_that_breaks_the_rules_is_refused_and_nothing_it_holds_is_dropped() {
     let refused = |edit: &dyn Fn(&mut Value)| {
         let mut stored = original.clone();
         edit(&mut stored);
-        record::from_record(&stored, basis(1)).unwrap_err()
+        tc4_record(&stored).unwrap_err()
     };
     refused(&|r| r["alignments"][0]["bottomWords"][0]["occurrence"] = Value::from(0));
     refused(&|r| r["targetVerseMd5"] = Value::from("F8AEE622DAFF1496BCCC7C2E3B358B43"));
@@ -329,7 +327,7 @@ fn a_record_that_breaks_the_rules_is_refused_and_nothing_it_holds_is_dropped() {
     stored["note"] = Value::from("kept");
     stored["alignments"][0]["note"] = Value::from("kept");
     stored["wordBank"][0]["disabled"] = Value::Bool(true);
-    let mut value = record::from_record(&stored, basis(1)).unwrap();
+    let mut value = tc4_record(&stored).unwrap();
     assert_eq!(value.alignments[0].top_words[0].occurrence, 1);
     assert_eq!(value.extra.get("note"), Some(&Json::from("kept")));
     assert_eq!(

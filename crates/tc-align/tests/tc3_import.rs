@@ -10,7 +10,7 @@ use tc_align::Alignment;
 
 use common::*;
 use serde_json::Value;
-use tc_align::{Aligner, record};
+use tc_align::Aligner;
 
 fn typed_words(list: &Value) -> usize {
     list.as_array()
@@ -27,8 +27,7 @@ fn every_record_of_a_tc3_project_reads_and_writes_back_with_tc3s_word_type() {
     let (mut with_type, mut typed_total) = (0, 0);
     for verse in &imported {
         let at = &verse.reference;
-        let value =
-            record::from_record(&verse.record, basis(1)).unwrap_or_else(|e| panic!("{at}: {e}"));
+        let value = tc4_record(&verse.record).unwrap_or_else(|e| panic!("{at}: {e}"));
         let typed = typed_words(&verse.record["wordBank"]);
         assert_eq!(
             value.all_target_words().filter(|w| typed_word(w)).count(),
@@ -47,7 +46,7 @@ fn every_record_of_a_tc3_project_reads_and_writes_back_with_tc3s_word_type() {
 fn a_tc3_record_opens_as_it_is_and_tc3s_word_type_goes_with_the_word() {
     let imported = imported();
     let verse = imported.iter().find(|v| v.reference == "1:1").unwrap();
-    let stored = record::from_record(&verse.record, basis(1)).unwrap();
+    let stored = tc4_record(&verse.record).unwrap();
     assert!(typed_words(&verse.record["wordBank"]) > 0);
     let mut aligner = Aligner::open(
         Some(&stored),

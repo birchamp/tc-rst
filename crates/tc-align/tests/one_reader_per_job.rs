@@ -8,7 +8,7 @@ mod common;
 use common::*;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use tc_align::{AlignmentGroup, AlignmentValue, record};
+use tc_align::{AlignmentGroup, AlignmentValue};
 use tc_core::BookId;
 use tc_journal::alignment::split_aligned;
 use tc_journal::fold::decode_alignments;
@@ -18,35 +18,7 @@ use tc_journal::record::Record;
 const SAMPLE: &str = "fixtures/tc4/sample-burrito/ingredients/checking/alignments/TIT.json";
 const EN_ULT: &str = "fixtures/tc4/test-fixtures/usfm-corpus/en_ult-TIT-aligned.usfm";
 
-/// The fields of two values that differ, each with both values.
-fn differences(a: &AlignmentValue, b: &AlignmentValue) -> Vec<String> {
-    let mut out = Vec::new();
-    macro_rules! field {
-        ($name:ident) => {
-            if a.$name != b.$name {
-                out.push(format!(
-                    "{}: {:?} / {:?}",
-                    stringify!($name),
-                    a.$name,
-                    b.$name
-                ));
-            }
-        };
-    }
-    field!(span_end);
-    field!(alignments);
-    field!(word_bank);
-    field!(target_verse_md5);
-    field!(source_version);
-    field!(source);
-    field!(done);
-    field!(marked_invalid);
-    field!(dismissed);
-    field!(extra);
-    out
-}
-
-/// `record` read by the sidecar reader, as a one-verse sidecar of TIT.
+/// `record` read by the sidecar reader, as a one-verse sidecar of TIT this app wrote.
 fn sidecar(chapter: &str, verse: &str, record: &Value) -> AlignmentValue {
     let file = json!({ "chapters": { chapter: { verse: record } } });
     let records = decode_alignments(BookId::Titus, file.to_string().as_bytes()).unwrap();
@@ -56,38 +28,32 @@ fn sidecar(chapter: &str, verse: &str, record: &Value) -> AlignmentValue {
     }
 }
 
-fn compare_sidecar(reference: &str, record: &Value, found: &mut Vec<String>) {
-    let (chapter, verse) = reference.split_once(':').unwrap();
-    let span_end = verse.split('-').next_back().unwrap().parse().unwrap();
-    let kept = sidecar(chapter, verse, record);
-    match record::from_record(record, basis(span_end)) {
-        Ok(other) => found.extend(
-            differences(&kept, &other)
-                .into_iter()
-                .map(|d| format!("{reference} {d}")),
-        ),
-        Err(e) => found.push(format!("{reference} from_record refuses: {e}")),
-    }
-}
-
+/// Every tC4 and tC3 record reads, as tC4 wrote it, into the value the removed second reader
+/// (`tc_align::record::from_record`) gave (`tests/expected/tc4_records.txt`), and, with
+/// `invalid` false in all of them, as this app's own sidecar reads it.
 #[test]
 fn the_sidecar_readers_agree_on_every_tc4_record() {
-    let mut found = Vec::new();
     let file: Value = serde_json::from_str(&read(SAMPLE)).unwrap();
-    let mut records = 0;
+    let mut records = Vec::new();
     for (chapter, verses) in file["chapters"].as_object().unwrap() {
         for (verse, record) in verses.as_object().unwrap() {
-            compare_sidecar(&format!("{chapter}:{verse}"), record, &mut found);
-            records += 1;
+            records.push((format!("{chapter}:{verse}"), record.clone()));
         }
     }
-    for verse in imported() {
-        compare_sidecar(&verse.reference, &verse.record, &mut found);
-        records += 1;
-    }
-    println!("{records} records, {} disagreements", found.len());
-    for line in &found {
-        println!("sidecar {line}");
+    records.extend(imported().into_iter().map(|v| (v.reference, v.record)));
+    let expected = read("crates/tc-align/tests/expected/tc4_records.txt");
+    let expected: Vec<&str> = expected.lines().collect();
+    assert_eq!(records.len(), expected.len());
+    for ((reference, record), expected) in records.iter().zip(expected) {
+        let value = tc4_record(record).unwrap_or_else(|e| panic!("{reference}: {e}"));
+        assert_eq!(format!("{reference} {value:?}"), expected);
+        let (chapter, verse) = reference.split_once(':').unwrap();
+        // The sidecar's span is its verse key's; the helper reads every record at 1:1.
+        let own = AlignmentValue {
+            span_end: value.span_end,
+            ..sidecar(chapter, verse, record)
+        };
+        assert_eq!(own, value, "{reference}");
     }
 }
 
@@ -159,4 +125,25 @@ fn the_aligned_usfm_readers_give_tc4s_cards_on_en_ult_titus() {
         read += 1;
     }
     assert_eq!(read, 46);
+}
+
+/// tC4 stores a person's "invalid" mark as `invalid`; this app's sidecar writes `invalid`
+/// computed and keeps the mark in `markedInvalid`. A field the reader cannot keep whole is
+/// refused, never read as nothing.
+#[test]
+fn each_writers_invalid_reads_as_that_writer_meant_it() {
+    let file: Value = serde_json::from_str(&read(SAMPLE)).unwrap();
+    let mut record = file["chapters"]["1"]["1"].clone();
+    record["invalid"] = Value::Bool(true);
+    assert!(tc4_record(&record).unwrap().marked_invalid);
+    assert!(!sidecar("1", "1", &record).marked_invalid);
+    record["markedInvalid"] = Value::Bool(true);
+    assert!(sidecar("1", "1", &record).marked_invalid);
+
+    let mut strong = file["chapters"]["1"]["1"].clone();
+    strong["alignments"][0]["topWords"][0]["strong"] = json!(39720);
+    assert!(tc4_record(&strong).is_err());
+    let mut done = file["chapters"]["1"]["1"].clone();
+    done["done"] = json!("yes");
+    assert!(tc4_record(&done).is_err());
 }

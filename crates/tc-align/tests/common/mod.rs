@@ -7,7 +7,9 @@
 use serde_json::{Map, Value};
 use std::io::Read;
 use std::path::PathBuf;
-use tc_align::{AlignmentValue, Basis, SourceVerse, SourceWord, TargetVerse, TargetWord, record};
+use tc_align::{
+    Alignment as _, AlignmentValue, Basis, SourceVerse, SourceWord, TargetVerse, TargetWord,
+};
 use tc_core::VerseSpan;
 use tc_journal::ids::VerseNo;
 use tc_journal::json::{Json, JsonMap};
@@ -81,7 +83,7 @@ pub fn sample_alignments() -> Value {
 
 /// tC4's conformance sample TIT 1:1: its record, as a value, and the verse's content.
 pub fn sample_tit_1_1() -> (AlignmentValue, String) {
-    let value = record::from_record(&sample_alignments()["chapters"]["1"]["1"], basis(1)).unwrap();
+    let value = tc4_record(&sample_alignments()["chapters"]["1"]["1"]).unwrap();
     (value, verse_body(SAMPLE_TIT, "1:1"))
 }
 
@@ -138,7 +140,22 @@ pub fn word(text: &str, occurrence: u32, occurrences: u32) -> TargetWord {
 
 /// A tC4 §5.1 record read as a value.
 pub fn value_of(record_json: &Value) -> AlignmentValue {
-    record::from_record(record_json, basis(1)).unwrap()
+    tc4_record(record_json).unwrap()
+}
+
+/// A tC3 or tC4 record of TIT 1:1 as an import reads it, held to the rules every edit keeps.
+pub fn tc4_record(record: &Value) -> Result<AlignmentValue, tc_align::Error> {
+    let (_, _, value) = tc_journal::fold::decode_alignment_record(
+        record,
+        "1:1",
+        1,
+        1,
+        1,
+        tc_journal::fold::Writer::Tc4,
+    )
+    .map_err(|e| tc_align::Error::Record(e.to_string()))?;
+    value.well_formed()?;
+    Ok(value)
 }
 
 /// A word list of a tC4 record (`topWords`, `bottomWords` or `wordBank`) as target words.

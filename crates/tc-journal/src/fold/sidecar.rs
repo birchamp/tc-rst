@@ -79,26 +79,51 @@ fn resource(v: &Value, at: &str) -> Result<ResourceRef, SidecarError> {
     })
 }
 
+/// A word's occurrence count: a number, or a string of digits as tC4's
+/// `normalizeOccurrences` reads it (tC3 wrote strings).
+fn occurrence(m: &Map<String, Value>, key: &str, at: &str) -> Result<u32, SidecarError> {
+    match m.get(key) {
+        Some(Value::String(s)) if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) => s
+            .parse()
+            .map_err(|_| fail(at, format!("{key} is not a count"))),
+        _ => number(m, key, at),
+    }
+}
+
+/// A flag that is absent, or `true` or `false`; anything else would be lost if read as
+/// false.
+fn strict_flag(m: &Map<String, Value>, key: &str, at: &str) -> Result<bool, SidecarError> {
+    match m.get(key) {
+        None => Ok(false),
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(_) => Err(fail(at, format!("{key} is not true or false"))),
+    }
+}
+
 fn target_word(v: &Value, at: &str) -> Result<TargetWord, SidecarError> {
     let m = obj(v, at)?;
     Ok(TargetWord {
         word: string(m, "word", at)?,
-        occurrence: number(m, "occurrence", at)?,
-        occurrences: number(m, "occurrences", at)?,
+        occurrence: occurrence(m, "occurrence", at)?,
+        occurrences: occurrence(m, "occurrences", at)?,
         extra: extra(m, &["word", "occurrence", "occurrences"], at)?,
     })
 }
 
 fn source_word(v: &Value, at: &str) -> Result<SourceWord, SidecarError> {
     let m = obj(v, at)?;
-    let opt = |key: &str| m.get(key).and_then(Value::as_str).map(str::to_owned);
+    let opt = |key: &str| match m.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(fail(at, format!("{key} is not a string"))),
+    };
     Ok(SourceWord {
         word: string(m, "word", at)?,
-        strong: opt("strong"),
-        lemma: opt("lemma"),
-        morph: opt("morph"),
-        occurrence: number(m, "occurrence", at)?,
-        occurrences: number(m, "occurrences", at)?,
+        strong: opt("strong")?,
+        lemma: opt("lemma")?,
+        morph: opt("morph")?,
+        occurrence: occurrence(m, "occurrence", at)?,
+        occurrences: occurrence(m, "occurrences", at)?,
         extra: extra(
             m,
             &[
@@ -128,7 +153,17 @@ fn list<T>(
         .collect()
 }
 
-/// Every alignment record of an alignments sidecar.
+/// Who wrote an alignment record, which decides what its `invalid` means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Writer {
+    /// This app's projection (§7.7): `invalid` is computed and ignored, and the mark a person
+    /// set is `markedInvalid`.
+    ThisApp,
+    /// tC3 or tC4 (their §5.1 record): the stored `invalid` is the mark.
+    Tc4,
+}
+
+/// Every alignment record of an alignments sidecar this app wrote.
 pub fn decode_alignments(book: BookId, bytes: &[u8]) -> Result<Vec<Record>, SidecarError> {
     let doc: Value = serde_json::from_slice(bytes).map_err(|e| fail("the file", e.to_string()))?;
     let doc = obj(&doc, "the file")?;
@@ -154,66 +189,106 @@ pub fn decode_alignments(book: BookId, bytes: &[u8]) -> Result<Vec<Record>, Side
                 .map(|v| v.parse().map_err(|_| fail(&at, "the span is not a number")))
                 .transpose()?
                 .unwrap_or(first);
-            let m = obj(record, &at)?;
-            let groups = list(m, "alignments", &at, |g, at| {
-                let g = obj(g, at)?;
-                Ok(AlignmentGroup {
-                    top_words: list(g, "topWords", at, source_word)?,
-                    bottom_words: list(g, "bottomWords", at, target_word)?,
-                    extra: extra(g, &["topWords", "bottomWords"], at)?,
-                })
-            })?;
-            let (c, v) = match m.get("anchor") {
-                Some(anchor) => {
-                    let a = obj(anchor, &at)?;
-                    (
-                        u16::try_from(number(a, "chapter", &at)?).unwrap_or(0),
-                        u16::try_from(number(a, "verse", &at)?).unwrap_or(0),
-                    )
-                }
-                None => (chapter, first),
-            };
-            let span_end = match m.get("spanEnd") {
-                Some(_) => u16::try_from(number(m, "spanEnd", &at)?).unwrap_or(0),
-                None => last,
-            };
-            let value = AlignmentValue {
-                span_end: VerseNo::new(span_end).ok_or_else(|| fail(&at, "verse 0"))?,
-                alignments: groups,
-                word_bank: list(m, "wordBank", &at, target_word)?,
-                target_verse_md5: md5(m, "targetVerseMd5", &at)?,
-                source_version: string(m, "sourceVersion", &at)?.into(),
-                source: m.get("source").map(|s| resource(s, &at)).transpose()?,
-                done: flag(m, "done"),
-                marked_invalid: flag(m, "markedInvalid"),
-                dismissed: flag(m, "dismissed"),
-                extra: extra(
-                    m,
-                    &[
-                        "alignments",
-                        "wordBank",
-                        "invalid",
-                        "targetVerseMd5",
-                        "sourceVersion",
-                        "done",
-                        "source",
-                        "markedInvalid",
-                        "dismissed",
-                        "anchor",
-                        "spanEnd",
-                    ],
-                    &at,
-                )?,
-            };
+            let (chapter, verse, value) =
+                decode_alignment_record(record, &at, chapter, first, last, Writer::ThisApp)?;
             out.push(Record::Alignment {
                 book,
-                chapter: ChapterNo::new(c).ok_or_else(|| fail(&at, "chapter 0"))?,
-                verse: VerseNo::new(v).ok_or_else(|| fail(&at, "verse 0"))?,
+                chapter,
+                verse,
                 value,
             });
         }
     }
     Ok(out)
+}
+
+/// One alignment record, stored at `chapter`:`first`-`last` (`at` names it in an error): the
+/// verse it is keyed by (its `anchor`, else where it is stored) and its value. A field the
+/// reader does not know is kept in the value's, the card's or the word's `extra`; a value it
+/// cannot keep whole (a fraction, a flag that is not true or false) is refused, never dropped.
+pub fn decode_alignment_record(
+    record: &Value,
+    at: &str,
+    chapter: u16,
+    first: u16,
+    last: u16,
+    writer: Writer,
+) -> Result<(ChapterNo, VerseNo, AlignmentValue), SidecarError> {
+    let m = obj(record, at)?;
+    let groups = list(m, "alignments", at, |g, at| {
+        let g = obj(g, at)?;
+        Ok(AlignmentGroup {
+            top_words: list(g, "topWords", at, source_word)?,
+            bottom_words: list(g, "bottomWords", at, target_word)?,
+            extra: extra(g, &["topWords", "bottomWords"], at)?,
+        })
+    })?;
+    let own = |key: &str| match writer {
+        Writer::ThisApp => m.get(key),
+        Writer::Tc4 => None,
+    };
+    let (c, v) = match own("anchor") {
+        Some(anchor) => {
+            let a = obj(anchor, at)?;
+            (
+                u16::try_from(number(a, "chapter", at)?).unwrap_or(0),
+                u16::try_from(number(a, "verse", at)?).unwrap_or(0),
+            )
+        }
+        None => (chapter, first),
+    };
+    let span_end = match own("spanEnd") {
+        Some(_) => u16::try_from(number(m, "spanEnd", at)?).unwrap_or(0),
+        None => last,
+    };
+    let marked_invalid = match writer {
+        Writer::ThisApp => strict_flag(m, "markedInvalid", at)?,
+        Writer::Tc4 => match m.get("invalid") {
+            Some(Value::Null) => false,
+            _ => strict_flag(m, "invalid", at)?,
+        },
+    };
+    // tC4 writes no `markedInvalid`; one in its record is a field this reader keeps.
+    let known: &[&str] = match writer {
+        Writer::ThisApp => &[
+            "alignments",
+            "wordBank",
+            "invalid",
+            "targetVerseMd5",
+            "sourceVersion",
+            "done",
+            "source",
+            "markedInvalid",
+            "dismissed",
+            "anchor",
+            "spanEnd",
+        ],
+        Writer::Tc4 => &[
+            "alignments",
+            "wordBank",
+            "invalid",
+            "targetVerseMd5",
+            "sourceVersion",
+            "done",
+        ],
+    };
+    let value = AlignmentValue {
+        span_end: VerseNo::new(span_end).ok_or_else(|| fail(at, "verse 0"))?,
+        alignments: groups,
+        word_bank: list(m, "wordBank", at, target_word)?,
+        target_verse_md5: md5(m, "targetVerseMd5", at)?,
+        source_version: string(m, "sourceVersion", at)?.into(),
+        source: own("source").map(|s| resource(s, at)).transpose()?,
+        done: strict_flag(m, "done", at)?,
+        marked_invalid,
+        dismissed: own("dismissed").is_some() && strict_flag(m, "dismissed", at)?,
+        extra: extra(m, known, at)?,
+    };
+    Ok((
+        ChapterNo::new(c).ok_or_else(|| fail(at, "chapter 0"))?,
+        VerseNo::new(v).ok_or_else(|| fail(at, "verse 0"))?,
+        value,
+    ))
 }
 
 fn status(text: &str) -> Option<UserStatus> {
