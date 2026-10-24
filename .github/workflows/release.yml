@@ -107,19 +107,20 @@ jobs:
         env:
           # tC4 #284: no Visual C++ runtime needed on the translator's computer.
           RUSTFLAGS: ${{ matrix.platform == 'windows-x64' && '-C target-feature=+crt-static' || '' }}
-        run: cargo build --locked --release -p tc4
-      - name: no test hooks in the shipped binary
-        env:
-          RUSTFLAGS: ${{ matrix.platform == 'windows-x64' && '-C target-feature=+crt-static' || '' }}
+        # The shipped binary is copied out first: building any test of tc4 builds tc4 again with
+        # the test features its dev-dependencies turn on, into the same target folder.
         run: |
-          exe=target/release/tc4; [ "${{ matrix.platform }}" = windows-x64 ] && exe=target/release/tc4.exe
-          TC4_RELEASE_BIN=$exe cargo test --locked --release -p tc4 --test release -- --ignored
+          cargo build --locked --release -p tc4
+          mkdir -p shipped
+          cp target/release/tc4${{ matrix.platform == 'windows-x64' && '.exe' || '' }} shipped/
+      - name: no test hooks in the shipped binary
+        run: TC4_RELEASE_BIN=shipped/tc4${{ matrix.platform == 'windows-x64' && '.exe' || '' }} cargo test --locked -p tc4 --test release -- --ignored
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - if: matrix.platform == 'windows-x64'
         name: tc4.exe needs no Visual C++ runtime
-        run: node scripts/release/pe-imports.mjs target/release/tc4.exe
+        run: node scripts/release/pe-imports.mjs shipped/tc4.exe
       - uses: actions/download-artifact@v4
         with:
           name: release-common
@@ -131,8 +132,7 @@ jobs:
           TC_HELP_DESK_TOKEN: ${{ secrets.TC_HELP_DESK_TOKEN }}
           TC_HELP_DESK_EMAIL: ${{ secrets.TC_HELP_DESK_EMAIL }}
         run: |
-          exe=target/release/tc4; [ "${{ matrix.platform }}" = windows-x64 ] && exe=target/release/tc4.exe
-          scripts/release/stage.sh ${{ matrix.platform }} "$exe" release/ui release/bundle "$RUNNER_TEMP/${{ matrix.electronite }}" stage
+          scripts/release/stage.sh ${{ matrix.platform }} shipped/tc4${{ matrix.platform == 'windows-x64' && '.exe' || '' }} release/ui release/bundle "$RUNNER_TEMP/${{ matrix.electronite }}" stage
       - if: env.SIGN == 'yes'
         name: sign the staged app
         shell: pwsh
