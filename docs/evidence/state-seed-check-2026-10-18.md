@@ -259,7 +259,8 @@ reformatted, and the bytes differ from what tC4 or a teammate's tC4-compatible w
 **Fix:** splice a frame as `writeFrame` does (the region replaced by `['', …text lines, '']`,
 or the template's empty form for an empty text).
 
-5.1 is fixed (B7, with 4.1); 5.2 is still open.
+5.1 is fixed (B7, with 4.1); 5.2 is fixed (T step 2, 2026-10-24): the test is now
+`obs_frame_edits_project_the_bytes_tc4_writes` and asserts equality with tC4's writers.
 
 ## 6. Declared differences
 

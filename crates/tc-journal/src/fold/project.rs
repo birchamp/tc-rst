@@ -2358,25 +2358,36 @@ pub(crate) fn splice_story(
         i += 1;
         if text.starts_with("![") {
             images += 1;
-            // Blank lines, then the frame's paragraph up to the next blank line.
-            while i < lines.len() && body(lines[i]).trim().is_empty() {
-                out.push_str(lines[i]);
-                i += 1;
-            }
+            // The frame's region runs to the next image or reference line (tC4 `writeFrame`).
             let start = i;
-            while i < lines.len()
-                && !body(lines[i]).trim().is_empty()
-                && Some(i) != reference_at
-                && !body(lines[i]).starts_with("![")
-            {
+            while i < lines.len() && Some(i) != reference_at && !body(lines[i]).starts_with("![") {
                 i += 1;
             }
             match frame(images) {
                 Some(text) => {
-                    let end = lines.get(i.saturating_sub(1)).copied().unwrap_or("");
-                    out.push_str(&text);
-                    let t = if i > start { terminator(end) } else { "\n" };
-                    out.push_str(t);
+                    let nl = match terminator(line) {
+                        "" => {
+                            out.push('\n');
+                            "\n"
+                        }
+                        t => t,
+                    };
+                    // tC4 joins the region's new lines with newlines: a blank line, the
+                    // text and a blank line, or the template's empty form, which is longer
+                    // when nothing follows.
+                    let followed = i < lines.len();
+                    let region: Vec<&str> = match (text.is_empty(), followed) {
+                        (true, true) => vec![""; 3],
+                        (true, false) => vec![""; 6],
+                        (false, _) => std::iter::once("")
+                            .chain(text.split('\n'))
+                            .chain(std::iter::once(""))
+                            .collect(),
+                    };
+                    out.push_str(&region.join(nl));
+                    if followed {
+                        out.push_str(nl);
+                    }
                 }
                 None => {
                     for l in &lines[start..i] {

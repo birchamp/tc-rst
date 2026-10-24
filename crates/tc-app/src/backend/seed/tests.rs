@@ -717,10 +717,10 @@ fn obs_story_one_after(frame: u16, text: &str) -> (String, String) {
 }
 
 /// Storage findings outside the seed check (docs/evidence/state-seed-check-2026-10-18.md,
-/// part 5): the title edit (5.1) is fixed in tc-journal (B7); the splice of an empty frame
-/// (5.2) is asserted as it stands, so this test fails the day storage changes it.
+/// part 5): the title edit (5.1) and the splice of an empty frame (5.2) project the bytes
+/// tC4's writers make, so the file reads back with no frame reformatted.
 #[test]
-fn obs_frame_edits_project_other_bytes_than_tc4_writes_today() {
+fn obs_frame_edits_project_the_bytes_tc4_writes() {
     // tC4's title box sends the title without the number, and the fold writes `# N. title`
     // as tC4's `writeTitle` does, so the number is kept and the file reads back.
     let (base, projected) = obs_story_one_after(0, "La Creación");
@@ -729,32 +729,14 @@ fn obs_frame_edits_project_other_bytes_than_tc4_writes_today() {
     assert_eq!(projected.lines().next(), Some("# 1. La Creación"));
     assert_eq!(projected, tc4);
     assert!(tc_obs::StoryFile::parse(projected).is_ok());
-    // An edit of an empty frame: the fold keeps the template's blank lines and adds the
-    // text after them; tC4's writer puts one blank line on each side.
+    // An edit of an empty frame: one blank line on each side of the text, as tC4's writer.
     let (base, projected) = obs_story_one_after(3, "Texto nuevo.");
     let tc4 = tc_obs::story::write_frame(&base, tc_obs::FrameNo(3), "Texto nuevo.").unwrap();
-    let image3 = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-03.jpg)";
-    let image4 = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-04.jpg)";
-    let between = |text: &str| -> String {
-        let start = text.find(image3).unwrap() + image3.len();
-        let end = text.find(image4).unwrap();
-        text[start..end].to_owned()
-    };
-    assert_eq!(between(&tc4), "\n\nTexto nuevo.\n\n");
-    assert_eq!(between(&projected), "\n\n\n\nTexto nuevo.\n");
-    assert_ne!(projected, tc4);
-    // tC4 still reads the frame's text there, but not in its writers' layout: reading the
-    // file back, as an outside edit is read, names frame 3 as reformatted.
+    assert_eq!(projected, tc4);
     let read = tc_obs::StoryFile::parse(projected.clone()).unwrap();
     assert_eq!(read.text(tc_obs::FrameNo(3)), Some("Texto nuevo."));
     let decoded = tc_obs::decode_story(&projected).unwrap();
-    assert!(
-        decoded
-            .reformatted
-            .contains(&tc_obs::Reformatted::Frame(tc_obs::FrameNo(3))),
-        "{:?}",
-        decoded.reformatted
-    );
+    assert!(decoded.reformatted.is_empty(), "{:?}", decoded.reformatted);
 }
 
 /// `folder` with the file at `path` given other bytes, as if it changed after the build.

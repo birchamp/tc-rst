@@ -325,6 +325,73 @@ fn story_one_with(template: &str, frame_zero: Option<&str>) -> String {
     String::from_utf8(state.render(&DerivedFile::Story(story)).expect("story")).expect("utf-8")
 }
 
+fn story_with_frames(template: &str, frames: &[(u16, &str)]) -> String {
+    let mut ana = Dev::new(1);
+    let story = tc_journal::StoryNo::new(1).expect("story");
+    let mut changes = vec![ana.one(
+        Record::StoryBase {
+            story,
+            value: template.into(),
+        },
+        vec![],
+    )];
+    for &(frame, text) in frames {
+        changes.push(ana.one(
+            Record::Frame {
+                story,
+                frame: tc_journal::FrameNo(frame),
+                value: text.into(),
+            },
+            vec![],
+        ));
+    }
+    let state = FoldState::fold(
+        ProjectKind::Stories,
+        changes.into_iter().map(FoldInput::from),
+    );
+    String::from_utf8(state.render(&DerivedFile::Story(story)).expect("story")).expect("utf-8")
+}
+
+/// tC4's `writeFrame` replaces a frame's whole region, from its image line to the next image
+/// or reference line, with a blank line, the text and a blank line, and an empty text with the
+/// template's empty form. An empty frame of the template is three blank lines; splicing only
+/// its paragraph wrote `\n\n\n\nTexto nuevo.\n`, which reads back as reformatted
+/// (docs/evidence/state-seed-check-2026-10-18.md §5.2).
+#[test]
+fn an_empty_frame_is_spliced_as_tc4_writes_it() {
+    let image =
+        |n: u8| format!("![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-0{n}.jpg)");
+    let template = format!(
+        "# 1. The Creation\n\n{}\n\nOne.\n\n{}\n\n\n\n{}\n\n\n\n\n\n",
+        image(1),
+        image(2),
+        image(3)
+    );
+    let between = |out: &str| -> String {
+        let from = out.find(&image(2)).expect("frame 2") + image(2).len();
+        let to = out.find(&image(3)).expect("frame 3");
+        out[from..to].to_owned()
+    };
+    assert_eq!(
+        between(&story_with_frames(&template, &[(2, "Texto nuevo.")])),
+        "\n\nTexto nuevo.\n\n"
+    );
+    let last = story_with_frames(&template, &[(3, "Fin.")]);
+    assert!(
+        last.ends_with(&format!("{}\n\nFin.\n", image(3))),
+        "{last:?}"
+    );
+    assert_eq!(
+        story_with_frames(&template, &[(2, ""), (3, "")]),
+        template,
+        "an empty text writes the template's empty form"
+    );
+    assert_eq!(
+        between(&story_with_frames(&template, &[(2, "Uno.\nDos.")])),
+        "\n\nUno.\nDos.\n\n"
+    );
+}
+
 /// tC4's `TITLE_RE` and `writeTitle`: frame 0 is what follows `# N. `, and the number is the
 /// line's own, so a title a person types never loses it (docs/evidence/state-seed-check-2026-10-18.md
 /// §4.1, §5.1).
