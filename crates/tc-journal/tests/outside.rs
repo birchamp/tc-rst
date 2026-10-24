@@ -9,7 +9,9 @@ mod support;
 use support::*;
 use tc_journal::change::ExternalSource;
 use tc_journal::command::{Choice, OutsideKeep};
-use tc_journal::fold::{ConflictKind, DerivedFile, FoldInput, FoldState, ProjectKind};
+use tc_journal::fold::{
+    AutoRule, ConflictKind, DerivedFile, FoldInput, FoldState, ProjectKind, Resolved,
+};
 use tc_journal::outside::{Base, OutsideFile, OutsidePlan, base_records, decode_file};
 use tc_journal::record::{CarriedValue, VerseValue};
 use tc_journal::{Cause, Change, Md5, Record, RecordKey, RepoPath};
@@ -397,12 +399,12 @@ fn a_book_file_of_an_absent_book_adds_the_book() {
 }
 
 #[test]
-fn an_outside_comment_edit_is_a_comment_conflict() {
+fn an_outside_comment_edit_with_no_known_base_never_wins_and_stays_in_history() {
     let mut world = World::new(&[3]);
     let note = world
         .dev
         .one(comment(7, verse_target(1, 1), "first note"), vec![]);
-    world.changes.push(note);
+    world.changes.push(note.clone());
     let state = world.state();
     let file = DerivedFile::Comments(BOOK);
     let bytes = state.render(&file).expect("comments");
@@ -429,12 +431,21 @@ fn an_outside_comment_edit_is_a_comment_conflict() {
     assert!(plan.unknown_base);
     let mut all = world.changes.clone();
     let mut outside = Dev::new(9);
-    all.extend(outside.apply(plan.changes));
+    let written = outside.apply(plan.changes);
+    all.extend(written.clone());
     let after = fold(&all);
-    assert!(
-        after.conflicts_of(ConflictKind::Comment).next().is_some(),
-        "the two versions of the comment are a visible conflict"
+    // Ruling H5: the newest wins, but a version from outside with no known base ranks
+    // below every other (F7), so the app's own note stays shown; the other is in History.
+    let key = note.body().record.key();
+    assert_eq!(after.conflict_count(), 0);
+    assert_eq!(
+        after.key_state(&key).map(|k| k.state),
+        Some(Resolved::SettledByRule {
+            head: note.id(),
+            rule: AutoRule::Newest
+        })
     );
+    assert!(after.history(&key).contains(&written[0].id()));
 }
 
 #[test]

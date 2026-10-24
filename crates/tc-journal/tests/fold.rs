@@ -7,7 +7,7 @@ mod support;
 
 use support::*;
 use tc_journal::fold::{
-    BookView, ConflictKind, FoldInput, FoldState, MergeHow, ProjectKind, Resolved,
+    AutoRule, BookView, ConflictKind, FoldInput, FoldState, MergeHow, ProjectKind, Resolved,
 };
 use tc_journal::record::{PresentHow, UserStatus};
 use tc_journal::{Cause, RecordKey};
@@ -100,7 +100,7 @@ fn a_paragraph_break_and_a_rewording_merge_by_units() {
 }
 
 #[test]
-fn bookmark_and_status_merge_but_two_statuses_conflict() {
+fn bookmark_and_status_merge_and_of_two_statuses_the_newest_wins() {
     let mut ana = Dev::new(1);
     let mut pedro = Dev::new(2);
     let key = check_key("abcd", 1, 1);
@@ -126,11 +126,28 @@ fn bookmark_and_status_merge_but_two_statuses_conflict() {
         check(&key, decision(Some(UserStatus::Todo), false, None)),
         vec![base.id()],
     );
-    let state = fold(&[base, status, other]);
-    let conflicts: Vec<_> = state.conflicts().collect();
-    assert_eq!(conflicts.len(), 1);
-    assert_eq!(conflicts[0].kind, ConflictKind::Check);
-    assert_eq!(conflicts[0].disputed.len(), 1);
+    let state = fold(&[base, status.clone(), other.clone()]);
+    // Ruling H5: no conflict; the newest wins and the other stays in History.
+    assert_eq!(state.conflicts().count(), 0);
+    let newest = [&status, &other]
+        .into_iter()
+        .max_by_key(|c| (c.body().at, c.id()))
+        .unwrap();
+    let older = if newest.id() == status.id() {
+        &other
+    } else {
+        &status
+    };
+    let key = RecordKey::Check(key);
+    assert_eq!(
+        state.key_state(&key).map(|k| k.state),
+        Some(Resolved::SettledByRule {
+            head: newest.id(),
+            rule: AutoRule::Newest
+        })
+    );
+    assert_eq!(state.projected(&key), Some(newest.body().record.clone()));
+    assert!(state.history(&key).contains(&older.id()));
 }
 
 #[test]

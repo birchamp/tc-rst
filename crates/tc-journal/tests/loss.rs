@@ -12,12 +12,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use support::*;
 use tc_journal::command::Choice;
 use tc_journal::fold::{
-    Anomaly, BookView, ConflictKind, DerivedFile, FoldInput, FoldState, MergeHow, Placement,
-    ProjectKind, Resolved, Side, decode_decisions,
+    Anomaly, AutoRule, BookView, ConflictKind, DerivedFile, FoldInput, FoldState, MergeHow,
+    Placement, ProjectKind, Resolved, Side, decode_decisions,
 };
 use tc_journal::json::Json;
 use tc_journal::record::{
-    BatchReleaseValue, ChapterFront, LayoutItem, PresentHow, UserStatus, UsfmBytes, VerseValue,
+    BatchReleaseValue, ChapterFront, CheckValue, LayoutItem, PresentHow, UserStatus, UsfmBytes,
+    VerseValue,
 };
 use tc_journal::{
     BookId, Cause, Change, ChangeId, MetaField, MetaPath, PinGroup, Record, RecordKey, ToolId,
@@ -25,6 +26,34 @@ use tc_journal::{
 
 fn all_of(parts: &[&[Change]]) -> Vec<Change> {
     parts.iter().flat_map(|p| p.iter().cloned()).collect()
+}
+
+/// Ruling H5: a record outside verse text is settled by its newest head, the largest
+/// (at, id), with no conflict listed, and every head stays in its History.
+fn the_newest(state: &FoldState, key: &RecordKey) -> ChangeId {
+    assert!(
+        state.conflicts().all(|c| c.key != *key),
+        "{key:?} is listed as a conflict"
+    );
+    let heads = state.heads(key);
+    assert!(heads.len() >= 2, "{key:?} has one head");
+    let newest = heads
+        .iter()
+        .copied()
+        .max_by_key(|h| (state.body(h).expect("readable").at, *h))
+        .expect("heads");
+    assert_eq!(
+        state.key_state(key).map(|k| k.state),
+        Some(Resolved::SettledByRule {
+            head: newest,
+            rule: AutoRule::Newest
+        })
+    );
+    let history = state.history(key);
+    for h in &heads {
+        assert!(history.contains(h), "{key:?}: {h:?} is not in History");
+    }
+    newest
 }
 
 fn the_conflict(state: &FoldState) -> tc_journal::fold::Conflict {
@@ -473,18 +502,21 @@ fn loss_same_verse_two_ways() {
     assert!(conflict.candidates.iter().any(|c| c.head == b.id()));
 }
 
-/// L8 (E4, F3, G7): two alignments of one verse are a listed conflict, not newest-wins.
+/// L8 (E4, F3, G7), ruling H5: of two alignments of one verse the newest wins, and the
+/// other stays in History.
 #[test]
-fn loss_e4_alignment_conflict_visible() {
+fn loss_e4_alignment_newest_wins_the_other_in_history() {
     let mut maria = Dev::new(1);
     let mut juan = Dev::new(2);
     let book = imported_book(&mut maria, &[3]);
     let a = maria.one(alignment(1, 1, 1, "words of 1:1"), vec![]);
     let b = juan.one(alignment(1, 1, 1, "words of"), vec![]);
-    let state = assert_converges(&all_of(&[&book, &[a, b]]));
-    let conflict = the_conflict(&state);
-    assert_eq!(conflict.kind, ConflictKind::Alignment);
-    assert_eq!(conflict.candidates.len(), 2);
+    let state = assert_converges(&all_of(&[&book, &[a.clone(), b.clone()]]));
+    assert_eq!(state.conflict_count(), 0);
+    let key = a.body().record.key();
+    let newest = the_newest(&state, &key);
+    let winner = if newest == a.id() { &a } else { &b };
+    assert_eq!(state.projected(&key), Some(winner.body().record.clone()));
 }
 
 fn statuses(first: UserStatus, second: UserStatus, second_bookmarks: bool) -> FoldState {
@@ -507,14 +539,15 @@ fn statuses(first: UserStatus, second: UserStatus, second_bookmarks: bool) -> Fo
     assert_converges(&all_of(&[&book, &[base, a, b]]))
 }
 
-/// L8: two check results are a listed conflict on the disputed unit.
+/// L8, ruling H5: of two check results the newest wins whole, and the other stays in
+/// History.
 #[test]
-fn loss_check_two_ways_visible() {
+fn loss_check_two_ways_newest_wins() {
     let state = statuses(UserStatus::Valid, UserStatus::Invalid, false);
-    let conflict = the_conflict(&state);
-    assert_eq!(conflict.kind, ConflictKind::Check);
-    assert_eq!(conflict.disputed.len(), 1);
-    assert_eq!(&*conflict.disputed[0].0, "/decision/judgement");
+    assert_eq!(state.conflict_count(), 0);
+    let key = RecordKey::Check(check_key("abcd", 1, 1));
+    let newest = the_newest(&state, &key);
+    assert_eq!(state.projected(&key), state.body(&newest).map(|b| b.record));
 }
 
 /// L8: a bookmark against a status is no conflict: decisions merge by unit first.
@@ -560,8 +593,8 @@ fn gateway(language: &str, with_words: bool) -> Record {
     pins(PinGroup::Primary, &slots)
 }
 
-/// L9: two gateway changes conflict as one pin group; the projection never mixes slots
-/// of two heads.
+/// L9, ruling H5: of two gateway changes the newest pin group wins whole; the projection
+/// never mixes slots of two heads.
 #[test]
 fn loss_two_gateway_changes_never_mix() {
     for juan_newer in [true, false] {
@@ -573,9 +606,11 @@ fn loss_two_gateway_changes_never_mix() {
         let es = maria.one(gateway("es", true), vec![base.id()]);
         let fr = juan.one(gateway("fr", false), vec![base.id()]);
         let state = assert_converges(&all_of(&[&book, &[base, es.clone(), fr.clone()]]));
-        let conflict = the_conflict(&state);
-        assert_eq!(conflict.kind, ConflictKind::Pins);
         let newer = if juan_newer { &fr } else { &es };
+        assert_eq!(
+            the_newest(&state, &RecordKey::Pins(PinGroup::Primary)),
+            newer.id()
+        );
         assert_eq!(
             state.projected(&RecordKey::Pins(PinGroup::Primary)),
             Some(newer.body().record.clone()),
@@ -982,34 +1017,20 @@ fn carry_over() -> (Vec<Change>, tc_journal::CheckKey, tc_journal::CheckKey) {
     (all_of(&[&[base], &upgrade, &[offline]]), old, new)
 }
 
-/// L35: a carry-over against an offline check is a `CheckMoved` conflict, and *Apply
-/// Pedro's change to the moved check* lands his verdict on the live key.
+/// L35, ruling H5: a carry-over against an offline check is settled by the newest, and
+/// Pedro's verdict is in the History of the check it moved to, where Restore brings it
+/// back.
 #[test]
 fn loss_carryover_move_vs_offline_check() {
     let (mut all, old, new) = carry_over();
+    let offline = all.last().expect("Pedro's change").id();
     let mut maria = Dev::new(4);
     all.extend(imported_book(&mut maria, &[3]));
     let state = assert_converges(&all);
-    let conflict = the_conflict(&state);
-    assert_eq!(conflict.kind, ConflictKind::CheckMoved);
-    assert_eq!(conflict.key, RecordKey::Check(old.clone()));
-    let planned = state.apply_to_moved_check(&conflict.id).expect("offered");
-    let mut ana = Dev::new(1);
-    ana.at += 10_000_000;
-    all.extend(ana.apply(planned));
-    let state = assert_converges(&all);
     assert_eq!(state.conflict_count(), 0);
-    assert_eq!(
-        state.projected(&RecordKey::Check(new.clone())),
-        Some(check(
-            &new,
-            decision(Some(UserStatus::Invalid), true, Some("Pedro's note"))
-        ))
-    );
-    assert_eq!(
-        state.projected(&RecordKey::Check(old.clone())),
-        Some(moved(&old, &new))
-    );
+    the_newest(&state, &RecordKey::Check(old.clone()));
+    assert_eq!(state.moved_into(&new), vec![old]);
+    assert!(state.history(&RecordKey::Check(new)).contains(&offline));
 }
 
 /// L36: a re-key moves the whole decision, comment and bookmark included, and a comment
@@ -1405,9 +1426,8 @@ fn tn_slot(version: &str, n: u8) -> Json {
     ])
 }
 
-/// L58: two upgrades of one resource to different versions: a pins conflict and the
-/// check conflicts it caused share their batches, so they are one row, resolved in one
-/// batch.
+/// L58, ruling H5: two upgrades of one resource to different versions: the newest upgrade
+/// wins its pins and the checks it moved, never a mix of the two.
 #[test]
 fn loss_upgrade_two_versions_grouped() {
     let mut maria = Dev::new(1);
@@ -1444,25 +1464,24 @@ fn loss_upgrade_two_versions_grouped() {
     };
     let v92 = upgrade(&mut maria, "v92", 92);
     let v93 = upgrade(&mut juan, "v93", 93);
-    let mut all = all_of(&[&book, &[base_pins.clone(), base_check.clone()], &v92, &v93]);
-    let state = assert_converges(&all);
-    let conflicts: Vec<_> = state.conflicts().cloned().collect();
-    assert_eq!(conflicts.len(), 2, "{conflicts:#?}");
-    let kinds: BTreeSet<u8> = conflicts.iter().map(|c| c.kind.order()).collect();
-    assert_eq!(
-        kinds,
-        [ConflictKind::Pins.order(), ConflictKind::Check.order()].into()
-    );
-    assert_eq!(conflicts[0].batches, conflicts[1].batches, "one row");
-    let ids: Vec<_> = conflicts.iter().map(|c| c.id).collect();
-    let (resolved, skipped) = state.bulk_resolution(&[maria.id].into(), &ids);
-    assert!(skipped.is_empty());
-    let planned: Vec<_> = resolved.into_iter().flat_map(|(_, p)| p).collect();
-    all.extend(maria.apply(planned));
+    let all = all_of(&[&book, &[base_pins.clone(), base_check.clone()], &v92, &v93]);
     let state = assert_converges(&all);
     assert_eq!(state.conflict_count(), 0);
+    let pins_head = the_newest(&state, &RecordKey::Pins(PinGroup::Primary));
+    let check_head = the_newest(&state, &RecordKey::Check(key));
+    let batch = |id: &ChangeId| state.change(id).map(|c| c.batch);
+    assert_eq!(
+        batch(&pins_head),
+        batch(&check_head),
+        "one upgrade wins both"
+    );
+    let version = if v92.iter().any(|c| c.id() == pins_head) {
+        "v92"
+    } else {
+        "v93"
+    };
     let resources = rendered(&state, &DerivedFile::Resources).expect("resources");
-    assert!(resources.to_string().contains("v92"), "{resources}");
+    assert!(resources.to_string().contains(version), "{resources}");
 }
 
 /// L59, L78: a bulk choice by computer skips conflicts whose candidates were all made on
@@ -2249,10 +2268,10 @@ fn loss_keep_joined_keeps_the_picked_span() {
 }
 
 /// L100: *Choose per line* keeps every unit that merged cleanly, whichever head has the
-/// smallest id, and takes the picked head's value only for the disputed units.
+/// smallest id, and takes the picked head's value only for the disputed units. Ruling H5
+/// leaves units to verse text: words and layout.
 #[test]
 fn loss_choose_per_line_keeps_agreed_units() {
-    let key = check_key("abcd", 1, 1);
     let mut orders = BTreeSet::new();
     for attempt in 0..32 {
         let mut ana = Dev::new(1);
@@ -2260,46 +2279,28 @@ fn loss_choose_per_line_keeps_agreed_units() {
         let mut juan = Dev::new(3);
         pedro.at += attempt * 1_000;
         let book = imported_book(&mut ana, &[1]);
-        let base = ana.one(
-            check(&key, decision(Some(UserStatus::Todo), false, Some("base"))),
-            vec![],
-        );
-        // Pedro changes the status; Juan the status and the comment.
-        let p = pedro.one(
-            check(
-                &key,
-                decision(Some(UserStatus::Invalid), false, Some("base")),
-            ),
-            vec![base.id()],
-        );
+        let base = latest(&book, &verse_key(1, 1));
+        // Pedro changes the words; Juan the words and the layout.
+        let p = pedro.one(verse(1, 1, text("Pedro's words", 1)), vec![base.id()]);
         let j = juan.one(
-            check(
-                &key,
-                decision(Some(UserStatus::Valid), false, Some("Juan's note")),
-            ),
+            verse(1, 1, text_layout("Juan's words", "\n\\p\n", 1)),
             vec![base.id()],
         );
         let pedro_first = p.id() < j.id();
         if !orders.insert(pedro_first) {
             continue;
         }
-        let state = assert_converges(&all_of(&[&book, &[base, p.clone(), j]]));
+        let state = assert_converges(&all_of(&[&book, &[p.clone(), j]]));
         let conflict = the_conflict(&state);
         assert_eq!(
             conflict.disputed,
-            vec![tc_journal::fold::UnitName("/decision/judgement".into())]
+            vec![tc_journal::fold::UnitName("/text/words".into())]
         );
-        let picks = BTreeMap::from([(
-            tc_journal::fold::UnitName("/decision/judgement".into()),
-            p.id(),
-        )]);
+        let picks = BTreeMap::from([(tc_journal::fold::UnitName("/text/words".into()), p.id())]);
         let record = state.per_unit(&conflict.id, &picks).expect("offered");
         assert_eq!(
             record,
-            check(
-                &key,
-                decision(Some(UserStatus::Invalid), false, Some("Juan's note"))
-            ),
+            verse(1, 1, text_layout("Pedro's words", "\n\\p\n", 1)),
             "Pedro's head has the smaller id: {pedro_first}"
         );
         if orders.len() == 2 {
@@ -2370,46 +2371,42 @@ fn carry_over_two_editors(
     (all, state, new)
 }
 
-/// L99: applying offline changes to a moved check applies every editor's changed units,
-/// not only the newest editor's, and supersedes nobody's verdict unseen.
+/// L99, ruling H5: two editors who changed a moved check offline: the newest version
+/// wins, and every editor's version is in the History of the check it moved to.
 #[test]
 fn loss_carryover_two_offline_editors() {
-    let mut pedros = decision(Some(UserStatus::Invalid), false, Some("first"));
-    pedros.extra.insert("x-reviewed".into(), Json::from(false));
-    let mut juans = decision(Some(UserStatus::Valid), true, Some("Juan's note"));
-    juans.extra.insert("x-reviewed".into(), Json::from(true));
-    let (mut all, state, new) = carry_over_two_editors(pedros, juans);
-    let conflict = the_conflict(&state);
-    assert_eq!(conflict.kind, ConflictKind::CheckMoved);
-    let planned = state.apply_to_moved_check(&conflict.id).expect("offered");
-    all.extend(Dev::new(4).apply(planned));
-    let state = assert_converges(&all);
-    assert_eq!(state.conflict_count(), 0);
-    let mut expected = decision(Some(UserStatus::Invalid), true, Some("Juan's note"));
-    expected.extra.insert("x-reviewed".into(), Json::from(true));
-    assert_eq!(
-        state.projected(&RecordKey::Check(new.clone())),
-        Some(check(&new, expected)),
-        "Pedro's verdict and Juan's comment, bookmark and extra field"
-    );
-}
-
-/// L99: two editors who changed the same unit of a moved check differently are not
-/// decided by clock: the choice is refused until one version is kept.
-#[test]
-fn loss_carryover_two_verdicts_refused() {
-    let mut pedros = decision(Some(UserStatus::Invalid), false, Some("first"));
-    pedros.extra.insert("x-reviewed".into(), Json::from(false));
-    let mut juans = decision(Some(UserStatus::Todo), false, Some("first"));
-    juans.extra.insert("x-reviewed".into(), Json::from(false));
-    let (_, state, _) = carry_over_two_editors(pedros, juans);
-    let conflict = the_conflict(&state);
-    assert_eq!(
-        state.apply_to_moved_check(&conflict.id),
-        Err(tc_journal::fold::ResolveError::Disputed(
-            tc_journal::fold::UnitName("/decision/judgement".into())
-        ))
-    );
+    for (pedros, juans) in [
+        (
+            decision(Some(UserStatus::Invalid), false, Some("first")),
+            decision(Some(UserStatus::Valid), true, Some("Juan's note")),
+        ),
+        (
+            decision(Some(UserStatus::Invalid), false, Some("first")),
+            decision(Some(UserStatus::Todo), false, Some("first")),
+        ),
+    ] {
+        let (all, state, new) = carry_over_two_editors(pedros, juans);
+        assert_eq!(state.conflict_count(), 0);
+        let old = check_key("abcd", 1, 1);
+        the_newest(&state, &RecordKey::Check(old.clone()));
+        assert_eq!(state.moved_into(&new), vec![old.clone()]);
+        let history = state.history(&RecordKey::Check(new));
+        for change in all
+            .iter()
+            .filter(|c| c.body().record.key() == RecordKey::Check(old.clone()))
+            .filter(|c| {
+                !matches!(
+                    &c.body().record,
+                    Record::Check {
+                        value: CheckValue::MovedTo { .. },
+                        ..
+                    }
+                )
+            })
+        {
+            assert!(history.contains(&change.id()), "{:?}", change.body().record);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -2571,8 +2568,8 @@ fn duplicated_comment_id_across_books_converges() {
         same_fold(&fold(&all_of(&[&book, &order])), &state, "by arrival");
     }
     let state = assert_converges(&all_of(&[&book, &[titus.clone(), ruth.clone()]]));
-    let conflict = the_conflict(&state);
-    assert_eq!(conflict.kind, ConflictKind::Comment);
+    assert_eq!(state.conflict_count(), 0);
+    the_newest(&state, &titus.body().record.key());
     // Ruth has a version of the comment and no presence.
     assert!(state.anomalies().any(|a| matches!(
         a,

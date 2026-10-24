@@ -1058,6 +1058,30 @@ pub(crate) fn follow_moves(state: &FoldState, check: &CheckKey) -> CheckKey {
     at
 }
 
+impl FoldState {
+    /// The checks a folded move names `check` as its new place, directly or through other
+    /// moves, in key order: the versions a move left behind are in their History (ruling
+    /// H5). Costs the moves into it, never the project.
+    pub fn moved_into(&self, check: &CheckKey) -> Vec<CheckKey> {
+        let mut seen: BTreeSet<CheckKey> = BTreeSet::new();
+        let mut queue = vec![check.clone()];
+        while let Some(at) = queue.pop() {
+            let Some(moves) = self.moves_into.get(&at) else {
+                continue;
+            };
+            for c in moves.iter().filter(|c| self.meta(**c).active()) {
+                if let RecordKey::Check(from) = &self.entry(self.meta(*c).key).key
+                    && from != check
+                    && seen.insert(from.clone())
+                {
+                    queue.push(from.clone());
+                }
+            }
+        }
+        seen.into_iter().collect()
+    }
+}
+
 fn merged_shape(record: &Record) -> Shape {
     match record {
         Record::Alignment { value, .. } => Shape::Alignment {
