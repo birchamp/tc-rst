@@ -331,6 +331,16 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             let measured = tokio::time::timeout(
                 Duration::from_secs(60),
                 cost(&s, async |s| {
+                    // The draft writer writes on a one-second timer, so on a slow run it would
+                    // write once more inside the count; held, it writes once, after the save.
+                    ok(
+                        &s.app,
+                        &Hold {
+                            request: request(46),
+                            at: HoldPoint::DraftWrite,
+                        },
+                    )
+                    .await;
                     let view = open_verse(s, first_verse(), 2).await;
                     assert_eq!(view.suggest.status, tc_api::align::SuggestStatus::Reading);
                     let (card, word) = view
@@ -365,6 +375,14 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
                         // its own; the store being idle does not mean that frame has gone.
                         changed(&mut frames, &first_alignment()).await;
                     }
+                    ok(
+                        &s.app,
+                        &Release {
+                            request: request(47),
+                            at: HoldPoint::DraftWrite,
+                        },
+                    )
+                    .await;
                 }),
             )
             .await
