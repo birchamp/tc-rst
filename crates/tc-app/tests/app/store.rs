@@ -37,14 +37,17 @@ fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
     store.wait_cleanup();
     let titus = std::fs::read(repo_root().join("fixtures/tc4/sample-burrito/ingredients/TIT.usfm"))
         .unwrap();
-    store
+    let folder = store
         .create(&tc_store::NewProject {
             name: name.to_owned(),
             kind: ProjectKind::Bible,
             records: sample_records(&BTreeMap::from([(BookId::Titus, titus)]), None),
             books: Vec::new(),
         })
-        .unwrap()
+        .unwrap();
+    // P5/INV-VALID-BURRITO on the real filesystem, which no FaultFs watch sees.
+    assert_valid_burrito_files(&files_on_disk(&folder));
+    folder
 }
 
 /// Every file under `folder` on disk, by its path relative to it.

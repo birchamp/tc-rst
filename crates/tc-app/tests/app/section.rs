@@ -431,7 +431,7 @@ struct Rig {
 impl Rig {
     async fn over(state: &ScenarioState) -> Rig {
         let fs = FaultFs::new();
-        let (store, _) = scenario_state_on(&fs, state);
+        let (store, _, _watch) = scenario_state_on(&fs, state);
         let dir = tempfile::tempdir().unwrap();
         let t = app_over(dir.path(), Arc::new(store)).await;
         let open = t

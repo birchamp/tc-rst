@@ -416,7 +416,7 @@ async fn a_conflict_with_another_computers_head_names_its_writer() {
         stale
     };
     {
-        let other = backend_over(
+        let (other, _other_watch) = backend_over(
             &rig.world.fs,
             "/app2",
             FakePlatform {

@@ -790,7 +790,8 @@ fn synced_backend(world: &StoreWorld, local_synced: bool) -> tc_app::backend::st
             threads: 2,
             watch_debounce: std::time::Duration::from_millis(20),
         },
-        Arc::default(),
+        // The world's hooks, so the world's watch looks at what this store writes too.
+        world.hooks.clone(),
     )
     .unwrap();
     backend.store().wait_cleanup();

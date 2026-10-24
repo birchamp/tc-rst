@@ -51,12 +51,13 @@ pub(super) async fn shared() -> World {
     let fake = FakeDoor43::start().await.unwrap();
     tc_door43_fake::seeded::parity_account(&fake).await.unwrap();
     let fs = FaultFs::new();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let state = scenario("shared");
     let (store, _) = ScenarioStore::write(backend, state).unwrap();
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
-    let t = app_over(dir.path(), Arc::new(store), fake.url()).await;
+    let mut t = app_over(dir.path(), Arc::new(store), fake.url()).await;
+    t.watch = Some(watch);
     World {
         t,
         _fake: fake,

@@ -38,10 +38,11 @@ impl Rig {
         let fs = FaultFs::new();
         let hooks = Arc::new(Hooks::default());
         let state = scenario("sample");
-        let backend = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
+        let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
         let (store, _) = ScenarioStore::write(backend, state).unwrap();
         install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
-        let t = start(dir.path(), Arc::new(store)).await;
+        let mut t = start(dir.path(), Arc::new(store)).await;
+        t.watch = Some(watch);
         Self { dir, fs, hooks, t }
     }
 
@@ -61,8 +62,9 @@ impl Rig {
     async fn restart(&mut self, power_cut: bool) {
         let fs = self.fs.crash(power_cut);
         let hooks = Arc::new(Hooks::default());
-        let store = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
+        let (store, watch) = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
         self.t = start(self.dir.path(), Arc::new(store)).await;
+        self.t.watch = Some(watch);
         self.fs = fs;
         self.hooks = hooks;
     }

@@ -44,6 +44,7 @@ mod app {
     mod keychain;
     mod language_search;
     mod memory;
+    mod p5;
     mod prefs;
     mod projects_root;
     mod replies;

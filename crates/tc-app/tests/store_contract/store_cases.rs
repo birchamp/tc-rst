@@ -520,7 +520,8 @@ async fn draft_with_unverifiable_token_is_offered_as_text() {
     after
         .delete(&std::path::Path::new(APP).join("installation.json"))
         .unwrap();
-    let backend = backend_over(&after, APP, FakePlatform::default(), Arc::default());
+    let (backend, _backend_watch) =
+        backend_over(&after, APP, FakePlatform::default(), Arc::default());
     let handle = tc_app::backend::ProjectStore::open(&backend, &world.bible, progress()).unwrap();
     handle.wait_idle();
     let offered = handle.offered_drafts();

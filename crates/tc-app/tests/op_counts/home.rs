@@ -127,19 +127,17 @@ async fn home_walks_no_history() {
 
 /// An app on `fs`'s projects folder, with app data `parts` keeps across launches.
 async fn launch(dir: &Path, parts: &Parts, fs: &tc_store::fault::FaultFs) -> TestApp {
-    let backend = Arc::new(backend_over(
-        fs,
-        APP,
-        FakePlatform::default(),
-        Arc::default(),
-    ));
+    let (backend, watch) = backend_over(fs, APP, FakePlatform::default(), Arc::default());
+    let backend = Arc::new(backend);
     let projects = dir.join("projects");
     std::fs::create_dir_all(&projects).unwrap();
-    TestApp::start_with(dir, parts, |config, deps| {
+    let mut t = TestApp::start_with(dir, parts, |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = tc_app::StoreChoice::Given(backend);
     })
-    .await
+    .await;
+    t.watch = Some(watch);
+    t
 }
 
 /// §8.2's Home row on the store (C1a's D7, A-25): with its summaries kept, a launch's Home of

@@ -15,7 +15,7 @@ no_loss: false
 size: 1-2 d
 merged: none
 updated: 2026-10-24
-next: step 1
+next: step 4
 blocked_by: none
 ---
 
@@ -243,3 +243,6 @@ G5's `app-e2e` job green if G5 has merged.
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
 - 2026-10-24 06:11 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-2 from main 33d2378d (S2 done). Overlap noted: C7a's branch edits tc-api's test.rs and lib.rs and tc-app tests/app/sync.rs; FIX-R's edits sources.rs, align_store.rs, upgrades.rs and create.rs among the store builders; whichever merges second resolves the small conflicts | python3 -I .audit/tools/board.py
+- 2026-10-24 07:44 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | Every tc-app test store carries a BurritoWatch: backend_over and watch_over install S2's writer probe (metadata.json and ingredients/ only, so the probe costs what it checks), StoreWorld and TestApp hold the watch, and its drop fails with "P5/INV-VALID-BURRITO: after <test>, <folder> is not a valid Scripture Burrito: <problems>". The two direct StoreBackend::start sites in store_scenario.rs call watch_over; app/store.rs's real-folder store is checked with assert_valid_burrito_files. every_store_a_tc_app_test_builds_is_watched scans tests/ for unwatched starts and thrown-away watches | cargo test --locked -p tc-app --test app p5::
+- 2026-10-24 07:44 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | p5_probe_names_a_planted_bad_md5 and p5_watch_fails_a_test_whose_store_reported_a_problem pass. With the watch's check emptied, the second fails: "test did not panic as expected at crates/tc-app/tests/app/p5.rs:34:10" | cargo test --locked -p tc-app --test app p5::
+- 2026-10-24 07:44 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | No store-written state was invalid: no blocker. Opt-outs: 2 (p5.rs's planted md5; the op-count corpus stores, whose watch stops and whose Scale drop checks each folder once). Times, same machine, load noted: app binary main 252 s (load 7) vs CHK-2 244 s (load 10-26); op_counts main 453 s (load 6-8) vs CHK-2 564-589 s with the watch on (load 9-14) and 511 s with the corpus watch stopped, so the corpus stores take step 3's opt-out. Mutation: one md5 hex digit flipped in tc-store's metadata_entries: 147 app tests fail, first on the older checks (the world's assert_valid_burrito, the store refusing NotABurrito); with the world's assert also off, 106 fail with "P5/INV-VALID-BURRITO: after app::create::a_create_sent_twice_with_one_request_id_makes_one_project, /projects/.staging-create-… is not a valid Scripture Burrito: ChecksumMismatch { path: \"ingredients/JON.usfm\", … }". Both reverted. Found in passing, not CHK-2's: a saved proptest case fails save_machine's C3 on main's code (story reference, Retry after a refused empty text); case and details in the shared notes, reported to the orchestrator | cargo test --locked -p tc-app --test app

@@ -167,15 +167,16 @@ async fn settings_from_home_of_a_folder_that_is_gone_say_so() {
 /// The sample written to disk on tc-store's in-memory file system, under an app over it.
 async fn on_the_store(dir: &Path) -> (FaultFs, TestApp) {
     let fs = FaultFs::new();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let (store, _) = ScenarioStore::write(backend, scenario("sample")).unwrap();
     let projects = dir.join("projects");
     std::fs::create_dir_all(&projects).unwrap();
-    let t = TestApp::start_with(dir, &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir, &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = StoreChoice::Given(Arc::new(store));
     })
     .await;
+    t.watch = Some(watch);
     (fs, t)
 }
 
