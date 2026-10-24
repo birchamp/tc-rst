@@ -4,7 +4,7 @@ title: Import tC3 projects and update a book from USFM (tc-import)
 track: A
 lane: storage
 milestone: M2
-state: claimed
+state: building
 owner: domain lane (Claude Code 9f599c21)
 branch: track-I
 worktree: .worktrees/track-I
@@ -16,7 +16,7 @@ no_loss: true
 size: 4-7 d (basis: B1a's seed took about 2 h; §13.1 is the bulk; +1 to +2 d for Update a book, docs/STORAGE-DELTA-2026-10-21.md §6)
 merged: none
 updated: 2026-10-24
-next: Step 1 (the tC3 row of the sweep: #796), then step 2: create crates/tc-import with the job machine.
+next: Step 2, create crates/tc-import with the job machine.
 blocked_by: none
 ---
 
@@ -546,3 +546,4 @@ features, `--features gallery`, `--features app` and `--features test-hooks`;
 - 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: your rows in docs/TC4-ISSUES.md and docs/P-LEDGER.md are (pending: I); when you write a test, replace the marker with its name in the same commit. .audit/tools/claims.test.mjs fails once this card is done while a marker remains | node --test .audit/tools/claims.test.mjs
 - 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
 - 2026-10-24 14:27 EDT | domain lane (Claude Code 9f599c21) | claim | none | Claimed on the orchestrator's word in .worktrees/track-I, cut from track-DOM-2 5ee8859d (DOM-2 is with the integration lane for batch 1; S2 is done on main). Scope by rulings/2026-10-24-H3-H4-H7-fast-release.md: kept steps 1 (only #796, the tC3 row), 2 (crate and machine), 6 (tC3 import), 7 (create_imported, on the current store: S3 is parked), 7a (Update a book; its store half is built here as Store::update_book, since S3 step 9 is parked) and 7b (no base, H20 ruled A). Cut until after the first release: steps 3 (raw USFM and burrito import; the MANIFEST test covers only the tC3 cases), 4 and 5 (tC4 4.0 seed and conversion), 8 (team move) and 9 (whole-Bible tC4 import). Before you start: STORAGE §13.6 present; plan_outside_edit at crates/tc-journal/src/outside.rs:676; H18 and H20 ruled, H13 not (it only concerned tC4 4.0 and USFM imports, both cut); no crates/tc-import yet | python3 -I .audit/tools/board.py
+- 2026-10-24 14:30 EDT | domain lane (Claude Code 9f599c21) | step 1 | none | Only the tC3 item is in scope: docs/TC4-ISSUES.md gets `#796 (tC3 import)` (unit I, test a_tc3_alignment_whose_words_do_not_fit_the_verse_is_marked_invalid, pending: I), read from ~/unfoldingword/tc4-sweep, which holds b86270f: `git log --oneline 9ad4d5c..b86270f -- src/data/import` lists 0b4cb270 (#813, burrito: cut), e17fce08 and e79a2795 (#796, tC3). #813, D110, #821, #822 and #835 concern the cut tC4 4.0, USFM and burrito imports and are left for later | git -C ~/unfoldingword/tc4-sweep log --oneline 9ad4d5c..b86270f -- src/data/import
