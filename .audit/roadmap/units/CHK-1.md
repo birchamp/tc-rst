@@ -4,7 +4,7 @@ title: Architecture and I/O boundary checks
 track: A
 lane: checks
 milestone: M1
-state: building
+state: parked
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-1
 worktree: .worktrees/track-CHK-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5-1 d
 merged: none
 updated: 2026-10-23
-next: step 4: CI on the pushed branch
+next: do step 5 after S2 merges (crates/tc-store and crates/tc-journal clippy.toml), then the review, then ask the orchestrator for a merge turn; branch track-CHK-1, worktree .worktrees/track-CHK-1
 blocked_by: none
 ---
 
@@ -317,3 +317,5 @@ Plus: `cargo test -p tc-arch` passes, and each planted violation of steps 1, 3 a
 - 2026-10-23 23:04 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | crates/tc-door43-fake/Cargo.toml: futures-util.workspace = true (the workspace entry has default-features = false). tc-arch architecture 6 pass; tc-door43-fake tests pass | cargo test -p tc-door43-fake
 - 2026-10-23 23:06 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | tests/io_boundaries.rs: pure_crates_do_no_io, only_listed_files_write_files, low_level_types_stay_in_their_owning_crate, every_route_is_behind_guard; all pass. allow/fs_writes.txt lists 14 files, each read first, each with its reason; none writes inside a project folder outside tc-store (app data, the resource store, uploads, downloads, the app lock, the installer bundle manifest, the fake server's repos, test hooks). allow/imports.txt holds the card's three rules; no stale reader. Plants, each reverted: std::fs::read in tc-check: "INV-PURE-CRATES-DO-NO-IO: crates/tc-check/src/lib.rs:52 uses std::fs (tc-check is pure logic)"; `pub use tc_usfm::Node;` in tc-check: "INV-ONE-PARSER-OWNER: crates/tc-check/src/lib.rs:52 names tc_usfm::Node; tc_usfm belongs to tc-usfm, call its functions instead"; a .route( after the guard layer: "INV-LOCAL-SERVER-IS-CLOSED: crates/tc-server/src/lib.rs:360 adds a route after the security::guard layer (line 359), so the guard never sees it". tc-server's request_without_token_is_401 now asks every registered path (prepare.html, uploads, download, media/obs, api added) | cargo test -p tc-arch
 - 2026-10-23 23:06 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | ARCHITECTURE.md: rows for tc-corpus and tc-arch; tc-sync and tc-import marked not built yet; the network rule names tc-resources until DOM-1 and the internet switch; a paragraph names crates/tc-arch, its two allow files, and DOM-3's typed capabilities as the compile-time fix | docs/ARCHITECTURE.md
+- 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | step 4 | 6c23dfbe | The gate list ran in CI on the pushed branch (INT-8: GitHub runs are the gate): ci 40056985489 and app-e2e 40056985483 both success, so tc-arch's tests pass on Linux and its code passes the Windows clippy | gh run view 40056985489
+- 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | park | 6c23dfbe | Parked as the card says: step 5 edits crates/tc-store while S2 is merging, not done | python3 -I .audit/tools/board.py
