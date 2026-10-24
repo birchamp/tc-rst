@@ -4,7 +4,7 @@ title: Sweep tC4 again, then every week
 track: A
 lane: integration
 milestone: M1
-state: gating
+state: done
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-SWEEP
 worktree: .worktrees/track-SWEEP
@@ -13,8 +13,8 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d, then about 1 h a week
-merged: none
-updated: 2026-10-23
+merged: 21fbbec0
+updated: 2026-10-24
 next: Merges in batch 2 (the integration lane runs batches, ruling 2026-10-24). The weekly sweep (step 5 items 2-4) waits until after the first release (rulings/2026-10-24-H3-H4-H7-fast-release.md item 4).
 blocked_by: none
 ---
@@ -55,7 +55,7 @@ rebuild tracks none of the 16 new or changed issues except #792.
   - INV-EVERY-TC4-CHANGE-HAS-A-ROW: every first-parent merge on tC4 `main`, every commit on
     `release/4.0`, and every tC4 issue opened or updated since the last sweep has a row in
     `docs/TC4-ISSUES.md` (or a line in the delta's not-applicable list) with its status, owner
-    card and test.
+    card and test (not in code: whether tC4 moved needs the network; the weekly rule holds it).
   - INV-THE-SWEEP-NAMES-ITS-RANGE: the top of `docs/TC4-ISSUES.md` holds one line that names the
     swept `main` commit, the swept `release/4.0` commit and the issue date, and the next sweep
     starts from that line.
@@ -253,3 +253,4 @@ it), and CHK-3's TC4-ISSUES test if CHK-3 has landed.
 - 2026-10-23 17:42 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner, through the orchestrator: "yes, needs-review, raw links are fine, yes orig lang highlights. MIT license new as of https://github.com/unfoldingWord/translationCore4/pull/838". Q37 (a): only Mark valid clears "needs review"; the D105.5 row is now a rebuild bug for FIX-R (§1 row 23; FIX-R is claimed, so its card is not edited here; the orchestrator is told). Q38 (a): raw rc:// links stay as in tC4; the row becomes a keep-it test to create. Q39: "yes", build now or wait asked again; the row stays an owner question. Licence: MIT chosen, blocked because tc-usfm's words module ports string-punctuation-tokenizer (GPL-2.0, unfoldingWord's); nothing changed. Counts recounted: 11, 88, 8, 120, 4, 64 = 295 | rulings/2026-10-23-Q37-needs-review.md, -Q38-raw-rc-links.md, -licence-mit.md
 - 2026-10-23 17:47 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner, through the orchestrator: "1 yes. 2. build it. (this project will most likely replace original tC4)". Licence: unfoldingWord relicenses string-punctuation-tokenizer to MIT, so the blocker is cleared; new card LIC-1 (integration, after SWEEP) and owner action A5 (relicense the npm package upstream). Q39: build original-language highlighting now; new card OLH-1 (app, M3, depends INT-4); the #840 row is unit todo for OLH-1. Strategy: the rebuild will most likely replace tC4; ROADMAP principle 7 says tC4 4.0 is the baseline, not the ceiling. DONE depends on both new cards. Counts recounted: 11 89 8 120 3 64 = 295 | rulings/2026-10-23-tokenizer-relicense.md, -Q39-original-language-highlight.md, -replace-tc4.md
 - 2026-10-24 14:21 EDT | integration lane (Claude Code 3d07d5f8) | note | none | the owner's ruling of 2026-10-24 (finish in days) parks the weekly sweep until after the first release; this first sweep still merges, in batch 2 | rulings/2026-10-24-H3-H4-H7-fast-release.md (on track-PLAN-FAST)
+- 2026-10-24 17:36 EDT | integration lane (Claude Code 3d07d5f8) | merge | 21fbbec0 | merged into main in batch 2a (UI-1 4a86b252, UI-2 312cef3f, SWEEP 21fbbec0, OLH-1 14e0f12b, T e1ffc583), gated by scripts/gates.sh --wait-ci batch-2a on the batch's last commit. TC4-ISSUES merged with FIX-R's and T's fixes and recounted (295 rows). | scripts/gates.sh --wait-ci batch-2a

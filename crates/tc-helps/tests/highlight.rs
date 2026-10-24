@@ -817,7 +817,8 @@ fn the_original_pane_marks_the_quote_at_its_occurrence() {
     );
     assert_eq!(
         highlight_original(&tit_1_1, &Quote::new("Θεοῦ"), nth(2)),
-        [10]
+        [10],
+        "INV-ORIGINAL-HIGHLIGHT-MATCHES-THE-QUOTE: the second Θεοῦ of TIT 1:1 is word 10"
     );
     // TIT 1:9: "τῇ ὑγιαινούσῃ" starts at the second τῇ, not the first.
     let tit_1_9 = ugnt_words(1, 9);

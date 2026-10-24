@@ -4,7 +4,7 @@ title: Highlight a note's words in the original-language pane
 track: A
 lane: app
 milestone: M3
-state: gating
+state: done
 owner: C7a session (Claude Code 3058c665)
 branch: track-OLH-1
 worktree: .worktrees/track-OLH-1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1]
 no_loss: false
 size: 2-3 sessions (basis: tC4 #840's scope; the gateway highlighter exists in tc-helps)
-merged: none
+merged: 14e0f12b
 updated: 2026-10-24
-next: On the orchestrator's merge turn (after SWEEP): merge main, run scripts/gates.sh --journeys on the merge commit, fast-forward main. The check captures wait for the capture machine (minors).
+next: none
 blocked_by: none
 ---
 
@@ -122,3 +122,4 @@ moves to.
 - 2026-10-24 | C7a session (Claude Code 3058c665) | step 1 | none | `highlight_original` in tc-helps: the verse's `\w` words, the quote's `&` spans matched as `highlight_plain` matches them (one shared `quote_matches`), then the note's occurrence; `-1` or unrecorded marks every match; not tied, a partial match or a missing occurrence marks nothing. Tests on UGNT TIT 1:1 and 1:9 and UHB JON 1:3 and 1:5 (a maqaf compound): `the_original_pane_marks_the_quote_at_its_occurrence`, `a_quote_the_verse_lacks_marks_nothing_in_the_original_pane`. Red first (no function); with the first match taken instead of the note's occurrence both fail (highlight.rs:813, :859). tc-helps passes, clippy clean | cargo test -p tc-helps --test highlight
 - 2026-10-24 | C7a session (Claude Code 3058c665) | step 2 | none | Draft's original tab: `App::focus` adds a focus for pane `orig` (no title) from `ChapterModel::original_focus`, remapped like the others in a mapped frame. The check card: `OriginalView::Ready.verse` is now `OriginalVerse { tokens, lit }` (golden updated) and the original row draws `orig-hl` marks through the gateway row's helper; both use `VerseModel::original_lit` over the `\\w` tokens. Understand has no original-language text (no tab, in tC4 or the rebuild), so it has nothing to mark; PLAN says so. Tests: tc-app `a_note_shows_its_panes_its_article_and_the_draft_words` (the Greek row marks TIT 1:1's seven quote words) and `a_chapters_helps_are_tc4s_cards_with_gateway_titles` (the orig focus); journeys `a_note_marks_its_quote_in_the_greek_tab`, `the_greek_row_marks_the_quote_of_the_check`; translate, check-detail, understand, check-keyboard and check-picker journeys 52 of 52, no skips. Native and wasm clippy clean; tc-ui and tc-api pass; screen_record passes on the committed files. Captures not retaken: this machine's font fingerprint differs from the captures' (minors), so pixels from here fail the gate. PLAN declares the difference; TC4-ISSUES #840 is covered | .enjoy-logs/olh-journeys.log
 - 2026-10-24 | C7a session (Claude Code 3058c665) | verify | f6317810 | browser-and-parity lens (subagent review of 03a460a1..f6317810): no blocker, no major. `highlight_plain` is unchanged by the shared matcher; real quotes all match at their occurrence (en_tn Jonah 191/191 on UHB, Titus 202/202 on UGNT, Psalms 7,921/7,921); the orig focus changes no title or other pane; the original row's text is the same drawn from tokens; mapped frames remap the orig marks. Two minors logged: overlapping matches of a repeated-word quote (no fixture reaches it), and unit-test quotes built from verse words | cargo test -p tc-helps --test highlight
+- 2026-10-24 17:36 EDT | integration lane (Claude Code 3d07d5f8) | merge | 14e0f12b | merged into main in batch 2a (UI-1 4a86b252, UI-2 312cef3f, SWEEP 21fbbec0, OLH-1 14e0f12b, T e1ffc583), gated by scripts/gates.sh --wait-ci batch-2a on the batch's last commit. | scripts/gates.sh --wait-ci batch-2a

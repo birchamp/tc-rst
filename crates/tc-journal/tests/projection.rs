@@ -374,7 +374,8 @@ fn an_empty_frame_is_spliced_as_tc4_writes_it() {
     };
     assert_eq!(
         between(&story_with_frames(&template, &[(2, "Texto nuevo.")])),
-        "\n\nTexto nuevo.\n\n"
+        "\n\nTexto nuevo.\n\n",
+        "INV-DERIVED-BYTES-EQUAL-TC4: an empty frame gets one blank line on each side, as tC4 writes it"
     );
     let last = story_with_frames(&template, &[(3, "Fin.")]);
     assert!(

@@ -38,15 +38,15 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 | Area | rebuild bug | unit todo | reference change | covered | owner question | not applicable | Rows |
 |---|---|---|---|---|---|---|---|
 | Align | 1 | 5 | 1 | 28 | 0 | 1 | 36 |
-| USFM, Translate and helps | 0 | 7 | 1 | 37 | 0 | 9 | 54 |
+| USFM, Translate and helps | 0 | 6 | 1 | 38 | 0 | 9 | 54 |
 | Check and resources | 0 | 2 | 2 | 37 | 1 | 22 | 64 |
 | Sync, storage and import | 0 | 20 | 3 | 27 | 2 | 13 | 65 |
 | Shell, startup, languages and help | 0 | 21 | 1 | 35 | 0 | 19 | 76 |
-| All area rows | 1 | 55 | 8 | 164 | 3 | 64 | 295 |
+| All area rows | 1 | 54 | 8 | 165 | 3 | 64 | 295 |
 
 Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep and T. A row counts once
-per area table. All area rows: 295; 1 rebuild bug, 55 unit todo, 8 reference
-change, 164 covered, 3 owner question and 64 not applicable. The 2026-10-23 sweep
+per area table. All area rows: 295; 1 rebuild bug, 54 unit todo, 8 reference
+change, 165 covered, 3 owner question and 64 not applicable. The 2026-10-23 sweep
 added 24 area rows (271 before) and changed 31, and its commit range holds 59 items
 (`TC4-DELTA-2026-10-23.md`; 25 covered, 7 unit todo, 8 reference change, 19 not applicable).
 Earlier: the 2026-10-19 range added 22 items (`TC4-DELTA-2026-10-19.md` §2). §1 lists the
@@ -239,7 +239,7 @@ the rebuild fixed it or does as tC4 does:
 | #615 | The Understand journey after the Resume journey | not applicable | C3 (J16 port) | — | The fix is inside tC4's J16 at the reference; port J16 as written. |
 | #628 (rc links) | Raw `rc://` links in helps (BSOJ Arabic notes for Titus) | covered | tc-helps; FIX-R | `a_bare_rc_link_shows_as_its_raw_text` | Ruled 2026-10-23 (Q38, `rulings/2026-10-23-Q38-raw-rc-links.md`): raw links are fine, as in tC4 4.0. The rebuild shows them raw; FIX-R's test keeps it so. |
 | #810 | Poetry verse as one body; poem lines shown as tabs | reference change | REF1 (H7); T step 4 | `verse_editor_shows_every_poem_line`; `no_change_section_save_on_psalm_3_writes_nothing` | tC4 shows poem lines as tabs and no longer cuts a verse at a mid-verse `\p`, `\b`, `\ts\*`, `\q3` or heading. The rebuild shows `\q` markers until the owner answers H7 (recommendation: keep markers). |
-| #812 | Editing a verse with a mid-verse `\p`, `\b` or `\ts\*` line changes only the part before it | unit todo | T step 4 | `every_bundled_ult_and_ust_verse_body_holds_every_target_word` (to create) | Right by code read: `split_verse` treats only the trailing run of layout lines as layout. The corpus test pins it, with 1SA 2:2, 1SA 4:1, REV 7:12 and MAT 27:9 saved whole. |
+| #812 | Editing a verse with a mid-verse `\p`, `\b` or `\ts\*` line changes only the part before it | covered | tc-usfm, tc-store; T | `every_bundled_ult_and_ust_verse_body_holds_every_target_word` (tc-usfm); `verses_with_a_layout_line_inside_save_whole` (tc-store) | Right by code read: `split_verse` treats only the trailing run of layout lines as layout. The corpus test pins it, with 1SA 2:2, 1SA 4:1, REV 7:12 and MAT 27:9 saved whole. |
 | #829 | Poetry indents two characters wide per level | not applicable | REF1 (H7) | — | Only for poem lines shown as tabs (#810). If the owner chooses tabs in H7, REF1 takes it. |
 | #831 | Home Resume card shows one verse's number with another's text, or `___` | covered | FIX-R step 5 | `resume_card_names_the_verse_of_its_text_and_never_shows_the_stub` | Fixed by FIX-R step 5: the recorder names a verse by the span it now holds, and a stub is no snippet. The test failed before the fix. |
 | #836 | English helps text read right to left under an Arabic gateway set | covered | tc-ui; FIX-R step 1 | `an_english_question_under_an_arabic_set_reads_left_to_right` (journey) | See §1 row 22; fixed by FIX-R step 1. |

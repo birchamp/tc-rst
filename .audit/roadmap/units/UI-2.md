@@ -4,7 +4,7 @@ title: Ports for sync, share, exchange and import
 track: A
 lane: app
 milestone: M1
-state: verifying
+state: done
 owner: C7a session (Claude Code 3058c665)
 branch: track-UI-2
 worktree: .worktrees/track-UI-2
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P2, P9]
 no_loss: false
 size: 1-2 d
-merged: none
+merged: 312cef3f
 updated: 2026-10-24
-next: Reviewed and ready; the merge waits for its dependencies. Merge after UI-1: merge main, gate the merge commit (batch or --wait-ci UI-2), fast-forward main.
+next: none
 blocked_by: none
 ---
 
@@ -264,3 +264,4 @@ It must print `# fail 0` and `# skipped 0`.
 - 2026-10-24 | C7a session (Claude Code 3058c665) | gate | none | tc-app: every test binary passes (app 677); clippy clean; journeys sync-button and share-open `# tests 5 # pass 5 # fail 0 # skipped 0`. The full gate list runs on the merge commit after UI-1 | .enjoy-logs/ui2-journeys.log
 - 2026-10-24 | races and protocol lens (Claude Code subagent of 3058c665) | verify | 7e609bd4 | no blocker. Release answers as before; with the feature on and `--test-hooks` off tc4 gets `UnavailableSync`, and `--scenario` journeys get the scripted port; reset still clears scripts. Majors, all in the tests and the script hook: the open case passes for a port that writes nothing (the scripted open answers a project already listed); the sync-fail and refused-open cases match any failure, so a dropped script passes; `test/script` answers Ok when the port is not scripted; `calls()` reads 0 for any other port. Minors: the allowlist is a ceiling, not exact; `is_branch` misses `cfg!` and tabs | cargo test -p tc-app --test app -- port_contract test_hook_branches sync share
 - 2026-10-24 | C7a session (Claude Code 3058c665) | fix | none | each fixture call now returns the exact error its case expects, and the cases compare it (`JobState::Failed(error)`); `OPEN_WRITES` makes a writing port prove the project was not listed before (the scripted port answers a listed one); `test/script` refuses a Door43 script with BadRequest when the port is not scripted (`scripting_a_port_that_is_not_scripted_is_refused`; without the refusal it fails `Ok(())`); `calls()` expects the scripted port. The lint's counts are exact and it catches `cfg!(` and tab indents; the exact count found my log's slip: app.rs still said 15 for 14 branches, now 14. 65 targeted tests pass, clippy clean | cargo test -p tc-app --test app -- port_contract test_hook_branches sync share hooks
+- 2026-10-24 17:36 EDT | integration lane (Claude Code 3d07d5f8) | merge | 312cef3f | merged into main in batch 2a (UI-1 4a86b252, UI-2 312cef3f, SWEEP 21fbbec0, OLH-1 14e0f12b, T e1ffc583), gated by scripts/gates.sh --wait-ci batch-2a on the batch's last commit. | scripts/gates.sh --wait-ci batch-2a
