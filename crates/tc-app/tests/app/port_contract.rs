@@ -4,16 +4,23 @@
 
 use tc_api::ApiError;
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
+use tc_api::editor::SaveVerse;
 use tc_api::endpoint::NetKind;
 use tc_api::home::{HomeView, List};
+use tc_api::ids::RequestId;
 use tc_api::ids::{JobId, ProjectRef};
 use tc_api::jobs::JobState;
 use tc_api::refusal::{OpenDoor43Refusal, Refusal, SyncFailure, SyncRefusal};
+use tc_api::session::Close;
 use tc_api::test::ScriptedSync;
+use tc_api::write::Stored;
 use tc_app::App;
+use tc_app::wire::token::shown;
 use tc_door43_fake::seeded::PARITY_USER;
+use tc_journal::Record;
+use tc_journal::record::VerseValue;
 
-use super::common::{folder, post, rid, until};
+use super::common::{folder, open_progress, post, rid, tit, until};
 use super::sync::{
     World, card_with_counts, internet_on, script, shared, shared_with, sign_in, synced,
 };
@@ -38,6 +45,106 @@ pub(super) trait SyncPortFixture {
     async fn open_refused(w: &World) -> ApiError;
     /// How many syncs and opens reached the port.
     fn calls(w: &World) -> usize;
+    /// The next sync of `project` succeeds; `n` makes the arrangement's request id.
+    async fn sync_succeeds(w: &World, project: &ProjectRef, n: u8);
+    /// The next sync waits, once it reached the port, until [`Self::release_sync`].
+    async fn hold_next_sync(w: &World);
+    fn release_sync(w: &World);
+    /// Whether Door43's copy of the sample holds `words` at Titus 1:1; `None` for a port with
+    /// no Door43 behind it.
+    async fn door43_holds(w: &World, words: &str) -> Option<bool>;
+}
+
+/// A project of the `shared` scenario that tells stories (#761).
+const STORIES: &str = "sample_burrito_obs";
+
+async fn script_synced(w: &World, n: u8, project: &ProjectRef) {
+    post(
+        &w.t.app,
+        &tc_api::test::Script {
+            request: rid(n),
+            next: tc_api::test::Scripted::Sync {
+                project: project.clone(),
+                outcome: ScriptedSync::Synced {
+                    teammates: None,
+                    joined: None,
+                    restored: 0,
+                },
+            },
+        },
+    )
+    .await
+    .unwrap();
+}
+
+/// Titus 1:1 of `project`, opened for the screens, saved as `words`; then closed.
+async fn save_titus_1_1(app: &App, project: &ProjectRef, n: u8, words: &str) {
+    let at = app
+        .sessions()
+        .open_screen(project, open_progress())
+        .await
+        .unwrap()
+        .at;
+    let minted = app
+        .sessions()
+        .reader(&at)
+        .unwrap()
+        .read()
+        .mint(&tit(1, 1), None)
+        .unwrap();
+    let ack = post(
+        app,
+        &SaveVerse {
+            at: at.clone(),
+            request: rid(n),
+            shown: shown(&minted).unwrap(),
+            words: words.to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    post(
+        app,
+        &Close {
+            at,
+            request: rid(n.wrapping_add(1)),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+/// Titus 1:1's words in `project`, as the project holds them now.
+async fn titus_1_1(app: &App, project: &ProjectRef) -> Option<String> {
+    let at = app
+        .sessions()
+        .open_screen(project, open_progress())
+        .await
+        .unwrap()
+        .at;
+    let record = app
+        .sessions()
+        .reader(&at)
+        .unwrap()
+        .read()
+        .projected(&tit(1, 1));
+    post(
+        app,
+        &Close {
+            at,
+            request: RequestId::from_bytes([0xC7; 16]),
+        },
+    )
+    .await
+    .unwrap();
+    match record {
+        Some(Record::Verse {
+            value: VerseValue::Text { words, .. },
+            ..
+        }) => Some(words),
+        _ => None,
+    }
 }
 
 pub(super) struct Scripted;
@@ -72,6 +179,28 @@ impl SyncPortFixture for Scripted {
             .scripted_sync_port()
             .expect("the scripted port")
             .calls()
+    }
+
+    async fn sync_succeeds(w: &World, project: &ProjectRef, n: u8) {
+        script_synced(w, n, project).await;
+    }
+
+    async fn hold_next_sync(w: &World) {
+        w.t.app
+            .scripted_sync_port()
+            .expect("the scripted port")
+            .hold_next();
+    }
+
+    fn release_sync(w: &World) {
+        w.t.app
+            .scripted_sync_port()
+            .expect("the scripted port")
+            .release();
+    }
+
+    async fn door43_holds(_w: &World, _words: &str) -> Option<bool> {
+        None
     }
 }
 
@@ -164,6 +293,73 @@ macro_rules! sync_port_contract {
                 assert_eq!(listed(app).await, before, "no project was added");
             }
 
+            /// INV-A-SYNC-NEVER-LOSES-A-SAVE: a save made while a sync runs is on disk after
+            /// the sync, and the next sync takes it to Door43.
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            async fn a_save_during_a_sync_is_kept_and_pushed_next() {
+                let w = <$fixture>::world().await;
+                let app = &w.t.app;
+                internet_on(app).await;
+                sign_in(app).await;
+                let sample = folder(SAMPLE);
+                <$fixture>::sync_succeeds(&w, &sample, 92).await;
+                <$fixture>::hold_next_sync(&w).await;
+                let calls = <$fixture>::calls(&w);
+                let job = post(app, &sync(10)).await.unwrap();
+                until("the sync reached the port", || {
+                    <$fixture>::calls(&w) > calls
+                })
+                .await;
+                const DURING: &str = "Pablo, siervo de Dios, escrito mientras se sincroniza";
+                save_titus_1_1(app, &sample, 11, DURING).await;
+                <$fixture>::release_sync(&w);
+                assert!(
+                    matches!(ended(app, job).await, JobState::Done(_)),
+                    "the sync ends"
+                );
+                assert_eq!(
+                    titus_1_1(app, &sample).await.as_deref(),
+                    Some(DURING),
+                    "INV-A-SYNC-NEVER-LOSES-A-SAVE: the save made during the sync is kept"
+                );
+                <$fixture>::sync_succeeds(&w, &sample, 93).await;
+                let next = post(app, &sync(13)).await.unwrap();
+                assert!(matches!(ended(app, next).await, JobState::Done(_)));
+                if let Some(held) = <$fixture>::door43_holds(&w, DURING).await {
+                    assert!(
+                        held,
+                        "INV-A-SYNC-NEVER-LOSES-A-SAVE: the next sync took the save to Door43"
+                    );
+                }
+            }
+
+            /// #761: a story project syncs as a Bible does.
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            async fn a_story_project_syncs_like_a_bible() {
+                let w = <$fixture>::world().await;
+                let app = &w.t.app;
+                internet_on(app).await;
+                sign_in(app).await;
+                let stories = folder(STORIES);
+                <$fixture>::sync_succeeds(&w, &stories, 94).await;
+                let job = post(
+                    app,
+                    &SyncProject {
+                        request: rid(14),
+                        project: stories,
+                    },
+                )
+                .await
+                .unwrap();
+                assert!(
+                    matches!(
+                        ended(app, job).await,
+                        JobState::Done(tc_api::jobs::JobOutcome::Synced(_))
+                    ),
+                    "the story project synced"
+                );
+            }
+
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             async fn with_the_internet_off_the_port_is_never_called() {
                 let w = <$fixture>::world().await;
@@ -189,6 +385,19 @@ macro_rules! sync_port_contract {
 pub(super) struct Door43;
 
 const REPO: &str = "es-419_tit_equipo";
+const STORY_REPO: &str = "es-419_obs_equipo";
+
+fn story_repo() -> RepoSeed {
+    RepoSeed {
+        owner: PARITY_USER.to_owned(),
+        name: STORY_REPO.to_owned(),
+        subject: "Open Bible Stories".to_owned(),
+        language: "es-419".to_owned(),
+        topics: Vec::new(),
+        private: false,
+        commits: Vec::new(),
+    }
+}
 
 fn repo_lookup_fails(w: &World) -> ApiError {
     w.fake.inject(FaultRule::once(
@@ -226,6 +435,11 @@ impl SyncPortFixture for Door43 {
             .connect_door43(&folder(SAMPLE), PARITY_USER, REPO, "master")
             .await
             .unwrap();
+        w.fake.add_repo(story_repo()).await.unwrap();
+        w.t.app
+            .connect_door43(&folder(STORIES), PARITY_USER, STORY_REPO, "master")
+            .await
+            .unwrap();
         w.fake.clear_requests();
         w
     }
@@ -247,6 +461,31 @@ impl SyncPortFixture for Door43 {
     fn calls(w: &World) -> usize {
         w.fake.requests().len()
     }
+
+    async fn sync_succeeds(_w: &World, _project: &ProjectRef, _n: u8) {}
+
+    async fn hold_next_sync(w: &World) {
+        w.fake.inject(FaultRule::once(
+            "GET",
+            &format!("/api/v1/repos/{PARITY_USER}/{REPO}"),
+            Fault::Hold,
+        ));
+    }
+
+    fn release_sync(w: &World) {
+        w.fake.release_held();
+    }
+
+    async fn door43_holds(w: &World, words: &str) -> Option<bool> {
+        // Door43's copy, opened as a new project, as a teammate's computer would get it.
+        let app = &w.t.app;
+        let job = post(app, &open(20, "door43-copy")).await.unwrap();
+        let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) = ended(app, job).await
+        else {
+            return Some(false);
+        };
+        Some(titus_1_1(app, &project).await.as_deref() == Some(words))
+    }
 }
 
 sync_port_contract!(scripted, Scripted);
@@ -258,7 +497,7 @@ sync_port_contract!(door43, Door43);
 async fn scripting_a_port_that_is_not_scripted_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let t = super::common::TestApp::start_in(dir.path(), |_, deps| {
-        deps.sync = std::sync::Arc::new(tc_app::ports::UnavailableSync);
+        deps.sync = std::sync::Arc::new(tc_app::ports::door43::Door43Sync);
     })
     .await;
     let answer = post(

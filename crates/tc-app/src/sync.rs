@@ -150,24 +150,34 @@ impl App {
             })?;
         let handle = lease.session().handle().clone();
         let report = handle.door43_sync(client, Some(session)).await;
-        let ended = match report {
-            Some(report) => match report.ended {
-                tc_sync::machine::Ended::Synced { .. } => Ok(()),
-                tc_sync::machine::Ended::Failed(failure) => {
-                    Err(ApiError::Refused(tc_api::Refusal::Sync(failure)))
-                }
-            },
-            None => Err(ApiError::Unavailable(tc_api::error::Feature::Sync)),
+        let (ended, received_by) = match report {
+            Some(report) => (
+                match report.ended {
+                    tc_sync::machine::Ended::Synced { .. } => Ok(()),
+                    tc_sync::machine::Ended::Failed(failure) => {
+                        Err(ApiError::Refused(tc_api::Refusal::Sync(failure)))
+                    }
+                },
+                report.received_by,
+            ),
+            None => (
+                Err(ApiError::Unavailable(tc_api::error::Feature::Sync)),
+                BTreeMap::new(),
+            ),
         };
         let view = {
             let session = lease.session();
             let me = session.handle().facts().device;
             let snapshot = session.read();
-            // shortcut: tc-sync's report does not name the changes it took in (it counts packs), so the
-            // toast counts none received; when tc-store's IntakeReport carries their ids, pass them.
-            let received: Vec<ChangeId> = Vec::new();
             let resources = &self.inner.resources;
-            synced_view(&snapshot, me, &received, 0, &|pin| resources.has_dcs(pin))
+            let mut view = synced_view(&snapshot, me, &[], 0, &|pin| resources.has_dcs(pin));
+            // Unit X counts what came in, by the person who made it (§9.7 `received`).
+            view.received = received_by.values().sum();
+            view.from = received_by
+                .keys()
+                .map(crate::wire::scope::person_label)
+                .collect();
+            view
         };
         drop(lease);
         self.inner.sessions.settled(&folder).await;

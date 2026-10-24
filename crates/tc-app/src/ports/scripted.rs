@@ -2,8 +2,8 @@
 //! Door43. It sends nothing; a scripted sync writes its teammates' changes through the app.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use tc_api::door43::{ProjectName, RepoSource};
 use tc_api::error::{ApiError, Feature};
@@ -23,6 +23,9 @@ pub struct ScriptedSyncPort {
     /// The outcomes of the next opens, in order; `Unavailable(Sync)` when none is left.
     opens: Mutex<VecDeque<Result<ProjectRef, ApiError>>>,
     calls: AtomicUsize,
+    /// The next sync waits for [`ScriptedSyncPort::release`] before it ends.
+    hold: AtomicBool,
+    released: Arc<tokio::sync::Notify>,
 }
 
 impl ScriptedSyncPort {
@@ -44,13 +47,27 @@ impl ScriptedSyncPort {
     pub fn calls(&self) -> usize {
         self.calls.load(Ordering::SeqCst)
     }
+
+    /// The next sync waits, once it reached the port, until [`Self::release`].
+    pub fn hold_next(&self) {
+        self.hold.store(true, Ordering::SeqCst);
+    }
+
+    pub fn release(&self) {
+        self.released.notify_one();
+    }
 }
 
 impl SyncPort for ScriptedSyncPort {
     fn sync(&self, app: App, folder: ProjectRef) -> BoxFuture<Result<SyncResultView, JobEnd>> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
         let next = lock(&self.syncs).remove(&folder);
+        let held = self.hold.swap(false, Ordering::SeqCst);
+        let released = self.released.clone();
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
+            if held {
+                released.notified().await;
+            }
             match next {
                 Some(outcome) => app.scripted_sync(folder, outcome).await,
                 None => Err(JobEnd::Failed(ApiError::Unavailable(Feature::Sync))),

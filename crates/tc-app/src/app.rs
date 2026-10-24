@@ -76,7 +76,7 @@ pub struct AppDeps {
     /// The projects: tc-store on disk; the memory backend in tests and parity captures
     /// (feature `fixture-backend`).
     pub store: StoreChoice,
-    /// Sync, share and open from Door43 (UI-2): unavailable until E1a; scripted in tests.
+    /// Sync, share and open from Door43 (UI-2): Door43 through unit X; scripted in tests.
     pub sync: Arc<dyn crate::ports::SyncPort>,
     /// USB exchange: unavailable until E2.
     pub exchange: Arc<dyn crate::ports::ExchangePort>,
@@ -107,7 +107,7 @@ impl AppDeps {
             host,
             files: FilesChoice::OnDisk,
             store: StoreChoice::OnDisk,
-            sync: Arc::new(crate::ports::UnavailableSync),
+            sync: Arc::new(crate::ports::door43::Door43Sync),
             exchange: Arc::new(crate::ports::UnavailableExchange),
             import: Arc::new(crate::ports::UnavailableImport),
             #[cfg(feature = "test-hooks")]
