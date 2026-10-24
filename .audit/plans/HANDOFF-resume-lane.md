@@ -1,3 +1,5 @@
+History: superseded by .audit/roadmap/ on 2026-10-21; do not update.
+
 # Handoff: the resume lane (kept current)
 
 Any agent can pick this up. Read, in order: this file, `.audit/STATUS.md`, `.audit/plans/RESUME-2026-10-20.md`

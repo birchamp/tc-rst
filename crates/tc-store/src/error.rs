@@ -25,6 +25,14 @@ impl StoreError {
         }
     }
 
+    /// The I/O error, if this is an I/O error.
+    pub fn io_error(&self) -> Option<&io::Error> {
+        match self {
+            Self::Io { source, .. } => Some(source),
+            Self::Other(_) => None,
+        }
+    }
+
     /// The I/O error kind, if this is an I/O error.
     pub fn kind(&self) -> Option<io::ErrorKind> {
         match self {

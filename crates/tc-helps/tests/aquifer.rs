@@ -809,3 +809,25 @@ proptest! {
         prop_assert_eq!(got, want);
     }
 }
+
+#[test]
+fn paragraph_marks_after_unicode_whitespace_remain_literal_text() {
+    let text = "\u{b}-\t'";
+    let markdown = html_to_markdown(&format!("<p>{text}</p>"));
+    assert_eq!(markdown, "\\- '");
+    assert_eq!(
+        plain_text(&markdown).split_whitespace().collect::<Vec<_>>(),
+        vec!["-", "'"],
+    );
+
+    for leading in ["\u{b}", "\u{85}", "\u{a0}", "\u{2003}"] {
+        for literal in ["- literal", "# literal", "> literal", "1. literal"] {
+            let markdown = html_to_markdown(&format!("<p>{leading}{literal}</p>"));
+            assert_eq!(
+                plain_text(&markdown).split_whitespace().collect::<Vec<_>>(),
+                literal.split_whitespace().collect::<Vec<_>>(),
+                "{leading:?} before {literal:?}: {markdown:?}",
+            );
+        }
+    }
+}

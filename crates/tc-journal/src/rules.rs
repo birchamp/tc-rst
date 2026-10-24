@@ -275,7 +275,9 @@ fn known_minor(v: u16) -> u16 {
 /// The files translationCore writes besides those its format derives (§3.1, §11.4).
 const OWNED: &[&str] = &["metadata.json", "ingredients/tc/**"];
 
-pub(crate) fn carried_path_problem(path: &RepoPath, minor: u16) -> Option<String> {
+/// Why `path` cannot be a carried file at format minor `minor`: the files translationCore
+/// writes, and the folders it needs (§11.4, V8); `None` when it can.
+pub fn carried_path_problem(path: &RepoPath, minor: u16) -> Option<String> {
     let folded = path.collision_form();
     let derived = derived_paths(minor);
     let owned: Vec<PathPattern> = OWNED.iter().filter_map(|p| PathPattern::parse(p)).collect();

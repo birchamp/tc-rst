@@ -19,6 +19,9 @@ browserTest('a_card_reads_again_on_a_new_home_visit_not_on_a_redraw', async () =
     const requests = recordRequests(page);
     await card(page).waitFor();
     await until('the tiles are known', async () => (await page.getByTestId('book-tile-TIT').textContent()).includes('11%'));
+    // The Home summary job may still be running; its card event makes the page read the card,
+    // which belongs before the count, not in it. Wait for the server, then the page.
+    await until('the server is quiet', async () => !(await env.call('test/quiet', {})).busy);
     await quiet(page);
     // A language preview redraws Home's texts: no read.
     let mark = requests.mark();

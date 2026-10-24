@@ -235,7 +235,7 @@ async fn a_write_finishes_when_its_caller_goes_away() {
     assert!(caller.await.unwrap_err().is_cancelled());
     assert_eq!(stored.load(Ordering::SeqCst), 0);
     release.notify_one();
-    for _ in 0..500 {
+    for () in crate::store_world::for_a_minute() {
         if stored.load(Ordering::SeqCst) == 1 {
             break;
         }
@@ -399,7 +399,7 @@ async fn a_running_write_is_counted_until_it_ends() {
                 .await
         })
     };
-    for _ in 0..2000 {
+    for () in crate::store_world::for_a_minute() {
         if cache.running() == 1 {
             break;
         }
@@ -487,7 +487,7 @@ async fn a_refusal_never_applies_to_an_id_that_was_sent() {
                 .await
         })
     };
-    for _ in 0..2000 {
+    for () in crate::store_world::for_a_minute() {
         if cache.running() == 1 {
             break;
         }
@@ -545,7 +545,7 @@ async fn forget_settled_forgets_finished_and_lost_writes_and_keeps_running_ones(
                 .await
         })
     };
-    for _ in 0..2000 {
+    for () in crate::store_world::for_a_minute() {
         if cache.running() == 1 {
             break;
         }
@@ -735,7 +735,7 @@ async fn a_write_that_keeps_nothing_is_waited_for_while_it_runs() {
                 .await
         })
     };
-    for _ in 0..2000 {
+    for () in crate::store_world::for_a_minute() {
         if cache.running() == 1 {
             break;
         }

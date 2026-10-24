@@ -4,18 +4,18 @@ title: Lint ratchet and fresh P7 captures
 track: A
 lane: checks
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
-depends: [INT-4]
+state: parked
+owner: checks lane (Claude Code 2198ee19)
+branch: track-CHK-6
+worktree: .worktrees/track-CHK-6
+depends: [INT-4, CHK-6a]
 needs_owner: []
 proves: [P7]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-24
+next: step 2 after C7a, FIX-R and S2 merge (the lint pass edits their crates); step 3 after CHK-1 merges (crates/tc-arch); step 5 after the app lane's UI merges (recapture); then the review and a merge turn. Branch track-CHK-6
 blocked_by: none
 ---
 
@@ -265,3 +265,11 @@ Plus: the gate step `ignored`; the recapture of step 5 on this PC; every journey
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-23 23:50 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-6 from main 325244a1. Order decided: steps 1, 4 and 6 now (their files overlap no active branch); step 2's lint pass edits nearly every crate while C7a and FIX-R change tc-api, tc-app and tc-ui and S2 changes tc-store and tc-journal, so it waits for those merges; step 3 needs crates/tc-arch (CHK-1, parked); step 5 recaptures the screens and waits for the app lane's UI merges, or its trees go stale at once | git diff --name-only claude/focused-ride-5uzj7p...track-C7a
+- 2026-10-24 00:05 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | `pub mod stub;` in tc-server is under cfg(feature = "test-hooks"), its two doc links plain text. Decided, against the card: FieldKind::Test stays in every build. With the variant under cfg, the workspace clippy and the Windows clippy failed ("E0004: non-exhaustive patterns: `tc_api::buffer::FieldKind::Test` not covered" in tc-ui): cargo unifies tc-api's test-hooks feature across the workspace, so tc-ui's host library sees the variant while its own feature is off, and a crate cannot test another crate's feature. Instead the variant carries `#[cfg_attr(not(feature = "test-hooks"), serde(skip))]`: a release build refuses a test field on the wire. clippy, clippy-release-bins, clippy-release-app, clippy-windows, wasm-ui, wasm-ui-app, wasm-ui-hooks, wasm-api, wasm-ui-gallery all exit 0; tc-server and tc-api tests pass; the release build and release_has_no_test_hooks pass | .enjoy-logs/chk6-step1b.log
+- 2026-10-24 00:05 EDT | checks lane (Claude Code 2198ee19) | step 4 | none | scripts/check-ignored.sh (gate step `ignored`, after `test` in CI's test job) lists the workspace's ignored tests with cargo and fails on one with no line in scripts/ignored-tests.txt, or a line naming no ignored test. The list holds today's 7: suggestions_meet_the_full_training_corpus_budget in job alignment-budget, six local with their reason. .audit/tools/ignored.test.mjs: every blessing variable a source reads is refused by gates.sh, and every list line names a workflow job or `local: <why>`. Plants, each reverted: #[ignore] on tc-versification's an_ordinary_shift_is_lossless: "INV-NO-BLESS-IN-CI: ignored test an_ordinary_shift_is_lossless has no line in scripts/ignored-tests.txt"; a read of UPDATE_SNAPSHOTS: "INV-NO-BLESS-IN-CI: crates/tc-versification/tests/losses.rs reads UPDATE_SNAPSHOTS, which scripts/gates.sh does not refuse; add it to the refusal list". gates-sync passes | scripts/gates.sh --step ignored
+- 2026-10-24 00:05 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | baseline.test.mjs "PLAN's reference commit is the baseline's": PLAN's "the reference is tC4 `main` at commit `<sha>`" is a prefix of manifest.json tc4.commit. Plant: PLAN's d310bf3 as a5ce030: "P7/INV-CAPTURES-FRESH: PLAN names reference a5ce030; the baseline was captured at d310bf304cfee784f4ca45dee474a3faf0d5616e"; reverted | node --test parity/tc4-baseline/baseline.test.mjs
+- 2026-10-24 00:05 EDT | checks lane (Claude Code 2198ee19) | park | none | Parked: steps 2, 3 and 5 wait (see next) | python3 -I .audit/tools/board.py
+- 2026-10-24 00:29 EDT | checks lane (Claude Code 2198ee19) | fix | none | CI on 95d6badd (run 40060957519) failed app::save_machine::c3_reload_anywhere_keeps_each_saved_field_once: "Elapsed" at the scenario's 30 s wall-clock bound (a Reference field, not the test field step 1 touched). Raised to 120 s with a "hung" message, as S2's branch already does for the verse scenario two hunks above (so the edits merge); ruling 2026-10-23 | gh run view 40060957519 --log-failed
+- 2026-10-24 00:30 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1, 4 and 6 and the C3 bound are card CHK-6a, merged on its own; this card keeps steps 2, 3 and 5 and depends on CHK-6a | .audit/roadmap/units/CHK-6a.md
+- 2026-10-24 01:44 EDT | checks lane (Claude Code 2198ee19) | note | none | On the orchestrator's option A (ruling 2026-10-23, rule 1): the alignment-budget job reports and does not fail in CI. suggestions_meet_the_full_training_corpus_budget asserts its p95 only with TC_ALIGN_BUDGET_ENFORCE set; its suggestion check still fails in CI. Main's ci 40065010453 had failed it at p95 150.76 ms against the 150 ms CI limit. The change rides with CHK-1a | crates/tc-align/tests/suggestion_budget.rs
