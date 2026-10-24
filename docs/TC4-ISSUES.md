@@ -438,7 +438,7 @@ the rebuild fixed it or does as tC4 does:
 | #284 | Ship or verify the Windows C runtime | unit todo | G1 | `tc4_exe_imports_no_vcruntime` | Build with `+crt-static`, or ship the DLLs next to the program. |
 | #456 | Sign the Windows installer and app | unit todo | G1 | `Get-AuthenticodeSignature` reports Valid for each file | Sign before hashing. |
 | #44 | Installers for Windows, macOS and Linux | unit todo | G1 | clean-machine smoke per installer | Uninstall keeps projects and app data. |
-| #554 | Third-party notices and the GPL text | unit todo | G1 | as #606 | Ship COPYING beside the notices. |
+| #554 | Third-party notices and the licence text | unit todo | G1 | as #606 | Ship the MIT `LICENSE` beside the third-party notices (the rebuild is MIT since LIC-1, as tC4 since #838). |
 | #640 | Start after an upgrade when a copy differs | covered | tc-resources | as §4 | None. |
 | #528 | Each release in its own folder | covered | tc-resources | as §4 | None. |
 | #707 | Import during start-up recovery | covered | tc-store | as §5 | None. |
