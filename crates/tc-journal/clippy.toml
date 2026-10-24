@@ -22,4 +22,13 @@ disallowed-methods = [
   { path = "std::fs::File::create", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
   { path = "std::fs::File::create_new", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
   { path = "std::fs::OpenOptions::open", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  # Unix-only or tc-store-only paths resolve only where they are built.
+  { path = "std::fs::DirBuilder::create", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::soft_link", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::os::unix::fs::symlink", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::openat", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::renameat", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::renameat_with", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::unlinkat", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::mkdirat", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
 ]
