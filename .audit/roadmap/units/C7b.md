@@ -4,7 +4,7 @@ title: Conflict choices: every other kind
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: shell lane (Claude Code e1bb3a0c)
 branch: track-C7b
 worktree: .worktrees/track-C7b
@@ -15,7 +15,7 @@ no_loss: true
 size: 4.5-6.5 sessions plus the owner's wait (basis: B11 and C8; carried choices shrink to two, about -0.5 session, docs/STORAGE-DELTA-2026-10-21.md §6)
 merged: none
 updated: 2026-10-24
-next: Step 1, the scripted teammates' changes for every kind group and the tab tests.
+next: Step 2, the H5 packet: draw each proposed screen, the q9 probe page and parity/app/q9-packet.mjs.
 blocked_by: none
 later: ["H5 from step 3"]
 ---
@@ -354,3 +354,4 @@ Plus:
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | ruling | none | Step 6 and the funnel card follow H19 (carried files stay) and H22 part 2 (*Keep both* is `jon_01-Juan.wav`); the STOP lines are gone | rulings/2026-10-22-H19.md, rulings/2026-10-22-H22.md
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | note | none | Step 7b gives PLAN P2 J26's check-decision step an owner whichever of C7b and E1a lands last; `later` names H5 from step 3 | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
 - 2026-10-24 15:03 EDT | shell lane (Claude Code e1bb3a0c) | claim | none | The orchestrator gave C7b to this lane (owner ruling 2026-10-24, finish in days); cut from origin/track-C7a d07d6612 with main 0189cee4 merged in, because C7a is in merge batch 1 and not on main yet (depends C7a: the merge waits for it). Kept to the review and conflict screens: the app lane does UI-1 meanwhile. One review, per the ruling | git log -2 track-C7b
+- 2026-10-24 15:32 EDT | shell lane (Claude Code e1bb3a0c) | step 1 | none | tc_api::test::ScriptedSync::Synced gains kinds: Vec<TeammatesKind> (serde default; Check, Comment, Alignment, Setting, Pins, BookPresence, CarriedFile, PathCase); Teammates::change_kind (test-hooks) has Teammates 1 and 2 change one record of each kind from its heads with tc-journal's encoder, as edit_verse does (a carried file: Teammate 1 adds it, both replace it, CF 3). cargo test -p tc-app --test app app::conflicts:: 13 passed, with every_kind_is_listed_on_its_tab and align_and_check_show_the_two_versions_marker; cargo test -p tc-api --test golden 9 passed (script.json regenerated). Proofs: Alignment moved to ReviewTab::Checks fails 'conflicts.rs:1042:5: left: [] right: [Alignment]'; the aligner's marker None fails 'conflicts.rs:1112:5: left: None right: Some(ConflictMarker { .., versions: 2 })'. The carried and path-case records arrive without their file contents (filling the git store is tc-store's), so the Notices tab also shows FileMissing notices; the tab test leaves Notices out and says why. Written by a subagent of this lane, reviewed here | cargo test -p tc-app --test app app::conflicts::

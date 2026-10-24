@@ -1134,6 +1134,19 @@ pub trait ProjectStore: Send + Sync + 'static {
         Err(StoreError::Other("this store has no teammates".to_owned()))
     }
 
+    /// Teammates 1 and 2's versions of one record of `kind` in `folder`, both from one version,
+    /// written as a sync's intake would ([`memory::teammates::Teammates::change_kind`]): the
+    /// changes' ids. A store with no teammates refuses.
+    #[cfg(feature = "test-hooks")]
+    fn teammates_change_kind(
+        &self,
+        folder: &ProjectRef,
+        kind: tc_api::test::TeammatesKind,
+    ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
+        let _ = (folder, kind);
+        Err(StoreError::Other("this store has no teammates".to_owned()))
+    }
+
     /// A scripted sync ended: Door43 has `folder`'s project as `fold` holds it, so the next
     /// teammates edit from it (B11). A store with no teammates keeps nothing.
     #[cfg(feature = "test-hooks")]

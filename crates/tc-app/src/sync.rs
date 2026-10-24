@@ -155,7 +155,7 @@ impl App {
     ) -> Result<JobOutcome, JobEnd> {
         use serde_json::json;
         use tc_api::test::ScriptedSync as Scripted;
-        let (teammates, joined, restored) = match outcome {
+        let (teammates, joined, kinds, restored) = match outcome {
             Scripted::Failed(failure) => {
                 return Err(JobEnd::Failed(ApiError::Refused(tc_api::Refusal::Sync(
                     failure,
@@ -164,8 +164,9 @@ impl App {
             Scripted::Synced {
                 teammates,
                 joined,
+                kinds,
                 restored,
-            } => (teammates, joined, restored),
+            } => (teammates, joined, kinds, restored),
         };
         let failed = |what: &str, reason: String| {
             JobEnd::Failed(self.internal(what, crate::reports::facts(json!({ "reason": reason }))))
@@ -216,6 +217,18 @@ impl App {
             received.extend(
                 written
                     .map_err(|e| failed("the teammates' join was not written", e.to_string()))?,
+            );
+        }
+        for kind in kinds {
+            let at = folder.clone();
+            let written = self
+                .with_store(move |store| store.teammates_change_kind(&at, kind))
+                .await
+                .map_err(JobEnd::Failed)?;
+            received.extend(
+                written.map_err(|e| {
+                    failed("the teammates' changes were not written", e.to_string())
+                })?,
             );
         }
         // Read the project again as a sync's intake does: the fold takes the received changes

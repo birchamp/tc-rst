@@ -18,7 +18,7 @@ use tc_api::home::Card;
 use tc_api::ids::{ChangeRef, ConflictRef, Scope};
 use tc_api::session::Close;
 use tc_api::shown::{Known, PersonLabel, Who};
-use tc_api::test::{ScriptedSync, TeammatesEdit, TeammatesJoin};
+use tc_api::test::{ScriptedSync, TeammatesEdit, TeammatesJoin, TeammatesKind};
 use tc_api::write::Stored;
 use tc_app::App;
 use tc_app::events::Next;
@@ -433,6 +433,7 @@ async fn versions_that_differ_only_in_a_footnote_look_different() {
             texts: vec![FIRST.into(), SECOND.into()],
         }),
         joined: None,
+        kinds: Vec::new(),
         restored: 0,
     })
     .await;
@@ -712,6 +713,7 @@ async fn joined_while_i_changed_five() -> (super::sync::World, Scope, ConflictEn
                 first: 4,
                 last: 5,
             }),
+            kinds: Vec::new(),
             restored: 0,
         },
     )
@@ -985,4 +987,173 @@ async fn bulk_keep_leaves_out_conflicts_with_two_candidates() {
     assert_eq!(view.conflicts, 2);
     let two = history(app, &at, &record_ref(&tit(1, 2)).unwrap()).await;
     assert_eq!(two[0].cause, VersionCause::Kept);
+}
+
+/// The shared project after a sync brought Teammates 1 and 2's versions of one record of each
+/// of `kinds`, open at Titus: their conflicts as only a sync or a USB file brings them.
+async fn synced_kinds(kinds: Vec<TeammatesKind>) -> (super::sync::World, Scope) {
+    synced_with(ScriptedSync::Synced {
+        teammates: None,
+        joined: None,
+        kinds,
+        restored: 0,
+    })
+    .await
+}
+
+/// The conflicts a tab lists, by kind.
+async fn kinds_on(app: &App, at: &Scope, on: ReviewTab) -> Vec<ConflictKind> {
+    let ReviewEntries::Conflicts(entries) = tab(app, at, on).await.entries else {
+        panic!("{on:?} lists no conflicts")
+    };
+    let mut kinds: Vec<ConflictKind> = entries.iter().map(|e| e.kind).collect();
+    kinds.sort_by_key(|k| format!("{k:?}"));
+    kinds
+}
+
+/// The one conflict a tab lists.
+async fn only_entry(app: &App, at: &Scope, on: ReviewTab) -> ConflictEntry {
+    let ReviewEntries::Conflicts(entries) = tab(app, at, on).await.entries else {
+        panic!("{on:?} lists no conflicts")
+    };
+    let [entry] = entries.as_slice() else {
+        panic!("{entries:?}")
+    };
+    entry.clone()
+}
+
+/// STORAGE §8.5: each kind outside the Text tab is listed on its own tab, and the counts say
+/// so; the tab of a kind is a design decision no type holds (B11's minor).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn every_kind_is_listed_on_its_tab() {
+    let (w, at) = synced_kinds(vec![
+        TeammatesKind::Check,
+        TeammatesKind::Comment,
+        TeammatesKind::Alignment,
+        TeammatesKind::Setting,
+        TeammatesKind::Pins,
+        TeammatesKind::BookPresence,
+        TeammatesKind::CarriedFile,
+        TeammatesKind::PathCase,
+    ])
+    .await;
+    let app = &w.t.app;
+    assert_eq!(kinds_on(app, &at, ReviewTab::Text).await, vec![]);
+    assert_eq!(
+        kinds_on(app, &at, ReviewTab::Alignments).await,
+        vec![ConflictKind::Alignment]
+    );
+    assert_eq!(
+        kinds_on(app, &at, ReviewTab::Checks).await,
+        vec![ConflictKind::Check, ConflictKind::Comment]
+    );
+    assert_eq!(
+        kinds_on(app, &at, ReviewTab::Settings).await,
+        vec![
+            ConflictKind::BookPresence,
+            ConflictKind::CarriedFile,
+            ConflictKind::PathCase,
+            ConflictKind::Pins,
+            ConflictKind::Setting,
+        ]
+    );
+    let view = tab(app, &at, ReviewTab::Settings).await;
+    // The scripted sync brings the carried files' records without their bytes, which only
+    // unit X's git fetch brings, so each of those files is a FileMissing notice.
+    let counts: Vec<(ReviewTab, u32)> = counts(&view)
+        .into_iter()
+        .filter(|(t, _)| *t != ReviewTab::Notices)
+        .collect();
+    assert_eq!(
+        counts,
+        vec![
+            (ReviewTab::Text, 0),
+            (ReviewTab::Alignments, 1),
+            (ReviewTab::Checks, 2),
+            (ReviewTab::Settings, 5),
+            (ReviewTab::Detached, 0),
+        ]
+    );
+}
+
+/// #791: a verse whose alignment has two versions opens in the aligner with "2 versions ·
+/// Review", and a check decision with two versions shows the same marker on the Check screen,
+/// each naming the conflict the review lists.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn align_and_check_show_the_two_versions_marker() {
+    use tc_api::check::{CheckListRef, CheckUnit, Item, RailRows, Tool};
+    use tc_api::shown::ConflictMarker;
+
+    let (w, at) = synced_kinds(vec![TeammatesKind::Alignment, TeammatesKind::Check]).await;
+    let app = &w.t.app;
+    let alignment = only_entry(app, &at, ReviewTab::Alignments).await;
+    let ReviewPlace::Verse {
+        book,
+        chapter,
+        verse,
+    } = alignment.place
+    else {
+        panic!("{:?}", alignment.place)
+    };
+    let opened = post(
+        app,
+        &tc_api::align::Open {
+            at: at.clone(),
+            request: rid(90),
+            book,
+            verse: Some(tc_api::align::OpenVerse { chapter, verse }),
+        },
+    )
+    .await
+    .unwrap();
+    let tc_api::align::Opened::Ready(view) = opened else {
+        panic!("{opened:?}")
+    };
+    assert_eq!(
+        view.marker,
+        Some(ConflictMarker {
+            conflict: alignment.conflict,
+            versions: 2,
+        })
+    );
+
+    let check = only_entry(app, &at, ReviewTab::Checks).await;
+    let list = CheckListRef {
+        tool: Tool::TranslationNotes,
+        unit: CheckUnit::Book(BookId::Titus),
+    };
+    let session = post(
+        app,
+        &tc_api::check::Open {
+            at: at.clone(),
+            list,
+            since: None,
+        },
+    )
+    .await
+    .unwrap();
+    let RailRows::Full(rows) = &session.rows else {
+        panic!("{:?}", session.rows)
+    };
+    let mut markers = Vec::new();
+    for row in rows {
+        let item = post(
+            app,
+            &Item {
+                at: at.clone(),
+                list,
+                index: row.index,
+            },
+        )
+        .await
+        .unwrap();
+        markers.extend(item.decision.marker);
+    }
+    assert_eq!(
+        markers,
+        vec![ConflictMarker {
+            conflict: check.conflict,
+            versions: 2,
+        }]
+    );
 }

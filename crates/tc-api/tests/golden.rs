@@ -105,7 +105,7 @@ use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
-    TeammatesEdit, TeammatesJoin, TokenBase,
+    TeammatesEdit, TeammatesJoin, TeammatesKind, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -2888,6 +2888,7 @@ impl Example for Script {
                         first: 4,
                         last: 5,
                     }),
+                    kinds: vec![TeammatesKind::Check, TeammatesKind::CarriedFile],
                     restored: 0,
                 },
             },

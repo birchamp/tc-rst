@@ -200,6 +200,7 @@ pub(super) const TWO_TEAMMATES: fn() -> ScriptedSync = || ScriptedSync::Synced {
         ],
     }),
     joined: None,
+    kinds: Vec::new(),
     restored: 0,
 };
 
@@ -246,6 +247,7 @@ async fn teammates_a_sync_receives_stand_as_one_verse_conflict_on_the_toast_the_
         ScriptedSync::Synced {
             teammates: None,
             joined: None,
+            kinds: Vec::new(),
             restored: 0,
         },
     )
@@ -299,6 +301,7 @@ async fn a_second_sync_sends_again_what_door43_lost_and_still_names_the_conflict
         ScriptedSync::Synced {
             teammates: None,
             joined: None,
+            kinds: Vec::new(),
             restored: 1,
         },
     )
