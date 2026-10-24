@@ -276,6 +276,16 @@ pub fn build_metadata(
     }
 }
 
+/// The bytes [`build_metadata`] gives, unchecked: what a document shows, to compare a file
+/// with. A folder in the middle of a change can list no book, which no valid document does,
+/// so these bytes are never written.
+pub fn render_metadata_unchecked(
+    source: &MetadataSource,
+    ingredients: &[IngredientEntry],
+) -> Vec<u8> {
+    to_canonical_json(&document(source, ingredients))
+}
+
 /// A document every check passes, to try one field in.
 fn baseline(kind: ProjectKind) -> MetadataSource {
     MetadataSource {

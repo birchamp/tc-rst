@@ -380,7 +380,10 @@ pub(crate) struct Dirty {
     /// grew, so the groups it reaches are rebuilt.
     pub regroup: BTreeSet<BatchIdx>,
     pub pins: bool,
+    /// A book's projection appeared, vanished or changed scope.
     pub paths: bool,
+    /// A `CarriedFile` record changed.
+    pub carried: bool,
     pub unknown: bool,
     /// A change stopped being folded: rebuild from scratch.
     pub rebuild: bool,
@@ -486,6 +489,9 @@ pub struct FoldState {
     /// the state itself.
     pub(crate) records: Option<Arc<super::cow::FxMap<ChangeIdx, Arc<Record>>>>,
     pub(crate) counters: Arc<CounterCells>,
+    /// Reads of a value the source could not give (§2.6), counted apart from the counters so
+    /// a state given counters of its own keeps counting them.
+    pub(crate) unreadable_reads: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl FoldState {
@@ -546,6 +552,7 @@ impl FoldState {
             source: None,
             records: None,
             counters: Arc::new(CounterCells::default()),
+            unreadable_reads: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -1282,6 +1289,17 @@ impl FoldState {
         }
     }
 
+    /// The change a Local device wrote with this seq, if the fold holds one (§6.3). Two
+    /// changes sharing a seq are a `DuplicateDevice` anomaly; this names the first the fold
+    /// met.
+    pub fn change_at(&self, device: DeviceId, seq: DeviceSeq) -> Option<ChangeId> {
+        let found = self.seqs.find(seq_hash(device, seq), |x| {
+            let meta = &self.metas[x as usize];
+            self.devices[meta.device.0 as usize] == device && self.seq_of(ChangeIdx(x)) == seq
+        })?;
+        Some(self.meta(ChangeIdx(found)).id)
+    }
+
     /// F5: files change `c` under its Local device and seq, and lists the devices that two
     /// changes claim.
     fn note_seq(&mut self, c: ChangeIdx, id: ChangeId, device: DeviceId, seq: DeviceSeq) {
@@ -1840,6 +1858,7 @@ impl FoldState {
         if dirty.all {
             dirty.pins = true;
             dirty.paths = true;
+            dirty.carried = true;
             dirty.unknown = !self.unknown_keys.is_empty();
         }
     }
@@ -1979,7 +1998,7 @@ impl FoldState {
         match &entry.key {
             // `resources.json` holds the extra keys too, so its projection is redone.
             RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => dirty.pins = true,
-            RecordKey::CarriedFile(_) => dirty.paths = true,
+            RecordKey::CarriedFile(_) => dirty.carried = true,
             _ => {}
         }
         dirty.books.extend(self.books_of(k));
@@ -2092,6 +2111,9 @@ impl FoldState {
             new_conflicts,
             pins: dirty.pins,
             paths: dirty.paths,
+            carried: dirty.carried,
+            conflicts_changed: !dirty.added_conflicts.is_empty()
+                || !dirty.removed_conflicts.is_empty(),
             everything: false,
         }
     }
@@ -2194,8 +2216,23 @@ impl FoldState {
             file: value.file,
             len: value.len,
         };
-        let bytes = self.source.as_ref()?.read(at)?;
-        (super::value::fingerprint(&bytes) == value.fingerprint()).then(|| Arc::from(bytes))
+        let bytes = self
+            .source
+            .as_ref()
+            .and_then(|source| source.read(at))
+            .filter(|bytes| super::value::fingerprint(bytes) == value.fingerprint());
+        if bytes.is_none() {
+            self.unreadable_reads
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        bytes.map(Arc::from)
+    }
+
+    /// How many reads of a value the source could not give so far (§2.6). A projection that
+    /// moved it showed a version it could not read as absent, and is not written.
+    pub fn values_unreadable(&self) -> u64 {
+        self.unreadable_reads
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 

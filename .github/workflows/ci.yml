@@ -110,6 +110,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: scripts/gates.sh --step test
 
+  # The long variant of the project store's model-based property test (docs/STORAGE.md §16.1):
+  # 5,000 random histories of saves, kills, damaged journal files, held files and outside
+  # edits; it fails when a reachable row of the ledger's table (§6.2) was never taken.
+  store-model-nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/gates.sh --step model-long
+
   alignment-budget:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -138,7 +151,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # board.py reads ancestry; a shallow clone turns a wrong `merged` into a warning.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: scripts/gates.sh --step node
+      - run: scripts/gates.sh --step board

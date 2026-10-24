@@ -6,7 +6,7 @@
 
 use crate::layout::{Folder, PACKS, PENDING};
 use crate::progress::Tracker;
-use crate::source::FileSource;
+use crate::source::{FileSource, RelocatedValue};
 use crate::vfs::{EntryKind, ReadHandle, Vfs};
 use std::collections::HashMap;
 use std::io;
@@ -306,13 +306,13 @@ pub fn load_streaming<T>(
     (out, reads)
 }
 
-/// Where each change's JSON lies in a file, by id, from a read of its bytes.
+/// Every verified JSON span, including duplicate occurrences of one change id.
 pub fn spans_of(
     kind: JournalKind,
     rel: &str,
     bytes: &[u8],
     project: ProjectId,
-) -> HashMap<ChangeId, (u64, u32)> {
+) -> Vec<(ChangeId, (u64, u32))> {
     let (entries, spans) = match kind {
         JournalKind::Pack => {
             let read = tc_journal::pack::read_pack(rel, bytes, project);
@@ -338,7 +338,7 @@ pub fn relocation(
     project: ProjectId,
     from: (&JournalFile, &[u8]),
     to: &[(&JournalFile, u32, &[u8])],
-) -> Option<HashMap<u64, ValueAt>> {
+) -> Option<HashMap<u64, RelocatedValue>> {
     let old = spans_of(from.0.kind, &from.0.rel, from.1, project);
     let mut new: HashMap<ChangeId, ValueAt> = HashMap::new();
     for (file, number, bytes) in to {
@@ -356,7 +356,14 @@ pub fn relocation(
         if at.len != len {
             return None;
         }
-        map.insert(offset, *at);
+        map.insert(
+            offset,
+            RelocatedValue {
+                id,
+                source_len: len,
+                destination: *at,
+            },
+        );
     }
     Some(map)
 }

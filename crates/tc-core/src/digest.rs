@@ -143,6 +143,26 @@ impl Md5 {
     }
 }
 
+/// An MD5 taken of bytes that arrive in pieces, for a file too large to hold in memory.
+#[derive(Default)]
+pub struct Md5Stream(md5::Md5);
+
+impl Md5Stream {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn update(&mut self, bytes: &[u8]) {
+        use md5::Digest;
+        self.0.update(bytes);
+    }
+
+    pub fn finish(self) -> Md5 {
+        use md5::Digest;
+        Md5(self.0.finalize().into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,6 +171,10 @@ mod tests {
     fn digests_read_and_write_lowercase_hex_only() {
         let md5 = Md5::of(b"");
         assert_eq!(md5.to_string(), "d41d8cd98f00b204e9800998ecf8427e");
+        let mut stream = Md5Stream::new();
+        stream.update(b"in ");
+        stream.update(b"pieces");
+        assert_eq!(stream.finish(), Md5::of(b"in pieces"));
         assert_eq!(Md5::parse(&md5.to_hex()), Some(md5));
         assert_eq!(Md5::parse("D41D8CD98F00B204E9800998ECF8427E"), None);
         assert!("+0".repeat(16).parse::<Md5>().is_err());

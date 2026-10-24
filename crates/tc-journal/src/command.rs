@@ -112,6 +112,31 @@ pub enum Command {
         devices: std::collections::BTreeSet<DeviceId>,
         conflicts: Vec<(ConflictId, Vec<ShownToken>)>,
     },
+    /// A pins conflict chosen together with its carry-over (§8.3, APP-DESIGN R7): `plan` holds
+    /// exactly one `Pins` change per record of the conflict, with every current head of the
+    /// record as its parents and cause `Resolve`, and the decisions the choice carries over or
+    /// moves, each with the heads it was planned from. One batch, all or nothing; a record
+    /// that moved since the plan was made is `PlanStale`.
+    ResolvePins {
+        conflict: ConflictId,
+        shown: Vec<ShownToken>,
+        plan: UpgradePlan,
+    },
+    /// *Undo* an outside edit recorded with a known base (§11.1 X7, APP-DESIGN R7): each
+    /// change of `batch` is replaced by the value it replaced, the External change as its
+    /// parent. What cannot be taken back is left, and listed in the reply.
+    UndoOutsideEdit {
+        batch: BatchId,
+    },
+    /// *Accept all from the file* or *Keep translationCore's text* over the rows an outside
+    /// edit of `batch` made (§8.1 `OutsideEditLarge`, APP-DESIGN R7): one batch, with each
+    /// conflict's review tokens; a conflict with no single version to keep is left for
+    /// *Review one by one*.
+    ResolveOutsideEdit {
+        batch: BatchId,
+        keep: OutsideKeep,
+        conflicts: Vec<(ConflictId, Vec<ShownToken>)>,
+    },
     /// Re-key a decision a carry-over could not place (§8.3, APP-DESIGN R7): the old key
     /// gets `MovedTo { to }` with the heads `shown` lists, and `to` gets the decision the
     /// screen showed, with the heads `to_shown` lists (none for a check never decided), so a
@@ -282,6 +307,22 @@ pub enum Choice {
     ApplyToMovedCheck,
     /// *Rename* one file of a path-case conflict: writes the new path's record too.
     RenameCarried { from: RepoPath, to: RepoPath },
+    /// *Keep both* versions of a carried file in conflict (§8.3): `keep` stays at the
+    /// file's path and `other` becomes a file of its own at `to`.
+    KeepBothCarried {
+        keep: ChangeId,
+        other: ChangeId,
+        to: RepoPath,
+    },
+}
+
+/// Which side of an outside edit's rows a bulk choice keeps (§8.1 `OutsideEditLarge`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutsideKeep {
+    /// *Accept all from the file*: the versions the outside edit wrote.
+    File,
+    /// *Keep translationCore's text*: the versions the project already had.
+    Project,
 }
 
 /// Which editor field a draft belongs to (§5.14).
