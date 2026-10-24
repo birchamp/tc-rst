@@ -366,6 +366,22 @@ impl FoldState {
             .collect()
     }
 
+    /// The records `metadata.json` takes its project details from (every `ProjectMeta`),
+    /// each with the heads its written bytes stand for by the token rule: the base of an
+    /// outside edit of the file (§11.1).
+    pub fn metadata_heads(&self) -> Vec<(RecordKey, Vec<ChangeId>)> {
+        self.by_key(self.part_keys(&Part::Meta))
+            .into_iter()
+            .filter(|k| self.entry(*k).active > 0)
+            .filter(|k| matches!(self.entry(*k).key, RecordKey::ProjectMeta(_)))
+            .map(|k| {
+                let key = self.entry(k).key.clone();
+                let heads = self.shown_heads(&key, None);
+                (key, heads)
+            })
+            .collect()
+    }
+
     /// The records the projection of `file` reads, in key order.
     pub fn scope_keys(&self, file: &DerivedFile) -> Vec<RecordKey> {
         let mut keys: Vec<RecordKey> = self

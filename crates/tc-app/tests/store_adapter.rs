@@ -792,6 +792,8 @@ fn edit_fields(
 #[tokio::test]
 async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
     type Change = fn(&StoreWorld, &Path);
+    // S2 (STORAGE §3.5): a project.json that is wrong or missing is written back from the
+    // project's history, so every case opens, and the listing says so too.
     let cases: [(&str, Change, bool); 11] = [
         ("as written", |_, _| {}, true),
         (
@@ -806,17 +808,17 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
         (
             "no schemaVersion",
             |w, f| edit_fields(w, f, |m| drop(m.remove("schemaVersion"))),
-            false,
+            true,
         ),
         (
             "no created",
             |w, f| edit_fields(w, f, |m| drop(m.remove("created"))),
-            false,
+            true,
         ),
         (
             "no projectId",
             |w, f| edit_fields(w, f, |m| drop(m.remove("projectId"))),
-            false,
+            true,
         ),
         (
             "schemaVersion as text",
@@ -825,7 +827,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("schemaVersion".into(), "1".into());
                 });
             },
-            false,
+            true,
         ),
         (
             "a negative schemaVersion",
@@ -834,7 +836,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("schemaVersion".into(), (-1).into());
                 });
             },
-            false,
+            true,
         ),
         (
             "created as a number",
@@ -843,7 +845,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("created".into(), 5.into());
                 });
             },
-            false,
+            true,
         ),
         (
             "an unknown kind",
@@ -852,7 +854,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("kind".into(), "psalter".into());
                 });
             },
-            false,
+            true,
         ),
         (
             "not a project id",
@@ -861,10 +863,10 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
                     m.insert("projectId".into(), "not an id".into());
                 });
             },
-            false,
+            true,
         ),
         // The folder keeps its journal, its books and its metadata.json.
-        ("deleted", |w, f| w.fs.delete(f).unwrap(), false),
+        ("deleted", |w, f| w.fs.delete(f).unwrap(), true),
     ];
     for (case, change, project) in cases {
         let world = store_world();
@@ -1370,7 +1372,10 @@ fn check_run(ops: Vec<Op>) -> Result<(), TestCaseError> {
                     let outcome = handle
                         .checkpoint(CheckpointReason::Other("prop".into()))
                         .await;
-                    prop_assert_eq!(outcome, CheckpointOutcome::Unchanged);
+                    prop_assert!(matches!(
+                        outcome,
+                        CheckpointOutcome::Committed | CheckpointOutcome::Unchanged
+                    ));
                 }
             }
         }

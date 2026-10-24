@@ -10,7 +10,10 @@
 //! staging folder of a create that is running.
 
 use crate::appdata::AppData;
-use crate::atomic::{SyncDir, atomic_create_dirs, atomic_write};
+use crate::atomic::{
+    HeldRetry, SyncDir, atomic_create_dirs, atomic_write, remove_dir_all_held, remove_held,
+    rename_dir_noreplace_held,
+};
 use crate::clock::Clock;
 use crate::error::StoreError;
 use crate::handle::{Mode, ProjectHandle};
@@ -20,7 +23,7 @@ use crate::layout::{
     LOCK, PACKS, PENDING, PROJECT_JSON,
 };
 use crate::load::{JournalKind, list};
-use crate::open::{Env, OpenError, OpenOptions, ProjectJson, open_project};
+use crate::open::{Env, OpenError, OpenOptions, ProjectJson, head_project_json, open_project};
 use crate::platform::Platform;
 use crate::reply::CommandError;
 use crate::vfs::{EntryKind, Vfs, is_not_found};
@@ -45,6 +48,9 @@ pub struct StoreConfig {
     pub clock: Arc<dyn Clock>,
     /// Threads that read journal files at an open.
     pub threads: usize,
+    /// How long the file watcher waits for a program to stop writing before it tells the
+    /// writer (§11.1): one second in the app.
+    pub watch_debounce: std::time::Duration,
 }
 
 impl std::fmt::Debug for StoreConfig {
@@ -190,6 +196,7 @@ impl Store {
             platform: config.platform.clone(),
             clock: config.clock.clone(),
             threads: config.threads.max(1),
+            watch_debounce: config.watch_debounce,
             hooks: hooks.clone(),
         };
         let (vfs, projects, gate) = (config.vfs.clone(), config.projects.clone(), cleanup.clone());
@@ -212,6 +219,17 @@ impl Store {
 
     pub fn app_data(&self) -> &AppData {
         &self.env.app
+    }
+
+    /// The `project.json` an open of `folder` would repair a damaged one from: HEAD's, when
+    /// this app reads it (§3.5). A listing asks this before it calls a folder unusable.
+    pub fn repaired_project_json(&self, folder: &Path) -> Option<Vec<u8>> {
+        head_project_json(
+            &self.env,
+            &*self.env.vfs,
+            folder,
+            &Arc::new(crate::counters::Counters::default()),
+        )
     }
 
     pub fn hooks(&self) -> &Arc<Hooks> {
@@ -252,11 +270,11 @@ impl Store {
     pub fn place(&self, staging: &Path, name: &str) -> Result<PathBuf, CreateError> {
         let target = self.projects.join(name);
         if let Err(e) = valid_name(name) {
-            let _ = self.env.vfs.remove_dir_all(staging);
+            let _ = remove_dir_all_held(&*self.env.vfs, staging, &HeldRetry::SAVE);
             return Err(e);
         }
         self.env.hooks.wait(Point::BeforeStagingRename);
-        match self.env.vfs.rename_dir_noreplace(staging, &target) {
+        match rename_dir_noreplace_held(&*self.env.vfs, staging, &target, &HeldRetry::SAVE) {
             Ok(()) => {
                 self.env
                     .vfs
@@ -265,7 +283,7 @@ impl Store {
                 Ok(target)
             }
             Err(e) => {
-                let _ = self.env.vfs.remove_dir_all(staging);
+                let _ = remove_dir_all_held(&*self.env.vfs, staging, &HeldRetry::SAVE);
                 if self.env.vfs.metadata(&target).is_ok() {
                     Err(CreateError::NameExists(name.to_owned()))
                 } else {
@@ -312,7 +330,7 @@ impl Store {
         }
         let staging = self.staging(StagingKind::Create);
         if let Err(e) = self.build(new, &staging, &target) {
-            let _ = self.env.vfs.remove_dir_all(&staging);
+            let _ = remove_dir_all_held(&*self.env.vfs, &staging, &HeldRetry::SAVE);
             return Err(e);
         }
         self.place(&staging, &new.name)
@@ -400,14 +418,14 @@ impl Store {
         }
         let staging = self.staging(StagingKind::Copy);
         if let Err(e) = copy_tree(&*self.env.vfs, from, &staging, &self.env.hooks) {
-            let _ = self.env.vfs.remove_dir_all(&staging);
+            let _ = remove_dir_all_held(&*self.env.vfs, &staging, &HeldRetry::SAVE);
             return Err(e.into());
         }
         let staged = Folder::new(&staging);
         for rel in [LOCK, DEVICE] {
             let path = staged.path(rel);
             if self.env.vfs.metadata(&path).is_ok() {
-                let _ = self.env.vfs.remove_file(&path);
+                let _ = remove_held(&*self.env.vfs, &path, &HeldRetry::SAVE);
             }
         }
         self.place(&staging, name)
@@ -472,7 +490,7 @@ fn remove_staging(vfs: &dyn Vfs, projects: &Path, hooks: &Hooks) -> Vec<RemovedS
         let name = entry.name.to_string_lossy().into_owned();
         if entry.kind == EntryKind::Dir && name.starts_with(STAGING) {
             hooks.wait(Point::BeforeStagingRemoval);
-            if vfs.remove_dir_all(&projects.join(&entry.name)).is_ok() {
+            if remove_dir_all_held(vfs, &projects.join(&entry.name), &HeldRetry::SAVE).is_ok() {
                 removed.push(RemovedStaging {
                     kind: StagingKind::of(&name),
                     folder: name,

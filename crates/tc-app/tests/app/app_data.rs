@@ -248,6 +248,12 @@ impl Vfs for HeldFs {
     fn rename_dir_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
         self.inner.rename_dir_noreplace(from, to)
     }
+    fn rename_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.rename_file_noreplace(from, to)
+    }
+    fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {
+        self.inner.outside_dir(folder)
+    }
     fn remove_file(&self, path: &Path) -> io::Result<()> {
         self.inner.remove_file(path)
     }
