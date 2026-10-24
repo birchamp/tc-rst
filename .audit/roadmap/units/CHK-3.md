@@ -4,18 +4,18 @@ title: Claimed tests must exist
 track: A
 lane: checks
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: checks lane (Claude Code 2198ee19)
+branch: track-CHK-3
+worktree: .worktrees/track-CHK-3
 depends: [INT-4]
 needs_owner: []
 proves: [P1, P3]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+updated: 2026-10-23
+next: step 1
 blocked_by: none
 ---
 
@@ -261,3 +261,4 @@ and each planted failure is in the log.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
+- 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-3 from main 48d29235. S2 is merging, not done: step 5 (STORAGE.md §15) waits for it. FIX-R is not claimed, so its rows of TC4-ISSUES.md are marked pending only. tC4 reference clone: ~/unfoldingword/translationcore4 (has d310bf3) | python3 -I .audit/tools/board.py
