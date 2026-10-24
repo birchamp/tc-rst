@@ -883,6 +883,15 @@ impl Actions {
         s.layers.dialog.try_set(Some(Dialog::OpenDoor43));
     }
 
+    /// A field of Open from Door43 changed: the next Open sends another body, so it is a new
+    /// attempt, even after a lost reply (UI-3).
+    pub fn edit_od(&self, change: impl FnOnce(&mut OpenForm)) {
+        self.patch_od(|od| {
+            change(od);
+            od.submit.edited(js::random_request_id());
+        });
+    }
+
     pub fn patch_od(&self, patch: impl FnOnce(&mut OpenForm)) {
         self.s().od.try_update(|od| {
             if let Some(od) = od {

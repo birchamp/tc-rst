@@ -50,6 +50,15 @@ impl Submit {
         self.problem = None;
     }
 
+    /// The form changed: what the next press sends is another request, so it is a new attempt
+    /// with `next`, even after a lost reply (the old request may have reached the server with
+    /// what the form said then). Nothing changes while a request is in flight.
+    pub fn edited(&mut self, next: RequestId) {
+        if !self.busy() {
+            self.confirm = Confirm::new(next);
+        }
+    }
+
     /// The request of the attempt, in flight or next.
     pub fn request(&self) -> RequestId {
         self.confirm.request()
