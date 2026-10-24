@@ -4,7 +4,7 @@ title: Typed jobs and one job follower
 track: A
 lane: app
 milestone: M1
-state: building
+state: verifying
 owner: C7a session (Claude Code 3058c665)
 branch: track-UI-1
 worktree: .worktrees/track-UI-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d (basis: +150/-200 lines estimated in health-app §8)
 merged: none
 updated: 2026-10-24
-next: Step 7: the job journeys and the gates, then one review.
+next: One review (races and protocol lens), then gate with C7a merged first; UI-1 merges after C7a.
 blocked_by: none
 ---
 
@@ -310,3 +310,4 @@ It must print `# fail 0` and `# skipped 0`.
 - 2026-10-24 | C7a session (Claude Code 3058c665) | step 4 | none | `Actions::follow::<E>` in web/jobs.rs is the one follower; `job_end`, `follow_download`, `follow_job` and `follow_open` are gone, and `follow_plan` is a thin generic over it (PlanUpgrade and PlanGateway). Every caller matches `JobEnd` exhaustively. Decision (step 4.2): a Door43 open or a sync that ends Cancelled, Lost or Left shows no failure; the button comes back (the open dialog stops being busy; the sync button is already reset) and the project list is read again, which shows whether it took effect. The download, the fix fetch and the plans keep their old meaning of a stop (`Dl` none, `FixScreen::stopped`, `Planned::Stopped`); the book open's stop ends the overlay, and a job the server forgot now ends it too instead of polling forever. The done-when grep prints only web/jobs.rs and `read_jobs`' two lines in web/mod.rs; no `Feature::Sync` in app_ctx.rs; wasm clippy clean with no feature, app, test-hooks and gallery; tc-ui host tests and clippy pass | cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets --features app -- -D warnings
 - 2026-10-24 | C7a session (Claude Code 3058c665) | step 5 | none | `only_the_follower_reads_jobs` (tc-ui tests/app/lint.rs) scans src with white space squeezed out, so a call split over lines is found; allowed: app/web/jobs.rs, and app/web/mod.rs inside `read_jobs` only. Proof: a stray `js::sleep(50)` and `.jobs.with_untracked(` in sources.rs fail it with `INV-ONE-JOB-FOLLOWER: ... src/app/web/sources.rs:321 js::sleep(50)` and `:322 .jobs.with_untracked(` | cargo test -p tc-ui --test app lint
 - 2026-10-24 | C7a session (Claude Code 3058c665) | step 6 | none | `tc_ui::app::latest::{Latest, Attempt}` (begin, current, is_current; no public `Attempt` constructor) replaces the nine statics in check.rs (ITEMS, ARTICLES, OPENS), align.rs (OPENS, READS, REFRESHES, NAVIGATIONS) and understand.rs (OPENS, ARTICLES) and their helpers; the open's follow passes `|| OPENS.with(|l| l.is_current(attempt))` as `wanted`. The scan also found two attempt counters the card did not list, app_ctx.rs `compose` and `share_flows`: both are `Latest` now. Allowed with reasons: id sources (fix.rs NEXT_ID, mod.rs next_listener, saves.rs next_hook), mod.rs state_frames (dates a hello), app_ctx.rs sign_in_flows (the flow id the sign-in step keeps in its own state). Tests: `a_newer_attempt_makes_an_older_reply_stale`, `no_hand_made_attempt_counters`; proof: a stray `Cell<u64>` in check.rs fails `INV-A-STALE-REPLY-NEVER-SHOWS: ... src/app/web/check.rs:854`. tc-ui host tests, native clippy and the four wasm clippy runs pass | cargo test -p tc-ui --test app
+- 2026-10-24 | C7a session (Claude Code 3058c665) | gate | none | the job journeys (source-texts, upgrades, understand, guided-fix, sync-button, share-open) on this branch: `# tests 27 # pass 27 # fail 0 # skipped 0`. Proof 3: with `asked(None)` answering no end, `a_job_the_server_no_longer_knows_ends_lost` fails at jobs.rs:90. The full gate list runs on the merge commit after C7a is on main (the branch is cut from track-C7a, which lacks main's newer merges) | .enjoy-logs/ui1-journeys.log
