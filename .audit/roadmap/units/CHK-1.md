@@ -4,7 +4,7 @@ title: Architecture and I/O boundary checks
 track: A
 lane: checks
 milestone: M1
-state: claimed
+state: building
 owner: checks lane (Claude Code 2198ee19)
 branch: track-CHK-1
 worktree: .worktrees/track-CHK-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5-1 d
 merged: none
 updated: 2026-10-23
-next: step 1
+next: step 3
 blocked_by: none
 ---
 
@@ -313,3 +313,5 @@ Plus: `cargo test -p tc-arch` passes, and each planted violation of steps 1, 3 a
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
 - 2026-10-23 23:01 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-1 in .worktrees/track-CHK-1 from main 48d29235. S2 is merging, not done: steps 1-4 and 6 now, step 5 (tc-store and tc-journal clippy) after S2 merges | python3 -I .audit/tools/board.py
+- 2026-10-23 23:04 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | crates/tc-arch (publish = false, workspace package keys and lints, dev-dependency serde_json only). Decided: the pure functions take text (code_lines, scan_io, scan_writes, scan_names, scan_routes, own_versions, uses_workspace_edition_and_lints); cargo metadata is parsed in tests/common.rs, since serde_json is a dev-dependency and the library has no dependency. tests/architecture.rs holds the six checks; the edge table equals today's normal member edges (cargo metadata). Red as the card says: only shared_dependency_versions_come_from_the_workspace failed, "INV-ARCHITECTURE (AGENTS.md: shared versions live in [workspace.dependencies]): crates/tc-door43-fake/Cargo.toml:13 gives futures-util its own version; use `futures-util.workspace = true`". With `tc-store = { path = "../tc-store" }` planted in crates/tc-ui/Cargo.toml: "INV-ARCHITECTURE: tc-ui may depend only on tc-api, tc-core (ARCHITECTURE.md \"Dependency rules\"); crates/tc-ui/Cargo.toml adds tc-store"; reverted. Lib unit tests: 6 pass | cargo test -p tc-arch
+- 2026-10-23 23:04 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | crates/tc-door43-fake/Cargo.toml: futures-util.workspace = true (the workspace entry has default-features = false). tc-arch architecture 6 pass; tc-door43-fake tests pass | cargo test -p tc-door43-fake
