@@ -106,7 +106,14 @@ async fn unchanged_save_writes_nothing() {
     let written = save(handle.as_ref(), &key, "a changed verse")
         .await
         .unwrap();
-    match events.recv().await.unwrap() {
+    // A background materialization of the open may end first; it writes no record.
+    let event = loop {
+        match events.recv().await.unwrap() {
+            StoreEvent::Materialized { .. } => {}
+            event => break event,
+        }
+    };
+    match event {
         StoreEvent::Committed { seq, .. } => assert_eq!(seq, written.seq),
         other => panic!("{other:?}"),
     }
@@ -382,6 +389,8 @@ async fn written_not_durable_is_saved_with_warning() {
                 assert!(matches!(cause, StoreCause::Command { .. }));
                 break;
             }
+            // The open's background materialization may end here; it is not this save's.
+            StoreEvent::Materialized { .. } => {}
             other => panic!("{other:?}"),
         }
     }
