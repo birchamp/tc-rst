@@ -32,6 +32,7 @@ pub mod index;
 pub mod json;
 pub mod keys;
 pub mod line;
+pub mod outside;
 pub mod pack;
 pub mod pending;
 pub mod pins;

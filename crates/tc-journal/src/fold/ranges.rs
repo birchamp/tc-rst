@@ -177,11 +177,12 @@ impl FoldState {
     /// *Apply what was recovered* lists (§7.4).
     pub fn batch_changes(&self, batch: BatchId) -> Vec<ChangeId> {
         let mut out: Vec<ChangeId> = self
-            .batches
-            .iter()
-            .enumerate()
-            .filter(|(_, b)| b.id == batch)
-            .flat_map(|(i, _)| self.members(super::meta::BatchIdx(i as u32)).to_vec())
+            .batch_ids
+            .find_all(super::state::batch_hash(&batch), |b| {
+                self.batches[b as usize].id == batch
+            })
+            .into_iter()
+            .flat_map(|b| self.members(super::meta::BatchIdx(b)).to_vec())
             .map(|c: ChangeIdx| self.meta(c).id)
             .collect();
         out.sort();

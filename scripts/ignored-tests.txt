@@ -7,3 +7,4 @@ suggestion_growth_bench	local: a bench, run with --release --ignored --nocapture
 suggestions_meet_the_full_training_corpus_budget	alignment-budget
 the_growth_bench_on_en_ult_and_en_ust_titus_gives_tc4s_recall	local: over a minute in a debug build; run with --release --ignored
 the_shown_text_is_what_tc4_reads_on_a_dump	local: needs a 12 MB dump of tC4's text (TC_USFM_SHOWN_TEXT_DUMP), not committed
+model::random_histories_lose_no_work_long	store-model-nightly

@@ -11,6 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 macro_rules! counters {
     ($($(#[$doc:meta])* $name:ident),* $(,)?) => {
@@ -86,6 +87,36 @@ counters! {
     queue_wait_max_ns,
     /// Draft files written.
     drafts_written,
+    /// Renames and removals tried again because another program held the file.
+    held_retries,
+    /// Nanoseconds spent waiting for those files.
+    held_wait_ns,
+    /// Bytes the writer took an md5 of: each rendered buffer once, and each file it read to
+    /// compare before it overwrote it.
+    bytes_hashed,
+    /// Nanoseconds the writer waited for saves in flight before a flush or a rename
+    /// (PERFORMANCE.md: derived-file flushes are paced behind saves).
+    writer_yield_ns,
+    /// Blobs written to the object database (packs, derived files, carried files).
+    git_blobs_written,
+    /// Their bytes.
+    git_blob_bytes,
+    /// Trees written: the directories on the paths a commit changed, and the root.
+    git_trees_written,
+    git_commits_written,
+    /// Repacks of the project's objects (§9.8).
+    git_repacks,
+    /// Objects a repack wrote into its pack.
+    git_objects_packed,
+    /// Loose object files a repack removed.
+    git_loose_removed,
+    /// Bytes of rendered USFM the per-record digests of the heads files were taken of
+    /// (§11.1 X3: the base of an outside edit).
+    digest_bytes,
+    /// Files an outside edit was decoded from (§11.1 X2).
+    outside_decodes,
+    /// Records an outside edit compared value by value (§11.1 X3): the changed ones.
+    outside_keys_examined,
 }
 
 impl Counters {
@@ -214,6 +245,11 @@ impl Vfs for CountingVfs {
         self.inner.rename(from, to)
     }
 
+    fn rename_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.counters.renames.fetch_add(1, Ordering::Relaxed);
+        self.inner.rename_file_noreplace(from, to)
+    }
+
     fn rename_dir_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
         self.counters.renames.fetch_add(1, Ordering::Relaxed);
         self.inner.rename_dir_noreplace(from, to)
@@ -251,6 +287,32 @@ impl Vfs for CountingVfs {
         self.inner.canonicalize(path)
     }
 
+    fn is_held(&self, error: &io::Error) -> bool {
+        self.inner.is_held(error)
+    }
+
+    fn wait_held(&self, delay: Duration) {
+        self.counters.held_retries.fetch_add(1, Ordering::Relaxed);
+        self.counters.held_wait_ns.fetch_add(
+            u64::try_from(delay.as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        self.inner.wait_held(delay);
+    }
+
+    fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {
+        self.inner.outside_dir(folder)
+    }
+
+    fn watch(
+        &self,
+        root: &Path,
+        recursive: bool,
+        sink: crate::vfs::WatchSink,
+    ) -> io::Result<Option<crate::vfs::WatchGuard>> {
+        self.inner.watch(root, recursive, sink)
+    }
+
     fn secure_dir_chain(&self, dir: &Path, made: &[PathBuf]) -> io::Result<()> {
         let Some(root) = self
             .root
@@ -259,18 +321,24 @@ impl Vfs for CountingVfs {
         else {
             return self.inner.secure_dir_chain(dir, made);
         };
+        // The directories just made had their entries flushed as they were made; the ones
+        // above them were found, and a killed process may have made them unflushed, so the
+        // walk goes on past the made ones (§6.1, "A directory found existing is not
+        // trusted").
         let todo: Vec<PathBuf> = {
             let mut secured = self.secured.lock().unwrap_or_else(|e| e.into_inner());
-            secured.extend(made.iter().cloned());
             let mut todo = Vec::new();
             let mut at = dir;
             while at != root && !secured.contains(at) {
-                todo.push(at.to_owned());
+                if !made.iter().any(|m| m == at) {
+                    todo.push(at.to_owned());
+                }
                 match at.parent() {
                     Some(parent) => at = parent,
                     None => break,
                 }
             }
+            secured.extend(made.iter().cloned());
             todo
         };
         // Outermost first; a directory is remembered only once its entry was flushed, so a

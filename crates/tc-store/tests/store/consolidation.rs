@@ -21,6 +21,7 @@ fn store_on(fs: &FaultFs, clock: &Arc<ManualClock>) -> Store {
     config.clock = clock.clone();
     let store = Store::start(config).unwrap();
     store.wait_cleanup();
+    watch_burrito(&store, fs);
     store
 }
 

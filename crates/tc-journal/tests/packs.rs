@@ -544,6 +544,20 @@ fn pack_round_trip_and_salvage() {
     );
 }
 
+#[test]
+fn restoring_a_flipped_byte_keeps_its_line_salvageable() {
+    let lines = changes(1);
+    let pack = seal(&spec(local(9)), &lines).unwrap().packs.remove(0);
+    let mut damaged = pack.bytes.clone();
+    let line_start = damaged.iter().position(|b| *b == b'\n').unwrap() + 1;
+    damaged[line_start + 10] ^= 1 << 6;
+    damaged[line_start + 10] ^= 1 << 6;
+    damaged[0] ^= 1;
+    let read = read_pack(&pack.path.to_string(), &damaged, project());
+    assert!(matches!(read.status, PackStatus::Damaged(_)));
+    assert_eq!(read.entries, lines);
+}
+
 /// A valid change whose line, with its tab, hash and line feed, is `len` bytes long.
 fn line_of_size(seq: u64, len: usize) -> Verified {
     let base = verse_body(local(1), seq, 1, "x");

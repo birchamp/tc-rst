@@ -70,19 +70,9 @@ async fn open_obs(t: &TestApp) -> Scope {
 /// which a teammate's edit through the store needs.
 async fn leave(t: &TestApp, at: &Scope) {
     t.app.sessions().leave_screen(at).unwrap();
-    let started = std::time::Instant::now();
-    loop {
-        t.app.sessions().settled(&folder(OBS)).await;
-        let open = t.app.sessions().open_sessions();
-        if !open.iter().any(|s| s.at.project == folder(OBS)) {
-            return;
-        }
-        assert!(
-            started.elapsed() < std::time::Duration::from_secs(60),
-            "hung: the story project is still open 60 s after the screen left"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
+    // A left screen's session closes after its checkpoint; the store opens the folder next in
+    // these tests, so wait for the close itself, not only for the screen to go.
+    t.app.sessions().close_all().await;
 }
 
 async fn rail(t: &TestApp, at: &Scope, tool: Tool) -> Vec<RailRow> {

@@ -4,23 +4,6 @@ The machine, the Windows VM, the reference laptop and the tools. The plan and th
 all work: `.audit/roadmap/README.md`. The push rule: `.audit/roadmap/README.md`, "Rules that
 never bend".
 
-## How the owner wants the work done
-
-- Short, plain sentences. Ask only questions a translator would notice, with each answer's effect
-  and a recommendation; decide technical choices and say so. Keep working unless truly blocked.
-- **What fixers take (2026-10-20):** every blocker, and a major only when it harms a translator's
-  data or what they see; other majors are logged with the minors. `build-lane.js` tags each finding
-  with its harm (data, user, internal).
-- **Hours, not days (2026-10-19):** one verification pass; fix only blockers and majors (minors go
-  to `.audit/minors.tsv`); simplest change; reuse tested work; deterministic tests over reading.
-- **Robustness (2026-10-19):** no piles of special cases. Logic that decides about a translator's
-  work is an explicit typed state machine (state enum, event enum, one pure exhaustive `next()`,
-  an executor for I/O) proven by a model-based property test with crashes and restarts, and each
-  known bug seeded back to show the test catches it. S2 and C1b are being rebuilt this way.
-- Speed is judged against tC4 doing the same work on the reference laptop, not Word or Edge.
-- Default models for every agent. Never message an agent a workflow is still running (it starts a
-  second copy); pass notes through the next step or a restart.
-
 ## The machine
 
 | What | Where |

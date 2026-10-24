@@ -252,7 +252,7 @@ fn list_item(marker: &str, content: &[String]) -> Option<String> {
 fn paragraph(text: &str) -> Option<String> {
     let lines: Vec<String> = text
         .split('\n')
-        .map(|l| escape_line_start(&collapse_spaces(l.trim_matches(' '))))
+        .map(|l| escape_line_start(&collapse_spaces(l.trim())))
         .filter(|l| !l.is_empty())
         .collect();
     (!lines.is_empty()).then(|| lines.join("\n"))
