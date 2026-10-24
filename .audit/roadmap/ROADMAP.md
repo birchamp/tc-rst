@@ -54,6 +54,10 @@ runs. If the owner wants more, it is a new H row, not a card.
 5. **Every result lands in its card in the same commit** (`TRACKING.md`).
 6. **Simplify before you extend.** Storage gets one simplification pass (S3) before sync adds
    new writers to it.
+7. **tC4 4.0 is the baseline, not the ceiling.** The rebuild matches tC4 4.0's look and
+   behaviour, but where tC4 has an open issue or a planned feature, the rebuild may build it now
+   instead of waiting to copy tC4; REF1 and SWEEP still track tC4's fixes
+   (`rulings/2026-10-23-replace-tc4.md`: the rebuild will most likely replace tC4).
 
 ## Milestones
 
@@ -102,6 +106,7 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | FIX-R | Fix the tC4 bugs the rebuild repeats; reconcile TC4-ISSUES | app | INT-4 | 2-3 d |
 | FIX-J | Finish the partial P1 journeys J3, J12 and J13 | app | INT-4 | 1-1.5 d |
 | SWEEP | Sweep tC4 again (b86270f and release/4.0), then every week | integration | INT-4 | 0.5 d |
+| LIC-1 | Move the rebuild to the MIT licence, as tC4 did | integration | SWEEP | 0.5 d |
 
 **Exit:** the checks in `FUNNEL.md` §"Checks the repository must have" all run in CI; the shared
 structures exist and the remaining units' cards point at them; S3's core slices are merged.
@@ -132,6 +137,7 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 | F1 | Import | I, UI-2, UI-3 | 5-7 sessions |
 | AQ1 | Aquifer helps in the app (P6) | INT-4, UI-1, owner H6 (Q34) | 3-5 sessions |
 | REF1 | Move the tC4 reference and port its changes | SWEEP, owner H7 | 3-5 sessions |
+| OLH-1 | Highlight a note's words in the original-language pane (#840, built ahead of tC4) | INT-4 | 2-3 sessions |
 
 **Exit:** every live tC4 journey (P1) and the team journeys (P2) run in CI; P6 is shown.
 
@@ -257,6 +263,7 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 | A2 | Optional: GitHub Pro, to make the CI check required before main changes | GitHub refuses required checks on a private repository on the free plan (HTTP 403). INT-3's merge receipt guards merges without it | none |
 | A3 | Add `eliaspinero` (Elias, H2) as a collaborator on `birchamp/tc-rst` when the owner says the hand-off starts (not yet, 2026-10-22), and confirm GitHub Actions minutes for Windows and macOS runners | Add the second developer as a collaborator on `birchamp/tc-rst`, and confirm GitHub Actions minutes for Windows and macOS runners | Track B pushes `ext/*` branches and runs installers on those runners | Track B start, G3 |
 | A4 | Create the GitHub environment `windows-signing` (deployment branch: the default branch only) and the repository secrets for the Windows signing identity (H4) and the help-desk key (H15); the secret names go into `docs/RELEASE.md` once H4 and H15 are answered. Creating environments and secrets needs repository admin, which a collaborator lacks (inference about GitHub, not cited) | G3's signed run after merge and G1's help-desk key read need them; nobody was assigned to create them | G1 step 7, G3 step 7 |
+| A5 | Relicense the `string-punctuation-tokenizer` npm package to MIT in unfoldingWord's own repository (not done by this project's sessions unless the owner asks) | The rebuild's `tc-usfm` words module ports it; the owner ruled it may be MIT (`rulings/2026-10-23-tokenizer-relicense.md`) | LIC-1's licence is honest once the package says MIT |
 
 ## When this plan changes
 
