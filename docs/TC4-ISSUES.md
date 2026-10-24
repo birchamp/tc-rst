@@ -385,7 +385,7 @@ the rebuild fixed it or does as tC4 does:
 
 | Issue | Title | Status | Unit or crate | Regression test | Action |
 |---|---|---|---|---|---|
-| #743 | A window from the click until the main window opens | unit todo | G1; APP-DESIGN §5.3, A9 D10 | `window_is_painted_within_1_s_of_the_click`; `closing_the_window_while_preparing_leaves_no_tc4_process` | Create the window at Electron `ready`; §5.3 picks the page, not whether a window shows. Fix the §5.3 and D10 wording now. |
+| #743 | A window from the click until the main window opens | unit todo | G1; APP-DESIGN §5.3, A9 D10 | `window_is_painted_within_1_s_of_the_click`; `closing_the_window_while_preparing_leaves_no_tc4_process` | Create the window at Electron `ready`; §5.3 picks the page, not whether a window shows. |
 | #741 | Help page wordmark | unit todo | A5 | help sha-list check | Vendor the help pages byte for byte; vendor again when tc-website ships the fix. |
 | #731 | Is the Report a problem attachment translated? | unit todo | A5 | `feedback_attachment_is_english_and_explained_in_the_app_language`; `platform_line_names_the_architecture` | Compose it in English, as tC4 does. An optional translated line explaining why is a declared difference. The platform line comes from Rust's OS and architecture constants. |
 | #751 | Duplicate work in Windows install and start | unit todo | G1, G2 | G2 budget row `first_launch_under_60_s` (five runs) | Install from archives; measure on the reference laptop with Defender. |
@@ -609,6 +609,6 @@ Added by SWEEP (2026-10-23):
 - **D2:** D105 export notice (`cc.exportSkipped`); #790 export fit; #796 (export).
 - **E1a:** D108 rows (#806, #791); `e2e/sync-refusal.spec.ts` port (#801); #807 recorded.
 - **E1b:** #837 (H14). **F1:** #835, #833.3. **G1:** #833.2, #833.4. **I:** #813, #821, #822 (H13).
-- **REF1:** #810 and #829 (H7); #794's and D105's strings; #784 vectors; D107.4; #840 if the
-  owner waits for tC4. **AQ1:** #720.
-- **docs:** rewrite APP-DESIGN Q-20 (#786); fix §5.3 and A9 D10 (#743).
+- **REF1:** #810 and #829 (H7); #794's and D105's strings; #784 vectors; D107.4. **OLH-1:** #840 (built now, Q39).
+  **AQ1:** #720.
+- **docs:** rewrite APP-DESIGN Q-20 (#786); fix §5.3 and A9 D10 (#743): done by INT-7.

@@ -11,7 +11,9 @@ on:
 concurrency:
   # The event name too, so a nightly or dispatched run never cancels a push run on the same branch.
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  # Main's runs always finish: a quick follow-up commit must not cancel the test of the one
+  # before, or main never shows a result for it.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' }}
 jobs:
   lint-linux:
     runs-on: ubuntu-latest
@@ -91,6 +93,7 @@ jobs:
       - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
       - run: scripts/gates.sh --step test
+      - run: scripts/gates.sh --step ignored
 
   # The Windows tests, nightly or on request, until CHK-5 makes them a push gate.
   nightly-windows:

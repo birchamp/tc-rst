@@ -1307,9 +1307,10 @@ proptest! {
     ) {
         tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap()
             .block_on(async {
-                tokio::time::timeout(Duration::from_secs(30), async {
+                // The bound only catches a hang (ruling 2026-10-23): CI's runner took over 30 s.
+                tokio::time::timeout(Duration::from_secs(120), async {
                     play_world(World::project_field(kind).await, steps).await;
-                }).await.expect("the C3 field reload scenario finishes");
+                }).await.expect("hung: the C3 field reload scenario did not finish in 120 s");
             });
     }
 }

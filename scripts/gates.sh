@@ -14,6 +14,7 @@ STEPS=(
   "clippy-windows|cargo clippy --locked --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings"
   "test|cargo test --locked --workspace"
   "alignment-budget|cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture"
+  "ignored|scripts/check-ignored.sh"
   "wasm-ui|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings"
   "wasm-ui-gallery|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features gallery -- -D warnings"
   "wasm-ui-app|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features app -- -D warnings"
@@ -52,6 +53,7 @@ command_of() {
 
 run_step() {
   local name="$1" cmd
+  if [[ "$name" == journeys ]]; then journeys; return; fi
   cmd="$(command_of "$name")"
   if [[ -z "$cmd" ]]; then echo "gates: no step named $name" >&2; return 1; fi
   if [[ "$name" == clippy-windows || "$cmd" == *x86_64-pc-windows-gnu* ]] && ! { command -v x86_64-w64-mingw32-gcc && command -v nasm; } > /dev/null; then
@@ -67,31 +69,84 @@ receipt_path() { echo "$target/gates/$(tree_now).ok"; }
 check_receipt() {
   local path
   path="$(receipt_path)"
-  if [[ -z "$(git status --porcelain)" && -f "$path" ]]; then
-    echo "gates: receipt $path"
-    return 0
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree (the tree has changes)"
+    return 1
   fi
-  echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree"
+  if [[ -f "$path" ]]; then
+    # The journeys are part of the list since app-e2e (G5); a local run without them is partial.
+    if grep -qx 'journeys yes' "$path"; then
+      echo "gates: receipt $path"
+      return 0
+    fi
+    ci_receipt && return 0
+    echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree (journeys not run; drop --no-journeys)"
+    return 1
+  fi
+  ci_receipt && return 0
+  echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree, or scripts/gates.sh --wait-ci <card> for GitHub's runs"
   return 1
 }
 
+# A green run of both workflows on a commit with this tree is a receipt too (INT-8): GitHub runs
+# the same list in parallel, so lanes need not queue for this PC. Only push runs count: a
+# pull_request run tests the pull request's merge ref, not the commit's own tree.
+ci_receipt() {
+  local tree sha runs ci_run e2e_run
+  tree="$(tree_now)"; sha="$(git rev-parse HEAD)"
+  command -v gh > /dev/null || return 1
+  runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
+    --jq '.workflow_runs[] | select(.event == "push" and .status == "completed" and .conclusion == "success") | "\(.name) \(.id) \(.head_sha)"' 2> /dev/null)" || return 1
+  ci_run="$(green_run_for ci "$runs" "$tree")"
+  e2e_run="$(green_run_for app-e2e "$runs" "$tree")"
+  [[ -n "$ci_run" && -n "$e2e_run" ]] || return 1
+  echo "gates: CI receipt: ci run $ci_run, app-e2e run $e2e_run on ${sha:0:8}"
+}
+
+# The id of a green run of workflow $1 among the lines $2 whose commit has the tree $3.
+green_run_for() {
+  local name id run_sha
+  while read -r name id run_sha; do
+    [[ "$name" == "$1" && "$(git rev-parse "$run_sha^{tree}" 2> /dev/null)" == "$3" ]] && { echo "$id"; return; }
+  done <<< "$2"
+}
+
+# Push HEAD to gate/<card>, wait for GitHub's ci and app-e2e runs on it, then check the receipt.
+wait_ci() {
+  local card="$1" sha deadline done_runs
+  [[ -z "$(git status --porcelain)" ]] || { echo "gates: --wait-ci needs a clean tree" >&2; return 1; }
+  command -v gh > /dev/null || { echo "gates: --wait-ci needs gh on PATH" >&2; return 1; }
+  sha="$(git rev-parse HEAD)"
+  git push origin "+$sha:refs/heads/gate/$card"
+  echo "gates: pushed ${sha:0:8} to gate/$card; waiting for the ci and app-e2e runs"
+  deadline=$((SECONDS + 5400))
+  while (( SECONDS < deadline )); do
+    done_runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
+      --jq '[.workflow_runs[] | select(.event == "push" and .status == "completed") | .name] | unique | join(" ")' 2> /dev/null || true)"
+    if [[ " $done_runs " == *" ci "* && " $done_runs " == *" app-e2e "* ]]; then
+      check_receipt
+      return
+    fi
+    sleep 60
+  done
+  echo "gates: no completed ci and app-e2e runs for ${sha:0:8} after 90 minutes" >&2
+  return 1
+}
+
+# Every browser journey against real builds; app-e2e.yml runs this as `--step journeys`.
 journeys() {
+  [[ -d "${PLAYWRIGHT_MODULE:-parity/tc4-baseline/node_modules/playwright}" ]] || (cd parity/tc4-baseline && npm ci)
   cargo build --locked -p tc4 --features test-hooks,fixture-backend
   cargo build --locked -p tc-door43-fake
   crates/tc-ui/build-app.sh --out "$target/tc-ui-app"
   crates/tc-ui/build-app.sh --test-hooks --out "$target/tc-ui-app-hooks"
-  local tap
-  tap="$(TC4_BIN="$target/debug/tc4" TC4_UI="$target/tc-ui-app" TC4_UI_HOOKS="$target/tc-ui-app-hooks" \
+  local tap="$target/app-e2e.tap" code=0
+  TC4_BIN="$target/debug/tc4" TC4_UI="$target/tc-ui-app" TC4_UI_HOOKS="$target/tc-ui-app-hooks" \
     TC4_DOOR43_FAKE="$target/debug/tc-door43-fake" \
-    node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee >(cat >&2))" || true
-  local failed skipped
-  failed="$(printf '%s\n' "$tap" | sed -n 's/^# fail \([0-9]*\)$/\1/p' | tail -1)"
-  skipped="$(printf '%s\n' "$tap" | sed -n 's/^# skipped \([0-9]*\)$/\1/p' | tail -1)"
-  # Everything is built, so a skip is a missing build.
-  if [[ "${failed:-1}" != 0 || "${skipped:-1}" != 0 ]]; then
-    echo "gates: journeys failed: ${failed:-?} fail, ${skipped:-?} skipped" >&2
-    return 1
-  fi
+    node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee "$tap" || code=$?
+  # Everything is built, so a skip is a missing build (INV-A-SKIP-IS-A-FAILURE).
+  node parity/app/journeys/no-skips.mjs "$tap" || code=1
+  return "$code"
 }
 
 run_all() {
@@ -126,16 +181,17 @@ run_all() {
     echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "rustc $(rustc --version)"
     echo "steps $total"
-    echo "journeys $([[ "$with_journeys" == yes ]] && echo yes || echo no)"
+    echo "journeys $with_journeys"
   } > "$path"
   echo "gates: all $total steps passed; receipt $path"
 }
 
 case "${1:-}" in
-  "") run_all no ;;
-  --journeys) run_all yes ;;
+  "" | --journeys) run_all yes ;;
+  --no-journeys) run_all no ;;
   --list) list ;;
   --step) run_step "${2:?gates: --step needs a name or number}" ;;
   --check-receipt) check_receipt ;;
-  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --journeys | --check-receipt]" >&2; exit 2 ;;
+  --wait-ci) wait_ci "${2:?gates: --wait-ci needs a card id}" ;;
+  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --no-journeys | --check-receipt | --wait-ci <card>]" >&2; exit 2 ;;
 esac

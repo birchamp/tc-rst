@@ -266,3 +266,10 @@ test('tc4_issues_names_its_swept_range', () => {
     'INV-THE-SWEEP-NAMES-ITS-RANGE: docs/TC4-ISSUES.md has no line "Swept: tC4 main <40-hex>, release/4.0 <40-hex>, issues updated to <date>."',
   );
 });
+
+test("PLAN's reference commit is the baseline's", () => {
+  const named = plan.match(/the reference is tC4 `main` at\s+commit `([0-9a-f]{7,40})`/)?.[1];
+  assert.ok(named, 'PLAN names no reference commit ("the reference is tC4 `main` at commit `<sha>`")');
+  const captured = manifest.tc4.commit;
+  assert.ok(captured.startsWith(named), `P7/INV-CAPTURES-FRESH: PLAN names reference ${named}; the baseline was captured at ${captured}`);
+});
