@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 
 use tc_api::ApiError;
 use tc_api::door43::SyncProject;
-use tc_api::error::Feature;
 use tc_api::ids::{JobId, ProjectRef};
 use tc_api::jobs::{JobKind, Phase, SyncPhase, SyncResultView};
 use tc_api::shown::PersonLabel;
@@ -110,45 +109,31 @@ fn missing_pins(snapshot: &CountingSnapshot, installed: &dyn Fn(&ResourcePin) ->
     })
 }
 
-/// The sync before unit X: how the next sync of each project ends, as a test set it. A test
-/// sets it from what Door43 holds, so each setting replaces the one before, as a change on
-/// Door43 changes what the next sync finds.
-#[cfg(feature = "test-hooks")]
-#[derive(Default)]
-pub(crate) struct ScriptedSync {
-    next: std::sync::Mutex<std::collections::HashMap<ProjectRef, tc_api::test::ScriptedSync>>,
-}
-
-#[cfg(feature = "test-hooks")]
-impl ScriptedSync {
-    fn take(&self, project: &ProjectRef) -> Option<tc_api::test::ScriptedSync> {
-        crate::app::lock(&self.next).remove(project)
-    }
-
-    pub(crate) fn clear(&self) {
-        crate::app::lock(&self.next).clear();
-    }
-}
-
 impl App {
     /// The next `door43/sync` of `project` ends with `outcome`, whatever was set before.
     #[cfg(feature = "test-hooks")]
     pub fn script_sync(&self, project: ProjectRef, outcome: tc_api::test::ScriptedSync) {
-        crate::app::lock(&self.inner.sync.next).insert(project, outcome);
+        if let Some(scripted) = self.inner.sync.scripted() {
+            scripted.script_sync(project, outcome);
+        }
+    }
+
+    /// The scripted sync port, when the app runs on one (tests and journeys).
+    #[cfg(feature = "test-hooks")]
+    pub fn scripted_sync_port(&self) -> Option<&crate::ports::scripted::ScriptedSyncPort> {
+        self.inner.sync.scripted()
     }
 
     /// One sync of `folder`, after the checkpoint of the project just left (tC4 `syncRun`).
     async fn sync_job(&self, folder: ProjectRef) -> Result<SyncResultView, JobEnd> {
         self.inner.sessions.settled(&folder).await;
-        #[cfg(feature = "test-hooks")]
-        if let Some(outcome) = self.inner.sync.take(&folder) {
-            return self.scripted_sync(folder, outcome).await;
-        }
-        Err(JobEnd::Failed(ApiError::Unavailable(Feature::Sync)))
+        self.inner.sync.sync(self.clone(), folder).await
     }
 
+    /// What the scripted sync port does for a sync a test scripted: the teammates' changes
+    /// written through the store, then the project read again as a sync's intake does.
     #[cfg(feature = "test-hooks")]
-    async fn scripted_sync(
+    pub(crate) async fn scripted_sync(
         &self,
         folder: ProjectRef,
         outcome: tc_api::test::ScriptedSync,

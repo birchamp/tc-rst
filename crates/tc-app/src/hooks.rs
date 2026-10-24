@@ -867,8 +867,9 @@ impl Handle<Reset> for App {
         // A launch computes every Home summary again.
         self.inner.home.reset();
         // Nothing a test scripted for Door43 reaches the next screen.
-        self.inner.open_door43.clear();
-        self.inner.sync.clear();
+        if let Some(scripted) = self.inner.sync.scripted() {
+            scripted.clear();
+        }
         self.inner.scripted_resources.clear();
         // A launch starts with no kept replies, so a request id may be used again.
         self.inner.replies.forget_settled();
