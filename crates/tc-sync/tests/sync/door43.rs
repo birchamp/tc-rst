@@ -651,3 +651,95 @@ async fn share_makes_the_repository_and_pushes_the_project() {
     );
     a.close().unwrap();
 }
+
+/// Commits on Door43's branch with no translationCore trailer, as another tool (or Door43's
+/// own editor) makes, and the change it makes to `path`.
+fn commit_by_another_tool(
+    door43: &Door43,
+    name: &str,
+    path: &str,
+    edit: impl Fn(&[u8]) -> Vec<u8>,
+) {
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, name)).unwrap();
+    let head = bare
+        .find_reference("refs/heads/main")
+        .unwrap()
+        .peel_to_commit()
+        .unwrap();
+    let tree = head.tree().unwrap();
+    let old = bare
+        .find_blob(tree.get_path(Path::new(path)).unwrap().id())
+        .unwrap()
+        .content()
+        .to_vec();
+    let blob = bare.blob(&edit(&old)).unwrap();
+    let mut update = git2::build::TreeUpdateBuilder::new();
+    update.upsert(path, blob, git2::FileMode::Blob);
+    let tree = bare
+        .find_tree(update.create_updated(&bare, &tree).unwrap())
+        .unwrap();
+    let sig = git2::Signature::now("jdoe", "jdoe@example.org").unwrap();
+    bare.commit(
+        Some("refs/heads/main"),
+        &sig,
+        &sig,
+        "Edit TIT.usfm",
+        &tree,
+        &[&head],
+    )
+    .unwrap();
+}
+
+/// `rulings/2026-10-22-H18.md` B and delta L152: a book changed on Door43 with another tool
+/// is reported once, by its author and commit; the project keeps its own text, and the
+/// sync's merge puts translationCore's file back on Door43.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_door43_edit_by_another_tool_is_reported_once() {
+    let door43 = door43("titus-web").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    save(&a, 1, 1, "Paul, a servant of God");
+    connect(&a, &door43, "titus-web");
+    synced(&sync(&a, &door43).await);
+    let ours = std::fs::read(folder.join("ingredients/TIT.usfm")).unwrap();
+    commit_by_another_tool(&door43, "titus-web", "ingredients/TIT.usfm", |bytes| {
+        String::from_utf8_lossy(bytes)
+            .replace("Paul, a servant of God", "Paul, a slave of God")
+            .into_bytes()
+    });
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert_eq!(report.other_tools.len(), 1, "{report:?}");
+    assert_eq!(report.other_tools[0].author, "jdoe");
+    assert_eq!(report.other_tools[0].books, [BookId::Titus]);
+    assert_eq!(words(&a, 1, 1).as_deref(), Some("Paul, a servant of God"));
+    assert_eq!(
+        std::fs::read(folder.join("ingredients/TIT.usfm")).unwrap(),
+        ours
+    );
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, "titus-web")).unwrap();
+    let tip = bare
+        .find_reference("refs/heads/main")
+        .unwrap()
+        .peel_to_tree()
+        .unwrap();
+    let on_door43 = bare
+        .find_blob(
+            tip.get_path(Path::new("ingredients/TIT.usfm"))
+                .unwrap()
+                .id(),
+        )
+        .unwrap()
+        .content()
+        .to_vec();
+    assert_eq!(
+        on_door43, ours,
+        "the merge puts translationCore's file back on Door43"
+    );
+    let again = sync(&a, &door43).await;
+    synced(&again);
+    assert!(again.other_tools.is_empty(), "said once: {again:?}");
+    a.close().unwrap();
+}

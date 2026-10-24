@@ -13,4 +13,4 @@ pub mod sync;
 pub use connect::{ConnectError, connect};
 pub use join::{JoinError, join};
 pub use share::{ShareError, share};
-pub use sync::{Backoff, Pause, SyncReport, sync};
+pub use sync::{Backoff, OtherToolCommit, Pause, SyncReport, sync};

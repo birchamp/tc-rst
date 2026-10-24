@@ -33,6 +33,23 @@ pub struct SyncReport {
     pub confirmed: Option<String>,
     /// Rounds that lost a race to a teammate's push.
     pub raced: u8,
+    /// Commits on Door43 made by another tool that changed the project's files (§9.2 N4,
+    /// `rulings/2026-10-22-H18.md` B): the project kept its own text, and each is said once.
+    pub other_tools: Vec<OtherToolCommit>,
+}
+
+/// One commit made on Door43 by another tool (§9.2 N4): "Titus was changed on Door43 by jdoe
+/// (commit 3fa2c1d) with another tool. translationCore kept its own text. That version is in
+/// Door43's history."
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OtherToolCommit {
+    /// The commit's first seven hex digits.
+    pub commit: String,
+    pub author: String,
+    /// The books whose files it changed.
+    pub books: Vec<tc_journal::BookId>,
+    /// The project's files it changed, by path.
+    pub paths: Vec<String>,
 }
 
 /// The pauses between rounds. Tests count them instead of waiting.
@@ -89,6 +106,7 @@ pub async fn sync(
             received: IntakeReport::default(),
             confirmed: None,
             raced: 0,
+            other_tools: Vec::new(),
         },
     };
     let (mut state, mut actions) = next(&SyncState::Idle, &SyncEvent::Start);
@@ -286,8 +304,13 @@ impl Run<'_> {
         };
         let read = tokio::task::spawn_blocking(move || read_tree(&target.git_dir, remote)).await;
         match read {
-            Ok(Ok(Intake::Packs(packs))) => {
+            Ok(Ok(Intake::Packs(packs, other_tools))) => {
                 self.packs = packs;
+                for commit in other_tools {
+                    if !self.report.other_tools.contains(&commit) {
+                        self.report.other_tools.push(commit);
+                    }
+                }
                 SyncEvent::RemoteRead
             }
             Ok(Ok(Intake::Blocked(block))) => SyncEvent::RemoteBlocked(block),
@@ -423,7 +446,7 @@ enum Pushed {
 }
 
 enum Intake {
-    Packs(Vec<ReceivedPack>),
+    Packs(Vec<ReceivedPack>, Vec<OtherToolCommit>),
     Blocked(SyncBlock),
 }
 
@@ -517,7 +540,76 @@ fn read_tree(git_dir: &std::path::Path, remote: git2::Oid) -> Result<Intake, Str
             git2::TreeWalkResult::Ok
         })
         .map_err(|e| e.message().to_owned())?;
-    Ok(Intake::Packs(packs))
+    let head = repo.head().ok().and_then(|h| h.target());
+    Ok(Intake::Packs(packs, other_tools(&repo, remote, head)?))
+}
+
+/// §9.2 N4: the commits of Door43's branch this history lacks that no translationCore made
+/// (no `Tc-Frontier` trailer) and that changed a file of the project, oldest first. Nothing
+/// is merged from them: the merge tree takes the fold's projection. Once merged, they are in
+/// this history, so the next sync does not walk them again.
+fn other_tools(
+    repo: &git2::Repository,
+    remote: git2::Oid,
+    head: Option<git2::Oid>,
+) -> Result<Vec<OtherToolCommit>, String> {
+    let git = |e: git2::Error| e.message().to_owned();
+    let mut walk = repo.revwalk().map_err(git)?;
+    walk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::REVERSE)
+        .map_err(git)?;
+    walk.push(remote).map_err(git)?;
+    if let Some(head) = head {
+        walk.hide(head).map_err(git)?;
+    }
+    let mut out = Vec::new();
+    for id in walk {
+        let commit = repo.find_commit(id.map_err(git)?).map_err(git)?;
+        let message = commit.message().unwrap_or_default();
+        if message.lines().any(|line| line.starts_with("Tc-Frontier:")) {
+            continue;
+        }
+        let tree = commit.tree().map_err(git)?;
+        let parent = commit.parent(0).ok().and_then(|p| p.tree().ok());
+        let diff = repo
+            .diff_tree_to_tree(parent.as_ref(), Some(&tree), None)
+            .map_err(git)?;
+        let mut paths = Vec::new();
+        let mut books = Vec::new();
+        for delta in diff.deltas() {
+            let Some(path) = delta
+                .new_file()
+                .path()
+                .or_else(|| delta.old_file().path())
+                .and_then(|p| p.to_str())
+            else {
+                continue;
+            };
+            let project_file = path.starts_with("ingredients/")
+                && !path.starts_with(PACKS)
+                && !path.starts_with("ingredients/tc/")
+                && !path.split('/').any(|part| part.starts_with('.'));
+            if !project_file {
+                continue;
+            }
+            if let Some(book) =
+                tc_journal::fold::DerivedFile::from_path(path).and_then(|f| f.book())
+                && !books.contains(&book)
+            {
+                books.push(book);
+            }
+            paths.push(path.to_owned());
+        }
+        if !paths.is_empty() {
+            let hex = commit.id().to_string();
+            out.push(OtherToolCommit {
+                commit: hex[..7].to_owned(),
+                author: commit.author().name().unwrap_or_default().to_owned(),
+                books,
+                paths,
+            });
+        }
+    }
+    Ok(out)
 }
 
 /// §9.2 N1 for a tree: a newer format than this app reads, or tC4's team format.
