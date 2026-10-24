@@ -4,18 +4,18 @@ title: One reader per job and one set of identifiers
 track: A
 lane: domain
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: domain lane (Claude Code 9f599c21)
+branch: track-DOM-2
+worktree: .worktrees/track-DOM-2
 depends: [S2]
 needs_owner: []
 proves: [P9]
 no_loss: true
 size: 2-3 d
 merged: none
-updated: 2026-10-22
-next: Claim this card after S2 merges, then do step 1.
+updated: 2026-10-24
+next: Step 1, write crates/tc-align/tests/one_reader_per_job.rs and log the disagreements.
 blocked_by: none
 ---
 
@@ -354,3 +354,4 @@ Plus:
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-domain.md
+- 2026-10-24 07:37 EDT | domain lane (Claude Code 9f599c21) | claim | none | Claimed in .worktrees/track-DOM-2 from main 29048562. Production callers on main: split_aligned in tc-store/src/commands.rs:1052 (Add books); decode_alignments in tc-journal/src/outside.rs:270 (outside edits), tc-app/src/backend/seed/records.rs:415 and seed/check.rs:596. from_aligned, from_aligned_usfm and from_record have only test callers (and tc-app's suggest_tests.rs). parse_story_questions only in tc-obs; load.rs:417 reads questions with the strict parse_questions. Id types at tc-api/src/ids.rs:433, tc-journal/src/ids.rs:289,293,319,333, tc-obs/src/ids.rs:14,46. 27 FromStr impls. S3 not active | python3 -I .audit/tools/board.py
