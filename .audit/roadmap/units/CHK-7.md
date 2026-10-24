@@ -1,0 +1,117 @@
+---
+id: CHK-7
+title: CI runs the full tests only on gates and main; fast checks before a gate; nightly failures become cards
+track: A
+lane: integration
+milestone: M1
+state: claimed
+owner: integration lane (Claude Code 3d07d5f8)
+branch: track-CHK-7
+worktree: .worktrees/track-CHK-7
+depends: []
+needs_owner: []
+proves: []
+no_loss: false
+size: 0.5 d (basis: three workflow conditions, one script step, one stub script)
+merged: none
+updated: 2026-10-24
+next: Step 1: the workflow conditions.
+blocked_by: none
+---
+
+# CHK-7: CI runs the full tests only on gates and main; fast checks before a gate; nightly failures become cards
+
+## Goal
+
+The owner's test-process ruling of 2026-10-24 (`rulings/2026-10-24-test-process.md`) holds in
+the workflows and scripts: on a track branch CI runs only the compile and lint jobs; the full
+tests, the journeys and app-e2e run on `gate/*` and main; a superseded track run is cancelled,
+a gate or main run never is. `scripts/gates.sh --wait-ci` runs the board check, the claims
+check and the journey coverage check locally before it pushes, and stops on a failure. A failed
+nightly run pushes a card stub to a `nightly/<date>-<job>` branch for the integration lane.
+
+## Why it matters to a translator
+
+A translator never sees it. It keeps CI's runners free for the runs that gate a merge, so fixes
+reach translators sooner, and no nightly failure goes unread.
+
+## Before you start
+
+- `grep -n 'cancel-in-progress' .github/workflows/*.yml` shows UI-3a's rule (gate/* and main
+  never cancelled) on all three workflows.
+- `sed -n '/^wait_ci()/,/^}/p' scripts/gates.sh` prints the gate's push and wait.
+
+## Funnel card
+
+- **Invariants**:
+  - INV-FULL-TESTS-GATE-MERGES: the `test`, `alignment-budget` and `parity-baseline` jobs of
+    `ci.yml` and the `journeys` job of `app-e2e.yml` run on main, on `gate/*` and on request,
+    and not on other pushes.
+  - INV-NIGHTLY-FAILURE-IS-A-CARD: a failed scheduled nightly job pushes a card stub naming
+    its run.
+- **Wrong states**:
+  - Every push to a track branch runs the 75-minute test job and the journeys, so the runs
+    that gate merges wait in the queue.
+  - A gate push carries a card that contradicts git, found only after 30 minutes of CI.
+  - A nightly failure is seen by nobody.
+- **Code**:
+  - Types: none; workflow conditions and a script.
+  - One entry point: `scripts/gates.sh --wait-ci` for every merge gate.
+  - Removed: `pull_request` from app-e2e (journeys run on gates).
+  - Left to checks, and why: workflow text is not a type; `gates-sync.test.mjs` holds it.
+- **Checks**:
+  - `INV-FULL-TESTS-GATE-MERGES` case in `.audit/tools/gates-sync.test.mjs`; kind: lint over
+    the workflow text; runs in CI's parity-baseline job (on gates).
+  - The `INV-JOURNEYS-RUN` case asserts app-e2e's push branches are main and `gate/**`.
+  - Proof it can fail: drop the condition from the `test` job; the new case fails.
+- **Prose**: TRACKING's merge checklist already says it (PROCESS-6).
+- **Human**: none; ruled.
+
+## Steps
+
+### Step 1: The workflow conditions
+
+- Do: give `test`, `alignment-budget` and `parity-baseline` in `ci.yml` the condition "main,
+  `gate/*` or a dispatch"; limit app-e2e's push trigger to main and `gate/**` and drop its
+  `pull_request`; extend `gates-sync.test.mjs`.
+- Done when: `node --test .audit/tools/*.test.mjs` passes and fails with a condition removed.
+- Record: a log line `step 1`.
+
+### Step 2: Fast checks before a gate
+
+- Do: `wait_ci` in `scripts/gates.sh` runs `board.py --check`, `claims.test.mjs` and
+  `coverage.test.mjs` before the push and returns 1 on a failure.
+- Done when: with a card set to `building` and `owner: none`, `--wait-ci` stops before pushing.
+- Record: a log line `step 2`.
+
+### Step 3: Nightly failures become cards
+
+- Do: `scripts/nightly-stub.sh <job> <log>` writes `units/NIGHTLY-<date>-<job>.md` (state
+  todo, the run's URL, the failing seed lines) and pushes `nightly/<date>-<job>`; the nightly
+  jobs tee their log and call it on a scheduled failure, with `contents: write`.
+- Done when: run locally with a fake log in a scratch clone, it writes a card `board.py --check`
+  accepts.
+- Record: a log line `step 3`.
+
+### Step 4: Verify and merge
+
+- Do: one verify pass, then a merge batch.
+
+## Gates before merge
+
+`scripts/gates.sh --wait-ci <batch>`.
+
+- The review gate of `FUNNEL.md` §8: a `verify` log line before `done`, and a `fix` line for every blocker and every major that harms a translator's data or view.
+
+## Stop and ask when
+
+- A lane needs the full tests on its track branch for a reason a gate cannot serve.
+
+## References
+
+- `rulings/2026-10-24-test-process.md`; TRACKING "Checklist: merge an item".
+
+## Log
+
+- 2026-10-24 | integration lane (Claude Code 3d07d5f8) | created | none | from the owner's test-process ruling, assigned by the orchestrator | rulings/2026-10-24-test-process.md
+- 2026-10-24 19:26 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | claimed on track-CHK-7, cut from batch/3 (UI-3a's cancel rule and PROCESS-6 are there); merges in the batch after 3 | python3 -I -B .audit/tools/board.py
