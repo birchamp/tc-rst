@@ -345,7 +345,9 @@ pub async fn receive(
         Ok(report) => report,
         Err(e) => {
             let fold = project.snapshot();
-            let some_held = changes.iter().any(|(_, id)| fold.fold().change(id).is_some());
+            let some_held = changes
+                .iter()
+                .any(|(_, id)| fold.fold().change(id).is_some());
             return Err(if some_held {
                 ExchangeError::PartlyReceived(e.to_string())
             } else {

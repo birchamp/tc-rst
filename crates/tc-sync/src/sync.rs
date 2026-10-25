@@ -327,9 +327,9 @@ impl Run<'_> {
             let refspec = format!("+{name}:{tracking}");
             tc_door43::git::fetch(&http, &repo, &target.remote, &[refspec.as_str()])
                 .map_err(|e| refusal_of(&e))?;
-            let remote = repo
-                .refname_to_id(&tracking)
-                .map_err(|e| SyncRefusal::Io { reason: e.to_string() })?;
+            let remote = repo.refname_to_id(&tracking).map_err(|e| SyncRefusal::Io {
+                reason: e.to_string(),
+            })?;
             let new = match repo.head().ok().and_then(|h| h.target()) {
                 Some(head) => {
                     head != remote && !repo.graph_descendant_of(head, remote).unwrap_or(false)

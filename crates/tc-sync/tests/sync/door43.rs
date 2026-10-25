@@ -717,7 +717,11 @@ async fn a_door43_edit_by_another_tool_is_reported_once() {
     });
     let report = sync(&a, &door43).await;
     synced(&report);
-    assert_eq!(report.other_tools.len(), 1, "{report:?}");
+    assert_eq!(
+        report.other_tools.len(),
+        1,
+        "INV-ONLY-TRANSLATIONCORE-MERGES: {report:?}"
+    );
     assert_eq!(report.other_tools[0].author, "jdoe");
     assert_eq!(report.other_tools[0].books, [BookId::Titus]);
     assert_eq!(words(&a, 1, 1).as_deref(), Some("Paul, a servant of God"));

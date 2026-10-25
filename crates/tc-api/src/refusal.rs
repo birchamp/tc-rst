@@ -515,9 +515,7 @@ impl Message for SyncFailure {
                 vec![("format", major.to_string())]
             }
             Self::Blocked(
-                SyncBlock::NotShared
-                | SyncBlock::ProjectMismatch
-                | SyncBlock::Tc4TeamRepository,
+                SyncBlock::NotShared | SyncBlock::ProjectMismatch | SyncBlock::Tc4TeamRepository,
             ) => Vec::new(),
             // Q36: Door43's words and an I/O reason, which can hold a path on this computer,
             // never reach the message; the refusal keeps them for the operation report.
