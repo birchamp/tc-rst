@@ -365,15 +365,24 @@ impl Writer {
             entry.nfc = is_text_path(rel)
                 .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(bytes)));
         }
-        self.manifest.kept.push(Kept {
-            path: rel.to_owned(),
-            copy: copy.clone(),
-            md5: md5.to_hex(),
-            size: bytes.len() as u64,
-            base,
-            why: KeptWhy::Changed,
-            unreadable,
-        });
+        // The same bytes found again (a crash stopped the write that ended their hold) are
+        // the entry that lists them already, with its base.
+        if !self
+            .manifest
+            .kept
+            .iter()
+            .any(|k| k.path == rel && k.md5 == md5.to_hex())
+        {
+            self.manifest.kept.push(Kept {
+                path: rel.to_owned(),
+                copy: copy.clone(),
+                md5: md5.to_hex(),
+                size: bytes.len() as u64,
+                base,
+                why: KeptWhy::Changed,
+                unreadable,
+            });
+        }
         self.manifest_changed = true;
         self.write_manifest()?;
         // `metadata.json` lists the held bytes as they are in the folder (M6).
@@ -554,16 +563,16 @@ impl Writer {
     /// Ends `entry` in one manifest write; a held file that still holds its bytes is the
     /// app's own after it (the import holds what they show), so the next job writes it.
     fn end_import(&mut self, entry: &Kept, bytes: &[u8]) -> Result<(), StoreError> {
-        self.manifest.kept.retain(|k| k.copy != entry.copy);
-        self.manifest_changed = true;
         let holds_these = matches!(self.state_of(&entry.path),
             State::Held { held } if held.md5 == entry.md5);
-        let md5 = Md5::of(bytes);
         if holds_these {
-            self.accept(&entry.path, md5, bytes, None)?;
-        } else {
-            self.write_manifest()?;
+            // While the entry lives, the heads file keeps its base: a crash before the entry
+            // ends then leaves it with the base its Import compares with.
+            self.accept(&entry.path, Md5::of(bytes), bytes, None)?;
         }
+        self.manifest.kept.retain(|k| k.copy != entry.copy);
+        self.manifest_changed = true;
+        self.write_manifest()?;
         if let Some(file) =
             DerivedFile::from_path(&entry.path).filter(|f| self.fold.projects_file(f))
         {

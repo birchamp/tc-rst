@@ -625,15 +625,38 @@ fn crash_at_every_write_point_of_the_hold_then_a_lost_manifest_still_lists_the_c
     assert!(written_over.get() > 0, "Not now never wrote the file over");
 }
 
-/// An *Import* killed at any write point imports the copy once or not at all: the verse is the
-/// file's after the import, never twice a version, and the copy is kept until the entry ends.
+/// The base heads a live `placed:` entry names are in its path's heads file.
+fn assert_bases_kept(fs: &FaultFs, folder: &Path, handle: &ProjectHandle) {
+    let heads = fs
+        .peek(&folder.join(".tc/heads/ingredients%2FTIT.usfm.bin"))
+        .and_then(|b| tc_store::manifest::HeadsFile::parse(&b));
+    for kept in handle.kept_copies() {
+        if let KeptBase::Placed(md5) = &kept.base {
+            assert!(
+                heads.as_ref().is_some_and(|h| h.get(md5).is_some()),
+                "a live entry's base heads left the heads file: {kept:?}"
+            );
+        }
+    }
+}
+
+/// An *Import* killed at any write point imports the copy once or not at all: a verse only the
+/// file changed is the file's after the import, never twice a version; a verse changed on both
+/// sides keeps the project's text and is one conflict (a kill can land between the import's two
+/// batches); the copy is kept, with its base, until the entry ends.
 #[test]
 fn crash_at_every_write_point_of_an_import_imports_once() {
     let (rig, folder, written) = saved_and_closed();
-    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    let edited = set_verse(
+        &set_verse(&written, 1, 2, "in hope of eternal life"),
+        1,
+        1,
+        "Paul, a servant of God",
+    );
     rig.fs.put(&usfm_path(&folder), &edited, None);
     let handle = open(&rig, &folder);
     assert_eq!(waiting(&handle), vec![USFM.to_owned()]);
+    save_verse(&handle, 1, 1, "Paul, a slave of God").unwrap();
     handle.close().unwrap();
     let base = rig.fs.crash(false);
     drop(rig);
@@ -643,8 +666,24 @@ fn crash_at_every_write_point_of_an_import_imports_once() {
         handle.wait_idle();
         Outcome::NotSaved
     };
+    let versions = |handle: &ProjectHandle, v: u16, text: &str| {
+        handle
+            .snapshot()
+            .fold()
+            .history(&verse(1, v))
+            .into_iter()
+            .filter(|id| {
+                handle.snapshot().fold().body(id).is_some_and(|b| {
+                    matches!(&b.record, tc_journal::Record::Verse {
+                        value: tc_journal::record::VerseValue::Text { words, .. }, ..
+                    } if words == text)
+                })
+            })
+            .count()
+    };
     let points = kill_everywhere_full(&base, &folder, &|_, _| {}, &action, &|handle, fs, _| {
         handle.wait_idle();
+        assert_eq!(words(handle, 1, 1).as_deref(), Some("Paul, a slave of God"));
         let imported = words(handle, 1, 2).as_deref() == Some("in hope of eternal life");
         if !imported {
             assert_eq!(words(handle, 1, 2).as_deref(), Some("in hope"));
@@ -657,6 +696,7 @@ fn crash_at_every_write_point_of_an_import_imports_once() {
                 Some(kept.md5.clone())
             );
         }
+        assert_bases_kept(fs, &folder, handle);
         // An import run again adds nothing the first run wrote.
         if let Some(book) = handle.waiting_books().first() {
             handle.import_kept(&book.kept.copy).wait().unwrap();
@@ -666,23 +706,59 @@ fn crash_at_every_write_point_of_an_import_imports_once() {
                 Some("in hope of eternal life")
             );
         }
-        assert_eq!(conflicts(handle), 0);
-        let versions = handle
-            .snapshot()
-            .fold()
-            .history(&verse(1, 2))
-            .into_iter()
-            .filter(|id| {
-                handle.snapshot().fold().body(id).is_some_and(|b| {
-                    matches!(&b.record, tc_journal::Record::Verse {
-                        value: tc_journal::record::VerseValue::Text { words, .. }, ..
-                    } if words == "in hope of eternal life")
-                })
-            })
-            .count();
-        assert_eq!(versions, 1, "imported once");
+        assert_eq!(words(handle, 1, 1).as_deref(), Some("Paul, a slave of God"));
+        assert_eq!(conflicts(handle), 1, "one conflict for 1:1");
+        assert_eq!(
+            versions(handle, 2, "in hope of eternal life"),
+            1,
+            "imported once"
+        );
+        assert_eq!(
+            versions(handle, 1, "Paul, a servant of God"),
+            1,
+            "to review once"
+        );
     });
     assert!(points > 4, "{points} kill points");
+}
+
+/// *Not now* killed at any write point: the project keeps its text, and the changed bytes are
+/// listed once, in a copy that holds them, whether the file still holds them (it waits) or was
+/// written from the project.
+#[test]
+fn crash_at_every_write_point_of_not_now_loses_nothing() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let handle = open(&rig, &folder);
+    assert_eq!(waiting(&handle), vec![USFM.to_owned()]);
+    handle.close().unwrap();
+    let base = rig.fs.crash(false);
+    drop(rig);
+    let path = usfm_path(&folder);
+    let action = |handle: &ProjectHandle| {
+        let _ = handle.not_now(USFM).wait();
+        handle.wait_idle();
+        Outcome::NotSaved
+    };
+    let points = kill_everywhere_full(&base, &folder, &|_, _| {}, &action, &|handle, fs, _| {
+        handle.wait_idle();
+        assert_eq!(words(handle, 1, 2).as_deref(), Some("in hope"));
+        let listed: Vec<Kept> = handle
+            .kept_copies()
+            .into_iter()
+            .filter(|k| k.md5 == Md5::of(&edited).to_hex())
+            .collect();
+        assert_eq!(listed.len(), 1, "{:?}", handle.kept_copies());
+        assert_eq!(fs.peek(&folder.join(&listed[0].copy)), Some(edited.clone()));
+        if fs.peek(&path) == Some(edited.clone()) {
+            assert_eq!(waiting(handle), vec![USFM.to_owned()], "asked again");
+        } else {
+            assert!(waiting(handle).is_empty());
+        }
+        assert_bases_kept(fs, &folder, handle);
+    });
+    assert!(points > 2, "{points} kill points");
 }
 
 // ---------------------------------------------------------------------------------------
