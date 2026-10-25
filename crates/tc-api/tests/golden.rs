@@ -72,6 +72,11 @@ use tc_api::ids::{
     ProjectRef, RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId,
     ViewSeq, WallMs,
 };
+use tc_api::import::{
+    FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview,
+    Review as ImportReviewRequest, Run as ImportRun, UpdateBook, UpdateReport, VerseAt,
+    VersionSlot, Versions, VersionsView,
+};
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
 };
@@ -3007,6 +3012,121 @@ impl Example for export::StoriesPrint {
     }
 }
 
+fn import_files() -> Vec<ImportFile> {
+    vec![ImportFile {
+        upload: UploadId::parse(&format!("{:032x}", 7)).unwrap(),
+        name: "cfm_fbt_tit_book.zip".into(),
+    }]
+}
+
+fn import_details() -> ImportDetails {
+    ImportDetails {
+        name: "Tita tC3".into(),
+        code: "cfm".into(),
+    }
+}
+
+impl Example for ImportReviewRequest {
+    fn example() -> Self {
+        ImportReviewRequest {
+            files: import_files(),
+            details: Some(import_details()),
+        }
+    }
+}
+
+impl Example for ImportReview {
+    fn example() -> Self {
+        ImportReview {
+            found: ImportFound {
+                details: ImportDetails {
+                    name: "cfm_fbt".into(),
+                    code: "cfm".into(),
+                },
+                licenses: vec!["CC BY-SA 4.0".into()],
+                contributors: vec!["Translator".into()],
+                books: vec![FoundBook {
+                    book: BookId::Titus,
+                    chapters: 3,
+                    verses: 46,
+                    drafted: 46,
+                    aligned: 46,
+                    decisions: 5,
+                    not_kept: Vec::new(),
+                }],
+            },
+            details: import_details(),
+            folder: Some(ProjectRef::parse("tita_tc3").unwrap()),
+            refusal: Some(tc_api::Refusal::Import(
+                tc_api::refusal::ImportRefusal::NameExists,
+            )),
+        }
+    }
+}
+
+impl Example for Versions {
+    fn example() -> Self {
+        Versions {
+            request: request(60),
+            files: import_files(),
+        }
+    }
+}
+
+impl Example for VersionsView {
+    fn example() -> Self {
+        VersionsView {
+            found: vec![FoundVersion {
+                slot: VersionSlot::TranslationNotes,
+                repo_path: "git.door43.org/unfoldingWord/en_tn".into(),
+                tag: "v87".into(),
+                sha: "e586762e330f482a60c52aedd1c7b3a2f155df8a".into(),
+            }],
+            unresolved: vec![VersionSlot::OriginalNewTestament],
+        }
+    }
+}
+
+impl Example for ImportRun {
+    fn example() -> Self {
+        ImportRun {
+            request: request(61),
+            files: import_files(),
+            details: import_details(),
+        }
+    }
+}
+
+impl Example for UpdateBook {
+    fn example() -> Self {
+        UpdateBook {
+            request: request(62),
+            at: scope(),
+            book: BookId::Titus,
+            file: ImportFile {
+                upload: UploadId::parse(&format!("{:032x}", 8)).unwrap(),
+                name: "TIT.usfm".into(),
+            },
+        }
+    }
+}
+
+impl Example for UpdateReport {
+    fn example() -> Self {
+        UpdateReport {
+            book: BookId::Titus,
+            imported: 12,
+            to_review: 2,
+            left_as_it_was: vec![VerseAt {
+                chapter: 1,
+                verse: 3,
+            }],
+            markup_kept: Vec::new(),
+            book_added: false,
+        }
+    }
+}
+
 fn golden_dir() -> PathBuf {
     common::crate_dir().join("tests/golden")
 }
@@ -3171,6 +3291,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "editor/saveLayout",
             "editor/draft",
             "editor/discardDraft",
+            "import/updateBook",
         ])
     );
 }

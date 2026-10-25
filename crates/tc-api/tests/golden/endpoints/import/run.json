@@ -1,0 +1,31 @@
+{
+  "path": "import/run",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
+    "files": [
+      {
+        "upload": "00000000000000000000000000000007",
+        "name": "cfm_fbt_tit_book.zip"
+      }
+    ],
+    "details": {
+      "name": "Tita tC3",
+      "code": "cfm"
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -788,21 +788,15 @@ impl ProjectStore for StoreBackend {
     }
 
     fn create(&self, new: super::NewProjectSpec) -> Result<(), super::CreateFailure> {
-        use super::CreateFailure;
-        let created = self.store.create(&tc_store::NewProject {
-            name: new.folder.as_str().to_owned(),
-            kind: new.kind,
-            records: new.records,
-            books: Vec::new(),
-        });
-        match created {
-            Ok(_) => Ok(()),
-            Err(tc_store::CreateError::NameExists(_)) => Err(CreateFailure::NameExists),
-            Err(tc_store::CreateError::Refused(tc_store::CommandError::Refused(
-                tc_store::Refusal::NotValidInBurrito(why),
-            ))) => Err(CreateFailure::NotHeld(why)),
-            Err(error) => Err(CreateFailure::Failed(error.to_string())),
-        }
+        create_failure(self.store.create(&new_project(new)))
+    }
+
+    fn create_imported(
+        &self,
+        new: super::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), super::CreateFailure> {
+        create_failure(self.store.create_imported(&new_project(new), cause))
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {
@@ -987,6 +981,29 @@ pub(crate) fn open_phase(phase: tc_store::Phase) -> OpenPhase {
 
 /// The pins a new project gets (tC4 `INSTALLED_SUITE`), which an open writes into a project
 /// that holds none (tC4 #766): every group or, should one not convert, none.
+fn new_project(new: super::NewProjectSpec) -> tc_store::NewProject {
+    tc_store::NewProject {
+        name: new.folder.as_str().to_owned(),
+        kind: new.kind,
+        records: new.records,
+        books: Vec::new(),
+    }
+}
+
+fn create_failure(
+    created: Result<std::path::PathBuf, tc_store::CreateError>,
+) -> Result<(), super::CreateFailure> {
+    use super::CreateFailure;
+    match created {
+        Ok(_) => Ok(()),
+        Err(tc_store::CreateError::NameExists(_)) => Err(CreateFailure::NameExists),
+        Err(tc_store::CreateError::Refused(tc_store::CommandError::Refused(
+            tc_store::Refusal::NotValidInBurrito(why),
+        ))) => Err(CreateFailure::NotHeld(why)),
+        Err(error) => Err(CreateFailure::Failed(error.to_string())),
+    }
+}
+
 pub(crate) fn creation_pins() -> Vec<(PinGroup, PinGroupValue)> {
     let pins = tc_resources::suite::project_pins();
     PinGroup::ALL
@@ -1037,6 +1054,7 @@ fn reply(reply: tc_store::StoreReply) -> StoreReply {
         seq: reply.seq,
         changes: reply.changes,
         skipped: reply.skipped,
+        kept: reply.kept,
     }
 }
 

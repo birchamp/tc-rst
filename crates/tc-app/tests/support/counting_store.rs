@@ -160,6 +160,14 @@ impl<S: ProjectStore> ProjectStore for CountingStore<S> {
         self.inner.create(new)
     }
 
+    fn create_imported(
+        &self,
+        new: tc_app::backend::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), tc_app::backend::CreateFailure> {
+        self.inner.create_imported(new, cause)
+    }
+
     fn trust_lock(&self, folder: &ProjectRef) {
         self.inner.trust_lock(folder);
     }
@@ -327,6 +335,14 @@ impl ProjectStore for SharedStore {
         new: tc_app::backend::NewProjectSpec,
     ) -> Result<(), tc_app::backend::CreateFailure> {
         self.0.create(new)
+    }
+
+    fn create_imported(
+        &self,
+        new: tc_app::backend::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), tc_app::backend::CreateFailure> {
+        self.0.create_imported(new, cause)
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {

@@ -155,6 +155,10 @@ fn every_shared_type_round_trips() {
             UploadRefusal,
             UploadFlow,
             UploadView,
+            // import
+            tc_api::import::ImportReview,
+            tc_api::import::VersionsView,
+            tc_api::import::UpdateReport,
             // events and jobs
             EventFrame,
             Event,

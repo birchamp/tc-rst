@@ -666,6 +666,7 @@ impl MemoryHandle {
             seq,
             changes: Vec::new(),
             skipped: Vec::new(),
+            kept: Vec::new(),
         })
     }
 }
@@ -711,6 +712,7 @@ impl ProjectHandle for MemoryHandle {
                     seq: live.published.seq(),
                     changes: Vec::new(),
                     skipped: Vec::new(),
+                    kept: Vec::new(),
                 })
             };
             return Box::pin(async move { result });

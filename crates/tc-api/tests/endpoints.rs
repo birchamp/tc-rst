@@ -115,6 +115,11 @@ const PHASE_0: &[&str] = &[
     // B8: what the Community Checking preview prints.
     "export/book",
     "export/stories",
+    // F1: import a tC3 project, and Update a book from USFM.
+    "import/review",
+    "import/versions",
+    "import/run",
+    "import/updateBook",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -181,6 +186,16 @@ fn the_list_and_the_impls_agree() {
         <tc_api::resources::Download as Endpoint>::KIND,
         Kind::StartJob
     );
+    assert_eq!(
+        <tc_api::import::Versions as Endpoint>::NET,
+        Some(NetKind::ImportVersions)
+    );
+    assert_eq!(<tc_api::import::Run as Endpoint>::KIND, Kind::StartJob);
+    assert_eq!(
+        <tc_api::import::UpdateBook as Endpoint>::KIND,
+        Kind::StartJob
+    );
+    assert_eq!(<tc_api::import::Review as Endpoint>::KIND, Kind::Query);
     assert_eq!(<tc_api::app::Hello as Endpoint>::KIND, Kind::Query);
     for endpoint in ALL {
         let asks = endpoint.net.is_some();
@@ -199,6 +214,7 @@ fn the_list_and_the_impls_agree() {
                 | "resources/checkUpdates"
                 | "resources/planUpgrade"
                 | "resources/fixFetch"
+                | "import/versions"
         );
         assert_eq!(
             asks, expected,

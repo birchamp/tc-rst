@@ -39,6 +39,7 @@ mod app {
     mod hello;
     mod home;
     mod hooks;
+    mod import;
     mod internet;
     mod jobs;
     mod keychain;

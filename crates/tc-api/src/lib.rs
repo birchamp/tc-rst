@@ -40,6 +40,7 @@ pub mod feedback;
 pub mod helps;
 pub mod home;
 pub mod ids;
+pub mod import;
 pub mod jobs;
 pub mod model;
 pub mod net;
@@ -207,6 +208,12 @@ macro_rules! endpoint_table {
 
             query "export/book": $crate::export::Book => $crate::export::BookPrint;
             query "export/stories": $crate::export::Stories => $crate::export::StoriesPrint;
+
+            query "import/review": $crate::import::Review => $crate::import::ImportReview;
+            job [ImportVersions] "import/versions": $crate::import::Versions
+                => $crate::ids::JobId;
+            job "import/run": $crate::import::Run => $crate::ids::JobId;
+            job "import/updateBook": $crate::import::UpdateBook => $crate::ids::JobId;
         }
     };
 }

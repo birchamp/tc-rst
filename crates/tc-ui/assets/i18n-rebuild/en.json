@@ -174,5 +174,11 @@
   "upgrade.checkFailedUnreachable": "Could not check for updates: Door43 cannot be reached. Check the connection and try again.",
   "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed.",
   "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code.",
-  "check.sort.byCategory": "By category"
+  "check.sort.byCategory": "By category",
+  "importer.tc3.unreadable": "{file} cannot be read, so nothing was imported.",
+  "importer.tc3.textChanged": "The text of {book} would change in the import, so nothing was imported.",
+  "updateBook.unreadable": "{file} cannot be read at line {line}, so the book was not updated.",
+  "updateBook.otherBook": "{file} is the book {named}, not {chosen}, so the book was not updated.",
+  "updateBook.notWritten": "The book was not updated. Nothing was changed.",
+  "updateBook.reviewNotWritten": "The verses that need no review were updated, but the changes to review were not saved. Update the book again from the same file to finish."
 }

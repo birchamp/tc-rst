@@ -80,7 +80,8 @@ pub struct AppDeps {
     pub sync: Arc<dyn crate::ports::SyncPort>,
     /// USB exchange: unavailable until E2.
     pub exchange: Arc<dyn crate::ports::ExchangePort>,
-    /// Import of other projects: unavailable until F1.
+    /// Import of a tC3 project and Update a book (F1): tc-import and the store; scripted in
+    /// tests.
     pub import: Arc<dyn crate::ports::ImportPort>,
     /// What ends the process at a test crash point.
     #[cfg(feature = "test-hooks")]
@@ -109,7 +110,7 @@ impl AppDeps {
             store: StoreChoice::OnDisk,
             sync: Arc::new(crate::ports::UnavailableSync),
             exchange: Arc::new(crate::ports::UnavailableExchange),
-            import: Arc::new(crate::ports::UnavailableImport),
+            import: Arc::new(crate::import::TcImport),
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),
             #[cfg(feature = "test-hooks")]
@@ -204,8 +205,7 @@ pub(crate) struct Inner {
     /// USB exchange (E2 adds its use).
     #[allow(dead_code)]
     pub(crate) exchange: Arc<dyn crate::ports::ExchangePort>,
-    /// Import (F1 adds its use).
-    #[allow(dead_code)]
+    /// Import (F1).
     pub(crate) import: Arc<dyn crate::ports::ImportPort>,
     /// The client resources are read and downloaded with, on the production server whatever
     /// the account's server is (tC4 #120, B9a).

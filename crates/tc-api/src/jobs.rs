@@ -34,6 +34,8 @@ pub enum JobKind {
     ExchangeReceive,
     Import,
     ImportVersions,
+    /// Update a book from USFM: its two batches.
+    UpdateBook,
     AddUsfmBooks,
     Download,
     UpgradePlan,
@@ -105,6 +107,8 @@ pub enum Phase {
     Train,
     Seed,
     Summary,
+    /// Reading the files of an import, or writing what they hold.
+    Import,
 }
 
 /// The phases of an open (STORAGE §6.1, "Progress"); tc-store reports them (AD8).
@@ -162,6 +166,10 @@ pub enum JobOutcome {
     Synced(SyncResultView),
     /// An upgrade, a gateway change or a re-pin planned (C8): the plan to read and confirm.
     PlanReady(Box<crate::resources::PlanView>),
+    /// The resource versions an import's projects name, looked up (F1).
+    VersionsFound(crate::import::VersionsView),
+    /// What Update a book did (F1).
+    BookUpdated(crate::import::UpdateReport),
 }
 
 /// What a completed sync brought and left (tC4's `report.facts` of an ok sync, which its toast
@@ -246,6 +254,15 @@ starts_job! {
     }
     crate::resources::PlanGateway => Box<crate::resources::PlanView> {
         JobOutcome::PlanReady(plan) => plan, plan => JobOutcome::PlanReady(plan)
+    }
+    crate::import::Versions => crate::import::VersionsView {
+        JobOutcome::VersionsFound(view) => view, view => JobOutcome::VersionsFound(view)
+    }
+    crate::import::Run => ProjectRef {
+        JobOutcome::Created { project } => project, project => JobOutcome::Created { project }
+    }
+    crate::import::UpdateBook => crate::import::UpdateReport {
+        JobOutcome::BookUpdated(report) => report, report => JobOutcome::BookUpdated(report)
     }
     crate::resources::FixFetch => () {
         JobOutcome::Finished => (), _done => JobOutcome::Finished
