@@ -497,9 +497,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:49:58.867Z#1",
+          "id": "2026-10-24T19:39:54.431Z#1",
           "op": "sync",
-          "startedAt": "2026-10-19T02:49:58.867Z",
+          "startedAt": "2026-10-24T19:39:54.431Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "phase": "apply",
@@ -522,33 +522,34 @@
                   "heads": [
                     {
                       "actor": "b678teammate0001",
-                      "ts": "2026-10-19T02:49:58.763Z|0000|b678teammate0001",
+                      "ts": "2026-10-24T19:39:54.537Z|0000|b678teammate0001",
                       "text": "Pablo, versión del compañero 1.\n"
                     },
                     {
                       "actor": "c678teammate0002",
-                      "ts": "2026-10-19T02:49:59.763Z|0000|c678teammate0002",
+                      "ts": "2026-10-24T19:39:55.537Z|0000|c678teammate0002",
                       "text": "Pablo, versión del compañero 2.\n"
                     }
                   ],
-                  "provisional": "2026-10-19T02:49:59.763Z|0000|c678teammate0002"
+                  "provisional": "2026-10-24T19:39:55.537Z|0000|c678teammate0002"
                 }
               ],
               "newestWins": [],
+              "alignReplaced": [],
               "names": {
-                "a47e5cfcf879bce8": "facilitator-zq"
+                "aa3af50975a3bd6e": "facilitator-zq"
               },
               "tries": 1,
               "repoPath": "_local_/_local_/sample_burrito"
             },
-            "startedAt": "2026-10-19T02:49:58.891Z",
-            "endedAt": "2026-10-19T02:50:00.465Z"
+            "startedAt": "2026-10-24T19:39:54.449Z",
+            "endedAt": "2026-10-24T19:39:55.031Z"
           }
         },
         {
-          "id": "2026-10-19T02:50:01.159Z#2",
+          "id": "2026-10-24T19:39:55.203Z#2",
           "op": "open",
-          "startedAt": "2026-10-19T02:50:01.159Z",
+          "startedAt": "2026-10-24T19:39:55.203Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -565,18 +566,18 @@
                 {
                   "key": "text|TIT|1:1",
                   "heads": [
-                    "2026-10-19T02:49:58.763Z|0000|b678teammate0001",
-                    "2026-10-19T02:49:59.763Z|0000|c678teammate0002"
+                    "2026-10-24T19:39:54.537Z|0000|b678teammate0001",
+                    "2026-10-24T19:39:55.537Z|0000|c678teammate0002"
                   ],
-                  "provisional": "2026-10-19T02:49:59.763Z|0000|c678teammate0002"
+                  "provisional": "2026-10-24T19:39:55.537Z|0000|c678teammate0002"
                 }
               ],
               "retained": [],
               "pendingStructural": [],
               "phases": []
             },
-            "startedAt": "2026-10-19T02:50:01.198Z",
-            "endedAt": "2026-10-19T02:50:01.630Z"
+            "startedAt": "2026-10-24T19:39:55.288Z",
+            "endedAt": "2026-10-24T19:39:55.399Z"
           }
         }
       ],
@@ -959,10 +960,10 @@
     "teamByProject": {
       "_local_/_local_/sample_burrito": {
         "names": {
-          "a47e5cfcf879bce8": "facilitator-zq"
+          "aa3af50975a3bd6e": "facilitator-zq"
         },
         "actors": [
-          "a47e5cfcf879bce8",
+          "aa3af50975a3bd6e",
           "b678teammate0001",
           "c678teammate0002"
         ]
@@ -978,13 +979,13 @@
         "verse": "1",
         "versions": [
           {
-            "ts": "2026-10-19T02:49:58.763Z|0000|b678teammate0001",
+            "ts": "2026-10-24T19:39:54.537Z|0000|b678teammate0001",
             "actor": "b678teammate0001",
             "text": "Pablo, versión del compañero 1.\n",
             "provisional": false
           },
           {
-            "ts": "2026-10-19T02:49:59.763Z|0000|c678teammate0002",
+            "ts": "2026-10-24T19:39:55.537Z|0000|c678teammate0002",
             "actor": "c678teammate0002",
             "text": "Pablo, versión del compañero 2.\n",
             "provisional": true
@@ -993,12 +994,12 @@
       }
     ],
     "team": {
-      "me": "a47e5cfcf879bce8",
+      "me": "aa3af50975a3bd6e",
       "names": {
-        "a47e5cfcf879bce8": "facilitator-zq"
+        "aa3af50975a3bd6e": "facilitator-zq"
       },
       "actors": [
-        "a47e5cfcf879bce8",
+        "aa3af50975a3bd6e",
         "b678teammate0001",
         "c678teammate0002"
       ]
@@ -1013,6 +1014,7 @@
     "storyFrame": null,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "testament": null,

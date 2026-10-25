@@ -171,6 +171,15 @@ test('the README lists every screen of the manifest in order, with its scenario,
   }
 });
 
+test('the screens changed since d310bf3 are in the manifest, and each keeps its old image', () => {
+  const changed = screenRows(section(readme, 'Changes since d310bf3'));
+  assert.ok(changed.length > 0);
+  for (const { name } of changed) {
+    assert.ok(byName.has(name), `${name} is not in the manifest`);
+    assert.ok(fs.existsSync(path.join(HERE, 'history', 'd310bf3', `${name}.png`)), `history/d310bf3/${name}.png is missing`);
+  }
+});
+
 test('the README states the tC4 commit and the totals of the manifest', () => {
   const text = flat(readme);
   const t = manifest.totals;
@@ -268,8 +277,23 @@ test('tc4_issues_names_its_swept_range', () => {
 });
 
 test("PLAN's reference commit is the baseline's", () => {
-  const named = plan.match(/the reference is tC4 `main` at\s+commit `([0-9a-f]{7,40})`/)?.[1];
-  assert.ok(named, 'PLAN names no reference commit ("the reference is tC4 `main` at commit `<sha>`")');
+  const named = plan.match(/the reference is tC4 `[^`]+` at\s+commit\s+`([0-9a-f]{7,40})`/)?.[1];
+  assert.ok(named, 'PLAN names no reference commit ("the reference is tC4 `<branch>` at commit `<sha>`")');
   const captured = manifest.tc4.commit;
   assert.ok(captured.startsWith(named), `P7/INV-CAPTURES-FRESH: PLAN names reference ${named}; the baseline was captured at ${captured}`);
+});
+
+// The screens, the vendored catalogs and CSS, and the help pages each record the tC4 commit they
+// come from; a move of the reference that misses one leaves the app showing two tC4 versions.
+test('the_reference_is_one_commit_everywhere', () => {
+  const named = plan.match(/the reference is tC4 `[^`]+` at\s+commit\s+`([0-9a-f]{7,40})`/)?.[1];
+  const ui = path.join(HERE, '..', '..', 'crates', 'tc-ui');
+  const vendored = fs.readFileSync(path.join(ui, 'vendored-from-tc4.txt'), 'utf8').match(/^commit ([0-9a-f]{40})$/m)?.[1];
+  const help = fs.readFileSync(path.join(ui, 'help-pages.txt'), 'utf8').match(/^commit ([0-9a-f]{40})$/m)?.[1];
+  const helpInReadme = readme.match(/^- Help pages: tc-website `([0-9a-f]{40})`/m)?.[1];
+  const records = { 'docs/PLAN.md': named, 'parity/tc4-baseline/manifest.json': manifest.tc4.commit, 'crates/tc-ui/vendored-from-tc4.txt': vendored };
+  for (const [file, commit] of Object.entries(records)) {
+    assert.ok(commit && named && (commit.startsWith(named) || named.startsWith(commit)), `INV-THE-REFERENCE-IS-ONE-COMMIT: ${file} names tC4 ${commit}; PLAN names ${named}`);
+  }
+  assert.equal(help, helpInReadme, `INV-THE-REFERENCE-IS-ONE-COMMIT: crates/tc-ui/help-pages.txt pins tc-website ${help}; the baseline README records ${helpInReadme}, tC4's pin at the reference`);
 });

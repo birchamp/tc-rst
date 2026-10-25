@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Copy tC4's design-system CSS, fonts and images, its app-level `src/ui.css`, its interface
-# catalogs and its LICENSE and COPYING (which About and License show) into crates/tc-ui/assets, byte for byte, from one commit of a tC4 checkout, and write
+# catalogs and its LICENSE (which About and License show; COPYING too at a commit before tC4 #838
+# made the licence MIT) into crates/tc-ui/assets, byte for byte, from one commit of a tC4 checkout, and write
 # the list of what was copied to crates/tc-ui/vendored-from-tc4.txt. `cargo test -p tc-ui`
 # checks every file under assets/ against that list (tests/vendored_assets.rs).
 #
