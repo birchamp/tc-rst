@@ -124,8 +124,7 @@ const SYNCED_STATES: &[&str] = &[
     "BookHeader",
     "ChapterFront",
     "BookPresence",
-    "BookRemovedWhileEdited",
-    "LastBookRemoved",
+    "newest BookPresence",
     "newest Alignment",
     "newest Check",
     "newest CheckMoved",
@@ -282,7 +281,23 @@ fn newest_kind(key: &RecordKey) -> bool {
             | RecordKey::Versification
             | RecordKey::DeviceProfile(_)
             | RecordKey::BookLayout(_)
+            // A presence race of *Restore the text* against *Start empty* still conflicts.
+            | RecordKey::BookPresence(_)
     )
+}
+
+/// A book's presence heads race *Restore the text* against *Start empty*: H5 keeps that a
+/// conflict, since one of them empties verse text.
+fn restore_race(state: &FoldState, key: &RecordKey) -> bool {
+    let how = |wanted: PresentHow| {
+        state.heads(key).iter().any(|h| {
+            matches!(
+                body_of(state, h).map(|b| b.record),
+                Some(Record::BookPresence { value: BookPresence::Present { how, .. }, .. }) if how == wanted
+            )
+        })
+    };
+    how(PresentHow::RestoredText) && how(PresentHow::StartedEmpty)
 }
 
 /// The census name of a record settled by the newest-wins rule: the kind it would have
@@ -313,6 +328,7 @@ fn newest_name(state: &FoldState, key: &RecordKey) -> &'static str {
         RecordKey::Versification => "newest Versification",
         RecordKey::DeviceProfile(_) => "newest DeviceProfile",
         RecordKey::BookLayout(_) => "newest BookLayout",
+        RecordKey::BookPresence(_) => "newest BookPresence",
         _ => "newest of another kind",
     }
 }
@@ -497,7 +513,7 @@ fn newest_wins_converges() {
                         n,
                         key
                     ),
-                    Some(Resolved::Conflict(_)) => {
+                    Some(Resolved::Conflict(_)) if !restore_race(state, &key) => {
                         prop_assert!(false, "fold {n} lists {key:?} as a conflict")
                     }
                     _ => {}
@@ -1920,9 +1936,13 @@ fn every_head_reachable_from_a_screen() {
 /// Fails if removal visibility ignores a record kind: every change of a removed book that
 /// the removers did not hold keeps the book projected and is counted.
 #[test]
-fn book_removal_hides_nothing_unseen() {
+fn a_newer_removal_removes_and_a_newer_edit_keeps() {
     team(
-        &["removed with unseen work", "removed, all seen"],
+        &[
+            "removed, all seen",
+            "kept by a newer edit",
+            "removed over older unseen work",
+        ],
         removal_hides_nothing_unseen,
     );
 }
@@ -1952,6 +1972,7 @@ fn removal_hides_nothing_unseen(view: &View, census: &Census) -> Result<(), Test
             continue;
         }
         let mut unseen = 0u32;
+        let mut newest_unseen: Option<ChangeId> = None;
         for (label, line) in view.lines() {
             let Verified::Change(change) = line else {
                 continue;
@@ -1971,23 +1992,55 @@ fn removal_hides_nothing_unseen(view: &View, census: &Census) -> Result<(), Test
             };
             if !removals.iter().any(closure_has) {
                 unseen += 1;
+                // Unseen work is never lost: it stays in its record's History (H5).
+                prop_assert!(
+                    state
+                        .history(&change.body().record.key())
+                        .contains(&change.id())
+                );
+                if newest_unseen
+                    .is_none_or(|n| newest_order(state, &change.id()) > newest_order(state, &n))
+                {
+                    newest_unseen = Some(change.id());
+                }
             }
         }
-        if unseen == 0 {
-            census.saw("removed, all seen");
-            if !matches!(state.book(book), BookView::KeptAsLast { .. }) {
-                prop_assert_eq!(state.book(book), BookView::Removed);
+        let newest_removal = heads
+            .iter()
+            .max_by_key(|h| newest_order(state, h))
+            .expect("removal heads");
+        let kept_as_last = matches!(state.book(book), BookView::KeptAsLast { .. });
+        match newest_unseen {
+            None => {
+                census.saw("removed, all seen");
+                if !kept_as_last {
+                    prop_assert_eq!(state.book(book), BookView::Removed);
+                }
             }
-        } else {
-            census.saw("removed with unseen work");
-            prop_assert!(
-                matches!(state.book(book), BookView::RemovedWhileEdited { unseen: n, .. } if n == unseen),
-                "{:?}: {} unseen, {:?}",
-                book,
-                unseen,
-                state.book(book)
-            );
+            Some(edit) if newest_order(state, &edit) > newest_order(state, newest_removal) => {
+                census.saw("kept by a newer edit");
+                prop_assert!(
+                    matches!(state.book(book), BookView::RemovedWhileEdited { unseen: n, .. } if n == unseen),
+                    "{:?}: {} unseen, {:?}",
+                    book,
+                    unseen,
+                    state.book(book)
+                );
+            }
+            Some(_) => {
+                census.saw("removed over older unseen work");
+                if !kept_as_last {
+                    prop_assert_eq!(state.book(book), BookView::Removed);
+                }
+            }
         }
+        prop_assert_eq!(
+            state
+                .conflicts_of(ConflictKind::BookPresence)
+                .filter(|c| c.key == presence)
+                .count(),
+            0
+        );
     }
     Ok(())
 }
@@ -2097,7 +2150,11 @@ fn a_comment_change_seen_under_another_book_counts_as_seen() {
         ],
         last_books_removed: false,
     };
-    let census = Census::new(&["removed with unseen work", "removed, all seen"]);
+    let census = Census::new(&[
+        "removed, all seen",
+        "kept by a newer edit",
+        "removed over older unseen work",
+    ]);
     let mut sim = Sim::run(&script, false);
     removal_hides_nothing_unseen(&View::of(&sim, most_defects(&sim)), &census).unwrap();
     sim.sync_all();

@@ -224,8 +224,10 @@ fn a_join_against_an_edit_of_a_joined_verse_is_one_passage_conflict() {
     );
 }
 
+// Owner ruling H5: the newest of a removal and an edit the remover had not seen decides,
+// with no question, and the edit stays in History either way.
 #[test]
-fn removal_hides_nothing_unseen() {
+fn the_newest_of_a_removal_and_an_unseen_edit_decides() {
     let mut maria = Dev::new(1);
     let mut juan = Dev::new(2);
     let mut book = imported_book(&mut maria, &[3]);
@@ -241,29 +243,29 @@ fn removal_hides_nothing_unseen() {
         vec![],
     ));
     let presence = on(&book, &RecordKey::BookPresence(BOOK));
-    // Juan edits verse 2; Maria removes the book without having seen it.
-    let edit = juan.one(
-        verse(1, 2, text("Juan's", 2)),
-        vec![on(&book, &verse_key(1, 2)).id()],
-    );
+    let base = on(&book, &verse_key(1, 2)).id();
+    // Juan edits verse 2 before Maria, who had not seen it, removes the book.
+    let older = juan.one(verse(1, 2, text("Juan's", 2)), vec![base]);
     let held: Vec<_> = ids(&book);
     let removal = maria.one(removed(&held), vec![presence.id()]);
+    assert!(juan.at < maria.at, "the removal is the newest");
     let mut all = book.clone();
     all.push(removal.clone());
+    all.push(older.clone());
     let state = fold(&all);
     assert_eq!(state.book(BOOK), BookView::Removed);
-    let mut all_with = all.clone();
-    all_with.push(edit);
-    let state = fold(&all_with);
+    assert!(state.history(&verse_key(1, 2)).contains(&older.id()));
+    assert_eq!(state.conflicts().count(), 0);
+    // Juan's next edit, after the removal, keeps the book.
+    juan.at = maria.at + 60_000;
+    let newer = juan.one(verse(1, 2, text("Juan's again", 2)), vec![older.id()]);
+    all.push(newer);
+    let state = fold(&all);
     assert!(matches!(
         state.book(BOOK),
-        BookView::RemovedWhileEdited { unseen: 1, .. }
+        BookView::RemovedWhileEdited { unseen: 2, .. }
     ));
-    assert!(
-        state
-            .conflicts()
-            .any(|c| matches!(c.kind, ConflictKind::BookRemovedWhileEdited { unseen: 1 }))
-    );
+    assert_eq!(state.conflicts().count(), 0);
 }
 
 #[test]

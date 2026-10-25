@@ -4,7 +4,7 @@
 use super::merge::{ancestors_or_self, record_of};
 use super::meta::{ChangeIdx, Form, KeyIdx};
 use super::state::{BookStatus, Dirty, FoldState, Owner, ProjectKind};
-use super::{Anomaly, Conflict, ConflictId, ConflictKind, Counter};
+use super::{Anomaly, Counter};
 use crate::ids::{ChangeId, ShortId};
 use crate::record::{BookPresence, PresentHow, Record};
 use std::collections::{BTreeMap, BTreeSet};
@@ -88,35 +88,33 @@ fn status_of(state: &mut FoldState, book: BookId, dirty: &mut Dirty) -> BookStat
         state.set_conflicts(Owner::Book(book), Vec::new(), dirty);
         return BookStatus::Unknown;
     }
-    let present: Vec<ChangeIdx> = heads
+    // Owner ruling H5: the newest of the removal and the work beside it decides, with no
+    // question; what loses stays in History.
+    state.set_conflicts(Owner::Book(book), Vec::new(), dirty);
+    let order = |h: &ChangeIdx| state.meta(*h).order();
+    let (present, removals): (Vec<ChangeIdx>, Vec<ChangeIdx>) = heads
         .iter()
         .copied()
-        .filter(|h| matches!(state.meta(*h).form, Form::Presence(Some(_))))
-        .collect();
-    if let Some(scope) = present
-        .iter()
-        .copied()
-        .max_by_key(|h| (state.meta(*h).at, state.meta(*h).id))
+        .partition(|h| matches!(state.meta(*h).form, Form::Presence(Some(_))));
+    let newest_removal = removals.iter().copied().max_by_key(order);
+    if let Some(scope) = present.iter().copied().max_by_key(order)
+        && newest_removal.is_none_or(|r| state.meta(scope).order() > state.meta(r).order())
     {
-        state.set_conflicts(Owner::Book(book), Vec::new(), dirty);
         return BookStatus::Present { scope };
     }
-    // Every head is a removal: does it hide anything its remover had not seen?
-    let unseen = unseen(state, book, presence, &heads);
-    let scope = nearest_present(state, &heads);
-    if unseen.is_empty() {
-        state.set_conflicts(Owner::Book(book), Vec::new(), dirty);
-        return BookStatus::Removed;
-    }
-    let count = unseen.len() as u32;
-    let mut ids: Vec<ChangeId> = heads.iter().map(|h| state.meta(*h).id).collect();
-    ids.extend(unseen.iter().map(|c| state.meta(*c).id));
-    let kind = ConflictKind::BookRemovedWhileEdited { unseen: count };
-    let conflict = book_conflict(state, presence, &heads, kind, &ids);
-    state.set_conflicts(Owner::Book(book), vec![conflict], dirty);
-    BookStatus::RemovedWhileEdited {
-        scope,
-        unseen: count,
+    let Some(removal) = newest_removal else {
+        return BookStatus::Unknown;
+    };
+    let unseen = unseen(state, book, presence, &removals);
+    let newest_unseen = unseen.iter().copied().max_by_key(order);
+    match newest_unseen {
+        Some(edit) if state.meta(edit).order() > state.meta(removal).order() => {
+            BookStatus::RemovedWhileEdited {
+                scope: nearest_present(state, &removals),
+                unseen: unseen.len() as u32,
+            }
+        }
+        _ => BookStatus::Removed,
     }
 }
 
@@ -208,41 +206,6 @@ fn unseen(
     out
 }
 
-fn book_conflict(
-    state: &FoldState,
-    presence: KeyIdx,
-    heads: &[ChangeIdx],
-    kind: ConflictKind,
-    ids: &[ChangeId],
-) -> Conflict {
-    let tag = kind.tag().unwrap_or("book");
-    let (candidates, unreadable) = super::attach::candidates_of(state, heads, |_| None);
-    let provisional = heads
-        .iter()
-        .copied()
-        .max_by_key(|h| state.meta(*h).order())
-        .map(|h| state.meta(h).id)
-        .unwrap_or(ChangeId::from_bytes([0; 32]));
-    let batches: BTreeSet<crate::ids::BatchId> = heads
-        .iter()
-        .map(|h| state.batch(state.meta(*h).batch).id)
-        .collect();
-    Conflict {
-        id: ConflictId::tagged(tag, ids),
-        key: state.entry(presence).key.clone(),
-        also_keys: Vec::new(),
-        kind,
-        bases: Vec::new(),
-        candidates,
-        agreed: Vec::new(),
-        disputed: Vec::new(),
-        provisional,
-        batches: batches.into_iter().collect(),
-        incomplete_history: super::attach::continues_missing(state, heads),
-        unreadable,
-    }
-}
-
 /// `RecordsWithoutBook`: records of a book that no folded presence change mentions. The
 /// anomaly listed for each book is kept beside the list, so a step replaces it by its exact
 /// value instead of looking for it among every anomaly.
@@ -314,11 +277,9 @@ fn last_book(state: &mut FoldState, dirty: &mut Dirty) {
     let Some(presence) = state.books.get(&book).and_then(|b| b.presence) else {
         return;
     };
+    // A project never ends with no book: the newest removal loses, with no question (H5).
     let heads: Vec<ChangeIdx> = state.entry(presence).heads.to_vec();
     let scope = nearest_present(state, &heads);
-    let ids: Vec<ChangeId> = heads.iter().map(|h| state.meta(*h).id).collect();
-    let conflict = book_conflict(state, presence, &heads, ConflictKind::LastBookRemoved, &ids);
-    state.set_conflicts(Owner::Book(book), vec![conflict], dirty);
     if let Some(entry) = state.book_mut(book) {
         entry.status = BookStatus::KeptAsLast { scope };
     }

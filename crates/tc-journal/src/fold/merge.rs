@@ -281,6 +281,17 @@ pub(crate) fn newest_wins(key: &RecordKey) -> bool {
     )
 }
 
+/// *Restore the text* against *Start empty*: one of them empties verse text, so the person
+/// decides (H5 keeps verse text a conflict).
+fn restore_race(state: &FoldState, heads: &[ChangeIdx]) -> bool {
+    let how = |wanted| {
+        heads
+            .iter()
+            .any(|h| state.meta(*h).form == super::meta::Form::Presence(Some(wanted)))
+    };
+    how(crate::record::PresentHow::RestoredText) && how(crate::record::PresentHow::StartedEmpty)
+}
+
 fn conflict(
     state: &FoldState,
     key: &RecordKey,
@@ -288,7 +299,9 @@ fn conflict(
     unreadable: bool,
 ) -> (Local, SmallVec<[BatchIdx; 1]>) {
     let provisional = provisional(state, heads);
-    if newest_wins(key) {
+    if newest_wins(key)
+        || (matches!(key, RecordKey::BookPresence(_)) && !restore_race(state, heads))
+    {
         return (
             Local::ByRule {
                 head: provisional,

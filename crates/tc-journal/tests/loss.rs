@@ -1124,8 +1124,8 @@ fn other_book(dev: &mut Dev, book: BookId) -> Vec<Change> {
     )
 }
 
-/// L37: a book removed while a teammate edits it stays projected with the edits, until a
-/// person decides; either choice resolves it.
+/// L37 under H5: a book removed while a teammate edits it follows the newest of the two, with
+/// no question; the edit is never lost, it stays in History.
 #[test]
 fn loss_book_removed_while_edited() {
     let mut maria = Dev::new(1);
@@ -1139,27 +1139,21 @@ fn loss_book_removed_while_edited() {
         removed(&ids(&book)),
         vec![on(&book, &RecordKey::BookPresence(BOOK)).id()],
     );
+    assert!(juan.at < maria.at, "the removal is the newest");
     let all = all_of(&[&book, &[edit.clone(), removal]]);
     let state = assert_converges(&all);
-    let conflict = the_conflict(&state);
-    assert_eq!(
-        conflict.kind,
-        ConflictKind::BookRemovedWhileEdited { unseen: 1 }
-    );
-    assert!(usfm(&state).contains("\\v 2 Juan's two\n"));
-    // *Keep it removed*: the unseen work is now seen and stays in History.
+    assert_eq!(state.conflict_count(), 0);
+    assert_eq!(state.book(BOOK), BookView::Removed);
+    assert!(state.history(&verse_key(1, 2)).contains(&edit.id()));
+    // An edit after the removal keeps the book, with the edits.
+    juan.at = maria.at + 60_000;
+    let later = juan.one(verse(1, 2, text("Juan's three", 2)), vec![edit.id()]);
     let mut kept = all.clone();
-    kept.extend(maria.apply(vec![state.keep_removed(BOOK)]));
+    kept.push(later);
     let after = assert_converges(&kept);
     assert_eq!(after.conflict_count(), 0);
-    assert_eq!(after.book(BOOK), BookView::Removed);
-    assert!(after.history(&verse_key(1, 2)).contains(&edit.id()));
-    // *Restore Titus*.
-    let mut restored = all.clone();
-    restored.extend(maria.apply(state.restore_book(conflict.id).expect("offered")));
-    let after = assert_converges(&restored);
-    assert_eq!(after.conflict_count(), 0);
-    assert!(usfm(&after).contains("\\v 2 Juan's two\n"));
+    assert!(after.book(BOOK).projects());
+    assert!(usfm(&after).contains("\\v 2 Juan's three\n"));
 }
 
 fn conflicted_verse() -> (Vec<Change>, Change, Change, Dev) {
@@ -1391,7 +1385,7 @@ fn merge_text_edit_never_conflicts_with_check() {
 }
 
 /// L55: concurrent removals of the last books keep one book, listed, so the burrito
-/// stays valid.
+/// stays valid; the newest removal is the one that loses.
 #[test]
 fn loss_last_book_removed_concurrently() {
     let mut maria = Dev::new(1);
@@ -1406,14 +1400,9 @@ fn loss_last_book_removed_concurrently() {
         removed_of(BookId::Ruth, &ids(&book)),
         vec![on(&book, &RecordKey::BookPresence(BookId::Ruth)).id()],
     );
-    let mut all = all_of(&[&book, &[titus, ruth]]);
+    let all = all_of(&[&book, &[titus, ruth]]);
     let state = assert_converges(&all);
-    let conflict = the_conflict(&state);
-    assert_eq!(conflict.kind, ConflictKind::LastBookRemoved);
-    assert_eq!(conflict.key, RecordKey::BookPresence(BookId::Ruth));
-    assert_eq!(state.projected_books(), vec![BookId::Ruth]);
-    all.extend(juan.apply(state.restore_book(conflict.id).expect("offered")));
-    let state = assert_converges(&all);
+    // H5: the newest removal, Ruth's, loses with no question.
     assert_eq!(state.conflict_count(), 0);
     assert_eq!(state.projected_books(), vec![BookId::Ruth]);
 }
@@ -1557,8 +1546,8 @@ fn loss_incomplete_batch_held_and_listed() {
     );
 }
 
-/// L67: a book file added on Door43 after a removal is a visible presence conflict, and
-/// the book projects meanwhile.
+/// L67 under H5: a book file added on Door43 after a removal is the newest, so the book
+/// projects, with no question; the removal stays in History.
 #[test]
 fn loss_web_added_book_after_removal_conflict() {
     let mut maria = Dev::new(1);
@@ -1568,11 +1557,16 @@ fn loss_web_added_book_after_removal_conflict() {
         removed(&ids(&book)),
         vec![on(&book, &RecordKey::BookPresence(BOOK)).id()],
     );
+    door43.at = maria.at + 60_000;
     let added = door43.one(present(PresentHow::Added), vec![]);
-    let state = assert_converges(&all_of(&[&book, &[removal, added]]));
-    let conflict = the_conflict(&state);
-    assert_eq!(conflict.kind, ConflictKind::BookPresence);
+    let state = assert_converges(&all_of(&[&book, &[removal.clone(), added]]));
+    assert_eq!(state.conflict_count(), 0);
     assert!(state.book(BOOK).projects());
+    assert!(
+        state
+            .history(&RecordKey::BookPresence(BOOK))
+            .contains(&removal.id())
+    );
 }
 
 // ---------------------------------------------------------------------------------------
