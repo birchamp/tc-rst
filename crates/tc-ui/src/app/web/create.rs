@@ -105,7 +105,9 @@ impl Actions {
             };
             match made {
                 Ok(created) => {
-                    let open = this.s().np_slot().with_untracked(Option::is_some);
+                    let open = this.s().np_slot().with_untracked(|np| {
+                        np.as_ref().is_some_and(|np| np.awaits(kind, request))
+                    });
                     this.refresh_projects();
                     if open && kind == NewKind::Bible {
                         // "You'll add books next" (tC4): Add a book opens for the new project.
@@ -117,7 +119,9 @@ impl Actions {
                 }
                 Err(error) => {
                     this.s().np_slot().try_update(|np| {
-                        let Some(np) = np else { return };
+                        let Some(np) = np.as_mut().filter(|np| np.awaits(kind, request)) else {
+                            return;
+                        };
                         match said(error) {
                             Said::Answered(error) => np.answered(Some(error)),
                             Said::Lost(error) => np.lost(error),
@@ -192,9 +196,13 @@ impl Actions {
                 project: project.clone(),
                 books,
             };
+            let mine = |ab: &AddBookForm| ab.project == project;
             match this.runtime().api().call(&asked).await {
                 Ok(added) => {
-                    let open = this.s().ab_slot().with_untracked(Option::is_some);
+                    let open = this
+                        .s()
+                        .ab_slot()
+                        .with_untracked(|ab| ab.as_ref().is_some_and(mine));
                     this.refresh_projects();
                     if open {
                         this.close_modal();
@@ -203,9 +211,13 @@ impl Actions {
                         }
                     }
                 }
-                Err(error) => this.patch_ab(|ab| match said(error) {
-                    Said::Answered(error) => ab.added(&[], Some(error)),
-                    Said::Lost(error) => ab.lost(error),
+                Err(error) => this.patch_ab(|ab| {
+                    if mine(ab) {
+                        match said(error) {
+                            Said::Answered(error) => ab.added(&[], Some(error)),
+                            Said::Lost(error) => ab.lost(error),
+                        }
+                    }
                 }),
             }
         });
@@ -281,9 +293,10 @@ impl Actions {
         spawn_local(async move {
             let asked = AddUsfmBooks {
                 request,
-                project,
+                project: project.clone(),
                 files,
             };
+            let mine = |ab: &AddBookForm| ab.project == project;
             match this.runtime().api().call(&asked).await {
                 Ok(done) => {
                     this.refresh_projects();
@@ -306,17 +319,28 @@ impl Actions {
                             }
                         }
                     }
-                    let open = this.s().ab_slot().with_untracked(Option::is_some);
+                    let open = this
+                        .s()
+                        .ab_slot()
+                        .with_untracked(|ab| ab.as_ref().is_some_and(mine));
                     if open && problems.is_empty() {
                         this.close_modal();
                     } else {
                         let error = (!problems.is_empty()).then(|| problems.join(" "));
-                        this.patch_ab(|ab| ab.added(&added, error));
+                        this.patch_ab(|ab| {
+                            if mine(ab) {
+                                ab.added(&added, error);
+                            }
+                        });
                     }
                 }
-                Err(error) => this.patch_ab(|ab| match said(error) {
-                    Said::Answered(error) => ab.added(&[], Some(error)),
-                    Said::Lost(error) => ab.lost(error),
+                Err(error) => this.patch_ab(|ab| {
+                    if mine(ab) {
+                        match said(error) {
+                            Said::Answered(error) => ab.added(&[], Some(error)),
+                            Said::Lost(error) => ab.lost(error),
+                        }
+                    }
                 }),
             }
         });

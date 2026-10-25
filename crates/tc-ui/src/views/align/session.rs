@@ -27,6 +27,23 @@ use crate::views::item_nav::{Which, item_nav_button};
 /// nothing to align, or the verse (tC4's `Align` and `AlignBlocked`).
 pub fn align_session(s: &AppState, actions: &Actions, book: BookId) -> impl IntoView + use<> {
     let (s, actions) = (s.clone(), actions.clone());
+    // Through a Memo, so that the verse redraws when the cap changes, not on every read of the
+    // open sessions (a drag in progress or the focus would go with it).
+    let cap = {
+        let actions = send_wrapper::SendWrapper::new(actions.clone());
+        Memo::new(move |_| actions.write_cap())
+    };
+    let read_only = {
+        let actions = send_wrapper::SendWrapper::new(actions.clone());
+        Memo::new(move |_| actions.read_only_words())
+    };
+    let read_only = move || {
+        read_only.get().map(|text| view! {
+            <Callout tone=CalloutTone::Warn attrs=Attrs::from([("data-testid", "align-read-only")])>
+                {text}
+            </Callout>
+        })
+    };
     let error = s.a.edit_error.clone();
     let notice = move || {
         error.get().map(|message| view! {
@@ -47,10 +64,10 @@ pub fn align_session(s: &AppState, actions: &Actions, book: BookId) -> impl Into
             }
             Screen::Failed(reason) => failed(&actions, reason),
             Screen::Blocked(why) => blocked(why, book),
-            Screen::Ready(view) => ready(&s, &actions, book, *view),
+            Screen::Ready(view) => ready(&s, &actions, cap.get(), book, *view),
         }
     };
-    (notice, screen).into_any()
+    (read_only, notice, screen).into_any()
 }
 
 fn notice_box() -> Css {
@@ -198,6 +215,13 @@ fn restore_focus() {
     });
 }
 
+fn with_off_look(mut css: Css, cap: Option<WriteCap>) -> Css {
+    if cap.is_none() {
+        css.extend(&crate::views::off_look());
+    }
+    css
+}
+
 /// Only a writable open lets a word or a card be picked up (6.4).
 fn draggable(cap: Option<WriteCap>) -> &'static str {
     if cap.is_some() { "true" } else { "false" }
@@ -254,7 +278,7 @@ fn card_header(
         "background": "var(--surface-app)",
         "border-bottom": "var(--stroke-hair) solid var(--border)",
         "text-align": "center",
-        "cursor": "grab",
+        "cursor": if cap.is_some() { "grab" } else { "default" },
         "display": "flex",
         "flex-direction": "column",
         "align-items": "center",
@@ -304,7 +328,7 @@ fn card_header(
     view! {
         <div
             draggable=draggable(cap)
-            title=t(keys::align::MERGE_HINT, &[])
+            title=cap.map(|_| t(keys::align::MERGE_HINT, &[]))
             style=header.to_style()
             on:dragstart=move |e: web_sys::DragEvent| {
                 e.stop_propagation();
@@ -386,6 +410,7 @@ fn word_card(
         "white-space": "nowrap",
         "box-shadow": "0 1px 2px rgba(1,66,99,.08)",
     };
+    let placed_style = with_off_look(placed_style, cap);
     let placed: Vec<AnyView> = card
         .placed
         .iter()
@@ -398,7 +423,7 @@ fn word_card(
                     type="button"
                     draggable=draggable(cap)
                     disabled=cap.is_none()
-                    title=t(keys::align::CLICK_TO_UNALIGN, &[])
+                    title=cap.map(|_| t(keys::align::CLICK_TO_UNALIGN, &[]))
                     aria-label=occurrence_name(w)
                     data-word=w.word.clone()
                     style=placed_style.to_style()
@@ -426,7 +451,7 @@ fn word_card(
             let (word, actions) = (w.clone(), actions.clone());
             let (testid, title, name) = (
                 format!("align-suggested-{index}"),
-                t(keys::align::suggest::CONFIRM, &[]),
+                cap.map(|_| t(keys::align::suggest::CONFIRM, &[])).unwrap_or_default(),
                 occurrence_name(&w).unwrap_or_default(),
             );
             view! {
@@ -833,7 +858,7 @@ fn bank(actions: &Actions, cap: Option<WriteCap>, view: &AlignerView) -> impl In
                         "box-shadow": "var(--shadow-chip)",
                     }
                 });
-                css
+                with_off_look(css, cap)
             };
             let word = w.clone();
             let (click, key, drag) = (actions.clone(), actions.clone(), view.clone());
@@ -843,7 +868,7 @@ fn bank(actions: &Actions, cap: Option<WriteCap>, view: &AlignerView) -> impl In
                     type="button"
                     draggable=draggable(cap)
                     disabled=cap.is_none()
-                    title=t(if armed_now { keys::align::HINT_ARMED } else { keys::align::HINT_IDLE }, &[])
+                    title=cap.map(|_| t(if armed_now { keys::align::HINT_ARMED } else { keys::align::HINT_IDLE }, &[]))
                     data-armed=if on { "1" } else { "0" }
                     aria-label=occurrence_name(w)
                     data-word=w.word.clone()
@@ -958,6 +983,7 @@ fn mark_valid_bar(
         "padding": "11px 20px",
         "border-radius": "var(--radius-md)",
     };
+    let button = with_off_look(button, cap);
     let go = |place: Option<tc_api::align::AlignPlace>| {
         let actions = actions.clone();
         Callback::new(move |()| {
@@ -975,7 +1001,7 @@ fn mark_valid_bar(
                 type="button"
                 data-testid="align-mark-valid"
                 data-active=if done { "1" } else { "0" }
-                title=t(keys::align::MARK_VALID_HINT, &[])
+                title=cap.map(|_| t(keys::align::MARK_VALID_HINT, &[]))
                 style=button.to_style()
                 disabled=cap.is_none()
                 on:click=move |_| if let Some(cap) = cap { mark.align_edit(cap, AlignEdit::MarkValid) }
@@ -1118,10 +1144,15 @@ fn how_toggle(s: &AppState) -> impl IntoView + use<> {
 }
 
 /// The verse itself, with its lens and bank and cards and marking row.
-fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> AnyView {
+fn ready(
+    s: &AppState,
+    actions: &Actions,
+    cap: Option<WriteCap>,
+    book: BookId,
+    view: AlignerView,
+) -> AnyView {
     restore_focus();
     let lens = effective_lens(s.a.lens.get(), view.gateway.is_some());
-    let cap = actions.write_cap();
     let stale = (view.freshness == Freshness::Stale).then(|| {
         let style = crate::css! {
             "font-size": "var(--fs-caption-lg)",

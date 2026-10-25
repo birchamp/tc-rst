@@ -35,6 +35,7 @@ use crate::i18n::{TextDir as LocaleDir, keys, locale_of, shown_locale, t};
 use crate::views::helps_panel::{
     block_text, expandable_note, list_indent, number_mark, quoted, with_tables,
 };
+use crate::views::off_look;
 
 fn dir_attr(dir: TextDir) -> &'static str {
     match dir {
@@ -850,6 +851,10 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
     });
     let nav = Memo::new(move |_| check_item::item_nav(index.get(), total.get()));
     let cap = write_cap(actions);
+    let read_only = {
+        let actions = send_wrapper::SendWrapper::new(actions.clone());
+        Memo::new(move |_| actions.read_only_words())
+    };
     let marking_row = {
         let row = crate::css! {
             "display": "flex",
@@ -869,7 +874,13 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
                     data-testid=testid
                     disabled=move || cap.get().is_none()
                     on:click=move |_| on.run(())
-                    style=move || triage_style(status.get() == Some(which), tone).to_style()
+                    style=move || {
+                        let mut css = triage_style(status.get() == Some(which), tone);
+                        if cap.get().is_none() {
+                            css.extend(&off_look());
+                        }
+                        css.to_style()
+                    }
                 >
                     {label}
                 </button>
@@ -920,6 +931,7 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
             {learn_more}
             {notices}
             {compare}
+            {move || read_only.get().map(|text| red_notice("check-read-only", text))}
             {marking_row}
             {marks}
         </div>
@@ -998,7 +1010,13 @@ fn check_marks(s: &AppState, actions: &Actions, tool: Tool) -> AnyView {
                         actions.mark(cap, DecideEdit::Bookmark { on: !bookmarked.get_untracked() });
                     }
                 }
-                style=move || mark_chip(bookmarked.get()).to_style()
+                style=move || {
+                    let mut css = mark_chip(bookmarked.get());
+                    if cap.get().is_none() {
+                        css.extend(&off_look());
+                    }
+                    css.to_style()
+                }
             >
                 <span aria-hidden="true">{t(keys::check::glyph::BOOKMARK, &[])}</span>
                 {move || t(if bookmarked.get() { keys::check::bookmark::ON } else { keys::check::bookmark::OFF }, &[])}
@@ -1058,6 +1076,7 @@ fn comment_editor(
     let Some((key, pair, scope)) = actions.comment_field() else {
         return ().into_any();
     };
+    let cap = write_cap(actions);
     let stored = pair.value.clone();
     let saves = send_wrapper::SendWrapper::new(actions.runtime().saves().clone());
     let text = saves.open(&key, scope, pair);
@@ -1183,6 +1202,7 @@ fn comment_editor(
                 rows="3"
                 dir="auto"
                 prop:value=move || text.get()
+                readonly=move || cap.get().is_none()
                 placeholder=t(keys::check::comment::PLACEHOLDER, &[])
                 on:input=on_input
                 on:focus=on_focus
@@ -1198,7 +1218,7 @@ fn comment_editor(
                 <Button
                     size=Size::Sm
                     variant=ButtonVariant::Ghost
-                    disabled=Signal::derive(can_delete)
+                    disabled=Signal::derive(move || can_delete() || cap.get().is_none())
                     attrs=Attrs::from([("data-testid", "comment-delete")])
                     on_click=Callback::new(delete)
                 >

@@ -111,9 +111,10 @@ pub(super) struct RuntimeHooks {
     pub read_sessions: Box<dyn Fn()>,
 }
 
-/// Proof that the open is writable (6.4). `Actions::align_edit`, `keep_align_reflow` and `mark`
-/// take one; views get `Option<WriteCap>` from `Actions::write_cap` and draw their edit controls
-/// off without one.
+/// Proof that the open was writable when the person acted (6.4). `Actions::align_edit`,
+/// `keep_align_reflow` and `mark` take one; views get `Option<WriteCap>` from
+/// `Actions::write_cap` and draw their edit controls off without one. It gates the click, not
+/// the send: an edit queued before the switch still goes, and the server refuses it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WriteCap(());
 
@@ -459,6 +460,19 @@ impl Saves {
             .state
             .sessions
             .with_untracked(|sessions| writable(sessions, at))
+    }
+
+    /// Why the open `at` is read-only, tracked; `None` while it is writable or not open.
+    pub fn watch_read_only(&self, at: &Scope) -> Option<tc_api::write::ReadOnlyReason> {
+        self.0.state.sessions.with(|sessions| {
+            sessions
+                .iter()
+                .find(|s| s.at == *at)
+                .and_then(|s| match s.mode {
+                    SessionMode::ReadOnly(reason) => Some(reason),
+                    SessionMode::Writable => None,
+                })
+        })
     }
 
     /// `write_cap`, tracked: a view that reads it redraws when the open turns read-only.

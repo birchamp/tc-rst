@@ -1113,14 +1113,7 @@ impl Actions {
     /// in the dialog, and no project was added; a project opened goes to the top of Home.
     fn open_door43_now(&self) {
         let host = self.s().server.account.with_untracked(|a| a.server.clone());
-        // After a sign-in step took its place, the dialog shows again for the open's end, as
-        // the same attempt, with the form as the person left it.
         let form = self.s().layers.dialog.try_update(|dialog| {
-            if let Some(Dialog::SignIn { under }) = dialog
-                && matches!(under.as_deref(), Some(Dialog::OpenDoor43(_)))
-            {
-                *dialog = under.take().map(|under| *under);
-            }
             let od = open_form(dialog)?;
             od.submit.press();
             Some((
@@ -1161,7 +1154,17 @@ impl Actions {
             };
             match ended {
                 JobEnd::Done(project) => {
-                    this.close_modal();
+                    // Only the open's own dialog closes: a sign-in step a sync put over it stays,
+                    // and Open does not come back after it.
+                    this.s().layers.dialog.try_update(|dialog| match dialog {
+                        Some(Dialog::OpenDoor43(_)) => *dialog = None,
+                        Some(Dialog::SignIn { under })
+                            if matches!(under.as_deref(), Some(Dialog::OpenDoor43(_))) =>
+                        {
+                            *under = None;
+                        }
+                        _ => {}
+                    });
                     this.s().import_toast.try_set(Some(ImportToast {
                         message: crate::i18n::t(
                             crate::i18n::keys::open_door43::DONE,
@@ -1427,13 +1430,16 @@ impl Actions {
         let flow = self.0.sign_in_flows.get() + 1;
         self.0.sign_in_flows.set(flow);
         self.s().sign_in.try_update(|step| step.open(flow, then));
-        // The step covers the dialog under it; Open from Door43 shows again after it with its
-        // form as it was, since the open goes on once the person is signed in.
+        // The step covers the dialog under it, which shows again after it with its form as the
+        // person left it: Open from Door43's open goes on once signed in, and a form typed in
+        // while a sync asked for the sign-in is the person's. A step over a step keeps the one
+        // dialog under both.
         self.s().layers.dialog.try_update(|dialog| {
-            let under = dialog.take().filter(|d| matches!(d, Dialog::OpenDoor43(_)));
-            *dialog = Some(Dialog::SignIn {
-                under: under.map(Box::new),
-            });
+            let under = match dialog.take() {
+                Some(Dialog::SignIn { under }) => under,
+                other => other.map(Box::new),
+            };
+            *dialog = Some(Dialog::SignIn { under });
         });
     }
 
@@ -1497,13 +1503,14 @@ impl Actions {
         });
     }
 
-    /// Cancel, Escape, the ✕ and the scrim: the step closes at once, and a sign-in on its way
-    /// is cancelled on the server, which then signs nobody in whenever the cancel arrives.
+    /// Cancel, Escape, the ✕ and the scrim: the step closes at once and the dialog it covered
+    /// shows again as the person left it, and a sign-in on its way is cancelled on the server,
+    /// which then signs nobody in whenever the cancel arrives.
     pub fn cancel_sign_in(&self) {
         let sending = self.s().sign_in.try_update(SignInFlow::cancel).flatten();
         self.s().layers.dialog.try_update(|dialog| {
-            if matches!(dialog, Some(Dialog::SignIn { .. })) {
-                *dialog = None;
+            if let Some(Dialog::SignIn { under }) = dialog {
+                *dialog = under.take().map(|under| *under);
             }
         });
         if let Some(sign_in) = sending {
