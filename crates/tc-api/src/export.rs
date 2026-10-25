@@ -219,6 +219,53 @@ pub struct RunExport {
     /// What only the UI holds for a print: required for [`Producer::PrintHtml`], and refused
     /// with any other producer.
     pub print: Option<PrintRequest>,
+    /// The page's offset from UTC, so the file is dated by the translator's own day, as tC4
+    /// dates it in its window.
+    pub utc_offset: UtcOffset,
+}
+
+/// Minutes east of UTC (JavaScript's `-getTimezoneOffset()`), at most 14 hours either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "i16", into = "i16")]
+pub struct UtcOffset(i16);
+
+impl UtcOffset {
+    pub const UTC: Self = Self(0);
+
+    pub fn new(minutes: i16) -> Option<Self> {
+        (-14 * 60..=14 * 60)
+            .contains(&minutes)
+            .then_some(Self(minutes))
+    }
+
+    pub fn minutes(self) -> i16 {
+        self.0
+    }
+}
+
+impl TryFrom<i16> for UtcOffset {
+    type Error = String;
+
+    fn try_from(minutes: i16) -> Result<Self, Self::Error> {
+        Self::new(minutes).ok_or_else(|| format!("{minutes} minutes is no offset from UTC"))
+    }
+}
+
+impl From<UtcOffset> for i16 {
+    fn from(offset: UtcOffset) -> Self {
+        offset.0
+    }
+}
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for UtcOffset {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+
+    fn arbitrary_with((): ()) -> Self::Strategy {
+        use proptest::prelude::*;
+        (-14 * 60..=14 * 60i16).prop_map(Self).boxed()
+    }
 }
 
 /// The print's choices and words as the person sees them: the preview's page setup, the

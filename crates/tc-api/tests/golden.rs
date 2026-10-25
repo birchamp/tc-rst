@@ -3031,6 +3031,7 @@ impl Example for export::PreflightView {
 impl Example for export::RunExport {
     fn example() -> Self {
         export::RunExport {
+            utc_offset: export::UtcOffset::new(180).unwrap(),
             request: request(41),
             at: scope(),
             producer: export::Producer::PrintHtml,
