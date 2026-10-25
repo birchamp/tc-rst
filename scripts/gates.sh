@@ -145,12 +145,14 @@ wait_ci() {
 }
 
 # Every browser journey against real builds; app-e2e.yml runs this as `--step journeys`.
+# `|| return 1` on each build: under `journeys ... || code=1` bash turns set -e off, and the
+# journeys must never run against an older build.
 journeys() {
   [[ -d "${PLAYWRIGHT_MODULE:-parity/tc4-baseline/node_modules/playwright}" ]] || (cd parity/tc4-baseline && npm ci)
-  cargo build --locked -p tc4 --features test-hooks,fixture-backend
-  cargo build --locked -p tc-door43-fake
-  crates/tc-ui/build-app.sh --out "$target/tc-ui-app"
-  crates/tc-ui/build-app.sh --test-hooks --out "$target/tc-ui-app-hooks"
+  cargo build --locked -p tc4 --features test-hooks,fixture-backend || return 1
+  cargo build --locked -p tc-door43-fake || return 1
+  crates/tc-ui/build-app.sh --out "$target/tc-ui-app" || return 1
+  crates/tc-ui/build-app.sh --test-hooks --out "$target/tc-ui-app-hooks" || return 1
   local tap="$target/app-e2e.tap" code=0
   (( $# )) || set -- parity/app/journeys/*.test.mjs
   TC4_BIN="$target/debug/tc4" TC4_UI="$target/tc-ui-app" TC4_UI_HOOKS="$target/tc-ui-app-hooks" \

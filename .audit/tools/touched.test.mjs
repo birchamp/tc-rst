@@ -24,10 +24,14 @@ test('INV-TOUCHED-RUNS-WHAT-A-CHANGE-REACHES: a journey that names a changed end
     '--- a/crates/tc-store/src/x.rs',
     '+++ b/crates/tc-store/src/x.rs',
     '+    let s = "not-a-ui-word";',
+    '--- a/crates/tc-ui/src/views/gone.rs',
+    '+++ /dev/null',
+    '-        .attr("data-testid", "gone-panel")',
   ].join('\n');
   const tokens = tokensOf(diff);
   assert.ok(tokens.has('prefs/setRailFolded') && tokens.has('export-menu-trigger'));
   assert.ok(!tokens.has('not-a-ui-word'), 'only the page, the API and the server count');
+  assert.ok(tokens.has('gone-panel'), "a deleted file's removed lines count");
   const journeys = {
     'parity/app/journeys/cc.test.mjs': "await page.getByTestId('export-menu-trigger').click();",
     'parity/app/journeys/rail.test.mjs': "await env.call('prefs/setRailFolded', {});",

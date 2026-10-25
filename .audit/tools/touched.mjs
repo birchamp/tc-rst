@@ -36,7 +36,8 @@ export function tokensOf(diff) {
   const tokens = new Set();
   let file = '';
   for (const line of diff.split('\n')) {
-    if (line.startsWith('+++ ') || line.startsWith('--- ')) { file = line.slice(6); continue; }
+    // A deleted file's `+++` names /dev/null: keep its `---` path, so its removed lines count.
+    if (line.startsWith('+++ ') || line.startsWith('--- ')) { if (!line.endsWith('/dev/null')) file = line.slice(6); continue; }
     if (!/^[+-]/.test(line) || !/^crates\/(tc-ui|tc-api|tc-app|tc-server|tc4)\/src\//.test(file)) continue;
     for (const [, word] of line.matchAll(/"([a-z][a-zA-Z0-9]*\/[a-zA-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:-[a-z0-9]+)+)"/g)) tokens.add(word);
   }
