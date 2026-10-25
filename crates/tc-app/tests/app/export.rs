@@ -724,6 +724,8 @@ async fn on_disk_exports() -> OnDiskExports {
         super::scenario::scenario("sample"),
     )
     .unwrap();
+    // A real folder, so P5's watch cannot see it: the test checks the Burrito itself.
+    crate::store_world::assert_valid_burrito_files(&project_files(&projects.join(BIBLE)));
     let t = super::store_scenario::app_over(dir.path(), Arc::new(store)).await;
     let downloads = give_downloads(&t.app);
     let at = open_on_screen(&t.app, BIBLE).await;
