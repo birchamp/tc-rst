@@ -190,6 +190,65 @@ pub fn groups<'a>(
     }
 }
 
+/// Whether a sort's groups fold (tC4 `FOLDING_SORTS`): By word and By figure.
+pub fn folds(mode: SortMode) -> bool {
+    matches!(mode, SortMode::ByWord | SortMode::ByFigure)
+}
+
+/// The id a group folds by: its term's slug (`terms`), for the groups of a folding sort.
+pub fn group_id(label: GroupLabel, terms: &[String]) -> Option<&str> {
+    match label {
+        GroupLabel::Term(t) | GroupLabel::Figure(t) => {
+            terms.get(usize::try_from(t).ok()?).map(String::as_str)
+        }
+        GroupLabel::Unit => None,
+    }
+}
+
+/// Which of `groups` are open: under a folding sort, a group is open unless its id is in
+/// `folded`, and the group of the active check (`active`, its group id) always is (tC4 #769,
+/// INV-THE-ACTIVE-GROUP-IS-OPEN). Costs the groups, not the rows.
+pub fn open_groups(
+    groups: &[RailGroup],
+    terms: &[String],
+    folded: &std::collections::BTreeSet<String>,
+    active: Option<&str>,
+    mode: SortMode,
+) -> Vec<bool> {
+    groups
+        .iter()
+        .map(|g| {
+            !folds(mode)
+                || group_id(g.label, terms)
+                    .is_none_or(|id| !folded.contains(id) || Some(id) == active)
+        })
+        .collect()
+}
+
+/// Fold all, or Unfold all once every other shown group is folded (tC4 `foldAll`): the ids to
+/// set and whether they fold. Fold all leaves the active check's group (`active`) open.
+pub fn fold_all(
+    groups: &[RailGroup],
+    terms: &[String],
+    folded: &std::collections::BTreeSet<String>,
+    active: Option<&str>,
+) -> (Vec<String>, bool) {
+    let ids: Vec<&str> = groups
+        .iter()
+        .filter_map(|g| group_id(g.label, terms))
+        .collect();
+    let others: Vec<String> = ids
+        .iter()
+        .filter(|id| Some(**id) != active)
+        .map(|id| (*id).to_owned())
+        .collect();
+    if others.iter().all(|id| folded.contains(id)) {
+        (ids.into_iter().map(str::to_owned).collect(), false)
+    } else {
+        (others, true)
+    }
+}
+
 /// Each term's decided and total rows over the whole rail, whatever the filter shows: the
 /// counts a folding heading shows (tC4 `groupStatsOf`). One pass over the rows.
 pub fn term_progress(rows: &[RailRow], terms: usize) -> Vec<(u32, u32)> {

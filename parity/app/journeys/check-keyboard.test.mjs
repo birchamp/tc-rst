@@ -183,7 +183,69 @@ browserTest('check_keyboard_on_a_psalms_sized_rail', async () => {
     assert.equal(await page.getByTestId('filter-bookmarked').getAttribute('data-count'), '85');
     await page.getByTestId('sort-byFigure').click();
     await page.getByTestId('check-list').evaluate((el) => { el.scrollTop = 0; });
-    await until('By category heads the groups', () => page.locator('[data-testid="check-list"] p').first().textContent().then((t) => t === 'figures'));
+    await until('By figure heads the groups with their counts', () => page.locator('[data-testid="rail-group-count"]').first().textContent().then((t) => /^\d+\/\d+$/.test(t)));
+  });
+});
+
+// REF1c, tC4 #769 (j04-check-book.spec.ts's By figure case): notes group by figure under
+// headings that fold, count every check of their group, keep their fold when the tool opens
+// again, and Fold all leaves the active check's group open. Left on a row goes to its heading;
+// Next into a folded group unfolds it.
+browserTest('tn_by_figure_headings_fold_and_count', async () => {
+  await withApp(async ({ page }) => {
+    await openCheck(page);
+    await page.getByTestId('open-translationNotes').click();
+    await page.getByTestId('check-progress').waitFor();
+    await page.getByTestId('sort-byFigure').click();
+    const headings = page.getByTestId('rail-group');
+    await headings.first().waitFor();
+    assert.ok((await headings.count()) > 1, 'Titus has several figures');
+    for (const count of await page.getByTestId('rail-group-count').allTextContents()) assert.match(count, /^\d+\/\d+$/);
+    const activeGroup = () => page.locator('[aria-current="true"]').evaluate((row) => row.closest('[data-testid="rail-group-rows"]')?.dataset.group ?? null);
+    const expanded = (group) => page.locator(`[data-testid="rail-group"][data-group="${group}"]`).getAttribute('aria-expanded');
+    const groups = await headings.evaluateAll((els) => els.map((el) => el.dataset.group));
+    const active = await activeGroup();
+    assert.ok(active !== null && groups.includes(active), `the active check is in a group: ${active}`);
+    const other = groups.find((g) => g !== active);
+    // A heading folds its group: its rows go.
+    await page.locator(`[data-testid="rail-group"][data-group="${other}"]`).click();
+    await until('the group folds', async () => (await expanded(other)) === 'false');
+    assert.equal(await page.locator(`[data-testid="rail-group-rows"][data-group="${other}"]`).count(), 0);
+    // The fold is kept: the tool opened again shows it folded.
+    await page.getByTestId('check-back').click();
+    await page.getByTestId('open-translationNotes').click();
+    await page.getByTestId('sort-byFigure').click();
+    await headings.first().waitFor();
+    assert.equal(await expanded(other), 'false', 'the fold survives opening the tool again');
+    // Fold all leaves only the active check's group open; then it reads Unfold all.
+    const foldAll = page.getByTestId('rail-fold-all');
+    if ((await foldAll.textContent()) === 'Unfold all') await foldAll.click();
+    await foldAll.click();
+    const now = await activeGroup();
+    await until('every other group folds', async () => {
+      const states = await headings.evaluateAll((els) => els.map((el) => [el.dataset.group, el.getAttribute('aria-expanded')]));
+      return states.every(([g, e]) => (g === now) === (e === 'true'));
+    });
+    assert.equal(await foldAll.textContent(), 'Unfold all');
+    // Left on the active row goes to its group's heading; Down from there comes back to a row.
+    await page.locator('[aria-current="true"]').focus();
+    await page.keyboard.press('ArrowLeft');
+    await until('the heading has the focus', () => page.evaluate((g) => document.activeElement?.dataset?.testid === 'rail-group' && document.activeElement.dataset.group === g, now));
+    await page.keyboard.press('ArrowDown');
+    await until('a row has the focus', () => page.evaluate(() => document.activeElement?.hasAttribute('data-rail-index') ?? false));
+    // Next into a folded group unfolds it.
+    let moved = false;
+    for (let n = 0; n < 40 && !moved; n += 1) {
+      const before = await activeGroup();
+      await page.getByTestId('check-next').click();
+      await until('the next check is selected', async () => (await activeGroup()) !== null);
+      const after = await activeGroup();
+      if (after !== before) {
+        moved = true;
+        assert.equal(await expanded(after), 'true', `Next into ${after} unfolds it`);
+      }
+    }
+    assert.ok(moved, 'Next reached another group');
   });
 });
 

@@ -148,3 +148,68 @@ fn term_counts_cover_every_row_whatever_the_filter() {
         "first appearance"
     );
 }
+
+fn figure_rows() -> Vec<RailRow> {
+    (0..6)
+        .map(|i| RailRow {
+            index: i,
+            check_id: "abcd".into(),
+            place: "TIT 1:1".parse().unwrap(),
+            title: String::new(),
+            flags: RowFlags {
+                dot: tc_api::check::Dot::Todo,
+                decided: false,
+                invalidated: false,
+                invalid: false,
+                bookmarked: false,
+                commented: false,
+            },
+            term: Some(i % 3),
+            category: None,
+            marker: None,
+        })
+        .collect()
+}
+
+/// INV-THE-ACTIVE-GROUP-IS-OPEN: a folded group shows its rows only while it holds the active
+/// check, and By verse never folds.
+#[test]
+fn the_active_group_is_open_whatever_was_folded() {
+    use tc_api::model::rail::open_groups;
+    let rows = figure_rows();
+    let terms: Vec<String> = ["a", "b", "c"].map(str::to_owned).to_vec();
+    let groups = groups(&rows, 3, Filter::All, SortMode::ByFigure);
+    let folded: std::collections::BTreeSet<String> = ["a", "b"].map(str::to_owned).into();
+    assert_eq!(
+        open_groups(&groups, &terms, &folded, Some("b"), SortMode::ByFigure),
+        [false, true, true],
+        "b holds the active check"
+    );
+    let by_verse = groups_by_verse(&rows);
+    assert_eq!(
+        open_groups(&by_verse, &terms, &folded, None, SortMode::ByVerse),
+        [true]
+    );
+}
+
+fn groups_by_verse(rows: &[RailRow]) -> Vec<tc_api::model::rail::RailGroup> {
+    groups(rows, 3, Filter::All, SortMode::ByVerse)
+}
+
+/// tC4 #769: Fold all folds every shown group but the active one; once those are folded, the
+/// same button unfolds every shown group.
+#[test]
+fn fold_all_keeps_the_active_group_open() {
+    use tc_api::model::rail::fold_all;
+    let rows = figure_rows();
+    let terms: Vec<String> = ["a", "b", "c"].map(str::to_owned).to_vec();
+    let groups = groups(&rows, 3, Filter::All, SortMode::ByFigure);
+    let mut folded = std::collections::BTreeSet::new();
+    let (ids, fold) = fold_all(&groups, &terms, &folded, Some("b"));
+    assert!(fold);
+    assert_eq!(ids, ["a", "c"]);
+    folded.extend(ids);
+    let (ids, fold) = fold_all(&groups, &terms, &folded, Some("b"));
+    assert!(!fold, "every other group is folded: Unfold all");
+    assert_eq!(ids, ["a", "b", "c"]);
+}
