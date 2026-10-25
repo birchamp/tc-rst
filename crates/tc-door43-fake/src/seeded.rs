@@ -171,6 +171,51 @@ pub(crate) async fn seed(fake: &FakeDoor43) -> Result<(), FakeError> {
         }],
     });
 
+    unfolding_word_resources(fake).await?;
+    fake.add_repo(resource(
+        READ_ONLY_ORG,
+        "es-419_tn",
+        "TSV Translation Notes",
+        "es-419",
+        vec![release(
+            "v66",
+            ReleaseKind::Published,
+            burrito("es-419_tn@v66", &[("TIT.tsv", "TIT.tsv")])?,
+        )],
+    ))
+    .await?;
+    fake.add_repo(RepoSeed {
+        topics: Vec::new(),
+        ..resource(
+            "uW",
+            "en_ugl",
+            "Greek Lexicon",
+            "en",
+            vec![CommitSeed {
+                message: "Greek lexicon".to_owned(),
+                files: {
+                    let mut files =
+                        burrito("en_ugl@d9d29e2d5892", &[("1.json", "content/1.json")])?;
+                    files.push(SeedFile::regular(
+                        "README.md",
+                        read("en_ugl@d9d29e2d5892", "README.md")?,
+                    ));
+                    files
+                },
+                tag: None,
+                release: None,
+            }],
+        )
+    })
+    .await?;
+    Ok(())
+}
+
+/// unfoldingWord's resource repositories of the table above (`en_tn`, `en_ult`, `en_twl`), the
+/// ones a gateway-language package of English is read from. [`FakeDoor43::start_seeded`] holds
+/// them, and so does the fake binary beside [`parity_account`], so the app's browser tests and
+/// its Rust tests download and upgrade from one set of releases.
+pub async fn unfolding_word_resources(fake: &FakeDoor43) -> Result<(), FakeError> {
     let tn_v91 = burrito("en_tn@v91", &[("TIT.tsv", "TIT.tsv")])?;
     fake.add_repo(resource(
         "unfoldingWord",
@@ -214,42 +259,6 @@ pub(crate) async fn seed(fake: &FakeDoor43) -> Result<(), FakeError> {
             burrito("en_twl@v86", &[("TIT.tsv", "TIT.tsv")])?,
         )],
     ))
-    .await?;
-    fake.add_repo(resource(
-        READ_ONLY_ORG,
-        "es-419_tn",
-        "TSV Translation Notes",
-        "es-419",
-        vec![release(
-            "v66",
-            ReleaseKind::Published,
-            burrito("es-419_tn@v66", &[("TIT.tsv", "TIT.tsv")])?,
-        )],
-    ))
-    .await?;
-    fake.add_repo(RepoSeed {
-        topics: Vec::new(),
-        ..resource(
-            "uW",
-            "en_ugl",
-            "Greek Lexicon",
-            "en",
-            vec![CommitSeed {
-                message: "Greek lexicon".to_owned(),
-                files: {
-                    let mut files =
-                        burrito("en_ugl@d9d29e2d5892", &[("1.json", "content/1.json")])?;
-                    files.push(SeedFile::regular(
-                        "README.md",
-                        read("en_ugl@d9d29e2d5892", "README.md")?,
-                    ));
-                    files
-                },
-                tag: None,
-                release: None,
-            }],
-        )
-    })
     .await?;
     Ok(())
 }

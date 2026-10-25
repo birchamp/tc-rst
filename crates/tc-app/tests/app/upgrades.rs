@@ -472,7 +472,7 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
     }
     let fs = FaultFs::new();
     let hooks = Arc::<tc_store::Hooks>::default();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
+    let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
     let folder = backend
         .store()
         .create(&NewProject {
@@ -522,7 +522,7 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
         tc_resources::install_dcs_zip(&store, &twl, &zip, 1 << 30).unwrap();
     }
     let bundle = opts.bundle.clone();
-    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         config.door43 = url.parse().unwrap();
         config.bundle = bundle;
@@ -536,6 +536,7 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
     }
     let at = open(&t, PROJECT).await;
     internet(&t, true, 1).await;
+    t.watch = Some(watch);
     World {
         _dir: dir,
         t,

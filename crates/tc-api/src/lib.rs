@@ -58,7 +58,7 @@ pub mod upload;
 pub mod write;
 
 pub use endpoint::{
-    ALL, API_VERSION, Endpoint, EndpointInfo, Kind, NetKind, Reply, ReplyOf, Write,
+    ALL, API_VERSION, Endpoint, EndpointInfo, Kind, NetKind, Reply, ReplyOf, StartsJob, Write,
 };
 pub use error::ApiError;
 pub use ids::{RequestId, Scope};
@@ -232,6 +232,7 @@ macro_rules! test_hook_table {
             command "test/reset": $crate::test::Reset => ();
             command "test/lastEdit": $crate::test::LastEdit => ();
             command "test/script": $crate::test::Script => ();
+            query "test/validate": $crate::test::Validate => $crate::test::ValidateView;
         }
     };
 }

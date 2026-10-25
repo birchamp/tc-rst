@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tc_api::ApiError;
 use tc_api::endpoint::NetKind;
 use tc_api::ids::{JobId, UploadId};
-use tc_api::jobs::{JobKind, JobOutcome, Phase};
+use tc_api::jobs::{JobKind, Phase};
 use tc_api::refusal::{Refusal, ResourceRefusal};
 use tc_api::resources::{FixFetch, FixRepin, FixSideload, FixState, FixView, PinLabel, PlanView};
 use tc_check::fix::{self, GuidedFix, Installed, Machine};
@@ -181,38 +181,41 @@ impl Handle<FixFetch> for App {
         )
         .project(session.scope().project.clone());
         let app = self.clone();
-        Ok(self.inner.jobs.start_async(spec, move |ctx| async move {
-            let phase = Phase::Install {
-                repo: pin.repo.repo().name.to_string(),
-            };
-            let watch = JobWatch {
-                progress: ctx.progress.clone(),
-                cancel: ctx.cancel.clone(),
-                phase,
-            };
-            // The download is checked against the pinned commit before it is installed.
-            match install_dcs_watched(
-                &app.inner.resources,
-                &client,
-                &pin,
-                Packaging::for_pin(&pin),
-                &watch,
-            )
-            .await
-            {
-                Ok(_) => {}
-                Err(InstallError::Door43(Door43Error::Cancelled { .. })) => {
-                    return Err(JobEnd::Cancelled);
+        Ok(self
+            .inner
+            .jobs
+            .start_typed::<FixFetch, _, _>(spec, move |ctx| async move {
+                let phase = Phase::Install {
+                    repo: pin.repo.repo().name.to_string(),
+                };
+                let watch = JobWatch {
+                    progress: ctx.progress.clone(),
+                    cancel: ctx.cancel.clone(),
+                    phase,
+                };
+                // The download is checked against the pinned commit before it is installed.
+                match install_dcs_watched(
+                    &app.inner.resources,
+                    &client,
+                    &pin,
+                    Packaging::for_pin(&pin),
+                    &watch,
+                )
+                .await
+                {
+                    Ok(_) => {}
+                    Err(InstallError::Door43(Door43Error::Cancelled { .. })) => {
+                        return Err(JobEnd::Cancelled);
+                    }
+                    Err(InstallError::Door43(Door43Error::Offline { .. })) => {
+                        return Err(JobEnd::Failed(ApiError::NeedsInternet(NetKind::Fix)));
+                    }
+                    Err(e) => return Err(JobEnd::Failed(fix_failed(e))),
                 }
-                Err(InstallError::Door43(Door43Error::Offline { .. })) => {
-                    return Err(JobEnd::Failed(ApiError::NeedsInternet(NetKind::Fix)));
-                }
-                Err(e) => return Err(JobEnd::Failed(fix_failed(e))),
-            }
-            // What was missing is here now: the book's panes and helps read again.
-            session.books().forget().await;
-            Ok(JobOutcome::Finished)
-        }))
+                // What was missing is here now: the book's panes and helps read again.
+                session.books().forget().await;
+                Ok(())
+            }))
     }
 }
 

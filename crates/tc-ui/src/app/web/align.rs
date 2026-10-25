@@ -34,6 +34,7 @@ use crate::app::align::{
 };
 use crate::app::check::CheckView;
 use crate::app::client::CallError;
+use crate::app::latest::Latest;
 
 /// The aligner of the screen (tC4 `s.alignSession`).
 #[derive(Debug, Clone, PartialEq)]
@@ -159,46 +160,21 @@ impl Default for AlignState {
 
 thread_local! {
     /// Counts the opens asked for: only the newest may land (tC4's `alignSessionSeq`).
-    static OPENS: Cell<u64> = const { Cell::new(0) };
+    static OPENS: Latest = const { Latest::new() };
     /// Counts the reads of the rail (tC4's `alignIndexSeq`).
-    static READS: Cell<u64> = const { Cell::new(0) };
+    static READS: Latest = const { Latest::new() };
     /// The edits the person made, one on their way at a time (A-14).
     static QUEUE: RefCell<EditQueue> = RefCell::new(EditQueue::default());
     /// Refreshes and navigation wait for replies instead of abandoning clicks.
     static EDIT_WAITERS: RefCell<Vec<Function>> = const { RefCell::new(Vec::new()) };
     /// Only the newest status refresh may replace the current view.
-    static REFRESHES: Cell<u64> = const { Cell::new(0) };
+    static REFRESHES: Latest = const { Latest::new() };
     /// A newer navigation wins while earlier requests wait for page edits to drain.
-    static NAVIGATIONS: Cell<u64> = const { Cell::new(0) };
+    static NAVIGATIONS: Latest = const { Latest::new() };
     /// The gate hook that asks the server to save the links, while the tool is open.
     static HOOK: Cell<Option<GateHookId>> = const { Cell::new(None) };
     /// The listener that keeps the rail and the view true to the server's events.
     static LISTENER: Cell<Option<ListenerId>> = const { Cell::new(None) };
-}
-
-fn next_open() -> u64 {
-    OPENS.with(|c| {
-        c.set(c.get() + 1);
-        c.get()
-    })
-}
-
-fn current_open() -> u64 {
-    OPENS.with(Cell::get)
-}
-
-fn next_navigation() -> u64 {
-    NAVIGATIONS.with(|n| {
-        n.set(n.get() + 1);
-        n.get()
-    })
-}
-
-fn next_read() -> u64 {
-    READS.with(|c| {
-        c.set(c.get() + 1);
-        c.get()
-    })
 }
 
 /// Pending page commands count as unsaved even before the server has seen their links.
@@ -230,7 +206,7 @@ impl Actions {
             return;
         };
         let s = self.s();
-        next_open();
+        OPENS.with(Latest::begin);
         s.c.view.try_set(CheckView::Align);
         s.c.return_to.try_set(None);
         let a = &s.a;
@@ -252,10 +228,10 @@ impl Actions {
     /// "← All checking tools" (tC4 `closeAlign`): the links are saved first; a save that fails
     /// keeps the person in the tool, with the indicator saying so.
     pub fn close_align(&self) {
-        let navigation = next_navigation();
+        let navigation = NAVIGATIONS.with(Latest::begin);
         let this = self.clone();
         spawn_local(async move {
-            if !this.drain_align_edits().await || NAVIGATIONS.with(Cell::get) != navigation {
+            if !this.drain_align_edits().await || !NAVIGATIONS.with(|l| l.is_current(navigation)) {
                 return;
             }
             let Some((at, _)) = this.align_scope() else {
@@ -269,7 +245,7 @@ impl Actions {
             if let Some(mut view) = view {
                 // Once every click has arrived, stop offering controls while Close saves the
                 // verse. An edit sent after Close could otherwise name an aligner that is gone.
-                next_open();
+                OPENS.with(Latest::begin);
                 this.s().a.screen.try_set(Screen::Loading);
                 let aligner = view.aligner;
                 let close = Close {
@@ -318,9 +294,9 @@ impl Actions {
                 }
             });
         }
-        next_open();
-        next_read();
-        next_navigation();
+        OPENS.with(Latest::begin);
+        READS.with(Latest::begin);
+        NAVIGATIONS.with(Latest::begin);
         QUEUE.with(|q| q.borrow_mut().drop_waiting());
         self.align_edits_changed();
         if let Some(id) = HOOK.with(Cell::take) {
@@ -358,10 +334,10 @@ impl Actions {
     /// Opens the aligner for `place` (the book's resume point when none), or reads the open
     /// one again. Only the newest open may land.
     pub fn open_align(&self, place: Option<AlignPlace>) {
-        let navigation = next_navigation();
+        let navigation = NAVIGATIONS.with(Latest::begin);
         let this = self.clone();
         spawn_local(async move {
-            if this.drain_align_edits().await && NAVIGATIONS.with(Cell::get) == navigation {
+            if this.drain_align_edits().await && NAVIGATIONS.with(|l| l.is_current(navigation)) {
                 this.open_align_after_edits(place);
             }
         });
@@ -371,7 +347,7 @@ impl Actions {
         let Some((at, book)) = self.align_scope() else {
             return;
         };
-        let attempt = next_open();
+        let attempt = OPENS.with(Latest::begin);
         // Every page edit has reached this verse before the server is asked to leave it.
         let a = self.s().a.clone();
         a.screen.try_set(Screen::Loading);
@@ -384,7 +360,7 @@ impl Actions {
                 verse: place.map(open_verse),
             };
             let result = this.runtime().api().call(&open).await;
-            if current_open() != attempt {
+            if !OPENS.with(|l| l.is_current(attempt)) {
                 return;
             }
             match result {
@@ -424,16 +400,13 @@ impl Actions {
         }) else {
             return;
         };
-        let attempt = current_open();
-        let refresh = REFRESHES.with(|n| {
-            n.set(n.get() + 1);
-            n.get()
-        });
+        let attempt = OPENS.with(Latest::current);
+        let refresh = REFRESHES.with(Latest::begin);
         let this = self.clone();
         spawn_local(async move {
             if !this.drain_align_edits().await
-                || current_open() != attempt
-                || REFRESHES.with(Cell::get) != refresh
+                || !OPENS.with(|l| l.is_current(attempt))
+                || !REFRESHES.with(|l| l.is_current(refresh))
             {
                 return;
             }
@@ -452,7 +425,8 @@ impl Actions {
                     verse: Some(open_verse(place)),
                 })
                 .await;
-            if current_open() != attempt || REFRESHES.with(Cell::get) != refresh {
+            if !OPENS.with(|l| l.is_current(attempt)) || !REFRESHES.with(|l| l.is_current(refresh))
+            {
                 return;
             }
             if let Ok(Opened::Ready(view)) = result {
@@ -539,7 +513,7 @@ impl Actions {
     }
 
     async fn drain_align_edits(&self) -> bool {
-        let attempt = current_open();
+        let attempt = OPENS.with(Latest::current);
         while edits_pending() {
             if edit_failure().is_some() {
                 return false;
@@ -548,7 +522,7 @@ impl Actions {
                 EDIT_WAITERS.with(|w| w.borrow_mut().push(resolve));
             });
             let _ = JsFuture::from(changed).await;
-            if current_open() != attempt {
+            if !OPENS.with(|l| l.is_current(attempt)) {
                 return false;
             }
         }
@@ -585,12 +559,12 @@ impl Actions {
     }
 
     fn send_align_request(&self, sent: SentEdit, retry: bool) {
-        let attempt = current_open();
+        let attempt = OPENS.with(Latest::current);
         let this = self.clone();
         spawn_local(async move {
             if retry {
                 let hello = this.runtime().api().call(&Hello {}).await;
-                if current_open() != attempt {
+                if !OPENS.with(|l| l.is_current(attempt)) {
                     return;
                 }
                 let run = match hello {
@@ -600,7 +574,7 @@ impl Actions {
                         return;
                     }
                 };
-                if current_open() != attempt {
+                if !OPENS.with(|l| l.is_current(attempt)) {
                     return;
                 }
                 if run != sent.run || this.runtime().state().instance.get_untracked() != sent.run {
@@ -611,7 +585,7 @@ impl Actions {
                 }
             }
             let result = this.runtime().api().call(&sent.request).await;
-            if current_open() != attempt {
+            if !OPENS.with(|l| l.is_current(attempt)) {
                 return;
             }
             match result {
@@ -697,7 +671,7 @@ impl Actions {
             return;
         }
         a.asking.try_set(true);
-        let attempt = current_open();
+        let attempt = OPENS.with(Latest::current);
         let this = self.clone();
         spawn_local(async move {
             let request = tc_api::align::Suggest {
@@ -707,7 +681,7 @@ impl Actions {
             };
             let result = this.runtime().api().call(&request).await;
             a.asking.try_set(false);
-            if current_open() != attempt {
+            if !OPENS.with(|l| l.is_current(attempt)) {
                 return;
             }
             if let Ok(view) = result {
@@ -727,11 +701,11 @@ impl Actions {
         let Some((at, book)) = self.align_scope() else {
             return;
         };
-        let attempt = next_read();
+        let attempt = READS.with(Latest::begin);
         let this = self.clone();
         spawn_local(async move {
             let result = this.runtime().api().call(&Index { at, book }).await;
-            if READS.with(Cell::get) != attempt {
+            if !READS.with(|l| l.is_current(attempt)) {
                 return;
             }
             let a = &this.s().a;
@@ -788,9 +762,9 @@ impl Actions {
     /// Every queued click reaches the server before `align/flush`. Clicks made while the save
     /// runs join the next drain, so navigation cannot leave them behind.
     async fn flush_aligner(&self) -> bool {
-        let attempt = current_open();
+        let attempt = OPENS.with(Latest::current);
         loop {
-            if !self.drain_align_edits().await || current_open() != attempt {
+            if !self.drain_align_edits().await || !OPENS.with(|l| l.is_current(attempt)) {
                 return false;
             }
             let Some((at, _)) = self.align_scope() else {
@@ -807,7 +781,7 @@ impl Actions {
             };
             let generation = QUEUE.with(|q| q.borrow().generation());
             let result = self.runtime().api().call(&request).await;
-            if current_open() != attempt {
+            if !OPENS.with(|l| l.is_current(attempt)) {
                 return false;
             }
             match result {

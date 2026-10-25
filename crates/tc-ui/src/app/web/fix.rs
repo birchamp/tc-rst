@@ -13,16 +13,21 @@ use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::check::CheckUnit;
 use tc_api::event::{Aspect, ChangeParts, ChangeScope};
+use tc_api::jobs::Phase;
 use tc_api::refusal::{Refusal, ResourceRefusal};
 use tc_api::resources::{FixFetch, FixRepin, FixSideload};
 use tc_api::upload::UploadFlow;
 use wasm_bindgen_futures::spawn_local;
 
-use super::app_ctx::Actions;
+use super::leave::LeaveTo;
+
+use super::app_ctx::{Actions, NetEnd};
 use super::js;
-use super::sources::{api_error, said};
+use super::sources::said;
+use crate::app::client::CallError;
 use crate::app::fix::{self, Fix, FixScreen};
 use crate::app::internet::Pending;
+use crate::app::jobs::JobEnd;
 use crate::i18n::{keys, t};
 
 thread_local! {
@@ -45,6 +50,13 @@ fn why_failed(error: &ApiError) -> String {
             reason.clone()
         }
         other => said(other),
+    }
+}
+
+fn why_failed_call(error: &CallError) -> String {
+    match error {
+        CallError::Api(error) => why_failed(error),
+        other => other.to_string(),
     }
 }
 
@@ -105,29 +117,41 @@ impl Actions {
                 tool: asked.tool,
                 unit: asked.unit,
             };
-            let ended = match this.runtime().api().call(&request).await.map_err(api_error) {
-                Ok(job) => {
-                    this.follow_job(job, |repo| {
-                        this.patch_fix(id, |screen| screen.fetching(&repo));
-                    })
+            let ended = match this.run_net(Pending::Fix(id), &request).await {
+                NetEnd::Ok(job) => {
+                    this.follow::<FixFetch>(
+                        job,
+                        |progress| {
+                            if let Phase::Install { repo } = &progress.phase {
+                                this.patch_fix(id, |screen| screen.fetching(repo));
+                            }
+                        },
+                        || true,
+                    )
                     .await
                 }
-                Err(error) => Err(Some(error)),
+                NetEnd::Failed(error) => JobEnd::Failed(error),
+                NetEnd::Asked | NetEnd::Dropped => JobEnd::Lost,
+                NetEnd::Transport(error) => {
+                    let reason = error.to_string();
+                    this.patch_fix(id, |screen| screen.install_failed(&reason));
+                    return;
+                }
             };
             match ended {
-                Ok(_) => this.finish_fix(id, &asked.at),
-                Err(None) => {
+                JobEnd::Done(()) => this.finish_fix(id, &asked.at),
+                JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
                     this.patch_fix(id, FixScreen::stopped);
                 }
-                // The switch went off after the question: ask once more.
-                Err(Some(ApiError::NeedsInternet(_))) => {
-                    this.patch_fix(id, FixScreen::stopped);
-                    this.ask_again(Pending::Fix(id));
-                }
-                Err(Some(error)) => {
-                    let reason = why_failed(&error);
-                    this.patch_fix(id, |screen| screen.install_failed(&reason));
-                }
+                JobEnd::Failed(error) => match this.net_refusal(Pending::Fix(id), error) {
+                    None => {
+                        this.patch_fix(id, FixScreen::stopped);
+                    }
+                    Some(error) => {
+                        let reason = why_failed(&error);
+                        this.patch_fix(id, |screen| screen.install_failed(&reason));
+                    }
+                },
             }
         });
     }
@@ -159,7 +183,7 @@ impl Actions {
                 }
                 Err(error) => Err(error),
             }
-            .map_err(|error| why_failed(&api_error(error)));
+            .map_err(|error| why_failed_call(&error));
             match sent {
                 Ok(()) => this.finish_fix(id, &asked.at),
                 Err(reason) => {
@@ -182,7 +206,7 @@ impl Actions {
         let this = self.clone();
         spawn_local(async move {
             // Saved first: the plan is read over work that is safe (A-26), as an upgrade's is.
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Plan).await {
                 let reason = t(keys::upgrade::ALIGN_UNSAVED, &[]);
                 this.patch_fix(id, |screen| screen.repin_failed(&reason));
                 return;
@@ -194,7 +218,7 @@ impl Actions {
                 unit: asked.unit,
                 sha,
             };
-            let planned = this.runtime().api().call(&request).await.map_err(api_error);
+            let planned = this.runtime().api().call(&request).await;
             // A plan for a project the person has left would describe one project over another.
             let same_project = this
                 .s()
@@ -210,7 +234,7 @@ impl Actions {
                 }
                 Ok(_) => {}
                 Err(error) => {
-                    let reason = why_failed(&error);
+                    let reason = why_failed_call(&error);
                     this.patch_fix(id, |screen| screen.repin_failed(&reason));
                 }
             }

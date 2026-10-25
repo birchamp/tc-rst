@@ -1256,6 +1256,21 @@ impl SaveMachine {
         }
     }
 
+    /// The fields of `kind` whose save has not landed: typed, on its way, failed or held.
+    pub fn unsaved_keys(&self, kind: FieldKind) -> Vec<BufferKey> {
+        self.fields
+            .iter()
+            .filter(|(key, field)| {
+                key.field.kind == kind
+                    && !matches!(
+                        field.state,
+                        FieldSave::Clean | FieldSave::SavedWithWarning(_)
+                    )
+            })
+            .map(|(key, _)| key.clone())
+            .collect()
+    }
+
     pub fn state(&self, key: &BufferKey) -> Option<&FieldSave> {
         self.fields.get(key).map(|f| &f.state)
     }

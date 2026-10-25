@@ -39,6 +39,7 @@ mod js;
 pub mod language_search;
 mod numbering;
 mod plans;
+pub mod ports;
 pub mod prefs;
 pub mod replies;
 pub mod reports;

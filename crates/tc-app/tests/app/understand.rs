@@ -334,6 +334,13 @@ async fn a_chapters_helps_are_tc4s_cards_with_gateway_titles() {
         Some("for the faith of the chosen people of God and knowledge of the truth")
     );
     assert_eq!(ult.lit.len(), 1);
+    // Owner ruling Q39 (tC4 #840): Draft's original tab marks the quote's seven Greek words,
+    // with no title of its own.
+    let orig = first.panes.iter().find(|p| p.pane == "orig").unwrap();
+    assert_eq!(orig.title, None);
+    assert_eq!(orig.lit.len(), 1);
+    assert_eq!(orig.lit[0].verse.as_str(), "1");
+    assert_eq!(orig.lit[0].tokens.len(), 7);
     assert_eq!(first.academy.as_deref(), Some("figs-abstractnouns"));
     assert!(notes.items.iter().all(|n| n.chapter.as_str() == "1"));
     // tC4 vendors no en_tq v91: the tab says the resource is not on this computer yet.

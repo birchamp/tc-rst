@@ -236,3 +236,49 @@ pub struct Cancel {
     pub request: RequestId,
     pub job: JobId,
 }
+
+/// Each job row's outcome: what its handler ends with (`JobOutcome::*` in tc-app).
+macro_rules! starts_job {
+    ($($req:path => $out:ty { $from:pat => $to:expr, $value:ident => $wrap:expr })*) => {
+        $(
+            impl crate::endpoint::StartsJob for $req {
+                type Outcome = $out;
+
+                fn outcome(outcome: JobOutcome) -> Result<$out, JobOutcome> {
+                    match outcome {
+                        $from => Ok($to),
+                        other => Err(other),
+                    }
+                }
+
+                fn wrap($value: $out) -> JobOutcome {
+                    $wrap
+                }
+            }
+        )*
+    };
+}
+
+starts_job! {
+    crate::door43::OpenDoor43 => ProjectRef {
+        JobOutcome::Created { project } => project, project => JobOutcome::Created { project }
+    }
+    crate::door43::SyncProject => SyncResultView {
+        JobOutcome::Synced(view) => view, view => JobOutcome::Synced(view)
+    }
+    crate::session::Open => Box<crate::session::OpenedProject> {
+        JobOutcome::Opened(opened) => opened, opened => JobOutcome::Opened(opened)
+    }
+    crate::resources::Download => () {
+        JobOutcome::Finished => (), _done => JobOutcome::Finished
+    }
+    crate::resources::PlanUpgrade => Box<crate::resources::PlanView> {
+        JobOutcome::PlanReady(plan) => plan, plan => JobOutcome::PlanReady(plan)
+    }
+    crate::resources::PlanGateway => Box<crate::resources::PlanView> {
+        JobOutcome::PlanReady(plan) => plan, plan => JobOutcome::PlanReady(plan)
+    }
+    crate::resources::FixFetch => () {
+        JobOutcome::Finished => (), _done => JobOutcome::Finished
+    }
+}

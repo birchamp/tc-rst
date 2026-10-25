@@ -29,6 +29,7 @@ pub mod derivations;
 mod doc;
 mod lex;
 pub mod markers;
+pub mod poem;
 /// The lossless syntax tree: what a reader inside this crate works on. A crate outside it
 /// asks for what it needs (words, verses, alignments) instead (INV-ONE-PARSER-OWNER).
 pub mod raw {
@@ -46,7 +47,8 @@ pub use align::{
 pub use attributes::{Attribute, Attributes};
 pub use book::{Book, ChapterMark, Segment, SegmentKind, VerseUnit};
 pub use derivations::{
-    SelectionCount, SelectionText, plain_text_v1, selections_v1, shown_text_v1, tokenize_v1,
+    SelectionCount, SelectionText, plain_text_v1, selections_v1, shown_text_v1, tc3_book_usfm,
+    tokenize_v1,
 };
 pub use text::{
     DisplaySource, DisplayToken, DisplayVerse, display_text, display_tokens, edge_markers,

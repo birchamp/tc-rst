@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 669f72dd5fc0ce03e097dab35b3bb11e440e432e4dc2ec6d629716fc8b46cb85 # shrinks to refusal = Upload(NotWritten { reason: "" })

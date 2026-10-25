@@ -23,7 +23,7 @@ use crate::store_world::{assert_valid_burrito_files, sample_records, words_of};
 
 /// Makes the project `name` in `projects` with tc-store on this computer's files: the sample's
 /// Titus as records, as the store tests make it.
-fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
+pub(super) fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
     let store = tc_store::Store::start(tc_store::StoreConfig {
         app_data: app_data.to_owned(),
         projects: projects.to_owned(),
@@ -37,14 +37,17 @@ fn make_project(app_data: &Path, projects: &Path, name: &str) -> PathBuf {
     store.wait_cleanup();
     let titus = std::fs::read(repo_root().join("fixtures/tc4/sample-burrito/ingredients/TIT.usfm"))
         .unwrap();
-    store
+    let folder = store
         .create(&tc_store::NewProject {
             name: name.to_owned(),
             kind: ProjectKind::Bible,
             records: sample_records(&BTreeMap::from([(BookId::Titus, titus)]), None),
             books: Vec::new(),
         })
-        .unwrap()
+        .unwrap();
+    // P5/INV-VALID-BURRITO on the real filesystem, which no FaultFs watch sees.
+    assert_valid_burrito_files(&files_on_disk(&folder));
+    folder
 }
 
 /// Every file under `folder` on disk, by its path relative to it.

@@ -768,9 +768,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:50:35.062Z#1",
+          "id": "2026-10-24T19:40:17.923Z#1",
           "op": "open",
-          "startedAt": "2026-10-19T02:50:35.062Z",
+          "startedAt": "2026-10-24T19:40:17.923Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -802,19 +802,19 @@
                       "checking/settings.json"
                     ]
                   },
-                  "startedAt": "2026-10-19T02:50:35.394Z",
-                  "endedAt": "2026-10-19T02:50:35.923Z"
+                  "startedAt": "2026-10-24T19:40:17.982Z",
+                  "endedAt": "2026-10-24T19:40:18.188Z"
                 }
               ]
             },
-            "startedAt": "2026-10-19T02:50:35.133Z",
-            "endedAt": "2026-10-19T02:50:35.923Z"
+            "startedAt": "2026-10-24T19:40:17.936Z",
+            "endedAt": "2026-10-24T19:40:18.188Z"
           }
         },
         {
-          "id": "2026-10-19T02:50:36.645Z#2",
+          "id": "2026-10-24T19:40:18.806Z#2",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:50:36.645Z",
+          "startedAt": "2026-10-24T19:40:18.806Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "message": "Checkpoint, leaving Understand: TIT checks, settings, sources (tC4)"
@@ -826,8 +826,8 @@
               "message": "Checkpoint, leaving Understand: TIT checks, settings, sources (tC4)",
               "written": []
             },
-            "startedAt": "2026-10-19T02:50:36.576Z",
-            "endedAt": "2026-10-19T02:50:36.861Z"
+            "startedAt": "2026-10-24T19:40:18.768Z",
+            "endedAt": "2026-10-24T19:40:18.964Z"
           }
         }
       ],
@@ -1209,7 +1209,7 @@
       "_local_/_local_/sample_burrito": {
         "names": {},
         "actors": [
-          "a55a3c4147dbcb61"
+          "a882dfc83404de3a"
         ]
       }
     },
@@ -1217,10 +1217,10 @@
     "syncResult": null,
     "verseConflicts": [],
     "team": {
-      "me": "a55a3c4147dbcb61",
+      "me": "a882dfc83404de3a",
       "names": {},
       "actors": [
-        "a55a3c4147dbcb61"
+        "a882dfc83404de3a"
       ]
     },
     "conflictReview": null,
@@ -1232,13 +1232,14 @@
           "mode": "draft",
           "chapter": 1,
           "verse": null,
-          "at": 1792378236544
+          "at": 1792870818735
         }
       }
     },
     "storyFrame": null,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "testament": null,

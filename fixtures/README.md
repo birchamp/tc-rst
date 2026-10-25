@@ -14,7 +14,7 @@ of `tc4/test-fixtures/` come from tC4 commit `9ad4d5c506466819e5b10f255bbb4a36d3
 
 | Path here | Path in tC4 | Provenance |
 |---|---|---|
-| `tc4/test-fixtures/` | `test/fixtures/` | Read `tc4/test-fixtures/README.md`. Pinned unfoldingWord resources (en_ult, en_ust, hbo_uhb, helps) and draft corpora. |
+| `tc4/test-fixtures/` | `test/fixtures/` | Read `tc4/test-fixtures/README.md`. The five `*-812.usfm` poetry files come from tC4 d25b7871 (REF1b). Pinned unfoldingWord resources (en_ult, en_ust, hbo_uhb, helps) and draft corpora. |
 | `tc4/conformance-fixtures/` | `conformance/fixtures/` | Import samples, team-sync journals, versification files, the OBS template. |
 | `tc4/sample-burrito/` | `conformance/sample-burrito/` | The reference Bible project (Titus, Jonah). |
 | `tc4/sample-burrito-obs/` | `conformance/sample-burrito-obs/` | The reference Open Bible Stories project. |
@@ -22,7 +22,7 @@ of `tc4/test-fixtures/` come from tC4 commit `9ad4d5c506466819e5b10f255bbb4a36d3
 
 Licenses: the content licenses are in `tc4/LICENSE-CONTENT.md`. unfoldingWord resources
 (ULT, UST, UHB, UGNT, tN, tW, tA, tQ, TWL, OBS) are CC BY-SA 4.0, © unfoldingWord. The
-`.mjs` generator scripts are tC4 code under GPL-2.0-or-later, kept for provenance.
+`.mjs` generator scripts are tC4 code, MIT since tC4 #838, kept for provenance.
 
 ## `obs/`
 

@@ -25,8 +25,10 @@
 //!   `translationCore`, so two at once could delete each other's token at Door43. A second
 //!   sign-in waits for the first; it is never refused as busy.
 //! - **Cancel signs nobody in.** `account/cancelSignIn` names its sign-in and works before it
-//!   arrives (it then sends nothing), while it waits for the lane or for Door43 (it stops), and
-//!   after it ended (the session it made is signed out, the token it kept forgotten).
+//!   arrives (it then sends nothing), while it waits for the lane (it stops), while Door43
+//!   answers the token calls (it stops and signs out, as tC4's cancel does, because those calls
+//!   may have replaced the token an earlier sign-in kept), and after it ended (the session it
+//!   made is signed out, the token it kept forgotten).
 //! - **`kept` says what the keychain holds**: every keychain write and the state change after it
 //!   happen one at a time (the keys lane), so a sign-out cannot forget a token between a
 //!   sign-in's keep and its commit.
@@ -589,10 +591,13 @@ impl App {
         let name: TokenName = TOKEN_NAME
             .parse()
             .map_err(|_| self.internal("the token name does not parse", Map::new()))?;
+        // From here a cancel signs out, as tC4's does: the token calls may already have
+        // replaced the `translationCore` token an earlier sign-in kept, so keeping it would
+        // show a saved sign-in Door43 refuses. The lane, held until this returns, keeps any
+        // other sign-in from keeping a token in between.
         let minted = tokio::select! {
             biased;
-            // The token calls stop where they are: whatever Door43 did, nothing is kept.
-            () = cancel.cancelled() => return Ok(account.view()),
+            () = cancel.cancelled() => return Ok(self.sign_out().await),
             minted = client.mint_token(&credentials, &name, &TokenScope::FOR_SHARING) => minted,
         };
         let session = match minted {
@@ -604,9 +609,10 @@ impl App {
             }
         };
 
-        let _keys = account.keys.lock().await;
+        let keys = account.keys.lock().await;
         if cancel.is_cancelled() {
-            return Ok(account.view());
+            drop(keys);
+            return Ok(self.sign_out().await);
         }
         let (keyed, step_facts) = self.keep_or_forget(req.stay, &session.token).await;
 
@@ -676,8 +682,9 @@ impl App {
         }
     }
 
-    /// A sign-in cancelled after its keychain step: the token it kept is forgotten again, and
-    /// `kept` says what the keychain now holds.
+    /// A sign-in cancelled after its keychain step signs out, as one cancelled during the token
+    /// calls does: the token it kept is forgotten again, and `kept` says what the keychain now
+    /// holds.
     async fn undo_keychain_step(&self, id: RequestId, keyed: Keyed, token: &Token) -> AccountView {
         let account = self.account();
         let forgot = match keyed {
@@ -685,6 +692,8 @@ impl App {
             Keyed::Untouched | Keyed::NoKeychain | Keyed::Emptied | Keyed::Unchanged => None,
         };
         let mut state = lock(&account.state);
+        state.session = None;
+        state.revision += 1;
         match (keyed, forgot) {
             (Keyed::Kept, Some(Err(error))) => {
                 // The keychain holds this sign-in's token and would not let it go: said, as a

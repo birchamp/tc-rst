@@ -54,6 +54,10 @@ runs. If the owner wants more, it is a new H row, not a card.
 5. **Every result lands in its card in the same commit** (`TRACKING.md`).
 6. **Simplify before you extend.** Storage gets one simplification pass (S3) before sync adds
    new writers to it.
+7. **tC4 4.0 is the baseline, not the ceiling.** The rebuild matches tC4 4.0's look and
+   behaviour, but where tC4 has an open issue or a planned feature, the rebuild may build it now
+   instead of waiting to copy tC4; REF1 and SWEEP still track tC4's fixes
+   (`rulings/2026-10-23-replace-tc4.md`: the rebuild will most likely replace tC4).
 
 ## Milestones
 
@@ -94,14 +98,20 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | CHK-4b | tc-app's tests wait for events, never for a short clock | checks | CHK-4 | 0.5 d |
 | UI-1 | Typed jobs and one job follower | app | INT-4, C7a | 1 d |
 | UI-2 | Ports for sync, share, exchange and import | app | UI-1 | 1-2 d |
-| UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced | app | UI-1 | 2 d |
+| UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced (split into UI-3a and UI-3b) | app | UI-1 | 2 d |
+| UI-3a | One leave path, one network-call helper, one refusal text, Submit | app | UI-1 | 1 d |
+| UI-3b | Dialogs that own their forms, WriteCap enforced | app | UI-3a | 1 d |
 | DOM-1 | One network gate: all network code behind `tc-door43` | domain | S2 | 1-2 d |
 | DOM-2 | One reader per job and one set of identifiers | domain | S2 | 2-3 d |
 | DOM-3 | Capability tokens for project writes and the network | domain | S3, DOM-1 | 2-3 d |
 | S3 | Simplify the store before sync | storage | S2, CHK-1 | core about 1 week; all 1-2 weeks |
 | FIX-R | Fix the tC4 bugs the rebuild repeats; reconcile TC4-ISSUES | app | INT-4 | 2-3 d |
 | FIX-J | Finish the partial P1 journeys J3, J12 and J13 | app | INT-4 | 1-1.5 d |
+| FIX-HIDE | A held leave never hides a verse whose save failed | app | none | 0.5 d |
+| FIX-HIDE2 | A section draft restored after a reload is shown, ready for Save | app | FIX-HIDE | 0.5 d |
 | SWEEP | Sweep tC4 again (b86270f and release/4.0), then every week | integration | INT-4 | 0.5 d |
+| LIC-1 | Move the rebuild to the MIT licence, as tC4 did | integration | SWEEP | 0.5 d |
+| CHK-7 | CI runs the full tests only on gates and main; fast checks before a gate; nightly failures become cards | integration | | 0.5 d |
 
 **Exit:** the checks in `FUNNEL.md` §"Checks the repository must have" all run in CI; the shared
 structures exist and the remaining units' cards point at them; S3's core slices are merged.
@@ -124,14 +134,17 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 |---|---|---|---|
 | C7a | Conflict choices: text and passage | B11 (done) | 3-4 sessions |
 | C7b | Conflict choices: every other kind | C7a, S2, owner H5 (Q-9) | 4.5-6.5 sessions |
-| D1 | Checkpoints and outside edits | S2, UI-3 | 5-6 sessions plus 1-2 of integration |
+| D1 | Checkpoints and outside edits | S2, UI-3a | 5-6 sessions plus 1-2 of integration |
 | D2 | Exports | S2, UI-1 | 4 sessions |
-| E1a | Sync | X, C7a, D1, UI-2, UI-3 | 5-6 sessions |
+| E1a | Sync | X, C7a, D1, UI-2, UI-3a | 5-6 sessions |
 | E1b | Share and open from Door43 | E1a | 3-4 sessions |
-| E2 | USB exchange | X, D2, C7b, UI-2, UI-3 | 4-4.5 sessions |
-| F1 | Import | I, UI-2, UI-3 | 5-7 sessions |
+| E2 | USB exchange | X, D2, C7b, UI-2, UI-3a | 4-4.5 sessions |
+| F1 | Import | I, UI-2, UI-3a | 5-7 sessions |
 | AQ1 | Aquifer helps in the app (P6) | INT-4, UI-1, owner H6 (Q34) | 3-5 sessions |
 | REF1 | Move the tC4 reference and port its changes | SWEEP, owner H7 | 3-5 sessions |
+| OLH-1 | Highlight a note's words in the original-language pane (#840, built ahead of tC4) | INT-4 | 2-3 sessions |
+| REF1b | Poem lines as tabs in the verse editor (tC4 #810) | REF1 | 2-3 sessions |
+| REF1c | Notes by figure, with groups that fold (tC4 #769) | REF1 | 2-3 sessions |
 
 **Exit:** every live tC4 journey (P1) and the team journeys (P2) run in CI; P6 is shown.
 
@@ -156,7 +169,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
-| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X | 1 d |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path
@@ -257,6 +270,7 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 | A2 | Optional: GitHub Pro, to make the CI check required before main changes | GitHub refuses required checks on a private repository on the free plan (HTTP 403). INT-3's merge receipt guards merges without it | none |
 | A3 | Add `eliaspinero` (Elias, H2) as a collaborator on `birchamp/tc-rst` when the owner says the hand-off starts (not yet, 2026-10-22), and confirm GitHub Actions minutes for Windows and macOS runners | Add the second developer as a collaborator on `birchamp/tc-rst`, and confirm GitHub Actions minutes for Windows and macOS runners | Track B pushes `ext/*` branches and runs installers on those runners | Track B start, G3 |
 | A4 | Create the GitHub environment `windows-signing` (deployment branch: the default branch only) and the repository secrets for the Windows signing identity (H4) and the help-desk key (H15); the secret names go into `docs/RELEASE.md` once H4 and H15 are answered. Creating environments and secrets needs repository admin, which a collaborator lacks (inference about GitHub, not cited) | G3's signed run after merge and G1's help-desk key read need them; nobody was assigned to create them | G1 step 7, G3 step 7 |
+| A5 | ~~Relicense the `string-punctuation-tokenizer` npm package to MIT~~ Not needed: version 2.2.0 is already MIT, and tC4 D111 (#838) proved its output equals 2.0.0's on 248,773 verse lines; `tc-usfm` cites 2.2.0 (LIC-1) | The rebuild's `tc-usfm` words module ports it | done |
 
 ## When this plan changes
 

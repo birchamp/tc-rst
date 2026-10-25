@@ -11,18 +11,23 @@
 use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::NotSaved;
+use tc_api::StartsJob;
 use tc_api::ids::JobId;
-use tc_api::jobs::{JobOutcome, JobState, Phase};
+use tc_api::jobs::{Phase, Progress};
 use tc_api::resources::{
     ApplyPlan, CheckUpdates, GatewayPackage, OfferRef, PlanApplied, PlanGateway, PlanUpgrade,
     PlanView, SetRung,
 };
 use wasm_bindgen_futures::spawn_local;
 
+use super::leave::LeaveTo;
+
 use super::app_ctx::Actions;
 use super::js;
-use super::sources::{api_error, said};
+use super::sources::{said, said_call};
+use crate::app::client::CallError;
 use crate::app::internet::Pending;
+use crate::app::jobs::JobEnd;
 use crate::app::upgrades::Installing;
 use crate::i18n::{keys, t};
 
@@ -36,14 +41,14 @@ enum Planned {
 
 /// What a failed confirm says: tC4's `upgrade.failed` wraps the stale words, and a refused disk
 /// says its own reason.
-fn apply_error(error: &ApiError) -> String {
+fn apply_error(error: &CallError) -> String {
     match error {
-        ApiError::NotSaved(NotSaved::PlanStale) => t(
+        CallError::Api(ApiError::NotSaved(NotSaved::PlanStale)) => t(
             keys::upgrade::FAILED,
             &[("reason", &t(keys::upgrade::STALE, &[]))],
         ),
-        ApiError::NotSaved(NotSaved::Disk(reason)) => reason.clone(),
-        other => said(other),
+        CallError::Api(ApiError::NotSaved(NotSaved::Disk(reason))) => reason.clone(),
+        other => said_call(other),
     }
 }
 
@@ -70,11 +75,9 @@ impl Actions {
         spawn_local(async move {
             let project = at.project.clone();
             let answer = this
-                .runtime()
-                .api()
-                .call(&CheckUpdates { at })
+                .run_net(Pending::Updates, &CheckUpdates { at })
                 .await
-                .map_err(api_error);
+                .said();
             let current = this
                 .s()
                 .project
@@ -87,9 +90,9 @@ impl Actions {
                             .try_update(|up| up.offers_read(&project, &current, view));
                     }
                 }
-                Err(ApiError::NeedsInternet(_)) => this.ask_again(Pending::Updates),
-                Err(error) => {
-                    let reason = t(keys::upgrade::CHECK_FAILED, &[("reason", &said(&error))]);
+                Err(None) => {}
+                Err(Some(said)) => {
+                    let reason = t(keys::upgrade::CHECK_FAILED, &[("reason", &said)]);
                     this.s().up.try_update(|up| up.check_failed(reason));
                 }
             }
@@ -132,7 +135,7 @@ impl Actions {
         let this = self.clone();
         spawn_local(async move {
             // Saved first: the plan is read over work that is safe (A-26).
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Plan).await {
                 // tC4's own sentence for a text upgrade that finds work unsaved.
                 let reason = t(
                     keys::upgrade::FAILED,
@@ -146,22 +149,15 @@ impl Actions {
                 at: at.clone(),
                 offer,
             };
-            let job = match this.runtime().api().call(&request).await.map_err(api_error) {
+            let job = match this.run_net(pending.clone(), &request).await.said() {
                 Ok(job) => job,
-                Err(ApiError::NeedsInternet(_)) => {
-                    this.s().up.try_update(|up| up.install_failed(None));
-                    return this.ask_again(pending);
-                }
-                Err(error) => {
-                    let reason = said(&error);
-                    {
-                        this.s().up.try_update(|up| up.install_failed(Some(reason)));
-                        return;
-                    }
+                Err(reason) => {
+                    this.s().up.try_update(|up| up.install_failed(reason));
+                    return;
                 }
             };
             match this
-                .follow_plan(job, |repo| {
+                .follow_plan::<PlanUpgrade>(job, |repo| {
                     this.s().up.try_update(|up| up.install_progress(repo));
                 })
                 .await
@@ -172,13 +168,9 @@ impl Actions {
                 Planned::Stopped => {
                     this.s().up.try_update(|up| up.install_failed(None));
                 }
-                Planned::Failed(ApiError::NeedsInternet(_)) => {
-                    this.s().up.try_update(|up| up.install_failed(None));
-                    this.ask_again(pending);
-                }
                 Planned::Failed(error) => {
-                    let reason = said(&error);
-                    this.s().up.try_update(|up| up.install_failed(Some(reason)));
+                    let reason = this.net_refusal(pending, error).map(|error| said(&error));
+                    this.s().up.try_update(|up| up.install_failed(reason));
                 }
             }
         });
@@ -215,7 +207,7 @@ impl Actions {
                 at: at.clone(),
                 plan,
             };
-            match this.runtime().api().call(&request).await.map_err(api_error) {
+            match this.runtime().api().call(&request).await {
                 Ok(PlanApplied::Applied) => {
                     this.s().up.try_update(|up| up.applied());
                     this.pins_changed(&at);
@@ -265,7 +257,7 @@ impl Actions {
         }
         let this = self.clone();
         spawn_local(async move {
-            if !this.runtime().saves().gate().await {
+            if !this.leave(LeaveTo::Plan).await {
                 let reason = t(keys::gateway::UNSAVED, &[]);
                 {
                     this.s().gw.try_update(|gw| gw.plan_failed(package, reason));
@@ -277,20 +269,18 @@ impl Actions {
                 at: at.clone(),
                 gateway: package.gateway.clone(),
             };
-            let job = match this.runtime().api().call(&request).await.map_err(api_error) {
+            let job = match this.runtime().api().call(&request).await {
                 Ok(job) => job,
                 Err(error) => {
-                    let reason = said(&error);
-                    {
-                        this.s().gw.try_update(|gw| gw.plan_failed(package, reason));
-                        return;
-                    }
+                    let reason = said_call(&error);
+                    this.s().gw.try_update(|gw| gw.plan_failed(package, reason));
+                    return;
                 }
             };
             // The person left the project while the plan was made: it would describe one project
             // over another, so nothing is shown (tC4 #580, interruption 4).
             let same_project = |this: &Actions| this.project_scope().is_some_and(|now| now == at);
-            let planned = this.follow_plan(job, |_| {}).await;
+            let planned = this.follow_plan::<PlanGateway>(job, |_| {}).await;
             if !same_project(&this) {
                 this.s().gw.try_update(|gw| {
                     gw.busy = false;
@@ -348,7 +338,7 @@ impl Actions {
                 at: at.clone(),
                 plan,
             };
-            match this.runtime().api().call(&request).await.map_err(api_error) {
+            match this.runtime().api().call(&request).await {
                 Ok(PlanApplied::Applied) => {
                     this.s().gw.try_update(|gw| gw.applied());
                     this.pins_changed(&at);
@@ -366,55 +356,22 @@ impl Actions {
 
     // ---- the jobs ------------------------------------------------------------------------------
 
-    /// Follows a plan job until it ends, telling `progress` which repository it downloads.
-    async fn follow_plan(&self, job: JobId, progress: impl Fn(String)) -> Planned {
-        match self.follow_job(job, progress).await {
-            Ok(JobOutcome::PlanReady(plan)) => Planned::Ready(plan),
-            Ok(_) | Err(None) => Planned::Stopped,
-            Err(Some(error)) => Planned::Failed(error),
-        }
-    }
-
-    /// Follows a job until it ends, telling `progress` which repository it installs. `Err(None)`:
-    /// cancelled, or gone.
-    pub(super) async fn follow_job(
+    /// Follows a plan job of row `E` until it ends, telling `progress` which repository it
+    /// downloads.
+    async fn follow_plan<E: StartsJob<Outcome = Box<PlanView>>>(
         &self,
         job: JobId,
         progress: impl Fn(String),
-    ) -> Result<JobOutcome, Option<ApiError>> {
-        let mut waited = 0;
-        loop {
-            let state = self
-                .s()
-                .server
-                .jobs
-                .with_untracked(|jobs| jobs.get(&job).map(|view| view.state.clone()));
-            match state {
-                Some(JobState::Done(outcome)) => return Ok(outcome),
-                Some(JobState::Cancelled) => return Err(None),
-                Some(JobState::Failed(error)) => return Err(Some(error)),
-                Some(JobState::Running(running)) => {
-                    if let Phase::Install { repo } = running.phase {
-                        progress(repo);
-                    }
-                }
-                Some(JobState::Queued | JobState::Cancelling) | None => {}
+    ) -> Planned {
+        let report = |p: &Progress| {
+            if let Phase::Install { repo } = &p.phase {
+                progress(repo.clone());
             }
-            js::sleep(50).await;
-            waited += 50;
-            if waited >= 1000 {
-                waited = 0;
-                match self.runtime().api().call(&tc_api::jobs::Get { job }).await {
-                    Ok(Some(view)) => {
-                        self.s()
-                            .server
-                            .jobs
-                            .try_update(|jobs| crate::app::effects::merge_job(jobs, view));
-                    }
-                    Ok(None) => return Err(None),
-                    Err(_) => {}
-                }
-            }
+        };
+        match self.follow::<E>(job, report, || true).await {
+            JobEnd::Done(plan) => Planned::Ready(plan),
+            JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => Planned::Stopped,
+            JobEnd::Failed(error) => Planned::Failed(error),
         }
     }
 }

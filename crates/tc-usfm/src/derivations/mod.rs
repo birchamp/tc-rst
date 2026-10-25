@@ -31,10 +31,12 @@
 
 mod js;
 mod shown;
+mod tc3;
 mod usfmjs;
 mod usfmjs_tables;
 
 use js::{JsStr, concat, js, to_string, trim};
+pub use tc3::tc3_book_usfm;
 use usfmjs::{Key, truthy};
 
 /// The text tC4 hashes for a verse's content (`words + layout` of a verse value): see the

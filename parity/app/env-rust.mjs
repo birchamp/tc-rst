@@ -306,6 +306,8 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
       next: { type: 'openDoor43Fails', value: { type: 'beforeIntake', value: { type: 'remoteMissing' } } },
     }),
     refused: () => [...refused],
+    /** tc4 is still running: a journey can quit it or crash it on purpose. */
+    alive: () => child.exitCode === null && child.signalCode === null,
     /** What `hello` says of the build, and the folder of the UI build the page loads. */
     async build() {
       const hello = await call('app/hello', {});

@@ -17,7 +17,7 @@ use tempfile::TempDir;
 
 use super::corpus::{FOLDER, corpora, store_corpora};
 use crate::common::{Parts, TestApp, folder, open_progress};
-use crate::store_world::{APP, backend_over};
+use crate::store_world::{APP, PROJECTS, assert_valid_burrito, backend_over};
 
 /// What holds the corpus project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,8 +87,31 @@ pub struct Scale {
     /// The memory backend, when the project is held in memory.
     memory: Option<MemoryBackend>,
     pub folder: ProjectRef,
+    /// The store's files, when the project is on the store: checked once as a Burrito at the
+    /// end (P5/INV-VALID-BURRITO), since the per-job watch is stopped for the corpus.
+    disk: Option<tc_store::fault::FaultFs>,
     _t: TestApp,
     _dir: TempDir,
+}
+
+impl Drop for Scale {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            return;
+        }
+        if let Some(fs) = &self.disk {
+            // The last save's background work may still be writing the folder.
+            for (_, session) in self.app.sessions().all_projects() {
+                if let Some(session) = session {
+                    session.handle().wait_idle();
+                }
+            }
+            assert_valid_burrito(
+                fs,
+                &std::path::Path::new(PROJECTS).join(self.folder.as_str()),
+            );
+        }
+    }
 }
 
 impl Scale {
@@ -193,16 +216,20 @@ pub async fn scale(
     on_disk: &tc_store::fault::FaultFs,
 ) -> Scale {
     let folder = folder(FOLDER);
-    let (store, memory): (Arc<dyn ProjectStore>, _) = match backing {
+    let (store, memory, watch, disk): (Arc<dyn ProjectStore>, _, _, _) = match backing {
         Backing::Memory => {
             let backend = MemoryBackend::new();
             backend.add(folder.clone(), project.clone()).unwrap();
-            (Arc::new(backend.clone()), Some(backend))
+            (Arc::new(backend.clone()), Some(backend), None, None)
         }
         Backing::Store => {
             let fs = on_disk.copy();
-            let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
-            (Arc::new(backend), None)
+            let (backend, mut watch) =
+                backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+            // The probe hashes the whole corpus book after every write job, which more than
+            // doubled this binary's time; Scale's drop checks the folder once instead.
+            watch.stop("op-count corpus: checked once at the end by Scale's drop");
+            (Arc::new(backend), None, Some(watch), Some(fs))
         }
     };
     let dir = tempfile::tempdir().unwrap();
@@ -222,16 +249,18 @@ pub async fn scale(
             copy_tree(super::corpus::psalms_resources(), &link);
         }
     }
-    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = tc_app::StoreChoice::Given(store);
     })
     .await;
+    t.watch = watch;
     Scale {
         app: t.app.clone(),
         backing,
         memory,
         folder,
+        disk,
         _t: t,
         _dir: dir,
     }

@@ -19,6 +19,10 @@
 //! materialize and the close). Each prints the machine's SHA and AVX-512 flags and the load.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "a benchmark that builds and removes its own scratch projects"
+)]
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

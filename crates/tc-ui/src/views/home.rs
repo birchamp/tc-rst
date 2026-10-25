@@ -17,7 +17,6 @@ use tc_api::home::{
     StoryTileView, UnusableCard,
 };
 use tc_api::ids::ProjectRef;
-use tc_api::refusal::Message;
 use tc_api::shown::{Direction, Known};
 use wasm_bindgen::JsValue;
 
@@ -35,7 +34,7 @@ use crate::ds::{
     Badge, BadgeSize, BadgeTone, BookTile, Button, ButtonVariant, Callout, CalloutTone, Card,
     Overline, Size, Toast, ToastTone,
 };
-use crate::i18n::{keys, t, t_dyn};
+use crate::i18n::{keys, t};
 use crate::views::sync_result::SyncResult;
 
 fn dir_str(dir: Direction) -> &'static str {
@@ -921,14 +920,7 @@ fn resume_card(actions: &Actions, edit: LastEditView, card: HomeCard) -> impl In
 /// (B2 D9; a declared difference from tC4, whose list leaves it off).
 fn unusable_card(folder: &UnusableCard) -> impl IntoView + use<> {
     let reason = folder.reason.clone();
-    let text = move || {
-        let vars = reason.vars();
-        let vars: Vec<(&str, &dyn std::fmt::Display)> = vars
-            .iter()
-            .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
-            .collect();
-        t_dyn(reason.key(), &vars, None)
-    };
+    let text = move || crate::i18n::refusal_text(&reason);
     let name = folder.name.clone();
     view! {
         <Card padding="22px 24px" attrs=Attrs::new().with("data-testid", format!("unusable-{name}"))>

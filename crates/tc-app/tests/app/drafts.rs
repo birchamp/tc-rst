@@ -65,10 +65,13 @@ impl Rig {
             world.bible.clone()
         };
         let dir = tempfile::tempdir().unwrap();
-        let t = start(&dir, world.store()).await;
+        let mut t = start(&dir, world.store()).await;
+        let fs = world.fs.clone();
+        let hooks = world.hooks.clone();
+        t.watch = Some(world.watch);
         Rig {
-            fs: world.fs.clone(),
-            hooks: world.hooks.clone(),
+            fs,
+            hooks,
             t,
             dir,
             bible: project,
@@ -88,8 +91,9 @@ impl Rig {
 
     async fn start_over(&mut self, fs: FaultFs, platform: FakePlatform) {
         let hooks = Arc::new(tc_store::Hooks::default());
-        let backend = Arc::new(backend_over(&fs, APP, platform, hooks.clone()));
-        self.t = start(&self.dir, backend).await;
+        let (backend, watch) = backend_over(&fs, APP, platform, hooks.clone());
+        self.t = start(&self.dir, Arc::new(backend)).await;
+        self.t.watch = Some(watch);
         self.fs = fs;
         self.hooks = hooks;
     }
@@ -563,7 +567,7 @@ async fn a_second_writer_makes_the_project_read_only_and_the_copy_carries_its_dr
     page::write_entry(&mut storage, &key_of(&session, "TIT 1:14"), &typed);
 
     // The other computer is told this one is closed, and saves.
-    let theirs = backend_over(
+    let (theirs, _theirs_watch) = backend_over(
         &rig.fs.other_machine(),
         "/app-desktop",
         FakePlatform {
@@ -1778,4 +1782,42 @@ async fn story_texts_are_saved_and_kept_in_the_form_tc4_stores() {
         "Typed before the crash,\nwith a blank line."
     );
     assert!(rig.offer(&session, &[]).await.offers.is_empty());
+}
+
+/// REF1b, INV-EVERY-POEM-LINE-STAYS: a poem verse's card text, buffered and kept after a
+/// relaunch, reaches the book as `\q` markers, not tabs (the loss review's finding).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn keep_of_a_poem_draft_writes_its_markers() {
+    let mut rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let v4 = tit(1, 4);
+    assert!(matches!(
+        rig.save(&session, 1, &v4, "first line\n\\q1 second line")
+            .await,
+        Answer::Reply { .. }
+    ));
+    session.handle().wait_idle();
+    assert_eq!(
+        words(&session, &v4).as_deref(),
+        Some("first line\n\\q1 second line")
+    );
+    let run = rig.t.app.instance();
+    let typed = entry(
+        run,
+        rig.token(&session, &v4),
+        "first line\n\tsecond line, typed on",
+        None,
+        1_000,
+    );
+    let buffered = vec![line(&key_of(&session, "TIT 1:4"), &typed)];
+    drop(session);
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let offers = rig.offer(&session, &buffered).await;
+    let offer = offer_at(&offers, "TIT 1:4");
+    rig.keep(&session, 40, offer).await.unwrap();
+    assert_eq!(
+        words(&session, &v4).as_deref(),
+        Some("first line\n\\q1 second line, typed on")
+    );
 }

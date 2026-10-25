@@ -76,18 +76,23 @@ test('INV-NO-UNGATED-MERGE: --check-receipt refuses a tree without a receipt', (
 
     // INV-NO-UNGATED-MERGE: a green ci and app-e2e run on the same tree is a receipt.
     const head = git('rev-parse', 'HEAD');
-    env.FAKE_GH_RUNS = `ci 11 ${head}\napp-e2e 12 ${head}`;
+    env.FAKE_GH_RUNS = `ci 11 ${head} gate/x\napp-e2e 12 ${head} gate/x`;
     r = gates();
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /^gates: CI receipt: ci run 11, app-e2e run 12 on /);
-    env.FAKE_GH_RUNS = `ci 11 ${head}`;
+    // A track push of the same commit ran only the lints: its green ci run is no receipt.
+    env.FAKE_GH_RUNS = `ci 13 ${head} track-x\napp-e2e 12 ${head} gate/x`;
+    r = gates();
+    assert.equal(r.status, 1, 'a track run is no receipt: ' + r.stdout);
+    assert.match(r.stdout, /^INV-NO-UNGATED-MERGE/);
+    env.FAKE_GH_RUNS = `ci 11 ${head} gate/x`;
     r = gates();
     assert.equal(r.status, 1, 'ci alone is no receipt: ' + r.stdout);
     assert.match(r.stdout, /^INV-NO-UNGATED-MERGE/);
     writeFileSync(join(scratch, 'other'), '');
     git('add', '.');
     git('commit', '-q', '-m', 'other tree');
-    env.FAKE_GH_RUNS = `ci 11 ${head}\napp-e2e 12 ${head}`;
+    env.FAKE_GH_RUNS = `ci 11 ${head} gate/x\napp-e2e 12 ${head} gate/x`;
     r = gates();
     assert.equal(r.status, 1, 'runs on another tree are no receipt: ' + r.stdout);
     assert.match(r.stdout, /^INV-NO-UNGATED-MERGE/);

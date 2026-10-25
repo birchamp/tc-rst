@@ -3,6 +3,7 @@ permissions:
   contents: read
 on:
   push:
+  # A pull request runs the lints only: the full tests run where they gate a merge (main, gate/*).
   pull_request:
   # The Windows test run, once a night; workflow_dispatch lets anyone run it on a branch.
   schedule:
@@ -11,9 +12,10 @@ on:
 concurrency:
   # The event name too, so a nightly or dispatched run never cancels a push run on the same branch.
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  # Main's runs always finish: a quick follow-up commit must not cancel the test of the one
-  # before, or main never shows a result for it.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' }}
+  # A newer push to a track branch cancels the run it supersedes, which frees runners. Main's
+  # runs always finish (a quick follow-up must not cancel the test of the one before), and so
+  # do gate/* runs, which are a merge's receipt (scripts/gates.sh --wait-ci).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
 jobs:
   lint-linux:
     runs-on: ubuntu-latest
@@ -83,7 +85,8 @@ jobs:
     runs-on: ubuntu-latest
     # The old single job took 26 min; the test binaries sum to about 15 min locally.
     timeout-minutes: 75
-    if: github.event_name != 'schedule'
+    # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
+    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -100,6 +103,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 120
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # A scheduled failure pushes a card stub to nightly/<date>-nightly-windows (rulings/2026-10-24-test-process.md).
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
@@ -108,7 +114,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
-      - run: scripts/gates.sh --step test
+      - run: scripts/gates.sh --step test 2>&1 | tee nightly.log
+      - if: failure() && github.event_name == 'schedule'
+        run: scripts/nightly-stub.sh nightly-windows nightly.log
 
   # The long variant of the project store's model-based property test (docs/STORAGE.md §16.1):
   # 5,000 random histories of saves, kills, damaged journal files, held files and outside
@@ -117,16 +125,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # A scheduled failure pushes a card stub to nightly/<date>-store-model-nightly (rulings/2026-10-24-test-process.md).
+    permissions:
+      contents: write
+    # bash -eo pipefail, so the tee keeps the test's failure.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
-      - run: scripts/gates.sh --step model-long
+      - run: scripts/gates.sh --step model-long 2>&1 | tee nightly.log
+      - if: failure() && github.event_name == 'schedule'
+        run: scripts/nightly-stub.sh store-model-nightly nightly.log
 
   alignment-budget:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event_name != 'schedule'
+    # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
+    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -149,6 +167,8 @@ jobs:
   # no install step.
   parity-baseline:
     runs-on: ubuntu-latest
+    # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
+    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
         with:

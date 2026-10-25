@@ -855,12 +855,19 @@ fn a_file_that_cannot_be_an_ingredient_is_moved_out_and_kept() {
     put("ingredients/Thumbs.db", b"thumbs");
     put("ingredients/notes&drafts.txt", b"a name with an ampersand");
     put("ingredients/tc4-sync/state.json", b"{}");
+    // An editor's leftovers (tC4 #747).
+    put("ingredients/TIT.usfm.bak", b"an editor's backup");
+    put("ingredients/notes.txt~", b"an editor's copy");
+    put("ingredients/draft.tmp", b"an editor's temporary file");
     let report = handle.focus().wait().unwrap();
-    assert_eq!(report.moved.len(), 3, "{report:?}");
+    assert_eq!(report.moved.len(), 6, "{report:?}");
     for rel in [
         "ingredients/Thumbs.db",
         "ingredients/notes&drafts.txt",
         "ingredients/tc4-sync/state.json",
+        "ingredients/TIT.usfm.bak",
+        "ingredients/notes.txt~",
+        "ingredients/draft.tmp",
     ] {
         assert!(rig.fs.peek(&folder.join(rel)).is_none(), "{rel} is gone");
     }
@@ -873,6 +880,9 @@ fn a_file_that_cannot_be_an_ingredient_is_moved_out_and_kept() {
         b"thumbs".to_vec(),
         b"a name with an ampersand".to_vec(),
         b"{}".to_vec(),
+        b"an editor's backup".to_vec(),
+        b"an editor's copy".to_vec(),
+        b"an editor's temporary file".to_vec(),
     ] {
         assert!(kept.contains(&want));
     }
@@ -882,6 +892,18 @@ fn a_file_that_cannot_be_an_ingredient_is_moved_out_and_kept() {
         .filter(|n| matches!(n.notice, Notice::FileMoved { .. }))
         .count();
     assert_eq!(told, 2, "the junk of the system is moved without a word");
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let committed = commit_files(&repo_of(&rig.fs, &folder), commit);
+    let junk: Vec<&String> = committed
+        .keys()
+        .filter(|p| p.ends_with(".bak") || p.ends_with('~') || p.ends_with(".tmp"))
+        .collect();
+    assert!(junk.is_empty(), "{junk:?}");
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }

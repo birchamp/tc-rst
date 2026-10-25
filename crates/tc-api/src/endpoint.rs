@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::ApiError;
 use crate::ids::{RequestId, Scope};
+use crate::jobs::JobOutcome;
 #[cfg(feature = "test-hooks")]
 use crate::test_hook_table;
 
@@ -116,6 +117,15 @@ pub trait Write: Endpoint {
     /// project-scoped. The server checks it before the reply cache, so a write against a
     /// closed or replaced open is refused and never answered from the cache of another.
     fn at(&self) -> Option<&Scope>;
+}
+
+/// A `job` row. The outcome its job ends with is typed per request, so the follower of a
+/// download cannot be handed an open's outcome, and the server cannot send one.
+pub trait StartsJob: Write {
+    type Outcome;
+    /// The outcome of this row's job, or the outcome back when it is of another kind.
+    fn outcome(outcome: JobOutcome) -> Result<Self::Outcome, JobOutcome>;
+    fn wrap(outcome: Self::Outcome) -> JobOutcome;
 }
 
 /// Whether a write row is project-scoped. Every `command` and `job` row needs one of
@@ -300,6 +310,11 @@ macro_rules! write_impl {
     };
     (job $req:path) => {
         write_impl!(command $req);
+        // Every job row names the outcome its job ends with.
+        const _: fn() = || {
+            fn starts_job<T: StartsJob>() {}
+            starts_job::<$req>();
+        };
     };
 }
 

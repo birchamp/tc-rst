@@ -1,0 +1,194 @@
+# The Electronite shell's tests (card G1, docs/contracts/SHELL.md): the unit tests, and the
+# end-to-end tests of the real shell in Electronite over a test build of tc4, on Linux, Windows
+# and macOS (H3, rulings/2026-10-24-H3-H4-H7-fast-release.md). A skipped end-to-end test fails
+# its job, as in app-e2e.
+name: shell
+permissions:
+  contents: read
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  # As in ci.yml: a superseded track run is cancelled; main and gate/* runs always finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
+env:
+  ELECTRONITE: v37.1.0-graphite
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test 'shell/test/*.test.cjs'
+
+  # The two UI folders and the bundle are the same files on every system: built once.
+  builds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CARGO_JOBS: 4
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - id: bindgen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-bindgen
+          key: wasm-bindgen-cli-0.2.129-${{ runner.os }}
+      - if: steps.bindgen.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: crates/tc-ui/build-app.sh --out target/tc-ui-app
+      - run: crates/tc-ui/build-app.sh --test-hooks --out target/tc-ui-app-hooks
+      # rust-cache keeps target/, and bundle_store refuses an install that is already there.
+      - run: rm -rf target/shell-bundle && cargo run --locked -p tc-app --example bundle_store -- --from bundle/en --only en_obs-tn --out target/shell-bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shell-builds
+          path: |
+            target/tc-ui-app
+            target/tc-ui-app-hooks
+            target/shell-bundle
+          retention-days: 3
+
+  e2e-linux:
+    needs: builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p tc4 --features test-hooks,fixture-backend
+      - uses: actions/download-artifact@v4
+        with:
+          name: shell-builds
+          path: target
+      - name: Electronite
+        run: |
+          zip="electronite-$ELECTRONITE-linux-x64.zip"
+          curl -sSfL -o "$RUNNER_TEMP/$zip" "https://github.com/unfoldingWord/electronite/releases/download/$ELECTRONITE/$zip"
+          echo "41218aa3cd79f3449cfc360384ad4ef6064fe871e4c40a38ae859f2ddd8f8540  $RUNNER_TEMP/$zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/$zip" -d "$RUNNER_TEMP/electronite"
+          # tC4 docs/PACKAGING.md "The Chromium sandbox": setuid root, so the renderer keeps it.
+          sudo chown root:root "$RUNNER_TEMP/electronite/chrome-sandbox"
+          sudo chmod 4755 "$RUNNER_TEMP/electronite/chrome-sandbox"
+          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2t64 libgbm1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: parity/tc4-baseline
+      # Playwright's own Chromium, which has no Graphite: the probe's proof that it can fail (G4).
+      - run: npx playwright install --with-deps chromium
+        working-directory: parity/tc4-baseline
+      - name: end to end
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
+          TC4_ELECTRON="$RUNNER_TEMP/electronite/electron" TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app \
+            TC4_UI_HOOKS=target/tc-ui-app-hooks TC4_BUNDLE=target/shell-bundle \
+            xvfb-run -a node --test --test-concurrency=1 --test-reporter=tap 'shell/e2e/*.test.cjs' | tee shell.tap
+          node parity/app/journeys/no-skips.mjs shell.tap
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-e2e-linux
+          path: |
+            shell.tap
+            target/shell-e2e/*/appdata/shell.log
+
+  e2e-windows:
+    needs: builds
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p tc4 --features test-hooks,fixture-backend
+      - uses: actions/download-artifact@v4
+        with:
+          name: shell-builds
+          path: target
+      - name: Electronite
+        shell: pwsh
+        run: |
+          $zip = "electronite-$env:ELECTRONITE-win32-x64.zip"
+          $file = Join-Path $env:RUNNER_TEMP $zip
+          Invoke-WebRequest -Uri "https://github.com/unfoldingWord/electronite/releases/download/$env:ELECTRONITE/$zip" -OutFile $file
+          $sum = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLower()
+          if ($sum -ne '8146ca21fa090e12bca01a8af73d234d9a31d90f51da0da86bb0e1731c371b52') { throw "electronite sha256 $sum" }
+          Expand-Archive -Path $file -DestinationPath (Join-Path $env:RUNNER_TEMP 'electronite')
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: parity/tc4-baseline
+      - name: end to end
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          TC4_ELECTRON="$RUNNER_TEMP/electronite/electron.exe" TC4_BIN=target/debug/tc4.exe TC4_UI=target/tc-ui-app \
+            TC4_UI_HOOKS=target/tc-ui-app-hooks TC4_BUNDLE=target/shell-bundle \
+            node --test --test-concurrency=1 --test-reporter=tap 'shell/e2e/*.test.cjs' | tee shell.tap
+          node parity/app/journeys/no-skips.mjs shell.tap
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-e2e-windows
+          path: |
+            shell.tap
+            target/shell-e2e/*/appdata/shell.log
+
+  e2e-macos:
+    needs: builds
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p tc4 --features test-hooks,fixture-backend
+      - uses: actions/download-artifact@v4
+        with:
+          name: shell-builds
+          path: target
+      - name: Electronite
+        run: |
+          zip="electronite-$ELECTRONITE-darwin-arm64.zip"
+          curl -sSfL -o "$RUNNER_TEMP/$zip" "https://github.com/unfoldingWord/electronite/releases/download/$ELECTRONITE/$zip"
+          echo "a3dde44e03a076bc778f952f7a7a5ed6d8e5037d46ea6c1ba2deb6a11df59488  $RUNNER_TEMP/$zip" | shasum -a 256 -c -
+          # ditto keeps the app bundle's symbolic links, which unzip may not.
+          ditto -x -k "$RUNNER_TEMP/$zip" "$RUNNER_TEMP/electronite"
+          ls "$RUNNER_TEMP/electronite"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: parity/tc4-baseline
+      - name: end to end
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          TC4_ELECTRON="$RUNNER_TEMP/electronite/Electron.app/Contents/MacOS/Electron" TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app \
+            TC4_UI_HOOKS=target/tc-ui-app-hooks TC4_BUNDLE=target/shell-bundle \
+            node --test --test-concurrency=1 --test-reporter=tap 'shell/e2e/*.test.cjs' | tee shell.tap
+          node parity/app/journeys/no-skips.mjs shell.tap
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-e2e-macos
+          path: |
+            shell.tap
+            target/shell-e2e/*/appdata/shell.log

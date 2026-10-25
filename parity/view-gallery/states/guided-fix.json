@@ -55,7 +55,7 @@
     "storyError": null,
     "storySource": null,
     "sources": {
-      "$part": "2f9408587db2aa01"
+      "$part": "d6e9ce6e231f0a1b"
     },
     "sourceTab": "ult",
     "editing": null,
@@ -68,7 +68,7 @@
     "helpsActive": null,
     "academy": null,
     "understand": {
-      "$part": "904e45d094447cd8"
+      "$part": "3d7a69553ef8b81e"
     },
     "noteSaveState": "saved",
     "alignSaveState": "saved",
@@ -573,9 +573,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:50:29.070Z#1",
+          "id": "2026-10-24T19:40:14.802Z#1",
           "op": "open",
-          "startedAt": "2026-10-19T02:50:29.070Z",
+          "startedAt": "2026-10-24T19:40:14.802Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -607,19 +607,19 @@
                       "checking/settings.json"
                     ]
                   },
-                  "startedAt": "2026-10-19T02:50:29.403Z",
-                  "endedAt": "2026-10-19T02:50:30.270Z"
+                  "startedAt": "2026-10-24T19:40:14.855Z",
+                  "endedAt": "2026-10-24T19:40:15.000Z"
                 }
               ]
             },
-            "startedAt": "2026-10-19T02:50:29.140Z",
-            "endedAt": "2026-10-19T02:50:30.271Z"
+            "startedAt": "2026-10-24T19:40:14.820Z",
+            "endedAt": "2026-10-24T19:40:15.000Z"
           }
         },
         {
-          "id": "2026-10-19T02:50:30.873Z#2",
+          "id": "2026-10-24T19:40:15.332Z#2",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:50:30.873Z",
+          "startedAt": "2026-10-24T19:40:15.332Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "message": "Checkpoint, leaving Understand: TIT checks, settings, sources (tC4)"
@@ -631,8 +631,8 @@
               "message": "Checkpoint, leaving Understand: TIT checks, settings, sources (tC4)",
               "written": []
             },
-            "startedAt": "2026-10-19T02:50:30.836Z",
-            "endedAt": "2026-10-19T02:50:31.094Z"
+            "startedAt": "2026-10-24T19:40:15.317Z",
+            "endedAt": "2026-10-24T19:40:15.398Z"
           }
         }
       ],
@@ -1055,7 +1055,7 @@
       "_local_/_local_/sample_burrito": {
         "names": {},
         "actors": [
-          "a4cab0a9f1d5e51b"
+          "a1be68bf1fddc325"
         ]
       }
     },
@@ -1063,10 +1063,10 @@
     "syncResult": null,
     "verseConflicts": [],
     "team": {
-      "me": "a4cab0a9f1d5e51b",
+      "me": "a1be68bf1fddc325",
       "names": {},
       "actors": [
-        "a4cab0a9f1d5e51b"
+        "a1be68bf1fddc325"
       ]
     },
     "conflictReview": null,
@@ -1078,13 +1078,14 @@
           "mode": "check",
           "chapter": 1,
           "verse": null,
-          "at": 1792378230821
+          "at": 1792870815315
         }
       }
     },
     "storyFrame": null,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "testament": null,

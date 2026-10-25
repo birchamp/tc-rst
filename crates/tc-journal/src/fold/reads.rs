@@ -125,6 +125,25 @@ impl FoldState {
         Some(KeyState { heads, state })
     }
 
+    /// The value a screen showed for `key` when its heads were `heads`: their one value,
+    /// the value they merge to, or the head a stub rule keeps. `None` when they conflict, or
+    /// a head is not a folded change of `key`. A save from a screen whose heads moved since
+    /// (a sync) is stored against what it showed and so stands beside the newer text,
+    /// never refused (no-loss).
+    pub fn merged_at(&self, key: &RecordKey, heads: &[ChangeId]) -> Option<Record> {
+        let k = self.key_idx(key)?;
+        let mut idx: Vec<ChangeIdx> = heads
+            .iter()
+            .map(|h| self.change_idx(h).filter(|c| self.meta(*c).key == k))
+            .collect::<Option<_>>()?;
+        self.sort_by_id(&mut idx);
+        match super::merge::resolve_heads(self, key, idx).0 {
+            Local::Settled(c) | Local::ByRule(c) => super::merge::record_of(self, c),
+            Local::Merged(merged) => Some((*merged.0).clone()),
+            Local::Empty | Local::Conflict(_) | Local::Passage => None,
+        }
+    }
+
     /// The heads of a record, sorted.
     pub fn heads(&self, key: &RecordKey) -> Vec<ChangeId> {
         self.key_idx(key).map_or_else(Vec::new, |k| {
