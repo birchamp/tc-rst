@@ -249,6 +249,31 @@ browserTest('tn_by_figure_headings_fold_and_count', async () => {
   });
 });
 
+// REF1c (the review's finding): on the windowed Psalms-sized rail a heading follows its fold, so a
+// folded group unfolds from its own heading, and a sort change draws the first heading again.
+browserTest('windowed_rail_headings_follow_their_folds', async () => {
+  await withApp(async ({ page }) => {
+    await openCheck(page);
+    await bigRail(page);
+    await page.getByTestId('open-translationNotes').click();
+    await page.getByTestId('check-progress').waitFor();
+    await page.getByTestId('sort-byFigure').click();
+    await page.getByTestId('rail-group').first().waitFor();
+    const heading = page.locator('[data-testid="rail-group"][data-group="term-001"]');
+    await page.getByTestId('check-list').evaluate((el) => { el.scrollTop = 700; });
+    await heading.waitFor();
+    await heading.click();
+    await until('the heading says folded', async () => (await heading.getAttribute('aria-expanded')) === 'false');
+    await heading.click();
+    await until('the heading unfolds again', async () => (await heading.getAttribute('aria-expanded')) === 'true');
+    await page.getByTestId('check-list').evaluate((el) => { el.scrollTop = 0; });
+    await page.getByTestId('sort-byVerse').click();
+    await page.getByTestId('sort-byFigure').click();
+    await until('the first line is a fold heading again', async () => (await page.locator('[data-testid="check-list"] [data-testid="rail-group"]').count()) > 0
+      && (await page.locator('[data-testid="check-list"] > p').count()) === 0);
+  });
+});
+
 // PERF:78 (APP-DESIGN §8.2, "Rail filter, sort, group"): a filter or a sort on a rail of Psalms'
 // size fits in a frame (16 ms) and sends no request. What is timed is the update's work, from the
 // click to the list drawn and laid out (its effects run, then a forced layout); the frame after it

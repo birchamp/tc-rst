@@ -471,9 +471,11 @@ impl Actions {
                 .sort
                 .get_untracked()
                 .unwrap_or(SortMode::default_for(tool));
-            if !rail::folds(mode) {
+            if !rail::folds(mode) || c.folded.with_untracked(BTreeSet::is_empty) {
                 return None;
             }
+            // shortcut: a walk of the rows, only while a group is folded; a by-index map would
+            // make it constant if Next on the Psalms rail ever shows in a trace.
             let row = rail.rows.iter().find(|r| r.index == index)?;
             let id = rail.view.terms.get(usize::try_from(row.term?).ok()?)?;
             c.folded

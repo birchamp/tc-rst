@@ -294,12 +294,12 @@ fn group_label(label: GroupLabel, terms: &[String], titles: &[String], unit: &st
 }
 
 /// Left on a row (Right in a right-to-left rail) moves the focus to its group's heading, the
-/// tree pattern, and selects nothing (tC4 #769 `rowToHeading`): the heading of `group`, the
-/// active check's.
+/// tree pattern, and selects nothing (tC4 #769 `rowToHeading`): the heading of the focused row's
+/// own group, which `group_of` names by the row's check index.
 fn row_to_heading(
     e: &web_sys::KeyboardEvent,
     list: NodeRef<leptos::html::Div>,
-    group: Option<String>,
+    group_of: impl Fn(u32) -> Option<String>,
 ) -> Option<web_sys::HtmlElement> {
     let list = list.get_untracked()?;
     let rtl = list
@@ -314,7 +314,11 @@ fn row_to_heading(
     {
         return None;
     }
-    let group = serde_json::to_string(&group?).ok()?;
+    let index = target
+        .get_attribute("data-rail-index")?
+        .parse::<u32>()
+        .ok()?;
+    let group = serde_json::to_string(&group_of(index)?).ok()?;
     list.query_selector(&format!("[data-testid=\"rail-group\"][data-group={group}]"))
         .ok()
         .flatten()?
@@ -546,9 +550,15 @@ fn check_rail(
         Memo::new(move |_| {
             let mode = c.sort.get().unwrap_or(SortMode::default_for(tool));
             let groups = rail::groups(rows.iter(), terms.len(), c.filter.get(), mode);
+            // Only a folding sort with a group folded depends on the selection, so a move under
+            // By verse does not group the rail again.
             let open = c.folded.with(|folded| {
-                active_group
-                    .with(|a| rail::open_groups(&groups, &terms, folded, a.as_deref(), mode))
+                if rail::folds(mode) && !folded.is_empty() {
+                    active_group
+                        .with(|a| rail::open_groups(&groups, &terms, folded, a.as_deref(), mode))
+                } else {
+                    vec![true; groups.len()]
+                }
             });
             let order: Vec<u32> = groups
                 .iter()
@@ -564,11 +574,19 @@ fn check_rail(
         })
     };
     let list_ref = NodeRef::<leptos::html::Div>::new();
+    // The group id of check `index`, by its row's term.
+    let group_of = {
+        let (rows, terms, by_index) = (rows.clone(), terms.clone(), by_index.clone());
+        move |index: u32| {
+            let term = rows.get(*by_index.get(&index)?)?.term?;
+            terms.get(usize::try_from(term).ok()?).cloned()
+        }
+    };
     let keydown = {
         let (c, actions) = (c.clone(), actions.clone());
         move |e: web_sys::KeyboardEvent| {
             // Left (Right in a right-to-left rail) on a row goes to its group's heading.
-            if let Some(heading) = row_to_heading(&e, list_ref, active_group.get_untracked()) {
+            if let Some(heading) = row_to_heading(&e, list_ref, &group_of) {
                 e.prevent_default();
                 let _ = heading.focus();
                 return;
@@ -771,12 +789,25 @@ fn check_rail(
                 .get()
                 .map_or(800.0, |el| f64::from(el.client_height()));
             let keep: Vec<u32> = stop.get().into_iter().chain(active.get()).collect();
-            plan.with(|(plan, ..)| {
+            plan.with(|(plan, labels, folds)| {
                 // A filter that shortens the list clamps the browser's scroll without a scroll
                 // event: the window follows the clamp.
                 let top = scroll_top.get().min((plan.height - height).max(0.0));
                 let window = plan.window(top, height);
+                // A heading line carries what it draws, so a fold, a sort or a filter that
+                // leaves it in place still draws it again.
                 plan.mounted(window, &keep)
+                    .into_iter()
+                    .map(|(line, y)| {
+                        let head = match line {
+                            Line::Header(n) => {
+                                labels.get(n).map(|(label, open)| (*label, *open, *folds))
+                            }
+                            Line::Row(_) => None,
+                        };
+                        (line, y, head)
+                    })
+                    .collect::<Vec<_>>()
             })
         });
         let spacer = move || {
@@ -810,13 +841,10 @@ fn check_rail(
                     crate::ds::refocus_after_moves();
                     lines.get()
                 }
-                key=|(line, y): &(Line, f64)| (*line, y.to_bits())
-                children=move |(line, y): (Line, f64)| match line {
-                    Line::Header(n) => {
-                        let line = plan.with_untracked(|(_, labels, folds)| {
-                            labels.get(n).map(|(label, open)| (*label, *open, *folds))
-                        });
-                        match line {
+                key=|(line, y, head): &(Line, f64, Option<(GroupLabel, bool, bool)>)| (*line, y.to_bits(), *head)
+                children=move |(line, y, head): (Line, f64, Option<(GroupLabel, bool, bool)>)| match line {
+                    Line::Header(_) => {
+                        match head {
                             Some((label, open, folds)) => heading(
                                 label,
                                 open,
