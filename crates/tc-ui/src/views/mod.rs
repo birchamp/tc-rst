@@ -15,6 +15,7 @@ pub mod conflict_markers;
 pub mod draft_chrome;
 pub mod help_panel;
 pub mod helps_panel;
+pub mod history;
 pub mod home;
 pub mod item_nav;
 pub mod modals;

@@ -573,7 +573,7 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
         .with_untracked(|p| p.as_ref().map(|p| p.dir))
         .unwrap_or(TextDir::Ltr);
 
-    let history = super::history::check_history(
+    let history = check_history(
         s,
         actions,
         format!(
@@ -1327,4 +1327,35 @@ fn article_body(state: &Academy) -> AnyView {
             .into_any()
         }
     }
+}
+
+/// The check's History under its marks (owner ruling H5); a decision in conflict has its review.
+fn check_history(s: &AppState, actions: &Actions, reference: String) -> AnyView {
+    let Some(at) = s
+        .project
+        .with_untracked(|p| p.as_ref().map(|p| p.at.clone()))
+    else {
+        return ().into_any();
+    };
+    let c = s.c.clone();
+    let detail = c.detail.clone();
+    let shown = Memo::new(move |_| {
+        detail.with(|d| match d {
+            Some(Detail::Ready(view)) if view.decision.marker.is_none() => {
+                Some(view.decision.token.clone())
+            }
+            _ => None,
+        })
+    });
+    let restoring = c.restoring.clone();
+    let actions = actions.clone();
+    crate::views::history::record_history(crate::views::history::RecordHistory {
+        test_id: "check-history",
+        at,
+        shown: shown.into(),
+        open: c.history_open.clone(),
+        busy: Signal::derive(move || restoring.get()),
+        reference,
+        restore: Callback::new(move |from| actions.restore_check(from)),
+    })
 }

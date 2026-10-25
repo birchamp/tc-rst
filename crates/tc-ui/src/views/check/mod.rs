@@ -6,7 +6,6 @@
 //! opens the guided fix (M11). Nothing here writes the project (tC4 #501).
 
 mod detail;
-mod history;
 mod picker;
 mod rail;
 mod story;

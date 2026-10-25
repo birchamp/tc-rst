@@ -107,7 +107,7 @@ browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s n
     await page.keyboard.press('Escape');
 
     // History keeps Teammate 1's older decision, and *Restore this version* brings it back.
-    await page.getByTestId('check-history-toggle').click();
+    await page.getByTestId('check-history').getByTestId('history-toggle').click();
     const versions = page.getByTestId('check-history').getByTestId('history-version');
     await until('the check\'s History lists both versions', async () => (await versions.count()) >= 2);
     assert.equal(await versions.first().getAttribute('data-shown'), 'true', 'the newest is shown, first');
@@ -127,5 +127,35 @@ browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s n
     const file = JSON.parse(fs.readFileSync(path.join(env.projectsDir, FOLDER, 'ingredients', 'checking', 'translationNotes', 'TIT.json'), 'utf8'));
     const held = file.decisions.map((d) => d.comments).filter((c) => c === ONE || c === TWO);
     assert.deepEqual(held, [ONE], 'the decision file holds the restored comment');
+
+    // The aligner's History keeps Teammate 1's alignment of Titus 1:1, and Restore brings it back.
+    await page.getByTestId(`project-${FOLDER}`).getByRole('button', { name: /Titus/ }).click();
+    await checkTab(page).click();
+    const align = page.getByTestId('open-align');
+    await align.or(allTools(page)).first().waitFor();
+    if (!(await align.count())) await allTools(page).click();
+    await align.click();
+    await page.getByTestId('align-session').waitFor();
+    await page.locator('[data-testid="align-verse-list"] [data-ref="1:1"]').click();
+    await until('Titus 1:1 is open', async () => (await page.getByTestId('align-verse-list').locator('[data-selected="true"]').getAttribute('data-ref')) === '1:1');
+    const versionsOf11 = async () => {
+      const opened = await env.call('align/open', { at: await scopeOf(env), request: newRequestId(), book: 'TIT', verse: { chapter: 1, verse: 1 } });
+      return (await env.call('conflicts/versions', { at: await scopeOf(env), shown: opened.value.history })).versions;
+    };
+    const byTeammate = (n) => (v) => v.version.by.type === 'person' && v.version.by.value.who.type === 'teammate' && v.version.by.value.who.value === n;
+    const before = await versionsOf11();
+    assert.ok(byTeammate(2)(before[0]) && before[0].version.shown, 'Teammate 2\'s newer alignment is shown');
+    const one = before.find(byTeammate(1));
+    assert.ok(one && !one.version.shown, 'Teammate 1\'s alignment is in History');
+    await page.getByTestId('align-history').getByTestId('history-toggle').click();
+    await page.getByTestId('align-history').locator(`[data-testid="history-restore"][data-ts="${one.version.change}"]`).click();
+    await until('the aligner opens again on the restored alignment', async () => {
+      const [shown] = await versionsOf11();
+      return shown.cause === 'restored' && shown.version.shown;
+    });
+    await page.getByTestId('align-session').waitFor();
+    const after = await versionsOf11();
+    assert.equal(after.filter((v) => v.version.shown).length, 1);
+    assert.ok(after.some(byTeammate(2)), 'Teammate 2\'s alignment stays in History');
   }, opts);
 });

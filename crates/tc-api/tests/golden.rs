@@ -2153,6 +2153,7 @@ impl Example for AlignerView {
             },
             save: AlignSave::Unsaved,
             marker: None,
+            history: Some(token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")),
         }
     }
 }

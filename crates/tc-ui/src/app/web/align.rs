@@ -133,6 +133,10 @@ pub struct AlignState {
     pub open: ArcRwSignal<Option<(tc_api::ids::Scope, tc_api::ids::AlignerId, AlignPlace)>>,
     /// The verse each book was last at, kept in memory only (tC4 `toolPos`, §4.2).
     pub remembered: ArcRwSignal<Vec<(BookId, AlignPlace)>>,
+    /// The open verse's History is open (owner ruling H5).
+    pub history_open: ArcRwSignal<bool>,
+    /// A *Restore this version* of the open verse's alignment is on its way.
+    pub restoring: ArcRwSignal<bool>,
 }
 
 impl AlignState {
@@ -148,6 +152,8 @@ impl AlignState {
             edit_error: ArcRwSignal::new(None),
             open: ArcRwSignal::new(None),
             remembered: ArcRwSignal::new(Vec::new()),
+            history_open: ArcRwSignal::new(false),
+            restoring: ArcRwSignal::new(false),
         }
     }
 }
@@ -327,6 +333,7 @@ impl Actions {
                 r.push((book, place));
             });
         }
+        a.history_open.try_set(false);
         a.verse.try_set(Some(place));
         self.open_align(Some(place));
     }
@@ -463,6 +470,56 @@ impl Actions {
                 self.s().a.screen.try_set(Screen::Failed(String::new()));
             }
         }
+    }
+
+    /// *Restore this version* from the open verse's History (owner ruling H5). The aligner holds
+    /// the verse's links while it is open, so the links typed are saved first, the restore is
+    /// written over the alignment as now stored, and the verse opens again from it.
+    pub fn restore_alignment(&self, from: tc_api::ids::ChangeRef) {
+        let Some((at, book)) = self.align_scope() else {
+            return;
+        };
+        let Some(place) = self.s().a.screen.with_untracked(|s| match s {
+            Screen::Ready(view) => Some(view.place),
+            _ => None,
+        }) else {
+            return;
+        };
+        let a = self.s().a.clone();
+        a.restoring.try_set(true);
+        let this = self.clone();
+        spawn_local(async move {
+            if this.flush_aligner().await {
+                let api = this.runtime().api();
+                let open = Open {
+                    at: at.clone(),
+                    request: js::random_request_id(),
+                    book,
+                    verse: Some(open_verse(place)),
+                };
+                if let Ok(Opened::Ready(view)) = api.call(&open).await
+                    && let Some(shown) = view.history.clone()
+                {
+                    let restore = tc_api::conflicts::Restore {
+                        at: at.clone(),
+                        request: js::random_request_id(),
+                        shown,
+                        from,
+                    };
+                    if let Err(error) = api.call(&restore).await {
+                        a.edit_error.try_set(Some(error.to_string()));
+                    }
+                    let close = Close {
+                        at,
+                        request: js::random_request_id(),
+                        aligner: view.aligner,
+                    };
+                    let _ = api.call(&close).await;
+                }
+            }
+            a.restoring.try_set(false);
+            this.open_align(Some(place));
+        });
     }
 
     /// A view of the open aligner came: it is the screen's, its save state is the indicator's,
