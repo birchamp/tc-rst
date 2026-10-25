@@ -22,7 +22,7 @@ use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
-use crate::app::q9::{Q9Body, Q9Conflict, Q9Question, Q9Review, Q9Row, Q9Screen, Q9Version};
+use crate::app::q9::{Q9Body, Q9Question, Q9Review, Q9Row, Q9Screen};
 use crate::app::review::{
     BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
     group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
@@ -1413,52 +1413,19 @@ fn q9_review(review: Q9Review) -> AnyView {
         "font-weight": "var(--fw-heavy)",
         "color": "var(--text-heading)",
     };
-    let position = crate::css! {
-        "font-size": "var(--fs-ui-sm)",
-        "font-weight": "var(--fw-heavy)",
-        "color": "var(--uw-slate)",
-    };
     let scroll = crate::css! {
         "flex": 1,
         "min-height": 0,
         "overflow": "auto",
         "padding": "22px 24px",
     };
-    let count = review
-        .tabs
-        .iter()
-        .find(|c| c.tab == review.tab)
-        .map_or(0, |c| c.count);
-    let navigator = matches!(review.body, Q9Body::Conflict(_)).then(|| {
-        let label = t(keys::conflicts::POSITION, &[("n", &1), ("m", &count)]);
-        view! {
-            <span style=position.to_style()>{label}</span>
-            <Button variant=ButtonVariant::Secondary size=Size::Sm disabled=true>
-                {icon(&["M15 18l-6-6 6-6"], 14, "2.2")}{t(keys::conflicts::PREVIOUS, &[])}
-            </Button>
-            <Button variant=ButtonVariant::Secondary size=Size::Sm disabled=count < 2>
-                {t(keys::conflicts::NEXT, &[])}{icon(&["M9 18l6-6-6-6"], 14, "2.2")}
-            </Button>
-        }
-    });
     let tabs = tab_strip(
         Callback::new(|_| ()),
         &tabs_shown(&review.tabs, review.tab),
         review.tab,
     );
-    let (body, footer) = match review.body {
-        Q9Body::Conflict(conflict) => {
-            let footer = (!conflict.footer.is_empty() || !conflict.hint.is_empty()).then(|| {
-                footer_frame(
-                    conflict.hint.clone(),
-                    q9_choices(conflict.footer.clone(), true, Size::default()),
-                    "q9-footer",
-                )
-            });
-            (q9_conflict(conflict), footer)
-        }
-        Q9Body::Rows { about, rows } => (q9_rows(about, rows), None),
-    };
+    let Q9Body::Rows { about, rows } = review.body;
+    let body = q9_rows(about, rows);
     let ghost = crate::css! { "padding": 0, "height": "auto", "font-size": "var(--fs-ui-sm)" };
     let back = back_label(BackTo::Translate(Some(tc_core::BookId::Titus), 1));
     view! {
@@ -1470,132 +1437,10 @@ fn q9_review(review: Q9Review) -> AnyView {
                 <span aria-hidden="true" style="width: 1px; height: 22px; background: var(--border);"></span>
                 <h1 style=h1.to_style()>{t(keys::conflicts::TITLE, &[])}</h1>
                 <span style="flex: 1;"></span>
-                {navigator}
             </div>
             {tabs}
             <div style=scroll.to_style()>{body}</div>
-            {footer}
         </main>
-    }
-    .into_any()
-}
-
-fn q9_conflict(conflict: Q9Conflict) -> AnyView {
-    let group = measure().merge(&crate::css! {
-        "display": "flex",
-        "flex-direction": "column",
-        "gap": 12,
-    });
-    let head = crate::css! { "display": "flex", "align-items": "baseline", "gap": 12, "flex-wrap": "wrap" };
-    let h2 = crate::css! {
-        "margin": 0,
-        "font-size": "var(--fs-h2)",
-        "letter-spacing": "var(--track-22)",
-        "font-weight": "var(--fw-black)",
-        "color": "var(--text-heading)",
-    };
-    let kind = crate::css! {
-        "font-size": "var(--fs-ui-sm)",
-        "font-weight": "var(--fw-medium)",
-        "color": "var(--text-tertiary)",
-    };
-    let about_style = crate::css! {
-        "margin": 0,
-        "font-size": "var(--fs-ui)",
-        "line-height": 1.45,
-        "color": "var(--uw-ink)",
-    };
-    let about = conflict
-        .about
-        .map(|about| view! { <p data-testid="q9-about" style=about_style.to_style()>{about}</p> });
-    let bulk = (!conflict.bulk.is_empty()).then(|| {
-        view! {
-            <div data-testid="q9-bulk" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                {q9_choices(conflict.bulk, false, Size::Sm)}
-            </div>
-        }
-    });
-    let cards = conflict.versions.into_iter().map(q9_version).collect_view();
-    view! {
-        <div role="group" style=group.to_style()>
-            <div style=head.to_style()>
-                <h2 data-testid="q9-place" style=h2.to_style()>{conflict.place}</h2>
-                <span style=kind.to_style()>{conflict.kind}</span>
-            </div>
-            {about}
-            {bulk}
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">{cards}</div>
-            <Button variant=ButtonVariant::Ghost size=Size::Sm
-                style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }>
-                {t(keys::review::HISTORY, &[])}
-            </Button>
-        </div>
-    }
-    .into_any()
-}
-
-/// A version as the Text tab's cards draw one, with the version's own buttons under it.
-fn q9_version(version: Q9Version) -> AnyView {
-    let card = crate::css! {
-        "box-sizing": "border-box",
-        "background": version.owner.fill(),
-        "border-radius": "var(--radius-lg)",
-        "padding": "15px 19px",
-        "display": "flex",
-        "flex-direction": "column",
-        "gap": 8,
-    };
-    let mut pill = crate::css! {
-        "display": "inline-flex",
-        "align-items": "center",
-        "padding": "3px 10px",
-        "border-radius": "var(--radius-pill)",
-        "font-size": "var(--fs-label)",
-        "font-weight": "var(--fw-heavy)",
-        "letter-spacing": ".02em",
-    };
-    pill.extend(&match version.owner {
-        Owner::Mine => crate::css! {
-            "background": "var(--uw-ocean)",
-            "color": "var(--text-inverse)",
-        },
-        Owner::Teammate => crate::css! {
-            "background": "var(--surface-card)",
-            "color": "var(--uw-ink)",
-            "border": "var(--stroke-hair) solid var(--border-input)",
-        },
-    });
-    let date = crate::css! {
-        "font-size": "var(--fs-caption)",
-        "font-weight": "var(--fw-bold)",
-        "color": "var(--uw-ink)",
-    };
-    let line = crate::css! {
-        "font-size": "var(--fs-ui)",
-        "line-height": 1.45,
-        "color": "var(--text-scripture)",
-    };
-    let lines = version
-        .lines
-        .into_iter()
-        .map(|l| view! { <span style=line.to_style()>{l}</span> })
-        .collect_view();
-    let choices = (!version.choices.is_empty()).then(|| {
-        view! {
-            <span style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;">
-                {q9_choices(version.choices, false, Size::Sm)}
-            </span>
-        }
-    });
-    view! {
-        <div data-testid="q9-version" data-owner=version.owner.attr() style=card.to_style()>
-            <span style="display: flex; align-items: center; gap: 10px;">
-                <span style=pill.to_style()>{version.who}</span>
-                <span style=date.to_style()>{version_date(version.at)}</span>
-            </span>
-            {lines}
-            {choices}
-        </div>
     }
     .into_any()
 }

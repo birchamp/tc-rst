@@ -641,30 +641,21 @@ fn keep_press() -> Press {
     press_keep('1', 'a')
 }
 
-/// The H5 packet (C7b step 2): every listed screen draws, and the carried file card offers
-/// what CF 3 rules: *Keep this one* on each version and *Keep both*, which names the second
-/// file `jon_01-Juan.wav` (H22 part 2); never *Keep the other*.
+/// The screens of the H5 packet the ruling kept all draw, and the conflict cards of the kinds
+/// whose newest version now wins are gone from it.
 #[test]
-fn the_packet_draws_every_screen_and_the_carried_card_offers_two_choices() {
-    use tc_ui::app::q9::{Q9Body, Q9Screen, SCREENS, screen};
+fn the_packet_draws_every_screen_the_ruling_kept() {
+    use tc_ui::app::q9::{SCREENS, screen};
 
     for name in SCREENS {
         assert!(screen(name).is_some(), "{name}");
     }
-    assert!(screen("nothing").is_none());
-    let Some(Q9Screen::Review(review)) = screen("settings-carried") else {
-        panic!("the carried card is a review screen")
-    };
-    let Q9Body::Conflict(card) = review.body else {
-        panic!("the carried card is a conflict")
-    };
-    assert!(
-        card.versions
-            .iter()
-            .all(|v| v.choices == vec!["Keep this one".to_owned()])
-    );
-    assert_eq!(card.footer, vec!["Keep both".to_owned()]);
-    assert!(card.hint.contains("jon_01-Juan.wav"), "{}", card.hint);
-    let every = format!("{card:?}");
-    assert!(!every.contains("Keep the other"), "{every}");
+    for gone in [
+        "checks",
+        "alignments",
+        "settings-carried",
+        "settings-path-case",
+    ] {
+        assert!(screen(gone).is_none(), "{gone}");
+    }
 }
