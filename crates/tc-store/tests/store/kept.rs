@@ -263,6 +263,119 @@ fn import_of_a_verse_changed_on_both_sides_is_a_conflict() {
     handle.close().unwrap();
 }
 
+/// `bytes` with the book's `\toc1` line replaced.
+fn set_toc1(bytes: &[u8], text: &str) -> Vec<u8> {
+    let s = String::from_utf8(bytes.to_vec()).unwrap();
+    let at = s.find("\\toc1 ").unwrap() + "\\toc1 ".len();
+    let end = at + s[at..].find('\n').unwrap();
+    format!("{}{}{}", &s[..at], text, &s[end..]).into_bytes()
+}
+
+fn header(handle: &ProjectHandle) -> String {
+    match handle
+        .snapshot()
+        .fold()
+        .projected(&tc_journal::RecordKey::BookHeader(TIT))
+    {
+        Some(tc_journal::record::Record::BookHeader { value, .. }) => value.0,
+        other => panic!("no header: {other:?}"),
+    }
+}
+
+/// A header the translator never touched (`\toc1` changed in another program) comes in with
+/// no question, and the project's header record holds the file's text.
+#[test]
+fn import_of_a_header_only_change_takes_it_in() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_toc1(&written, "Paul's letter to Titus");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let handle = open(&rig, &folder);
+    let copy = handle.waiting_books()[0].kept.copy.clone();
+    let report = handle.import_kept(&copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+    assert!(
+        header(&handle).contains("\\toc1 Paul's letter to Titus"),
+        "{}",
+        header(&handle)
+    );
+    let file = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
+    assert!(file.contains("\\toc1 Paul's letter to Titus"), "{file}");
+    assert!(handle.kept_copies().is_empty());
+    handle.close().unwrap();
+}
+
+/// A header changed on both sides (two saves of the file, the newer imported first) is a
+/// conflict whose two versions each hold their header text.
+#[test]
+fn import_of_a_header_changed_on_both_sides_is_a_conflict_with_both_texts() {
+    let (rig, folder, written) = saved_and_closed();
+    let first = set_toc1(&written, "First title");
+    rig.fs.put(&usfm_path(&folder), &first, None);
+    let handle = open(&rig, &folder);
+    rig.fs.advance(std::time::Duration::from_secs(5));
+    let second = set_toc1(&written, "Second title");
+    rig.fs.put(&usfm_path(&folder), &second, None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    let kept = handle.kept_copies();
+    assert_eq!(kept.len(), 2, "{kept:?}");
+    handle.import_kept(&kept[1].copy).wait().unwrap();
+    handle.wait_idle();
+    let report = handle.import_kept(&kept[0].copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!((report.imported, report.to_review), (0, 1), "{report:?}");
+    let snapshot = handle.snapshot();
+    let conflict = snapshot
+        .fold()
+        .conflicts()
+        .find(|c| c.kind == ConflictKind::BookHeader)
+        .expect("a header conflict");
+    let mut texts: Vec<String> = conflict
+        .candidates
+        .iter()
+        .map(|c| match &c.value {
+            tc_journal::record::Record::BookHeader { value, .. } => value.0.clone(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    texts.sort();
+    assert_eq!(texts.len(), 2, "{texts:?}");
+    assert!(texts[0].contains("\\toc1 First title"), "{texts:?}");
+    assert!(texts[1].contains("\\toc1 Second title"), "{texts:?}");
+    handle.close().unwrap();
+}
+
+/// A second *Import* of the same copy (two windows, or a reload during an Import) is refused
+/// with `NotKept` once the first ended the entry, never answered "0 imported, 0 to review"
+/// while the first made a conflict.
+#[test]
+fn a_second_import_of_an_ended_copy_is_refused() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 2, "in the hope").unwrap();
+    let copy = handle.kept_copies()[0].copy.clone();
+    let first = handle.import_kept(&copy);
+    let second = handle.import_kept(&copy);
+    let first = first.wait().unwrap();
+    assert_eq!((first.imported, first.to_review), (0, 1), "{first:?}");
+    let second = second.wait();
+    assert!(
+        matches!(&second, Err(tc_store::StoreError::NotKept { copy: c }) if *c == copy),
+        "{second:?}"
+    );
+    handle.wait_idle();
+    let third = handle.import_kept(&copy).wait();
+    assert!(
+        matches!(third, Err(tc_store::StoreError::NotKept { .. })),
+        "{third:?}"
+    );
+    assert_eq!(conflicts(&handle), 1);
+    handle.close().unwrap();
+}
+
 /// INV-EVERY-KEPT-COPY-HAS-ITS-ENTRY: a second save of a held file is kept under its own entry
 /// with the same base; the question imports the newest, and the first stays listed.
 #[test]
@@ -294,7 +407,8 @@ fn a_second_save_of_a_held_file_keeps_the_first_copy_listed() {
     handle.close().unwrap();
 }
 
-/// Line ends and blanks at line ends only: nothing is asked, and the file is written again.
+/// Line ends and blanks at line ends only: nothing is asked, the file is written again, a copy
+/// is kept and the whitespace notice is shown.
 #[test]
 fn a_line_ends_only_change_asks_nothing() {
     let (rig, folder, written) = saved_and_closed();
@@ -306,6 +420,21 @@ fn a_line_ends_only_change_asks_nothing() {
     assert!(waiting(&handle).is_empty());
     assert!(handle.kept_copies().is_empty());
     assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(written));
+    // H22 part 4: a copy is kept, and the notice is shown.
+    let copies: Vec<Vec<u8>> = files(&rig.fs, &folder)
+        .into_iter()
+        .filter(|(p, _)| p.starts_with(".tc/external/"))
+        .map(|(_, b)| b)
+        .collect();
+    assert_eq!(copies, vec![crlf.clone().into_bytes()]);
+    assert!(
+        handle
+            .notices()
+            .iter()
+            .any(|n| matches!(n.notice, Notice::WhitespaceOnlyEdit { .. })),
+        "{:?}",
+        handle.notices()
+    );
     handle.close().unwrap();
 }
 
@@ -477,10 +606,10 @@ fn a_kept_copy_is_listed_again_after_the_manifest_is_lost() {
     }
 }
 
-/// A file held against HEAD (`.tc/` knew nothing of it) is compared at *Import* with no
-/// base, not with the HEAD of the time of the Import: a verse the translator saved and
-/// committed after the hold keeps the translator's text (to review at most), never the file's
-/// older words with no question.
+/// A file held against HEAD (`.tc/` knew nothing of it) is compared at *Import* with the
+/// HEAD recorded when it was held, not with the HEAD of the time of the Import: a verse the
+/// translator saved and committed after the hold keeps the translator's text (to review at
+/// most), never the file's older words with no question.
 #[test]
 fn import_of_a_head_based_copy_never_replaces_newer_text() {
     let (rig, folder) = titus();
@@ -535,6 +664,91 @@ fn import_of_a_head_based_copy_never_replaces_newer_text() {
         report.to_review >= 1,
         "the file's 1:3 is to review: {report:?}"
     );
+    handle.close().unwrap();
+}
+
+/// The same bytes held again after a second loss of the manifest, once HEAD moved with the
+/// translator's saves: the new entry has no base (the copy was kept before, against an older
+/// HEAD), so its Import never replaces the newer text without a question.
+#[test]
+fn bytes_held_again_after_a_second_lost_manifest_have_no_base() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "which God promised").unwrap();
+    leave(&handle);
+    handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    handle.close().unwrap();
+    let written = rig.fs.peek(&usfm_path(&folder)).unwrap();
+    rig.fs.put(
+        &usfm_path(&folder),
+        &set_verse(&written, 1, 3, "which God promised long ago"),
+        None,
+    );
+    let manifest = folder.join(".tc/materialized.json");
+    rig.fs.delete(&manifest).unwrap();
+    let handle = open(&rig, &folder);
+    assert!(matches!(
+        handle.waiting_books()[0].kept.base,
+        KeptBase::Head(Some(_))
+    ));
+    save_verse(&handle, 1, 3, "which God, who never lies, promised").unwrap();
+    let moved = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(moved.commit.is_some(), "{moved:?}");
+    handle.close().unwrap();
+    rig.fs.advance(std::time::Duration::from_secs(5));
+    rig.fs.delete(&manifest).unwrap();
+
+    let handle = open(&rig, &folder);
+    let books = handle.waiting_books();
+    assert_eq!(books.len(), 1, "{books:?}");
+    assert_eq!(books[0].kept.base, KeptBase::None, "{books:?}");
+    let report = handle.import_kept(&books[0].kept.copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("which God, who never lies, promised"),
+        "{report:?}"
+    );
+    handle.close().unwrap();
+}
+
+/// After a lost manifest, a copy an earlier *Import* took in is not listed again; a copy
+/// never imported still is.
+#[test]
+fn an_imported_copy_is_not_listed_again_after_the_manifest_is_lost() {
+    let (rig, folder, written) = saved_and_closed();
+    let first = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &first, None);
+    let handle = open(&rig, &folder);
+    rig.fs.advance(std::time::Duration::from_secs(5));
+    let second = set_verse(&written, 1, 3, "which God promised");
+    rig.fs.put(&usfm_path(&folder), &second, None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    let kept = handle.kept_copies();
+    assert_eq!(kept.len(), 2, "{kept:?}");
+    handle.import_kept(&kept[1].copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(handle.kept_copies(), vec![kept[0].clone()]);
+    leave(&handle);
+    handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    handle.close().unwrap();
+    rig.fs
+        .delete(&folder.join(".tc/materialized.json"))
+        .unwrap();
+
+    let handle = open(&rig, &folder);
+    let listed: Vec<String> = handle.kept_copies().into_iter().map(|k| k.copy).collect();
+    assert_eq!(listed, vec![kept[0].copy.clone()]);
     handle.close().unwrap();
 }
 
@@ -931,4 +1145,121 @@ proptest! {
     ) {
         run_ops(&ops);
     }
+}
+
+/// H22 part 1, row N4: a save the journal lost (its pending file deleted before a crash) that
+/// the book file the app wrote still shows. The text is kept in a copy listed with
+/// `why: lost`; nothing is asked and nothing comes back on its own; the file is written from
+/// the project. *Bring it back* (the copy's *Import*) restores the save, and the entry ends.
+#[test]
+fn a_lost_work_copy_offers_bring_it_back() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved before the file was deleted").unwrap();
+    leave(&handle);
+    let pending = pending_files(&rig.fs, &folder);
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    rig.fs.delete(&folder.join(&pending[0])).unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    let kept = handle.kept_copies();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert_eq!(kept[0].why, tc_store::KeptWhy::Lost);
+    assert!(matches!(kept[0].base, KeptBase::Placed(_)), "{kept:?}");
+    let copy = rig.fs.peek(&folder.join(&kept[0].copy)).unwrap();
+    assert!(String::from_utf8_lossy(&copy).contains("saved before the file was deleted"));
+    assert!(waiting(&handle).is_empty(), "nothing is asked");
+    assert_ne!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was deleted"),
+        "nothing comes back on its own"
+    );
+    let file = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
+    assert!(
+        !file.contains("saved before the file was deleted"),
+        "written from the project"
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+
+    let handle = open(&rig, &folder);
+    assert_eq!(handle.kept_copies(), kept, "listed again after a reopen");
+    let report = handle.import_kept(&kept[0].copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was deleted")
+    );
+    assert!(handle.kept_copies().is_empty());
+    let file = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
+    assert!(file.contains("saved before the file was deleted"), "{file}");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// H22 part 4: a project opened read-only (here a full disk) keeps no copy, asks nothing and
+/// writes nothing; it shows a notice that names the changed book file. Opened normally, the
+/// book is asked about.
+#[test]
+fn a_read_only_open_asks_nothing_and_shows_a_notice() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let before = files(&rig.fs, &folder);
+    rig.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+    let handle = open(&rig, &folder);
+    assert!(
+        matches!(handle.facts().mode, tc_store::Mode::ReadOnly(_)),
+        "{:?}",
+        handle.facts().mode
+    );
+    assert!(waiting(&handle).is_empty());
+    assert!(handle.kept_copies().is_empty());
+    let told: Vec<String> = handle
+        .notices()
+        .into_iter()
+        .filter_map(|n| match n.notice {
+            Notice::ChangedWhileReadOnly { path } => Some(path.as_str().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(told, vec![USFM.to_owned()], "{:?}", handle.notices());
+    handle.close().unwrap();
+    assert_eq!(files(&rig.fs, &folder), before, "nothing was written");
+    rig.fs.fail_writes(None);
+    let handle = open(&rig, &folder);
+    assert_eq!(waiting(&handle), vec![USFM.to_owned()]);
+    handle.close().unwrap();
+}
+
+/// H22 part 4: with a full disk the copy cannot be made, so a changed book file is left exactly
+/// as it is and nothing is listed; once there is space, the next look keeps and asks.
+#[test]
+fn a_full_disk_leaves_a_changed_book_file_as_it_is_until_the_copy_can_be_made() {
+    let (rig, folder, written) = saved_and_closed();
+    let handle = open(&rig, &folder);
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    rig.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+    let _ = handle.focus().wait();
+    handle.wait_idle();
+    assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(edited.clone()));
+    assert!(
+        handle.kept_copies().is_empty(),
+        "{:?}",
+        handle.kept_copies()
+    );
+    assert_eq!(words(&handle, 1, 2).as_deref(), Some("in hope"));
+    rig.fs.fail_writes(None);
+    handle.close().unwrap();
+    assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(edited.clone()));
+    let handle = open(&rig, &folder);
+    let books = handle.waiting_books();
+    assert_eq!(books.len(), 1, "{books:?}");
+    assert_copy(&rig, &folder, &books[0].kept, &edited);
+    assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(edited));
+    handle.close().unwrap();
 }

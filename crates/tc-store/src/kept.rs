@@ -21,9 +21,13 @@ use crate::outside::Examined;
 use crate::vfs::{EntryKind, is_not_found};
 use crate::writer::Writer;
 use serde::{Deserialize, Serialize};
-use tc_journal::fold::DerivedFile;
+use tc_journal::fold::{DerivedFile, Notice};
 use tc_journal::outside::{Base as PlanBase, OutsideFile, OutsidePlan};
 use tc_journal::{BookId, Md5, RepoPath};
+
+/// After the name of a copy in `.tc/external/`: the empty file that says an *Import* took
+/// the copy in.
+pub(crate) const IMPORTED: &str = ".imported";
 
 /// What a kept copy was compared with: the version of the project the outside file was
 /// written from (delta §2.3). Written as `placed:<md5>`, `head:<commit>`, `head` or `none`.
@@ -101,6 +105,9 @@ impl KeptBase {
 pub enum KeptWhy {
     /// Another program changed the file.
     Changed,
+    /// The app's own bytes show work the journal lost (row N4, H22 part 1): *Bring it back*
+    /// (an *Import* of the copy) and *Dismiss*.
+    Lost,
 }
 
 /// One kept copy that still has a notice (`.tc/materialized.json` `kept`, delta §2.3).
@@ -214,8 +221,9 @@ impl Writer {
 
     /// At an open that found no manifest: every copy in `.tc/external/` of a book file or
     /// story that no entry names is listed again with no base, since its entry may have been
-    /// in the lost manifest. An open that has the manifest never calls this, so a copy whose
-    /// entry ended by *Import* or *Dismiss* stays unlisted.
+    /// in the lost manifest. A copy an *Import* took in has a mark beside it (its name and
+    /// [`IMPORTED`]), so it is not one of them. An open that has the manifest never calls
+    /// this, so a copy whose entry ended by *Import* or *Dismiss* stays unlisted.
     pub(crate) fn relist_unnamed_copies(&mut self) -> Result<(), StoreError> {
         let dir = self.folder.path(EXTERNAL);
         let mut names: Vec<String> = match self.vfs.read_dir(&dir) {
@@ -228,11 +236,19 @@ impl Writer {
             Err(e) => return Err(StoreError::io("list", &dir, e)),
         };
         names.sort();
+        let marked: std::collections::BTreeSet<String> = names
+            .iter()
+            .filter(|n| n.ends_with(IMPORTED))
+            .cloned()
+            .collect();
         let named = self.kept_entries();
         for name in names {
             let Some(rel) = source_of_copy(&name) else {
                 continue;
             };
+            if marked.contains(&format!("{name}{IMPORTED}")) {
+                continue;
+            }
             let copy = format!("{EXTERNAL}/{name}");
             let path = self.folder.path(&copy);
             let bytes = self
@@ -260,6 +276,33 @@ impl Writer {
             self.manifest_changed = true;
         }
         Ok(())
+    }
+
+    /// Whether `.tc/external/` holds a copy of `rel` with the md5 `md5`.
+    fn has_copy_of(&self, rel: &str, md5: &str) -> Result<bool, StoreError> {
+        let dir = self.folder.path(EXTERNAL);
+        let entries = match self.vfs.read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) if is_not_found(&e) => return Ok(false),
+            Err(e) => return Err(StoreError::io("list", &dir, e)),
+        };
+        for entry in entries {
+            let Ok(name) = entry.name.into_string() else {
+                continue;
+            };
+            if entry.kind != EntryKind::File || source_of_copy(&name).as_deref() != Some(rel) {
+                continue;
+            }
+            let path = dir.join(&name);
+            let bytes = self
+                .vfs
+                .read(&path)
+                .map_err(|e| StoreError::io("read the kept copy", &path, e))?;
+            if Md5::of(&bytes).to_hex() == md5 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// The bases the live entries of `rel` name: their heads stay in the path's heads file.
@@ -324,6 +367,13 @@ impl Writer {
                 .rev()
                 .find(|k| k.path == rel)
                 .map_or(KeptBase::None, |k| k.base.clone()),
+            // These bytes were kept before (an earlier hold whose manifest was lost): HEAD may
+            // have moved since with the person's saves, so it is no base for them.
+            _ if base == ledger::Base::Head
+                && self.has_copy_of(rel, &Md5::of(bytes).to_hex())? =>
+            {
+                KeptBase::None
+            }
             _ => KeptBase::of(
                 &base,
                 self.git
@@ -390,6 +440,68 @@ impl Writer {
         self.shared.remove_notices_of(rel);
         self.hold_notice(rel, HeldCause::Edit, copy);
         Ok(Next::Held)
+    }
+
+    /// *Keep and write, lost* (delta §2.4, row N4) for a book file or story the app wrote that
+    /// shows work the journal lost: the copy, then its `kept` entry with `why: lost` and the
+    /// R4 base in one manifest write; then the file is written from the project. Nothing comes
+    /// back until the person chooses *Bring it back* (H22 part 1).
+    pub(crate) fn keep_lost(
+        &mut self,
+        rel: &str,
+        bytes: &[u8],
+        base: &ledger::Base,
+    ) -> Result<Next, StoreError> {
+        let copy = self.copy_external(rel, bytes)?;
+        let md5 = Md5::of(bytes).to_hex();
+        if !self
+            .manifest
+            .kept
+            .iter()
+            .any(|k| k.path == rel && k.md5 == md5)
+        {
+            self.manifest.kept.push(Kept {
+                path: rel.to_owned(),
+                copy,
+                md5,
+                size: bytes.len() as u64,
+                base: KeptBase::of(base, None),
+                why: KeptWhy::Lost,
+                unreadable: None,
+            });
+        }
+        self.manifest_changed = true;
+        self.write_manifest()?;
+        Ok(Next::Write)
+    }
+
+    /// At a read-only open, which keeps no copy and asks nothing: a notice for each book file
+    /// or story whose bytes are not the ones the app placed (H22 part 4).
+    pub(crate) fn notice_changed_while_read_only(&self) {
+        for (rel, entry) in &self.manifest.paths {
+            let Some(placed) = entry.placement() else {
+                continue;
+            };
+            let Ok(path) = RepoPath::parse(rel) else {
+                continue;
+            };
+            if !asks(rel) {
+                continue;
+            }
+            let file = self.folder.path(rel);
+            let same_stat = self.vfs.metadata(&file).is_ok_and(|m| {
+                placed.settled && m.len == placed.size && Some(m.mtime_ns) == placed.mtime_ns
+            });
+            if same_stat {
+                continue;
+            }
+            match self.vfs.read(&file) {
+                Ok(bytes) if Md5::of(&bytes).to_hex() != placed.md5 => {
+                    self.notice(Notice::ChangedWhileReadOnly { path }, None);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// The examination's state for the recording that a held file never gets.
@@ -473,7 +585,9 @@ impl Writer {
             .kept_entries()
             .into_iter()
             .find(|k| k.copy == copy)
-            .ok_or_else(|| StoreError::Other(format!("{copy} is not a kept copy")))?;
+            .ok_or_else(|| StoreError::NotKept {
+                copy: copy.to_owned(),
+            })?;
         let path = self.folder.path(&entry.copy);
         let bytes = self
             .vfs
@@ -551,10 +665,16 @@ impl Writer {
     ) {
         let result = result.and_then(|report| {
             self.begin_newest();
-            let entry = self.kept_entries().into_iter().find(|k| k.copy == copy);
-            if let Some(entry) = entry {
-                self.end_import(&entry, bytes)?;
-            }
+            // An earlier *Import* of the same copy ended its entry while this one waited
+            // for the actor: this one took nothing in, and the earlier one has the report.
+            let entry = self
+                .kept_entries()
+                .into_iter()
+                .find(|k| k.copy == copy)
+                .ok_or_else(|| StoreError::NotKept {
+                    copy: copy.to_owned(),
+                })?;
+            self.end_import(&entry, bytes)?;
             Ok(report)
         });
         reply.resolve(result);
@@ -573,12 +693,27 @@ impl Writer {
         self.manifest.kept.retain(|k| k.copy != entry.copy);
         self.manifest_changed = true;
         self.write_manifest()?;
+        self.mark_imported(&entry.copy);
         if let Some(file) =
             DerivedFile::from_path(&entry.path).filter(|f| self.fold.projects_file(f))
         {
             self.dirty.add_file(file);
         }
         self.finish_looking()
+    }
+
+    /// Marks an ended import's copy with an empty file beside it, so that an open that lost
+    /// the manifest does not list it again; the copy keeps its name and bytes. A mark that
+    /// cannot be written only lets that open list the copy again.
+    fn mark_imported(&self, copy: &str) {
+        let (dir, name) = self.folder.dir_and_name(copy);
+        let _ = crate::atomic::atomic_create(
+            &*self.vfs,
+            &dir,
+            &format!("{name}{IMPORTED}"),
+            b"",
+            SyncDir::Now,
+        );
     }
 
     /// *Not now* for a held book file or story: the file is written again from the project
