@@ -61,7 +61,7 @@ test('every_bundled_resource_has_an_attribution', () => {
 });
 
 test('the notices hold the licences of the app, its notices, Electronite and the fonts', () => {
-  for (const heading of ['translationCore 4 (tc-rst)', 'tc-door43 NOTICE', 'tc-align NOTICE', 'Font licence OFL-CharisSIL.txt']) {
+  for (const heading of ['translationCore 4 (tc-rst)', 'tc-door43 NOTICE', 'tc-align NOTICE', 'Font licence OFL-CharisSIL.txt', 'Font licence OFL-AwamiNastaliq.txt']) {
     assert.ok(text.includes(`\n${heading}\n`), heading);
   }
   assert.ok(text.includes('Copyright (c) Electron contributors'));
