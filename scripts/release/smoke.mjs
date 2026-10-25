@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Post-install smoke test of a release (card G3, step 4): run on a fresh runner of each
+// INV-EVERY-INSTALLER-PASSES-THE-SMOKE-TEST: post-install smoke test of a release (card G3, step 4): run on a fresh runner of each
 // platform against the installed `tc4`, with no network and no npm dependencies.
 //
 //   node scripts/release/smoke.mjs --tc4 <exe> --ui <dir> --bundle <dir> --manifest <BUILD-MANIFEST.json>

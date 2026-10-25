@@ -52,7 +52,7 @@ export async function fetchPinned(dir, { base = DOOR43, tries = 4, wait = 5000, 
         if (attempt < tries) await new Promise((done) => setTimeout(done, wait * attempt));
       }
     }
-    if (!fs.existsSync(target)) throw new Error(`${entry.repo} ${entry.commit}: refused ${url}: ${why}`);
+    if (!fs.existsSync(target)) throw new Error(`INV-EVERY-PINNED-FILE-IS-SHIPPED: ${entry.repo} ${entry.commit}: refused ${url}: ${why}`);
   }
   return fetched;
 }

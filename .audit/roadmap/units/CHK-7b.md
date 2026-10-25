@@ -4,7 +4,7 @@ title: One command runs what a branch's change reaches before it is handed over
 track: A
 lane: integration
 milestone: M1
-state: gating
+state: done
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-CHK-7b
 worktree: .worktrees/track-CHK-7b
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.25 d (basis: one node selector, one gates.sh mode)
-merged: none
+merged: 9cd32159
 updated: 2026-10-25
-next: Batch 7, with C7b.
+next: none
 blocked_by: none
 ---
 
@@ -65,3 +65,4 @@ translators sooner.
 - 2026-10-25 12:26 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | touched.mjs selects crates (with dependents from cargo metadata path deps) and journeys (changed files, or naming a quoted endpoint path or test id from a changed line of tc-ui, tc-api, tc-app, tc-server or tc4 src); gates.sh --touched runs board, claims, coverage, touched.test, tc-api endpoints and golden, cargo test --no-fail-fast on the crates, and journeys() on the files; the test step and the VM agree on --no-fail-fast. On batch 6 against batch 5 it picks 16 crates and 15 journey files, among them community-checking.test.mjs; against batch 6 itself, 0 and 0, and its fast checks and tc-api lists pass | scripts/gates.sh --touched batch/6
 - 2026-10-25 12:28 EDT | integration lane (Claude Code 3d07d5f8) | verify | 450f98ba | one pass by a fresh read-only reviewer agent: base and diff ranges right; crate names match packages; dependents include dev-dependencies; --package= expands; journeys() still globs all with no arguments; board, node and touched lines fail under set -e, cargo and journey failures add up; --no-fail-fast changes only how much a failure reports. §8: code a heuristic selector; checks exist and run in CI's node step; reach N/A (tooling); siblings: run_all fine; no-loss N/A; prose fine. One major: under `journeys ... || code=1` bash turns set -e off, so a failed build let the journeys run against an older one. Minors: one-word and format! test ids, changes with no quoted token, paths outside crates/ and untracked files pick nothing; a deleted file's removed lines were not read | reviewer report in this session
 - 2026-10-25 12:28 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | each build in journeys() returns 1 on failure; a deleted file keeps its `---` path, with a test case; the other three minors are in .audit/minors.tsv (the batch gate runs everything) | node --test .audit/tools/touched.test.mjs
+- 2026-10-25 17:27 EDT | integration lane (Claude Code 3d07d5f8) | merge | 9cd32159 | merged into main in batch 7 (CHK-7b 9cd32159, G3 85c1ad82, X's seal fix 47c6aced), gated by scripts/gates.sh --wait-ci batch-7. | scripts/gates.sh --wait-ci batch-7

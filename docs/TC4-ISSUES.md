@@ -40,13 +40,13 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 | Align | 1 | 2 | 1 | 32 | 0 | 1 | 37 |
 | USFM, Translate and helps | 0 | 5 | 1 | 39 | 0 | 9 | 54 |
 | Check and resources | 0 | 2 | 2 | 37 | 1 | 22 | 64 |
-| Sync, storage and import | 0 | 19 | 3 | 28 | 2 | 13 | 65 |
-| Shell, startup, languages and help | 0 | 13 | 1 | 44 | 0 | 18 | 76 |
-| All area rows | 1 | 41 | 8 | 180 | 3 | 63 | 296 |
+| Sync, storage and import | 0 | 17 | 3 | 30 | 2 | 13 | 65 |
+| Shell, startup, languages and help | 0 | 9 | 1 | 48 | 0 | 18 | 76 |
+| All area rows | 1 | 35 | 8 | 186 | 3 | 63 | 296 |
 
 Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep, T, G1, I, REF1, G4 and D2. A row counts once
-per area table. All area rows: 296; 1 rebuild bug, 41 unit todo, 8 reference
-change, 180 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
+per area table. All area rows: 296; 1 rebuild bug, 35 unit todo, 8 reference
+change, 186 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
 added 24 area rows (271 before) and changed 31, and its commit range holds 59 items
 (`TC4-DELTA-2026-10-23.md`; 25 covered, 7 unit todo, 8 reference change, 19 not applicable).
 Earlier: the 2026-10-19 range added 22 items (`TC4-DELTA-2026-10-19.md` §2). §1 lists the
@@ -401,11 +401,11 @@ the rebuild fixed it or does as tC4 does:
 | #657 | Mirror the interface for a right-to-left language | covered | A5, B3, C6 (B4a's half done) | tC4 app-language cases h and i; B4a `app_language_i_scripture_follows_the_project_under_an_arabic_interface` | Window-control room stays on the physical side. B4a: under Arabic the page reads right to left and a left-to-right project's source, translation and verse card read left to right; a right-to-left project under English needs C6's create. |
 | #642 | Remove the Linux native title bar | covered | G1 | `linux_window_keeps_native_frame` | Match 4.0. |
 | #613 | Bundle a Devanagari interface font | unit todo | G2 | `hindi_label_renders_in_the_bundled_face_offline` | No Devanagari face is vendored yet (neither G1 nor G4 bundles one; it waits with G2, whose P7 review covers how each script looks). Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
-| #606 | Third-party licenses in About | unit todo | G3 (A5 if tC4 ships it) | release check: every crate in `Cargo.lock` has a notice (pending: G3) | Generate notices from `Cargo.lock`, fonts, vendored tC4 assets, Electronite and resources. Include the crates' own `NOTICE` files: `crates/tc-align/NOTICE`, and `crates/tc-door43/NOTICE` (proxy-watch's MIT notice, Windows builds). |
+| #606 | Third-party licenses in About | unit todo | REL-1 (G3 ships them) | `every_crate_in_cargo_lock_has_a_notice`, `every_bundled_resource_has_an_attribution` | G3 ships THIRD-PARTY-NOTICES.txt beside LICENSE in every installer (crates, NOTICE files, fonts' OFL texts, Electronite, each bundled resource's attribution); About does not list it yet. |
 | #569 | Keyboard shortcuts for Understand, Translate and Check | unit todo | A5; FIX-R reconciles | the Switcher key port | Match 4.0 (no shortcuts). Port tC4's if it adds them. |
 | #525 | Choose the app language automatically | covered | tc-app | `hello_answers_real_state` | C1a adds a relaunch test that the saved language survives. |
 | #523 | Collect translation corrections in Weblate | not applicable | tc-ui | — | They arrive with the next vendoring. |
-| #278 | Show the build in the app | unit todo | G3 (A5 and G1 done: G1 passes the build to both builds) | `about_commit_matches_the_release_record` (pending: G3) | G1 sets `TC4_BUILD_COMMIT` for server and wasm. |
+| #278 | Show the build in the app | covered | G3 (A5 and G1 done: G1 passes the build to both builds) | `about_commit_matches_the_release_record` | The smoke test reads About's commit from the installed app on each platform. |
 | #167 | Which interface languages | covered | tc-ui | `the_registry_names_the_ten_decided_locales_each_with_a_catalog` | None. |
 | #37 | Unused catalog keys | not applicable | tc-ui | — | Optional: check that each rebuild key is used. |
 | #29 | Right-to-left and complex scripts end to end | covered | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` | Use logical properties where tC4's physical ones break right to left, and record it. |
@@ -438,10 +438,10 @@ the rebuild fixed it or does as tC4 does:
 | #639 | Remove the Windows native title bar | covered | G1 | `windows_window_has_no_native_bar_and_keeps_zoom_and_reload` | Keep an application menu for reload and zoom keys. |
 | #214 | Hide the macOS window frame | covered | G1 | `macos_window_hides_the_frame_and_centres_the_traffic_lights` | |
 | #206 | The server does not stop on quit (macOS) | covered | tc4; G1 | `closed_stdin_quits_within_5_s` and the other lifecycle tests | Fix the SIGTERM race that makes `sigterm_quits_like_the_quit_message` flaky. |
-| #284 | Ship or verify the Windows C runtime | unit todo | G3 | `tc4_exe_imports_no_vcruntime` (pending: G3) | Build with `+crt-static`, or ship the DLLs next to the program. |
-| #456 | Sign the Windows installer and app | unit todo | G3 | `Get-AuthenticodeSignature` reports Valid for each file (pending: G3) | Sign before hashing. |
-| #44 | Installers for Windows, macOS and Linux | unit todo | G3 | clean-machine smoke per installer (pending: G3) | Uninstall keeps projects and app data. |
-| #554 | Third-party notices and the licence text | unit todo | G3 | as #606 (pending: G3) | Ship the MIT `LICENSE` beside the third-party notices (the rebuild is MIT since LIC-1, as tC4 since #838). |
+| #284 | Ship or verify the Windows C runtime | covered | G3 | `tc4_exe_imports_no_vcruntime` | Built with `+crt-static`; the release job checks the shipped tc4.exe's imports. |
+| #456 | Sign the Windows installer and app | unit todo | REL-1 (G3 built the signing) | `Get-AuthenticodeSignature` reports Valid for each file, after the first signed run | Signing is wired (Azure Artifact Signing through OIDC, environment windows-signing); it waits on owner action A4 (docs/RELEASE.md). |
+| #44 | Installers for Windows, macOS and Linux | covered | G3 | `projects_survive`; `about_commit_matches_the_release_record` (smoke on a fresh runner of each platform) | Uninstall keeps projects and app data. |
+| #554 | Third-party notices and the licence text | covered | G3 | `every_crate_in_cargo_lock_has_a_notice` | The MIT `LICENSE` and THIRD-PARTY-NOTICES.txt ship in every installer. |
 | #640 | Start after an upgrade when a copy differs | covered | tc-resources | as §4 | None. |
 | #528 | Each release in its own folder | covered | tc-resources | as §4 | None. |
 | #707 | Import during start-up recovery | covered | tc-store | as §5 | None. |
