@@ -103,6 +103,35 @@ pub(crate) fn open_external(url: &str) {
     }
 }
 
+/// Whether the shell offers a folder picker: without it there is no USB export (a browser gets
+/// the Burrito zip download instead, APP-DESIGN §5.7).
+pub(crate) fn has_choose_folder() -> bool {
+    method("chooseFolder").is_some()
+}
+
+pub(crate) fn has_choose_file() -> bool {
+    method("chooseFile").is_some()
+}
+
+/// The shell's folder or file picker: the path chosen, `None` when cancelled or absent.
+async fn choose(name: &str) -> Option<String> {
+    let (shell, function) = method(name)?;
+    let answer = function.call0(&shell).ok()?;
+    let answer = match answer.dyn_into::<Promise>() {
+        Ok(promise) => JsFuture::from(promise).await.ok()?,
+        Err(value) => value,
+    };
+    answer.as_string().filter(|path| !path.is_empty())
+}
+
+pub(crate) async fn choose_folder() -> Option<String> {
+    choose("chooseFolder").await
+}
+
+pub(crate) async fn choose_file() -> Option<String> {
+    choose("chooseFile").await
+}
+
 /// Whether the shell can print a PDF: without it there is no PDF export (`tC4:src/data/export/pdf.ts:120`).
 pub(crate) fn has_print_pdf() -> bool {
     method("printPdf").is_some()

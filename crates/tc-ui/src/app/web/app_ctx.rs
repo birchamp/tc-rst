@@ -68,6 +68,10 @@ pub enum Dialog {
     OpenDoor43,
     /// Share on Door43; its form is `sh`.
     Share,
+    /// Save work for a teammate (E2); its form is `ex`.
+    SaveForTeammate,
+    /// Receive work from a file (E2); its form is `rx`.
+    ReceiveWork,
     /// The guided fix (M11, B5a); its state is `c.fix`.
     GuidedFix,
     /// Project settings (M7); its form is `st`.
@@ -126,6 +130,10 @@ pub struct AppState {
     pub im: ArcRwSignal<Option<ImportForm>>,
     /// The share dialog's form (tC4 `sh`, B9b).
     pub sh: ArcRwSignal<Option<ShareForm>>,
+    /// Save work for a teammate (E2).
+    pub ex: ArcRwSignal<Option<crate::app::exchange::ExportForm>>,
+    /// Receive work from a file (E2).
+    pub rx: ArcRwSignal<Option<crate::app::exchange::ReceiveForm>>,
     /// Open a project from Door43's form (tC4 `od`, B9b).
     pub od: ArcRwSignal<Option<OpenForm>>,
     /// Project settings' form (tC4 `st`, B9a).
@@ -189,6 +197,8 @@ impl AppState {
             ab: ArcRwSignal::new(None),
             im: ArcRwSignal::new(None),
             sh: ArcRwSignal::new(None),
+            ex: ArcRwSignal::new(None),
+            rx: ArcRwSignal::new(None),
             od: ArcRwSignal::new(None),
             st: ArcRwSignal::new(None),
             src: ArcRwSignal::new(crate::app::sources::SourcesForm::default()),
@@ -844,6 +854,8 @@ impl Actions {
         s.ab.try_set(None);
         s.im.try_set(None);
         s.sh.try_set(None);
+        s.ex.try_set(None);
+        s.rx.try_set(None);
         s.od.try_set(None);
         s.c.fix.try_set(None);
         s.st.try_set(None);

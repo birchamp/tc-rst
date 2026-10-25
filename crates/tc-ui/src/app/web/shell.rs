@@ -25,6 +25,7 @@ use crate::views::check::Check;
 use crate::views::home::Home;
 use crate::views::modals::add_book::AddBook;
 use crate::views::modals::add_project::AddProject;
+use crate::views::modals::exchange::{ReceiveWork, SaveForTeammate};
 use crate::views::modals::feedback::Feedback;
 use crate::views::modals::gateway_change::GatewayChange;
 use crate::views::modals::guided_fix::GuidedFix;
@@ -79,6 +80,16 @@ pub fn App() -> impl IntoView {
         let (dialog, sh) = (ctx.s.layers.dialog.clone(), ctx.s.sh.clone());
         Memo::new(move |_| dialog.get() == Some(Dialog::Share) && sh.with(Option::is_some))
     };
+    let save_open = {
+        let (dialog, ex) = (ctx.s.layers.dialog.clone(), ctx.s.ex.clone());
+        Memo::new(move |_| {
+            dialog.get() == Some(Dialog::SaveForTeammate) && ex.with(Option::is_some)
+        })
+    };
+    let receive_open = {
+        let (dialog, rx) = (ctx.s.layers.dialog.clone(), ctx.s.rx.clone());
+        Memo::new(move |_| dialog.get() == Some(Dialog::ReceiveWork) && rx.with(Option::is_some))
+    };
     let fix_open = {
         let (dialog, fix) = (ctx.s.layers.dialog.clone(), ctx.s.c.fix.clone());
         Memo::new(move |_| dialog.get() == Some(Dialog::GuidedFix) && fix.with(Option::is_some))
@@ -105,6 +116,8 @@ pub fn App() -> impl IntoView {
             {move || fix_open.get().then(|| view! { <GuidedFix /> })}
             {move || sign_in_open.get().map(|_| view! { <ShareSignIn /> })}
             {move || share_open.get().then(|| view! { <ShareDialog /> })}
+            {move || save_open.get().then(|| view! { <SaveForTeammate /> })}
+            {move || receive_open.get().then(|| view! { <ReceiveWork /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}
             <InternetDialog />
             <OpenProgress />
