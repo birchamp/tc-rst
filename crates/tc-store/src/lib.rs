@@ -69,12 +69,13 @@ pub use counters::StoreCounters;
 pub use drafts::OfferedDraft;
 pub use error::StoreError;
 pub use handle::{
-    BookRead, CheckpointReason, CheckpointReport, CheckpointSkip, Leave, Mode, Pending,
-    ProjectFacts, ProjectHandle, Snapshot, StoreEvent, Work,
+    BookRead, CheckpointReason, CheckpointReport, CheckpointSkip, Confirmed, IntakeReport, Leave,
+    Mode, Pending, ProjectFacts, ProjectHandle, ReceivedPack, Snapshot, StoreEvent, SyncFile, Work,
 };
 pub use hooks::{Failure, Hooks, Point};
 pub use notices::StoreNotice;
 pub use open::{LockHolder, OpenError, OpenOptions};
+pub use packs::{PackRead, read_received_pack};
 pub use platform::{FakePlatform, FolderFacts, Platform, StdPlatform, UnsafeFolder};
 pub use progress::{Phase, Progress, ProgressSink};
 pub use reply::{
