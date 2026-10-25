@@ -24,12 +24,13 @@ case "$platform" in
     ;;
   windows-x64)
     installer=$(ls "$dist"/translationCore4-*-windows-x64*.exe)
-    "$installer" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER "/LOG=$(np "$PWD/smoke-logs/install.log")"
+    # Git Bash would turn /VERYSILENT into a path, and the installer would wait on its wizard.
+    MSYS2_ARG_CONV_EXCL='*' "$installer" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER "/LOG=$(np "$PWD/smoke-logs/install.log")"
     root="$(cygpath -u "$LOCALAPPDATA")/Programs/translationCore 4"
     resources="$root/resources"
     start=(node "$(np "$here/app-starts.mjs")" --exe "$(np "$root/electron.exe")")
     appdata="$(cygpath -u "$APPDATA")/translationCore4/app-data"
-    uninstall() { "$root/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART; while [ -e "$root/electron.exe" ]; do sleep 1; done; }
+    uninstall() { MSYS2_ARG_CONV_EXCL='*' "$root/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART; while [ -e "$root/electron.exe" ]; do sleep 1; done; }
     ;;
   macos-arm64)
     sudo installer -pkg "$(ls "$dist"/translationCore4-*-macos-arm64*.pkg)" -target /
