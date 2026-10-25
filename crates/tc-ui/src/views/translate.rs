@@ -377,11 +377,30 @@ fn chapter_view(
         let actions = actions.clone();
         Callback::new(move |_| actions.toggle_rail())
     };
-    let review = {
-        let actions = actions.clone();
-        Callback::new(move |()| actions.open_review(tc_api::conflicts::ReviewTab::Text, None))
+    let entry = {
+        let (sessions, at) = (s.server.sessions.clone(), open.at.clone());
+        Memo::new(move |_| {
+            let kept = sessions.with(|sessions| {
+                sessions
+                    .iter()
+                    .find(|s| s.at == at)
+                    .map_or(0, |s| s.outside.kept.len())
+            });
+            crate::app::outside::review_entry(conflicts.get(), kept)
+        })
     };
-    let button = move || conflicts_button(conflicts.get(), off, review);
+    let button = {
+        let actions = actions.clone();
+        move || {
+            let (count, tab) = entry.get()?;
+            let actions = actions.clone();
+            conflicts_button(
+                count,
+                off,
+                Callback::new(move |()| actions.open_review(tab, None)),
+            )
+        }
+    };
     let tabs = source_tabs(actions, book_id, panes, chosen);
     let head = target_head(s, actions, cross_frame, mode, off);
     let rows = {

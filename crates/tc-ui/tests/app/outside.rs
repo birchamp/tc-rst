@@ -2,9 +2,13 @@
 //! OE 3, `docs/STORAGE-DELTA-2026-10-21.md` §2.11).
 
 use tc_api::conflicts::{ReviewTab, TabCount};
+use tc_api::event::SessionMode;
 use tc_api::session::{KeptCopy, KeptImported, KeptWhy, OutsideEdits, WaitingBook};
+use tc_api::write::ReadOnlyReason;
 use tc_core::BookId;
-use tc_ui::app::outside::{can_dismiss, can_import, kept_line, question, report_line, with_kept};
+use tc_ui::app::outside::{
+    KeptOffer, can_import, kept_line, kept_offer, question, report_line, review_entry, with_kept,
+};
 
 fn waiting(file: &str, book: Option<BookId>, added: bool) -> WaitingBook {
     WaitingBook {
@@ -55,6 +59,11 @@ fn the_import_report_names_the_book_and_its_counts() {
         report_line(&report),
         "Titus: 12 verses imported, 2 to review."
     );
+    let one = KeptImported {
+        imported: 1,
+        ..report
+    };
+    assert_eq!(report_line(&one), "Titus: 1 verse imported, 2 to review.");
 }
 
 /// A book that cannot be read offers only *Not now*; a copy is dismissed only once its book
@@ -69,8 +78,15 @@ fn the_choices_follow_the_store() {
         copy: ".tc/external/x".into(),
         why: KeptWhy::Changed,
     };
-    assert!(!can_dismiss(&kept, std::slice::from_ref(&broken)));
-    assert!(can_dismiss(&kept, &[]));
+    let writable = SessionMode::Writable;
+    assert_eq!(
+        kept_offer(&kept, std::slice::from_ref(&broken), &writable),
+        KeptOffer::Import
+    );
+    assert_eq!(
+        kept_offer(&kept, &[], &writable),
+        KeptOffer::ImportOrDismiss
+    );
     assert_eq!(
         kept_line(&kept),
         "Titus was changed outside translationCore. A copy is kept."
@@ -87,4 +103,27 @@ fn the_choices_follow_the_store() {
     ];
     assert_eq!(with_kept(&tabs, 2)[1].count, 2);
     assert_eq!(with_kept(&tabs, 2)[0].count, 1);
+}
+
+/// INV-A-KEPT-COPY-STAYS-ON-A-SCREEN: a kept copy alone shows the way into the review, at its
+/// notices; with verse conflicts it opens at them and counts both.
+#[test]
+fn a_kept_copy_alone_shows_the_way_into_the_review() {
+    assert_eq!(review_entry(0, 0), None);
+    assert_eq!(review_entry(0, 1), Some((1, ReviewTab::Notices)));
+    assert_eq!(review_entry(2, 1), Some((3, ReviewTab::Text)));
+    assert_eq!(review_entry(2, 0), Some((2, ReviewTab::Text)));
+}
+
+/// A read-only project's kept copies show their line and no *Import* or *Dismiss*, which the
+/// store would refuse.
+#[test]
+fn a_read_only_project_offers_nothing_on_its_kept_copies() {
+    let kept = KeptCopy {
+        file: "ingredients/TIT.usfm".into(),
+        copy: ".tc/external/x".into(),
+        why: KeptWhy::Changed,
+    };
+    let read_only = SessionMode::ReadOnly(ReadOnlyReason::SecondWriter);
+    assert_eq!(kept_offer(&kept, &[], &read_only), KeptOffer::Nothing);
 }

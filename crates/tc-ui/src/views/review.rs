@@ -17,13 +17,14 @@ use tc_api::conflicts::{
     ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version, VersionValue,
 };
 use tc_api::editor::{PaneText, SourceFrame, Sources};
+use tc_api::event::SessionMode;
 use tc_api::ids::Scope;
 use tc_api::session::{KeptCopy, OutsideEdits};
 use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
-use crate::app::outside::{can_dismiss, kept_line, with_kept};
+use crate::app::outside::{KeptOffer, kept_line, kept_offer, with_kept};
 use crate::app::review::{
     BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
     group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
@@ -266,7 +267,14 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
                 },
                 Some(ReviewEntries::Detached(entries)) => detached(entries).into_any(),
                 Some(ReviewEntries::Notices(entries)) => {
-                    notices(&actions, &outside(), entries).into_any()
+                    let mode = s.server.sessions.with(|sessions| {
+                        sessions
+                            .iter()
+                            .find(|s| s.at == at)
+                            .map_or(SessionMode::Writable, |s| s.mode)
+                    });
+                    let refused = s.outside_refused.get();
+                    notices(&actions, &outside(), &mode, refused, entries).into_any()
                 }
                 None => ().into_any(),
             });
@@ -1352,28 +1360,49 @@ fn detached(entries: &[DetachedEntry]) -> AnyView {
 /// The notices, one sentence each (STORAGE §8.5); first each kept copy of a book another
 /// program changed, with *Import* and *Dismiss* until it is imported or dismissed (D1,
 /// INV-A-KEPT-COPY-STAYS-ON-A-SCREEN). No *Undo* follows an import (delta Q7).
-fn notices(actions: &Actions, outside: &OutsideEdits, entries: &[NoticeEntry]) -> AnyView {
+fn notices(
+    actions: &Actions,
+    outside: &OutsideEdits,
+    mode: &SessionMode,
+    refused: Option<String>,
+    entries: &[NoticeEntry],
+) -> AnyView {
     if entries.is_empty() && outside.kept.is_empty() {
         return none(t(keys::review::NONE, &[])).into_any();
     }
+    // A refused *Import* or *Dismiss* says why above the rows, which stay.
+    let refused = refused.filter(|_| !outside.kept.is_empty()).map(|why| {
+        let style = measure().merge(&crate::css! { "margin-bottom": 12, "overflow-wrap": "anywhere" });
+        view! {
+            <Callout tone=CalloutTone::Warn style=style attrs=Attrs::from([("role", "alert"), ("data-testid", "outside-refused")])>
+                {why}
+            </Callout>
+        }
+    });
     let kept = outside
         .kept
         .iter()
-        .map(|kept| kept_row(actions, kept, can_dismiss(kept, &outside.waiting)))
+        .map(|kept| kept_row(actions, kept, kept_offer(kept, &outside.waiting, mode)))
         .collect_view();
     let rows = entries
         .iter()
         .map(|e| (String::new(), notice_text(&e.notice)))
         .collect();
-    view! { {kept}{list_box(rows, "review-notice", None)} }.into_any()
+    view! { {refused}{kept}{list_box(rows, "review-notice", None)} }.into_any()
 }
 
-fn kept_row(actions: &Actions, kept: &KeptCopy, dismissable: bool) -> AnyView {
-    let import = {
+fn kept_row(actions: &Actions, kept: &KeptCopy, offer: KeptOffer) -> AnyView {
+    let import = (offer != KeptOffer::Nothing).then(|| {
         let (actions, copy) = (actions.clone(), kept.copy.clone());
-        Callback::new(move |_| actions.import_kept(copy.clone()))
-    };
-    let dismiss = dismissable.then(|| {
+        let on_click = Callback::new(move |_| actions.import_kept(copy.clone()));
+        view! {
+            <Button variant=ButtonVariant::Secondary on_click=on_click
+                attrs=Attrs::new().with("data-testid", "kept-import")>
+                {t(keys::outside::IMPORT, &[])}
+            </Button>
+        }
+    });
+    let dismiss = (offer == KeptOffer::ImportOrDismiss).then(|| {
         let (actions, copy) = (actions.clone(), kept.copy.clone());
         let on_click = Callback::new(move |_| actions.dismiss_kept(copy.clone()));
         view! {
@@ -1386,10 +1415,7 @@ fn kept_row(actions: &Actions, kept: &KeptCopy, dismissable: bool) -> AnyView {
     view! {
         <div data-testid="review-kept" style="margin-bottom: 10px; padding: 12px 16px; border-radius: var(--radius-lg); background: var(--surface-card); border: var(--stroke-hair) solid var(--border); display: flex; align-items: center; gap: 10px;">
             <span style="flex: 1; font-size: var(--fs-ui-sm); color: var(--uw-ink);">{kept_line(kept)}</span>
-            <Button variant=ButtonVariant::Secondary on_click=import
-                attrs=Attrs::new().with("data-testid", "kept-import")>
-                {t(keys::outside::IMPORT, &[])}
-            </Button>
+            {import}
             {dismiss}
         </div>
     }

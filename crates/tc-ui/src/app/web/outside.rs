@@ -16,6 +16,8 @@ fn warn(what: &str, error: &impl std::fmt::Display) {
     )));
 }
 
+const FOCUS: &str = "the folder was not looked at";
+
 impl Actions {
     /// The open project's scope and its outside edits as the session lists them.
     pub fn outside_edits(&self) -> Option<(Scope, OutsideEdits)> {
@@ -32,11 +34,24 @@ impl Actions {
         Some((at, outside))
     }
 
+    /// A refusal shows where the person answered, and the question or the row stays; a focus
+    /// look that fails only warns, since no one asked for it.
     async fn outside_call<E: Endpoint>(&self, request: E, what: &str) -> Option<E::Ok> {
+        let answer = what != FOCUS;
         match self.runtime().api().call(&request).await {
-            Ok(reply) => Some(reply),
+            Ok(reply) => {
+                if answer {
+                    self.s().outside_refused.set(None);
+                }
+                Some(reply)
+            }
             Err(error) => {
                 warn(what, &error);
+                if answer {
+                    self.s()
+                        .outside_refused
+                        .set(Some(super::sources::said_call(&error)));
+                }
                 None
             }
         }
@@ -54,10 +69,7 @@ impl Actions {
                 request: js::random_request_id(),
                 at: at.clone(),
             };
-            if let Some(outside) = this
-                .outside_call(request, "the folder was not looked at")
-                .await
-            {
+            if let Some(outside) = this.outside_call(request, FOCUS).await {
                 this.s().server.session_outside(&at, outside);
             }
         });
@@ -169,6 +181,7 @@ impl Actions {
 
     pub fn close_outside_reports(&self) {
         self.s().outside_reports.set(Vec::new());
+        self.s().outside_refused.set(None);
     }
 
     /// The report's link: the review of the changes to look at.

@@ -11,8 +11,8 @@ use leptos::prelude::*;
 use crate::app::outside::{can_import, question, report_line};
 use crate::app::web::{Actions, AppCtx, use_app};
 use crate::ds::{
-    Attrs, Direction, Dismiss, Fill, Justify, Scrim, ScrimToken, Stack, Surface, Text, TextRole,
-    Tone, Weight, action,
+    Attrs, Callout, CalloutTone, Direction, Dismiss, Fill, Justify, Scrim, ScrimToken, Stack,
+    Surface, Text, TextRole, Tone, Weight, action,
 };
 use crate::i18n::{keys, t};
 use crate::tokens::{Corner, Shadow};
@@ -29,6 +29,7 @@ pub fn ChangedBooks() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
+    let refused = s.outside_refused.clone();
     let shown = {
         let (reports, sessions, project) = (
             s.outside_reports.clone(),
@@ -59,7 +60,12 @@ pub fn ChangedBooks() -> impl IntoView {
             })
         })
     };
-    (move || shown.get().map(|shown| dialog(&actions, shown))).into_any()
+    (move || {
+        shown
+            .get()
+            .map(|shown| dialog(&actions, shown, refused.get()))
+    })
+    .into_any()
 }
 
 fn button(
@@ -76,7 +82,7 @@ fn button(
     )
 }
 
-fn dialog(actions: &Actions, shown: Shown) -> AnyView {
+fn dialog(actions: &Actions, shown: Shown, refused: Option<String>) -> AnyView {
     let id = crate::ds::next_id("tc-outside");
     let label_id = id.clone();
     let reports = matches!(shown, Shown::Reports(..));
@@ -141,11 +147,25 @@ fn dialog(actions: &Actions, shown: Shown) -> AnyView {
                 )
             }
         };
+        // Every report line alike; under the question, the reasons a book cannot be read.
+        let rest_role = if reports {
+            TextRole::Body
+        } else {
+            TextRole::Caption
+        };
         let mut lines = lines.into_iter();
         let head = lines.next().unwrap_or_default();
         let rest = lines
-            .map(|line| view! { <Text role=TextRole::Caption>{line}</Text> })
+            .map(|line| view! { <Text role=rest_role>{line}</Text> })
             .collect_view();
+        // A refused answer says why; the question stays.
+        let refused = refused.clone().map(|why| {
+            view! {
+                <Callout tone=CalloutTone::Warn attrs=Attrs::from([("role", "alert"), ("data-testid", "outside-refused")])>
+                    {why}
+                </Callout>
+            }
+        });
         view! {
             <Surface fill=Fill::Card radius=Corner::X2l elevation=Shadow::Modal style=crate::css! { "width": "var(--modal-w-sm)", "max-width": "100%" }>
                 <Stack direction=Direction::Column gap=16 style=crate::css! { "padding": 24 } attrs=Attrs::from([("data-testid", "changed-books")])>
@@ -153,6 +173,7 @@ fn dialog(actions: &Actions, shown: Shown) -> AnyView {
                         <Text attrs=Attrs::from([("id", id.as_str())]) role=TextRole::Body>{head}</Text>
                         {rest}
                     </Stack>
+                    {refused}
                     <Stack direction=Direction::Row gap=10 justify=Justify::End>{buttons}</Stack>
                 </Stack>
             </Surface>

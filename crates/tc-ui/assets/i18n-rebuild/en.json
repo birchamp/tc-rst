@@ -33,6 +33,7 @@
   "openDoor43.whereAny": "The project opens from {host}.",
   "outside.import": "Import",
   "outside.imported": "{book}: {imported} verses imported, {review} to review.",
+  "outside.importedOne": "{book}: 1 verse imported, {review} to review.",
   "outside.kept": "{name} was changed outside translationCore. A copy is kept.",
   "outside.notNow": "Not now",
   "outside.question.added": "A book file {file} was added outside translationCore. Would you like to import it into this project?",

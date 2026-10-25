@@ -2,6 +2,7 @@
 //! `docs/STORAGE-DELTA-2026-10-21.md` §2.11): the words, decided on the host.
 
 use tc_api::conflicts::{ReviewTab, TabCount};
+use tc_api::event::SessionMode;
 use tc_api::session::{KeptCopy, KeptImported, WaitingBook};
 use tc_core::BookId;
 
@@ -46,7 +47,11 @@ pub fn can_import(waiting: &[WaitingBook]) -> bool {
 /// The report of one *Import*: "Titus: 12 verses imported, 2 to review."
 pub fn report_line(report: &KeptImported) -> String {
     t(
-        keys::outside::IMPORTED,
+        if report.imported == 1 {
+            keys::outside::IMPORTED_ONE
+        } else {
+            keys::outside::IMPORTED
+        },
         &[
             ("book", &name_of(&report.file, report.book)),
             ("imported", &report.imported),
@@ -63,9 +68,24 @@ pub fn kept_line(kept: &KeptCopy) -> String {
     )
 }
 
-/// *Dismiss* is refused while the copy's book still waits for the question's answer.
-pub fn can_dismiss(kept: &KeptCopy, waiting: &[WaitingBook]) -> bool {
-    !waiting.iter().any(|w| w.file == kept.file)
+/// What a kept copy's row offers besides its line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeptOffer {
+    /// The project is read-only: the store refuses both.
+    Nothing,
+    /// Its book still waits for the question's answer, so *Dismiss* is refused.
+    Import,
+    ImportOrDismiss,
+}
+
+pub fn kept_offer(kept: &KeptCopy, waiting: &[WaitingBook], mode: &SessionMode) -> KeptOffer {
+    if matches!(mode, SessionMode::ReadOnly(_)) {
+        KeptOffer::Nothing
+    } else if waiting.iter().any(|w| w.file == kept.file) {
+        KeptOffer::Import
+    } else {
+        KeptOffer::ImportOrDismiss
+    }
 }
 
 /// The book an `ingredients/<CODE>.usfm` path is.
@@ -87,4 +107,17 @@ pub fn with_kept(tabs: &[TabCount], kept: usize) -> Vec<TabCount> {
             },
         })
         .collect()
+}
+
+/// The toolbar's way into the conflict review (INV-A-KEPT-COPY-STAYS-ON-A-SCREEN): tC4's button
+/// counts the open verse conflicts; here it counts the kept copies too, so a copy left by *Not
+/// now* stays one click away. It opens at the conflicts, else at the notices that list the
+/// copies. `None` when there is neither.
+pub fn review_entry(conflicts: u32, kept: usize) -> Option<(u32, ReviewTab)> {
+    let kept = u32::try_from(kept).unwrap_or(u32::MAX);
+    match (conflicts, kept) {
+        (0, 0) => None,
+        (0, kept) => Some((kept, ReviewTab::Notices)),
+        (conflicts, kept) => Some((conflicts.saturating_add(kept), ReviewTab::Text)),
+    }
 }
