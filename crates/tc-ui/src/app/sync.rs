@@ -4,8 +4,9 @@
 //! (tC4 #678), never Door43's words or a path (Q36).
 
 use tc_api::ApiError;
+use tc_api::conflicts::ReviewPlace;
 use tc_api::ids::ProjectRef;
-use tc_api::jobs::SyncResultView;
+use tc_api::jobs::{ReplacedKind, ReplacedView, SyncResultView};
 use tc_api::refusal::{Message, Refusal};
 use tc_api::shown::{Computer, PersonLabel, Who};
 
@@ -116,6 +117,22 @@ impl SyncToast {
         Some(t(keys::sync_result::FROM, &[("names", &names.join(" · "))]))
     }
 
+    /// What the sync's newer versions replaced with no question, one row per person, kind and
+    /// person replaced (owner ruling H5).
+    pub fn replaced(&self) -> Vec<Counted> {
+        let Some(view) = self.synced() else {
+            return Vec::new();
+        };
+        view.replaced
+            .iter()
+            .map(|row| Counted {
+                test_id: "sync-replaced",
+                n: row.count,
+                text: replaced_text(row),
+            })
+            .collect()
+    }
+
     /// The sentences under the line, each only when its count is not 0: changes sent again,
     /// verses with two alignments (#791), and resource versions this computer lacks.
     pub fn notes(&self) -> Vec<Counted> {
@@ -196,6 +213,67 @@ pub fn failure_text(error: &ApiError) -> String {
     let sentence = crate::i18n::refusal_text(failure);
     match failure.kept_note() {
         Some(note) => format!("{sentence} {}", t_dyn(note, &[], None)),
+        None => sentence,
+    }
+}
+
+/// The Received sheet's sentence for what one person's newer versions replaced with no question
+/// (owner ruling H5), and where the older version is. A verse's alignment of the person's own
+/// is tC4's `syncResult.alignReplaced`.
+pub fn replaced_text(row: &ReplacedView) -> String {
+    use keys::sync_result::replaced as k;
+    let name = person_label(&row.by);
+    let place = crate::app::review::place_label(&row.place);
+    let place = if row.count > 1 {
+        t(k::AND_MORE, &[("place", &place), ("n", &(row.count - 1))])
+    } else {
+        place
+    };
+    let mine = row.whose.who == Who::Mine;
+    let whose = if mine {
+        t(k::YOURS, &[])
+    } else {
+        t(k::THEIRS, &[("name", &person_label(&row.whose))])
+    };
+    let in_history = if mine {
+        k::IN_HISTORY
+    } else {
+        k::OLDER_IN_HISTORY
+    };
+    let many = |one: Key, more: Key| if row.count > 1 { more } else { one };
+    let args: [(&str, &dyn std::fmt::Display); 3] =
+        [("place", &place), ("name", &name), ("whose", &whose)];
+    let (sentence, after) = match row.kind {
+        ReplacedKind::Alignment => match &row.place {
+            ReviewPlace::Verse {
+                book,
+                chapter,
+                verse,
+            } if mine && row.count == 1 => (
+                t(
+                    keys::sync_result::ALIGN_REPLACED,
+                    &[
+                        ("book", &book.english_name()),
+                        ("ref", &format!("{chapter}:{verse}")),
+                        ("name", &name),
+                    ],
+                ),
+                Some(in_history),
+            ),
+            _ => (
+                t(many(k::ALIGNMENT, k::ALIGNMENTS), &args),
+                Some(in_history),
+            ),
+        },
+        ReplacedKind::Check => (t(many(k::CHECK, k::CHECKS), &args), Some(in_history)),
+        ReplacedKind::Comment => (t(many(k::COMMENT, k::COMMENTS), &args), Some(in_history)),
+        ReplacedKind::Setting => (t(k::SETTING, &args), Some(k::IN_SETTINGS)),
+        ReplacedKind::Resources => (t(k::RESOURCES, &args), Some(k::IN_SETTINGS)),
+        ReplacedKind::Book => (t(k::BOOK, &args), None),
+        ReplacedKind::File => (t(many(k::FILE, k::FILES), &args), Some(k::BOTH_KEPT)),
+    };
+    match after {
+        Some(after) => format!("{sentence} {}", t(after, &[])),
         None => sentence,
     }
 }

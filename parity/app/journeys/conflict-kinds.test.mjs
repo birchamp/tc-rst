@@ -79,6 +79,13 @@ browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s n
       { by: teammate(2), whose: teammate(1), kind: 'check', place: { type: 'check', value: { tool: 'translationNotes', place: 'TIT 1:4' } }, count: 1 },
       { by: teammate(2), whose: teammate(1), kind: 'alignment', place: { type: 'verse', value: { book: 'TIT', chapter: 1, verse: 1 } }, count: 1 },
     ], 'Teammate 2\'s newer check and alignment replaced Teammate 1\'s');
+    // The Received sheet names each replaced version and where the older one is (HIST-1).
+    const olderSaid = en['syncResult.replaced.olderInHistory'];
+    const said = (key, place) => `${en[key].replace('{place}', place).replace('{name}', 'Teammate 2').replace('{whose}', 'Teammate 1\'s')} ${olderSaid}`;
+    assert.deepEqual(await toast(page).getByTestId('sync-replaced').allTextContents(), [
+      said('syncResult.replaced.check', 'Titus 1:4 · Translation Notes'),
+      said('syncResult.replaced.alignment', 'Titus 1:1'),
+    ]);
     await toast(page).getByTestId('sync-dismiss').click();
 
     await page.getByTestId(`project-${FOLDER}`).getByRole('button', { name: /Titus/ }).click();

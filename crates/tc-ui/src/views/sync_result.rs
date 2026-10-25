@@ -105,6 +105,7 @@ pub fn SyncResult(
         view! { <span data-testid="sync-received-from" style=note_style()>{names}</span> }
     });
     let notes = toast.notes().into_iter().map(note).collect_view();
+    let replaced = toast.replaced().into_iter().map(note).collect_view();
     let review = toast
         .review()
         .then(|| link("sync-review", t(keys::sync_result::REVIEW, &[]), on_review));
@@ -149,6 +150,7 @@ pub fn SyncResult(
                 {line}
                 {from}
                 {notes}
+                {replaced}
             </div>
             {review}
             {download}
