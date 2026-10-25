@@ -466,6 +466,7 @@ fn the_toasts_review_opens_where_something_waits() {
             alignments,
             restored: 0,
             missing_pins: 0,
+            replaced: Vec::new(),
         }),
     };
     assert_eq!(toast(1, 0).review_tab(), ReviewTab::Text);

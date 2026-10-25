@@ -1521,6 +1521,7 @@ fn loss_last_book_removed_concurrently() {
         removed_of(BookId::Ruth, &ids(&book)),
         vec![on(&book, &RecordKey::BookPresence(BookId::Ruth)).id()],
     );
+    assert!(maria.at < juan.at, "Ruth's removal is the newest");
     let all = all_of(&[&book, &[titus, ruth]]);
     let state = assert_converges(&all);
     // H5: the newest removal, Ruth's, loses with no question.
@@ -2141,9 +2142,8 @@ fn loss_case_colliding_carried_paths_kept() {
     let book = imported_book(&mut maria, &[1]);
     let a = maria.one(carried("audio/Intro.mp3", 1), vec![]);
     let b = juan.one(carried("audio/intro.mp3", 2), vec![]);
-    assert!(juan.at < maria.at, "Maria's file is the newest");
     let state = assert_converges(&all_of(&[&book, &[a, b]]));
-    // H5: the newest keeps its name with no question; the other moves beside it.
+    // H5: one keeps its name with no question, by byte order; the other moves beside it.
     assert_eq!(state.conflict_count(), 0);
     let placed = state.carried_files();
     assert_eq!(placed.len(), 2);

@@ -472,9 +472,11 @@ fn loss_invalid_name_file_moved_not_deleted() {
 }
 
 /// §3.3 and H5: two files whose names differ by case only cannot both be written on Windows
-/// and macOS; with no question, the newest keeps its name and the other is placed beside it.
+/// and macOS. With no question, one keeps the name, by byte order, and the other is placed
+/// beside it; a newer version of the one beside never swaps the names, since on a disk that
+/// ignores case a read of the moved name would return the other file's bytes.
 #[test]
-fn a_path_case_clash_keeps_the_newest_name_and_both_files() {
+fn a_path_case_clash_keeps_one_name_and_both_files() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     let (upper, lower) = ("ingredients/audio/Song.mp3", "ingredients/audio/song.mp3");
@@ -482,25 +484,39 @@ fn a_path_case_clash_keeps_the_newest_name_and_both_files() {
     arrive(&rig, &handle, &folder, lower, b"the small letter song");
     leave(&handle);
     assert_eq!(handle.snapshot().fold().conflicts().count(), 0);
-    let places = placements(&handle);
-    assert_eq!(places.len(), 2);
-    let newest = places
-        .iter()
-        .find(|p| p.path == lower)
-        .expect("the newest keeps its name");
-    assert_eq!(
-        rig.fs.peek(&folder.join(&newest.path)).unwrap(),
-        b"the small letter song"
+    let check = |want_lower: &[u8]| {
+        let places = placements(&handle);
+        assert_eq!(places.len(), 2);
+        let kept = places
+            .iter()
+            .find(|p| p.path == upper)
+            .expect("one keeps its name");
+        assert_eq!(
+            rig.fs.peek(&folder.join(&kept.path)).unwrap(),
+            b"the capital letter song"
+        );
+        let aside = places
+            .iter()
+            .find(|p| p.record.as_str() == lower)
+            .expect("the other is placed");
+        assert!(aside.path.contains(".case-"), "{}", aside.path);
+        assert_eq!(rig.fs.peek(&folder.join(&aside.path)).unwrap(), want_lower);
+    };
+    check(b"the small letter song");
+    // A newer version of the one beside keeps the names where they are.
+    let aside = placements(&handle)
+        .into_iter()
+        .find(|p| p.record.as_str() == lower)
+        .unwrap();
+    arrive(
+        &rig,
+        &handle,
+        &folder,
+        &aside.path,
+        b"the small letter song, again",
     );
-    let aside = places
-        .iter()
-        .find(|p| p.record.as_str() == upper)
-        .expect("the other is placed");
-    assert!(aside.path.contains(".case-"), "{}", aside.path);
-    assert_eq!(
-        rig.fs.peek(&folder.join(&aside.path)).unwrap(),
-        b"the capital letter song"
-    );
+    leave(&handle);
+    check(b"the small letter song, again");
     assert_valid_burrito(&rig.fs, &folder);
     handle.close().unwrap();
 }

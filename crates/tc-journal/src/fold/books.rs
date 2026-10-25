@@ -252,7 +252,7 @@ fn last_book(state: &mut FoldState, dirty: &mut Dirty) {
     if state.books.values().any(|b| b.status.projects()) {
         return;
     }
-    let mut best: Option<(crate::ids::WallTime, ChangeId, BookId, ChangeIdx)> = None;
+    let mut best: Option<((u8, crate::ids::WallTime, ChangeId), BookId, ChangeIdx)> = None;
     for (book, entry) in state.books.iter() {
         if entry.status != BookStatus::Removed {
             continue;
@@ -262,16 +262,13 @@ fn last_book(state: &mut FoldState, dirty: &mut Dirty) {
         };
         for h in state.entry(presence).heads.iter() {
             let meta = state.meta(*h);
-            let candidate = (meta.at, meta.id, *book, *h);
-            if best
-                .as_ref()
-                .is_none_or(|b| (b.0, b.1) < (candidate.0, candidate.1))
-            {
+            let candidate = (meta.order(), *book, *h);
+            if best.as_ref().is_none_or(|b| b.0 < candidate.0) {
                 best = Some(candidate);
             }
         }
     }
-    let Some((_, _, book, _)) = best else {
+    let Some((_, book, _)) = best else {
         return;
     };
     let Some(presence) = state.books.get(&book).and_then(|b| b.presence) else {

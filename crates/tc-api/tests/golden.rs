@@ -3351,6 +3351,23 @@ fn events() -> Vec<Event> {
                 alignments: 0,
                 restored: 0,
                 missing_pins: 5,
+                replaced: vec![tc_api::jobs::ReplacedView {
+                    by: PersonLabel {
+                        who: Who::Teammate(1),
+                        computer: None,
+                    },
+                    whose: PersonLabel {
+                        who: Who::Username("maria".into()),
+                        computer: None,
+                    },
+                    kind: tc_api::jobs::ReplacedKind::Alignment,
+                    place: tc_api::conflicts::ReviewPlace::Verse {
+                        book: BookId::Titus,
+                        chapter: 1,
+                        verse: 1,
+                    },
+                    count: 1,
+                }],
             })),
         }),
         Event::Job(JobView {

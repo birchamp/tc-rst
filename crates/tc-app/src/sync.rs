@@ -87,15 +87,99 @@ pub fn synced_view(
             from.push(label);
         }
     }
+    let replaced = replaced(snapshot, received, &labels);
     SyncResultView {
         received: u32::try_from(received.len()).unwrap_or(u32::MAX),
         from,
-        kept_newest: tally.others,
+        // tC4's "{n} conflicts kept the newest version": under H5 every version a newer one
+        // replaced with no question.
+        kept_newest: replaced.iter().map(|r| r.count).sum(),
         verse_conflicts: tally.verse,
         alignments: tally.alignments,
         restored,
         missing_pins: missing_pins(snapshot, installed),
+        replaced,
     }
+}
+
+/// Owner ruling H5: each received change that won as the newest over another version, by who
+/// replaced whose and of what kind ("yours" when the other version is this person's). Costs
+/// the changes received.
+fn replaced(
+    snapshot: &CountingSnapshot,
+    received: &[ChangeId],
+    labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
+) -> Vec<tc_api::jobs::ReplacedView> {
+    use tc_api::jobs::ReplacedKind;
+    use tc_journal::RecordKey;
+    use tc_journal::fold::{AutoRule, Resolved};
+    let mut rows: Vec<((DeviceId, DeviceId), tc_api::jobs::ReplacedView)> = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for id in received {
+        let Some(body) = snapshot.body(id) else {
+            continue;
+        };
+        let key = body.record.key();
+        let kind = match &key {
+            RecordKey::Alignment(..) => ReplacedKind::Alignment,
+            RecordKey::Check(_) => ReplacedKind::Check,
+            RecordKey::Comment(_) => ReplacedKind::Comment,
+            RecordKey::Setting(_)
+            | RecordKey::ProjectMeta(_)
+            | RecordKey::Versification
+            | RecordKey::BookLayout(_) => ReplacedKind::Setting,
+            RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => ReplacedKind::Resources,
+            RecordKey::BookPresence(_) => ReplacedKind::Book,
+            RecordKey::CarriedFile(_) => ReplacedKind::File,
+            _ => continue,
+        };
+        if !seen.insert(key.clone()) {
+            continue;
+        }
+        // Every record a received change touched that settled on its newest head: the received
+        // change won, or lost (a teammate's decision at a check that moved), never silently.
+        let Some(state) = snapshot.key_state(&key) else {
+            continue;
+        };
+        let Resolved::SettledByRule {
+            head: winner,
+            rule: AutoRule::Newest,
+        } = state.state
+        else {
+            continue;
+        };
+        let Some(winner_device) = snapshot.body(&winner).map(|b| b.device) else {
+            continue;
+        };
+        let Some(by) = labels.get(&winner_device) else {
+            continue;
+        };
+        for h in state.heads.iter().filter(|h| **h != winner) {
+            let Some(loser) = snapshot.body(h).map(|b| b.device) else {
+                continue;
+            };
+            let Some(whose) = labels.get(&loser) else {
+                continue;
+            };
+            match rows
+                .iter_mut()
+                .find(|(device, row)| *device == (winner_device, loser) && row.kind == kind)
+            {
+                Some((_, row)) => row.count += 1,
+                None => rows.push((
+                    (winner_device, loser),
+                    tc_api::jobs::ReplacedView {
+                        by: crate::wire::scope::person_label(by),
+                        whose: crate::wire::scope::person_label(whose),
+                        kind,
+                        place: crate::conflicts::place_of(&key),
+                        count: 1,
+                    },
+                )),
+            }
+        }
+    }
+    rows.into_iter().map(|(_, row)| row).collect()
 }
 
 /// tC4's `missingPinsAfterSync`: 0 when the pins cannot be read.

@@ -1011,21 +1011,11 @@ async fn kinds_on(app: &App, at: &Scope, on: ReviewTab) -> Vec<ConflictKind> {
     kinds
 }
 
-/// The one conflict a tab lists.
-async fn only_entry(app: &App, at: &Scope, on: ReviewTab) -> ConflictEntry {
-    let ReviewEntries::Conflicts(entries) = tab(app, at, on).await.entries else {
-        panic!("{on:?} lists no conflicts")
-    };
-    let [entry] = entries.as_slice() else {
-        panic!("{entries:?}")
-    };
-    entry.clone()
-}
-
-/// STORAGE §8.5: each kind outside the Text tab is listed on its own tab, and the counts say
-/// so; the tab of a kind is a design decision no type holds (B11's minor).
+/// Owner ruling H5: of every kind outside a verse's text, the newest version wins with no
+/// question, so a sync that brings two versions of each lists nothing outside the Text tab,
+/// where the one book question left, *Restore the text* against *Start empty*, is.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn every_kind_is_listed_on_its_tab() {
+async fn only_text_kinds_reach_the_review() {
     let (w, at) = synced_kinds(vec![
         TeammatesKind::Check,
         TeammatesKind::Comment,
@@ -1038,122 +1028,61 @@ async fn every_kind_is_listed_on_its_tab() {
     ])
     .await;
     let app = &w.t.app;
-    assert_eq!(kinds_on(app, &at, ReviewTab::Text).await, vec![]);
     assert_eq!(
-        kinds_on(app, &at, ReviewTab::Alignments).await,
-        vec![ConflictKind::Alignment]
+        kinds_on(app, &at, ReviewTab::Text).await,
+        vec![ConflictKind::BookPresence]
     );
-    assert_eq!(
-        kinds_on(app, &at, ReviewTab::Checks).await,
-        vec![ConflictKind::Check, ConflictKind::Comment]
-    );
-    assert_eq!(
-        kinds_on(app, &at, ReviewTab::Settings).await,
-        vec![
-            ConflictKind::BookPresence,
-            ConflictKind::CarriedFile,
-            ConflictKind::PathCase,
-            ConflictKind::Pins,
-            ConflictKind::Setting,
-        ]
-    );
-    let view = tab(app, &at, ReviewTab::Settings).await;
-    // The scripted sync brings the carried files' records without their bytes, which only
-    // unit X's git fetch brings, so each of those files is a FileMissing notice.
-    let counts: Vec<(ReviewTab, u32)> = counts(&view)
-        .into_iter()
-        .filter(|(t, _)| *t != ReviewTab::Notices)
-        .collect();
-    assert_eq!(
-        counts,
-        vec![
-            (ReviewTab::Text, 0),
-            (ReviewTab::Alignments, 1),
-            (ReviewTab::Checks, 2),
-            (ReviewTab::Settings, 5),
-            (ReviewTab::Detached, 0),
-        ]
-    );
+    for on in [
+        ReviewTab::Alignments,
+        ReviewTab::Checks,
+        ReviewTab::Settings,
+    ] {
+        assert_eq!(kinds_on(app, &at, on).await, vec![], "{on:?}");
+    }
 }
 
-/// #791: a verse whose alignment has two versions opens in the aligner with "2 versions ·
-/// Review", and a check decision with two versions shows the same marker on the Check screen,
-/// each naming the conflict the review lists.
+/// Owner ruling H5: the Received sheet says what a newer version replaced, and whose:
+/// "Teammate 2's check replaced Teammate 1's" (or "yours" when the other version is this
+/// person's).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn align_and_check_show_the_two_versions_marker() {
-    use tc_api::check::{CheckListRef, CheckUnit, Item, RailRows, Tool};
-    use tc_api::shown::ConflictMarker;
+async fn received_says_what_was_replaced() {
+    use tc_api::jobs::ReplacedKind;
 
-    let (w, at) = synced_kinds(vec![TeammatesKind::Alignment, TeammatesKind::Check]).await;
+    let w = shared().await;
+    w.t.clock.set(START_MS);
     let app = &w.t.app;
-    let alignment = only_entry(app, &at, ReviewTab::Alignments).await;
-    let ReviewPlace::Verse {
-        book,
-        chapter,
-        verse,
-    } = alignment.place
-    else {
-        panic!("{:?}", alignment.place)
-    };
-    let opened = post(
+    internet_on(app).await;
+    sign_in(app).await;
+    script(
         app,
-        &tc_api::align::Open {
-            at: at.clone(),
-            request: rid(90),
-            book,
-            verse: Some(tc_api::align::OpenVerse { chapter, verse }),
+        41,
+        ScriptedSync::Synced {
+            teammates: None,
+            joined: None,
+            kinds: vec![TeammatesKind::Check, TeammatesKind::Alignment],
+            restored: 0,
         },
     )
-    .await
-    .unwrap();
-    let tc_api::align::Opened::Ready(view) = opened else {
-        panic!("{opened:?}")
-    };
+    .await;
+    let synced = synced(app, 42).await;
+    let rows: Vec<_> = synced
+        .replaced
+        .iter()
+        .map(|r| (r.by.clone(), r.whose.clone(), r.kind, r.count))
+        .collect();
     assert_eq!(
-        view.marker,
-        Some(ConflictMarker {
-            conflict: alignment.conflict,
-            versions: 2,
-        })
+        rows,
+        vec![
+            (teammate(2), teammate(1), ReplacedKind::Check, 1),
+            (teammate(2), teammate(1), ReplacedKind::Alignment, 1),
+        ]
     );
-
-    let check = only_entry(app, &at, ReviewTab::Checks).await;
-    let list = CheckListRef {
-        tool: Tool::TranslationNotes,
-        unit: CheckUnit::Book(BookId::Titus),
-    };
-    let session = post(
-        app,
-        &tc_api::check::Open {
-            at: at.clone(),
-            list,
-            since: None,
-        },
-    )
-    .await
-    .unwrap();
-    let RailRows::Full(rows) = &session.rows else {
-        panic!("{:?}", session.rows)
-    };
-    let mut markers = Vec::new();
-    for row in rows {
-        let item = post(
-            app,
-            &Item {
-                at: at.clone(),
-                list,
-                index: row.index,
-            },
-        )
-        .await
-        .unwrap();
-        markers.extend(item.decision.marker);
-    }
-    assert_eq!(
-        markers,
-        vec![ConflictMarker {
-            conflict: check.conflict,
-            versions: 2,
-        }]
-    );
+    assert!(matches!(
+        synced.replaced[0].place,
+        ReviewPlace::Check { .. }
+    ));
+    assert!(matches!(
+        synced.replaced[1].place,
+        ReviewPlace::Verse { .. }
+    ));
 }

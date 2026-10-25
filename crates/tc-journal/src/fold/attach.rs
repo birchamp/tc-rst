@@ -1198,22 +1198,10 @@ pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
         if files.len() < 2 && !derived_here {
             continue;
         }
-        // Owner ruling H5: the file whose newest present version is newest keeps the name, with
-        // no question; the others stay beside it.
-        let newest = |k: KeyIdx| {
-            state
-                .entry(k)
-                .heads
-                .iter()
-                .filter(|h| matches!(state.shape(**h), Shape::Carried { oid: Some(_) }))
-                .map(|h| state.meta(*h).order())
-                .max()
-        };
-        files.sort_by(|a, b| {
-            newest(b.1)
-                .cmp(&newest(a.1))
-                .then_with(|| a.0.as_str().as_bytes().cmp(b.0.as_str().as_bytes()))
-        });
+        // H5 asks no question; which name stays is byte order, never the newest version, so a
+        // newer recording never swaps the names on a disk that ignores case (a read of the
+        // moved name would return the other file's bytes).
+        files.sort_by(|a, b| a.0.as_str().as_bytes().cmp(b.0.as_str().as_bytes()));
         let keep = if derived_here { 0 } else { 1 };
         for (path, _, oid) in files.iter().skip(keep) {
             if let Some(oid) = oid {

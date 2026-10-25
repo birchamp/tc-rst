@@ -105,7 +105,35 @@
             "verseConflicts": 1,
             "alignments": 0,
             "restored": 0,
-            "missingPins": 5
+            "missingPins": 5,
+            "replaced": [
+              {
+                "by": {
+                  "who": {
+                    "type": "teammate",
+                    "value": 1
+                  },
+                  "computer": null
+                },
+                "whose": {
+                  "who": {
+                    "type": "username",
+                    "value": "maria"
+                  },
+                  "computer": null
+                },
+                "kind": "alignment",
+                "place": {
+                  "type": "verse",
+                  "value": {
+                    "book": "TIT",
+                    "chapter": 1,
+                    "verse": 1
+                  }
+                },
+                "count": 1
+              }
+            ]
           }
         }
       }

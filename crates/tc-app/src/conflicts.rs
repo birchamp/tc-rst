@@ -46,11 +46,13 @@ fn tab_of(kind: &Kind) -> ReviewTab {
         | Kind::ChapterFront
         | Kind::StoryBase
         | Kind::Frame
-        | Kind::StoryRef => ReviewTab::Text,
+        | Kind::StoryRef
+        // H5: the one book question left, *Restore the text* against *Start empty*, decides
+        // verse text.
+        | Kind::BookPresence => ReviewTab::Text,
         Kind::Alignment => ReviewTab::Alignments,
         Kind::Check | Kind::CheckMoved | Kind::Comment => ReviewTab::Checks,
-        Kind::BookPresence
-        | Kind::BookRemovedWhileEdited { .. }
+        Kind::BookRemovedWhileEdited { .. }
         | Kind::LastBookRemoved
         | Kind::BookLayout
         | Kind::Pins
@@ -124,7 +126,7 @@ fn kind_view(kind: &Kind) -> ConflictKind {
 }
 
 /// Where a record is, as the review names it.
-fn place_of(key: &RecordKey) -> ReviewPlace {
+pub(crate) fn place_of(key: &RecordKey) -> ReviewPlace {
     match key {
         RecordKey::Verse(book, chapter, verse) | RecordKey::Alignment(book, chapter, verse) => {
             ReviewPlace::Verse {

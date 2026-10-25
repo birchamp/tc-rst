@@ -484,10 +484,10 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
         .unwrap();
     assert_valid_burrito(&fs, &folder);
     match opts.trouble {
-        Trouble::ConflictedDecision => two_heads(&backend, &folder, 1, |handle| {
+        Trouble::ConflictedDecision => two_heads(&backend, &folder, 0, |handle| {
             decision_edits(handle, &decided[1].0, &tn)
         }),
-        Trouble::ConflictedPins => two_heads(&backend, &folder, 1, |handle| {
+        Trouble::ConflictedPins => two_heads(&backend, &folder, 0, |handle| {
             pins_edits(handle, &pins, SetSlot::TranslationWordsLinks)
         }),
         Trouble::MergedPins => two_heads(&backend, &folder, 0, |handle| {
@@ -2170,8 +2170,10 @@ async fn upgrade_titus(w: &World, id: u8) -> Outcome {
     }
 }
 
+// Ruling H5: two versions of a decision settle on the newest with no question, so the upgrade
+// carries the newest over, and the other stays in History.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn an_upgrade_keeps_a_decision_in_conflict_and_both_versions_of_it() {
+async fn an_upgrade_carries_the_newest_of_two_decisions_and_keeps_the_other_in_history() {
     let w = build(
         6,
         0,
@@ -2185,48 +2187,17 @@ async fn an_upgrade_keeps_a_decision_in_conflict_and_both_versions_of_it() {
     let key = RecordKey::Check(w.decided[1].0.clone());
     let heads_before = heads(&w, &key);
     assert_eq!(heads_before.len(), 2);
-    let (changes_before, conflicts_before) =
-        (changes(&w), handle(&w).snapshot().fold().conflict_count());
-    assert_eq!(conflicts_before, 1);
+    assert_eq!(handle(&w).snapshot().fold().conflict_count(), 0);
 
     let done = upgrade_titus(&w, 50).await;
 
-    // The conflicted decision is not carried over: it comes back as a check to do again.
-    assert_eq!((done.carried, done.check_again), (5, 1));
-    assert_eq!((done.on_new, done.on_old), (5, 1));
-    assert_eq!(
-        changes(&w) - changes_before,
-        6,
-        "the pins and five decisions"
-    );
-    assert_eq!(
-        heads(&w, &key),
-        heads_before,
-        "no change closed the conflict"
-    );
+    assert_eq!((done.carried, done.check_again), (6, 0));
     let snapshot = handle(&w).snapshot();
-    assert_eq!(snapshot.fold().conflict_count(), 1);
-    let mut versions: Vec<(Option<tc_check::UserStatus>, Option<String>)> = heads_before
-        .iter()
-        .map(|head| match snapshot.fold().body(head).unwrap().record {
-            Record::Check {
-                value: CheckValue::Decision(d),
-                ..
-            } => (d.judgement.status, d.comment),
-            other => panic!("{other:?}"),
-        })
-        .collect();
-    versions.sort_by_key(|(_, comment)| comment.clone());
-    assert_eq!(
-        versions,
-        [
-            (Some(tc_check::UserStatus::Todo), Some("mine".to_owned())),
-            (
-                Some(tc_check::UserStatus::Invalid),
-                Some("theirs".to_owned())
-            ),
-        ]
-    );
+    assert_eq!(snapshot.fold().conflict_count(), 0);
+    let history = snapshot.fold().history(&key);
+    for head in &heads_before {
+        assert!(history.contains(head), "{head:?} is in History");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2254,8 +2225,10 @@ async fn two_decisions_that_come_to_one_check_are_counted_as_checks_to_do_again(
     }
 }
 
+// Ruling H5: two versions of the pins settle on the newest, so an upgrade starts from it and
+// replaces both; the other stays in History.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn an_upgrade_does_not_move_pins_that_are_in_conflict() {
+async fn an_upgrade_over_two_pin_versions_starts_from_the_newest() {
     let w = build(
         6,
         0,
@@ -2269,32 +2242,20 @@ async fn an_upgrade_does_not_move_pins_that_are_in_conflict() {
     let key = RecordKey::Pins(PinGroup::Primary);
     let heads_before = heads(&w, &key);
     assert_eq!(heads_before.len(), 2);
-    let changes_before = changes(&w);
 
-    let job = ok(
-        &w.t.app,
-        &PlanUpgrade {
-            request: rid(50),
-            at: w.at.clone(),
-            offer: OfferRef::Set {
-                rung: SetRung::Primary,
-            },
-        },
-    )
-    .await;
-    match ended(&w.t.app, job).await {
-        JobState::Failed(ApiError::Refused(tc_api::Refusal::Resources(
-            tc_api::refusal::ResourceRefusal::GatewayFailed { reason },
-        ))) => assert!(reason.contains("conflict"), "{reason}"),
-        other => panic!("{other:?}"),
+    upgrade_titus(&w, 50).await;
+
+    assert_eq!(heads(&w, &key).len(), 1);
+    let history = handle(&w).snapshot().fold().history(&key);
+    for head in &heads_before {
+        assert!(history.contains(head), "{head:?} is in History");
     }
-    assert_eq!(changes(&w), changes_before);
-    assert_eq!(heads(&w, &key), heads_before);
-    assert_eq!(handle(&w).snapshot().fold().conflict_count(), 1);
 }
 
+// Ruling H5: the pins' two versions settle on the newest, so a download adopts over it; the
+// other stays in History.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_download_does_not_adopt_pins_over_a_conflict_and_says_so() {
+async fn a_download_adopts_pins_over_two_versions_and_keeps_the_other_in_history() {
     let w = build(
         6,
         0,
@@ -2324,13 +2285,16 @@ async fn a_download_does_not_adopt_pins_over_a_conflict_and_says_so() {
     )
     .await;
     match ended(&w.t.app, job).await {
-        JobState::Failed(ApiError::Refused(tc_api::Refusal::Resources(
-            tc_api::refusal::ResourceRefusal::AdoptFailed { error },
-        ))) => assert!(error.contains("conflict"), "{error}"),
-        other => panic!("{other:?}"),
+        JobState::Failed(error) => panic!("{error:?}"),
+        _ => {}
     }
-    assert_eq!(changes(&w), changes_before);
-    assert_eq!(heads(&w, &key), heads_before);
+    handle(&w).wait_idle();
+    assert_eq!(heads(&w, &key).len(), 1);
+    assert!(changes(&w) > changes_before);
+    let history = handle(&w).snapshot().fold().history(&key);
+    for head in &heads_before {
+        assert!(history.contains(head), "{head:?} is in History");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
