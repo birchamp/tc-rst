@@ -726,12 +726,11 @@ mod outside {
         }
     }
 
-    /// H22 part 1: a save the project's records lost (its pending file deleted before a
-    /// crash), still in the book file the app wrote, is listed as lost work, asked nothing and
-    /// not taken in; *Bring it back* is the copy's import, with the same report.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn a_lost_work_copy_offers_bring_it_back() {
-        const SAVED: &str = "saved before the file was deleted";
+    const SAVED: &str = "saved before the file was deleted";
+
+    /// The store world after a save of Titus 1:1 that the book file holds and the project's
+    /// records lost (its pending file deleted before a crash).
+    fn lost_work_world() -> StoreWorld {
         let world = store_world();
         let folder = world.folder(&world.bible);
         // The store itself, so a mode leave writes the book file and seals nothing.
@@ -762,12 +761,52 @@ mod outside {
         );
         let world = world_over(&world, world.fs.crash(false));
         drop(handle);
+        world
+    }
+
+    /// H22 part 1: *Not now* on the lost-work question answers it for good: it is not asked
+    /// again after a reload, and the copy stays in the notices with *Bring it back*.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn not_now_on_lost_work_is_never_asked_again() {
+        let world = lost_work_world();
+        let (_dir, t, at) = opened(&world).await;
+        assert_eq!(hello_outside(&t, &at).await.waiting.len(), 1);
+        let outside = post(
+            &t.app,
+            &NotNow {
+                request: request(1),
+                at: at.clone(),
+                file: TIT.into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(outside.waiting.is_empty(), "{outside:?}");
+        assert_eq!(outside.kept.len(), 1);
+        assert_eq!(outside.kept[0].why, KeptWhy::Lost);
+        assert_eq!(
+            hello_outside(&t, &at).await,
+            outside,
+            "not asked after a reload"
+        );
+    }
+
+    /// H22 part 1: a save the project's records lost (its pending file deleted before a
+    /// crash), still in the book file the app wrote, is listed as lost work, asked once and not
+    /// taken in; *Bring it back* is the copy's import, with the same report.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_lost_work_copy_offers_bring_it_back() {
+        let world = lost_work_world();
         let (_dir, t, at) = opened(&world).await;
         let outside = hello_outside(&t, &at).await;
-        assert!(outside.waiting.is_empty(), "nothing is asked: {outside:?}");
         assert_eq!(outside.kept.len(), 1, "{outside:?}");
         assert_eq!(outside.kept[0].why, KeptWhy::Lost);
         assert_eq!(outside.kept[0].file, TIT);
+        // Asked once (H22 part 1), until the person answers: a reload asks again.
+        assert_eq!(outside.waiting.len(), 1, "{outside:?}");
+        assert_eq!(outside.waiting[0].why, KeptWhy::Lost);
+        assert_eq!(outside.waiting[0].copy, outside.kept[0].copy);
+        assert_eq!(hello_outside(&t, &at).await, outside, "a reload asks again");
         assert_ne!(
             words(&t, &at, 1).as_deref(),
             Some(SAVED),

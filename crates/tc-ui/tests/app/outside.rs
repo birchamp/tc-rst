@@ -7,8 +7,8 @@ use tc_api::session::{KeptCopy, KeptImported, KeptWhy, OutsideEdits, WaitingBook
 use tc_api::write::ReadOnlyReason;
 use tc_core::BookId;
 use tc_ui::app::outside::{
-    KeptOffer, can_import, kept_import_label, kept_line, kept_offer, question, report_line,
-    review_entry, with_kept,
+    KeptOffer, asked_now, can_import, import_label, kept_import_label, kept_line, kept_offer,
+    question, report_line, review_entry, with_kept,
 };
 
 fn waiting(file: &str, book: Option<BookId>, added: bool) -> WaitingBook {
@@ -18,6 +18,7 @@ fn waiting(file: &str, book: Option<BookId>, added: bool) -> WaitingBook {
         added,
         copy: format!(".tc/external/{file}"),
         unreadable: None,
+        why: KeptWhy::Changed,
     }
 }
 
@@ -130,7 +131,7 @@ fn a_read_only_project_offers_nothing_on_its_kept_copies() {
 }
 
 /// H22 part 1: a copy of lost work asks in the ruling's words, with *Bring it back* (the same
-/// import) and *Dismiss*.
+/// import) and no *Dismiss*: its copy may be the work's only one.
 #[test]
 fn a_lost_work_copy_asks_bring_it_back() {
     let lost = KeptCopy {
@@ -145,6 +146,33 @@ fn a_lost_work_copy_asks_bring_it_back() {
     assert_eq!(kept_import_label(&lost), "Bring it back");
     assert_eq!(
         kept_offer(&lost, &[], &SessionMode::Writable),
-        KeptOffer::ImportOrDismiss
+        KeptOffer::Import
     );
+}
+
+/// H22 part 1: lost work that waits is asked once, in the ruling's words, with *Bring it back*
+/// and *Not now*; with changed books waiting too, it is asked first and on its own, and the
+/// books' question follows.
+#[test]
+fn waiting_lost_work_is_asked_with_bring_it_back_before_changed_books() {
+    let mut lost = waiting("ingredients/TIT.usfm", Some(BookId::Titus), false);
+    lost.why = KeptWhy::Lost;
+    let ruth = waiting("ingredients/RUT.usfm", Some(BookId::Ruth), false);
+    let both = [ruth.clone(), lost.clone()];
+    let now = asked_now(&both);
+    assert_eq!(now, vec![lost.clone()]);
+    assert_eq!(
+        question(&now).as_deref(),
+        Some("Some recent work was missing from this project's records. Bring it back?")
+    );
+    assert_eq!(import_label(&now), "Bring it back");
+    let after = asked_now(std::slice::from_ref(&ruth));
+    assert_eq!(after, vec![ruth.clone()]);
+    assert_eq!(
+        question(&after).as_deref(),
+        Some(
+            "This book has been changed externally. Would you like to import it into this project?"
+        )
+    );
+    assert_eq!(import_label(&after), "Import");
 }

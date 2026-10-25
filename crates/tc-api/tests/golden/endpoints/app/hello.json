@@ -39,14 +39,16 @@
                 "book": "TIT",
                 "added": false,
                 "copy": ".tc/external/TIT.usfm.20261024T101500Z",
-                "unreadable": null
+                "unreadable": null,
+                "why": "changed"
               },
               {
                 "file": "ingredients/RUT.usfm",
                 "book": "RUT",
                 "added": true,
                 "copy": ".tc/external/RUT.usfm.20261024T101500Z",
-                "unreadable": "RUT 1:3 appears twice (line 212)"
+                "unreadable": "RUT 1:3 appears twice (line 212)",
+                "why": "changed"
               }
             ],
             "kept": [

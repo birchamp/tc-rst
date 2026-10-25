@@ -1407,7 +1407,7 @@ pub fn outside_edits(
     waiting: Vec<tc_store::WaitingBook>,
     kept: Vec<tc_store::Kept>,
 ) -> tc_api::session::OutsideEdits {
-    use tc_api::session::{KeptCopy, KeptWhy, OutsideEdits, WaitingBook};
+    use tc_api::session::{KeptCopy, OutsideEdits, WaitingBook};
     use tc_journal::fold::DerivedFile;
     OutsideEdits {
         waiting: waiting
@@ -1421,6 +1421,7 @@ pub fn outside_edits(
                 added: w.added,
                 copy: w.kept.copy,
                 unreadable: w.kept.unreadable,
+                why: kept_why(w.kept.why),
             })
             .collect(),
         kept: kept
@@ -1428,12 +1429,17 @@ pub fn outside_edits(
             .map(|k| KeptCopy {
                 file: k.path,
                 copy: k.copy,
-                why: match k.why {
-                    tc_store::KeptWhy::Changed => KeptWhy::Changed,
-                    tc_store::KeptWhy::Lost => KeptWhy::Lost,
-                },
+                why: kept_why(k.why),
             })
             .collect(),
+    }
+}
+
+fn kept_why(why: tc_store::KeptWhy) -> tc_api::session::KeptWhy {
+    use tc_api::session::KeptWhy;
+    match why {
+        tc_store::KeptWhy::Changed => KeptWhy::Changed,
+        tc_store::KeptWhy::Lost => KeptWhy::Lost,
     }
 }
 

@@ -20,9 +20,28 @@ fn file_name(file: &str) -> &str {
     file.rsplit('/').next().unwrap_or(file)
 }
 
-/// The one question for every book found together; `None` when no book waits.
+/// What the question asks now: lost work first, on its own (H22 part 1), and once it is
+/// answered every changed book found together. Each answer leaves the other kind waiting, so
+/// a second question follows.
+pub fn asked_now(waiting: &[WaitingBook]) -> Vec<WaitingBook> {
+    let lost: Vec<WaitingBook> = waiting
+        .iter()
+        .filter(|w| w.why == KeptWhy::Lost)
+        .cloned()
+        .collect();
+    if lost.is_empty() {
+        waiting.to_vec()
+    } else {
+        lost
+    }
+}
+
+/// The question for what [`asked_now`] gives; `None` when nothing waits.
 pub fn question(waiting: &[WaitingBook]) -> Option<String> {
     use keys::outside::question as q;
+    if waiting.iter().any(|w| w.why == KeptWhy::Lost) {
+        return Some(t(keys::outside::LOST, &[]));
+    }
     match waiting {
         [] => None,
         [one] if one.added => Some(t(q::ADDED, &[("file", &file_name(&one.file))])),
@@ -42,6 +61,16 @@ pub fn question(waiting: &[WaitingBook]) -> Option<String> {
 /// (delta §2.11 Q2).
 pub fn can_import(waiting: &[WaitingBook]) -> bool {
     waiting.iter().any(|w| w.unreadable.is_none())
+}
+
+/// The question's button that takes the copies in: *Bring it back* for lost work, else
+/// *Import*.
+pub fn import_label(waiting: &[WaitingBook]) -> String {
+    if waiting.iter().any(|w| w.why == KeptWhy::Lost) {
+        t(keys::outside::BRING_BACK, &[])
+    } else {
+        t(keys::outside::IMPORT, &[])
+    }
 }
 
 /// The report of one *Import*: "Titus: 12 verses imported, 2 to review."
@@ -85,7 +114,8 @@ pub fn kept_import_label(kept: &KeptCopy) -> String {
 pub enum KeptOffer {
     /// The project is read-only: the store refuses both.
     Nothing,
-    /// Its book still waits for the question's answer, so *Dismiss* is refused.
+    /// Its book still waits for the question's answer, so *Dismiss* is refused; or it is lost
+    /// work, which is never dismissed (its copy may be the work's only one).
     Import,
     ImportOrDismiss,
 }
@@ -93,7 +123,7 @@ pub enum KeptOffer {
 pub fn kept_offer(kept: &KeptCopy, waiting: &[WaitingBook], mode: &SessionMode) -> KeptOffer {
     if matches!(mode, SessionMode::ReadOnly(_)) {
         KeptOffer::Nothing
-    } else if waiting.iter().any(|w| w.file == kept.file) {
+    } else if kept.why == KeptWhy::Lost || waiting.iter().any(|w| w.file == kept.file) {
         KeptOffer::Import
     } else {
         KeptOffer::ImportOrDismiss

@@ -79,14 +79,13 @@ impl Actions {
         });
     }
 
-    /// The question's *Import*: each waiting book that can be read, its newest copy; then the
-    /// reports. A book that cannot be read stays asked, with *Not now* only.
+    /// The question's *Import* (or *Bring it back*): each copy asked about now that can be
+    /// read; then the reports. A book that cannot be read stays asked, with *Not now* only.
     pub fn import_waiting(&self) {
         let Some((at, outside)) = self.outside_edits() else {
             return;
         };
-        let copies = outside
-            .waiting
+        let copies = crate::app::outside::asked_now(&outside.waiting)
             .iter()
             .filter(|w| w.unreadable.is_none())
             .map(|w| w.copy.clone())
@@ -138,7 +137,8 @@ impl Actions {
         });
     }
 
-    /// The question's *Not now*: the project keeps its text for every waiting book.
+    /// The question's *Not now*: the project keeps its text for every book asked about now;
+    /// lost work is answered and stays in the notices with *Bring it back*.
     pub fn not_now_waiting(&self) {
         let Some((at, outside)) = self.outside_edits() else {
             return;
@@ -148,7 +148,7 @@ impl Actions {
         }
         let this = self.clone();
         spawn_local(async move {
-            for waiting in outside.waiting {
+            for waiting in crate::app::outside::asked_now(&outside.waiting) {
                 let request = NotNow {
                     request: js::random_request_id(),
                     at: at.clone(),

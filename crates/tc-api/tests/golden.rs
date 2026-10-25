@@ -1717,6 +1717,7 @@ fn outside_edits() -> tc_api::session::OutsideEdits {
                 added: false,
                 copy: ".tc/external/TIT.usfm.20261024T101500Z".into(),
                 unreadable: None,
+                why: KeptWhy::Changed,
             },
             WaitingBook {
                 file: "ingredients/RUT.usfm".into(),
@@ -1724,6 +1725,7 @@ fn outside_edits() -> tc_api::session::OutsideEdits {
                 added: true,
                 copy: ".tc/external/RUT.usfm.20261024T101500Z".into(),
                 unreadable: Some("RUT 1:3 appears twice (line 212)".into()),
+                why: KeptWhy::Changed,
             },
         ],
         kept: vec![

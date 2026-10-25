@@ -140,7 +140,9 @@ pub struct RetryCheckpoint {
 
 /// A book file or story another program changed, and the copy kept of it, waiting for the
 /// one question at open and at focus (D1, owner ruling OE 3; delta §2.11): nothing of it is in
-/// the project until the person chooses *Import*.
+/// the project until the person chooses *Import*. Or, with `why: lost`, work missing from the
+/// project's records that a file the app wrote still held, asked once with *Bring it back*
+/// (H22 part 1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +161,7 @@ pub struct WaitingBook {
     pub copy: String,
     /// Why the bytes cannot be read; the question then offers only *Not now*.
     pub unreadable: Option<String>,
+    pub why: KeptWhy,
 }
 
 /// Why a copy was kept (delta §2.3 `why`).
@@ -169,7 +172,7 @@ pub enum KeptWhy {
     /// Another program changed the file: *Import* and *Dismiss*.
     Changed,
     /// Work missing from the project's records was still in a file the app wrote: *Bring it
-    /// back* and *Dismiss* (H22 part 1).
+    /// back* only, since the copy may be the work's only one (H22 part 1).
     Lost,
 }
 

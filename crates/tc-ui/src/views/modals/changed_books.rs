@@ -8,7 +8,7 @@ use std::sync::Arc;
 use leptos::ev::MouseEvent;
 use leptos::prelude::*;
 
-use crate::app::outside::{can_import, question, report_line};
+use crate::app::outside::{asked_now, can_import, import_label, question, report_line};
 use crate::app::web::{Actions, AppCtx, use_app};
 use crate::ds::{
     Attrs, Callout, CalloutTone, Direction, Dismiss, Fill, Justify, Scrim, ScrimToken, Stack,
@@ -21,7 +21,7 @@ use crate::tokens::{Corner, Shadow};
 #[derive(Clone, PartialEq)]
 enum Shown {
     Reports(Vec<String>, u32),
-    Question(String, Vec<String>, bool),
+    Question(String, Vec<String>, Option<String>),
 }
 
 #[component]
@@ -47,15 +47,15 @@ pub fn ChangedBooks() -> impl IntoView {
             }
             let at = project.with(|p| p.as_ref().map(|p| p.at.clone()))?;
             sessions.with(|sessions| {
-                let waiting = &sessions.iter().find(|s| s.at == at)?.outside.waiting;
+                let waiting = asked_now(&sessions.iter().find(|s| s.at == at)?.outside.waiting);
                 let reasons = waiting
                     .iter()
                     .filter_map(|w| Some(format!("{}: {}", w.file, w.unreadable.as_ref()?)))
                     .collect();
                 Some(Shown::Question(
-                    question(waiting)?,
+                    question(&waiting)?,
                     reasons,
-                    can_import(waiting),
+                    can_import(&waiting).then(|| import_label(&waiting)),
                 ))
             })
         })
@@ -122,7 +122,7 @@ fn dialog(actions: &Actions, shown: Shown, refused: Option<String>) -> AnyView {
                 };
                 (lines, view! { {link}{close} }.into_any())
             }
-            Shown::Question(sentence, reasons, importable) => {
+            Shown::Question(sentence, reasons, import_label) => {
                 let not_now = {
                     let a = a.clone();
                     button(
@@ -132,14 +132,11 @@ fn dialog(actions: &Actions, shown: Shown, refused: Option<String>) -> AnyView {
                         move || a.not_now_waiting(),
                     )
                 };
-                let import = importable.then(|| {
+                let import = import_label.map(|label| {
                     let a = a.clone();
-                    button(
-                        Weight::Fill,
-                        Tone::Accent,
-                        t(keys::outside::IMPORT, &[]),
-                        move || a.import_waiting(),
-                    )
+                    button(Weight::Fill, Tone::Accent, label, move || {
+                        a.import_waiting()
+                    })
                 });
                 (
                     std::iter::once(sentence).chain(reasons).collect(),
