@@ -1,8 +1,8 @@
 # The release pipeline (card G3, docs/RELEASE.md): the app for Windows, macOS and Linux (H3),
 # each installer installed on a fresh runner and smoke-tested there, a draft GitHub release only
-# from a tag. Windows is signed only on a manual run of the default branch with `sign` ticked,
-# inside the `windows-signing` environment (H4; tC4 package-desktop.yml #456). macOS stays
-# unsigned, as tC4 4.0 rc.2.
+# from a tag. Windows is signed on a release tag, and on a manual run of the default branch with
+# `sign` ticked, inside the `windows-signing` environment (H4; tC4 package-desktop.yml #456, which
+# signs release/* the same way). macOS stays unsigned, as tC4 4.0 rc.2.
 name: release
 permissions:
   contents: read
@@ -95,9 +95,10 @@ jobs:
             electronite: electronite-v37.1.0-graphite-darwin-arm64.zip
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
-    # Signing (H4): Azure trusts only this environment's OIDC subject, and its branch rules allow
-    # only the default branch. Every other run uses no environment and builds unsigned.
-    environment: ${{ matrix.platform == 'windows-x64' && github.event_name == 'workflow_dispatch' && inputs.sign && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'windows-signing' || '' }}
+    # Signing (H4): Azure trusts only this environment's OIDC subject, and its deployment rules
+    # allow only the default branch and v* tags. Every other run uses no environment and builds
+    # unsigned.
+    environment: ${{ matrix.platform == 'windows-x64' && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.sign && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))) && 'windows-signing' || '' }}
     permissions:
       contents: read
       id-token: write
@@ -105,7 +106,7 @@ jobs:
       run:
         shell: bash
     env:
-      SIGN: ${{ matrix.platform == 'windows-x64' && github.event_name == 'workflow_dispatch' && inputs.sign && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'yes' || '' }}
+      SIGN: ${{ matrix.platform == 'windows-x64' && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.sign && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))) && 'yes' || '' }}
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install && rustc --version
@@ -224,6 +225,13 @@ jobs:
           pattern: release-*-*
           path: dist
           merge-multiple: true
+      # tC4 #456: a release never carries an unsigned Windows installer.
+      - name: the Windows installer is signed
+        run: |
+          if ls dist/*windows*-unsigned* 2> /dev/null; then
+            echo 'publish: the Windows installer is unsigned; a release ships only a signed one (H4)' >&2
+            exit 1
+          fi
       - env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "translationCore 4 ${GITHUB_REF_NAME#v}" --notes "Built from $GITHUB_SHA." dist/*

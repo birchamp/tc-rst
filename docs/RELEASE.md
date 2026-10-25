@@ -17,6 +17,11 @@ H3, H4, H10 and H16). The pipeline is `.github/workflows/release.yml`; its scrip
 - **Files:** `translationCore4-<version>-windows-x64.exe` (`-unsigned` when not signed), a per-user
   installer that needs no administrator; `translationCore4-<version>-macos-arm64-unsigned.pkg`;
   `translationCore4-<version>-linux-x64.zip`; and one `BUILD-MANIFEST-<platform>.json` each.
+- **THIRD-PARTY-NOTICES.txt** (beside `LICENSE` in the installed app; in
+  `Contents/Resources` on macOS): the licence of every crate in `Cargo.lock`, tc-rst's NOTICE
+  files, the fonts' OFL texts, Electronite's licence, and an attribution block (title, creator,
+  rights, source, changes) for each bundled Door43 resource, as CC BY-SA asks. The app does not
+  show it yet.
 - **BUILD-MANIFEST.json** (also inside each installed app): the commit, the version, the platform,
   Electronite's tag and archive sha256, and the sha256 and size of every shipped file. About shows
   the same commit (`app/hello`'s `build.commit`), and the smoke test checks they match.
@@ -44,8 +49,11 @@ test checks it.
 4. The owner reads the draft, adds the release notes (what the translator gets, from the merge
    subjects since the last tag), and publishes it.
 
-A tagged build is unsigned unless signing is set up (below). To sign a release, run the workflow
-by hand on the default branch with **sign** ticked, after the tag's run passed.
+A tag run signs the Windows build inside the `windows-signing` environment (below). Until signing
+is set up, the tag's Windows build fails at signing and nothing is published; `publish` also
+refuses any Windows installer named `-unsigned` (tC4 #456). So a release always carries a signed
+Windows installer. To try signing without a tag, run the workflow by hand on the default branch
+with **sign** ticked.
 
 ## Signing (H4)
 
@@ -57,8 +65,9 @@ Open Anyway).
 
 What must be set up once in the GitHub repository, by someone with admin rights (owner action A4):
 
-- An environment named **`windows-signing`**, with a deployment branch rule that allows only the
-  default branch.
+- An environment named **`windows-signing`**, with deployment rules (*Selected branches and
+  tags*) that allow only the default branch and tags matching `v*`. tC4 allows its `release/*`
+  branches the same way.
 - Five repository variables (Settings, Secrets and variables, Actions, **Variables**; they are not
   secret): `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE`,
   `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` — the same values tC4's repository uses.
@@ -66,7 +75,7 @@ What must be set up once in the GitHub repository, by someone with admin rights 
   Actions with organization and repository of **this** repository, entity type *Environment*,
   environment `windows-signing` (subject `repo:<owner>/<repo>:environment:windows-signing`).
 
-A manual run with **sign** ticked on the default branch then signs every `.exe`, `.dll` and
+A tag run, or a manual run with **sign** ticked on the default branch, then signs every `.exe`, `.dll` and
 `.node` file of the app, the installer and its uninstaller; files Microsoft already signed keep
 their signature. Any other run builds unsigned and its file names say `-unsigned`. Check a
 signature in PowerShell:
@@ -95,6 +104,9 @@ branch, it can also be run by hand from the Actions tab on any branch.
 | `release_has_no_test_hooks` | build | the shipped `tc4` has no test flag, route or text |
 | `tc4_exe_imports_no_vcruntime` | build (Windows) | `tc4.exe` needs no Visual C++ runtime (tC4 #284) |
 | Electronite sha256 | build | the shell is the pinned Electronite v37.1.0-graphite |
+| `fetch-pinned.mjs`, `, 0 skipped,` | common | every archive `bundle/en/fetched.lock` pins (the OBS pictures) is downloaded, matches the lock's size and sha256, and is installed in the bundle |
+| `notices.mjs` | build | the notices name every crate in `Cargo.lock` and every bundled resource |
+| the Windows installer is signed | publish | no release carries an `-unsigned` Windows installer |
 | `installed_manifest_is_the_build_s` | smoke | the installed files are the build's |
 | `app_starts_and_starts_tc4` | smoke | the installed app starts with no arguments and brings up tc4 |
 | `smoke.mjs` steps | smoke | address line, About's commit, resources offline, a project made, a verse saved and read back after a restart, one server per app-data folder |
