@@ -119,6 +119,7 @@ impl Actions {
             let asked = Review {
                 files,
                 details: None,
+                use_installed: None,
             };
             match this.runtime().api().call(&asked).await {
                 Ok(review) => this.patch_im(|im| im.reviewed(review, js::random_request_id())),
@@ -214,9 +215,32 @@ impl Actions {
         });
     }
 
-    /// "Use installed versions" (tC4 `importUseInstalled`).
+    /// "Use installed versions" (tC4 `importUseInstalled`): the server counts what carries
+    /// over, and writes nothing.
     pub fn import_use_installed(&self) {
-        self.patch_im(|im| im.use_installed());
+        let Some(asked) = self
+            .s()
+            .im
+            .try_update(|im| im.as_mut().and_then(|im| im.use_installed()))
+            .flatten()
+        else {
+            return;
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            match this.runtime().api().call(&asked).await {
+                Ok(review) => this.patch_im(|im| im.carry_counted(review.carry_over)),
+                Err(error) => {
+                    let problem = said(error);
+                    this.patch_im(|im| im.carry_failed(problem));
+                }
+            }
+        });
+    }
+
+    /// The license picker of the review step.
+    pub fn import_pick_license(&self, license: Option<String>) {
+        self.patch_im(|im| im.pick_license(license, js::random_request_id()));
     }
 
     /// "Import as a new Bible" and "Try the import again" (tC4 `importRun`): one job that

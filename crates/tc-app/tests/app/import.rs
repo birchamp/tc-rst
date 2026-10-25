@@ -11,8 +11,8 @@ use tc_api::Refusal;
 use tc_api::create::{Bible, Details};
 use tc_api::ids::{JobId, ProjectRef, Scope, UploadId};
 use tc_api::import::{
-    FoundVersion, ImportDetails, ImportFile, Review, Run, UpdateBook, UpdateReport, VersionSlot,
-    Versions, VersionsView,
+    CarryOver, FoundVersion, ImportDetails, ImportFile, Review, Run, UpdateBook, UpdateReport,
+    VersionSlot, Versions, VersionsView,
 };
 use tc_api::jobs::{JobOutcome, JobState};
 use tc_api::refusal::{CreateRefusal, ImportRefusal};
@@ -141,6 +141,7 @@ pub(super) fn run(n: u8, file: &ImportFile, details: ImportDetails) -> Run {
         files: vec![file.clone()],
         details,
         found: Vec::new(),
+        license: "CC BY-SA 4.0".to_owned(),
     }
 }
 
@@ -261,6 +262,7 @@ async fn import_accepts_x_codes_and_refuses_unusable_codes_before_import() {
             &Review {
                 files: vec![file.clone()],
                 details: Some(details(&name, code)),
+                use_installed: None,
             },
         )
         .await
@@ -326,6 +328,7 @@ async fn typed_import_name_is_the_project_name() {
         &Review {
             files: vec![file.clone()],
             details: None,
+            use_installed: None,
         },
     )
     .await
@@ -333,7 +336,6 @@ async fn typed_import_name_is_the_project_name() {
     assert_eq!(review.found.details, details("cfm_fbt", "cfm"));
     assert_eq!(review.found.books.len(), 1);
     assert_eq!(review.found.books[0].book, BookId::Titus);
-    assert_eq!(review.found.books[0].aligned, 46);
     assert_eq!(review.found.books[0].decisions, 5);
 
     let typed = details("Tita del tC3", "cfm");
@@ -357,6 +359,7 @@ async fn typed_import_name_is_the_project_name() {
         &Review {
             files: vec![file.clone()],
             details: Some(typed.clone()),
+            use_installed: None,
         },
     )
     .await
@@ -876,4 +879,119 @@ async fn an_import_marks_invalid_a_decision_whose_check_the_installed_pin_lacks(
             "{id}: only the decision whose check the installed notes lack is invalid"
         );
     }
+}
+
+/// tC4 j09 :219 and `alignedVerses`: the Titus project keeps an alignment record for each of
+/// its 46 verses, none with an aligned word, so the review counts 0 aligned verses; and it
+/// names the slots its versions are for before any lookup (tC4 `NOT_LOOKED_UP`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_review_counts_as_tc4_counts() {
+    let (dir, t, _world) = app().await;
+    let file = upload(dir.path(), 1, TC3_TITUS, &tc3_titus());
+    let review = post(
+        &t.app,
+        &Review {
+            files: vec![file],
+            details: None,
+            use_installed: None,
+        },
+    )
+    .await
+    .unwrap();
+    let book = &review.found.books[0];
+    assert_eq!(
+        (book.verses, book.aligned, book.decisions),
+        (46, 0, 5),
+        "Verses 46, Alignments 0 verses, Checking decisions 5 (tC4 j09 :219)"
+    );
+    assert_eq!(
+        review.found.slots,
+        [
+            VersionSlot::TranslationNotes,
+            VersionSlot::OriginalNewTestament
+        ],
+        "the versions the project names, before the lookup"
+    );
+    assert_eq!(
+        review.carry_over, None,
+        "asked without Use installed versions"
+    );
+}
+
+/// tC4 `importUseInstalled` and `applyVersions`: Use installed versions says, before anything
+/// is written, how many decisions carry over to the installed versions and how many must be
+/// checked again; a version found keeps its slot's decisions where they were.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn use_installed_versions_counts_what_carries_over_and_writes_nothing() {
+    let (dir, t, world) = app().await;
+    let file = upload(dir.path(), 1, TC3_TITUS, &titus_with_a_dropped_check());
+    let before = listed(&t.app).await;
+    let staged = at_name_or_staging(&world, "cfm_fbt");
+    let ask = |found: Vec<FoundVersion>| Review {
+        files: vec![file.clone()],
+        details: None,
+        use_installed: Some(found),
+    };
+    let review = post(&t.app, &ask(Vec::new())).await.unwrap();
+    assert_eq!(
+        review.carry_over,
+        Some(CarryOver {
+            carried: 4,
+            invalidated: 1
+        }),
+        "the installed notes hold four of the five checks"
+    );
+    let notes = FoundVersion {
+        slot: VersionSlot::TranslationNotes,
+        repo_path: "git.door43.org/unfoldingWord/en_tn".into(),
+        tag: "v87".into(),
+        sha: "a".repeat(40),
+    };
+    let review = post(&t.app, &ask(vec![notes])).await.unwrap();
+    assert_eq!(
+        review.carry_over,
+        Some(CarryOver {
+            carried: 0,
+            invalidated: 0
+        }),
+        "the notes found keep their decisions; no other tool has any"
+    );
+    assert_eq!(listed(&t.app).await, before, "no project was made");
+    assert_eq!(at_name_or_staging(&world, "cfm_fbt"), staged);
+}
+
+/// tC4 j09 :240 and :345: the project's metadata states the license the run names, the files'
+/// one or the one picked where they differ, as `copyright.shortStatements`; a license the files
+/// do not name is refused.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_import_states_the_license_in_its_metadata() {
+    let (dir, t, world) = app().await;
+    let file = upload(dir.path(), 1, TC3_TITUS, &tc3_titus());
+    let wrong = Run {
+        license: "CC0 1.0 Public Domain".into(),
+        ..run(1, &file, details("Tita licencia", "cfm"))
+    };
+    let job = post(&t.app, &wrong).await.unwrap();
+    assert!(
+        matches!(
+            ended(&t.app, job).await,
+            JobState::Failed(ApiError::BadRequest { ref field, .. }) if field == "license"
+        ),
+        "a license the files do not name"
+    );
+    let file = upload(dir.path(), 2, TC3_TITUS, &tc3_titus());
+    let job = post(&t.app, &run(2, &file, details("Tita licencia", "cfm")))
+        .await
+        .unwrap();
+    let JobState::Done(JobOutcome::Created { project }) = ended(&t.app, job).await else {
+        panic!("not imported")
+    };
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&files(&world.fs, &world.folder(&project))["metadata.json"])
+            .unwrap();
+    assert_eq!(
+        metadata["copyright"],
+        serde_json::json!({ "shortStatements": [{ "statement": "CC BY-SA 4.0" }] })
+    );
+    assert_valid_burrito(&world.fs, &world.folder(&project));
 }

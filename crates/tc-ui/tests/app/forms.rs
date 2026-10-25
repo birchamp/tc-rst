@@ -406,8 +406,8 @@ mod import {
     use tc_api::Refusal;
     use tc_api::ids::UploadId;
     use tc_api::import::{
-        FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview, VersionSlot,
-        VersionsView,
+        CarryOver, FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview,
+        VersionSlot, VersionsView,
     };
     use tc_api::refusal::ImportRefusal;
     use tc_core::BookId;
@@ -443,11 +443,27 @@ mod import {
                     decisions: 5,
                     not_kept: Vec::new(),
                 }],
+                slots: vec![
+                    VersionSlot::TranslationNotes,
+                    VersionSlot::OriginalNewTestament,
+                ],
             },
             details: found,
             folder: None,
             refusal,
+            carry_over: None,
         }
+    }
+
+    const COUNTED: CarryOver = CarryOver {
+        carried: 4,
+        invalidated: 1,
+    };
+
+    /// "Use installed versions" and the server's count.
+    fn installed(form: &mut ImportForm) {
+        form.use_installed().expect("the count is asked");
+        form.carry_counted(Some(COUNTED));
     }
 
     fn versions(unresolved: Vec<VersionSlot>) -> VersionsView {
@@ -555,7 +571,7 @@ mod import {
         form.review_refused(failure.clone());
         assert_eq!(form.step(), ImportStep::Review);
         assert_eq!(form.reviewed, Some(Reviewed::Damaged(failure)));
-        form.use_installed();
+        assert_eq!(form.use_installed(), None);
         assert!(!form.can_import(NONE));
         assert_eq!(form.press_run(NONE), None);
     }
@@ -576,7 +592,7 @@ mod import {
     #[test]
     fn a_name_in_use_holds_import_and_another_name_frees_it() {
         let mut form = reviewed(None);
-        form.use_installed();
+        installed(&mut form);
         assert!(form.can_import(NONE));
         form.type_name("Sample Bible".into(), rid(3));
         assert!(
@@ -595,7 +611,7 @@ mod import {
     #[test]
     fn the_reviews_refusal_holds_while_the_details_are_the_ones_it_read() {
         let mut form = reviewed(Some(Refusal::Import(ImportRefusal::NameExists)));
-        form.use_installed();
+        installed(&mut form);
         assert!(form.name_in_use(NONE), "the server's listing said so");
         assert!(!form.can_import(NONE));
         form.type_name("Another".into(), rid(3));
@@ -607,7 +623,7 @@ mod import {
             reason: "not a tag".into(),
         });
         let mut form = reviewed(Some(code.clone()));
-        form.use_installed();
+        installed(&mut form);
         assert_eq!(form.details_refusal(), Some(&code));
         assert!(!form.can_import(NONE));
         form.type_code("  kr ".into(), rid(3));
@@ -626,8 +642,11 @@ mod import {
         assert_eq!(form.versions.data_state(), "missing");
         assert!(form.versions.open());
         assert!(!form.can_import(NONE));
-        form.use_installed();
+        let asked = form.use_installed().expect("the count is asked");
+        assert_eq!(asked.use_installed, Some(versions(vec![]).found));
         assert_eq!(form.versions.data_state(), "installed");
+        assert!(!form.can_import(NONE), "Import waits for the count");
+        form.carry_counted(Some(COUNTED));
         assert!(form.can_import(NONE));
         assert_eq!(
             form.versions.found(),
@@ -694,7 +713,7 @@ mod import {
     #[test]
     fn a_run_that_ends_with_nothing_to_say_returns_to_the_review_as_a_new_attempt() {
         let mut form = reviewed(None);
-        form.use_installed();
+        installed(&mut form);
         form.press_run(NONE).unwrap();
         form.run_started(tc_api::ids::JobId::new(7));
         assert!(matches!(
@@ -710,9 +729,88 @@ mod import {
     #[test]
     fn an_edit_makes_the_next_import_another_request() {
         let mut form = reviewed(None);
-        form.use_installed();
+        installed(&mut form);
         form.type_name("Tita".into(), rid(5));
         assert_eq!(form.press_run(NONE).unwrap().request, rid(5));
+    }
+
+    /// tC4 `NOT_LOOKED_UP` and `importUseInstalled`: not looked up, every slot the files name
+    /// takes the installed versions, and the review is asked what that does to the decisions.
+    #[test]
+    fn use_installed_before_a_lookup_moves_every_named_slot_and_asks_for_the_count() {
+        let mut form = reviewed(None);
+        let asked = form.use_installed().expect("the count is asked");
+        assert_eq!(asked.use_installed, Some(Vec::new()));
+        assert_eq!(asked.details, Some(details("cfm_fbt", "cfm")));
+        assert_eq!(asked.files.len(), 1);
+        assert_eq!(
+            form.versions,
+            VersionLookup::Installed(
+                VersionsView {
+                    found: Vec::new(),
+                    unresolved: vec![
+                        VersionSlot::TranslationNotes,
+                        VersionSlot::OriginalNewTestament
+                    ],
+                },
+                None
+            )
+        );
+        assert_eq!(form.use_installed(), None, "one count at a time");
+        form.carry_failed("no answer".into());
+        assert_eq!(form.versions, VersionLookup::NotLookedUp, "offered again");
+        assert_eq!(form.state, ImportState::Problem("no answer".into()));
+        installed(&mut form);
+        assert!(matches!(
+            form.versions,
+            VersionLookup::Installed(_, Some(COUNTED))
+        ));
+        assert!(form.can_import(NONE));
+    }
+
+    /// A review whose files name no version has nothing to look up (tC4 `unresolvedSlots`
+    /// empty: the row is found and Import needs no choice).
+    #[test]
+    fn a_review_that_names_no_version_needs_no_choice() {
+        let mut form = with_file();
+        form.press_review().unwrap();
+        let mut none = review(None);
+        none.found.slots.clear();
+        form.reviewed(none, rid(1));
+        assert_eq!(form.versions.data_state(), "found");
+        assert!(form.can_import(NONE));
+    }
+
+    /// tC4 j09 :345: where the files differ on the license, Import waits for the pick, and
+    /// the run states the one picked; one license is stated as it is.
+    #[test]
+    fn differing_licenses_wait_for_a_pick_and_the_run_states_it() {
+        let mut form = reviewed(None);
+        installed(&mut form);
+        assert_eq!(form.license.as_deref(), Some("CC BY-SA 4.0"));
+        assert_eq!(form.press_run(NONE).unwrap().license, "CC BY-SA 4.0");
+
+        let mut form = with_file();
+        form.press_review().unwrap();
+        let mut two = review(None);
+        two.found.licenses = vec!["CC BY-SA 4.0".into(), "CC0 1.0 Public Domain".into()];
+        form.reviewed(two, rid(1));
+        installed(&mut form);
+        assert_eq!(form.license, None);
+        assert!(!form.can_import(NONE), "Import waits for the choice");
+        form.pick_license(Some("CC0 1.0 Public Domain".into()), rid(2));
+        let run = form.press_run(NONE).expect("Import runs");
+        assert_eq!(run.license, "CC0 1.0 Public Domain");
+        assert_eq!(run.request, rid(2), "a pick is an edit");
+
+        let mut form = with_file();
+        form.press_review().unwrap();
+        let mut unnamed = review(None);
+        unnamed.found.licenses = vec!["CC BY-SA 4.0".into(), String::new()];
+        form.reviewed(unnamed, rid(1));
+        installed(&mut form);
+        form.pick_license(Some(String::new()), rid(2));
+        assert_eq!(form.press_run(NONE).unwrap().license, "", "No license");
     }
 
     #[test]

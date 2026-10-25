@@ -571,7 +571,7 @@ pub struct ImportFailure {
 /// What the review step read of the files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reviewed {
-    Found(tc_api::import::ImportReview),
+    Found(Box<tc_api::import::ImportReview>),
     /// The files cannot be imported (tC4's `damaged` finding): nothing will be made of them.
     Damaged(ImportFailure),
 }
@@ -583,8 +583,12 @@ pub enum VersionLookup {
     NotLookedUp,
     Looking,
     Found(tc_api::import::VersionsView),
-    /// "Use installed versions": the slots Door43 did not give take this computer's.
-    Installed(tc_api::import::VersionsView),
+    /// "Use installed versions": the slots Door43 did not give take this computer's, and what
+    /// that does to their decisions once the server has counted it.
+    Installed(
+        tc_api::import::VersionsView,
+        Option<tc_api::import::CarryOver>,
+    ),
 }
 
 impl VersionLookup {
@@ -595,23 +599,24 @@ impl VersionLookup {
             Self::Looking => "looking",
             Self::Found(view) if view.unresolved.is_empty() => "found",
             Self::Found(_) => "missing",
-            Self::Installed(_) => "installed",
+            Self::Installed(..) => "installed",
         }
     }
 
-    /// Import waits for a choice: a lookup, or Use installed versions.
+    /// Import waits for a choice, a lookup or Use installed versions, or for the count of
+    /// what the installed versions do (tC4 `im.busy`).
     pub fn open(&self) -> bool {
         match self {
-            Self::NotLookedUp | Self::Looking => true,
+            Self::NotLookedUp | Self::Looking | Self::Installed(_, None) => true,
             Self::Found(view) => !view.unresolved.is_empty(),
-            Self::Installed(_) => false,
+            Self::Installed(_, Some(_)) => false,
         }
     }
 
     /// The versions Door43 gave, which the project pins.
     pub fn found(&self) -> Vec<tc_api::import::FoundVersion> {
         match self {
-            Self::Found(view) | Self::Installed(view) => view.found.clone(),
+            Self::Found(view) | Self::Installed(view, _) => view.found.clone(),
             Self::NotLookedUp | Self::Looking => Vec::new(),
         }
     }
@@ -647,6 +652,9 @@ pub struct ImportForm {
     pub name: String,
     pub code: String,
     pub versions: VersionLookup,
+    /// The license the project states: the files' one, or the one picked where they differ
+    /// (tC4 `im.license`); `None` until picked, `Some("")` for none.
+    pub license: Option<String>,
     /// The run's attempt: one request per attempt (UI-3).
     pub submit: crate::app::submit::Submit,
     pub state: ImportState,
@@ -664,6 +672,7 @@ impl ImportForm {
             name: String::new(),
             code: String::new(),
             versions: VersionLookup::NotLookedUp,
+            license: None,
             submit: crate::app::submit::Submit::new(request),
             state: ImportState::Idle,
         }
@@ -768,11 +777,24 @@ impl ImportForm {
     }
 
     /// The review's answer: the review step with the details the files hold, not looked up.
+    /// A review that names no version has nothing to look up (tC4 `unresolvedSlots` empty).
     pub fn reviewed(&mut self, review: tc_api::import::ImportReview, next: RequestId) {
         self.name = review.details.name.clone();
         self.code = review.details.code.clone();
-        self.reviewed = Some(Reviewed::Found(review));
-        self.versions = VersionLookup::NotLookedUp;
+        self.license = match review.found.licenses.as_slice() {
+            [one] => Some(one.clone()),
+            [] => Some(String::new()),
+            _ => None,
+        };
+        self.versions = if review.found.slots.is_empty() {
+            VersionLookup::Found(tc_api::import::VersionsView {
+                found: Vec::new(),
+                unresolved: Vec::new(),
+            })
+        } else {
+            VersionLookup::NotLookedUp
+        };
+        self.reviewed = Some(Reviewed::Found(Box::new(review)));
         self.page = ImportPage::Review;
         self.state = ImportState::Idle;
         self.submit.next(next);
@@ -898,18 +920,53 @@ impl ImportForm {
         }
     }
 
-    /// "Use installed versions".
-    pub fn use_installed(&mut self) {
-        self.versions = match std::mem::replace(&mut self.versions, VersionLookup::NotLookedUp) {
-            VersionLookup::Found(view) | VersionLookup::Installed(view) => {
-                VersionLookup::Installed(view)
-            }
-            VersionLookup::NotLookedUp => VersionLookup::Installed(tc_api::import::VersionsView {
-                found: Vec::new(),
-                unresolved: Vec::new(),
-            }),
-            VersionLookup::Looking => VersionLookup::Looking,
+    /// "Use installed versions" (tC4 `importUseInstalled`): the review to ask for what the
+    /// installed versions do to the decisions. Not looked up, every slot the files name takes
+    /// them.
+    pub fn use_installed(&mut self) -> Option<tc_api::import::Review> {
+        let view = match &self.versions {
+            VersionLookup::Found(view) if !view.unresolved.is_empty() => view.clone(),
+            VersionLookup::NotLookedUp => match &self.reviewed {
+                Some(Reviewed::Found(review)) => tc_api::import::VersionsView {
+                    found: Vec::new(),
+                    unresolved: review.found.slots.clone(),
+                },
+                _ => return None,
+            },
+            _ => return None,
         };
+        let found = view.found.clone();
+        self.versions = VersionLookup::Installed(view, None);
+        Some(tc_api::import::Review {
+            files: self.sent(),
+            details: Some(self.details()),
+            use_installed: Some(found),
+        })
+    }
+
+    pub fn carry_counted(&mut self, carry: Option<tc_api::import::CarryOver>) {
+        if let (VersionLookup::Installed(_, held @ None), Some(carry)) = (&mut self.versions, carry)
+        {
+            *held = Some(carry);
+        }
+    }
+
+    /// The count failed: the choice is offered again, and the callout says why.
+    pub fn carry_failed(&mut self, problem: String) {
+        if let VersionLookup::Installed(view, None) = &self.versions {
+            self.versions = if view.found.is_empty() {
+                VersionLookup::NotLookedUp
+            } else {
+                VersionLookup::Found(view.clone())
+            };
+            self.state = ImportState::Problem(problem);
+        }
+    }
+
+    /// The license picker (tC4 `import-license`): `None` is "Choose a license".
+    pub fn pick_license(&mut self, license: Option<String>, next: RequestId) {
+        self.license = license;
+        self.submit.edited(next);
     }
 
     /// tC4 `cantImport`, inverted.
@@ -921,6 +978,7 @@ impl ImportForm {
             && !self.name_in_use(listing)
             && self.details_refusal().is_none()
             && !self.versions.open()
+            && self.license.is_some()
             && !matches!(
                 self.state,
                 ImportState::Reviewing | ImportState::Running { .. }
@@ -947,6 +1005,7 @@ impl ImportForm {
             files: self.sent(),
             details: self.details(),
             found: self.versions.found(),
+            license: self.license.clone().unwrap_or_default(),
         })
     }
 

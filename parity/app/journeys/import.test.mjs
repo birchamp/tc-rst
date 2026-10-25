@@ -17,6 +17,21 @@ const TIT = path.join(TC3, 'cfm_fbt_tit_book.zip');
 const MULTI = ['jhn', 'job', 'luk'].map((b) => path.join(TC3, 'multi', `en_kjv_${b}_book.zip`));
 const abbrOf = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 const listed = (env) => fs.readdirSync(env.projectsDir).filter((n) => !n.startsWith('.')).sort();
+const projectFile = (env, name, rel) => JSON.parse(fs.readFileSync(path.join(env.projectsDir, abbrOf(name), rel), 'utf8'));
+const pinsOf = (env, name) => projectFile(env, name, path.join('ingredients', 'checking', 'resources.json'));
+const decisionsOf = (env, name, tool, book) => projectFile(env, name, path.join('ingredients', 'checking', tool, `${book}.json`));
+const statement = (env, name) => projectFile(env, name, 'metadata.json').copyright;
+/** The commit the fake Door43 gives `repo`'s `tag`. */
+async function tagSha(env, repo, tag) {
+  const response = await fetch(`${env.door43.url}/api/v1/repos/${repo}/tags/${tag}`);
+  assert.equal(response.status, 200, `${repo} ${tag}`);
+  return (await response.json()).commit.sha;
+}
+/** tC4's `pickOption`: the combobox, then the option by its name. */
+async function pickOption(page, combobox, option) {
+  await combobox.click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+}
 
 /** From Home to the review step of `files` (paths or payloads), with `name` typed. */
 async function review(page, files, { name } = {}) {
@@ -94,7 +109,7 @@ browserTest('tC3 offline: the review page shows what carries over; Use installed
     await page.getByTestId('import-book-TIT').waitFor();
     assert.equal(await page.getByTestId('import-damaged').count(), 0);
     const carried = await page.getByTestId('import-carried').textContent();
-    for (const part of ['Verses46', 'Checking decisions5', 'Contributors0']) assert.ok(carried.includes(part), `${part} in ${carried}`);
+    for (const part of ['Verses46', 'Alignments0 verses', 'Checking decisions5', 'Contributors0']) assert.ok(carried.includes(part), `${part} in ${carried}`);
     assert.match(await page.getByTestId('import-book-TIT').textContent(), /3 chapters · 46 verses/);
     assert.ok(await page.getByText('CC BY-SA 4.0', { exact: true }).isVisible());
     // Offline: the versions are not looked up, so Import waits for a choice.
@@ -103,17 +118,19 @@ browserTest('tC3 offline: the review page shows what carries over; Use installed
     assert.ok(await page.getByTestId('import-run').isDisabled());
     await page.getByTestId('import-use-installed').click();
     assert.equal(await state(page), 'installed');
+    await until('the carry-over is counted', async () => /\d+ decisions carry over\. \d+ decisions must be checked again\./.test(await resources(page).textContent()));
     await imported(page, name);
     const folder = path.join(env.projectsDir, abbrOf(name));
     const meta = JSON.parse(fs.readFileSync(path.join(folder, 'metadata.json'), 'utf8'));
     assert.equal(meta.languages[0].tag, 'cfm');
+    assert.deepEqual(meta.copyright, { shortStatements: [{ statement: 'CC BY-SA 4.0' }] });
     assert.equal(fs.readFileSync(path.join(folder, 'ingredients', 'TIT.usfm'), 'utf8').match(/^\\c \d+/gm).length, 3);
     // D95: nothing asked the internet.
     assert.equal(await page.getByTestId('net-ask').count(), 0);
   });
 });
 
-browserTest('tC3 multi-zip: three books of one language are one project', async () => {
+browserTest('tC3 multi-zip: three books of one language are one project; the license is chosen on the review page', async () => {
   await withApp(async ({ page, env }) => {
     const name = 'KJV tC3';
     await review(page, MULTI, { name });
@@ -122,41 +139,66 @@ browserTest('tC3 multi-zip: three books of one language are one project', async 
     // The files disagree on the license: the check says so.
     assert.equal(await page.getByTestId('import-check-license').getAttribute('data-status'), 'warn');
     await page.getByTestId('import-use-installed').click();
+    assert.equal(await state(page), 'installed');
+    // the files disagree (CC BY-SA 4.0, CC0 1.0): Import waits for the choice
+    await until('the carry-over is counted', async () => /decisions? must be checked again/.test(await resources(page).textContent()));
+    assert.ok(await page.getByTestId('import-run').isDisabled());
+    await pickOption(page, page.getByTestId('import-license'), 'CC0 1.0 Public Domain');
     await imported(page, name);
+    assert.deepEqual(statement(env, name), { shortStatements: [{ statement: 'CC0 1.0 Public Domain' }] });
     for (const code of ['JHN', 'JOB', 'LUK']) assert.ok(fs.existsSync(path.join(env.projectsDir, abbrOf(name), 'ingredients', `${code}.usfm`)), code);
   });
 });
 
-browserTest('tC3 online: the lookup waits for its click and the question, then names what Door43 has', async () => {
+browserTest('tC3 online: each version Door43 has is a full pin; the project opens and the guided fix lists the en_tn v87 this computer lacks', async () => {
   await withApp(async ({ page, env }) => {
     const name = 'Tita tC3 online';
+    const v87 = await tagSha(env, 'unfoldingWord/en_tn', 'v87');
     await env.door43.clear();
     await review(page, [TIT], { name });
     assert.equal(await state(page), 'offline');
     assert.deepEqual((await env.door43.requests()).filter((r) => r.path.includes('/tags')), [], 'nothing looked up before the click');
+    // the review page finds the versions; Import needs no choice
     await lookUp(page);
-    const asked = (await env.door43.requests()).filter((r) => r.path.includes('/tags'));
-    assert.ok(asked.length > 0, 'the lookup asked Door43 for the tags');
-    const shown = await state(page);
-    assert.ok(['found', 'missing'].includes(shown), shown);
-    if (shown === 'missing') await page.getByTestId('import-use-installed').click();
+    assert.ok((await env.door43.requests()).some((r) => r.path.includes('/tags')), 'the lookup asked Door43 for the tags');
+    assert.equal(await state(page), 'found');
+    assert.ok((await resources(page).textContent()).includes('unfoldingWord/en_tn v87'));
     await imported(page, name);
+    // on disk: translationNotes is pinned to en_tn v87 by its sha, and the decisions record it
+    const notes = pinsOf(env, name).languageSets.primary.translationNotes;
+    assert.deepEqual([notes.version, notes.sha, notes.books], ['v87', v87, ['TIT']]);
+    assert.equal(decisionsOf(env, name, 'translationNotes', 'TIT').resource.sha, v87);
+    // Check offers the guided fix for the pinned en_tn v87 (D88: a missing pin is always a fetch)
+    await page.getByTestId(`project-${abbrOf(name)}`).getByRole('button', { name: /Titus/ }).click();
+    await page.getByRole('tab', { name: en['nav.check'], exact: true }).click();
+    const card = page.getByTestId('preflight-translationNotes');
+    await until('the notes card offers a fetch', async () => (await card.getAttribute('data-state')) === 'fetch', 60_000);
+    await card.getByTestId('fix-translationNotes').click();
+    await page.getByTestId('guided-fix').waitFor();
+    assert.ok((await page.getByTestId('fix-pin').textContent()).includes(v87));
   }, { door43: true });
 });
 
-browserTest('tC3 online, mixed: Use installed versions keeps the found pins named', async () => {
-  await withApp(async ({ page }) => {
-    await review(page, MULTI, { name: 'KJV tC3 mixed' });
+browserTest('tC3 online, mixed: the found pins stay named when translationWords moves to the installed versions, and they are stored', async () => {
+  await withApp(async ({ page, env }) => {
+    const name = 'KJV tC3 mixed';
+    const v87 = await tagSha(env, 'unfoldingWord/en_tn', 'v87');
+    await review(page, MULTI, { name });
     await lookUp(page);
+    assert.equal(await state(page), 'missing');
+    // LUK names en_tn v87 and ugnt v0.34 (found); its translationWords decisions name no version
     const before = await resources(page).textContent();
-    if ((await state(page)) === 'missing') {
-      await page.getByTestId('import-use-installed').click();
-      assert.equal(await state(page), 'installed');
-      const after = await resources(page).textContent();
-      const found = before.match(/were found: (.*?)\./)?.[1];
-      if (found) assert.ok(after.includes(found), 'the found versions stay named');
-    }
-    await imported(page, 'KJV tC3 mixed');
+    for (const found of ['unfoldingWord/en_tn v87', 'unfoldingWord/el-x-koine_ugnt v0.34']) assert.ok(before.includes(found), `${found} in ${before}`);
+    await page.getByTestId('import-use-installed').click();
+    assert.equal(await state(page), 'installed');
+    const after = await resources(page).textContent();
+    assert.ok(after.includes('unfoldingWord/en_tn v87'), after);
+    assert.ok(after.includes('The versions on this computer will be used for translationWords.'), after);
+    await pickOption(page, page.getByTestId('import-license'), 'CC BY-SA 4.0');
+    await imported(page, name);
+    const notes = pinsOf(env, name).languageSets.primary.translationNotes;
+    assert.deepEqual([notes.version, notes.sha, notes.books], ['v87', v87, ['LUK']]);
+    assert.equal(decisionsOf(env, name, 'translationNotes', 'LUK').resource.sha, v87);
   }, { door43: true });
 });
 
@@ -173,7 +215,8 @@ browserTest('tC3 name clash: a Bible name of a project on this computer is flagg
     assert.ok(await run.isDisabled());
     await page.getByTestId('import-name').fill('Tita tC3 clash');
     await until('the message clears', async () => (await field.getByRole('alert').count()) === 0);
-    assert.ok(await run.isEnabled());
+    // tC4's toBeEnabled waits; here Import also waits for the carry-over count.
+    await until('Import is on', () => run.isEnabled());
     // Stale: a folder of the name appears after the review read the listing.
     const before = listed(env);
     fs.cpSync(path.join(env.projectsDir, 'sample_burrito'), path.join(env.projectsDir, 'tita_tc3_clash'), { recursive: true });

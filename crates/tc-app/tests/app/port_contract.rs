@@ -214,7 +214,9 @@ mod import_ports {
     use std::sync::Arc;
 
     use tc_api::ApiError;
-    use tc_api::import::{FoundBook, ImportDetails, ImportFile, ImportFound, Review, UpdateReport};
+    use tc_api::import::{
+        FoundBook, ImportDetails, ImportFile, ImportFound, Review, UpdateReport, VersionSlot,
+    };
     use tc_api::jobs::{JobOutcome, JobState};
     use tc_api::refusal::{ImportRefusal, Refusal};
     use tc_app::StoreChoice;
@@ -273,10 +275,14 @@ mod import_ports {
                 chapters: 3,
                 verses: 46,
                 drafted: 46,
-                aligned: 46,
+                aligned: 0,
                 decisions: 5,
                 not_kept: Vec::new(),
             }],
+            slots: vec![
+                VersionSlot::TranslationNotes,
+                VersionSlot::OriginalNewTestament,
+            ],
         }
     }
 
@@ -483,6 +489,7 @@ mod import_ports {
                         &Review {
                             files: vec![w.zip.clone()],
                             details: Some(in_use.clone()),
+                            use_installed: None,
                         },
                     )
                     .await

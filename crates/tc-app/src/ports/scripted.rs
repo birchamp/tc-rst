@@ -88,6 +88,7 @@ impl SyncPort for ScriptedSyncPort {
 pub struct ScriptedImportPort {
     reviews: Mutex<VecDeque<Result<ImportFound, ApiError>>>,
     versions: Mutex<VecDeque<Result<VersionsView, ApiError>>>,
+    carry_overs: Mutex<VecDeque<Result<tc_api::import::CarryOver, ApiError>>>,
     runs: Mutex<VecDeque<ScriptedRun>>,
     updates: Mutex<VecDeque<Result<UpdateReport, ApiError>>>,
     calls: AtomicUsize,
@@ -113,6 +114,10 @@ impl ScriptedImportPort {
 
     pub fn script_versions(&self, outcome: Result<VersionsView, ApiError>) {
         lock(&self.versions).push_back(outcome);
+    }
+
+    pub fn script_carry_over(&self, outcome: Result<tc_api::import::CarryOver, ApiError>) {
+        lock(&self.carry_overs).push_back(outcome);
     }
 
     /// The next run's project, which the test's store already holds, or its refusal.
@@ -152,6 +157,17 @@ impl ImportPort for ScriptedImportPort {
         Box::pin(async move { outcome.map_err(JobEnd::Failed) })
     }
 
+    fn carry_over(
+        &self,
+        _app: App,
+        _files: Vec<SourceFile>,
+        _found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
+    ) -> BoxFuture<Result<tc_api::import::CarryOver, ApiError>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let outcome = next(&self.carry_overs);
+        Box::pin(async move { outcome })
+    }
+
     /// A cancel asked before the run answers ends it with nothing made, as the real port's
     /// cancel before its create does.
     fn run(
@@ -160,6 +176,7 @@ impl ImportPort for ScriptedImportPort {
         _files: Vec<SourceFile>,
         _details: ImportDetails,
         _found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
+        _license: String,
         _folder: ProjectRef,
         ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {

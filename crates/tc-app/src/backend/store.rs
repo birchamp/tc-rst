@@ -828,13 +828,26 @@ impl ProjectStore for StoreBackend {
 /// thread of its own, so the reports are written from another, and the start never waits for
 /// them. "Ask for help" attaches them; E1b tells the person of a join that did not finish, and
 /// F1 of an import (APP-DESIGN §10).
+///
+/// An import's removal also sets `import_removed` for Home's next listing, and Home lists again.
 pub(crate) fn report_removed_staging(
     backend: Arc<StoreBackend>,
     reports: ReportLog,
     clock: Arc<dyn Clock>,
+    bus: crate::events::EventBus,
+    import_removed: Arc<std::sync::atomic::AtomicBool>,
 ) {
-    fn record(backend: &StoreBackend, reports: &ReportLog, clock: &dyn Clock, started: WallMs) {
-        for removed in backend.removed_at_start() {
+    let started = clock.now();
+    let record = move |started: WallMs| {
+        let removed = backend.removed_at_start();
+        if removed
+            .iter()
+            .any(|r| r.kind == Some(tc_store::StagingKind::Import))
+        {
+            import_removed.store(true, std::sync::atomic::Ordering::SeqCst);
+            bus.publish(tc_api::event::Event::ProjectsChanged);
+        }
+        for removed in removed {
             let (op, outcome, facts) = staging_report(&removed);
             reports.add(
                 op,
@@ -844,17 +857,14 @@ pub(crate) fn report_removed_staging(
                 clock.now(),
             );
         }
-    }
-    let started = clock.now();
+    };
     let spawned = {
-        let (backend, reports, clock) = (backend.clone(), reports.clone(), clock.clone());
-        spawn("tc-app staging report", move || {
-            record(&backend, &reports, clock.as_ref(), started);
-        })
+        let record = record.clone();
+        spawn("tc-app staging report", move || record(started))
     };
     if spawned.is_none() {
         // No thread to be had: wait for the cleanup here rather than lose the reports.
-        record(&backend, &reports, clock.as_ref(), started);
+        record(started);
     }
 }
 

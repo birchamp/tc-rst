@@ -12,7 +12,15 @@
     "details": {
       "name": "Tita tC3",
       "code": "cfm"
-    }
+    },
+    "useInstalled": [
+      {
+        "slot": "translationNotes",
+        "repoPath": "git.door43.org/unfoldingWord/en_tn",
+        "tag": "v87",
+        "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a"
+      }
+    ]
   },
   "reply": {
     "type": "ok",
@@ -34,10 +42,14 @@
             "chapters": 3,
             "verses": 46,
             "drafted": 46,
-            "aligned": 46,
+            "aligned": 0,
             "decisions": 5,
             "notKept": []
           }
+        ],
+        "slots": [
+          "translationNotes",
+          "originalNewTestament"
         ]
       },
       "details": {
@@ -50,6 +62,10 @@
         "value": {
           "type": "nameExists"
         }
+      },
+      "carryOver": {
+        "carried": 4,
+        "invalidated": 1
       }
     }
   },

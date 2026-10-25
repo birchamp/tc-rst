@@ -200,6 +200,8 @@ pub(crate) struct Inner {
     pub(crate) seed_job: Mutex<Option<JobId>>,
     /// Home's summaries (B2).
     pub(crate) home: crate::home::SummaryCache,
+    /// The start removed an import's part copy and Home has not said so yet (F1).
+    pub(crate) import_removed: Arc<std::sync::atomic::AtomicBool>,
     /// Sync, share and open from Door43 (UI-2).
     pub(crate) sync: Arc<dyn crate::ports::SyncPort>,
     /// USB exchange (E2 adds its use).
@@ -383,8 +385,15 @@ impl App {
             );
         }
 
+        let import_removed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         if let Some(backend) = on_disk {
-            crate::backend::store::report_removed_staging(backend, reports.clone(), clock.clone());
+            crate::backend::store::report_removed_staging(
+                backend,
+                reports.clone(),
+                clock.clone(),
+                bus.clone(),
+                import_removed.clone(),
+            );
         }
 
         // The keychain is read here and nowhere else (but a test relaunch): an
@@ -480,6 +489,7 @@ impl App {
             resources,
             seed_job: Mutex::new(None),
             home: crate::home::SummaryCache::default(),
+            import_removed,
             sync,
             exchange,
             import,

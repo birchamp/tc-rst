@@ -73,7 +73,7 @@ use tc_api::ids::{
     ViewSeq, WallMs,
 };
 use tc_api::import::{
-    FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview,
+    CarryOver, FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview,
     Review as ImportReviewRequest, Run as ImportRun, UpdateBook, UpdateReport, VerseAt,
     VersionSlot, Versions, VersionsView,
 };
@@ -1562,6 +1562,7 @@ impl Example for HomeView {
                 tool: None,
                 snippet: "Pablo, siervo de Dios".into(),
             }),
+            import_removed: true,
         }
     }
 }
@@ -3031,6 +3032,7 @@ impl Example for ImportReviewRequest {
         ImportReviewRequest {
             files: import_files(),
             details: Some(import_details()),
+            use_installed: Some(VersionsView::example().found),
         }
     }
 }
@@ -3050,16 +3052,24 @@ impl Example for ImportReview {
                     chapters: 3,
                     verses: 46,
                     drafted: 46,
-                    aligned: 46,
+                    aligned: 0,
                     decisions: 5,
                     not_kept: Vec::new(),
                 }],
+                slots: vec![
+                    VersionSlot::TranslationNotes,
+                    VersionSlot::OriginalNewTestament,
+                ],
             },
             details: import_details(),
             folder: Some(ProjectRef::parse("tita_tc3").unwrap()),
             refusal: Some(tc_api::Refusal::Import(
                 tc_api::refusal::ImportRefusal::NameExists,
             )),
+            carry_over: Some(CarryOver {
+                carried: 4,
+                invalidated: 1,
+            }),
         }
     }
 }
@@ -3094,6 +3104,7 @@ impl Example for ImportRun {
             files: import_files(),
             details: import_details(),
             found: VersionsView::example().found,
+            license: "CC BY-SA 4.0".into(),
         }
     }
 }

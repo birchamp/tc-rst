@@ -154,6 +154,9 @@ pub struct AppState {
     pub import_toast: ArcRwSignal<Option<ImportToast>>,
     /// The project an import of this page made: its card carries "Imported" (F1 sets it).
     pub imported_repo: ArcRwSignal<Option<ProjectRef>>,
+    /// Home's `home.importRemoved`: the server said so in one listing of this launch, and it
+    /// stays until the person opens Import.
+    pub import_removed: ArcRwSignal<bool>,
     /// The open and the Understand screen (B3).
     pub u: super::understand::UnderstandState,
     /// The Check screen (B5a).
@@ -205,6 +208,7 @@ impl AppState {
             sync_result: ArcRwSignal::new(None),
             import_toast: ArcRwSignal::new(None),
             imported_repo: ArcRwSignal::new(None),
+            import_removed: ArcRwSignal::new(false),
             u: super::understand::UnderstandState::new(
                 place.map(|p| p.book),
                 place.map_or(1, |p| p.chapter),
@@ -804,6 +808,7 @@ impl Actions {
     pub fn open_import(&self) {
         let s = self.s();
         s.im.try_set(Some(ImportForm::open(js::random_request_id())));
+        s.import_removed.try_set(false);
         s.layers.dialog.try_set(Some(Dialog::Import));
     }
 

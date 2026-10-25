@@ -2,9 +2,8 @@
 //! review of what they hold, the run and its failure. This release imports the tC3 kind; the
 //! USFM and Scripture Burrito cards stay on the kind step (rulings/2026-10-24-H3-H4-H7).
 //!
-//! Declared differences from tC4 4.0 (APP-DESIGN F1 row): the run shows its progress and has
-//! Cancel; the review shows no "Missing verses" row and no license picker, because the server's
-//! review names neither (tc-api `ImportFound`).
+//! Declared difference from tC4 4.0 (APP-DESIGN F1 row): the run shows its progress and has
+//! Cancel.
 
 use std::sync::Arc;
 
@@ -21,7 +20,8 @@ use crate::app::web::{Actions, AppCtx, use_app, use_runtime};
 use crate::ds::{
     Attrs, Button, ButtonVariant, Callout, CalloutTone, Corner, DropZone, Edge, Field, Fill,
     IconButton, IconButtonVariant, Input, Inset, KeyValue, KeyValueGrid, OptionCard, Overline,
-    ProgressBar, Size, Spinner, Status, StatusDot, Surface, Text, TextRole, TextTone, Tone,
+    ProgressBar, Select, SelectOption, Size, Spinner, Status, StatusDot, Surface, Text, TextRole,
+    TextTone, Tone,
 };
 use crate::i18n::{Key, keys, t, t_dyn};
 
@@ -476,7 +476,7 @@ fn review_step(
 ) -> AnyView {
     let reviewed = im.with_untracked(|im| im.as_ref().and_then(|im| im.reviewed.clone()));
     match reviewed {
-        Some(Reviewed::Found(review)) => found(actions, im, listing, review).into_any(),
+        Some(Reviewed::Found(review)) => found(actions, im, listing, *review).into_any(),
         Some(Reviewed::Damaged(failure)) => {
             let code = failure
                 .code
@@ -559,6 +559,7 @@ fn found_list(found: &[FoundVersion]) -> String {
 fn resources_check(
     actions: &Actions,
     im: &ArcRwSignal<Option<ImportForm>>,
+    slots: Vec<VersionSlot>,
 ) -> impl IntoView + use<> {
     use keys::importer::review as k;
     let versions = read(im, |im| im.versions.clone(), VersionLookup::NotLookedUp);
@@ -567,7 +568,12 @@ fn resources_check(
             (!found.is_empty()).then(|| t(k::RESOURCES_FOUND, &[("list", &found_list(found))]))
         };
         let parts: Vec<Option<String>> = match versions.get() {
-            VersionLookup::NotLookedUp => vec![Some(t(k::RESOURCES_OFFLINE_ANY, &[]))],
+            VersionLookup::NotLookedUp => {
+                vec![Some(t(
+                    k::RESOURCES_OFFLINE,
+                    &[("list", &slot_list(&slots))],
+                ))]
+            }
             VersionLookup::Looking => vec![Some(t(k::RESOURCES_LOOKING, &[]))],
             VersionLookup::Found(view) => vec![
                 found_words(&view.found),
@@ -578,14 +584,27 @@ fn resources_check(
                     )
                 }),
             ],
-            VersionLookup::Installed(view) => vec![
+            VersionLookup::Installed(view, carry) => vec![
                 found_words(&view.found),
-                Some(if view.unresolved.is_empty() {
-                    t(k::RESOURCES_INSTALLED_ALL, &[])
-                } else {
-                    t(
-                        k::RESOURCES_INSTALLED,
-                        &[("list", &slot_list(&view.unresolved))],
+                Some(t(
+                    k::RESOURCES_INSTALLED,
+                    &[("list", &slot_list(&view.unresolved))],
+                )),
+                carry.map(|c| {
+                    let carried = if c.carried == 1 {
+                        k::DECISIONS_CARRIED_ONE
+                    } else {
+                        k::DECISIONS_CARRIED
+                    };
+                    let invalidated = if c.invalidated == 1 {
+                        k::DECISIONS_INVALIDATED_ONE
+                    } else {
+                        k::DECISIONS_INVALIDATED
+                    };
+                    format!(
+                        "{} {}",
+                        t(carried, &[("n", &c.carried)]),
+                        t(invalidated, &[("n", &c.invalidated)])
                     )
                 }),
             ],
@@ -644,12 +663,7 @@ fn resources_check(
 
 /// The license check: the one license the files name, or that they differ (tC4 `license`).
 fn license_check(review: &ImportReview) -> impl IntoView + use<> {
-    let mut licenses: Vec<String> = Vec::new();
-    for license in &review.found.licenses {
-        if !licenses.contains(license) {
-            licenses.push(license.clone());
-        }
-    }
+    let licenses = &review.found.licenses;
     let (status, text) = match licenses.as_slice() {
         [] | [_] if licenses.iter().all(String::is_empty) => {
             (Status::Valid, t(keys::importer::review::LICENSE_NONE, &[]))
@@ -676,6 +690,57 @@ fn license_check(review: &ImportReview) -> impl IntoView + use<> {
         }
     };
     check("license", keys::importer::review::LICENSE, status, text)
+}
+
+/// The license picker where the files differ (tC4 `import-license`). A value is `l:` and the
+/// license, so "No license" (`l:`) differs from "Choose a license" (``).
+fn license_pick(
+    actions: &Actions,
+    im: &ArcRwSignal<Option<ImportForm>>,
+    licenses: &[String],
+) -> Option<impl IntoView + use<>> {
+    use keys::importer::review as k;
+    if licenses.len() < 2 {
+        return None;
+    }
+    let none = SelectOption {
+        label: t(k::LICENSE_PICK_NONE, &[]),
+        ..SelectOption::from("")
+    };
+    let options: Vec<SelectOption> = std::iter::once(none)
+        .chain(licenses.iter().map(|l| SelectOption {
+            label: if l.is_empty() {
+                t(k::LICENSE_PICK_EMPTY, &[])
+            } else {
+                l.clone()
+            },
+            ..SelectOption::from(format!("l:{l}").as_str())
+        }))
+        .collect();
+    let value = read(
+        im,
+        |im| {
+            Some(
+                im.license
+                    .as_ref()
+                    .map_or_else(String::new, |l| format!("l:{l}")),
+            )
+        },
+        None,
+    );
+    let actions = actions.clone();
+    let on_change = Callback::new(move |value: String| {
+        actions.import_pick_license(value.strip_prefix("l:").map(str::to_owned));
+    });
+    Some(view! {
+        <Select
+            label=move || t(k::LICENSE_PICK, &[])
+            value=value
+            on_change=on_change
+            options=options
+            attrs=Attrs::from([("data-testid", "import-license")])
+        />
+    })
 }
 
 fn found(
@@ -822,6 +887,7 @@ fn found(
             Callback::new(move |e: web_sys::Event| b.import_type_code(event_target_value(&e))),
         )
     };
+    let pick = license_pick(actions, im, &review.found.licenses);
     view! {
         <div data-testid="import-review" style="display: flex; flex-direction: column; gap: 16px;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 24px; align-items: start;">
@@ -836,7 +902,7 @@ fn found(
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 14px;">
                     <Overline tag="span">{t(k::CHECKS, &[])}</Overline>
-                    {resources_check(actions, im)}
+                    {resources_check(actions, im, review.found.slots.clone())}
                     {license_check(&review)}
                     <div
                         data-testid="import-check-details"
@@ -849,9 +915,11 @@ fn found(
                             <Text role=TextRole::Caption>{details_text}</Text>
                         </div>
                     </div>
+                    {check("missing", k::MISSING, Status::Valid, t(k::NONE_MISSING, &[]))}
                     <Surface fill=Fill::Paper border=Edge::Line radius=Corner::Lg pad=Inset::Md>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <Text role=TextRole::Caption tone=TextTone::Muted>{t(k::READ_FROM_FILE, &[])}</Text>
+                            {pick}
                             <Field
                                 label=Signal::derive(|| t(keys::importer::review::NAME, &[]))
                                 live_error=name_error

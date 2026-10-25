@@ -43,6 +43,11 @@ pub struct Review {
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub files: Vec<ImportFile>,
     pub details: Option<ImportDetails>,
+    /// "Use installed versions" was pressed with these versions found (none when nothing was
+    /// looked up): the review says what carries over to the installed versions (tC4
+    /// `importUseInstalled`).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::maybe_few()"))]
+    pub use_installed: Option<Vec<FoundVersion>>,
 }
 
 /// The review step. Nothing was written.
@@ -59,6 +64,20 @@ pub struct ImportReview {
     /// :367), no name, or a language code a Scripture Burrito cannot hold (#835). The run
     /// refuses the same.
     pub refusal: Option<Refusal>,
+    /// What "Use installed versions" does to the decisions, when the review was asked with it.
+    pub carry_over: Option<CarryOver>,
+}
+
+/// The decisions of the slots that take the installed versions (tC4 `applyVersions`):
+/// `importer.review.decisionsCarried` and `importer.review.decisionsInvalidated`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct CarryOver {
+    /// Placed on a check of the installed version.
+    pub carried: u32,
+    /// Kept, marked invalid: the installed version has no such check.
+    pub invalidated: u32,
 }
 
 /// What the files hold.
@@ -75,6 +94,10 @@ pub struct ImportFound {
     pub contributors: Vec<String>,
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub books: Vec<FoundBook>,
+    /// The slots the files name a version for, before any lookup (tC4 `unresolvedSlots` of
+    /// `NOT_LOOKED_UP`).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub slots: Vec<VersionSlot>,
 }
 
 /// One book of the import.
@@ -88,7 +111,8 @@ pub struct FoundBook {
     pub verses: u32,
     /// Verses with words.
     pub drafted: u32,
-    /// Verses with an alignment record.
+    /// Verses with an aligned word (tC4 `alignedVerses`): tC3 keeps a record for every verse
+    /// it opened in the aligner, aligned or not.
     pub aligned: u32,
     /// The checking decisions that carry over.
     pub decisions: u32,
@@ -165,6 +189,9 @@ pub struct Run {
     /// marked invalid (tC4 `applyVersions`). Empty when nothing was looked up.
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub found: Vec<FoundVersion>,
+    /// The license the project's metadata states: the files' one license, or the one the
+    /// person picked where they differ. `""` states none.
+    pub license: String,
 }
 
 /// `import/updateBook`: "Update a book from USFM" on the open project (STORAGE §13.6). A

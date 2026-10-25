@@ -11,8 +11,8 @@ use tc_api::create::Details;
 use tc_api::error::Feature;
 use tc_api::ids::{JobId, ProjectRef};
 use tc_api::import::{
-    FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview, Review, Run,
-    UpdateBook, UpdateReport, VerseAt, VersionSlot, Versions, VersionsView,
+    CarryOver, FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview,
+    Review, Run, UpdateBook, UpdateReport, VerseAt, VersionSlot, Versions, VersionsView,
 };
 use tc_api::jobs::{JobKind, Phase};
 use tc_api::refusal::{CreateRefusal, ImportRefusal};
@@ -24,7 +24,7 @@ use tc_core::BookId;
 use tc_import::SourceFile;
 use tc_import::tc3::{DecisionPins, Slot, Tc3Import, VersionRequest};
 use tc_journal::fold::ProjectKind;
-use tc_journal::keys::ToolId;
+use tc_journal::keys::{MetaField, ToolId};
 use tc_journal::outside::UpdatePart;
 use tc_journal::record::CheckValue;
 use tc_journal::{Cause, ImportSource, RecordKey};
@@ -117,7 +117,14 @@ pub fn found(import: &Tc3Import) -> ImportFound {
                     chapters: count(parts.map_or(0, |p| p.chapters.len())),
                     verses,
                     drafted,
-                    aligned: count(book.alignments().len()),
+                    aligned: count(
+                        book.alignments()
+                            .iter()
+                            .filter(|(_, _, value)| {
+                                value.alignments.iter().any(|g| !g.bottom_words.is_empty())
+                            })
+                            .count(),
+                    ),
                     decisions: count(
                         book.decision_count(ToolId::TranslationNotes)
                             + book.decision_count(ToolId::TranslationWords),
@@ -125,6 +132,10 @@ pub fn found(import: &Tc3Import) -> ImportFound {
                     not_kept: book.not_kept.clone(),
                 }
             })
+            .collect(),
+        slots: candidates(&import.versions)
+            .into_keys()
+            .map(slot_of)
             .collect(),
     }
 }
@@ -243,6 +254,15 @@ impl App {
 impl Handle<Review> for App {
     async fn handle(&self, req: Review) -> Result<ImportReview, ApiError> {
         let files = self.uploaded(&req.files).await?;
+        let carry_over = match &req.use_installed {
+            Some(kept) => Some(
+                self.inner
+                    .import
+                    .carry_over(self.clone(), files.clone(), found_pins(kept)?)
+                    .await?,
+            ),
+            None => None,
+        };
         let found = self.inner.import.review(files).await?;
         let details = req.details.unwrap_or_else(|| found.details.clone());
         let (folder, refusal) = match self.import_target(&details).await? {
@@ -254,6 +274,7 @@ impl Handle<Review> for App {
             details,
             folder,
             refusal,
+            carry_over,
         })
     }
 }
@@ -292,7 +313,15 @@ impl Handle<Run> for App {
             .start_typed::<Run, _, _>(spec, move |ctx| async move {
                 let port = app.inner.import.clone();
                 let made = port
-                    .run(app.clone(), files, req.details, found, folder, ctx)
+                    .run(
+                        app.clone(),
+                        files,
+                        req.details,
+                        found,
+                        req.license,
+                        folder,
+                        ctx,
+                    )
                     .await?;
                 app.imported(&made);
                 app.drop_uploads(&req.files);
@@ -604,6 +633,7 @@ fn carry_over(
     tool: ToolId,
     source: &ListSource,
     sources: &dyn PlanSources,
+    counts: &mut CarryOver,
 ) -> Result<Vec<Record>, PlanError> {
     let mut out = Vec::with_capacity(records.len());
     let mut by_book: BTreeMap<BookId, Vec<StoredDecision>> = BTreeMap::new();
@@ -634,13 +664,17 @@ fn carry_over(
                 .map(|change| (change.record.key(), change.record))
                 .collect();
         for entry in plan.entries {
+            let unplaced = entry.outcome == Outcome::Unplaced;
+            if unplaced {
+                counts.invalidated += 1;
+            } else {
+                counts.carried += 1;
+            }
             if written.contains_key(&RecordKey::Check(entry.key.clone())) {
                 continue;
             }
             let mut decision = entry.decision;
-            if entry.outcome == Outcome::Unplaced {
-                decision.imported_invalid = true;
-            }
+            decision.imported_invalid |= unplaced;
             out.push(Record::Check {
                 key: entry.key,
                 value: CheckValue::Decision(decision),
@@ -651,9 +685,89 @@ fn carry_over(
     Ok(out)
 }
 
+/// The books' records, their decisions on the versions `found` and, for a helps slot not
+/// found, carried over to the installed version (tC4 `applyVersions`), with what that did.
+async fn imported_records(
+    app: &App,
+    import: &Tc3Import,
+    found: &[(VersionSlot, ResourcePin)],
+) -> Result<(Vec<Record>, CarryOver), ApiError> {
+    let installed = installed_pins().ok_or(ApiError::Unavailable(Feature::Import))?;
+    let pins = DecisionPins {
+        translation_notes: found_of(found, VersionSlot::TranslationNotes)
+            .map_or(installed.translation_notes, ResourcePin::resource),
+        translation_words: found_of(found, VersionSlot::TranslationWordsLinks)
+            .map_or(installed.translation_words, ResourcePin::resource),
+    };
+    let imported = import
+        .records(&pins)
+        .map_err(|e| refused(import_refusal(e)))?;
+    let carried = [
+        (VersionSlot::TranslationNotes, ToolId::TranslationNotes),
+        (VersionSlot::TranslationWords, ToolId::TranslationWords),
+    ]
+    .into_iter()
+    .filter(|(slot, _)| found_of(found, *slot).is_none())
+    .map(|(_, tool)| tool)
+    .collect::<Vec<_>>();
+    let mut counts = CarryOver {
+        carried: 0,
+        invalidated: 0,
+    };
+    if carried.is_empty() {
+        return Ok((imported, counts));
+    }
+    let store = app.inner.resources.clone();
+    let notes = pins.translation_notes.clone();
+    let links = pins.translation_words.clone();
+    let articles = tc_resources::suite::english_helps()
+        .pin(SetSlot::TranslationWords)
+        .map(ResourcePin::resource);
+    let unreadable = |problem: String| {
+        refused(ImportRefusal::Unreadable {
+            file: String::new(),
+            problem,
+        })
+    };
+    tokio::task::spawn_blocking(move || {
+        let sources = crate::upgrades::StoreSources::new(&store);
+        carried
+            .into_iter()
+            .try_fold(imported, |records, tool| {
+                let source = match tool {
+                    ToolId::TranslationNotes => ListSource {
+                        list: notes.clone(),
+                        articles: None,
+                    },
+                    _ => ListSource {
+                        list: links.clone(),
+                        articles: articles.clone(),
+                    },
+                };
+                carry_over(records, tool, &source, &sources, &mut counts)
+            })
+            .map(|records| (records, counts))
+    })
+    .await
+    .map_err(|e| unreadable(e.to_string()))?
+    .map_err(|PlanError::Unreadable(problem)| unreadable(problem))
+}
+
 impl ImportPort for TcImport {
     fn review(&self, files: Vec<SourceFile>) -> BoxFuture<Result<ImportFound, ApiError>> {
         Box::pin(async move { Ok(found(&read_tc3(files).await?)) })
+    }
+
+    fn carry_over(
+        &self,
+        app: App,
+        files: Vec<SourceFile>,
+        found: Vec<(VersionSlot, ResourcePin)>,
+    ) -> BoxFuture<Result<CarryOver, ApiError>> {
+        Box::pin(async move {
+            let import = read_tc3(files).await?;
+            Ok(imported_records(&app, &import, &found).await?.1)
+        })
     }
 
     /// Each slot's candidates are tried newest first; a slot Door43 did not answer for stays
@@ -725,23 +839,24 @@ impl ImportPort for TcImport {
         files: Vec<SourceFile>,
         details: ImportDetails,
         found: Vec<(VersionSlot, ResourcePin)>,
+        license: String,
         folder: ProjectRef,
         ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {
         Box::pin(async move {
             ctx.progress.total(2);
             let import = read_tc3(files).await?;
+            if !import.licenses.contains(&license) {
+                return Err(ApiError::BadRequest {
+                    field: "license".to_owned(),
+                    reason: "not a license the files name".to_owned(),
+                }
+                .into());
+            }
             ctx.progress.add(1);
             ctx.cancel.check()?;
-            let installed = installed_pins().ok_or(ApiError::Unavailable(Feature::Import))?;
             let mut project_pins = tc_resources::suite::project_pins();
             lay_over(&mut project_pins, &found, &import);
-            let pins = DecisionPins {
-                translation_notes: found_of(&found, VersionSlot::TranslationNotes)
-                    .map_or(installed.translation_notes, ResourcePin::resource),
-                translation_words: found_of(&found, VersionSlot::TranslationWordsLinks)
-                    .map_or(installed.translation_words, ResourcePin::resource),
-            };
             let mut records = crate::create::project_records(
                 &create_details(&details),
                 &folder,
@@ -758,54 +873,18 @@ impl ImportPort for TcImport {
                         .map_err(|_| refused(ImportRefusal::WriteFailed))?;
                 }
             }
-            let mut imported = import
-                .records(&pins)
-                .map_err(|e| refused(import_refusal(e)))?;
-            let carried = [
-                (VersionSlot::TranslationNotes, ToolId::TranslationNotes),
-                (VersionSlot::TranslationWords, ToolId::TranslationWords),
-            ]
-            .into_iter()
-            .filter(|(slot, _)| found_of(&found, *slot).is_none())
-            .map(|(_, tool)| tool)
-            .collect::<Vec<_>>();
-            if !carried.is_empty() {
-                let store = app.inner.resources.clone();
-                let notes = pins.translation_notes.clone();
-                let links = pins.translation_words.clone();
-                let articles = tc_resources::suite::english_helps()
-                    .pin(SetSlot::TranslationWords)
-                    .map(ResourcePin::resource);
-                imported = tokio::task::spawn_blocking(move || {
-                    let sources = crate::upgrades::StoreSources::new(&store);
-                    carried.into_iter().try_fold(imported, |records, tool| {
-                        let source = match tool {
-                            ToolId::TranslationNotes => ListSource {
-                                list: notes.clone(),
-                                articles: None,
-                            },
-                            _ => ListSource {
-                                list: links.clone(),
-                                articles: articles.clone(),
-                            },
-                        };
-                        carry_over(records, tool, &source, &sources)
-                    })
-                })
-                .await
-                .map_err(|e| {
-                    refused(ImportRefusal::Unreadable {
-                        file: String::new(),
-                        problem: e.to_string(),
-                    })
-                })?
-                .map_err(|PlanError::Unreadable(problem)| {
-                    refused(ImportRefusal::Unreadable {
-                        file: String::new(),
-                        problem,
-                    })
-                })?;
+            if !license.is_empty() {
+                let statement =
+                    serde_json::json!({ "shortStatements": [{ "statement": license }] });
+                records.push(Record::ProjectMeta {
+                    field: MetaField::Copyright,
+                    value: Some(
+                        tc_journal::json::parse(statement.to_string().as_bytes())
+                            .map_err(|_| refused(ImportRefusal::WriteFailed))?,
+                    ),
+                });
             }
+            let (imported, _) = imported_records(&app, &import, &found).await?;
             records.extend(imported);
             let spec = NewProjectSpec {
                 folder: folder.clone(),
