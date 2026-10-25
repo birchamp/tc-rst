@@ -144,9 +144,9 @@ jobs:
           AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
         run: |
           scripts/release/sign-windows.ps1 -ToolDir "$env:RUNNER_TEMP\sign" -Setup
-          scripts/release/sign-windows.ps1 -ToolDir "$env:RUNNER_TEMP\sign" -Sign stage\translationCore4
+          scripts/release/sign-windows.ps1 -ToolDir "$env:RUNNER_TEMP\sign" -Sign "stage\translationCore 4"
           # The manifest records the signed files.
-          node scripts/release/manifest.mjs --root stage\translationCore4 --platform windows-x64 --electronite $env:ELECTRONITE --electronite-sha256 8146ca21fa090e12bca01a8af73d234d9a31d90f51da0da86bb0e1731c371b52
+          node scripts/release/manifest.mjs --root "stage\translationCore 4" --platform windows-x64 --electronite $env:ELECTRONITE --electronite-sha256 8146ca21fa090e12bca01a8af73d234d9a31d90f51da0da86bb0e1731c371b52
       - name: package
         env:
           AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}

@@ -196,3 +196,6 @@ I	Tc3Import::records takes the pins the app passes; when a tC3 version cannot be
 I	Update a book goes in two batches (Fill, then Review); nothing submits UpdateBook yet. F1 must send Review right after Fill, show the reply only after both land, and on a failure between them tell the translator to run the update again (a rerun recovers fully)	crates/tc-store/src/commands.rs update_book; races-lens review of I
 I	The tC3 import refusals word themselves differently from tC4 importer.tc3.* (en.json:306-313), and code() gives a tC4 code for 3 of 8 kinds; F1 shows tC4 keys	crates/tc-import/src/lib.rs:27-44; parity-lens review of I
 I	Add a book answers addBook.usfmExists ("use Import"), which points nowhere while Import takes no USFM; once F1 puts Update a book on screen the words point there, a declared difference	crates/tc-api/src/create.rs:202; parity-lens review of I
+G3	Every build leg gets id-token: write, not only the Windows leg that signs	.github/workflows/release.yml
+G3	The installed-manifest smoke step compares the commit and the file count, not each file's hash	scripts/release/smoke.mjs
+G3	Branch-run artifacts hold help-desk.key for 14 days in a public repository; stage it only on default-branch runs	scripts/release/stage.sh
