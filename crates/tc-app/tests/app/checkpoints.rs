@@ -13,7 +13,8 @@ fn skipped(skip: CheckpointSkip) -> CheckpointOutcome {
 }
 
 /// INV-A-FAILED-CHECKPOINT-IS-SHOWN-UNTIL-RETRIED: every skip has its outcome; a skip that is
-/// no failure is `Unchanged`, and every other is `Failed` with words, never hidden.
+/// no failure is `Unchanged`, and every other is `Failed` with words, never hidden, and with a
+/// code, so Home's banner offers Ask for help (a problem in the app, tC4 `askHelpFor`).
 #[test]
 fn every_checkpoint_skip_has_an_outcome() {
     for skip in [
@@ -31,7 +32,7 @@ fn every_checkpoint_skip_has_an_outcome() {
         CheckpointSkip::HeadMoved,
     ] {
         assert!(
-            matches!(skipped(skip), CheckpointOutcome::Failed { reason } if !reason.is_empty()),
+            matches!(skipped(skip), CheckpointOutcome::Failed { reason, code: Some(_) } if !reason.is_empty()),
             "{skip:?}"
         );
     }

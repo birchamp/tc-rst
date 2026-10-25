@@ -497,7 +497,8 @@ async fn a_failed_leave_checkpoint_still_closes_and_says_so() {
         [
             SessionEvent::Opened,
             SessionEvent::Checkpoint(CheckpointOutcome::Failed {
-                reason: "the disk is full".to_owned()
+                reason: "the disk is full".to_owned(),
+                code: None,
             }),
             SessionEvent::Closed
         ]

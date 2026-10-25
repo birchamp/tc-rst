@@ -53,6 +53,9 @@ pub struct HelloView {
 pub struct FailedCheckpoint {
     pub project: ProjectRef,
     pub reason: String,
+    /// As `CheckpointOutcome::Failed`'s: set when the banner offers Ask for help.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 /// The build the server runs. A UI built from another commit reloads once (§3.10).

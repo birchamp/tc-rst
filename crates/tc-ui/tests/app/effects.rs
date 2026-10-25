@@ -415,6 +415,7 @@ fn a_resync_forgets_what_was_held_for_an_open_that_hello_no_longer_lists() {
     };
     let failed = CheckpointOutcome::Failed {
         reason: "disk full".into(),
+        code: None,
     };
     let mut held: HashMap<Scope, CheckpointOutcome> = HashMap::from([
         (still_open.clone(), failed.clone()),
@@ -446,6 +447,7 @@ fn a_restart_forgets_everything_an_event_filled_that_the_old_runs_numbers_key() 
         open.clone(),
         CheckpointOutcome::Failed {
             reason: "disk full".into(),
+            code: None,
         },
     )]);
     let mut blocked = HashMap::from([(open, vec!["TIT.usfm".to_owned()])]);

@@ -283,6 +283,7 @@ impl Example for HelloView {
             checkpoints: vec![tc_api::app::FailedCheckpoint {
                 project: scope().project,
                 reason: "the disk is full".into(),
+                code: None,
             }],
         }
     }
@@ -3543,6 +3544,7 @@ fn session_events() -> Vec<SessionEvent> {
         },
         SessionEvent::Checkpoint(CheckpointOutcome::Failed {
             reason: "the index is locked".into(),
+            code: None,
         }),
         SessionEvent::MaterializeBlocked {
             paths: vec!["ingredients/TIT.usfm".into()],

@@ -240,6 +240,10 @@ pub enum CheckpointOutcome {
     Unchanged,
     Failed {
         reason: String,
+        /// The failure's code when it is a problem in the app, not in the computer (a full
+        /// disk): the banner then offers Ask for help with it (tC4 `askHelpFor`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
     },
 }
 

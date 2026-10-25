@@ -223,7 +223,7 @@ impl ProjectHandle for CountingHandle {
                 let _ = released.wait_for(|go| *go).await;
             }
             match fail {
-                Some(reason) => CheckpointOutcome::Failed { reason },
+                Some(reason) => CheckpointOutcome::Failed { reason, code: None },
                 None => inner.await,
             }
         })

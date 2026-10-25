@@ -198,10 +198,11 @@ fn banners(
         );
         move || {
             failed.with(|failed| failed.first().cloned()).map(|failed| {
-                let help = ask_for_help(&actions, None);
+                let (text, help) = crate::app::home::checkpoint_banner(&failed);
+                let help = ask_for_help(&actions, help);
                 view! {
                     <Callout tone=CalloutTone::Warn style=style.clone() attrs=Attrs::from([("role", "alert"), ("data-testid", "home-checkpoint-error")])>
-                        {failed.reason.clone()}" "{move || t(keys::home::COMMIT_ERROR_HINT, &[])}
+                        {text}" "{move || t(keys::home::COMMIT_ERROR_HINT, &[])}
                         {help}
                     </Callout>
                 }

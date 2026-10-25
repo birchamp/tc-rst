@@ -1403,8 +1403,11 @@ pub fn checkpoint_outcome(
     report: Result<tc_store::CheckpointReport, tc_store::StoreError>,
 ) -> CheckpointOutcome {
     use tc_store::CheckpointSkip;
-    let failed = |reason: &str| CheckpointOutcome::Failed {
+    // A skip is a problem in the app, so the banner offers Ask for help with its code; an I/O
+    // error (a full disk) is the computer's, and tC4 offers none for it either.
+    let failed = |code: &str, reason: &str| CheckpointOutcome::Failed {
         reason: reason.to_owned(),
+        code: Some(format!("checkpoint.{code}")),
     };
     match report {
         Ok(report) if report.commit.is_some() => CheckpointOutcome::Committed,
@@ -1413,17 +1416,28 @@ pub fn checkpoint_outcome(
             | Some(
                 CheckpointSkip::NoChanges | CheckpointSkip::ReadOnly | CheckpointSkip::SecondWriter,
             ) => CheckpointOutcome::Unchanged,
-            Some(CheckpointSkip::NoHistory) => failed("the project has no history to commit to"),
-            Some(CheckpointSkip::SealFailed) => failed("the saved changes could not be sealed"),
-            Some(CheckpointSkip::PackMissing) => failed("a saved pack is missing or unreadable"),
-            Some(CheckpointSkip::TreeInvalid) => {
-                failed("the project's files are not a valid Scripture Burrito")
+            Some(CheckpointSkip::NoHistory) => {
+                failed("no-history", "the project has no history to commit to")
             }
-            Some(CheckpointSkip::HeadMoved) => {
-                failed("the history moved while the checkpoint was made")
+            Some(CheckpointSkip::SealFailed) => {
+                failed("seal-failed", "the saved changes could not be sealed")
             }
+            Some(CheckpointSkip::PackMissing) => {
+                failed("pack-missing", "a saved pack is missing or unreadable")
+            }
+            Some(CheckpointSkip::TreeInvalid) => failed(
+                "tree-invalid",
+                "the project's files are not a valid Scripture Burrito",
+            ),
+            Some(CheckpointSkip::HeadMoved) => failed(
+                "head-moved",
+                "the history moved while the checkpoint was made",
+            ),
         },
-        Err(error) => failed(&error.to_string()),
+        Err(error) => CheckpointOutcome::Failed {
+            reason: error.to_string(),
+            code: None,
+        },
     }
 }
 
@@ -1496,6 +1510,7 @@ impl ProjectHandle for StoreHandle {
             return Box::pin(async {
                 CheckpointOutcome::Failed {
                     reason: "the project is closed".to_owned(),
+                    code: None,
                 }
             });
         };

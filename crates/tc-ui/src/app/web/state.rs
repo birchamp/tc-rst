@@ -121,10 +121,11 @@ impl ServerState {
     pub(super) fn checkpoint_ended(&self, at: &Scope, outcome: &CheckpointOutcome) {
         self.failed.update(|failed| {
             failed.retain(|f| f.project != at.project);
-            if let CheckpointOutcome::Failed { reason } = outcome {
+            if let CheckpointOutcome::Failed { reason, code } = outcome {
                 failed.push(FailedCheckpoint {
                     project: at.project.clone(),
                     reason: reason.clone(),
+                    code: code.clone(),
                 });
             }
         });
@@ -174,6 +175,7 @@ fn failed_of_open(hello: &HelloView) -> HashMap<Scope, CheckpointOutcome> {
                 session.at.clone(),
                 CheckpointOutcome::Failed {
                     reason: failed.reason.clone(),
+                    code: failed.code.clone(),
                 },
             ))
         })

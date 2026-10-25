@@ -434,7 +434,7 @@ impl SessionRegistry {
         }
         lock(&self.inner.checkpoints)
             .insert(folder.clone(), CheckpointState::Ended(outcome.clone()));
-        if let CheckpointOutcome::Failed { reason } = &outcome {
+        if let CheckpointOutcome::Failed { reason, .. } = &outcome {
             self.inner.reports.add(
                 ReportOp::Checkpoint,
                 ReportOutcome::Failed {
@@ -486,10 +486,11 @@ impl SessionRegistry {
         lock(&self.inner.checkpoints)
             .iter()
             .filter_map(|(project, state)| match state {
-                CheckpointState::Ended(CheckpointOutcome::Failed { reason }) => {
+                CheckpointState::Ended(CheckpointOutcome::Failed { reason, code }) => {
                     Some(tc_api::app::FailedCheckpoint {
                         project: project.clone(),
                         reason: reason.clone(),
+                        code: code.clone(),
                     })
                 }
                 _ => None,
