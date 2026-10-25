@@ -42,6 +42,9 @@ browserTest('a quit with the aligner open saves its links, then checkpoints: the
     allow(/ERR_CONNECTION_REFUSED|Failed to load resource|Failed to fetch|NetworkError/);
     await env.call('app/quit', { request: newRequestId() }).catch(() => {});
     await until('the quit commit', async () => committedLink(env));
+    // The commit lands before tc4 ends; a project check sent meanwhile meets a server that is
+    // shutting down (503).
+    await until('tc4 ended', async () => !env.alive());
     assert.match(execFileSync('git', ['-C', path.join(env.projectsDir, BIBLE), 'log', '-1', '--format=%s'], { encoding: 'utf8' }), /^Checkpoint, leaving the project: /);
   });
 });
