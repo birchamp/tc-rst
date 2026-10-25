@@ -25,7 +25,7 @@ use tc_api::editor::{Draft, DraftField};
 use tc_api::helps::ArticleView;
 use tc_api::ids::Scope;
 use tc_api::model::rail::{self, Filter, SortMode};
-use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, RecordPlace};
+use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetRailFolded};
 use tc_api::query::QueryKey;
 use tc_api::resources::FixState;
 use tc_api::token::ShownToken;
@@ -93,6 +93,9 @@ pub struct CheckState {
     pub filter: ArcRwSignal<Filter>,
     /// The sort chosen; `None` shows the tool's default.
     pub sort: ArcRwSignal<Option<SortMode>>,
+    /// The open tool's folded groups, by id, as this computer keeps them (tC4 #769
+    /// `railFolded`).
+    pub folded: ArcRwSignal<BTreeSet<String>>,
     /// The selected check, by its index in the list (tC4 `activeIndex`).
     pub active: ArcRwSignal<Option<u32>>,
     pub fix: ArcRwSignal<Option<Fix>>,
@@ -118,6 +121,7 @@ impl CheckState {
             session: ArcRwSignal::new(None),
             filter: ArcRwSignal::new(Filter::All),
             sort: ArcRwSignal::new(None),
+            folded: ArcRwSignal::new(BTreeSet::new()),
             active: ArcRwSignal::new(None),
             fix: ArcRwSignal::new(None),
             return_to: ArcRwSignal::new(None),
@@ -384,6 +388,7 @@ impl Actions {
             match result {
                 Ok(view) => {
                     let (start, empty) = (view.start, view.empty.is_some());
+                    c.folded.try_set(view.folded.iter().cloned().collect());
                     c.active.try_set(Some(start));
                     let rows = rows_of(&view);
                     c.session
@@ -444,9 +449,67 @@ impl Actions {
         if c.active.get_untracked() == Some(index) {
             return;
         }
+        // Moving into a folded group unfolds it, under a sort that folds (tC4 #769).
+        if let Some((tool, id)) = self.folded_group_of(index) {
+            self.set_rail_folded(tool, vec![id], false);
+        }
         self.leave_item();
         c.active.try_set(Some(index));
         self.load_item(index);
+    }
+
+    /// The open tool and the id of check `index`'s group, when the sort shown folds and that
+    /// group is folded.
+    fn folded_group_of(&self, index: u32) -> Option<(Tool, String)> {
+        let c = &self.s().c;
+        c.session.with_untracked(|session| {
+            let Some(Session::Open(rail)) = session else {
+                return None;
+            };
+            let tool = rail.view.list.tool;
+            let mode = c
+                .sort
+                .get_untracked()
+                .unwrap_or(SortMode::default_for(tool));
+            if !rail::folds(mode) || c.folded.with_untracked(BTreeSet::is_empty) {
+                return None;
+            }
+            // shortcut: a walk of the rows, only while a group is folded; a by-index map would
+            // make it constant if Next on the Psalms rail ever shows in a trace.
+            let row = rail.rows.iter().find(|r| r.index == index)?;
+            let id = rail.view.terms.get(usize::try_from(row.term?).ok()?)?;
+            c.folded
+                .with_untracked(|f| f.contains(id))
+                .then(|| (tool, id.clone()))
+        })
+    }
+
+    /// Folds or unfolds groups of the open tool's rail: shown at once, and kept on this
+    /// computer for every project (tC4 `setRailFolded`).
+    pub fn set_rail_folded(&self, tool: Tool, groups: Vec<String>, folded: bool) {
+        self.s().c.folded.update(|set| {
+            for id in &groups {
+                if folded {
+                    set.insert(id.clone());
+                } else {
+                    set.remove(id);
+                }
+            }
+        });
+        let Some(at) = self.s().project.get_untracked().map(|p| p.at) else {
+            return;
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            let request = SetRailFolded {
+                at,
+                request: js::random_request_id(),
+                tool,
+                groups,
+                folded,
+            };
+            let _ = this.runtime().api().call(&request).await;
+        });
     }
 
     pub fn set_check_filter(&self, filter: Filter) {

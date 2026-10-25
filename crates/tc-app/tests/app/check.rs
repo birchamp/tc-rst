@@ -347,3 +347,29 @@ async fn the_rail_groups_equal_tc_checks_on_titus() {
         }
     }
 }
+
+/// REF1c, tC4 #769: By figure heads each Translation Notes group with its Translation Academy
+/// article's title, and a figure whose article is not read with its slug (tC4 `readTaTitle`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn by_figure_headings_carry_ta_titles() {
+    let state = scenario("en-pins");
+    let (backend, _) = MemoryBackend::from_scenario(state).unwrap();
+    let backend = Arc::new(backend);
+    let dir = tempfile::tempdir().unwrap();
+    install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
+    let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
+        deps.store = tc_app::StoreChoice::Given(backend.clone());
+    })
+    .await;
+    let at = opened(&t.app).await.session.at;
+    let session = open_tool(&t.app, &at, Tool::TranslationNotes, None).await;
+    assert_eq!(session.group_titles.len(), session.terms.len());
+    let at_slug = |slug: &str| {
+        let i = session.terms.iter().position(|t| t == slug).unwrap();
+        session.group_titles[i].as_str()
+    };
+    assert_eq!(at_slug("figs-abstractnouns"), "Abstract Nouns");
+    for (slug, title) in session.terms.iter().zip(&session.group_titles) {
+        assert!(!title.is_empty() || slug.is_empty(), "{slug} has a heading");
+    }
+}

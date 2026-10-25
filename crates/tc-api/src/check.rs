@@ -473,6 +473,13 @@ pub struct CheckSessionView {
     /// order By word lists them; a row's `term` indexes it.
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub terms: Vec<String>,
+    /// Each term's heading By figure, parallel to `terms`: a tN figure's Translation Academy
+    /// title, else its slug (tC4 #769).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub group_titles: Vec<String>,
+    /// The groups this tool's rail has folded on this computer, by id (tC4 #769 `railFolded`).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub folded: Vec<String>,
     pub progress: RailProgress,
     /// The resource the list derives from (tC4 `cs.resource`).
     pub citation: Option<ResourceCitation>,

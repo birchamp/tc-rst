@@ -45,6 +45,21 @@ pub struct SetAlignSuggestions {
     pub on: bool,
 }
 
+/// `prefs/setRailFolded`: groups of a Check tool's rail folded or unfolded (tC4 #769
+/// `setRailFolded`), kept per computer for every project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetRailFolded {
+    pub at: Scope,
+    pub request: RequestId,
+    pub tool: Tool,
+    /// The groups' ids (tN figures' and tW terms' article slugs).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub groups: Vec<String>,
+    pub folded: bool,
+}
+
 /// `prefs/recordPlace`: where the person works in the open project, so a Home tile
 /// returns there (`tC4:src/data/place.ts`). Sent when the person moves, not per keystroke;
 /// the server writes it 500 ms after the last one.
