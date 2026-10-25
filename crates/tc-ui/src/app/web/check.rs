@@ -34,7 +34,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use super::app_ctx::{Actions, Dialog};
 use super::js;
-use super::saves::{FieldWriter, LocalBoxFuture};
+use super::saves::{FieldWriter, LocalBoxFuture, WriteCap};
 use super::{Api, ListenerId};
 use crate::app::check::CheckView;
 use crate::app::check_item::{self, DecisionWrites, MarkFailure};
@@ -715,7 +715,7 @@ impl Actions {
     /// One act on the shown check, saved at once (AD20). The writes of decisions go one at a time
     /// (`write_decision`); a reply that comes after the person moved to another check is not for
     /// the check now shown, so it changes the rail's rows and nothing on screen.
-    pub fn mark(&self, edit: DecideEdit) {
+    pub fn mark(&self, _cap: WriteCap, edit: DecideEdit) {
         let c = self.s().c.clone();
         let (Some((at, list)), Some(Detail::Ready(view))) =
             (self.detail_target(), c.detail.get_untracked())

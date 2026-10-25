@@ -25,7 +25,7 @@ use crate::app::check::place_parts;
 use crate::app::check_item::{self, MarkFailure, WordKey, WordNav, WordStep};
 use crate::app::save::Source;
 use crate::app::web::check::{Academy, Detail, Marking};
-use crate::app::web::{Actions, AppState};
+use crate::app::web::{Actions, AppState, WriteCap};
 use crate::attrs::Attrs;
 use crate::css::Css;
 use crate::ds::{
@@ -849,6 +849,7 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
         }
     });
     let nav = Memo::new(move |_| check_item::item_nav(index.get(), total.get()));
+    let cap = write_cap(actions);
     let marking_row = {
         let row = crate::css! {
             "display": "flex",
@@ -866,6 +867,7 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
                 <button
                     type="button"
                     data-testid=testid
+                    disabled=move || cap.get().is_none()
                     on:click=move |_| on.run(())
                     style=move || triage_style(status.get() == Some(which), tone).to_style()
                 >
@@ -877,9 +879,21 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
             let (a, b, c2) = (actions.clone(), actions.clone(), actions.clone());
             let selection = c.selection.clone();
             (
-                Callback::new(move |()| a.mark(check_item::valid_edit(&selection.get_untracked()))),
-                Callback::new(move |()| b.mark(DecideEdit::Invalid)),
-                Callback::new(move |()| c2.mark(DecideEdit::Todo)),
+                Callback::new(move |()| {
+                    if let Some(cap) = cap.get_untracked() {
+                        a.mark(cap, check_item::valid_edit(&selection.get_untracked()));
+                    }
+                }),
+                Callback::new(move |()| {
+                    if let Some(cap) = cap.get_untracked() {
+                        b.mark(cap, DecideEdit::Invalid);
+                    }
+                }),
+                Callback::new(move |()| {
+                    if let Some(cap) = cap.get_untracked() {
+                        c2.mark(cap, DecideEdit::Todo);
+                    }
+                }),
             )
         };
         let (prev_actions, next_actions) = (actions.clone(), actions.clone());
@@ -911,6 +925,12 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
         </div>
     }
     .into_any()
+}
+
+/// The open's write proof, followed (6.4): the marks turn off the moment it goes read-only.
+fn write_cap(actions: &Actions) -> Memo<Option<WriteCap>> {
+    let actions = send_wrapper::SendWrapper::new(actions.clone());
+    Memo::new(move |_| actions.write_cap())
 }
 
 /// A chip button of the marks (tC4's `railChip` with the marks' padding).
@@ -959,6 +979,7 @@ fn check_marks(s: &AppState, actions: &Actions, tool: Tool) -> AnyView {
         }
     });
     let toggle: NodeRef<html::Button> = NodeRef::new();
+    let cap = write_cap(actions);
     let wrap = crate::css! { "margin-top": 16 };
     let row =
         crate::css! { "display": "flex", "align-items": "center", "gap": 10, "flex-wrap": "wrap" };
@@ -971,7 +992,12 @@ fn check_marks(s: &AppState, actions: &Actions, tool: Tool) -> AnyView {
                 data-testid="bookmark"
                 data-active=move || if bookmarked.get() { "1" } else { "0" }
                 title=move || t(if bookmarked.get() { keys::check::bookmark::REMOVE_HINT } else { keys::check::bookmark::HINT }, &[])
-                on:click=move |_| actions.mark(DecideEdit::Bookmark { on: !bookmarked.get_untracked() })
+                disabled=move || cap.get().is_none()
+                on:click=move |_| {
+                    if let Some(cap) = cap.get_untracked() {
+                        actions.mark(cap, DecideEdit::Bookmark { on: !bookmarked.get_untracked() });
+                    }
+                }
                 style=move || mark_chip(bookmarked.get()).to_style()
             >
                 <span aria-hidden="true">{t(keys::check::glyph::BOOKMARK, &[])}</span>

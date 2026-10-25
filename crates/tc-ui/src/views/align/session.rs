@@ -14,7 +14,7 @@ use crate::app::align::{
     effective_lens, nav, occurrence, occurrence_name,
 };
 use crate::app::web::align::{Rail, Screen};
-use crate::app::web::{Actions, AppState};
+use crate::app::web::{Actions, AppState, WriteCap};
 use crate::attrs::Attrs;
 use crate::css::Css;
 use crate::ds::{
@@ -198,6 +198,11 @@ fn restore_focus() {
     });
 }
 
+/// Only a writable open lets a word or a card be picked up (6.4).
+fn draggable(cap: Option<WriteCap>) -> &'static str {
+    if cap.is_some() { "true" } else { "false" }
+}
+
 fn drag_over(e: web_sys::DragEvent) {
     e.prevent_default();
 }
@@ -217,6 +222,7 @@ fn set_drag(e: &web_sys::DragEvent, drag: &Drag) {
 /// gateway word, and SPLIT on a phrase. Draggable onto another card to merge.
 fn card_header(
     actions: &Actions,
+    cap: Option<WriteCap>,
     card: &Card,
     lens: Lens,
     rtl_orig: bool,
@@ -278,9 +284,12 @@ fn card_header(
                 size=Size::Sm
                 attrs=Attrs::from([("data-testid", testid.as_str())])
                 title=Some(t(keys::align::SPLIT_HINT, &[]))
+                disabled=cap.is_none()
                 on_click=Callback::new(move |e: web_sys::MouseEvent| {
                     e.stop_propagation();
-                    actions.align_edit(AlignEdit::Split { card: index });
+                    if let Some(cap) = cap {
+                        actions.align_edit(cap, AlignEdit::Split { card: index });
+                    }
                 })
             >
                 {t(keys::align::SPLIT, &[])}
@@ -294,7 +303,7 @@ fn card_header(
     };
     view! {
         <div
-            draggable="true"
+            draggable=draggable(cap)
             title=t(keys::align::MERGE_HINT, &[])
             style=header.to_style()
             on:dragstart=move |e: web_sys::DragEvent| {
@@ -317,6 +326,7 @@ fn card_header(
 /// placement (any card may take it), and at rest.
 fn word_card(
     actions: &Actions,
+    cap: Option<WriteCap>,
     card: &Card,
     armed_now: bool,
     lens: Lens,
@@ -324,6 +334,7 @@ fn word_card(
     target_dir: Direction,
 ) -> impl IntoView + use<> {
     let index = card.index;
+    let armed_now = armed_now && cap.is_some();
     let over = RwSignal::new(false);
     let style = move || {
         let mut css = crate::css! {
@@ -385,7 +396,8 @@ fn word_card(
             view! {
                 <button
                     type="button"
-                    draggable="true"
+                    draggable=draggable(cap)
+                    disabled=cap.is_none()
                     title=t(keys::align::CLICK_TO_UNALIGN, &[])
                     aria-label=occurrence_name(w)
                     data-word=w.word.clone()
@@ -395,7 +407,9 @@ fn word_card(
                     }
                     on:click=move |e: web_sys::MouseEvent| {
                         e.stop_propagation();
-                        click_actions.align_edit(AlignEdit::Unplace { card: from, word: word.clone() });
+                        if let Some(cap) = cap {
+                            click_actions.align_edit(cap, AlignEdit::Unplace { card: from, word: word.clone() });
+                        }
                     }
                 >
                     {w.word.clone()}{occurrence_sup(w, true)}
@@ -428,7 +442,9 @@ fn word_card(
                     <span
                         on:click=move |e: web_sys::MouseEvent| {
                             e.stop_propagation();
-                            actions.align_edit(AlignEdit::Accept { card: index, word: word.clone() });
+                            if let Some(cap) = cap {
+                                actions.align_edit(cap, AlignEdit::Accept { card: index, word: word.clone() });
+                            }
                         }
                     >
                         {w.word.clone()}{occurrence_sup(&w, false)}
@@ -450,7 +466,7 @@ fn word_card(
         };
         view! { <span style=s.to_style()></span> }
     });
-    let header = card_header(actions, card, lens, rtl_orig);
+    let header = card_header(actions, cap, card, lens, rtl_orig);
     let (click, key, drop_actions) = (actions.clone(), actions.clone(), actions.clone());
     view! {
         <div
@@ -459,16 +475,16 @@ fn word_card(
             tabindex=if armed_now { "0" } else { "-1" }
             style=style
             on:click=move |e: web_sys::MouseEvent| {
-                if armed_now {
+                if let Some(cap) = cap.filter(|_| armed_now) {
                     remember_focus(e.current_target());
-                    click.align_edit(AlignEdit::PlaceSelection { card: index });
+                    click.align_edit(cap, AlignEdit::PlaceSelection { card: index });
                 }
             }
             on:keydown=move |e: web_sys::KeyboardEvent| {
-                if card_key_places(&e.key(), armed_now) {
+                if let Some(cap) = cap.filter(|_| card_key_places(&e.key(), armed_now)) {
                     e.prevent_default();
                     remember_focus(e.current_target());
-                    key.align_edit(AlignEdit::PlaceSelection { card: index });
+                    key.align_edit(cap, AlignEdit::PlaceSelection { card: index });
                 }
             }
             on:dragenter=move |_| over.set(true)
@@ -488,8 +504,8 @@ fn word_card(
             on:drop=move |e: web_sys::DragEvent| {
                 e.prevent_default();
                 over.set(false);
-                if let Some(drag) = drag_data(&e) {
-                    drop_actions.align_edit(drop_on_card(index, drag));
+                if let (Some(cap), Some(drag)) = (cap, drag_data(&e)) {
+                    drop_actions.align_edit(cap, drop_on_card(index, drag));
                 }
             }
         >
@@ -662,6 +678,7 @@ fn dir_name(dir: Direction) -> &'static str {
 fn suggestions_row(
     s: &AppState,
     actions: &Actions,
+    cap: Option<WriteCap>,
     suggest: &SuggestView,
 ) -> impl IntoView + use<> {
     let row = crate::css! {
@@ -727,16 +744,16 @@ fn suggestions_row(
                     on_click=Callback::new(move |_| ask.suggest_align())>
                     {t(keys::align::suggest::SUGGEST, &[])}
                 </Button>
-                <Button size=Size::Sm attrs=Attrs::from([("data-testid", "align-suggest-accept-all")]) disabled=!standing
-                    on_click=Callback::new(move |_| accept.align_edit(AlignEdit::AcceptAll))>
+                <Button size=Size::Sm attrs=Attrs::from([("data-testid", "align-suggest-accept-all")]) disabled=!standing || cap.is_none()
+                    on_click=Callback::new(move |_| if let Some(cap) = cap { accept.align_edit(cap, AlignEdit::AcceptAll) })>
                     {t(keys::align::suggest::ACCEPT_ALL, &[])}
                 </Button>
-                <Button size=Size::Sm variant=ButtonVariant::Outline attrs=Attrs::from([("data-testid", "align-suggest-reject-all")]) disabled=!standing
-                    on_click=Callback::new(move |_| reject.align_edit(AlignEdit::RejectAll))>
+                <Button size=Size::Sm variant=ButtonVariant::Outline attrs=Attrs::from([("data-testid", "align-suggest-reject-all")]) disabled=!standing || cap.is_none()
+                    on_click=Callback::new(move |_| if let Some(cap) = cap { reject.align_edit(cap, AlignEdit::RejectAll) })>
                     {t(keys::align::suggest::REJECT_ALL, &[])}
                 </Button>
-                <Button size=Size::Sm variant=ButtonVariant::Ghost attrs=Attrs::from([("data-testid", "align-suggest-reset")]) disabled=!asked
-                    on_click=Callback::new(move |_| reset.align_edit(AlignEdit::RejectAll))>
+                <Button size=Size::Sm variant=ButtonVariant::Ghost attrs=Attrs::from([("data-testid", "align-suggest-reset")]) disabled=!asked || cap.is_none()
+                    on_click=Callback::new(move |_| if let Some(cap) = cap { reset.align_edit(cap, AlignEdit::RejectAll) })>
                     {t(keys::align::suggest::RESET, &[])}
                 </Button>
             </span>
@@ -764,7 +781,7 @@ fn suggestions_row(
 
 /// The word bank: the target words not yet placed, on the paper tint. A word with a standing
 /// suggestion shows on its card as a dashed chip instead (tC4 #1).
-fn bank(actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
+fn bank(actions: &Actions, cap: Option<WriteCap>, view: &AlignerView) -> impl IntoView + use<> {
     let armed_now = armed(view);
     let outer = crate::css! {
         "padding": "14px 20px 16px",
@@ -824,7 +841,8 @@ fn bank(actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
             view! {
                 <button
                     type="button"
-                    draggable="true"
+                    draggable=draggable(cap)
+                    disabled=cap.is_none()
                     title=t(if armed_now { keys::align::HINT_ARMED } else { keys::align::HINT_IDLE }, &[])
                     data-armed=if on { "1" } else { "0" }
                     aria-label=occurrence_name(w)
@@ -834,8 +852,9 @@ fn bank(actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
                         set_drag(&e, &Drag::Bank { words: crate::app::align::dragged_words(&drag, i) });
                     }
                     on:click=move |e: web_sys::MouseEvent| {
+                        let Some(cap) = cap else { return };
                         remember_focus(e.current_target());
-                        click.align_edit(AlignEdit::ClickBank {
+                        click.align_edit(cap, AlignEdit::ClickBank {
                             word: click_word.clone(),
                             click: bank_click(e.ctrl_key() || e.meta_key(), e.shift_key()),
                         });
@@ -843,10 +862,10 @@ fn bank(actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
                     // The click a key fires carries no modifier, so Ctrl, Cmd or Shift with
                     // Enter or Space selects from the keyboard here.
                     on:keydown=move |e: web_sys::KeyboardEvent| {
-                        if let Some(click) = bank_key(&e.key(), e.ctrl_key() || e.meta_key(), e.shift_key()) {
+                        if let (Some(cap), Some(click)) = (cap, bank_key(&e.key(), e.ctrl_key() || e.meta_key(), e.shift_key())) {
                             e.prevent_default();
                             remember_focus(e.current_target());
-                            key.align_edit(AlignEdit::ClickBank { word: key_word.clone(), click });
+                            key.align_edit(cap, AlignEdit::ClickBank { word: key_word.clone(), click });
                         }
                     }
                 >
@@ -879,8 +898,8 @@ fn bank(actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
             on:dragover=drag_over
             on:drop=move |e: web_sys::DragEvent| {
                 e.prevent_default();
-                if let Some(edit) = drag_data(&e).and_then(drop_on_bank) {
-                    drop_actions.align_edit(edit);
+                if let (Some(cap), Some(edit)) = (cap, drag_data(&e).and_then(drop_on_bank)) {
+                    drop_actions.align_edit(cap, edit);
                 }
             }
             style=outer.to_style()
@@ -898,7 +917,12 @@ fn bank(actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
 }
 
 /// tC4's `MarkValidBar` (#271, D73, #726): Previous and Next sit either side of Mark valid.
-fn mark_valid_bar(s: &AppState, actions: &Actions, view: &AlignerView) -> impl IntoView + use<> {
+fn mark_valid_bar(
+    s: &AppState,
+    actions: &Actions,
+    cap: Option<WriteCap>,
+    view: &AlignerView,
+) -> impl IntoView + use<> {
     let items = s.a.rail.with_untracked(|rail| match rail {
         Rail::Ready(rows) => Some(rows.items.clone()),
         Rail::Loading | Rail::Failed(_) => None,
@@ -953,7 +977,8 @@ fn mark_valid_bar(s: &AppState, actions: &Actions, view: &AlignerView) -> impl I
                 data-active=if done { "1" } else { "0" }
                 title=t(keys::align::MARK_VALID_HINT, &[])
                 style=button.to_style()
-                on:click=move |_| mark.align_edit(AlignEdit::MarkValid)
+                disabled=cap.is_none()
+                on:click=move |_| if let Some(cap) = cap { mark.align_edit(cap, AlignEdit::MarkValid) }
             >
                 {t(keys::align::MARK_VALID, &[])}
             </button>
@@ -1096,6 +1121,7 @@ fn how_toggle(s: &AppState) -> impl IntoView + use<> {
 fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> AnyView {
     restore_focus();
     let lens = effective_lens(s.a.lens.get(), view.gateway.is_some());
+    let cap = actions.write_cap();
     let stale = (view.freshness == Freshness::Stale).then(|| {
         let style = crate::css! {
             "font-size": "var(--fs-caption-lg)",
@@ -1129,6 +1155,7 @@ fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> An
         .map(|card| {
             word_card(
                 actions,
+                cap,
                 card,
                 armed_now,
                 lens,
@@ -1168,11 +1195,11 @@ fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> An
             <div style=panel.to_style()>
                 {mode_bar(s, lens, view.gateway.is_some(), view.testament)}
                 {ref_band(&view, lens)}
-                {suggestions_row(s, actions, &view.suggest)}
-                {bank(actions, &view)}
+                {suggestions_row(s, actions, cap, &view.suggest)}
+                {bank(actions, cap, &view)}
                 <div style=cards_style.to_style() dir=dir_name(view.orig_dir)>{cards}</div>
             </div>
-            {mark_valid_bar(s, actions, &view)}
+            {mark_valid_bar(s, actions, cap, &view)}
         </div>
     };
     session.into_any()

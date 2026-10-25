@@ -111,10 +111,18 @@ pub(super) struct RuntimeHooks {
     pub read_sessions: Box<dyn Fn()>,
 }
 
-/// Proof that the open is writable (6.4): editors take `Option<WriteCap>`, and their edit
-/// controls are off without one.
+/// Proof that the open is writable (6.4). `Actions::align_edit`, `keep_align_reflow` and `mark`
+/// take one; views get `Option<WriteCap>` from `Actions::write_cap` and draw their edit controls
+/// off without one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WriteCap(());
+
+fn writable(sessions: &[OpenSession], at: &Scope) -> Option<WriteCap> {
+    sessions
+        .iter()
+        .any(|s| s.at == *at && s.mode == SessionMode::Writable)
+        .then_some(WriteCap(()))
+}
 
 #[derive(Default)]
 struct DraftLane {
@@ -447,12 +455,18 @@ impl Saves {
 
     /// `Some` only while the open `at` is writable (6.4).
     pub fn write_cap(&self, at: &Scope) -> Option<WriteCap> {
-        self.0.state.sessions.with_untracked(|sessions| {
-            sessions
-                .iter()
-                .any(|s| s.at == *at && s.mode == SessionMode::Writable)
-                .then_some(WriteCap(()))
-        })
+        self.0
+            .state
+            .sessions
+            .with_untracked(|sessions| writable(sessions, at))
+    }
+
+    /// `write_cap`, tracked: a view that reads it redraws when the open turns read-only.
+    pub fn watch_write_cap(&self, at: &Scope) -> Option<WriteCap> {
+        self.0
+            .state
+            .sessions
+            .with(|sessions| writable(sessions, at))
     }
 
     pub fn add_gate_hook(&self, hook: GateHook) -> GateHookId {
