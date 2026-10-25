@@ -90,6 +90,7 @@ macro_rules! endpoint_table {
             command "prefs/setLocale": $crate::prefs::SetLocale => ();
             command "prefs/setDraftUnit": $crate::prefs::SetDraftUnit => ();
             command "prefs/setAlignSuggestions": $crate::prefs::SetAlignSuggestions => ();
+            command "prefs/setRailFolded": $crate::prefs::SetRailFolded => ();
             command "prefs/recordPlace": $crate::prefs::RecordPlace => ();
 
             command "session/drafts": $crate::session::Drafts => $crate::session::OfferedDrafts;

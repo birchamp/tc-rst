@@ -1256,6 +1256,7 @@ fn session_view(
         rows,
         terms: entry.derived.terms.clone(),
         group_titles: entry.derived.group_titles.clone(),
+        folded: app.inner.prefs.rail_folded(list.tool),
         progress: entry.progress(),
         citation: Some(entry.derived.citation.clone()),
         dropped: entry.derived.dropped.clone(),

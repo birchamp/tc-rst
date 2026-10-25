@@ -80,7 +80,7 @@ use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_api::net::{NetView, Set, State as NetState};
 use tc_api::prefs::{
     DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetAlignSuggestions, SetDraftUnit,
-    SetLocale,
+    SetLocale, SetRailFolded,
 };
 use tc_api::refusal::Message;
 use tc_api::resources::{
@@ -329,6 +329,18 @@ impl Example for SetAlignSuggestions {
             at: scope(),
             request: request(5),
             on: true,
+        }
+    }
+}
+
+impl Example for SetRailFolded {
+    fn example() -> Self {
+        SetRailFolded {
+            at: scope(),
+            request: request(6),
+            tool: Tool::TranslationNotes,
+            groups: vec!["figs-metaphor".to_owned(), "figs-abstractnouns".to_owned()],
+            folded: true,
         }
     }
 }
@@ -2485,6 +2497,7 @@ impl Example for CheckSessionView {
             rows: RailRows::Full(vec![Ack::example().rows[0].row.clone()]),
             terms: vec!["figs-metaphor".to_owned()],
             group_titles: vec!["Metaphor".to_owned()],
+            folded: vec!["figs-metaphor".to_owned()],
             progress: RailProgress {
                 decided: 1,
                 total: 112,
@@ -3151,6 +3164,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
+            "prefs/setRailFolded",
             "resources/applyPlan",
             "resources/download",
             "resources/fixFetch",

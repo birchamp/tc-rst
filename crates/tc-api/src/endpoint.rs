@@ -171,6 +171,7 @@ scoped!(
     crate::editor::DiscardDraft,
     crate::prefs::SetDraftUnit,
     crate::prefs::SetAlignSuggestions,
+    crate::prefs::SetRailFolded,
     crate::prefs::RecordPlace,
     crate::session::Close,
     crate::session::Drafts,

@@ -477,6 +477,9 @@ pub struct CheckSessionView {
     /// title, else its slug (tC4 #769).
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub group_titles: Vec<String>,
+    /// The groups this tool's rail has folded on this computer, by id (tC4 #769 `railFolded`).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub folded: Vec<String>,
     pub progress: RailProgress,
     /// The resource the list derives from (tC4 `cs.resource`).
     pub citation: Option<ResourceCitation>,
