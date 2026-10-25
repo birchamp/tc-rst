@@ -18,6 +18,7 @@ const PHASE_0: &[&str] = &[
     "prefs/setDraftUnit",
     "prefs/setAlignSuggestions",
     "prefs/recordPlace",
+    "prefs/setRailFolded",
     "net/state",
     "net/set",
     "jobs/get",
