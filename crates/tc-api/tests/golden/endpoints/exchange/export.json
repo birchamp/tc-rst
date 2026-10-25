@@ -1,0 +1,23 @@
+{
+  "path": "exchange/export",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "16161616161616161616161616161616",
+    "project": "sample_burrito",
+    "destination": "/media/stick"
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

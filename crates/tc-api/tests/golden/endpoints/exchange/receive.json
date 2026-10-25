@@ -1,0 +1,26 @@
+{
+  "path": "exchange/receive",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "17171717171717171717171717171717",
+    "project": "sample_burrito",
+    "file": {
+      "type": "upload",
+      "value": "00112233445566778899aabbccddeeff"
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

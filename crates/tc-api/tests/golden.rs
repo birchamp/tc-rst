@@ -56,6 +56,10 @@ use tc_api::event::{
     Aspect, ChangeCause, ChangeParts, ChangeScope, ChapterRef, CheckpointOutcome, Event,
     EventFrame, RecordChange, SessionEvent, SessionMode, StartupProgress, StartupState,
 };
+use tc_api::exchange::{
+    ExchangeFile, Export, ExportedView, HandEditOutcome, HandEdited, Identify, IdentifyView,
+    Receive, ReceivedView,
+};
 use tc_api::export;
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::helps::{
@@ -538,6 +542,72 @@ impl Example for SyncProject {
         SyncProject {
             request: request(21),
             project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for Identify {
+    fn example() -> Self {
+        Identify {
+            file: ExchangeFile::Path("/media/stick/tit-2026-10-25-maria.zip".into()),
+        }
+    }
+}
+
+impl Example for IdentifyView {
+    fn example() -> Self {
+        IdentifyView {
+            name: "Tito".into(),
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+        }
+    }
+}
+
+impl Example for Export {
+    fn example() -> Self {
+        Export {
+            request: request(22),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            destination: "/media/stick".into(),
+        }
+    }
+}
+
+impl Example for ExportedView {
+    fn example() -> Self {
+        ExportedView {
+            path: "/media/stick/tit-2026-10-25-ana.zip".into(),
+        }
+    }
+}
+
+impl Example for Receive {
+    fn example() -> Self {
+        Receive {
+            request: request(23),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            file: ExchangeFile::Upload(
+                tc_api::ids::UploadId::parse("00112233445566778899aabbccddeeff").unwrap(),
+            ),
+        }
+    }
+}
+
+impl Example for ReceivedView {
+    fn example() -> Self {
+        ReceivedView {
+            received: 3,
+            from: vec![PersonLabel {
+                who: Who::Username("maria".into()),
+                computer: None,
+            }],
+            kept_newest: 1,
+            verse_conflicts: 1,
+            alignments: 0,
+            hand_edited: vec![HandEdited {
+                path: "ingredients/TIT.usfm".into(),
+                outcome: HandEditOutcome::NotTakenIn,
+            }],
         }
     }
 }
@@ -3381,6 +3451,18 @@ fn events() -> Vec<Event> {
                 restored: 0,
                 missing_pins: 5,
             })),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(13),
+            kind: JobKind::ExchangeExport,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Exported(ExportedView::example())),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(14),
+            kind: JobKind::ExchangeReceive,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Received(ReceivedView::example())),
         }),
         Event::Job(JobView {
             id: JobId::new(12),

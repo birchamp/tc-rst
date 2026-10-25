@@ -35,6 +35,7 @@ pub mod editor;
 pub mod endpoint;
 pub mod error;
 pub mod event;
+pub mod exchange;
 pub mod export;
 pub mod feedback;
 pub mod helps;
@@ -121,6 +122,10 @@ macro_rules! endpoint_table {
 
             job [Open] "door43/open": $crate::door43::OpenDoor43 => $crate::ids::JobId;
             job [Sync] "door43/sync": $crate::door43::SyncProject => $crate::ids::JobId;
+
+            query "exchange/identify": $crate::exchange::Identify => $crate::exchange::IdentifyView;
+            job "exchange/export": $crate::exchange::Export => $crate::ids::JobId;
+            job "exchange/receive": $crate::exchange::Receive => $crate::ids::JobId;
 
             query "feedback/compose": $crate::feedback::Compose => $crate::feedback::FeedbackDraft;
 

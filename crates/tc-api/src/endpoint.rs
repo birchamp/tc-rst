@@ -208,6 +208,8 @@ unscoped!(
     crate::session::Open,
     crate::door43::OpenDoor43,
     crate::door43::SyncProject,
+    crate::exchange::Export,
+    crate::exchange::Receive,
     crate::settings::Save,
     crate::create::Bible,
     crate::create::Obs,

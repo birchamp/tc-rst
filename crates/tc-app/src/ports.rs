@@ -3,8 +3,11 @@
 //! Release builds get ports that answer `Unavailable`; tests and journeys get a scripted one,
 //! so release and tests run the same business code.
 
+use std::path::PathBuf;
+
 use tc_api::door43::{ProjectName, RepoSource};
 use tc_api::error::{ApiError, Feature};
+use tc_api::exchange::{ExchangeFile, ExportedView, IdentifyView, ReceivedView};
 use tc_api::ids::ProjectRef;
 use tc_api::jobs::SyncResultView;
 
@@ -36,8 +39,35 @@ pub trait SyncPort: Send + Sync {
     }
 }
 
-/// USB exchange. E2 adds its methods and its real port.
-pub trait ExchangePort: Send + Sync {}
+/// USB exchange (E2; STORAGE §10). The app holds the project's exchange flow while a call runs,
+/// so a receive never runs beside a sync of the same project (INV-NEVER-BESIDE-A-SYNC).
+pub trait ExchangePort: Send + Sync {
+    /// §10.1: checkpoint `project`, write the exchange file into `destination`, read it back
+    /// from the device. Ends verified, or failed with the file deleted.
+    fn export(
+        &self,
+        app: App,
+        project: ProjectRef,
+        destination: PathBuf,
+    ) -> BoxFuture<Result<ExportedView, JobEnd>>;
+
+    /// §10.2 R1-R3: the project the file holds, with nothing written.
+    fn identify(&self, app: App, file: ExchangeFile) -> BoxFuture<Result<IdentifyView, ApiError>>;
+
+    /// §10.2 R4-R8: the file's packs taken into `project`, whole or not at all, and only
+    /// the packs: a file edited by hand inside the zip is listed, never taken in.
+    fn receive(
+        &self,
+        app: App,
+        project: ProjectRef,
+        file: ExchangeFile,
+    ) -> BoxFuture<Result<ReceivedView, JobEnd>>;
+
+    #[cfg(feature = "test-hooks")]
+    fn scripted(&self) -> Option<&scripted::ScriptedExchangePort> {
+        None
+    }
+}
 
 /// Import of other projects. F1 adds its methods and its real port.
 pub trait ImportPort: Send + Sync {}
@@ -60,10 +90,36 @@ impl SyncPort for UnavailableSync {
     }
 }
 
-/// The release exchange until E2.
+/// The release exchange until E2's real port lands.
 pub struct UnavailableExchange;
 
-impl ExchangePort for UnavailableExchange {}
+impl ExchangePort for UnavailableExchange {
+    fn export(
+        &self,
+        _app: App,
+        _project: ProjectRef,
+        _destination: PathBuf,
+    ) -> BoxFuture<Result<ExportedView, JobEnd>> {
+        Box::pin(async { Err(JobEnd::Failed(ApiError::Unavailable(Feature::Exchange))) })
+    }
+
+    fn identify(
+        &self,
+        _app: App,
+        _file: ExchangeFile,
+    ) -> BoxFuture<Result<IdentifyView, ApiError>> {
+        Box::pin(async { Err(ApiError::Unavailable(Feature::Exchange)) })
+    }
+
+    fn receive(
+        &self,
+        _app: App,
+        _project: ProjectRef,
+        _file: ExchangeFile,
+    ) -> BoxFuture<Result<ReceivedView, JobEnd>> {
+        Box::pin(async { Err(JobEnd::Failed(ApiError::Unavailable(Feature::Exchange))) })
+    }
+}
 
 /// The release import until F1.
 pub struct UnavailableImport;
