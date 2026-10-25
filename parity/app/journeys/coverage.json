@@ -130,7 +130,7 @@
       {
         "file": "parity/app/journeys/j07-export.test.mjs",
         "tests": [
-          "J7: aligned and plain USFM download from the export menu and leave the project unchanged",
+          "j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged",
           "J7: an aligned word in an add span keeps the span in the aligned USFM (tC4 #420)",
           "J7: the PDF prints the print page of its job and leaves the project unchanged",
           "J7 and J23: each export is named as tC4 names it"
@@ -265,7 +265,7 @@
       {
         "file": "parity/app/journeys/j07-export.test.mjs",
         "tests": [
-          "J23: Story Markdown holds content/ as stored, the PDF prints, and the project is unchanged",
+          "j23_story_markdown_and_the_pdf_leave_the_project_unchanged",
           "J7 and J23: each export is named as tC4 names it"
         ]
       },
@@ -446,10 +446,10 @@
       {
         "file": "parity/app/journeys/j07-export.test.mjs",
         "tests": [
-          "J7: aligned and plain USFM download from the export menu and leave the project unchanged",
+          "j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged",
           "J7: an aligned word in an add span keeps the span in the aligned USFM (tC4 #420)",
           "J7: the PDF prints the print page of its job and leaves the project unchanged",
-          "J23: Story Markdown holds content/ as stored, the PDF prints, and the project is unchanged",
+          "j23_story_markdown_and_the_pdf_leave_the_project_unchanged",
           "J7 and J23: each export is named as tC4 names it"
         ]
       },

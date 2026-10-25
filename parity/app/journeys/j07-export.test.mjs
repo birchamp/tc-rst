@@ -186,7 +186,7 @@ function assertPdf(pdf, pages) {
   assert.match(text, /\/MediaBox\s*\[\s*0 0 594\.9\d* 841\.9\d*\s*\]/, 'A4');
 }
 
-browserTest('J7: aligned and plain USFM download from the export menu and leave the project unchanged', async () => {
+browserTest('j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged', async () => {
   await withApp(async ({ page, env }) => {
     await openTitusPreview(page);
     const project = path.join(env.projectsDir, BIBLE);
@@ -259,7 +259,7 @@ browserTest('J7: the PDF prints the print page of its job and leaves the project
   }, { init: async (context, env) => { await downloads(context, env); printed = await stubPrintPdf(context, env); } });
 });
 
-browserTest('J23: Story Markdown holds content/ as stored, the PDF prints, and the project is unchanged', async () => {
+browserTest('j23_story_markdown_and_the_pdf_leave_the_project_unchanged', async () => {
   let printed;
   await withApp(async ({ page, env }) => {
     await openStoryPreview(page, env);
