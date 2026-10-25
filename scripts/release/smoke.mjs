@@ -46,8 +46,8 @@ function bounded(promise, what) {
   return Promise.race([promise, hang]).finally(() => clearTimeout(timer));
 }
 
-async function until(what, poll) {
-  const deadline = Date.now() + HANG_MS;
+async function until(what, poll, ms = HANG_MS) {
+  const deadline = Date.now() + ms;
   let last;
   for (;;) {
     const value = await poll((seen) => { last = seen; });
@@ -163,11 +163,12 @@ await step('bundled_resources_without_network', async () => {
   if (first.type !== 'preparing' || !(first.value.total > 0)) {
     throw new Error(`a first start has nothing to install from the bundle: ${JSON.stringify(first)}`);
   }
+  // A fresh Windows runner scans each new file, so the first install once took over 60 s.
   const end = await until('bundled_resources_without_network', async (seen) => {
     const now = (await state.app.call('app/hello')).startup;
     seen(now);
     return now.type !== 'preparing' && now;
-  });
+  }, 180_000);
   if (end.type !== 'ready') throw new Error(`installing the bundle ended ${JSON.stringify(end)}`);
 });
 
