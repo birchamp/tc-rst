@@ -2,6 +2,7 @@
 
 pub mod add_book;
 pub mod add_project;
+pub mod changed_books;
 pub mod feedback;
 pub mod gateway_change;
 pub mod guided_fix;

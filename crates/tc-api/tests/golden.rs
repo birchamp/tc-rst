@@ -271,6 +271,7 @@ impl Example for HelloView {
                 id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
                 mode: SessionMode::ReadOnly(ReadOnlyReason::CloudSynced),
                 role: SessionRole::Screen,
+                outside: outside_edits(),
             }],
             prefs: AppPrefsView {
                 app_locale: LocaleId::parse("ar").unwrap(),
@@ -1638,6 +1639,7 @@ fn opened() -> OpenedProject {
             id: ProjectId::parse("0a1b2c3d-0000-4000-8000-000000000001").unwrap(),
             mode: SessionMode::Writable,
             role: SessionRole::Screen,
+            outside: tc_api::session::OutsideEdits::default(),
         },
         name: "Equipo Ejemplo — Tito y Jonás".into(),
         tag: "es-419".into(),
@@ -1678,6 +1680,99 @@ impl Example for tc_api::session::LeaveMode {
             request: request(33),
             at: scope(),
             from: tc_api::session::ScreenMode::Translate,
+        }
+    }
+}
+
+/// Titus changed outside and waiting, Ruth added outside, and an earlier copy of Titus.
+fn outside_edits() -> tc_api::session::OutsideEdits {
+    use tc_api::session::{KeptCopy, KeptWhy, OutsideEdits, WaitingBook};
+    OutsideEdits {
+        waiting: vec![
+            WaitingBook {
+                file: "ingredients/TIT.usfm".into(),
+                book: Some(BookId::Titus),
+                added: false,
+                copy: ".tc/external/TIT.usfm.20261024T101500Z".into(),
+                unreadable: None,
+            },
+            WaitingBook {
+                file: "ingredients/RUT.usfm".into(),
+                book: Some(BookId::Ruth),
+                added: true,
+                copy: ".tc/external/RUT.usfm.20261024T101500Z".into(),
+                unreadable: Some("RUT 1:3 appears twice (line 212)".into()),
+            },
+        ],
+        kept: vec![
+            KeptCopy {
+                file: "ingredients/TIT.usfm".into(),
+                copy: ".tc/external/TIT.usfm.20261023T090000Z".into(),
+                why: KeptWhy::Changed,
+            },
+            KeptCopy {
+                file: "ingredients/TIT.usfm".into(),
+                copy: ".tc/external/TIT.usfm.20261024T101500Z".into(),
+                why: KeptWhy::Changed,
+            },
+        ],
+    }
+}
+
+impl Example for tc_api::session::OutsideEdits {
+    fn example() -> Self {
+        outside_edits()
+    }
+}
+
+impl Example for tc_api::session::Focus {
+    fn example() -> Self {
+        tc_api::session::Focus {
+            request: request(34),
+            at: scope(),
+        }
+    }
+}
+
+impl Example for tc_api::session::ImportKept {
+    fn example() -> Self {
+        tc_api::session::ImportKept {
+            request: request(35),
+            at: scope(),
+            copy: ".tc/external/TIT.usfm.20261024T101500Z".into(),
+        }
+    }
+}
+
+impl Example for tc_api::session::KeptImported {
+    fn example() -> Self {
+        tc_api::session::KeptImported {
+            file: "ingredients/TIT.usfm".into(),
+            book: Some(BookId::Titus),
+            imported: 12,
+            to_review: 2,
+            book_added: false,
+            outside: tc_api::session::OutsideEdits::default(),
+        }
+    }
+}
+
+impl Example for tc_api::session::NotNow {
+    fn example() -> Self {
+        tc_api::session::NotNow {
+            request: request(36),
+            at: scope(),
+            file: "ingredients/TIT.usfm".into(),
+        }
+    }
+}
+
+impl Example for tc_api::session::DismissNotice {
+    fn example() -> Self {
+        tc_api::session::DismissNotice {
+            request: request(37),
+            at: scope(),
+            copy: ".tc/external/TIT.usfm.20261023T090000Z".into(),
         }
     }
 }
@@ -3159,6 +3254,10 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "session/close",
             "session/retryCheckpoint",
             "session/leave",
+            "session/focus",
+            "session/importKept",
+            "session/notNow",
+            "session/dismissNotice",
             "session/copy",
             "session/discardDraft",
             "session/drafts",
@@ -3448,6 +3547,7 @@ fn session_events() -> Vec<SessionEvent> {
         SessionEvent::MaterializeBlocked {
             paths: vec!["ingredients/TIT.usfm".into()],
         },
+        SessionEvent::OutsideEdits(outside_edits()),
         SessionEvent::AlignSave {
             aligner: AlignerId::new(5),
             state: AlignSave::Failed(NotSaved::Disk("The disk is full.".into())),

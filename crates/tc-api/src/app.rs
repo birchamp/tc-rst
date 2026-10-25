@@ -74,6 +74,9 @@ pub struct OpenSession {
     pub id: ProjectId,
     pub mode: SessionMode,
     pub role: SessionRole,
+    /// INV-A-CHANGED-BOOK-IS-ASKED-NOT-TAKEN, INV-A-KEPT-COPY-STAYS-ON-A-SCREEN (D1): the books
+    /// the question asks about and the kept copies, so a reload asks and lists them again.
+    pub outside: crate::session::OutsideEdits,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -146,6 +146,11 @@ pub struct AppState {
     pub sync_result: ArcRwSignal<Option<SyncToast>>,
     /// The toast of a finished import (F1 sets it).
     pub import_toast: ArcRwSignal<Option<ImportToast>>,
+    /// The reports of the *Import*s just made of books another program changed (D1), shown
+    /// until the person closes them.
+    pub outside_reports: ArcRwSignal<Vec<tc_api::session::KeptImported>>,
+    /// An *Import* or *Not now* is on its way: a second click would send the same answer again.
+    pub outside_busy: ArcRwSignal<bool>,
     /// The project an import of this page made: its card carries "Imported" (F1 sets it).
     pub imported_repo: ArcRwSignal<Option<ProjectRef>>,
     /// The open and the Understand screen (B3).
@@ -196,6 +201,8 @@ impl AppState {
             syncing: ArcRwSignal::new(None),
             sync_result: ArcRwSignal::new(None),
             import_toast: ArcRwSignal::new(None),
+            outside_reports: ArcRwSignal::new(Vec::new()),
+            outside_busy: ArcRwSignal::new(false),
             imported_repo: ArcRwSignal::new(None),
             u: super::understand::UnderstandState::new(
                 place.map(|p| p.book),

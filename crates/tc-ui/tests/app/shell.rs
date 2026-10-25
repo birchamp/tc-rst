@@ -175,6 +175,7 @@ fn session(p: &CurrentProject, role: SessionRole) -> OpenSession {
         id: p.id.clone(),
         mode: SessionMode::Writable,
         role,
+        outside: Default::default(),
     }
 }
 

@@ -583,6 +583,100 @@ impl Handle<tc_api::session::LeaveMode> for App {
 }
 
 // ---------------------------------------------------------------------------------------
+// D1: the question about changed books, and the kept copies
+// ---------------------------------------------------------------------------------------
+
+impl App {
+    /// The session of a write about outside edits, by its scope.
+    fn outside_session(&self, at: &tc_api::Scope) -> Result<Arc<ProjectSession>, ApiError> {
+        self.inner
+            .sessions
+            .reader(at)
+            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))
+    }
+
+    /// The lists after a store call, also told to every page of the session.
+    fn outside_after(
+        &self,
+        session: &ProjectSession,
+        done: Result<(), crate::backend::StoreError>,
+    ) -> Result<tc_api::session::OutsideEdits, ApiError> {
+        done.map_err(|e| ApiError::NotSaved(NotSaved::Disk(e.to_string())))?;
+        Ok(self.inner.sessions.publish_outside(session))
+    }
+}
+
+impl Handle<tc_api::session::Focus> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::Focus,
+    ) -> Result<tc_api::session::OutsideEdits, ApiError> {
+        let session = self.outside_session(&req.at)?;
+        let done = session.handle().focus().await;
+        self.outside_after(&session, done)
+    }
+}
+
+impl Handle<tc_api::session::ImportKept> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::ImportKept,
+    ) -> Result<tc_api::session::KeptImported, ApiError> {
+        let session = self.outside_session(&req.at)?;
+        let file = session
+            .handle()
+            .outside_edits()
+            .kept
+            .iter()
+            .find(|k| k.copy == req.copy)
+            .map(|k| k.file.clone())
+            .ok_or_else(|| ApiError::BadRequest {
+                field: "copy".into(),
+                reason: "no kept copy has this name".into(),
+            })?;
+        let book = book_of_file(&file);
+        let report = session.handle().import_kept(&req.copy).await;
+        let report = report.map_err(|e| ApiError::NotSaved(NotSaved::Disk(e.to_string())))?;
+        Ok(tc_api::session::KeptImported {
+            file,
+            book,
+            imported: report.imported,
+            to_review: report.to_review,
+            book_added: report.book_added,
+            outside: self.inner.sessions.publish_outside(&session),
+        })
+    }
+}
+
+impl Handle<tc_api::session::NotNow> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::NotNow,
+    ) -> Result<tc_api::session::OutsideEdits, ApiError> {
+        let session = self.outside_session(&req.at)?;
+        let done = session.handle().not_now(&req.file).await;
+        self.outside_after(&session, done)
+    }
+}
+
+impl Handle<tc_api::session::DismissNotice> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::DismissNotice,
+    ) -> Result<tc_api::session::OutsideEdits, ApiError> {
+        let session = self.outside_session(&req.at)?;
+        let done = session.handle().dismiss_kept(&req.copy).await;
+        self.outside_after(&session, done)
+    }
+}
+
+/// The book an `ingredients/<CODE>.usfm` path is.
+fn book_of_file(file: &str) -> Option<BookId> {
+    let code = file.strip_prefix("ingredients/")?.strip_suffix(".usfm")?;
+    code.parse().ok()
+}
+
+// ---------------------------------------------------------------------------------------
 // editor/book, editor/sources
 // ---------------------------------------------------------------------------------------
 

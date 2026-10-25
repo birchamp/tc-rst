@@ -1186,6 +1186,34 @@ pub trait ProjectHandle: Send + Sync {
         Vec::new()
     }
 
+    /// The books another program changed that wait for the question, and every kept copy
+    /// (D1, delta §2.3, §2.11), as the store's manifest lists them. A backend with no files has
+    /// none.
+    fn outside_edits(&self) -> tc_api::session::OutsideEdits {
+        tc_api::session::OutsideEdits::default()
+    }
+
+    /// The window got focus: the store looks for files another program changed and holds them
+    /// (STORAGE §11.1). A backend with no files finds none.
+    fn focus(&self) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// *Import* of the kept copy `copy` (delta §2.11 Q4).
+    fn import_kept(&self, _copy: &str) -> BoxFuture<Result<tc_store::ImportReport, StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
+    }
+
+    /// *Not now* for the waiting file `file`: the project keeps its text (delta §2.11 Q5).
+    fn not_now(&self, _file: &str) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
+    }
+
+    /// *Dismiss* of the kept copy `copy`; refused while its book still waits.
+    fn dismiss_kept(&self, _copy: &str) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
+    }
+
     /// Drafts from an earlier session that differ from what their records hold (O12).
     fn offered_drafts(&self) -> Vec<OfferedDraft>;
 

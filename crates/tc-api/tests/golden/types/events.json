@@ -52,7 +52,11 @@
               "mode": {
                 "type": "writable"
               },
-              "role": "screen"
+              "role": "screen",
+              "outside": {
+                "waiting": [],
+                "kept": []
+              }
             },
             "name": "Equipo Ejemplo — Tito y Jonás",
             "tag": "es-419",

@@ -25,6 +25,7 @@ use crate::views::check::Check;
 use crate::views::home::Home;
 use crate::views::modals::add_book::AddBook;
 use crate::views::modals::add_project::AddProject;
+use crate::views::modals::changed_books::ChangedBooks;
 use crate::views::modals::feedback::Feedback;
 use crate::views::modals::gateway_change::GatewayChange;
 use crate::views::modals::guided_fix::GuidedFix;
@@ -50,6 +51,12 @@ pub fn App() -> impl IntoView {
     };
     remember_place(&ctx.s);
     go_home_after_a_restart(&ctx.s, &ctx.actions);
+    // D1: another program may have changed a book file while the window was elsewhere.
+    let focused = {
+        let actions = ctx.actions.clone();
+        window_event_listener(leptos::ev::focus, move |_| actions.focus_window())
+    };
+    on_cleanup(move || focused.remove());
     let frame = crate::css! {
         "display": "flex",
         "flex-direction": "column",
@@ -107,6 +114,7 @@ pub fn App() -> impl IntoView {
             {move || share_open.get().then(|| view! { <ShareDialog /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}
             <InternetDialog />
+            <ChangedBooks />
             <OpenProgress />
             // The Inspector (late) mounts here.
         </div>

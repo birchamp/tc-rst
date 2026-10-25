@@ -1352,6 +1352,49 @@ fn close_off_thread(handle: tc_store::ProjectHandle) -> oneshot::Receiver<Result
     rx
 }
 
+/// A store call of a handle that may have closed.
+fn store_result<P>(pending: Option<P>) -> Result<P, StoreError> {
+    pending.ok_or_else(|| StoreError::Other("the project is closed".to_owned()))
+}
+
+fn other(error: tc_store::StoreError) -> StoreError {
+    StoreError::Other(error.to_string())
+}
+
+/// The store's waiting books and kept copies in the screens' terms (D1).
+pub fn outside_edits(
+    waiting: Vec<tc_store::WaitingBook>,
+    kept: Vec<tc_store::Kept>,
+) -> tc_api::session::OutsideEdits {
+    use tc_api::session::{KeptCopy, KeptWhy, OutsideEdits, WaitingBook};
+    use tc_journal::fold::DerivedFile;
+    OutsideEdits {
+        waiting: waiting
+            .into_iter()
+            .map(|w| WaitingBook {
+                book: match w.file {
+                    DerivedFile::Usfm(book) => Some(book),
+                    _ => None,
+                },
+                file: w.path,
+                added: w.added,
+                copy: w.kept.copy,
+                unreadable: w.kept.unreadable,
+            })
+            .collect(),
+        kept: kept
+            .into_iter()
+            .map(|k| KeptCopy {
+                file: k.path,
+                copy: k.copy,
+                why: match k.why {
+                    tc_store::KeptWhy::Changed => KeptWhy::Changed,
+                },
+            })
+            .collect(),
+    }
+}
+
 /// What a checkpoint came to, for the screens (D1): a commit is `Committed`; no changes, a
 /// read-only project and a second writer are `Unchanged` (the last two have their own banner or
 /// notice); every other skip and every store error is `Failed`, which stays on Home until a
@@ -1471,6 +1514,36 @@ impl ProjectHandle for StoreHandle {
             .as_ref()
             .map(|handle| handle.notices())
             .unwrap_or_default()
+    }
+
+    fn outside_edits(&self) -> tc_api::session::OutsideEdits {
+        self.inner()
+            .as_ref()
+            .map(|handle| outside_edits(handle.waiting_books(), handle.kept_copies()))
+            .unwrap_or_default()
+    }
+
+    fn focus(&self) -> BoxFuture<Result<(), StoreError>> {
+        let pending = self.inner().as_ref().map(tc_store::ProjectHandle::focus);
+        Box::pin(async move { store_result(pending)?.await.map(drop).map_err(other) })
+    }
+
+    fn import_kept(&self, copy: &str) -> BoxFuture<Result<tc_store::ImportReport, StoreError>> {
+        let pending = self.inner().as_ref().map(|handle| handle.import_kept(copy));
+        Box::pin(async move { store_result(pending)?.await.map_err(other) })
+    }
+
+    fn not_now(&self, file: &str) -> BoxFuture<Result<(), StoreError>> {
+        let pending = self.inner().as_ref().map(|handle| handle.not_now(file));
+        Box::pin(async move { store_result(pending)?.await.map_err(other) })
+    }
+
+    fn dismiss_kept(&self, copy: &str) -> BoxFuture<Result<(), StoreError>> {
+        let pending = self
+            .inner()
+            .as_ref()
+            .map(|handle| handle.dismiss_kept(copy));
+        Box::pin(async move { store_result(pending)?.await.map_err(other) })
     }
 
     fn offered_drafts(&self) -> Vec<OfferedDraft> {

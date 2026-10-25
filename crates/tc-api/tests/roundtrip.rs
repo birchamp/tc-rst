@@ -245,6 +245,8 @@ fn every_shared_type_round_trips() {
             BuildInfo,
             OpenSession,
             FailedCheckpoint,
+            tc_api::session::OutsideEdits,
+            tc_api::session::KeptImported,
             SessionRole,
             AppPrefsView,
             DraftUnit,

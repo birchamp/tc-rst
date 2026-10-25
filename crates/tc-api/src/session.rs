@@ -138,6 +138,120 @@ pub struct RetryCheckpoint {
     pub at: Scope,
 }
 
+/// A book file or story another program changed, and the copy kept of it, waiting for the
+/// one question at open and at focus (D1, owner ruling OE 3; delta §2.11): nothing of it is in
+/// the project until the person chooses *Import*.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct WaitingBook {
+    /// The file's path in the project, `ingredients/TIT.usfm`.
+    pub file: String,
+    /// The book the file is; `None` for a story.
+    #[cfg_attr(
+        feature = "proptest",
+        proptest(strategy = "proptest::option::of(crate::arb::book())")
+    )]
+    pub book: Option<BookId>,
+    /// The project has no such book: *Import* adds it.
+    pub added: bool,
+    /// The newest copy kept of it, what *Import* takes in.
+    pub copy: String,
+    /// Why the bytes cannot be read; the question then offers only *Not now*.
+    pub unreadable: Option<String>,
+}
+
+/// Why a copy was kept (delta §2.3 `why`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum KeptWhy {
+    /// Another program changed the file: *Import* and *Dismiss*.
+    Changed,
+}
+
+/// A kept copy that still has a notice (delta §2.3 `kept`), until it is imported or dismissed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct KeptCopy {
+    pub file: String,
+    /// The copy in `.tc/external/`; it names the entry for *Import* and *Dismiss*.
+    pub copy: String,
+    pub why: KeptWhy,
+}
+
+/// The project's outside edits as the store lists them: the books the question asks about and
+/// every kept copy. `hello` carries them in each open session, so a reload asks again and lists
+/// the copies again.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct OutsideEdits {
+    pub waiting: Vec<WaitingBook>,
+    pub kept: Vec<KeptCopy>,
+}
+
+/// `session/focus` (D1): the window got focus. The store looks for files another program
+/// changed; the reply is what waits now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Focus {
+    pub request: RequestId,
+    pub at: Scope,
+}
+
+/// `session/importKept` (D1): *Import* of one kept copy, from the question or the notices.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportKept {
+    pub request: RequestId,
+    pub at: Scope,
+    pub copy: String,
+}
+
+/// What an *Import* did: "Titus: 12 verses imported, 2 to review."; the changes to review are
+/// conflicts in the review's Text tab.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct KeptImported {
+    pub file: String,
+    #[cfg_attr(
+        feature = "proptest",
+        proptest(strategy = "proptest::option::of(crate::arb::book())")
+    )]
+    pub book: Option<BookId>,
+    pub imported: u32,
+    pub to_review: u32,
+    pub book_added: bool,
+    pub outside: OutsideEdits,
+}
+
+/// `session/notNow` (D1): *Not now* for one waiting file. The project keeps its text, the file is
+/// written from it, and its copy stays in the notices.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NotNow {
+    pub request: RequestId,
+    pub at: Scope,
+    pub file: String,
+}
+
+/// `session/dismissNotice` (D1): *Dismiss* of a kept copy's notice. The store refuses it while
+/// the copy's book still waits for an answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DismissNotice {
+    pub request: RequestId,
+    pub at: Scope,
+    pub copy: String,
+}
+
 /// `session/drafts`: what to offer of the open project's unsaved text. A command: the texts it
 /// offers are written into `drafts.json` before it answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

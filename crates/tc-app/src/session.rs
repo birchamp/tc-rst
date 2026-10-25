@@ -461,6 +461,16 @@ impl SessionRegistry {
         Some(self.checkpoint(session, reason).await)
     }
 
+    /// The session's outside edits as the store lists them now, told to every page (D1).
+    pub fn publish_outside(&self, session: &ProjectSession) -> tc_api::session::OutsideEdits {
+        let outside = session.handle.outside_edits();
+        self.inner.bus.publish(Event::Session {
+            at: session.scope.clone(),
+            event: SessionEvent::OutsideEdits(outside.clone()),
+        });
+        outside
+    }
+
     /// The projects whose last checkpoint failed, for `hello`.
     pub fn failed_checkpoints(&self) -> Vec<tc_api::app::FailedCheckpoint> {
         lock(&self.inner.checkpoints)
@@ -520,6 +530,7 @@ impl SessionRegistry {
             id: session.id.clone(),
             mode: session.handle.facts().mode,
             role: SessionRole::Screen,
+            outside: session.handle.outside_edits(),
         })
     }
 
@@ -933,6 +944,7 @@ impl SessionRegistry {
                     } else {
                         SessionRole::Side
                     },
+                    outside: session.handle.outside_edits(),
                 })
             })
             .collect()
@@ -1158,8 +1170,13 @@ async fn pump(
                 }
             }
             StoreEvent::Mode(mode) => SessionEvent::Mode(mode),
-            // Shown by `session/notices`, which reads the store's list, and D1 (what could not
-            // be written); a skipped event never ends the pump.
+            // A file was held, or a hold ended: the question and the kept copies change (D1).
+            StoreEvent::Notice(tc_store::StoreNotice {
+                notice: tc_journal::fold::Notice::OutsideEditHeld { .. },
+                ..
+            }) => SessionEvent::OutsideEdits(session.handle.outside_edits()),
+            // The conflict review's notices read the store's list; a skipped event never ends
+            // the pump.
             StoreEvent::Notice(_) | StoreEvent::Materialized { .. } => continue,
         };
         bus.publish(Event::Session {

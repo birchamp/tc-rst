@@ -130,6 +130,15 @@ impl ServerState {
         });
     }
 
+    /// The books waiting for the question and the kept copies of the open `at` (D1).
+    pub(super) fn session_outside(&self, at: &Scope, outside: tc_api::session::OutsideEdits) {
+        self.sessions.update(|sessions| {
+            for session in sessions.iter_mut().filter(|s| s.at == *at) {
+                session.outside = outside.clone();
+            }
+        });
+    }
+
     pub(super) fn session_mode(&self, at: &Scope, mode: SessionMode) {
         self.sessions.update(|sessions| {
             for session in sessions.iter_mut().filter(|s| s.at == *at) {

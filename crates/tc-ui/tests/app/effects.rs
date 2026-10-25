@@ -395,6 +395,7 @@ fn open_session(at: Scope) -> OpenSession {
         id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
         mode: SessionMode::Writable,
         role: SessionRole::Screen,
+        outside: Default::default(),
     }
 }
 

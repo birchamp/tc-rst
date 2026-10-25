@@ -18,10 +18,12 @@ use tc_api::conflicts::{
 };
 use tc_api::editor::{PaneText, SourceFrame, Sources};
 use tc_api::ids::Scope;
+use tc_api::session::{KeptCopy, OutsideEdits};
 use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
+use crate::app::outside::{can_dismiss, kept_line, with_kept};
 use crate::app::review::{
     BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
     group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
@@ -218,17 +220,31 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
             })
         }
     };
-    let tabs = {
-        let actions = actions.clone();
+    let outside = {
+        let (sessions, at) = (s.server.sessions.clone(), at.clone());
         move || {
+            sessions.with(|sessions| {
+                sessions
+                    .iter()
+                    .find(|s| s.at == at)
+                    .map(|s| s.outside.clone())
+                    .unwrap_or_default()
+            })
+        }
+    };
+    let tabs = {
+        let (actions, outside) = (actions.clone(), outside.clone());
+        move || {
+            let kept = outside().kept.len();
             view.with(|v| {
                 v.as_ref()
-                    .map(|v| tab_strip(&actions, &tabs_shown(&v.tabs, tab), tab))
+                    .map(|v| tab_strip(&actions, &tabs_shown(&with_kept(&v.tabs, kept), tab), tab))
             })
         }
     };
     let body = {
         let (s, actions, at) = (s.clone(), actions.clone(), at.clone());
+        let outside = outside.clone();
         move || {
             let outcome = review.with(|r| r.as_ref().and_then(|r| r.keep.outcome()));
             let error = outcome.map(outcome_callout);
@@ -249,7 +265,9 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
                     None => none(t(keys::conflicts::NONE, &[])).into_any(),
                 },
                 Some(ReviewEntries::Detached(entries)) => detached(entries).into_any(),
-                Some(ReviewEntries::Notices(entries)) => notices(entries).into_any(),
+                Some(ReviewEntries::Notices(entries)) => {
+                    notices(&actions, &outside(), entries).into_any()
+                }
                 None => ().into_any(),
             });
             (error, content)
@@ -1331,14 +1349,49 @@ fn detached(entries: &[DetachedEntry]) -> AnyView {
     )
 }
 
-/// The notices, one sentence each (STORAGE §8.5).
-fn notices(entries: &[NoticeEntry]) -> AnyView {
-    if entries.is_empty() {
+/// The notices, one sentence each (STORAGE §8.5); first each kept copy of a book another
+/// program changed, with *Import* and *Dismiss* until it is imported or dismissed (D1,
+/// INV-A-KEPT-COPY-STAYS-ON-A-SCREEN). No *Undo* follows an import (delta Q7).
+fn notices(actions: &Actions, outside: &OutsideEdits, entries: &[NoticeEntry]) -> AnyView {
+    if entries.is_empty() && outside.kept.is_empty() {
         return none(t(keys::review::NONE, &[])).into_any();
     }
+    let kept = outside
+        .kept
+        .iter()
+        .map(|kept| kept_row(actions, kept, can_dismiss(kept, &outside.waiting)))
+        .collect_view();
     let rows = entries
         .iter()
         .map(|e| (String::new(), notice_text(&e.notice)))
         .collect();
-    list_box(rows, "review-notice", None)
+    view! { {kept}{list_box(rows, "review-notice", None)} }.into_any()
+}
+
+fn kept_row(actions: &Actions, kept: &KeptCopy, dismissable: bool) -> AnyView {
+    let import = {
+        let (actions, copy) = (actions.clone(), kept.copy.clone());
+        Callback::new(move |_| actions.import_kept(copy.clone()))
+    };
+    let dismiss = dismissable.then(|| {
+        let (actions, copy) = (actions.clone(), kept.copy.clone());
+        let on_click = Callback::new(move |_| actions.dismiss_kept(copy.clone()));
+        view! {
+            <Button variant=ButtonVariant::Ghost on_click=on_click
+                attrs=Attrs::new().with("data-testid", "kept-dismiss")>
+                {t(keys::common::DISMISS, &[])}
+            </Button>
+        }
+    });
+    view! {
+        <div data-testid="review-kept" style="margin-bottom: 10px; padding: 12px 16px; border-radius: var(--radius-lg); background: var(--surface-card); border: var(--stroke-hair) solid var(--border); display: flex; align-items: center; gap: 10px;">
+            <span style="flex: 1; font-size: var(--fs-ui-sm); color: var(--uw-ink);">{kept_line(kept)}</span>
+            <Button variant=ButtonVariant::Secondary on_click=import
+                attrs=Attrs::new().with("data-testid", "kept-import")>
+                {t(keys::outside::IMPORT, &[])}
+            </Button>
+            {dismiss}
+        </div>
+    }
+    .into_any()
 }

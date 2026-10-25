@@ -83,6 +83,9 @@ pub enum SessionEvent {
     MaterializeBlocked {
         paths: Vec<String>,
     },
+    /// The project's outside edits changed: a file was held, or a hold or a kept copy ended
+    /// (D1). The lists replace the session's.
+    OutsideEdits(crate::session::OutsideEdits),
     /// The server's alignment save for an open aligner (AD18).
     AlignSave {
         aligner: AlignerId,

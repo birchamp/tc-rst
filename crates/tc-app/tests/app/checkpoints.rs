@@ -38,7 +38,7 @@ fn every_checkpoint_skip_has_an_outcome() {
 }
 
 /// The app over the store world, its projects folder a temporary one.
-async fn store_app(
+pub(super) async fn store_app(
     world: &crate::store_world::StoreWorld,
 ) -> (tempfile::TempDir, super::common::TestApp) {
     use tc_app::StoreChoice;
