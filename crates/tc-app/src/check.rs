@@ -151,6 +151,8 @@ struct Derived {
     order: Vec<u32>,
     terms: Vec<String>,
     term_of: Vec<Option<u32>>,
+    /// Each term's heading By figure: a tN figure's Translation Academy title (tC4 #769).
+    group_titles: Vec<String>,
     titles: Vec<String>,
     places: Vec<CheckPlace>,
     dropped: Option<DroppedNote>,
@@ -557,9 +559,32 @@ fn derive(
             LoadedText::Ready(book) => Some(book),
             _ => None,
         });
-    assemble(list.items, dropped, citation, resolution.0, |item| {
-        title(loaded, literal, item)
-    })
+    assemble(
+        list.items,
+        dropped,
+        citation,
+        resolution.0,
+        |item| title(loaded, literal, item),
+        |slug| academy_title(helps, slug),
+    )
+}
+
+/// A figure's heading: its Translation Academy article's title, else its slug (tC4
+/// `readTaTitle`).
+fn academy_title(helps: &tc_helps::Helps, slug: &str) -> String {
+    tc_helps::Slug::parse(slug)
+        .ok()
+        .and_then(|slug| {
+            crate::understand::MANUALS.iter().find_map(|manual| {
+                helps
+                    .academy_article(&tc_helps::AcademyArticleId::Dcs {
+                        manual: *manual,
+                        slug: slug.clone(),
+                    })
+                    .map(|found| found.item.title.clone())
+            })
+        })
+        .unwrap_or_else(|| slug.to_owned())
 }
 
 /// Derives `tool`'s list of one story from the loaded story resources: the open story's
@@ -598,9 +623,14 @@ fn derive_story(
     }
     // A story has one source text and no original language: a check is titled by its quote,
     // which is the gateway story's own words.
-    assemble(list.items, None, citation, resolution.0, |item| {
-        item.original_title()
-    })
+    assemble(
+        list.items,
+        None,
+        citation,
+        resolution.0,
+        CheckItem::original_title,
+        |slug| academy_title(helps, slug),
+    )
 }
 
 /// A list with no check to show.
@@ -615,6 +645,7 @@ fn empty_derived(
         order: Vec::new(),
         terms: Vec::new(),
         term_of: Vec::new(),
+        group_titles: Vec::new(),
         titles: Vec::new(),
         places: Vec::new(),
         dropped,
@@ -633,6 +664,7 @@ fn assemble(
     citation: ResourceCitation,
     resolution: &Pin,
     title_of: impl Fn(&CheckItem) -> String,
+    group_title: impl Fn(&str) -> String,
 ) -> Result<Derived, String> {
     let places = items
         .iter()
@@ -657,6 +689,7 @@ fn assemble(
         .map(|item| at.get(item.group_id.as_str()).copied())
         .collect();
     let terms: Vec<String> = slugs.into_iter().map(str::to_owned).collect();
+    let group_titles = terms.iter().map(|slug| group_title(slug)).collect();
     let titles = items.iter().map(title_of).collect();
     let (by_key, by_part) = indexes(&items);
     Ok(Derived {
@@ -666,6 +699,7 @@ fn assemble(
         order,
         terms,
         term_of,
+        group_titles,
         titles,
         places,
         dropped,
@@ -1221,6 +1255,7 @@ fn session_view(
         view: view_of(read),
         rows,
         terms: entry.derived.terms.clone(),
+        group_titles: entry.derived.group_titles.clone(),
         progress: entry.progress(),
         citation: Some(entry.derived.citation.clone()),
         dropped: entry.derived.dropped.clone(),

@@ -59,7 +59,12 @@
           }
         ]
       },
-      "terms": [],
+      "terms": [
+        "figs-metaphor"
+      ],
+      "groupTitles": [
+        "Metaphor"
+      ],
       "progress": {
         "decided": 1,
         "total": 112

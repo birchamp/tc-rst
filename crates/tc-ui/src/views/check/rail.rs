@@ -276,14 +276,18 @@ fn rail_row(
     .into_any()
 }
 
-fn group_label(label: GroupLabel, terms: &[String], unit: &str) -> String {
+fn group_label(label: GroupLabel, terms: &[String], titles: &[String], unit: &str) -> String {
     match label {
         GroupLabel::Unit => unit.to_owned(),
         GroupLabel::Term(t) => terms.get(t as usize).cloned().unwrap_or_default(),
-        // A note with no article is under "Other notes" (tC4 #769).
+        // A figure is headed by its Translation Academy title; a note with no article is under
+        // "Other notes" (tC4 #769).
         GroupLabel::Figure(figure) => match terms.get(figure as usize).map(String::as_str) {
             Some("") | None => t(keys::check::group::OTHER, &[]),
-            Some(slug) => slug.to_owned(),
+            Some(slug) => titles
+                .get(figure as usize)
+                .cloned()
+                .unwrap_or_else(|| slug.to_owned()),
         },
     }
 }
@@ -320,6 +324,7 @@ fn check_rail(
     let story = matches!(kind, CheckUnit::Story(_));
     let unit = super::picker::unit_label(kind);
     let terms = Arc::new(rail.view.terms.clone());
+    let titles = Arc::new(rail.view.group_titles.clone());
     let rows = Arc::new(rail.rows.clone());
     let progress = rail.view.progress;
     let counts = rail::counts(&rows);
@@ -485,8 +490,13 @@ fn check_rail(
     let list = if rows.len() <= VIRTUAL_FROM {
         // tC4's DOM: a group of rows under its heading. Drawn again only when the filter or the
         // sort changes.
-        let (rows, terms, actions, unit) =
-            (rows.clone(), terms.clone(), actions.clone(), unit.clone());
+        let (rows, terms, titles, actions, unit) = (
+            rows.clone(),
+            terms.clone(),
+            titles.clone(),
+            actions.clone(),
+            unit.clone(),
+        );
         (move || {
             layout.with(|(groups, _)| {
                 let overline = crate::css! { "margin": "0 0 6px" };
@@ -495,7 +505,7 @@ fn check_rail(
                 groups
                     .iter()
                     .map(|g| {
-                        let label = group_label(g.label, &terms, &unit);
+                        let label = group_label(g.label, &terms, &titles, &unit);
                         let buttons: Vec<AnyView> = g
                             .rows
                             .iter()
@@ -553,9 +563,10 @@ fn check_rail(
                 format!("position: relative; height: {}px; flex: none;", plan.height)
             })
         };
-        let (rows, terms, actions, unit, by_index) = (
+        let (rows, terms, titles, actions, unit, by_index) = (
             rows.clone(),
             terms.clone(),
+            titles.clone(),
             actions.clone(),
             unit.clone(),
             by_index.clone(),
@@ -583,7 +594,7 @@ fn check_rail(
                 children=move |(line, y): (Line, f64)| match line {
                     Line::Header(n) => {
                         let label = plan.with_untracked(|(_, labels)| {
-                            labels.get(n).map(|l| group_label(*l, &terms, &unit)).unwrap_or_default()
+                            labels.get(n).map(|l| group_label(*l, &terms, &titles, &unit)).unwrap_or_default()
                         });
                         view! {
                             <Overline tag="p" style=place(y, crate::app::check::HEADER_HEIGHT).merge(&crate::css! { "margin": 0 })>{label}</Overline>

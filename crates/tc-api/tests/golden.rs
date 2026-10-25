@@ -2483,7 +2483,8 @@ impl Example for CheckSessionView {
             list: titus_tn(),
             view: ViewSeq::new(41),
             rows: RailRows::Full(vec![Ack::example().rows[0].row.clone()]),
-            terms: vec![],
+            terms: vec!["figs-metaphor".to_owned()],
+            group_titles: vec!["Metaphor".to_owned()],
             progress: RailProgress {
                 decided: 1,
                 total: 112,
