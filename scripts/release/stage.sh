@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Lays out the installed app for one platform (card G3): Electronite, the shell, tc4, the UI
-# and the bundle, the licence and BUILD-MANIFEST.json. Every installer and zip is made from
+# and the bundle, the licence, THIRD-PARTY-NOTICES.txt and BUILD-MANIFEST.json. Every installer and zip is made from
 # this folder, and the smoke test runs what it holds.
 #
 #   scripts/release/stage.sh <platform> <tc4 binary> <ui dir> <bundle dir> <electronite zip> <out dir>
@@ -67,6 +67,15 @@ cp -R "$bundle" "$resources/tc4/bundle"
 
 docs="$root"
 [ "$platform" = macos-arm64 ] && docs="$resources"
+# Electronite's licence is where the app's LICENSE goes, so the notices take it first. On macOS
+# it and Chromium's licences sit beside the app bundle, which is all that ships.
+electronite_license="$root/LICENSE"
+if [ "$platform" = macos-arm64 ]; then
+  electronite_license="$out/LICENSE"
+  mv "$out/LICENSES.chromium.html" "$resources/"
+fi
+node "$(np "$repo/scripts/release/notices.mjs")" --bundle "$(np "$bundle")" --electronite-license "$(np "$electronite_license")" \
+  --out "$(np "$docs/THIRD-PARTY-NOTICES.txt")"
 cp "$repo/LICENSE" "$docs/LICENSE"
 
 if [ "$platform" = linux-x64 ]; then
