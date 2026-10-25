@@ -181,7 +181,7 @@ browserTest('check_keyboard_on_a_psalms_sized_rail', async () => {
     // A filter and a sort change the list in place.
     await page.getByTestId('filter-bookmarked').click();
     assert.equal(await page.getByTestId('filter-bookmarked').getAttribute('data-count'), '85');
-    await page.getByTestId('sort-byCategory').click();
+    await page.getByTestId('sort-byFigure').click();
     await page.getByTestId('check-list').evaluate((el) => { el.scrollTop = 0; });
     await until('By category heads the groups', () => page.locator('[data-testid="check-list"] p').first().textContent().then((t) => t === 'figures'));
   });
@@ -206,7 +206,7 @@ browserTest('rail_filter_and_sort_paint_within_a_frame_on_a_psalms_sized_rail', 
       const task = () => new Promise((resolve) => setTimeout(resolve, 0));
       const work = [];
       const frames = [];
-      const ids = ['filter-bookmarked', 'filter-all', 'sort-byCategory', 'sort-byVerse', 'filter-todo', 'filter-all'];
+      const ids = ['filter-bookmarked', 'filter-all', 'sort-byFigure', 'sort-byVerse', 'filter-todo', 'filter-all'];
       for (let round = 0; round < 5; round += 1) {
         for (const id of ids) {
           await frame();

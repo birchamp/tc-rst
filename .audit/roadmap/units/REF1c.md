@@ -4,7 +4,7 @@ title: Notes by figure, with groups that fold (tC4 #769)
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-REF1c
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -15,7 +15,7 @@ no_loss: false
 size: 2-3 sessions (basis: tC4's state.jsx and Check.jsx changed by about 800 lines)
 merged: none
 updated: 2026-10-25
-next: Step 1: By figure in tc-check and tc-helps, red first.
+next: Step 2: tA titles on the headings, folding saved per computer (prefs railFolded), Fold all, keys; then the journeys.
 blocked_by: none
 ---
 
@@ -108,3 +108,5 @@ line, and a `fix` line for every blocker and every major that harms a translator
 
 - 2026-10-24 15:15 EDT | REF1 session (Claude Code 56b3f56d) | created | none | split from REF1 step 4.1 on the orchestrator's word: the next free lane builds it; REF1 keeps "By category" until it lands | .audit/roadmap/units/REF1.md
 - 2026-10-25 08:56 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed on the orchestrator's word (the domain lane skips it), on track-REF1c cut from track-REF1 1ad7e1f8 with main c45091d1 merged in, so it depends on REF1 alone. Note: REF1 is not done (queued for batch 3), so the merge waits for it. In REF1's worktree to spare the disk | python3 -I -B .audit/tools/board.py
+- 2026-10-25 09:13 EDT | REF1 session (Claude Code 56b3f56d) | note | none | Design (a read-only planning agent, checked here): tC4 groups By figure by each note's support-reference slug (group_id), in first-appearance order among the rows shown, '' as "Other notes"; heading = tA title (else the slug); counts decided/total over every check whatever the filter (groupStatsOf); folding sorts are byWord and byFigure (tW By term folds too); fold state is the client setting railFolded {"<tool>|<groupId>": bool}, per computer, an unfold stored as false; the active group always open, Next/Previous into a folded group clears its fold; Fold all folds every shown group but the active one, then reads Unfold all; keys: heading a button with aria-expanded, Left (Right in RTL) from a row to its heading, Up/Down skip folded rows, one Tab stop, the first heading the stop when every group is folded. In the rebuild tN rows already carry the slug as their term (tc-app check.rs assemble), so tc-api groups By figure by term index; no new tc-helps reader: the tA titles come from the loaded helps | .audit/roadmap/units/REF1c.md
+- 2026-10-25 09:13 EDT | REF1 session (Claude Code 56b3f56d) | step 1 | none | SortMode::ByCategory becomes ByFigure in tc-check (GroupLabel::Figure(slug), group_progress over all checks) and tc-api (GroupLabel::Figure(term index), term_progress over all rows, id "byFigure"); the UI heads a figure group with its slug, or "Other notes", until step 2 gives the tA title; the ten i18n-rebuild check.sort.byCategory keys removed. Tests: tc-check rail_groups_by_figure_in_first_note_order (tC4 checkSessionMerge's case) and group_counts_ignore_the_filter; tc-api term_counts_cover_every_row_whatever_the_filter; the differentials the_rail_groups_equal_tc_checks_on_titus and _on_psalms agree for every filter (Psalms 150 s). tc-check rail 9, tc-api rail 4 pass; wasm app clippy and tc-app check clean | cargo test -p tc-check --test rail

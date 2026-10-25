@@ -280,7 +280,11 @@ fn group_label(label: GroupLabel, terms: &[String], unit: &str) -> String {
     match label {
         GroupLabel::Unit => unit.to_owned(),
         GroupLabel::Term(t) => terms.get(t as usize).cloned().unwrap_or_default(),
-        GroupLabel::Category(c) => category_name(c).to_owned(),
+        // A note with no article is under "Other notes" (tC4 #769).
+        GroupLabel::Figure(figure) => match terms.get(figure as usize).map(String::as_str) {
+            Some("") | None => t(keys::check::group::OTHER, &[]),
+            Some(slug) => slug.to_owned(),
+        },
     }
 }
 

@@ -92,7 +92,7 @@ fn rail_groups_visit_each_row_once() {
             marker: None,
         })
         .collect();
-    for mode in [SortMode::ByWord, SortMode::ByVerse, SortMode::ByCategory] {
+    for mode in [SortMode::ByWord, SortMode::ByVerse, SortMode::ByFigure] {
         let visits = Cell::new(0usize);
         let counted = all.iter().inspect(|_| visits.set(visits.get() + 1));
         let out = groups(counted, terms as usize, Filter::All, mode);
@@ -104,4 +104,47 @@ fn rail_groups_visit_each_row_once() {
             assert_eq!(out[3].label, GroupLabel::Term(3));
         }
     }
+}
+
+/// INV-GROUP-COUNTS-IGNORE-THE-FILTER: each term's heading counts every row of its term,
+/// decided or not, whatever the filter shows (tC4 `groupStatsOf`).
+#[test]
+fn term_counts_cover_every_row_whatever_the_filter() {
+    let row = |index: u32, term: u32, decided: bool, bookmarked: bool| RailRow {
+        index,
+        check_id: "abcd".into(),
+        place: "TIT 1:1".parse().unwrap(),
+        title: String::new(),
+        flags: RowFlags {
+            dot: tc_api::check::Dot::Todo,
+            decided,
+            invalidated: false,
+            invalid: false,
+            bookmarked,
+            commented: false,
+        },
+        term: Some(term),
+        category: None,
+        marker: None,
+    };
+    let rows = [
+        row(0, 1, true, false),
+        row(1, 0, false, true),
+        row(2, 1, false, false),
+        row(3, 1, true, false),
+    ];
+    let shown = groups(&rows, 2, Filter::Bookmarked, SortMode::ByFigure);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].label, GroupLabel::Figure(0));
+    assert_eq!(
+        tc_api::model::rail::term_progress(&rows, 2),
+        [(0, 1), (2, 3)]
+    );
+    let all = groups(&rows, 2, Filter::All, SortMode::ByFigure);
+    let labels: Vec<GroupLabel> = all.iter().map(|g| g.label).collect();
+    assert_eq!(
+        labels,
+        [GroupLabel::Figure(1), GroupLabel::Figure(0)],
+        "first appearance"
+    );
 }

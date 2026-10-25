@@ -143,11 +143,67 @@ fn text_references_sort_ahead_of_numbers() {
         .collect();
     assert_eq!(order, ["front:intro", "1:1-2", "1:1", "1:3"]);
     assert_eq!(by_verse[0].label, GroupLabel::Unit);
-    let by_category = groups(&items, &states, Filter::All, SortMode::ByCategory);
-    let labels: Vec<GroupLabel> = by_category.into_iter().map(|g| g.label).collect();
+}
+
+fn with_figure(mut item: CheckItem, figure: &str) -> CheckItem {
+    item.group_id = figure.into();
+    item
+}
+
+/// tC4 #769, `checkSessionMerge.test.tsx` "byFigure groups by tA module, keyed by groupId": one
+/// group per figure, in verse order of first appearance; a note with none groups under ''.
+#[test]
+fn rail_groups_by_figure_in_first_note_order() {
+    let other = Category::Note(NoteCategory::Other);
+    let items = [
+        with_figure(item("1", "3", other, "a"), "figs-metaphor"),
+        with_figure(item("front", "intro", other, "b"), ""),
+        with_figure(item("1", "1-2", other, "c"), "figs-abstractnouns"),
+        with_figure(item("1", "1", other, "d"), "figs-metaphor"),
+    ];
+    let states = vec![CheckState::undecided(); items.len()];
+    let by_figure: Vec<(GroupLabel, Vec<usize>)> =
+        groups(&items, &states, Filter::All, SortMode::ByFigure)
+            .into_iter()
+            .map(|g| (g.label, g.rows))
+            .collect();
     assert_eq!(
-        labels,
-        [GroupLabel::Category(other), GroupLabel::Category(kt)]
+        by_figure,
+        [
+            (GroupLabel::Figure(String::new()), vec![1]),
+            (GroupLabel::Figure("figs-abstractnouns".into()), vec![2]),
+            (GroupLabel::Figure("figs-metaphor".into()), vec![3, 0]),
+        ]
+    );
+}
+
+/// INV-GROUP-COUNTS-IGNORE-THE-FILTER: a heading counts every check of its group, whatever the
+/// filter shows (tC4 `groupStatsOf`).
+#[test]
+fn group_counts_ignore_the_filter() {
+    let list = notes_for_book(
+        &notes("en_tn@v86/TIT.tsv", BookId::Titus),
+        &eng(BookId::Titus),
+    );
+    let mut states = vec![CheckState::undecided(); list.items.len()];
+    states[0] = state(&[Edit::Bookmark(true)]);
+    states[1] = state(&[Edit::Triage(Triage::Invalid)]);
+    let all = tc_check::rail::group_progress(&list.items, &states);
+    let figure = list.items[0].group_id.clone();
+    let shown = groups(&list.items, &states, Filter::Bookmarked, SortMode::ByFigure);
+    assert_eq!(shown.len(), 1, "one bookmarked check shows one group");
+    assert_eq!(shown[0].label, GroupLabel::Figure(figure.clone()));
+    let total = list.items.iter().filter(|i| i.group_id == figure).count();
+    assert!(total > 1, "{figure} has several notes in Titus");
+    assert_eq!(all[&figure].total, total);
+    assert_eq!(
+        all.values().map(|p| p.total).sum::<usize>(),
+        list.items.len()
+    );
+    assert_eq!(
+        all.values().map(|p| p.decided).sum::<usize>(),
+        1,
+        "the Invalid is decided"
     );
 }
 
@@ -212,12 +268,7 @@ fn a_filter_narrows_the_rail_and_its_keyboard_order() {
     for i in [3, 10, 42] {
         states[i] = state(&[Edit::Bookmark(true)]);
     }
-    let shown = groups(
-        &list.items,
-        &states,
-        Filter::Bookmarked,
-        SortMode::ByCategory,
-    );
+    let shown = groups(&list.items, &states, Filter::Bookmarked, SortMode::ByFigure);
     let mut rows: Vec<usize> = shown.iter().flat_map(|g| g.rows.clone()).collect();
     rows.sort_unstable();
     assert_eq!(rows, [3, 10, 42]);
