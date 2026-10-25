@@ -1263,3 +1263,54 @@ fn a_full_disk_leaves_a_changed_book_file_as_it_is_until_the_copy_can_be_made() 
     assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(edited));
     handle.close().unwrap();
 }
+
+/// A lost save over a verse that had text: *Bring it back* restores it with no question while
+/// the project holds nothing newer for the verse, and makes it a conflict once the person
+/// saved the verse again after the loss (H22 part 1).
+#[test]
+fn bring_it_back_restores_a_lost_save_over_text_unless_newer_work_exists() {
+    for newer in [false, true] {
+        let (rig, folder) = titus();
+        let handle = open(&rig, &folder);
+        save_verse(&handle, 1, 1, "the text before").unwrap();
+        leave(&handle);
+        handle
+            .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+            .wait()
+            .unwrap();
+        let before = pending_files(&rig.fs, &folder);
+        save_verse(&handle, 1, 1, "the lost save").unwrap();
+        leave(&handle);
+        let pending: Vec<String> = pending_files(&rig.fs, &folder)
+            .into_iter()
+            .filter(|p| !before.contains(p))
+            .collect();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        rig.fs.delete(&folder.join(&pending[0])).unwrap();
+        let fs = rig.fs.crash(false);
+        drop(handle);
+        let rig = rig_as(fs, APP, "host-1");
+        let handle = open(&rig, &folder);
+        assert_eq!(words(&handle, 1, 1).as_deref(), Some("the text before"));
+        let kept = handle.kept_copies();
+        assert_eq!(kept.len(), 1, "{kept:?}");
+        if newer {
+            save_verse(&handle, 1, 1, "saved after the loss").unwrap();
+        }
+        let report = handle.import_kept(&kept[0].copy).wait().unwrap();
+        handle.wait_idle();
+        if newer {
+            assert_eq!((report.imported, report.to_review), (0, 1), "{report:?}");
+            assert_eq!(
+                words(&handle, 1, 1).as_deref(),
+                Some("saved after the loss")
+            );
+            assert_eq!(conflicts(&handle), 1);
+        } else {
+            assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+            assert_eq!(words(&handle, 1, 1).as_deref(), Some("the lost save"));
+            assert_eq!(conflicts(&handle), 0);
+        }
+        handle.close().unwrap();
+    }
+}

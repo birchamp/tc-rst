@@ -470,7 +470,7 @@ impl Writer {
             self.manifest.kept.push(Kept {
                 path: rel.to_owned(),
                 copy,
-                md5,
+                md5: md5.clone(),
                 size: bytes.len() as u64,
                 base: KeptBase::of(base, None),
                 why: KeptWhy::Lost,
@@ -479,7 +479,50 @@ impl Writer {
         }
         self.manifest_changed = true;
         self.write_manifest()?;
+        self.pin_lost_base(rel, &md5)?;
         Ok(Next::Write)
+    }
+
+    /// The base of a `why: lost` entry, fixed now: a record whose heads in the placement name a
+    /// change the journal lost stands on the heads the fold holds for it at this moment, the
+    /// versions the lost save was made over, with no digest so it is compared. *Bring it back*
+    /// then restores the save while the project still holds those heads, and a save made since
+    /// makes it a conflict. Written after the entry: a crash before this leaves the lost heads,
+    /// which compare as no base (a conflict, nothing lost), and the next open pins them.
+    fn pin_lost_base(&mut self, rel: &str, md5: &str) -> Result<(), StoreError> {
+        let Some(placed) = self
+            .heads_of(rel)
+            .and_then(|file| file.placements.into_iter().find(|p| p.md5 == md5))
+        else {
+            return Ok(());
+        };
+        let current = self.current_heads(rel);
+        let mut changed = false;
+        let mut records = placed.records;
+        for record in &mut records {
+            let lost = record
+                .heads
+                .iter()
+                .any(|id| !self.shows_held(&tc_journal::ChangeId::from_bytes(*id), &current));
+            let key = tc_journal::json::parse(record.key.as_bytes())
+                .ok()
+                .and_then(|j| tc_journal::canon::decode_key(&j).ok());
+            if let (true, Some(key)) = (lost, key) {
+                record.heads = self
+                    .fold
+                    .heads(&key)
+                    .iter()
+                    .map(|id| *id.as_bytes())
+                    .collect();
+                record.shown = None;
+                changed = true;
+            }
+        }
+        if !changed {
+            return Ok(());
+        }
+        crate::atomic::atomic_create_dirs(&*self.vfs, &self.folder.path(crate::layout::HEADS))?;
+        self.put_heads(rel, md5, records, SyncDir::Now)
     }
 
     /// At a read-only open, which keeps no copy and asks nothing: a notice for each book file

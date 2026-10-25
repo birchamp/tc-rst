@@ -1116,9 +1116,9 @@ fn recorded_edits_of_titus(handle: &ProjectHandle) -> Vec<(u32, bool, Option<Str
 /// §6.2: the book file is the only copy of a save whose pending file lost it. The open must not
 /// take it for the app's own stale bytes: its heads file names the save, which the fold no longer
 /// holds, so a copy is kept with `why: lost` and nothing comes back on its own (H22 part 1).
-/// *Bring it back* imports the copy, and the save is a version of its verse again. The base is
-/// what the fold holds of the heads the file stood for, so a version the project holds and the
-/// file does not show is in conflict with the save, never replaced by it.
+/// *Bring it back* imports the copy, and the save is a version of its verse again. For a record
+/// whose head the journal lost, the base is the heads the fold held when the copy was kept, so
+/// the save comes back over them, and a version saved since is in conflict with it.
 fn assert_the_book_file_gave_the_save_back(
     rig: &Rig,
     folder: &Path,
@@ -1246,9 +1246,14 @@ fn a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_r
         &handle,
         "saved before the file was deleted",
     );
-    // The save's parent is not known any more: the text before stays beside it, in conflict.
+    // Nothing was saved over the verse since: the save comes back over the text before, with
+    // no question, and the text before stays in History.
     assert!(a_version_holds(&handle, 1, 1, "the text before"));
-    assert_eq!(verse_text_conflicts(&handle), 1);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was deleted")
+    );
+    assert_eq!(verse_text_conflicts(&handle), 0);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
@@ -1410,7 +1415,11 @@ fn a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap
         &handle,
         "saved before the file was deleted",
     );
-    assert_eq!(verse_text_conflicts(&handle), 1);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was deleted")
+    );
+    assert_eq!(verse_text_conflicts(&handle), 0);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }

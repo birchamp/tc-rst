@@ -783,10 +783,14 @@ mod outside {
         )
         .await
         .unwrap();
-        // On this sample the lost save comes back as a version to review beside the
-        // project's text (the store's plan against the copy's base), never lost and never
-        // taken in unasked.
-        assert_eq!(report.imported + report.to_review, 1, "{report:?}");
+        // Nothing newer was saved over the verse since the loss: the save comes back with no
+        // question (H22 part 1).
+        assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+        assert_eq!(
+            words(&t, &at, 1).as_deref(),
+            Some(SAVED),
+            "the save is restored"
+        );
         let review = post(
             &t.app,
             &tc_api::conflicts::List {
