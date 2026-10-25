@@ -24,7 +24,7 @@ use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
-use crate::app::outside::{KeptOffer, kept_line, kept_offer, with_kept};
+use crate::app::outside::{KeptOffer, kept_import_label, kept_line, kept_offer, with_kept};
 use crate::app::review::{
     BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
     group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
@@ -1395,10 +1395,11 @@ fn kept_row(actions: &Actions, kept: &KeptCopy, offer: KeptOffer) -> AnyView {
     let import = (offer != KeptOffer::Nothing).then(|| {
         let (actions, copy) = (actions.clone(), kept.copy.clone());
         let on_click = Callback::new(move |_| actions.import_kept(copy.clone()));
+        let label = kept_import_label(kept);
         view! {
             <Button variant=ButtonVariant::Secondary on_click=on_click
                 attrs=Attrs::new().with("data-testid", "kept-import")>
-                {t(keys::outside::IMPORT, &[])}
+                {label}
             </Button>
         }
     });

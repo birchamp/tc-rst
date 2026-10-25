@@ -3,7 +3,7 @@
 
 use tc_api::conflicts::{ReviewTab, TabCount};
 use tc_api::event::SessionMode;
-use tc_api::session::{KeptCopy, KeptImported, WaitingBook};
+use tc_api::session::{KeptCopy, KeptImported, KeptWhy, WaitingBook};
 use tc_core::BookId;
 
 use crate::i18n::{keys, t};
@@ -60,12 +60,24 @@ pub fn report_line(report: &KeptImported) -> String {
     )
 }
 
-/// A kept copy's line in the conflict review's notices.
+/// A kept copy's line in the conflict review's notices; lost work in H22 part 1's words.
 pub fn kept_line(kept: &KeptCopy) -> String {
-    t(
-        keys::outside::KEPT,
-        &[("name", &name_of(&kept.file, book_of_file(&kept.file)))],
-    )
+    match kept.why {
+        KeptWhy::Changed => t(
+            keys::outside::KEPT,
+            &[("name", &name_of(&kept.file, book_of_file(&kept.file)))],
+        ),
+        KeptWhy::Lost => t(keys::outside::LOST, &[]),
+    }
+}
+
+/// The row's button that takes the copy in: *Import*, or *Bring it back* for lost work; both
+/// run the same import and show the same report.
+pub fn kept_import_label(kept: &KeptCopy) -> String {
+    match kept.why {
+        KeptWhy::Changed => t(keys::outside::IMPORT, &[]),
+        KeptWhy::Lost => t(keys::outside::BRING_BACK, &[]),
+    }
 }
 
 /// What a kept copy's row offers besides its line.

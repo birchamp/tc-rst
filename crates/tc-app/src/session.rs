@@ -1194,6 +1194,7 @@ async fn pump(
     mut events: mpsc::UnboundedReceiver<StoreEvent>,
 ) {
     let mut previous = session.read();
+    let mut outside = session.handle.outside_edits();
     session.checks().begin(previous.seq());
     while let Some(event) = events.recv().await {
         let event = match event {
@@ -1235,14 +1236,18 @@ async fn pump(
                 }
             }
             StoreEvent::Mode(mode) => SessionEvent::Mode(mode),
-            // A file was held, or a hold ended: the question and the kept copies change (D1).
-            StoreEvent::Notice(tc_store::StoreNotice {
-                notice: tc_journal::fold::Notice::OutsideEditHeld { .. },
-                ..
-            }) => SessionEvent::OutsideEdits(session.handle.outside_edits()),
-            // The conflict review's notices read the store's list; a skipped event never ends
-            // the pump.
-            StoreEvent::Notice(_) | StoreEvent::Materialized { .. } => continue,
+            // The question and the kept copies change with the store's looks at the files: a
+            // hold (a notice), lost work kept at a look (only a write follows it, H22 part 1),
+            // a hold that ended. Each notice and write reads the two lists again, which costs
+            // the entries listed; the pages hear of it only when they changed (D1).
+            StoreEvent::Notice(_) | StoreEvent::Materialized { .. } => {
+                let now = session.handle.outside_edits();
+                if now == outside {
+                    continue;
+                }
+                outside = now.clone();
+                SessionEvent::OutsideEdits(now)
+            }
         };
         bus.publish(Event::Session {
             at: session.scope.clone(),

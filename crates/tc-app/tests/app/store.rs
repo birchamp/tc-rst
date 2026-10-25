@@ -704,4 +704,216 @@ mod outside {
         assert_eq!(again.kept, outside.kept);
         assert!(again.waiting.is_empty());
     }
+
+    /// The world again over `fs`: the same projects, a new store on those files.
+    fn world_over(world: &StoreWorld, fs: tc_store::fault::FaultFs) -> StoreWorld {
+        use crate::store_world::{APP, backend_over};
+        let hooks = std::sync::Arc::new(tc_store::Hooks::default());
+        let backend = std::sync::Arc::new(backend_over(
+            &fs,
+            APP,
+            tc_store::FakePlatform::default(),
+            hooks.clone(),
+        ));
+        StoreWorld {
+            fs,
+            hooks,
+            backend,
+            bible: world.bible.clone(),
+            conflicted: world.conflicted.clone(),
+            other: world.other.clone(),
+            sources: world.sources.clone(),
+        }
+    }
+
+    /// H22 part 1: a save the project's records lost (its pending file deleted before a
+    /// crash), still in the book file the app wrote, is listed as lost work, asked nothing and
+    /// not taken in; *Bring it back* is the copy's import, with the same report.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_lost_work_copy_offers_bring_it_back() {
+        const SAVED: &str = "saved before the file was deleted";
+        let world = store_world();
+        let folder = world.folder(&world.bible);
+        // The store itself, so a mode leave writes the book file and seals nothing.
+        let handle = world
+            .backend
+            .store()
+            .open(&folder, &tc_store::OpenOptions::default())
+            .unwrap();
+        handle.wait_idle();
+        let before = crate::store_world::pending_files(&world.fs, &folder);
+        let shown = handle.mint(&tit(1, 1), None).unwrap();
+        handle
+            .submit(tc_journal::command::Command::SaveVerse {
+                shown,
+                words: SAVED.to_owned(),
+            })
+            .wait()
+            .unwrap();
+        handle.leave(tc_store::Leave::Mode).wait().unwrap();
+        let pending: Vec<_> = crate::store_world::pending_files(&world.fs, &folder)
+            .into_iter()
+            .filter(|p| !before.contains(p))
+            .collect();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        world.fs.delete(&folder.join(&pending[0])).unwrap();
+        assert!(
+            String::from_utf8_lossy(&world.fs.peek(&path(&world, TIT)).unwrap()).contains(SAVED)
+        );
+        let world = world_over(&world, world.fs.crash(false));
+        drop(handle);
+        let (_dir, t, at) = opened(&world).await;
+        let outside = hello_outside(&t, &at).await;
+        assert!(outside.waiting.is_empty(), "nothing is asked: {outside:?}");
+        assert_eq!(outside.kept.len(), 1, "{outside:?}");
+        assert_eq!(outside.kept[0].why, KeptWhy::Lost);
+        assert_eq!(outside.kept[0].file, TIT);
+        assert_ne!(
+            words(&t, &at, 1).as_deref(),
+            Some(SAVED),
+            "nothing comes back on its own"
+        );
+        let report = post(
+            &t.app,
+            &ImportKept {
+                request: request(1),
+                at: at.clone(),
+                copy: outside.kept[0].copy.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        // On this sample the lost save comes back as a version to review beside the
+        // project's text (the store's plan against the copy's base), never lost and never
+        // taken in unasked.
+        assert_eq!(report.imported + report.to_review, 1, "{report:?}");
+        let review = post(
+            &t.app,
+            &tc_api::conflicts::List {
+                at: at.clone(),
+                tab: tc_api::conflicts::ReviewTab::Text,
+            },
+        )
+        .await
+        .unwrap();
+        let text = review
+            .tabs
+            .iter()
+            .find(|c| c.tab == tc_api::conflicts::ReviewTab::Text)
+            .unwrap();
+        assert_eq!(text.count, report.to_review, "the report's review lists it");
+        assert!(report.outside.kept.is_empty());
+        // A second *Bring it back* of the same copy is refused, never a 0/0 report.
+        let again = post(
+            &t.app,
+            &ImportKept {
+                request: request(2),
+                at: at.clone(),
+                copy: outside.kept[0].copy.clone(),
+            },
+        )
+        .await;
+        assert_eq!(
+            again,
+            Err(tc_api::ApiError::NotSaved(tc_api::NotSaved::Refused(
+                tc_api::write::SaveRefusal::NotKept
+            )))
+        );
+    }
+
+    /// H22 part 4: a project opened read-only keeps no copy and asks nothing; the review's
+    /// notices name the changed book.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_read_only_open_asks_nothing_and_shows_a_notice() {
+        let world = store_world();
+        edit(&world, TIT, 1, 2, "in hope, from another program");
+        world.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+        let (_dir, t, at) = opened(&world).await;
+        let outside = hello_outside(&t, &at).await;
+        world.fs.fail_writes(None);
+        assert_eq!(outside, OutsideEdits::default());
+        let review = post(
+            &t.app,
+            &tc_api::conflicts::List {
+                at: at.clone(),
+                tab: tc_api::conflicts::ReviewTab::Notices,
+            },
+        )
+        .await
+        .unwrap();
+        let tc_api::conflicts::ReviewEntries::Notices(notices) = review.entries else {
+            panic!("{:?}", review.entries)
+        };
+        assert!(
+            notices.iter().any(|n| n.notice
+                == tc_api::conflicts::NoticeView::ChangedWhileReadOnly { file: TIT.into() }),
+            "{notices:?}"
+        );
+    }
+
+    /// Two outside edits of the header, the first given *Not now* and the second imported:
+    /// the first's *Import* is a header conflict, and neither version reads empty in the
+    /// review (the header's lines, as the file holds them).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_header_conflict_shows_both_versions() {
+        let world = store_world();
+        let (_dir, t, at) = opened(&world).await;
+        let written = String::from_utf8(world.fs.peek(&path(&world, TIT)).unwrap()).unwrap();
+        let header = |h: &str| written.replacen("\\h Tito", &format!("\\h {h}"), 1);
+        world
+            .fs
+            .put(&path(&world, TIT), header("Tito A").as_bytes(), None);
+        let first = focus(&t, &at, 1).await.waiting[0].copy.clone();
+        post(
+            &t.app,
+            &NotNow {
+                request: request(2),
+                at: at.clone(),
+                file: TIT.into(),
+            },
+        )
+        .await
+        .unwrap();
+        t.app.read(&at).unwrap().handle().wait_idle();
+        world.fs.advance(std::time::Duration::from_secs(5));
+        world
+            .fs
+            .put(&path(&world, TIT), header("Tito B").as_bytes(), None);
+        let second = focus(&t, &at, 3).await.waiting[0].copy.clone();
+        for (n, copy) in [(4, second), (5, first)] {
+            post(
+                &t.app,
+                &ImportKept {
+                    request: request(n),
+                    at: at.clone(),
+                    copy,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        let review = post(
+            &t.app,
+            &tc_api::conflicts::List {
+                at: at.clone(),
+                tab: tc_api::conflicts::ReviewTab::Text,
+            },
+        )
+        .await
+        .unwrap();
+        let tc_api::conflicts::ReviewEntries::Conflicts(entries) = review.entries else {
+            panic!("{:?}", review.entries)
+        };
+        let headers: Vec<_> = entries
+            .iter()
+            .filter(|e| format!("{:?}", e.record).contains("bookHeader"))
+            .collect();
+        assert!(!headers.is_empty(), "{entries:?}");
+        for version in headers.iter().flat_map(|e| &e.versions) {
+            assert!(
+                matches!(&version.value, tc_api::conflicts::VersionValue::Text(text) if !text.is_empty()),
+                "{version:?}"
+            );
+        }
+    }
 }

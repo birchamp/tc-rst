@@ -175,7 +175,10 @@ fn value_of(record: &Record) -> VersionValue {
             ChapterFront::Present(usfm) => VersionValue::Text(tc_usfm::display_text(&usfm.0)),
             ChapterFront::Absent => VersionValue::Absent,
         },
-        Record::BookHeader { value, .. } => VersionValue::Text(tc_usfm::display_text(&value.0)),
+        // A header is markers only (`\id`, `\h`, `\toc1`…), which the display text drops: its
+        // lines as the file holds them, so two versions show what differs (tC4 reviews no
+        // header).
+        Record::BookHeader { value, .. } => VersionValue::Text(value.0.trim().to_owned()),
         Record::Frame { value, .. } | Record::StoryBase { value, .. } => {
             VersionValue::Text(value.trim().to_owned())
         }
@@ -279,6 +282,9 @@ fn notice_view(
         },
         Notice::StorageDamage { path, .. } => NoticeView::StorageDamage { file: file(path) },
         Notice::OutsideEditHeld { path, .. } => NoticeView::OutsideEditHeld { file: file(path) },
+        Notice::ChangedWhileReadOnly { path } => {
+            NoticeView::ChangedWhileReadOnly { file: file(path) }
+        }
         Notice::MetadataEditedOutside { .. } => NoticeView::DetailsEditedOutside,
         Notice::MaterializeBlocked { paths, .. } => NoticeView::WriteBlocked {
             file: paths.first().map(|p| file(p)).unwrap_or_default(),

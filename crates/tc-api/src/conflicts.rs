@@ -321,6 +321,9 @@ pub enum NoticeView {
     IncompleteChanges { have: u32, of: u32 },
     /// Changes the journal could not place are kept apart.
     KeptApart { changes: u32 },
+    /// Another program changed `file` while the project is open read-only: nothing is kept
+    /// or asked (H22 part 4).
+    ChangedWhileReadOnly { file: String },
 }
 
 /// `conflicts/history`: every version of one record, newest first (#78).

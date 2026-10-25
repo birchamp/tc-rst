@@ -7,7 +7,8 @@ use tc_api::session::{KeptCopy, KeptImported, KeptWhy, OutsideEdits, WaitingBook
 use tc_api::write::ReadOnlyReason;
 use tc_core::BookId;
 use tc_ui::app::outside::{
-    KeptOffer, can_import, kept_line, kept_offer, question, report_line, review_entry, with_kept,
+    KeptOffer, can_import, kept_import_label, kept_line, kept_offer, question, report_line,
+    review_entry, with_kept,
 };
 
 fn waiting(file: &str, book: Option<BookId>, added: bool) -> WaitingBook {
@@ -126,4 +127,24 @@ fn a_read_only_project_offers_nothing_on_its_kept_copies() {
     };
     let read_only = SessionMode::ReadOnly(ReadOnlyReason::SecondWriter);
     assert_eq!(kept_offer(&kept, &[], &read_only), KeptOffer::Nothing);
+}
+
+/// H22 part 1: a copy of lost work asks in the ruling's words, with *Bring it back* (the same
+/// import) and *Dismiss*.
+#[test]
+fn a_lost_work_copy_asks_bring_it_back() {
+    let lost = KeptCopy {
+        file: "ingredients/TIT.usfm".into(),
+        copy: ".tc/external/x".into(),
+        why: KeptWhy::Lost,
+    };
+    assert_eq!(
+        kept_line(&lost),
+        "Some recent work was missing from this project's records. Bring it back?"
+    );
+    assert_eq!(kept_import_label(&lost), "Bring it back");
+    assert_eq!(
+        kept_offer(&lost, &[], &SessionMode::Writable),
+        KeptOffer::ImportOrDismiss
+    );
 }

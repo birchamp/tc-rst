@@ -1716,6 +1716,11 @@ fn outside_edits() -> tc_api::session::OutsideEdits {
                 copy: ".tc/external/TIT.usfm.20261024T101500Z".into(),
                 why: KeptWhy::Changed,
             },
+            KeptCopy {
+                file: "ingredients/JON.usfm".into(),
+                copy: ".tc/external/JON.usfm.20261024T101500Z".into(),
+                why: KeptWhy::Lost,
+            },
         ],
     }
 }
@@ -2927,6 +2932,7 @@ fn review_notices() -> Vec<NoticeView> {
         NoticeView::ImportUnfinished,
         NoticeView::IncompleteChanges { have: 3, of: 5 },
         NoticeView::KeptApart { changes: 2 },
+        NoticeView::ChangedWhileReadOnly { file: file() },
     ]
 }
 

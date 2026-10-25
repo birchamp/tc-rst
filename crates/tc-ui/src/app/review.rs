@@ -202,6 +202,9 @@ pub fn failure_text(error: &ApiError) -> String {
         ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook)) => {
             t(keys::review::refused::LAST_BOOK, &[])
         }
+        ApiError::NotSaved(NotSaved::Refused(SaveRefusal::NotKept)) => {
+            t(keys::outside::NOT_KEPT, &[])
+        }
         ApiError::NotSaved(NotSaved::Disk(reason)) => {
             t(keys::review::refused::DISK, &[("reason", reason)])
         }
@@ -648,5 +651,12 @@ pub fn notice_text(notice: &NoticeView) -> String {
             t(n::INCOMPLETE_CHANGES, &[("have", have), ("of", of)])
         }
         NoticeView::KeptApart { changes } => t(n::KEPT_APART, &[("changes", changes)]),
+        NoticeView::ChangedWhileReadOnly { file } => t(
+            n::CHANGED_WHILE_READ_ONLY,
+            &[(
+                "name",
+                &crate::app::outside::name_of(file, crate::app::outside::book_of_file(file)),
+            )],
+        ),
     }
 }

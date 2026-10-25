@@ -38,6 +38,11 @@
           "file": "ingredients/TIT.usfm",
           "copy": ".tc/external/TIT.usfm.20261024T101500Z",
           "why": "changed"
+        },
+        {
+          "file": "ingredients/JON.usfm",
+          "copy": ".tc/external/JON.usfm.20261024T101500Z",
+          "why": "lost"
         }
       ]
     }

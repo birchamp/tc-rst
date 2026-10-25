@@ -1358,7 +1358,10 @@ fn store_result<P>(pending: Option<P>) -> Result<P, StoreError> {
 }
 
 fn other(error: tc_store::StoreError) -> StoreError {
-    StoreError::Other(error.to_string())
+    match error {
+        tc_store::StoreError::NotKept { .. } => StoreError::NotKept,
+        error => StoreError::Other(error.to_string()),
+    }
 }
 
 /// The store's waiting books and kept copies in the screens' terms (D1).
@@ -1389,6 +1392,7 @@ pub fn outside_edits(
                 copy: k.copy,
                 why: match k.why {
                     tc_store::KeptWhy::Changed => KeptWhy::Changed,
+                    tc_store::KeptWhy::Lost => KeptWhy::Lost,
                 },
             })
             .collect(),

@@ -1027,6 +1027,9 @@ pub enum StoreError {
     /// `project.json`, since it was listed.
     #[error("not a project")]
     NotAProject,
+    /// The kept copy was imported or dismissed already.
+    #[error("the copy is no kept copy any more")]
+    NotKept,
     #[error("{0}")]
     Other(String),
 }

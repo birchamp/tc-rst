@@ -48,9 +48,13 @@ impl Actions {
             Err(error) => {
                 warn(what, &error);
                 if answer {
-                    self.s()
-                        .outside_refused
-                        .set(Some(super::sources::said_call(&error)));
+                    self.s().outside_refused.set(Some(match &error {
+                        // The review's words for a refused write, `NotKept` among them.
+                        crate::app::client::CallError::Api(api) => {
+                            crate::app::review::failure_text(api)
+                        }
+                        other => super::sources::said_call(other),
+                    }));
                 }
                 None
             }

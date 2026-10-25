@@ -601,8 +601,19 @@ impl App {
         session: &ProjectSession,
         done: Result<(), crate::backend::StoreError>,
     ) -> Result<tc_api::session::OutsideEdits, ApiError> {
-        done.map_err(|e| ApiError::NotSaved(NotSaved::Disk(e.to_string())))?;
+        done.map_err(outside_refusal)?;
         Ok(self.inner.sessions.publish_outside(session))
+    }
+}
+
+/// A refused answer about a kept copy: one imported or dismissed already is `NotKept`, never
+/// a 0/0 report; any other is a disk refusal with the store's words.
+fn outside_refusal(error: crate::backend::StoreError) -> ApiError {
+    match error {
+        crate::backend::StoreError::NotKept => {
+            ApiError::NotSaved(NotSaved::Refused(tc_api::write::SaveRefusal::NotKept))
+        }
+        error => ApiError::NotSaved(NotSaved::Disk(error.to_string())),
     }
 }
 
@@ -630,13 +641,12 @@ impl Handle<tc_api::session::ImportKept> for App {
             .iter()
             .find(|k| k.copy == req.copy)
             .map(|k| k.file.clone())
-            .ok_or_else(|| ApiError::BadRequest {
-                field: "copy".into(),
-                reason: "no kept copy has this name".into(),
-            })?;
+            .ok_or(ApiError::NotSaved(NotSaved::Refused(
+                tc_api::write::SaveRefusal::NotKept,
+            )))?;
         let book = book_of_file(&file);
         let report = session.handle().import_kept(&req.copy).await;
-        let report = report.map_err(|e| ApiError::NotSaved(NotSaved::Disk(e.to_string())))?;
+        let report = report.map_err(outside_refusal)?;
         Ok(tc_api::session::KeptImported {
             file,
             book,

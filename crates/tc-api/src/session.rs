@@ -168,6 +168,9 @@ pub struct WaitingBook {
 pub enum KeptWhy {
     /// Another program changed the file: *Import* and *Dismiss*.
     Changed,
+    /// Work missing from the project's records was still in a file the app wrote: *Bring it
+    /// back* and *Dismiss* (H22 part 1).
+    Lost,
 }
 
 /// A kept copy that still has a notice (delta §2.3 `kept`), until it is imported or dismissed.
