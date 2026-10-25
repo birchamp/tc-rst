@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "13c176632f3754b6",
+      "ui": "6239bdc24c392969",
       "commit": "dev",
       "api": 1
     }
@@ -30,8 +30,8 @@
     "rows": 130,
     "same": 36,
     "declared": 0,
-    "differs": 76,
-    "unported": 18,
+    "differs": 80,
+    "unported": 14,
     "failed": 0
   },
   "rows": [
@@ -2718,10 +2718,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "E1b",
-        "dom": "E1b"
+      "status": "differs",
+      "by": "E1b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e4c866e608abad5fe8a503c2f0f6f4ac84fe49b6d11948e4fcb61e18ea78e12b",
+        "rustSha256": "394889870e9bcde21e587f75cf8666bbf4c3a412270d374277cbeae22c0ff58e",
+        "mismatched": 388,
+        "outsideMasks": 388,
+        "masks": [],
+        "diff": "diffs/share-progress-preparing.png"
+      },
+      "dom": {
+        "tc4Sha256": "ceb17d67d5508b6167366f9407a135e2e2d76d3b2f9621e0ec38302f84e9e76f",
+        "rustSha256": "dc7f4f8b433a96fec5d9d593146c70c88b931e777adcbd4a8757285311218955",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2729,10 +2743,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "E1b",
-        "dom": "E1b"
+      "status": "differs",
+      "by": "E1b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "8940d6f5fed629c4f53048d3c5e3bc12917d16bced0e3dbea688f38b6c93bdde",
+        "rustSha256": "475c920d5884bfe5308bb107da4ddc331c7c7ee69fdf1e6b19f36a225d742c6c",
+        "mismatched": 384,
+        "outsideMasks": 384,
+        "masks": [],
+        "diff": "diffs/share-progress-create.png"
+      },
+      "dom": {
+        "tc4Sha256": "f60e48fe236a13767a13d20619670ad30bc97020b95180120352f34c3d8526f7",
+        "rustSha256": "66e7a7cf266d7bcfa8044fe2ff848289da31eec8fcf7e2e81d36f851e9bb8ae0",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2740,10 +2768,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "E1b",
-        "dom": "E1b"
+      "status": "differs",
+      "by": "E1b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "1de467f62170f6ba47aee055082a41c6ed8920706a12a9de1c7116e8ded1644c",
+        "rustSha256": "c473ad168c858559ce58d87617f815b21850463c5490a56406aa7227fb4d1de5",
+        "mismatched": 384,
+        "outsideMasks": 384,
+        "masks": [],
+        "diff": "diffs/share-progress-push.png"
+      },
+      "dom": {
+        "tc4Sha256": "8c137b2e37130950512e10496caf2608a95a3b573872420d8a36ac48e66d5c76",
+        "rustSha256": "6be13704fae98bce8d97542d32ed5e19e4cad418aa73dcc9fd7cc7e1a41240c2",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2751,10 +2793,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "E1b",
-        "dom": "E1b"
+      "status": "differs",
+      "by": "E1b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "7f47cb22d367cfdaea16490a65679cb141a9c2e28fd0731fdb0208b7fd430533",
+        "rustSha256": "17733f52742661baeb042c0f31a36b4dd31a5cc742838174643be35aff0441c1",
+        "mismatched": 69,
+        "outsideMasks": 69,
+        "masks": [],
+        "diff": "diffs/share-done.png"
+      },
+      "dom": {
+        "tc4Sha256": "6489b79f5ac8db58a6f4fc8b0c9360be4ccb91304cf185d441748ecfaa436cab",
+        "rustSha256": "d0f59813c1f6c0f32c4f28537af33d95f693cd5d56503c7e4ebe5e8f251b30be",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {

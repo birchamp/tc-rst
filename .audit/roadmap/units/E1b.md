@@ -4,7 +4,7 @@ title: Share and open from Door43
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-E1b
 worktree: .worktrees/track-REF1
@@ -16,7 +16,7 @@ no_loss: true
 size: 3-4 sessions (basis: B9b)
 merged: none
 updated: 2026-10-25
-next: Step 1: the share job with the scripted port, progress and done step.
+next: Step 2: the real share and open in Door43Sync over X's share and join.
 blocked_by: none
 ---
 
@@ -259,3 +259,4 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/app-remaining.md
 - 2026-10-25 16:10 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed at the audit session's request before E1a merges: cut from track-E1a at e5b30962 (journeys sync for real against the fake), so E1a's later commits come in by merge; the app lane owns share-open.test.mjs and env-rust.mjs until it says otherwise | git log --oneline -1 e5b30962
+- 2026-10-25 18:40 EDT | REF1 session (Claude Code 56b3f56d) | step 1 | c55e1eb5 | door43/share with Phase::Share(Preparing, Create, Push) and JobOutcome::Shared on SyncPort::share (scripted queue; the real port answers Unavailable until step 2); the dialog runs through UI-3's Submit with Running(SharePhase) and Done(SharedRepo), no footer or close while it runs, a refusal back on the check step. Merged track-UI-3b (dialogs in their Dialog variant) and track-E1a at 85f11a81. The four share cases are captured on the store (DOM same as tC4's, pixels only the Home cards' glyph anti-aliasing, residuals as share-dialog-check's). Declared difference: the team-access line on every project (tC4 left it off OBS, #724). Proof: drawing it only for Books fails `the_done_step_names_team_access_for_every_project`: 'Stories: teammates need write access to sync, stories too (#724)' | cargo test -p tc-ui --features tc-api/test-hooks --test app share; cargo test -p tc-ui --test screen_record

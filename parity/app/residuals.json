@@ -607,6 +607,34 @@
         "dom"
       ],
       "why": "After the click on “Pictures wrapped”, React updates each layout chip's style in place, one changed property at a time: it sets the chip's new `border` shorthand, whose value holds a `var()`, and does not set the unchanged `borderWidth: 1` again after it, so tC4's DOM reads the four `border-*-width` longhands as pending (empty). The rebuild writes each chip's whole style again, so they read `1px`, as both DOMs do before the click (`cc-obs` is the same). `--stroke` is 1px, so every pixel is the same (0 differ). Unit B8."
+    },
+    "share-progress-preparing": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's: the progress line, or the done step with the address, the team-access line (tC4 draws it for this Bible project too), Copy link and Open on Door43. The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset, as on share-dialog-check (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "share-progress-create": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's: the progress line, or the done step with the address, the team-access line (tC4 draws it for this Bible project too), Copy link and Open on Door43. The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset, as on share-dialog-check (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "share-progress-push": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's: the progress line, or the done step with the address, the team-access line (tC4 draws it for this Bible project too), Copy link and Open on Door43. The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset, as on share-dialog-check (docs/evidence/home-2026-10-19.md).",
+      "until": null
+    },
+    "share-done": {
+      "layers": [
+        "pixels"
+      ],
+      "why": "The dialog's DOM with every computed style is line for line tC4's: the progress line, or the done step with the address, the team-access line (tC4 draws it for this Bible project too), Copy link and Open on Door43. The Home behind it is tC4's line for line, and the pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset, as on share-dialog-check (docs/evidence/home-2026-10-19.md).",
+      "until": null
     }
   }
 }

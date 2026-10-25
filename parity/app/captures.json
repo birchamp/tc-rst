@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "13c176632f3754b6",
+    "ui": "6239bdc24c392969",
     "commit": "dev",
     "api": 1
   },
@@ -2159,6 +2159,106 @@
       "sha256": "cbc98e3c28f3205ae97c4f637be8ac30a319dacd0457c28bff45fede1fb4e97f",
       "dom": "dom/net-failed.json",
       "domSha256": "f33369429356cb454a3bac81edab07d75c8822c6d22658ba0fc6bc8240dc15c9"
+    },
+    {
+      "name": "share-progress-preparing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-preparing.png",
+      "sha256": "394889870e9bcde21e587f75cf8666bbf4c3a412270d374277cbeae22c0ff58e",
+      "dom": "dom/share-progress-preparing.json",
+      "domSha256": "dc7f4f8b433a96fec5d9d593146c70c88b931e777adcbd4a8757285311218955"
+    },
+    {
+      "name": "share-progress-create",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-create.png",
+      "sha256": "475c920d5884bfe5308bb107da4ddc331c7c7ee69fdf1e6b19f36a225d742c6c",
+      "dom": "dom/share-progress-create.json",
+      "domSha256": "66e7a7cf266d7bcfa8044fe2ff848289da31eec8fcf7e2e81d36f851e9bb8ae0"
+    },
+    {
+      "name": "share-progress-push",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-push.png",
+      "sha256": "c473ad168c858559ce58d87617f815b21850463c5490a56406aa7227fb4d1de5",
+      "dom": "dom/share-progress-push.json",
+      "domSha256": "6be13704fae98bce8d97542d32ed5e19e4cad418aa73dcc9fd7cc7e1a41240c2"
+    },
+    {
+      "name": "share-done",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-done.png",
+      "sha256": "17733f52742661baeb042c0f31a36b4dd31a5cc742838174643be35aff0441c1",
+      "dom": "dom/share-done.json",
+      "domSha256": "d0f59813c1f6c0f32c4f28537af33d95f693cd5d56503c7e4ebe5e8f251b30be"
     },
     {
       "name": "add-book-pick",
