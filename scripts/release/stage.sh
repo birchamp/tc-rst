@@ -23,7 +23,8 @@ case "$platform" in
   macos-arm64) want=a3dde44e03a076bc778f952f7a7a5ed6d8e5037d46ea6c1ba2deb6a11df59488 ;;
   *) echo "stage.sh: no platform $platform" >&2; exit 2 ;;
 esac
-if command -v sha256sum > /dev/null; then got=$(sha256sum "$zip" | cut -d' ' -f1); else got=$(shasum -a 256 "$zip" | cut -d' ' -f1); fi
+# Read from stdin: given a path with backslashes (Windows), sha256sum puts a backslash before the hash.
+if command -v sha256sum > /dev/null; then got=$(sha256sum < "$zip" | cut -d' ' -f1); else got=$(shasum -a 256 < "$zip" | cut -d' ' -f1); fi
 [ "$got" = "$want" ] || { echo "stage.sh: $zip has sha256 $got, not the pinned $want" >&2; exit 1; }
 
 rm -rf "$out"
