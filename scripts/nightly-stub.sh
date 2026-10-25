@@ -84,4 +84,4 @@ git -c user.name="tc nightly" -c user.email=noreply@github.com checkout -q -b "n
 git add "$card" .audit/roadmap/units/DONE.md
 git -c user.name="tc nightly" -c user.email=noreply@github.com commit -q -m "Nightly $job failed on $date: a card for the integration lane" -m "$run"
 [[ "${3:-}" == --no-push ]] || git push -q origin "HEAD:refs/heads/nightly/$date-$job-${GITHUB_RUN_ID:-local}"
-echo "nightly: $card on nightly/$date-$job-${GITHUB_RUN_ID:-local}"
+echo "INV-NIGHTLY-FAILURE-IS-A-CARD: $card on nightly/$date-$job-${GITHUB_RUN_ID:-local}"

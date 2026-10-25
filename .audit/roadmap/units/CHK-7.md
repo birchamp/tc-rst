@@ -4,7 +4,7 @@ title: CI runs the full tests only on gates and main; fast checks before a gate;
 track: A
 lane: integration
 milestone: M1
-state: gating
+state: done
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-CHK-7
 worktree: .worktrees/track-CHK-7
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d (basis: three workflow conditions, one script step, one stub script)
-merged: none
-updated: 2026-10-24
-next: Merge in the batch after batch 3.
+merged: d9f9528f
+updated: 2026-10-25
+next: none
 blocked_by: none
 ---
 
@@ -121,3 +121,4 @@ reach translators sooner, and no nightly failure goes unread.
 - 2026-10-24 19:32 EDT | integration lane (Claude Code 3d07d5f8) | note | none | item 5 of the orchestrator's brief: op_counts::align::align_save_costs_one_verse and its _while_model_training_is_held variant pass in every main and gate ci run since batch 1 (40127991235, 40133930168, 40136425572, 40139145271: 2 ok each); fix-book-removal-unseen's hold of draft writes fixed it | gh run view <id> --log
 - 2026-10-24 19:37 EDT | integration lane (Claude Code 3d07d5f8) | verify | none | one pass by a fresh read-only reviewer agent: the if: expressions are valid; track pushes run only the three lint jobs; nightly conditions and cancel rules intact; nothing relies on app-e2e PR runs; the fast checks run from the repo root and stop before the push; nightly-stub works in a shallow detached clone; gates-sync cases fail when they should. §8: code: the receipt needed a branch filter; checks: none tested the receipt against a lint-only run; reach fine; siblings: the receipt and the wait loop were missed; no-loss N/A; prose fine. One blocker: ci_receipt and wait_ci accepted any green push run of the sha, so a lint-only track run of the same commit could stand as the receipt. One major: python3 may be missing on windows-latest. Minors: a same-day rerun hits an existing branch; two failing jobs conflict on DONE; PRs now get lint only, unstated | reviewer report in this session
 - 2026-10-24 19:37 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | blocker: the receipt's runs carry their head_branch and green_run_for accepts only gate/* and main; wait_ci waits only for runs on gate/<card>; gates-script.test.mjs adds "a track run is no receipt" (it fails with the branch check removed). Major: the stub uses python3 or python. Minors: the branch is nightly/<date>-<job>-<run id>; ci.yml says PRs run the lints only; the DONE conflict is logged as a minor | node --test .audit/tools/*.test.mjs
+- 2026-10-25 09:19 EDT | integration lane (Claude Code 3d07d5f8) | merge | d9f9528f | merged into main in batch 4 (CHK-7 d9f9528f, FIX-HIDE fa874ebd, FIX-HIDE2 fa75b778, REF1b bdb1e670), gated by scripts/gates.sh --wait-ci batch-4 on the batch's last commit. | scripts/gates.sh --wait-ci batch-4

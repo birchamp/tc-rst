@@ -758,7 +758,11 @@ fn every_bundled_ult_and_ust_verse_body_holds_every_target_word() {
         }
     }
     assert_eq!(verses, 47_723);
-    assert!(cut.is_empty(), "{} verses cut off: {cut:?}", cut.len());
+    assert!(
+        cut.is_empty(),
+        "INV-NO-CUT-AT-A-MID-VERSE-BREAK: {} verses cut off: {cut:?}",
+        cut.len()
+    );
 }
 
 /// REF1b, INV-EVERY-POEM-LINE-STAYS: over every verse of the ULT and UST v91, the words the

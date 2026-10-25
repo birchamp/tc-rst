@@ -4,7 +4,7 @@ title: Poem lines as tabs in the verse editor (tC4 #810)
 track: A
 lane: app
 milestone: M3
-state: gating
+state: done
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-REF1b
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1, P7]
 no_loss: true
 size: 2-3 sessions (basis: tC4's change is about 1,300 lines with tests, PR #810 and its pick #826)
-merged: none
-updated: 2026-10-24
-next: The integration lane batches track-REF1b after REF1 (depends); CI runs on the push.
+merged: bdb1e670
+updated: 2026-10-25
+next: none
 blocked_by: none
 ---
 
@@ -131,3 +131,4 @@ blocker and every major that harms a translator's data or view.
 - 2026-10-25 08:48 EDT | REF1 session (Claude Code 56b3f56d) | verify | afe48c3b | Lens the browser and parity, by an independent reviewer (subagent of this session, did not write the code), driving the app in Chromium and tC4 d25b7871's sectionDraft.js, verseEdit.ts and splice.ts under node. Major: a section save that clears the words after a verse's \ts\* lost the \ts\* (the last verse of a section) or turned it into \p (before the next verse), where tC4 rc.2 keeps it once (j02's #812 case); the earlier note that such blank lines live in the verse's layout was wrong: they are the verse's own words' breaks. Minors: the journey's grid comment had no check; tabs are eight wide in the verse card (tC4 sets no tab-size either; #829 is not merged). Matched tC4: the verse card's text, Tab moving focus and blur saving, a typed first-line tab stripped, a new empty line as \p, new trailing empty lines dropped, \q3 from three tabs, markers in TIT.usfm; the section card's text, Tab and Shift+Tab to three tabs inside a verse and two on a verse line, Place and back unchanged, its save writing \q3, \ts\* and \q1; the grid's text; right to left | this log
 - 2026-10-25 08:48 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | Major fixed: SectionBuffer::own_breaks (tC4 ownText's count: a verse's blank lines after its last words, less the line end before the next verse's line and the blank line that gives it its \p; none for a span joined now) and section_values gives them back to the verse before converting, so each takes back its break. own_breaks equals tC4's trailing line ends on all 729 vector texts (the_port_reads_every_text_as_tc4_does); test clearing_the_words_after_a_break_keeps_the_break (Titus 1:4 and 1:5, \ts\* kept once each), fails without the fix. The journey asserts the grid's text. section::, translate::, drafts:: 51 pass; tc-api section 47 pass; translate.test.mjs 13 pass | cargo test -p tc-app --test app -- section::clearing_the_words
 - 2026-10-25 08:54 EDT | REF1 session (Claude Code 56b3f56d) | gate | 561d9a08 | Pre-hand-off checks on main c45091d1 merged in (561d9a08): cargo fmt --check ok; board 0 errors; node step 358 tests, 0 fail (claims and coverage included); cargo check --workspace --all-targets ok; wasm-ui-app and wasm-api clippy clean; tc-arch pass; tc-usfm poem 9, tc-api section 47, tc-app section/translate/drafts 51, tc-store drafts 24 pass. Pushed once for the integration lane; the merge waits for REF1 (depends), whose commits this branch holds | target/ref1b-prehandoff.log
+- 2026-10-25 09:19 EDT | integration lane (Claude Code 3d07d5f8) | merge | bdb1e670 | merged into main in batch 4 (CHK-7 d9f9528f, FIX-HIDE fa874ebd, FIX-HIDE2 fa75b778, REF1b bdb1e670), gated by scripts/gates.sh --wait-ci batch-4 on the batch's last commit. In the batch translate.test.mjs keeps FIX-HIDE's and REF1b's journeys (14 tests). | scripts/gates.sh --wait-ci batch-4

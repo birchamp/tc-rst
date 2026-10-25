@@ -4,7 +4,7 @@ title: A section draft restored after a reload is shown, ready for Save
 track: A
 lane: app
 milestone: M1
-state: gating
+state: done
 owner: C7a session (Claude Code 3058c665)
 branch: track-FIX-HIDE2
 worktree: .worktrees/track-FIX-HIDE2
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1]
 no_loss: true
 size: 0.5 d (basis: FIX-HIDE)
-merged: none
-updated: 2026-10-24
-next: The integration lane: gate it with FIX-HIDE (it depends on it) and merge it.
+merged: fa75b778
+updated: 2026-10-25
+next: none
 blocked_by: none
 ---
 
@@ -69,3 +69,4 @@ Save (A-1), so it also stays unsaved.
 - 2026-10-25 | races and protocol lens (Claude Code subagent of 3058c665) | verify | 1a784ec4 | no blocker, no major. No window where a closed card pops back (Cancel closes after the discard removed the field; Save closes once Clean); one chapter_view at a time; no effect loop; cost fine for Psalm 119. Minor: verse keys were collected on every machine run before the early return | code reading
 - 2026-10-25 | browser and parity lens (Claude Code subagent of 3058c665) | verify | 1a784ec4 | no blocker. Major: reopening a restored section is a difference from tC4 (tC4 keeps the draft only in the card's state, so a reload loses it), not declared. Minors: the journey's last assert checked only that the box exists; nothing says why the card opened (same focus and lock as a card opened on purpose). No capture affected | ~/unfoldingword/tc4-rc2 src/views/SectionEditor.jsx
 - 2026-10-25 | C7a session (Claude Code 3058c665) | fix | none | docs/PLAN.md declares the difference; the journey's last assert reads the box's text; the effect returns before collecting keys while a card is open. Journey passes | node --test section.test.mjs
+- 2026-10-25 09:19 EDT | integration lane (Claude Code 3d07d5f8) | merge | fa75b778 | merged into main in batch 4 (CHK-7 d9f9528f, FIX-HIDE fa874ebd, FIX-HIDE2 fa75b778, REF1b bdb1e670), gated by scripts/gates.sh --wait-ci batch-4 on the batch's last commit. | scripts/gates.sh --wait-ci batch-4
