@@ -35,7 +35,7 @@ use super::{Runtime, ServerState, bridge, js};
 use crate::app::account::{SignInFlow, SignInForm, SignInNext};
 use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
-use crate::app::forms::{AddBookForm, ImportForm, ImportKind, NewProjectForm};
+use crate::app::forms::{AddBookForm, ImportForm, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
 use crate::app::latest::Latest;
 pub(crate) use crate::app::net::NetEnd;
@@ -74,6 +74,8 @@ pub enum Dialog {
     Settings,
     /// Get source texts (M8); its form is `src`.
     Sources,
+    /// Update a book from USFM (F1); its form is `ub`.
+    UpdateBook,
 }
 
 /// A banner on Home: its text, and the "Ask for help" it offers (tC4 #378).
@@ -124,6 +126,8 @@ pub struct AppState {
     pub ab: ArcRwSignal<Option<AddBookForm>>,
     /// Import's form (tC4 `im`).
     pub im: ArcRwSignal<Option<ImportForm>>,
+    /// Update a book's form (F1).
+    pub ub: ArcRwSignal<Option<crate::app::update_book::UpdateBookForm>>,
     /// The share dialog's form (tC4 `sh`, B9b).
     pub sh: ArcRwSignal<Option<ShareForm>>,
     /// Open a project from Door43's form (tC4 `od`, B9b).
@@ -188,6 +192,7 @@ impl AppState {
             np: ArcRwSignal::new(None),
             ab: ArcRwSignal::new(None),
             im: ArcRwSignal::new(None),
+            ub: ArcRwSignal::new(None),
             sh: ArcRwSignal::new(None),
             od: ArcRwSignal::new(None),
             st: ArcRwSignal::new(None),
@@ -470,6 +475,7 @@ impl Actions {
             Pending::UpgradeSet(rung) => self.upgrade_set_now(rung),
             Pending::UpgradeText(repo) => self.upgrade_text_now(repo),
             Pending::Fix(id) => self.fix_fetch_now(id),
+            Pending::ImportVersions => self.import_versions_now(),
         }
     }
 
@@ -488,6 +494,7 @@ impl Actions {
                 self.patch_od(|od| od.submit.not_sent());
             }
             Pending::Catalog => self.catalog_dropped(),
+            Pending::ImportVersions => self.patch_im(|im| im.versions_not_looked_up()),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
             // Not now: the download never started, and the guided fix is as it was.
             Pending::Download
@@ -843,6 +850,7 @@ impl Actions {
         s.np.try_set(None);
         s.ab.try_set(None);
         s.im.try_set(None);
+        s.ub.try_set(None);
         s.sh.try_set(None);
         s.od.try_set(None);
         s.c.fix.try_set(None);
@@ -872,9 +880,6 @@ impl Actions {
             tc_api::home::Door43Card::Local => Pending::Share(Box::new(ShareProject::of(card))),
         });
     }
-
-    /// Import's kind step: F1 draws the files step it leads to.
-    pub fn import_pick_kind(&self, _kind: ImportKind) {}
 
     /// "Open a project from Door43", the fourth card of Add a project (tC4 `openDoor43Dialog`).
     pub fn open_door43_dialog(&self) {

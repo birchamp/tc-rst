@@ -153,6 +153,40 @@ const gatewayScripted = (plan, after = async () => {}) => async (app, env) => {
   await app.page.getByTestId('gateway-change').waitFor();
   await after(app, env);
 };
+/** The Rust app's Import of the tC3 sample (F1): its files step, then its review. This release
+ * imports the tC3 kind only, so the USFM cases are drawn with the tC3 project. */
+const TC3_ZIP = path.join(REPO, 'fixtures', 'tc4', 'conformance-fixtures', 'import', 'tc3', 'cfm_fbt_tit_book.zip');
+/** Runs a case holds: aborted before the next case, so none reaches the server later. */
+const heldRuns = [];
+const tc3Files = async (app) => {
+  // After the page is left, so no page sees the aborted request fail.
+  await app.home();
+  for (const route of heldRuns.splice(0)) await route.abort().catch(() => {});
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.page.getByTestId('add-project').click();
+  await app.page.getByTestId('add-project-import').click();
+  await app.page.getByTestId('import-kind-tc3').click();
+  await app.page.getByTestId('import-file-input').setInputFiles(TC3_ZIP);
+  await app.page.locator('[data-testid="import-to-review"]:not([disabled])').waitFor();
+};
+const tc3Review = async (app) => {
+  await tc3Files(app);
+  await app.page.getByTestId('import-to-review').click();
+  await app.page.getByTestId('import-review').waitFor();
+  await app.page.getByTestId('import-use-installed').click();
+};
+/** The run's reply held, or answered with tC4's write-failed refusal. */
+const tc3Run = (reply, name) => async (app) => {
+  await tc3Review(app);
+  await app.page.getByTestId('import-name').fill(name);
+  await app.page.route('**/api/v1/import/run', reply);
+  await app.page.getByTestId('import-run').click();
+};
+const importRefused = (route) => route.fulfill({
+  status: 200, contentType: 'application/json',
+  body: JSON.stringify({ type: 'err', value: { type: 'refused', value: { type: 'import', value: { type: 'writeFailed' } } } }),
+});
+
 /** The confirm held on the server: the dialog while the change is written (tC4 #580). */
 const holdApply = async (app) => {
   await app.page.route('**/api/v1/resources/applyPlan', () => {});
@@ -512,15 +546,29 @@ export const CASES = [
 
   // ---- import --------------------------------------------------------------------------------
   { name: 'import-files', group: 'import', state: 'import-files',
+    rust: tc3Files,
     why: 'Import a project, USFM files, with 57-TIT.usfm chosen.' },
   { name: 'import-review-usfm', group: 'import', state: 'import-review-usfm',
+    // The Rust app imports the tC3 kind only in this release (rulings/2026-10-24-H3-H4-H7): its
+    // review step stands in, and residuals.json says so.
+    rust: tc3Review,
     why: 'The review of the USFM import: Titus, the name from the file, no language yet.' },
   { name: 'import-review-tc3', group: 'import', state: 'import-review-tc3',
+    rust: (app, env) => stateNamed('import-review-tc3').route(app, env),
     why: 'The review of the tC3 project import, with its resource versions not looked up.' },
   { name: 'import-working', group: 'import', state: 'import-review-usfm',
+    rust: async (app) => {
+      await tc3Run((route) => { heldRuns.push(route); }, 'Obra tC3')(app);
+      await app.page.getByTestId('import-working').waitFor();
+    },
+    held: true, heldRequests: ['/api/v1/import/run'],
     patch: (s) => ({ im: { ...s.im, busy: true, step: 'working', error: null, report: null } }), steps: [{ do: 'blur' }],
     why: 'The import creating the Bible (state.jsx importRun). The mock cannot create a project.' },
   { name: 'import-failed', group: 'import', state: 'import-review-usfm',
+    rust: async (app) => {
+      await tc3Run(importRefused, 'Falla tC3')(app);
+      await app.page.getByTestId('import-failed').waitFor();
+    },
     patch: (s, { kit }) => {
       const language = s.projects.find((p) => p.id === BIBLE).languageTag;
       const repoPath = kit.importRepoPath(s.im.name, language);
@@ -690,6 +738,12 @@ export const CASES = [
     },
     why: 'Home with the Resume card after a section of Titus 1 was saved.' },
   { name: 'import-toast', group: 'import-toast', state: 'home',
+    rust: async (app) => {
+      await tc3Review(app);
+      await app.page.getByTestId('import-name').fill('Tita tC3');
+      await app.page.getByTestId('import-run').click();
+      await app.page.getByTestId('import-toast').waitFor({ timeout: 120_000 });
+    },
     patch: (s, { kit }) => {
       const project = s.projects.find((p) => p.id === BIBLE);
       return { importedRepo: BIBLE, importToast: { name: project.name, books: project.bookCodes.map((code) => kit.bookName(code)).join(' · ') } };

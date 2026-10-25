@@ -35,6 +35,7 @@ use crate::views::modals::project_settings::ProjectSettings;
 use crate::views::modals::share::ShareDialog;
 use crate::views::modals::sign_in::ShareSignIn;
 use crate::views::modals::source_texts::SourceTexts;
+use crate::views::modals::update_book::UpdateBook;
 use crate::views::modals::upgrade_set::UpgradeSet;
 use crate::views::open_progress::OpenProgress;
 use crate::views::story_draft::StoryDraft;
@@ -96,6 +97,7 @@ pub fn App() -> impl IntoView {
             <TopBar />
             <ViewBoundary />
             {home_dialogs(&ctx.s)}
+            <UpdateBook />
             {move || settings_open.get().then(|| view! { <ProjectSettings /> })}
             {move || sources_open.get().then(|| view! { <SourceTexts /> })}
             // The confirmations that Get source texts and Project settings open; each shows while

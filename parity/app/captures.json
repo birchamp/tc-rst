@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "13c176632f3754b6",
+    "ui": "787affc05a46eaf4",
     "commit": "dev",
     "api": 1
   },
@@ -2161,6 +2161,125 @@
       "domSha256": "f33369429356cb454a3bac81edab07d75c8822c6d22658ba0fc6bc8240dc15c9"
     },
     {
+      "name": "import-files",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "F1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import-files.png",
+      "sha256": "6c8a502f2b758a92ef5354382339ec40c9c1b33f500c80f8dde5e20b4c13c4f8",
+      "dom": "dom/import-files.json",
+      "domSha256": "0592e7b4871270980ee6083ada82c4ae66ea31419247e7cf8bbcad1d0566129c"
+    },
+    {
+      "name": "import-review-usfm",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "F1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import-review-usfm.png",
+      "sha256": "509ae6535e438263d5e3838b78a7ff6b3f27469ae2e181eb40beeee582fc3fdd",
+      "dom": "dom/import-review-usfm.json",
+      "domSha256": "e697d90c9c2f4a1f015b8d5ea4828a7a8d77f51689ebd5267cde0a46220ee049"
+    },
+    {
+      "name": "import-review-tc3",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "F1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import-review-tc3.png",
+      "sha256": "d7dc9bea5aafd644668cfac1a47577903d8d5d7b643b1650049c3043109ca844",
+      "dom": "dom/import-review-tc3.json",
+      "domSha256": "a30d580ffab5424692648378be818138cd19cf707f188f492ffa5f12b9a3bc93"
+    },
+    {
+      "name": "import-working",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "F1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import-working.png",
+      "sha256": "4367c9a400890f64eee2592d7eefa266f50b74c83dbfd701b7f74a9cde6838cc",
+      "dom": "dom/import-working.json",
+      "domSha256": "fe9db9d6604b29b19d2a30c84fdcd35b84bed10fc1c1487a3d6b62af3c7523fd"
+    },
+    {
+      "name": "import-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "F1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import-failed.png",
+      "sha256": "92fb01b7a671528a413486e8596b9558c6b93a3773e50fe1d0bcc6bc0bbbcc6d",
+      "dom": "dom/import-failed.json",
+      "domSha256": "b49208ffe0bc80d31675ae28770b1937cbdc45c13a3109e3e4ed2e8196504c9b"
+    },
+    {
       "name": "add-book-pick",
       "kind": "case",
       "scenario": "sample",
@@ -2231,7 +2350,7 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "C6",
       "backend": "store",
       "layers": [
         "pixels",
@@ -2244,9 +2363,9 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-usfm-files.png",
-      "sha256": "c39d8a9636a7c51b9e3758e9965e6e0f0b0e0aa472533d366abe4b5960bad00d",
+      "sha256": "cfb15e0f4018012377d3e9ceaeb68232173adfb26df081b4a3820c499df30dfd",
       "dom": "dom/add-book-usfm-files.json",
-      "domSha256": "558df5c42d8a37cd86d0cbe5aec68782696935909975c5819a3bb831e5c3b6d5"
+      "domSha256": "daee150d60a6492beb5455750f22e4a55fa01ec80e11961b02fcd4f9d61b1746"
     },
     {
       "name": "signin-error",
@@ -2791,6 +2910,32 @@
       "sha256": "d58143645c7db683c68a935c28fa89e9b63a9dc8490578aa889467a4328965cb",
       "dom": "dom/home-resume.json",
       "domSha256": "71c716c91807457f6d9d196d0ba8ecd4c7d04b4f2fe1f2649e636d5cfcff24f2"
+    },
+    {
+      "name": "import-toast",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "F1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "tita_tc3": "share",
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import-toast.png",
+      "sha256": "dbe49f873f3567081862f76a8740014f98b6a41da9327e20bba5fea59fa2ad50",
+      "dom": "dom/import-toast.json",
+      "domSha256": "f7783330bbc3e8e96e1d9daffa8cb40cea9946d06167de294b7e3b467de13b27"
     }
   ]
 }
