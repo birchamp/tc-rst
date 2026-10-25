@@ -1379,3 +1379,40 @@ fn a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// A checkpoint that fails on a full disk after it renamed a book file into place (while it
+/// writes `metadata.json` or flushes the folder) is retried: the retry's commit holds the file
+/// as saved, not the blob of the last commit (a stale `blob` in the manifest; D1's loss lens,
+/// 2026-10-25). Door43 and teammates would otherwise read an old book file until it changed again.
+#[test]
+fn a_retried_checkpoint_commits_the_book_file_as_saved() {
+    for n in 30..46u64 {
+        let (rig, folder) = titus();
+        let handle = open(&rig, &folder);
+        save_verse(&handle, 1, 1, "MUST BE COMMITTED").unwrap();
+        handle.wait_idle();
+        rig.fs.fail_op(n, std::io::ErrorKind::StorageFull);
+        let first = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
+        handle.wait_idle();
+        if first.is_ok() {
+            handle.close().unwrap();
+            continue;
+        }
+        let second = handle
+            .checkpoint(CheckpointReason::Other("retry".into()))
+            .wait()
+            .unwrap();
+        handle.wait_idle();
+        let repo = repo_of(&rig.fs, &folder);
+        let head = repo.head().unwrap().peel_to_commit().unwrap().id();
+        let files = commit_files(&repo, head);
+        let committed = String::from_utf8_lossy(&files["ingredients/TIT.usfm"]);
+        assert!(
+            second.commit.is_some() && committed.contains("MUST BE COMMITTED"),
+            "fail point {n}: retry {:?}, HEAD's TIT.usfm holds the save: {}",
+            (second.commit.is_some(), second.skipped),
+            committed.contains("MUST BE COMMITTED")
+        );
+        handle.close().unwrap();
+    }
+}
