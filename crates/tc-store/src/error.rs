@@ -16,6 +16,10 @@ pub enum StoreError {
     /// *Import* of it ended, or it was dismissed (two windows, or a reload during an Import).
     #[error("{copy} is no kept copy any more: it was imported or dismissed already")]
     NotKept { copy: String },
+    /// *Dismiss* of a `why: lost` copy: it holds the only copy of work the project's records
+    /// lost, so it is only ever brought back.
+    #[error("{copy} holds work the project's records lost; it can only be brought back")]
+    LostWorkKept { copy: String },
     #[error("{0}")]
     Other(String),
 }
@@ -33,7 +37,7 @@ impl StoreError {
     pub fn io_error(&self) -> Option<&io::Error> {
         match self {
             Self::Io { source, .. } => Some(source),
-            Self::NotKept { .. } | Self::Other(_) => None,
+            Self::NotKept { .. } | Self::LostWorkKept { .. } | Self::Other(_) => None,
         }
     }
 
@@ -41,7 +45,7 @@ impl StoreError {
     pub fn kind(&self) -> Option<io::ErrorKind> {
         match self {
             Self::Io { source, .. } => Some(source.kind()),
-            Self::NotKept { .. } | Self::Other(_) => None,
+            Self::NotKept { .. } | Self::LostWorkKept { .. } | Self::Other(_) => None,
         }
     }
 }

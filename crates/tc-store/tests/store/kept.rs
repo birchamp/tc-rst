@@ -1147,12 +1147,9 @@ proptest! {
     }
 }
 
-/// H22 part 1, row N4: a save the journal lost (its pending file deleted before a crash) that
-/// the book file the app wrote still shows. The text is kept in a copy listed with
-/// `why: lost`; nothing is asked and nothing comes back on its own; the file is written from
-/// the project. *Bring it back* (the copy's *Import*) restores the save, and the entry ends.
-#[test]
-fn a_lost_work_copy_offers_bring_it_back() {
+/// A project whose save of 1:1 "saved before the file was deleted" the journal lost (its
+/// pending file deleted before a crash) while the book file the app wrote still shows it.
+fn lost_work() -> (Rig, PathBuf) {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     save_verse(&handle, 1, 1, "saved before the file was deleted").unwrap();
@@ -1162,15 +1159,100 @@ fn a_lost_work_copy_offers_bring_it_back() {
     rig.fs.delete(&folder.join(&pending[0])).unwrap();
     let fs = rig.fs.crash(false);
     drop(handle);
-    let rig = rig_as(fs, APP, "host-1");
-    let handle = open(&rig, &folder);
+    (rig_as(fs, APP, "host-1"), folder)
+}
+
+/// The one `why: lost` entry the open of `folder` lists, with its copy checked.
+fn handle_kept(rig: &Rig, folder: &Path) -> Vec<Kept> {
+    let handle = open(rig, folder);
     let kept = handle.kept_copies();
     assert_eq!(kept.len(), 1, "{kept:?}");
     assert_eq!(kept[0].why, tc_store::KeptWhy::Lost);
     assert!(matches!(kept[0].base, KeptBase::Placed(_)), "{kept:?}");
     let copy = rig.fs.peek(&folder.join(&kept[0].copy)).unwrap();
     assert!(String::from_utf8_lossy(&copy).contains("saved before the file was deleted"));
-    assert!(waiting(&handle).is_empty(), "nothing is asked");
+    handle.close().unwrap();
+    kept
+}
+
+/// H22 part 1: lost work is asked about until the person answers, after a reload too; *Not
+/// now* answers it for good and writes nothing else: the copy stays listed with *Bring it
+/// back*, and *Dismiss* is refused, since the copy may be the work's only one.
+#[test]
+fn lost_work_is_asked_until_not_now_and_is_never_dismissed() {
+    let (rig, folder) = lost_work();
+    let kept = handle_kept(&rig, &folder);
+    let handle = open(&rig, &folder);
+    let books = handle.waiting_books();
+    assert_eq!(books.len(), 1, "asked again after a reload: {books:?}");
+    assert_eq!(books[0].kept.why, tc_store::KeptWhy::Lost);
+    let before = files(&rig.fs, &folder);
+    handle.not_now(USFM).wait().unwrap();
+    handle.wait_idle();
+    assert!(waiting(&handle).is_empty());
+    assert_eq!(handle.kept_copies().len(), 1);
+    let changed: Vec<String> = files(&rig.fs, &folder)
+        .into_iter()
+        .filter(|(p, b)| before.get(p) != Some(b))
+        .map(|(p, _)| p)
+        .collect();
+    assert_eq!(
+        changed,
+        vec![".tc/materialized.json".to_owned()],
+        "only the answer is written"
+    );
+    let dismissed = handle.dismiss_kept(&kept[0].copy).wait();
+    assert!(
+        matches!(&dismissed, Err(tc_store::StoreError::LostWorkKept { copy }) if *copy == kept[0].copy),
+        "{dismissed:?}"
+    );
+    assert!(
+        rig.fs.peek(&folder.join(&kept[0].copy)).is_some(),
+        "the copy stays"
+    );
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert!(waiting(&handle).is_empty(), "never asked again");
+    assert_eq!(handle.kept_copies().len(), 1, "still listed");
+    let report = handle.import_kept(&kept[0].copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+    handle.close().unwrap();
+}
+
+/// After a lost manifest, lost work is listed as lost again (its mark beside the copy), and
+/// *Bring it back* still restores it.
+#[test]
+fn lost_work_stays_lost_work_after_the_manifest_is_lost() {
+    let (rig, folder) = lost_work();
+    handle_kept(&rig, &folder);
+    rig.fs
+        .delete(&folder.join(".tc/materialized.json"))
+        .unwrap();
+    let handle = open(&rig, &folder);
+    let kept = handle.kept_copies();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert_eq!(kept[0].why, tc_store::KeptWhy::Lost, "{kept:?}");
+    let report = handle.import_kept(&kept[0].copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was deleted")
+    );
+    handle.close().unwrap();
+}
+
+/// H22 part 1, row N4: a save the journal lost (its pending file deleted before a crash) that
+/// the book file the app wrote still shows. The text is kept in a copy listed with
+/// `why: lost` and asked about once; nothing comes back on its own; the file is written from
+/// the project. *Bring it back* (the copy's *Import*) restores the save, and the entry ends.
+#[test]
+fn a_lost_work_copy_offers_bring_it_back() {
+    let (rig, folder) = lost_work();
+    let kept = handle_kept(&rig, &folder);
+    let handle = open(&rig, &folder);
+    assert_eq!(waiting(&handle), vec![USFM.to_owned()], "asked once");
     assert_ne!(
         words(&handle, 1, 1).as_deref(),
         Some("saved before the file was deleted"),

@@ -29,6 +29,11 @@ use tc_journal::{BookId, Md5, RepoPath};
 /// the copy in.
 pub(crate) const IMPORTED: &str = ".imported";
 
+/// After the name of a copy in `.tc/external/`: the empty file that says the copy holds work
+/// the project's records lost (`why: lost`), so an open that lost the manifest lists it as
+/// that again.
+const LOST: &str = ".lost";
+
 /// What a kept copy was compared with: the version of the project the outside file was
 /// written from (delta §2.3). Written as `placed:<md5>`, `head:<commit>`, `head` or `none`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,7 +111,7 @@ pub enum KeptWhy {
     /// Another program changed the file.
     Changed,
     /// The app's own bytes show work the journal lost (row N4, H22 part 1): *Bring it back*
-    /// (an *Import* of the copy) and *Dismiss*.
+    /// (an *Import* of the copy), and no *Dismiss*: the copy may be the work's only one.
     Lost,
 }
 
@@ -126,10 +131,15 @@ pub struct Kept {
     /// the question offers only *Not now* (delta §2.11 Q2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unreadable: Option<String>,
+    /// A `why: lost` entry the person answered (*Not now*): it is not asked again, and stays
+    /// listed with *Bring it back*. An entry of an earlier build has none, so it is asked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub answered: bool,
 }
 
 /// A book file or story that waits for the person's answer: held as it is, with its newest
-/// kept copy, the one *Import* takes.
+/// kept copy, the one *Import* takes; or a `why: lost` copy not answered yet, which the
+/// question offers to bring back (H22 part 1, `kept.why`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WaitingBook {
     pub path: String,
@@ -213,6 +223,7 @@ impl Writer {
                     base: KeptBase::None,
                     why: KeptWhy::Changed,
                     unreadable: None,
+                    answered: false,
                 });
             }
         }
@@ -238,7 +249,7 @@ impl Writer {
         names.sort();
         let marked: std::collections::BTreeSet<String> = names
             .iter()
-            .filter(|n| n.ends_with(IMPORTED))
+            .filter(|n| n.ends_with(IMPORTED) || n.ends_with(LOST))
             .cloned()
             .collect();
         let named = self.kept_entries();
@@ -264,14 +275,22 @@ impl Writer {
             {
                 continue;
             }
+            // Lost work keeps its kind and its pinned base, the placement it was found as,
+            // whose heads stay in the heads file while the entry lives.
+            let (why, base) = if marked.contains(&format!("{name}{LOST}")) {
+                (KeptWhy::Lost, KeptBase::Placed(md5.clone()))
+            } else {
+                (KeptWhy::Changed, KeptBase::None)
+            };
             self.manifest.kept.push(Kept {
                 path: rel,
                 copy,
                 md5,
                 size: bytes.len() as u64,
-                base: KeptBase::None,
-                why: KeptWhy::Changed,
+                base,
+                why,
                 unreadable: None,
+                answered: false,
             });
             self.manifest_changed = true;
         }
@@ -343,6 +362,18 @@ impl Writer {
                         kept: newest,
                     })
                 })
+                .chain(
+                    kept.iter()
+                        .filter(|k| k.why == KeptWhy::Lost && !k.answered)
+                        .filter_map(|k| {
+                            Some(WaitingBook {
+                                path: k.path.clone(),
+                                file: DerivedFile::from_path(&k.path)?,
+                                added: false,
+                                kept: k.clone(),
+                            })
+                        }),
+                )
                 .collect()
         };
         self.shared.set_kept(KeptView { waiting, kept });
@@ -438,6 +469,7 @@ impl Writer {
                 base,
                 why: KeptWhy::Changed,
                 unreadable,
+                answered: false,
             });
         }
         self.manifest_changed = true;
@@ -460,6 +492,7 @@ impl Writer {
         base: &ledger::Base,
     ) -> Result<Next, StoreError> {
         let copy = self.copy_external(rel, bytes)?;
+        self.mark(&copy, LOST);
         let md5 = Md5::of(bytes).to_hex();
         if !self
             .manifest
@@ -475,6 +508,7 @@ impl Writer {
                 base: KeptBase::of(base, None),
                 why: KeptWhy::Lost,
                 unreadable: None,
+                answered: false,
             });
         }
         self.manifest_changed = true;
@@ -766,7 +800,7 @@ impl Writer {
         self.manifest.kept.retain(|k| k.copy != entry.copy);
         self.manifest_changed = true;
         self.write_manifest()?;
-        self.mark_imported(&entry.copy);
+        self.mark(&entry.copy, IMPORTED);
         if let Some(file) =
             DerivedFile::from_path(&entry.path).filter(|f| self.fold.projects_file(f))
         {
@@ -775,15 +809,15 @@ impl Writer {
         self.finish_looking()
     }
 
-    /// Marks an ended import's copy with an empty file beside it, so that an open that lost
-    /// the manifest does not list it again; the copy keeps its name and bytes. A mark that
-    /// cannot be written only lets that open list the copy again.
-    fn mark_imported(&self, copy: &str) {
+    /// Marks a copy with an empty file beside it ([`IMPORTED`], [`LOST`]), which an open that
+    /// lost the manifest reads; the copy keeps its name and bytes. A mark that cannot be
+    /// written only lets that open list the copy as an outside change.
+    fn mark(&self, copy: &str, mark: &str) {
         let (dir, name) = self.folder.dir_and_name(copy);
         let _ = crate::atomic::atomic_create(
             &*self.vfs,
             &dir,
-            &format!("{name}{IMPORTED}"),
+            &format!("{name}{mark}"),
             b"",
             SyncDir::Now,
         );
@@ -798,6 +832,18 @@ impl Writer {
             )));
         }
         self.begin_newest();
+        // Lost work of the path is answered: it is not asked again and stays listed.
+        let mut answered = false;
+        for kept in &mut self.manifest.kept {
+            if kept.path == rel && kept.why == KeptWhy::Lost && !kept.answered {
+                kept.answered = true;
+                answered = true;
+            }
+        }
+        if answered {
+            self.manifest_changed = true;
+            self.write_manifest()?;
+        }
         let State::Held { held } = self.state_of(rel) else {
             return Ok(());
         };
@@ -850,6 +896,11 @@ impl Writer {
         let Some(entry) = self.kept_entries().into_iter().find(|k| k.copy == copy) else {
             return Ok(());
         };
+        if entry.why == KeptWhy::Lost {
+            return Err(StoreError::LostWorkKept {
+                copy: copy.to_owned(),
+            });
+        }
         if matches!(self.state_of(&entry.path),
             State::Held { held } if held.md5 == entry.md5)
         {
