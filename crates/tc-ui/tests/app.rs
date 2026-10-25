@@ -31,6 +31,7 @@ mod app {
     mod section;
     mod share;
     mod shell;
+    mod shell_contract;
     mod sources;
     mod sse;
     mod story;

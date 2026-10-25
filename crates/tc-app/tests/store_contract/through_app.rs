@@ -300,9 +300,9 @@ async fn a_save_through_the_app_is_announced_as_its_own_request() {
     let req = rig.request(&open, 6, &tit(1, 6), "announced as mine");
     let ack = result_of(&rig.send(&req).await).unwrap();
     loop {
-        let next = tokio::time::timeout(Duration::from_secs(5), events.next())
+        let next = tokio::time::timeout(Duration::from_secs(60), events.next())
             .await
-            .expect("the event comes");
+            .expect("hung: the event comes");
         let Next::Frame(frame) = next else {
             panic!("{next:?}")
         };
@@ -416,7 +416,7 @@ async fn a_conflict_with_another_computers_head_names_its_writer() {
         stale
     };
     {
-        let other = backend_over(
+        let (other, _other_watch) = backend_over(
             &rig.world.fs,
             "/app2",
             FakePlatform {
@@ -478,9 +478,9 @@ async fn production_save_waits_for_durability_before_acknowledging() {
     assert_eq!(words_of(&session.handle().snapshot(), &key), before);
     rig.world.hooks.release(Point::BeforeDurablePending);
     let ack = result_of(
-        &tokio::time::timeout(Duration::from_secs(5), saving)
+        &tokio::time::timeout(Duration::from_secs(60), saving)
             .await
-            .unwrap()
+            .expect("hung: the held save after its release")
             .unwrap(),
     )
     .unwrap();

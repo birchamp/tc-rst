@@ -1,6 +1,6 @@
 {
- "built": "2026-10-09",
- "build": "b04c70f",
+ "built": "2026-10-16",
+ "build": "2545c2e",
  "docs": [
   {
    "id": "gs-install",
@@ -19,7 +19,7 @@
     "+ Add a project",
     "Your projects"
    ],
-   "text": "The download already has the source texts, the translation helps and the story pictures, so you can start without the internet. Get the file for your computer from the tC4 releases page: the .exe for Windows, the .pkg for macOS (Apple silicon), or the .zip for Linux. Install it: Windows: run the .exe. If Windows warns about an unknown app, choose More info, then Run anyway. Start tC4 from the Start menu. macOS: open the .pkg. If macOS blocks it, open System Settings › Privacy & Security and choose Open Anyway. Then start translationCore 4 from Applications. Linux: unpack the zip, open a terminal in the translationCore4 folder and run ./start-tc4.sh. Wait for the window. tC4 opens on Home with the heading Your projects. Click + Add a project to start your first project. See The Home screen. The warnings in step 2 appear because the installers are not signed yet. They only appear the first time. Windows says \"The backend could not be started\": install the Microsoft Visual C++ Redistributable (x64), then start tC4 again. Nothing new opens: only one copy of tC4 runs at a time. Starting it again brings back the window that is already open. Linux prints a line about \"--no-sandbox\": that is normal for the zip. tC4 is still a pre-release. Keep a copy of important work elsewhere."
+   "text": "The download already has the source texts, the translation helps and the story pictures, so you can start without the internet. Get the file for your computer from the tC4 releases page: the .exe for Windows, the .pkg for macOS (Apple silicon), or the .zip for Linux. Install it: Windows: run the .exe. If Windows warns about an unknown app, choose More info, then Run anyway. Start tC4 from the Start menu. macOS: open the .pkg. If macOS blocks it, open System Settings › Privacy & Security and choose Open Anyway. Then start translationCore 4 from Applications. Linux: unpack the zip, open a terminal in the translationCore4 folder and run ./start-tc4.sh. The first time, a small window says \"Preparing translationCore4\" and counts the resources, for example \"Preparing resources: 2 of 16\". Wait until it finishes. This can take a minute on a slow computer. Later starts are fast; the window shows only for a moment. tC4 opens on Home with the heading Your projects. Click + Add a project to start your first project. See The Home screen. The warnings in step 2 appear because the installers are not signed yet. They only appear the first time. Windows says \"The backend could not be started\": install the Microsoft Visual C++ Redistributable (x64), then start tC4 again. Nothing new opens: only one copy of tC4 runs at a time. Starting it again brings back the window that is already open. \"translationCore4 could not start … Bundled archive checksum mismatch\": the download is damaged. Click OK, download it again and start the new copy. You closed tC4 while it was preparing: start it again. It continues and cleans up. Linux prints a line about \"--no-sandbox\": that is normal for the zip. tC4 is still a pre-release. Keep a copy of important work elsewhere."
   },
   {
    "id": "gs-home",
@@ -41,6 +41,7 @@
     "About translationCore",
     "Add a book",
     "App language",
+    "Help and guides",
     "Import a project",
     "New Bible",
     "New Open Bible Stories",
@@ -53,7 +54,7 @@
     "Understand",
     "Use the internet"
    ],
-   "text": "Click a book tile on a project card. A book you have not opened before starts in Understand. A book you have worked in opens where you left it. To come back to Home, click the translationCore logo at the top left. To go straight back to the verse you last edited, click the blue banner or Resume →. See Resume where you left off. The project you used last is always at the top of the list. The line under a project's name shows its language code, how many books it has, and whether it is only on this computer or shared on Door43. Click + Add a project, then choose one of the three cards. New Bible starts a new Bible translation. See Create a Bible project. New Open Bible Stories starts the 50 stories. See Start an Open Bible Stories project. Import a project brings in work from translationCore 3, USFM files or a Scripture Burrito. See Import a project. To close the dialog without choosing, press Esc or click ✕. Settings on the card opens Project settings: the checking language, text direction and script font. See Project settings. Add a book adds another book to the project. Share on Door43 uploads a copy of the project to Door43. See Share to Door43. Click the round person icon at the top right. The menu is the same on Home and inside a project. Sign in to Door43 so you can share projects. Use the internet turns the internet on or off for translationCore. While it is off, a step that needs the internet asks first. App language changes the language of the menus and buttons. See Change the app language. Report a problem opens a form that sends a message to the unfoldingWord help desk. About translationCore shows the version and the license."
+   "text": "Click a book tile on a project card. A book you have not opened before starts in Understand. A book you have worked in opens where you left it. To come back to Home, click the translationCore logo at the top left. To go straight back to the verse you last edited, click the blue banner or Resume →. See Resume where you left off. The project you used last is always at the top of the list. The line under a project's name shows its language code, how many books it has, and whether it is only on this computer or shared on Door43. Click + Add a project, then choose one of the three cards. New Bible starts a new Bible translation. See Create a Bible project. New Open Bible Stories starts the 50 stories. See Start an Open Bible Stories project. Import a project brings in work from translationCore 3, USFM files or a Scripture Burrito. See Import a project. To close the dialog without choosing, press Esc or click ✕. Settings on the card opens Project settings: the checking language, text direction and script font. See Project settings. Add a book adds another book to the project. Share on Door43 uploads a copy of the project to Door43. See Share to Door43. Click the round person icon at the top right. The menu is the same on Home and inside a project. Sign in to Door43 so you can share projects. Use the internet turns the internet on or off for translationCore. While it is off, a step that needs the internet asks first. Help and guides opens the offline help that ships with the app. You can browse and search with no internet. App language changes the language of the menus and buttons. See Change the app language. Report a problem opens a form that sends a message to the unfoldingWord help desk. About translationCore shows the version and the license."
   },
   {
    "id": "gs-modes",
@@ -172,7 +173,7 @@
     "Script font",
     "Versification"
    ],
-   "text": "\"You'll add books next. Everything here can be changed later.\" On Home, click + Add a project, then New Bible (1). Type a Bible name, for example Kanuri Bible. Type the Language name and the language Code, for example Kanuri and knc. Choose Left to right or Right to left. Leave Checking language on English. It comes with the app, so you don't need to download anything. Click Create Bible →. The Add a book dialog opens. Continue with Add a book. To cancel, click Cancel or the ✕. Nothing is saved. The name needs at least one plain letter or digit, because it also names the project folder. If that folder already exists, choose another name. Script font sets the font your translation is shown in. Versification is the verse-numbering scheme; most projects keep the default. If a language code is refused, try the code for your specific language, for example knc for Central Kanuri rather than kau. Wait a moment after clicking into a field before you type, then check the name. The first letters can be lost. You can change text direction and font later in Project settings. The name and language can't be changed yet."
+   "text": "\"You'll add books next. Everything here can be changed later.\" On Home, click + Add a project, then New Bible (1). Type a Bible name, for example Kanuri Bible. Type the Language name. When a matching language appears in the list, choose it so Code fills in (for example French (fr) → fr). You can still type the code yourself. Choose Left to right or Right to left. Leave Checking language on English. It comes with the app, so you don't need to download anything. Click Create Bible →. The Add a book dialog opens. Continue with Add a book. To cancel, click Cancel or the ✕. Nothing is saved. The name needs at least one plain letter or digit, because it also names the project folder. If that folder already exists, choose another name. Script font sets the font your translation is shown in. Versification is the verse-numbering scheme; most projects keep the default. If a language code is refused, try the code for your specific language, for example knc for Central Kanuri rather than kau. Wait a moment after clicking into a field before you type, then check the name. The first letters can be lost. You can change text direction and font later in Project settings. The name and language can't be changed yet."
   },
   {
    "id": "bp-add-book",
@@ -251,7 +252,7 @@
     "Use installed versions",
     "translationCore 3 project"
    ],
-   "text": "Each import creates a new project. Nothing on this computer changes until you click Import as a new Bible. On Home, click + Add a project, then Import a project (1). Choose the kind of file: translationCore 3 project, USFM files or Scripture Burrito. Drop your files on the drop area, or click it to choose them. Remove a wrong file with its ✕. Click Review files →. Read the review. A green dot means all is well. An orange dot means you need to act. For a translationCore 3 project, choose Look up on Door43 (needs the internet) or Use installed versions (1). Check the Bible name and Language code and change them if needed. Click Import as a new Bible. Home shows \"{name} was imported\", and the new card has an Imported badge. To cancel, click Cancel or the ✕. Nothing is created. The name is already used. Type another Bible name. USFM files have no language code. Type it yourself, for example es or es-419. A file is damaged. A red \"This file cannot be imported\" box gives the reason. Nothing can be imported from that file. See Messages that protect your project. Each USFM file must be one book and start with an \\id line. All translationCore 3 zips in one import must be the same language. A Scripture Burrito exported from tC4 also brings its alignments and checking decisions. See Export a project as a Scripture Burrito. An imported USFM project has no source texts yet. Add them in Project settings. The \"was imported\" message stays until you close it with its ✕. To add a book to a project you already have, use Add a book › Add books from USFM files."
+   "text": "Each import creates a new project. Nothing on this computer changes until you click Import as a new Bible. On Home, click + Add a project, then Import a project (1). Choose the kind of file: translationCore 3 project, USFM files or Scripture Burrito. Drop your files on the drop area, or click it to choose them. Remove a wrong file with its ✕. Click Review files →. Read the review. A green dot means all is well. An orange dot means you need to act. For a translationCore 3 project, choose Look up on Door43 (needs the internet) or Use installed versions (1). Check the Bible name and Language code and change them if needed. Click Import as a new Bible. Home shows \"{name} was imported\", and the new card has an Imported badge. To cancel, click Cancel or the ✕. Nothing is created. The name is already used. Type another Bible name. USFM files have no language code. Type it yourself, for example es or es-419. A file is damaged. A red \"This file cannot be imported\" box gives the reason. Nothing can be imported from that file. See Messages that protect your project. For a translationCore 3 import, Translation Words Links is pinned to a _twl release (matched by date when looking up on Door43). Languages without a Links repository use the English Links that come with the app. Each USFM file must be one book and start with an \\id line. All translationCore 3 zips in one import must be the same language. A Scripture Burrito exported from tC4 also brings its alignments and checking decisions. See Export a project as a Scripture Burrito. An imported USFM project has no source texts yet. Add them in Project settings. The \"was imported\" message stays until you close it with its ✕. To add a book to a project you already have, use Add a book › Add books from USFM files."
   },
   {
    "id": "bp-export-pdf",
@@ -353,13 +354,14 @@
     "Questions",
     "Save section",
     "Section",
+    "Toggle helps panel",
     "Translate",
     "ULT",
     "UST",
     "Verse",
     "Words"
    ],
-   "text": "Each row puts a section of the source text next to your translation of it. Open a book, then click Translate at the top. Pick a chapter in the book list on the left. Choose the source text with the tabs above it: ULT (literal), UST (simplified) or the original language (Greek or Hebrew). The line under the tabs names the text and its version. Choose Section to draft a whole section at once, or Verse to draft one verse at a time. Click Draft section beside the section you want. Type the text, then use Place verse numbers. See Draft a section. Click Save section. To leave the section as it was, click Cancel. The button at the top left of the page shows or hides the book list. At the top right of the page, one button widens the helps panel and the other hides it. Click the first one again to put the panel back to its normal width. The panel shows help for the section you are working on: Notes, Words, Questions, the simplified text (UST) and Comments from Understand. Click a help card and the words it is about are highlighted in the source text. See The helps panel in Translate. Translate remembers your choice of Section or Verse for each project."
+   "text": "Each row puts a section of the source text next to your translation of it. Open a book, then click Translate at the top. Pick a chapter in the book list on the left. Choose the source text with the tabs above it: ULT (literal), UST (simplified) or the original language (Greek or Hebrew). The line under the tabs names the text and its version. Choose Section to draft a whole section at once, or Verse to draft one verse at a time. Click Draft section beside the section you want. Type the text, then use Place verse numbers. See Draft a section. Click Save section. To leave the section as it was, click Cancel. The button at the top left of the page shows or hides the book list. At the top right of the page, Toggle helps panel shows or hides the helps. Drag the vertical divider to change the panel width. The panel shows help for the section you are working on: Notes, Words, Questions, the simplified text (UST) and Comments from Understand. Click a help card and the words it is about are highlighted in the source text. See The helps panel in Translate. Translate remembers your choice of Section or Verse for each project."
   },
   {
    "id": "tr-source-texts",
@@ -410,7 +412,7 @@
     "Type",
     "Verse"
    ],
-   "text": "You type the section straight through, the way you would say it, and add the verse numbers afterwards. In Translate, make sure the switch above your translation says Section. On the row you want, click Draft section {span} at its top right (1). The editor opens in Type mode. Type your translation of the whole section. Click Place verse numbers and put each number where its verse begins. See Place verse numbers. Click Save section. To close the editor without saving, click Cancel. To change a saved section, click its Draft section {span} label again. Clicking the saved text does not open the editor. You can type the verse numbers yourself: start a line with the number, for example 5 no nos salvó…. The first verse number of a section is always at the start. Wait a moment after the editor opens before you type, and check the start of your text before you save. While an editor is open, the Section / Verse switch can't be used. A verse number you leave in the To place box is saved as an empty verse."
+   "text": "You type the section straight through, the way you would say it, and add the verse numbers afterwards. In Translate, make sure the switch above your translation says Section. On the row you want, click the Draft section {span} button at its top right (1). It is a small rounded button, always visible. The editor opens in Type mode. Type your translation of the whole section. Click Place verse numbers and put each number where its verse begins. See Place verse numbers. Click Save section. To close the editor without saving, click Cancel. To change a saved section, click its Draft section {span} label again. Clicking the saved text does not open the editor. You can type the verse numbers yourself: start a line with the number, for example 5 no nos salvó…. The first verse number of a section is always at the start. Wait a moment after the editor opens before you type, and check the start of your text before you save. While an editor is open, the Section / Verse switch can't be used. A verse number you leave in the To place box is saved as an empty verse."
   },
   {
    "id": "tr-place-verse-numbers",
@@ -526,10 +528,9 @@
     "Translate",
     "UST",
     "Understand",
-    "Widen the helps panel",
     "Words"
    ],
-   "text": "It sits on the right of Translate, next to your draft. If the panel is hidden, click Toggle helps panel at the top right of the chapter. Click a tab. Open a section or verse editor. The panel narrows to the verses you are editing. Notes: translation notes, with links to Translation Academy articles. Words: key terms, each with Read the article →. Questions: questions with answers, to test your draft's meaning. UST: the simplified text of the chapter. Some gateway languages give this tab another name, such as GST. Comments: comments you wrote in Understand. It says \"Nothing in this chapter.\" when there are none. Point at a card to highlight its words in the source; click it to keep the highlight. Long notes have Show more and Show less. To give the panel more room, click Widen the helps panel (⇤) next to it. Click it again to restore the width. Each help is explained in the Understand section."
+   "text": "It sits on the right of Translate, next to your draft. If the panel is hidden, click Toggle helps panel at the top right of the chapter. Click a tab. Open a section or verse editor. The panel narrows to the verses you are editing. Notes: translation notes, with links to Translation Academy articles. Words: key terms, each with Read the article →. Questions: questions with answers, to test your draft's meaning. UST: the simplified text of the chapter. Some gateway languages give this tab another name, such as GST. Comments: comments you wrote in Understand. It says \"Nothing in this chapter.\" when there are none. Point at a card to highlight its words in the source; click it to keep the highlight. Long notes have Show more and Show less. Drag the vertical divider between your draft and the helps to make the panel wider or narrower. Toggle helps panel shows or hides the panel completely (one button; there is no separate widen control). Each help is explained in the Understand section."
   },
   {
    "id": "tr-edit-after-check",
@@ -622,7 +623,7 @@
     "Understand",
     "Words"
    ],
-   "text": "Use them to translate key terms such as grace, apostle or righteous the same way every time. In Understand, select a section. In the helps panel, click Words. Point at a card to see its word in the passage. Click Read the article → on a card (1). The article opens under the cards (2), and the word is highlighted in the passage. Close the article with ✕. Each card shows the word as it appears in the passage and the name of its article. The same terms become check items in Check with Translation Words."
+   "text": "Use them to translate key terms such as grace, apostle or righteous the same way every time. In Understand, select a section. In the helps panel, click Words. Point at a card to see its word in the passage. Click Read the article → on a card (1). The article opens under the cards (2), and the word is highlighted in the passage. Close the article with ✕. The same released Links list drives Check with Translation Words. A term with no article in your checking language does not become a check item. Each card shows the word as it appears in the passage and the name of its article. The same terms become check items in Check with Translation Words."
   },
   {
    "id": "un-questions",
@@ -758,7 +759,8 @@
    "where": "",
    "headings": [
     "Check a term",
-    "Find your way"
+    "Find your way",
+    "Good to know"
    ],
    "labels": [
     "All",
@@ -779,7 +781,7 @@
     "✎ Add a comment",
     "✓ Mark valid"
    ],
-   "text": "Use it to make sure each term is translated the right way, and the same way everywhere it appears. Click Check, then Start checking → on the Translation Words card. Read the term at the top. Click Learn more to read what it means. The article opens in a panel on the right. Close it with ✕. Under Your translation, tap the word or words that translate the highlighted term. Choose ✓ Mark valid, Invalid or To do. See Decide on a check item. Click → at the top right to go to the next item. Marking an item does not move you on. To stop, click ← Back to translating at the bottom left. Next time, Check opens Translation Words where you left it. Sort By word puts every place a term is used together, so you can see whether you translated \"grace\" the same way each time. By verse goes through the book in order. The filters show All, To do, Invalid, Bookmarked or Commented items. See Filter and sort check items. ⚑ Bookmark marks an item to come back to. ✎ Add a comment leaves a note for your team. See Bookmark a check and Write a check comment. Note: A verse that is not drafted yet cannot be checked. Draft it in Translate first."
+   "text": "Use it to make sure each term is translated the right way, and the same way everywhere it appears. Click Check, then Start checking → on the Translation Words card. Read the term at the top. Click Learn more to read what it means. The article opens in a panel on the right. Close it with ✕. Under Your translation, tap the word or words that translate the highlighted term. Choose ✓ Mark valid, Invalid or To do. See Decide on a check item. Click → at the top right to go to the next item. Marking an item does not move you on. To stop, click ← Back to translating at the bottom left. Next time, Check opens Translation Words where you left it. Sort By word puts every place a term is used together, so you can see whether you translated \"grace\" the same way each time. By verse goes through the book in order. The filters show All, To do, Invalid, Bookmarked or Commented items. See Filter and sort check items. ⚑ Bookmark marks an item to come back to. ✎ Add a comment leaves a note for your team. See Bookmark a check and Write a check comment. Note: A verse that is not drafted yet cannot be checked. Draft it in Translate first. The check list comes from a Translation Words Links release (for English, en_twl that ships with the app). The articles come from Translation Words (en_tw). Some books have no Translation Words check yet (for example Ezekiel), until a Links release includes them. If a link points to an article your checking language does not have, that item is hidden and does not count in progress."
   },
   {
    "id": "ck-decide",
@@ -796,13 +798,15 @@
    ],
    "labels": [
     "Invalid",
+    "Next",
+    "Previous",
     "To do",
     "Translate",
     "Your translation",
     "← Back to translating",
     "✓ Mark valid"
    ],
-   "text": "Every item starts as To do until you decide it. Read the highlighted quote in the source. Under Your translation (1), tap the word or words that translate it. Tap again to unselect. Click ✓ Mark valid if the translation is right, or Invalid if something needs fixing (2). Click To do to take a decision back. Click → at the top right (3) to go to the next item, or click any item in the list on the left. Marking an item doesn't move you on, so you can change your mind before you go to the next one. Each decision is saved right away. Your translation shows your words without punctuation, and a word with an apostrophe can look split (for example \"God's\" as \"God s\"). Your text in Translate isn't changed. To fix the text, click ← Back to translating. See Editing a verse you already checked or aligned. Use the Invalid filter later to find everything you still need to fix. If you see \"This check was not saved. The project's resource changed since this book was checked…\", update the resource first, then check again. Nothing was lost."
+   "text": "Every item starts as To do until you decide it. Read the highlighted quote in the source. Under Your translation (1), tap the word or words that translate it. Tap again to unselect. To select several words in a row, drag across them. The drag selects whole words. Click ✓ Mark valid if the translation is right, or Invalid if something needs fixing (2). Click To do to take a decision back. Click Next beside the marking buttons (3) to go to the next item, or click any item in the list on the left. Marking an item doesn't move you on, so you can change your mind before you go to the next one. Each decision is saved right away. ✓ Mark valid also saves the words you selected. They are still selected when you come back to the item. A drag that starts to the left of the first word selects text to copy instead. That shows in the normal blue highlight, not yellow. Previous and Next are on the same row as the marking buttons. On a small screen, a long note can push that row below the window. Scroll down to reach it. Your translation shows your words without punctuation, and a word with an apostrophe can look split (for example \"God's\" as \"God s\"). Your text in Translate isn't changed. To fix the text, click ← Back to translating. See Editing a verse you already checked or aligned. Use the Invalid filter later to find everything you still need to fix. If you see \"This check was not saved. The project's resource changed since this book was checked…\", update the resource first, then check again. Nothing was lost."
   },
   {
    "id": "ck-bookmarks",
@@ -944,6 +948,9 @@
    "where": "",
    "headings": [
     "Steps",
+    "Place several words at once",
+    "Repeated words are numbered",
+    "Undo a link",
     "Good to know"
    ],
    "labels": [
@@ -952,7 +959,7 @@
     "Translate",
     "✓ Mark valid"
    ],
-   "text": "Each source word has a card, and the words of your verse wait in the word bank above them. In Align, open a verse. Click a word in the word bank (1). The cards get a blue outline, and the word's tooltip says \"Now click the card this word belongs under.\" Click the card it belongs under (2). Or drag the word onto the card. Repeat until your words are placed. The count at the top right of the word bank goes up. Click ✓ Mark valid. See Mark an alignment done. To undo a link, click the placed word. It goes back to the word bank. To unselect a word without placing it, click it again. How alignment works at the top of the verse gives a short reminder. You can mark a verse done even if some words stay in the bank, for example words your language adds. If you change the verse in Translate later, the changed words go back to the word bank. See Editing a verse you already checked or aligned."
+   "text": "Each source word has a card, and the words of your verse wait in the word bank above them. In Align, open a verse. Click a word in the word bank (1). The cards get a blue outline, and the word's tooltip says \"Now click the card this word belongs under.\" Click the card it belongs under (2). Or drag the word onto the card. Repeat until your words are placed. The count at the top right of the word bank goes up. Click ✓ Mark valid. See Mark an alignment done. Hold Ctrl (Cmd on a Mac) and click each word you want. The words do not have to be next to each other. Shift-click adds every word between the first selected word and the one you click. Click the card, or drag the words onto it. All the selected words go onto that card in one move. A card always shows its words in the order they come in your verse, wherever you drop them. In the picture, la¹, fe and los land as \"la¹ fe los\". When a word comes more than once in the verse, each copy has a small number: de¹, de², de³ and so on. The number tells you which copy it is, counting from the start of the verse. The source cards use the same numbers, for example Θεοῦ¹ and Θεοῦ². A word that comes only once has no number. To undo a link, click the placed word. It goes back to the word bank. To unselect a word without placing it, click it again. How alignment works at the top of the verse gives a short reminder. You can mark a verse done even if some words stay in the bank, for example words your language adds. If you change the verse in Translate later, the changed words go back to the word bank. See Editing a verse you already checked or aligned."
   },
   {
    "id": "al-phrases",
@@ -1216,7 +1223,7 @@
    "labels": [
     "Check"
    ],
-   "text": "Nothing to do: these are ready when you create a project. Resource What it is Version ULT unfoldingWord Literal Text (English) v91 UST unfoldingWord Simplified Text (English) v91 UGNT Greek New Testament v0.34 UHB Hebrew Bible v3.0.0 Translation Notes English notes v91 Translation Words English word articles and links v91 Translation Academy English lessons v91 Translation Questions English questions v91 UGL / UHL Greek and Hebrew lexicons included Open Bible Stories English stories v9 Story notes, word links, questions English story helps v13, v3, v10 Story pictures Pictures for each frame included Open a checking tool from Check. Read the line under the filters (1). A newer app may come with newer versions. For another gateway language, see Download source texts."
+   "text": "Nothing to do: these are ready when you create a project. Resource What it is Version ULT unfoldingWord Literal Text (English) v91 UST unfoldingWord Simplified Text (English) v91 UGNT Greek New Testament v0.34 UHB Hebrew Bible v3.0.0 Translation Notes English notes v91 Translation Words English word articles v91 Translation Words Links English check-list links (en_twl) v91 Translation Academy English lessons v91 Translation Questions English questions v91 UGL / UHL Greek and Hebrew lexicons included Open Bible Stories English stories v9 Story notes, word links, questions English story helps v13, v3, v10 Story pictures Pictures for each frame included Open a checking tool from Check. Read the line under the filters (1). Translation Words Links is a separate resource from Translation Words. The app ships both for English so checks use a released list, not an unreleased export. A newer app may come with newer versions. For another gateway language, see Download source texts."
   },
   {
    "id": "rs-source-texts",
@@ -1243,7 +1250,7 @@
     "Turn on internet",
     "⇣ Download package"
    ],
-   "text": "A gateway language is the language your team reads the source and helps in. English comes with the app. On Home, click Settings on the project card, then Manage source texts →. The project opens with Get source texts on top. Under Choose your gateway language, click a language (1). If \"Turn on the internet?\" appears, click Turn on internet. See Working offline. Choose the Book. Check the Package contents. Click a card to leave it out, or again to add it back. Click ⇣ Download package. When it says \"✓ {book} · {language} is ready\", click Close. To cancel, click Close or the ✕. Nothing is downloaded. Two rows can share a name, like the two Français rows. The organisation under the name tells them apart. The versions in the list are the newest on Door43, not the ones your project uses. To check in the downloaded language, choose it in Project settings. See Change the checking language. Offline, the dialog says \"tC4 did not read the Door43 list of source texts.\" with Read the list. The line under it, \"This organisation publishes nothing tC4 can use…\", only means the list hasn't been read. If some downloads fail, the dialog lists them."
+   "text": "A gateway language is the language your team reads the source and helps in. English comes with the app. On Home, click Settings on the project card, then Manage source texts →. The project opens with Get source texts on top. Under Choose your gateway language, click a language (1). If \"Turn on the internet?\" appears, click Turn on internet. See Working offline. Choose the Book. Check the Package contents. Click a card to leave it out, or again to add it back. Click ⇣ Download package. When it says \"✓ {book} · {language} is ready\", click Close. To cancel, click Close or the ✕. Nothing is downloaded. For most gateway languages the package includes a Translation Words Links repository (…_twl) as well as Translation Words. Leave it selected so checking can finish installing. Two rows can share a name, like the two Français rows. The organisation under the name tells them apart. The versions in the list are the newest on Door43, not the ones your project uses. To check in the downloaded language, choose it in Project settings. See Change the checking language. Offline, the dialog says \"tC4 did not read the Door43 list of source texts.\" with Read the list. The line under it, \"This organisation publishes nothing tC4 can use…\", only means the list hasn't been read. If some downloads fail, the dialog lists them."
   },
   {
    "id": "rs-checking-language",
@@ -1263,7 +1270,7 @@
     "Current",
     "Settings"
    ],
-   "text": "Checks use the notes and word articles of one gateway language. If the language isn't listed yet, download it first. See Download source texts. On Home, click Settings on the project card. Under Checking language, click the language you want. The current one is marked Current (1). Read the confirmation. It says how many decisions carry over and how many come back as work. Click \"Change to …\" to confirm. The new language is now marked Current. To cancel, click \"Keep …\" in the confirmation. A decision carries over only when the new notes have the same check on the same words. Notes in another language are often split differently, so few may carry over. That is expected. Nothing is deleted. Decisions that don't carry over stop counting, and those checks come back as To do. A finished book may not be finished any more. The language set must be complete: notes, words and academy. The same language can have two names, for example \"Español (Latinoamérica)\" in the list and \"Spanish (Latin American)\" in the confirmation."
+   "text": "Checks use the notes and word articles of one gateway language. If the language isn't listed yet, download it first. See Download source texts. On Home, click Settings on the project card. Under Checking language, click the language you want. The current one is marked Current (1). Read the confirmation. It says how many decisions carry over and how many come back as work. Click \"Change to …\" to confirm. The new language is now marked Current. To cancel, click \"Keep …\" in the confirmation. Completeness includes Translation Words Links (_twl) when that language publishes one. Download the package so Links is installed; the app does not fall back to English Links for those languages. A few gateway organisations publish words but no Links repository. For those, checks use the English Links list with that language's word articles. Two Arabic rows can appear: pick the organisation named under the language. After you change language, Translation Words items are rebuilt from the new Links pin. Decisions carry over only when the same check still exists. A decision carries over only when the new notes have the same check on the same words. Notes in another language are often split differently, so few may carry over. That is expected. Nothing is deleted. Decisions that don't carry over stop counting, and those checks come back as To do. A finished book may not be finished any more. The language set must be complete: notes, words and academy. The same language can have two names, for example \"Español (Latinoamérica)\" in the list and \"Spanish (Latin American)\" in the confirmation."
   },
   {
    "id": "rs-upgrade-helps",
@@ -1408,11 +1415,12 @@
    "section": "Settings",
    "status": "shipped",
    "kind": "feature",
-   "summary": "Show translationCore's menus, buttons and dialogs in English, Spanish (Latin America), French or Hindi.",
+   "summary": "Show translationCore's menus, buttons and dialogs in English, Spanish (Latin America), French, Hindi, and five more languages shipped after #522.",
    "where": "",
    "headings": [
     "Steps",
     "What changes and what doesn't",
+    "Languages in the list",
     "Find English again"
    ],
    "labels": [
@@ -1425,7 +1433,7 @@
     "Translate",
     "Understand"
    ],
-   "text": "Your translation and your projects do not change. Click the round person icon at the top right (1), then App language (2). The menu is the same on Home and inside a project. Click the Language box and choose a language. The whole app switches to that language right away, so you can see what it looks like before you decide. Click Apply to keep it. In Spanish the button reads Aplicar. To go back to the language you had, click Cancel or ✕ instead. translationCore remembers your choice the next time you open it. Changes: menus, buttons, labels and dialogs, such as Understand, Translate and Check at the top of a project. Doesn't change: your translation, the source texts (such as the ULT) and the translation helps (notes, words and questions). These stay in the language they were written in. To choose the language of the checking helps, see Checking language. If you can't read the current language, the person icon is always at the top right, and App language is the third item in its menu. English is always first in the list."
+   "text": "Your translation and your projects do not change. Click the round person icon at the top right (1), then App language (2). The menu is the same on Home and inside a project. Click the Language box and choose a language. The whole app switches to that language right away, so you can see what it looks like before you decide. Click Apply to keep it. In Spanish the button reads Aplicar. To go back to the language you had, click Cancel or ✕ instead. translationCore remembers your choice the next time you open it. Changes: menus, buttons, labels and dialogs, such as Understand, Translate and Check at the top of a project. Doesn't change: your translation, the source texts (such as the ULT) and the translation helps (notes, words and questions). These stay in the language they were written in. To choose the language of the checking helps, see Checking language. English, Español (Latinoamérica), Français, हिन्दी, Português (Brasil), Bahasa Indonesia, Українська, Русский and Tiếng Việt. The first four came with #522; the next five with #622. If you can't read the current language, the person icon is always at the top right, and App language is in the account menu (after Help and guides). English is always first in the list."
   },
   {
    "id": "ts-save-problems",
@@ -1470,7 +1478,7 @@
     "Pictures",
     "← Choose other files"
    ],
-   "text": "Each message says whether your work is saved, or that nothing was created. Read the message and follow its advice. For a refused import file, click ← Choose other files to pick a good file, or Cancel. If it says \"Ask for help\", contact your support person and leave the project folder as it is. Code Example What to do import.damaged.usfm-parse \"no-id.sfm has no \\id line, so the book is not known.\" Fix the file (for example add \\id TIT as the first line), then choose it again. import.damaged.truncated \"… is not a complete zip file.\" The zip was cut off. Export or copy it again. import.damaged.no-manifest \"… has no manifest.json, so it is not a translationCore 3 project.\" Choose the zip translationCore 3 exported. import.damaged.corrupt-entry \"… is damaged … so it cannot be read.\" Export it from translationCore 3 again. import.name-exists \"A project with this name is already on this computer.\" Type another Bible name. import.write-failed \"The partly written Bible was removed…\" Try again. If it happens again, ask for help. Message starts with What to do \"A file changed outside the app.\" Open the project again. tC4 repairs what it can and names what it can't. \"A story file was changed outside the app.\" Undo the outside change, then open the project again. \"This computer's change folder holds another computer's changes.\" A project folder was copied by hand. Ask for help. \"… has no drafted verse yet, so the PDF has nothing to print.\" Draft at least one verse, then export again. \"The app could not print the PDF…\" Close tC4, open it again and export again. For stories, try with Pictures off. \"The app stopped to protect your project.\" Ask for help. Write down the code, or take a picture of the message, when you ask for help. Under the red box the checks can still look green. Trust the red box: the file can't be imported."
+   "text": "Each message says whether your work is saved, or that nothing was created. Read the message and follow its advice. For a refused import file, click ← Choose other files to pick a good file, or Cancel. If it says \"Ask for help\", contact your support person and leave the project folder as it is. Code Example What to do import.damaged.usfm-parse \"no-id.sfm has no \\id line, so the book is not known.\" Fix the file (for example add \\id TIT as the first line), then choose it again. import.damaged.truncated \"… is not a complete zip file.\" The zip was cut off. Export or copy it again. import.damaged.no-manifest \"… has no manifest.json, so it is not a translationCore 3 project.\" Choose the zip translationCore 3 exported. import.damaged.corrupt-entry \"… is damaged … so it cannot be read.\" Export it from translationCore 3 again. import.name-exists \"A project with this name is already on this computer.\" Type another Bible name. import.write-failed \"The partly written Bible was removed…\" Try again. If it happens again, ask for help. Message starts with What to do \"A file changed outside the app.\" Open the project again. tC4 repairs what it can and names what it can't. \"A story file was changed outside the app.\" Undo the outside change, then open the project again. \"This computer's change folder holds another computer's changes.\" A project folder was copied by hand. Ask for help. \"… has no drafted verse yet, so the PDF has nothing to print.\" Draft at least one verse, then export again. \"The app could not print the PDF…\" Close tC4, open it again and export again. For stories, try with Pictures off. \"The app stopped to protect your project.\" Ask for help. \"A pre-release version of translationCore pinned the Translation Words links…\" Create the project again in this version of tC4. The old Links pin cannot be used. Write down the code, or take a picture of the message, when you ask for help. Under the red box the checks can still look green. Trust the red box: the file can't be imported."
   },
   {
    "id": "ts-crash-recovery",
@@ -1531,16 +1539,20 @@
    "url": "ts-team-sync.html",
    "title": "Working as a team on several computers",
    "section": "Troubleshooting and known limits",
-   "status": "not-yet",
+   "status": "shipped",
    "kind": "feature",
-   "summary": "Each computer keeps its own copy of a project. Syncing a project between computers isn’t built yet.",
+   "summary": "Share a Bible project on Door43, then each teammate opens it from Door43 and uses Sync with Door43 to swap work.",
    "where": "",
    "headings": [
-    "Hand a project to someone",
+    "Start sharing (project owner)",
+    "Join a project (teammate)",
+    "Sync",
     "Good to know"
    ],
-   "labels": [],
-   "text": "\"Only on this computer\" on a project card means just that: no other computer gets your changes automatically. Export a Scripture Burrito. They import it. Import always makes a new project. To let others read your work, share it on Door43. Bringing it back into tC4 isn't built yet. Don't copy project folders between computers by hand. tC4 will refuse to open them, to protect the project."
+   "labels": [
+    "Share on Door43"
+   ],
+   "text": "Once a Bible project is on Door43, teammates can each work on their own computer and swap changes with Sync with Door43. On the Home screen, select Share on Door43 on the project card and follow the steps. See Share to Door43. On Door43, give each teammate write access to the repository. Teammates can't sync without it. The card now says On Door43, and its button changes to Sync with Door43. !Project card showing On Door43 and Sync with Door43 Select + Add a project, then Open a project from Door43. Type owner/repository, or paste the link. Only public repositories can be opened. Each project on your computer needs its own name. If the name is already used, tC4 asks you to choose another one. !Name already on this computer Select Sync with Door43 on the project card. The result tells you how many changes came from teammates and whether any verses have conflicts to review. !Sync result If the internet is off, tC4 asks first. Not now sends nothing. !Turn on the internet? Open Bible Stories projects can't sync yet. Don't copy project folders between computers by hand. tC4 refuses to open them, to protect the project."
   },
   {
    "id": "ts-not-yet",
@@ -1562,7 +1574,7 @@
    "id": "wn-alpha1",
    "url": "wn-alpha1.html",
    "title": "alpha.1 — First public build",
-   "section": "What's new",
+   "section": "Release notes",
    "status": "",
    "kind": "release",
    "summary": "The first public snapshot of translationCore 4, a ground-up rewrite. Create a project and draft beside source texts.",
@@ -1578,7 +1590,7 @@
    "id": "wn-alpha2",
    "url": "wn-alpha2.html",
    "title": "alpha.2 — Check and align",
-   "section": "What's new",
+   "section": "Release notes",
    "status": "",
    "kind": "release",
    "summary": "Check a whole book with Translation Notes and Translation Words, and align verses to the original language.",
@@ -1593,7 +1605,7 @@
    "id": "wn-alpha4",
    "url": "wn-alpha4.html",
    "title": "alpha.4 — Open and resume",
-   "section": "What's new",
+   "section": "Release notes",
    "status": "",
    "kind": "release",
    "summary": "Resume where you left off after a restart, checkpoints on mode changes, and the new design for Understand, Translate and Check.",
@@ -1609,7 +1621,7 @@
    "id": "wn-alpha5",
    "url": "wn-alpha5.html",
    "title": "alpha.5 — Drafting for real",
-   "section": "What's new",
+   "section": "Release notes",
    "status": "",
    "kind": "release",
    "summary": "Draft a whole section at a time, place verse numbers, join verses into spans, format paragraphs and poetry, and read a passage with helps.",
@@ -1624,7 +1636,7 @@
    "id": "wn-alpha6",
    "url": "wn-alpha6.html",
    "title": "alpha.6 — Suggestions and resources",
-   "section": "What's new",
+   "section": "Release notes",
    "status": "",
    "kind": "release",
    "summary": "Alignment suggestions, check comments and bookmarks, resource upgrades, and a guided fix for missing resources.",
@@ -1640,7 +1652,7 @@
    "id": "wn-alpha7",
    "url": "wn-alpha7.html",
    "title": "alpha.7 — Open Bible Stories",
-   "section": "What's new",
+   "section": "Release notes",
    "status": "",
    "kind": "release",
    "summary": "Create an Open Bible Stories project, translate stories frame by frame with pictures, read them with helps, and check them.",
@@ -1656,7 +1668,7 @@
    "id": "wn-add-a-project",
    "url": "wn-add-a-project.html",
    "title": "Sep 27, 2026 — one + Add a project button on Home",
-   "section": "What's new",
+   "section": "Release notes",
    "status": "",
    "kind": "release",
    "summary": "Home now has one + Add a project button instead of three. It opens a dialog where you choose a new Bible, new Open Bible Stories, or an import. The Home heading is now Your projects.",
@@ -1680,7 +1692,7 @@
    "id": "wn-rc1",
    "url": "wn-rc1.html",
    "title": "What's new in 4.0 rc.1",
-   "section": "What's new",
+   "section": "Release notes",
    "status": "",
    "kind": "release",
    "summary": "Get your work out and bring existing work in: export a book as PDF, USFM or a Scripture Burrito, export stories as Markdown, PDF or a burrito, and import translationCore 3, USFM and Scripture Burrito files. Plus project Settings on the Home card, new books opening in Understand, English helps v91 in the box, and Spacing and Paper size for printing.",
@@ -1709,6 +1721,39 @@
     "Understand"
    ],
    "text": "Export All exports start from Check › Community Checking › Open → › Export. When the file is saved, the panel says \"Saved <file name>\". Bible book: Export PDF, USFM, aligned, USFM, plain and Scripture Burrito (.zip). See Export a book as PDF, Export a book as USFM and Export a project as a Scripture Burrito. Open Bible Stories: Export PDF (with or without pictures), Story Markdown (.zip) and Scripture Burrito (.zip). See Export stories as PDF or Markdown. A book with nothing drafted isn't printed. tC4 tells you to draft at least one verse first. Import + Add a project › Import a project makes a new project from a translationCore 3 project, USFM files or a Scripture Burrito. See Import a project. The review shows the books, three checks (License, Details, Missing verses) and what carries over. A missing language code or a Bible name already in use must be fixed before you can import. Damaged files are refused with a reason and a code, and nothing is created. See Messages that protect your project. The new card has an Imported badge. Also new Settings on the card: click Settings on a project's Home card. See Project settings. A cleaner top bar. Cards say \"Only on this computer\" or where the project is shared. See The Home screen. New books open in Understand, so you read before you draft. After that a book reopens in the mode you used last. See The three modes. English helps v91 come with the app, so a new project needs no download. See What comes with the app. Moving between a Bible and a stories project no longer confuses their notes and words. See Check a story. Page setup for printing: spacing and paper size for Bible books, and picture layout for stories. See Community Checking preview and Story preview and export. Window › Reload (Ctrl+R) brings the app back without quitting. A screen that can't be drawn shows \"This screen could not be shown.\" with Back to Home. See If the app closed unexpectedly. Resume returns to the last mode, including the checking tool you were using. See Resume where you left off. Check for updates offers only the texts your books need. A New Testament project isn't offered the Hebrew text. See Update scripture texts. Changing the checking language keeps the checks that still match. The rest come back as work; nothing is deleted. See Change the checking language. translationCore 3 imports ask whether to look up the resource versions on Door43 or use the ones on this computer. See Import a project. After you join verses into a span, the book's percentage can drop, and the Resume banner can still name the old verse. The \"… was imported\" message doesn't close by itself. Close it with its ✕. In USFM exports, the \\h, \\toc and \\mt lines carry the book code (for example TIT), not the book name. On Linux, the save window's Save and Cancel buttons can be off-screen. Press Enter to save, or Esc to cancel. The same language can be named two ways, for example \"Español (Latinoamérica)\" in lists and \"Spanish (Latin American)\" in sentences."
+  },
+  {
+   "id": "wn-rc2",
+   "url": "wn-rc2.html",
+   "title": "What's new in 4.0 rc.2",
+   "section": "Release notes",
+   "status": "",
+   "kind": "release",
+   "summary": "The public beta. A preparing window on first start, numbered repeated words and multi-word placing in Align, drag-select in Check, and Previous and Next beside the marking buttons.",
+   "where": "",
+   "headings": [
+    "Starting tC4",
+    "Align",
+    "Check",
+    "Translate",
+    "Also new since rc.1"
+   ],
+   "labels": [
+    "About translationCore",
+    "Add a book",
+    "Add books from USFM files",
+    "App language",
+    "Help and guides",
+    "Invalid",
+    "Next",
+    "Previous",
+    "Report a problem",
+    "To do",
+    "Use the internet",
+    "Your translation",
+    "✓ Mark valid"
+   ],
+   "text": "4.0.0-rc.2 is the public beta. These are the main changes since rc.1. A preparing window on the first start. \"Preparing translationCore4\" counts the bundled resources, for example \"Preparing resources: 2 of 16\", and then tC4 opens on Home. Later starts are much faster. If the download is damaged, tC4 says so and quits without changing anything. See Install and start tC4. Repeated words are numbered. A word that comes more than once in the verse shows which copy it is: de¹, de², de³. The source cards use the same numbers. Place several words at once. Ctrl-click (Cmd-click on a Mac) or Shift-click words in the word bank, then click or drag them onto one card. Cards keep verse order. Words on a card always show in the order they come in your verse, wherever you drop them. See Link your words to the source. Drag to select words. Drag across Your translation to select whole words. ✓ Mark valid saves the selection, and it is still there when you come back to the item. This works in Translation Notes and Translation Words. See Decide on a check item. Previous and Next beside the marks. Previous and Next are now on the same row as ✓ Mark valid, Invalid and To do, in Check and in Align. The Draft section button is always visible, as a small rounded button on each section. See Draft a section. Translation Words checks use released Links. English ships en_twl v91 beside en_tw v91. Gateway downloads install their own _twl when published; otherwise English Links pair with that language's articles. Books not in the Links release have no tW check. Missing-article rows are hidden. See Check with Translation Words and What comes with the app. The internet is off until you turn it on. A step that needs the internet asks \"Turn on the internet?\" first. tC4 then uses the internet until you switch off Use the internet in the account menu, or close tC4. See Working offline. Add books from USFM files to a project you already have: Add a book › Add books from USFM files. Each file becomes a book. See Add a book. Sharing on Door43 uses the same question. It also says you'll review the destination and books before anything is uploaded. See Share to Door43. The Stories list keeps its titles and percentages while you draft a story. See Translate a story. Project settings says \"1 book\" instead of \"1 books\". Account menu: Help and guides (offline), About translationCore, App language (nine languages) and Report a problem. See The Home screen and Change the app language. Verse spans count in the drafted percentage, and joining verses across a paragraph no longer leaves a blank line inside the span. See Make or break a verse span. Resume names the verse or span you were on after a span change. See Resume where you left off. Place verse numbers supports click-then-click to move a number you already placed. See Place verse numbers. Understand / Translate / Check stay centered when Saved flips to Unsaved. See The three modes. You can save a section after deleting all of its text (placeholder verses). See Draft a section. Helps articles render quotes and bold cleanly; UST/GST verse numbers are superscript. See Read the notes and Simplified text."
   }
  ]
 }

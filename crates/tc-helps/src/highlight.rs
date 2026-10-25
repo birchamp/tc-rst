@@ -581,29 +581,73 @@ pub fn tokenize_plain(text: &str) -> Vec<PlainToken> {
 /// contiguous run of words, each span after the one before, first match wins. A quote
 /// that does not match in full lights nothing. Returns token indices.
 pub fn highlight_plain(tokens: &[PlainToken], quote: &Quote) -> Vec<usize> {
-    let words: Vec<(usize, String)> = tokens
+    let (index, keys): (Vec<usize>, Vec<String>) = tokens
         .iter()
         .enumerate()
         .filter(|(_, t)| t.word)
         .map(|(i, t)| (i, normalize_word(&t.text)))
         .filter(|(_, w)| !w.is_empty())
-        .collect();
+        .unzip();
+    quote_matches(&keys, quote)
+        .into_iter()
+        .next()
+        .map(|lit| lit.into_iter().map(|k| index[k]).collect())
+        .unwrap_or_default()
+}
+
+/// Marks a note's quote in an original-language verse, given its `\w` words in order (owner
+/// ruling Q39, tC4 #840): the matches as [`highlight_plain`] finds them, and of those the
+/// note's occurrence, or every one when the occurrence is `-1` or unrecorded. A quote that
+/// does not match in full, or an occurrence the verse lacks, marks nothing. Returns indexes
+/// into `words`, ascending.
+pub fn highlight_original<S: AsRef<str>>(
+    words: &[S],
+    quote: &Quote,
+    occurrence: Occurrence,
+) -> Vec<usize> {
+    let keys: Vec<String> = words.iter().map(|w| normalize_word(w.as_ref())).collect();
+    let matches = quote_matches(&keys, quote);
+    match occurrence {
+        Occurrence::NotTied => Vec::new(),
+        Occurrence::Nth(n) => usize::try_from(n.get() - 1)
+            .ok()
+            .and_then(|i| matches.into_iter().nth(i))
+            .unwrap_or_default(),
+        Occurrence::All | Occurrence::Unrecorded => {
+            let mut all: Vec<usize> = matches.into_iter().flatten().collect();
+            all.sort_unstable();
+            all.dedup();
+            all
+        }
+    }
+}
+
+/// Every complete match of `quote` over normalized `words`, in the order of its first word:
+/// each `&` span a contiguous run, each span the first run after the one before. A match is
+/// its positions in `words`, ascending.
+fn quote_matches(words: &[String], quote: &Quote) -> Vec<Vec<usize>> {
     let spans: Vec<Vec<String>> = quote
         .as_str()
         .split('&')
         .map(quote_words)
         .filter(|s| !s.is_empty())
         .collect();
-    let mut lit = Vec::new();
-    let mut from = 0;
-    for span in &spans {
-        let found = (from..words.len().saturating_sub(span.len() - 1))
-            .find(|&k| span.iter().enumerate().all(|(j, w)| words[k + j].1 == *w));
-        let Some(k) = found else {
-            return Vec::new();
-        };
-        lit.extend(words[k..k + span.len()].iter().map(|(i, _)| *i));
-        from = k + span.len();
-    }
-    lit
+    let Some((first, rest)) = spans.split_first() else {
+        return Vec::new();
+    };
+    let at =
+        |k: usize, span: &[String]| words.get(k..k + span.len()).is_some_and(|run| run == span);
+    (0..words.len())
+        .filter(|&k| at(k, first))
+        .filter_map(|k| {
+            let mut lit: Vec<usize> = (k..k + first.len()).collect();
+            let mut from = k + first.len();
+            for span in rest {
+                let found = (from..words.len()).find(|&j| at(j, span))?;
+                lit.extend(found..found + span.len());
+                from = found + span.len();
+            }
+            Some(lit)
+        })
+        .collect()
 }

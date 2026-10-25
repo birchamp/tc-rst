@@ -28,15 +28,15 @@ use super::common::{
 use super::scenario::scenario;
 use super::state_seed::bible_declared;
 use crate::store_world::{
-    APP, PROJECTS, START_MS, assert_valid_burrito, backend_over, files, pending_files, progress,
-    words_of,
+    APP, BurritoWatch, PROJECTS, START_MS, assert_valid_burrito, backend_over, files,
+    pending_files, progress, watch_over, words_of,
 };
 
 pub(super) const SAMPLE: &str = "sample_burrito";
 const OBS: &str = "sample_burrito_obs";
 
 /// The scenario `name` written into an empty projects folder on `fs`.
-fn scenario_on(fs: &FaultFs, name: &str) -> (ScenarioStore, ScenarioReport) {
+fn scenario_on(fs: &FaultFs, name: &str) -> (ScenarioStore, ScenarioReport, BurritoWatch) {
     scenario_state_on(fs, scenario(name))
 }
 
@@ -44,9 +44,10 @@ fn scenario_on(fs: &FaultFs, name: &str) -> (ScenarioStore, ScenarioReport) {
 pub(super) fn scenario_state_on(
     fs: &FaultFs,
     state: &tc_app::backend::scenario::ScenarioState,
-) -> (ScenarioStore, ScenarioReport) {
-    let backend = backend_over(fs, APP, FakePlatform::default(), Arc::default());
-    ScenarioStore::write(backend, state).unwrap()
+) -> (ScenarioStore, ScenarioReport, BurritoWatch) {
+    let (backend, watch) = backend_over(fs, APP, FakePlatform::default(), Arc::default());
+    let (store, report) = ScenarioStore::write(backend, state).unwrap();
+    (store, report, watch)
 }
 
 fn sample_path() -> PathBuf {
@@ -64,7 +65,7 @@ fn open_sample(store: &ScenarioStore) -> Arc<dyn ProjectHandle> {
 fn every_scenario_writes_both_its_projects() {
     for name in ["sample", "en-pins", "shared"] {
         let fs = FaultFs::new();
-        let (store, report) = scenario_on(&fs, name);
+        let (store, report, _watch) = scenario_on(&fs, name);
         let loaded: Vec<String> = report.loaded.iter().map(|(f, _)| f.to_string()).collect();
         assert_eq!(loaded, [SAMPLE, OBS], "{name}");
         assert_eq!(report.loaded[0].1.declared, bible_declared(), "{name}");
@@ -101,7 +102,7 @@ fn every_scenario_writes_both_its_projects() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_obs_project_opens_on_the_store_and_is_a_valid_burrito() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let handle = store.open(&folder(OBS), progress()).unwrap();
     handle.wait_idle();
     assert_eq!(handle.facts().kind, tc_journal::fold::ProjectKind::Stories);
@@ -121,7 +122,7 @@ async fn the_obs_project_opens_on_the_store_and_is_a_valid_burrito() {
 #[test]
 fn the_store_scenario_holds_exactly_the_seed() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let (memory, _) = MemoryBackend::from_scenario(scenario("sample")).unwrap();
     let want = memory.fold(&folder(SAMPLE)).unwrap();
     let handle = open_sample(&store);
@@ -141,7 +142,7 @@ fn the_store_scenario_holds_exactly_the_seed() {
 #[test]
 fn the_scenario_project_on_disk_holds_the_fixture_bytes() {
     let fs = FaultFs::new();
-    let _ = scenario_on(&fs, "sample");
+    let (_store, _report, _watch) = scenario_on(&fs, "sample");
     let on_disk = files(&fs, &sample_path());
     let project = scenario("sample")
         .projects()
@@ -182,7 +183,7 @@ fn a_scenario_needs_an_empty_projects_folder() {
     let someones = Path::new(PROJECTS).join("someones_work/metadata.json");
     fs.put(&someones, b"{}", None);
     let before = fs.files_under(Path::new(PROJECTS));
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, _backend_watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let refused = ScenarioStore::write(backend, scenario("sample")).unwrap_err();
     assert_eq!(
         refused,
@@ -202,6 +203,7 @@ fn a_scenario_written_while_the_start_cleanup_runs_keeps_its_staging_folder_and_
     fs.put(&left.join("metadata.json"), b"{}", None);
     let hooks = Arc::new(Hooks::default());
     hooks.hold(Point::BeforeStagingRemoval);
+    let _watch = watch_over(&fs, hooks.clone());
     let backend = StoreBackend::start(
         StoreConfig {
             app_data: PathBuf::from(APP),
@@ -210,6 +212,7 @@ fn a_scenario_written_while_the_start_cleanup_runs_keeps_its_staging_folder_and_
             platform: Arc::new(FakePlatform::default()),
             clock: Arc::new(ManualClock::at(START_MS)),
             threads: 2,
+            watch_debounce: std::time::Duration::from_millis(20),
         },
         hooks.clone(),
     )
@@ -267,9 +270,13 @@ async fn save_through_the_app(t: &TestApp, words: &str) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_reset_puts_back_a_changed_project_and_removes_others() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let store = Arc::new(store);
-    let seed_words = words_of(&open_sample(&store).snapshot(), &tit(1, 1));
+    // Closed, not dropped: a drop closes off-thread, and the app's first open below would
+    // find the project still held.
+    let seeded = open_sample(&store);
+    let seed_words = words_of(&seeded.snapshot(), &tit(1, 1));
+    seeded.close().await.unwrap();
     assert!(seed_words.is_some());
     let dir = tempfile::tempdir().unwrap();
     let t = app_over(dir.path(), store.clone()).await;
@@ -309,7 +316,7 @@ async fn a_reset_puts_back_a_changed_project_and_removes_others() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_reset_rewrites_no_project_nobody_opened() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let device = sample_path().join(".tc/device.json");
     let before = fs.peek(&device).unwrap();
     let dir = tempfile::tempdir().unwrap();
@@ -325,7 +332,7 @@ async fn a_reset_rewrites_no_project_nobody_opened() {
 fn a_shared_scenarios_project_keeps_its_door43_remote_on_the_store() {
     for name in ["sample", "en-pins", "shared"] {
         let fs = FaultFs::new();
-        let (store, _) = scenario_on(&fs, name);
+        let (store, _, _watch) = scenario_on(&fs, name);
         let remote = store.peek(&folder(SAMPLE)).unwrap().remote;
         let shared = (name == "shared").then(|| tc_app::backend::Door43Remote {
             host: "git.door43.org".to_owned(),
@@ -340,7 +347,7 @@ fn a_shared_scenarios_project_keeps_its_door43_remote_on_the_store() {
 #[test]
 fn teammates_written_into_a_closed_project_stand_as_a_conflict() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "shared");
+    let (store, _, _watch) = scenario_on(&fs, "shared");
     let key = tit(1, 1);
     let ids = store
         .teammates_edit_verse(&folder(SAMPLE), &key, &["Paul, a servant", "Paul, a slave"])
@@ -382,7 +389,7 @@ fn teammates_written_into_a_closed_project_stand_as_a_conflict() {
 #[test]
 fn teammates_are_refused_while_a_session_holds_the_project() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "shared");
+    let (store, _, _watch) = scenario_on(&fs, "shared");
     let handle = open_sample(&store);
     let before = files(&fs, &sample_path());
     let refused = store
@@ -407,7 +414,8 @@ fn teammates_are_refused_while_a_session_holds_the_project() {
 fn a_crash_while_a_scenario_project_is_written_leaves_no_half_project() {
     // The dry run: how many write points the scenario's write has, and what it holds.
     let dry = FaultFs::new();
-    let backend = backend_over(&dry, APP, FakePlatform::default(), Arc::default());
+    let (backend, _backend_watch) =
+        backend_over(&dry, APP, FakePlatform::default(), Arc::default());
     let start = dry.ops();
     let (written, _) = ScenarioStore::write(backend, scenario("sample")).unwrap();
     let points = dry.ops() - start;
@@ -423,13 +431,15 @@ fn a_crash_while_a_scenario_project_is_written_leaves_no_half_project() {
     for n in 0..points {
         let torn = n % 2 == 1;
         let fs = FaultFs::new();
-        let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+        let (backend, _backend_watch) =
+            backend_over(&fs, APP, FakePlatform::default(), Arc::default());
         fs.kill_before(n, torn);
         let _ = ScenarioStore::write(backend, scenario("sample"));
         assert!(fs.is_dead(), "point {n} of {points} was reached");
         let next = fs.crash(false);
         // The next start removes a staging folder the crash left (N1).
-        let after = backend_over(&next, APP, FakePlatform::default(), Arc::default());
+        let (after, _after_watch) =
+            backend_over(&next, APP, FakePlatform::default(), Arc::default());
         let names: std::collections::BTreeSet<String> = next
             .files_under(Path::new(PROJECTS))
             .keys()
@@ -470,7 +480,7 @@ fn a_crash_while_a_scenario_project_is_written_leaves_no_half_project() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_summary_stamp_follows_saves_and_seals() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let sample = folder(SAMPLE);
     let first = store.backend().summary_stamp(&sample).unwrap();
     assert_eq!(store.backend().summary_stamp(&sample).unwrap(), first);
@@ -500,6 +510,8 @@ fn a_summary_stamp_lists_one_folder_and_stats_one_file_at_any_history() {
     let fs = FaultFs::new();
     let counters = Arc::new(tc_store::counters::Counters::default());
     let counted = tc_store::counters::CountingVfs::new(Arc::new(fs.clone()), counters.clone());
+    let hooks = Arc::new(Hooks::default());
+    let _watch = watch_over(&fs, hooks.clone());
     let backend = StoreBackend::start(
         StoreConfig {
             app_data: PathBuf::from(APP),
@@ -508,8 +520,9 @@ fn a_summary_stamp_lists_one_folder_and_stats_one_file_at_any_history() {
             platform: Arc::new(FakePlatform::default()),
             clock: Arc::new(ManualClock::at(START_MS)),
             threads: 2,
+            watch_debounce: std::time::Duration::from_millis(20),
         },
-        Arc::default(),
+        hooks,
     )
     .unwrap();
     let (store, _) = ScenarioStore::write(backend, scenario("shared")).unwrap();
@@ -592,7 +605,7 @@ async fn open_writes_creation_pins_only_when_none_exist() {
     // A project with pins keeps them byte for byte.
     let sample = Path::new(PROJECTS).join(SAMPLE);
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let before = fs
         .peek(&sample.join("ingredients/checking/resources.json"))
         .unwrap();
@@ -611,7 +624,7 @@ async fn open_writes_creation_pins_only_when_none_exist() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_held_store_save_holds_the_reply_and_quiet_says_busy() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let dir = tempfile::tempdir().unwrap();
     let t = app_over(dir.path(), Arc::new(store)).await;
     let open = t
@@ -670,7 +683,7 @@ async fn a_held_store_save_holds_the_reply_and_quiet_says_busy() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_reset_releases_the_store_holds() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let dir = tempfile::tempdir().unwrap();
     let t = app_over(dir.path(), Arc::new(store)).await;
     post(
@@ -684,11 +697,11 @@ async fn a_reset_releases_the_store_holds() {
     .unwrap();
     post(&t.app, &Reset { request: rid(4) }).await.unwrap();
     let saved = tokio::time::timeout(
-        Duration::from_secs(20),
+        Duration::from_secs(60),
         save_through_the_app(&t, "not held after the reset"),
     )
     .await;
-    assert!(saved.is_ok(), "the save was held after the reset");
+    assert!(saved.is_ok(), "hung: the save was held after the reset");
     assert_eq!(t.app.holding(), 0);
     t.app.quit().await;
 }
@@ -733,7 +746,7 @@ fn phase_index(phase: &tc_api::jobs::Phase) -> usize {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn j15_a_slow_open_reports_from_300_ms_and_counts_up() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let dir = tempfile::tempdir().unwrap();
     let t = app_over(dir.path(), Arc::new(store)).await;
     fs.set_read_delay(Some(Duration::from_millis(60)));
@@ -758,10 +771,11 @@ async fn j15_a_slow_open_reports_from_300_ms_and_counts_up() {
         .position(|(_, p)| *p != initial)
         .expect("the open reported");
     let at = samples[first].0;
-    // tc-store's own test allows 300-400 ms (tests/store/progress.rs); 20 ms more here for
-    // the sampler's 2 ms and the hop to the blocking pool.
+    // Nothing is reported before 300 ms (tests/store/progress.rs). How much later the first
+    // report comes is speed, which a loaded machine stretches: not asserted here (ruling
+    // 2026-10-23).
     assert!(
-        at >= Duration::from_millis(300) && at <= Duration::from_millis(420),
+        at >= Duration::from_millis(300),
         "the first report came at {at:?}"
     );
     let reported = &samples[first..];
@@ -792,7 +806,7 @@ async fn j15_a_slow_open_reports_from_300_ms_and_counts_up() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn j15_a_quick_open_reports_nothing_before_300_ms() {
     let fs = FaultFs::new();
-    let (store, _) = scenario_on(&fs, "sample");
+    let (store, _, _watch) = scenario_on(&fs, "sample");
     let dir = tempfile::tempdir().unwrap();
     let t = app_over(dir.path(), Arc::new(store)).await;
     let sink = open_progress();

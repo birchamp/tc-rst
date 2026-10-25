@@ -11,6 +11,7 @@
 mod attach;
 mod books;
 mod cow;
+mod decode;
 mod merge;
 pub(crate) mod meta;
 mod metadata;
@@ -25,14 +26,21 @@ mod sidecar;
 mod state;
 pub(crate) mod value;
 
+pub use decode::{
+    DecodedComment, DecodedMetadata, decode_comments, decode_metadata, decode_resources,
+    decode_settings, decode_versification,
+};
 pub use meta::ChangeIdx;
 pub use people::PersonLabel;
-pub use project::{CarriedPlacement, CheckTexts, DerivedFile, ProjectedDecision};
+pub use project::{CarriedPlacement, CheckTexts, DerivedFile, ProjectedDecision, RenderedFile};
 pub use ranges::{ChapterKeys, DeviceStat};
 pub use reads::{BookView, ChangeView, Placement};
 pub use resolve::ResolveError;
 pub use scope::ScopeDigest;
-pub use sidecar::{SidecarError, decode_alignments, decode_decisions, records_from_usfm};
+pub use sidecar::{
+    SidecarError, Writer, decode_alignment_record, decode_alignments, decode_decisions,
+    records_from_usfm,
+};
 pub use state::{FoldInput, FoldState, MergeHow, ProjectKind};
 pub use value::{ValueAt, ValueSource};
 
@@ -327,8 +335,13 @@ pub struct Delta {
     pub new_conflicts: Vec<ConflictId>,
     /// A pin group changed: decision sidecars and `resources.json` change.
     pub pins: bool,
-    /// Carried or derived paths may have moved.
+    /// A book's projection appeared, vanished or changed scope (`books` names it): its files
+    /// are written or removed.
     pub paths: bool,
+    /// A `CarriedFile` record changed: carried files are placed or removed.
+    pub carried: bool,
+    /// A conflict was listed or unlisted: `conflicts.json` changes.
+    pub conflicts_changed: bool,
     /// The fold was rebuilt from scratch: every derived file may have changed.
     pub everything: bool,
 }
@@ -519,6 +532,24 @@ pub enum RotationReason {
     PendingUnreadable,
 }
 
+/// Why a materialization or a commit is blocked (R16).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Blocked {
+    /// Another program holds the file and the rename kept failing (a scanner, Paratext).
+    FileBusy,
+    /// The file could not be read to compare it before it is written over (§4.4).
+    FileUnreadable,
+    /// `records` values of the fold cannot be read on this computer yet (§2.6): nothing is
+    /// written from a value that is not read.
+    ValuesUnreadable { records: u32 },
+    /// An expected pack is missing (§4.4): nothing derived from it is removed.
+    PackMissing,
+    /// The commit's tree is not a valid Scripture Burrito (§9.4): no commit was made.
+    TreeInvalid { problem: Box<str> },
+    /// A write failed for another reason.
+    Failed { reason: Box<str> },
+}
+
 /// Notices depend on the files and the machine, so `tc-store` computes them outside the
 /// fold, and they are not part of the convergence comparison.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -556,10 +587,57 @@ pub enum Notice {
         missing: u64,
         last_at: WallTime,
     },
+    /// A file changed outside the app was recorded as `changes` changes in one batch
+    /// (§11.1). `unknown_base`: they were recorded without parents, so each is a conflict
+    /// with the project's text (the review offers *Accept all from the file*, *Keep
+    /// translationCore's text* and *Review one by one*); otherwise a toast with *Undo*.
     OutsideEditRecorded {
         path: RepoPath,
         changes: u32,
         batch: BatchId,
+        unknown_base: bool,
+    },
+    /// The file no longer shows `records` alignments, decisions or comments it was written
+    /// with. A file cannot remove them (no removal value exists, §11.1 X3): they stay, and
+    /// the file is written again with them.
+    OutsideRemovalKept {
+        path: RepoPath,
+        records: u32,
+    },
+    /// `metadata.json` was changed in fields translationCore writes itself (§11.1 X2); they
+    /// are written again from the project.
+    DerivedFieldsEdited {
+        path: RepoPath,
+        fields: u32,
+    },
+    /// `project.json`, `format.json` or `conflicts.json` was changed outside the app (§3.5):
+    /// it is written again, and `copy` holds the bytes found.
+    FixedFileRestored {
+        path: RepoPath,
+        copy: Box<str>,
+    },
+    /// `.git` was damaged and was built again from the project (§6.4 G4); `broken` is where
+    /// the damaged one was kept.
+    HistoryRebuilt {
+        broken: Box<str>,
+    },
+    /// The folder's history cannot be opened (for example another account owns `.git`); the
+    /// session runs without checkpoints (§6.1 O3).
+    HistoryUnavailable {
+        reason: Box<str>,
+    },
+    /// A carried file over 256 MiB is not recorded and not committed (§11.4).
+    CarriedTooLarge {
+        path: RepoPath,
+        size: u64,
+    },
+    /// A save the disk refused leaves its file behind; the person saved again, so the open
+    /// kept the earlier attempt as a copy instead of folding it beside their later work
+    /// (§6.1 O2, §5.0 B3).
+    UnsavedAttemptKept {
+        copy: Box<str>,
+        changes: u32,
+        at: WallTime,
     },
     OutsideEditUnreadable {
         path: RepoPath,
@@ -579,6 +657,13 @@ pub enum Notice {
     PackRestored {
         path: RepoPath,
         was: PackLoss,
+    },
+    /// A pending file of this session's saves was deleted or cut short by another program
+    /// before the seal took it. The session held the `changes` saves it lost in memory, and the
+    /// seal wrote them into its pack (§5.11 K1): nothing is lost.
+    PendingWrittenAgain {
+        file: Box<str>,
+        changes: u32,
     },
     /// A file that could not be read. Never treated as damage; retried later.
     FileUnreadable {
@@ -605,10 +690,13 @@ pub enum Notice {
     MetadataEditedOutside {
         copy: Box<str>,
     },
+    /// Derived files (§5.10) or a commit (§5.13) could not be written, and the work is saved:
     /// "translationCore can't update TIT.usfm because another program has it open. Your
-    /// work is saved." (§5.10): the rename kept failing for 2 s; the path stays dirty.
-    WriteBlocked {
-        path: RepoPath,
+    /// work is saved." The paths stay dirty and are tried again; the notice is listed once for
+    /// each reason and path set, and goes when the blockage clears (R16).
+    MaterializeBlocked {
+        paths: Vec<RepoPath>,
+        reason: Blocked,
     },
     /// An expected pack (§4.4) is missing from the working tree and no copy of it could be
     /// restored: nothing derived from it is removed, and no tree is built, until it is back.

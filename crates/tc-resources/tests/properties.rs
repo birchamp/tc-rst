@@ -292,3 +292,38 @@ proptest! {
         prop_assert_eq!(fold, want);
     }
 }
+
+/// A value that parses prints a text that parses back to it (INV-IDS-ROUND-TRIP).
+fn round_trips<T: std::str::FromStr + std::fmt::Display + PartialEq + std::fmt::Debug>(
+    text: &str,
+) -> Result<(), TestCaseError> {
+    if let Ok(value) = text.parse::<T>() {
+        let printed = value.to_string();
+        prop_assert_eq!(
+            printed.parse::<T>().ok(),
+            Some(value),
+            "{:?} printed {:?}",
+            text,
+            printed
+        );
+    }
+    Ok(())
+}
+
+proptest! {
+    #[test]
+    fn ids_round_trip(
+        repo in "[A-Za-z0-9_.-]{1,10}(/[A-Za-z0-9_.-]{1,10})?",
+        hex in "[0-9a-f]{64}|[0-9a-fA-F]{64}",
+        word in "[A-Za-z0-9_. -]{1,12}",
+        asset in "[A-Za-z0-9_. -]{1,10}(-json)?\\.zip",
+    ) {
+        round_trips::<tc_resources::RepoPath>(&repo)?;
+        round_trips::<Sha256>(&hex)?;
+        round_trips::<tc_resources::GithubName>(&word)?;
+        round_trips::<tc_resources::AquiferRepo>(&repo)?;
+        round_trips::<tc_resources::AquiferLanguage>(&word)?;
+        round_trips::<tc_resources::AssetName>(&asset)?;
+        round_trips::<tc_resources::PaneId>(&word)?;
+    }
+}

@@ -68,12 +68,12 @@ async fn home_card(app: &App, name: &str) -> HomeCard {
     .await
 }
 
-/// Waits for `HomeCard` of `name`; panics after five seconds.
+/// Waits for `HomeCard` of `name`; panics after a minute, which only a hang reaches.
 async fn card_event(events: &mut Subscription, name: &str) {
     let wanted = Event::HomeCard {
         project: folder(name),
     };
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             match events.next().await {
                 Next::Frame(frame) if frame.event == wanted => return,
@@ -83,7 +83,28 @@ async fn card_event(events: &mut Subscription, name: &str) {
         }
     })
     .await
-    .unwrap_or_else(|_| panic!("no HomeCard event for {name}"));
+    .unwrap_or_else(|_| panic!("hung: no HomeCard event for {name} in 60 s"));
+}
+
+/// Waits for a `HomeCard` event of each of `names`, in any order: a job computes the cards in
+/// no promised order; panics after a minute, which only a hang reaches.
+async fn cards_event(events: &mut Subscription, names: &[&str]) {
+    let mut left: Vec<Event> = names
+        .iter()
+        .map(|name| Event::HomeCard {
+            project: folder(name),
+        })
+        .collect();
+    tokio::time::timeout(Duration::from_secs(60), async {
+        while !left.is_empty() {
+            match events.next().await {
+                Next::Frame(frame) => left.retain(|wanted| *wanted != frame.event),
+                other => panic!("{other:?}"),
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("hung: no HomeCard event for {left:?} in 60 s"));
 }
 
 /// Whether a `HomeCard` event came by now.
@@ -97,14 +118,14 @@ fn card_events(events: &mut Subscription) -> usize {
 
 /// Until no job runs: the summaries the reads queued are done.
 async fn quiet(app: &App) {
-    for _ in 0..500 {
+    for () in crate::store_world::for_a_minute() {
         let quiet: tc_api::test::QuietView = ok(app, &tc_api::test::Quiet {}).await;
         if !quiet.busy {
             return;
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    panic!("the app did not settle");
+    panic!("hung: the app did not settle");
 }
 
 fn drafted(card: &HomeCard) -> Vec<(BookId, Known<u8>)> {
@@ -432,8 +453,7 @@ async fn one_summary_job_runs_at_a_time() {
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert_eq!(store.asked(), 1);
     store.set(|g| g.hold = false);
-    card_event(&mut events, "a_copy").await;
-    card_event(&mut events, "b_copy").await;
+    cards_event(&mut events, &["a_copy", "b_copy"]).await;
     assert_eq!(store.asked(), 2);
 }
 
@@ -518,13 +538,14 @@ fn debug_card_names_qa_server() {
         kind: tc_journal::fold::ProjectKind::Bible,
     };
     let peek = |host: &str| ProjectPeek {
+        text_direction: None,
         metadata: Err("not read".into()),
         remote: Door43Remote::parse_url(&format!("https://{host}/o/r.git")),
         stamp: SummaryStamp::parse_hex(&"0".repeat(64)),
     };
     let place = |host: &str, server: &ServerUrl| {
         let peek = peek(host);
-        let facts = card_facts(&peek.metadata, &entry.folder, ProjectKind::Bible);
+        let facts = card_facts(&peek.metadata, None, &entry.folder, ProjectKind::Bible);
         match card(&entry, &facts, &peek, None, server).door43 {
             Door43Card::Shared { place } => place,
             Door43Card::Local => panic!("shared"),
@@ -553,7 +574,12 @@ fn debug_card_names_qa_server() {
 /// its language and books unknown.
 #[test]
 fn a_card_without_metadata_is_named_after_its_folder() {
-    let facts = card_facts(&Err("gone".into()), &folder("mine"), ProjectKind::Bible);
+    let facts = card_facts(
+        &Err("gone".into()),
+        None,
+        &folder("mine"),
+        ProjectKind::Bible,
+    );
     assert_eq!(facts.name, "mine");
     assert_eq!((facts.tag, facts.books, facts.created), (None, None, 0));
 }
@@ -665,7 +691,7 @@ async fn peek_and_summary_agree_on_the_store_and_in_memory() {
             .find(|e| e.folder == *name)
             .unwrap();
         let peek = store.peek(name).unwrap();
-        let facts = card_facts(&peek.metadata, name, ProjectKind::Bible);
+        let facts = card_facts(&peek.metadata, None, name, ProjectKind::Bible);
         let watch = SummaryWatch {
             cancel: Default::default(),
             counters: Default::default(),
@@ -893,11 +919,12 @@ fn a_story_card_has_stories_and_no_chip() {
         kind: tc_journal::fold::ProjectKind::Stories,
     };
     let peek = ProjectPeek {
+        text_direction: None,
         metadata: Ok(serde_json::json!({"identification": {"name": {"en": "Historias"}}})),
         remote: None,
         stamp: SummaryStamp::parse_hex(&"0".repeat(64)),
     };
-    let facts = card_facts(&peek.metadata, &entry.folder, ProjectKind::Stories);
+    let facts = card_facts(&peek.metadata, None, &entry.folder, ProjectKind::Stories);
     let unknown = card(&entry, &facts, &peek, None, &ServerUrl::production());
     assert_eq!(unknown.books, Known::Known(Vec::new()));
     assert_eq!(unknown.conflicts, Known::Unknown);

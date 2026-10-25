@@ -1,0 +1,588 @@
+{
+  "_about": "Each live tC4 journey and each tC4 e2e spec at tc4.commit, mapped to the journey tests (file and exact titles) or Rust tests that cover it, or to the card that is not done and will. A list holds the parts of a partial mapping. Checked by coverage.test.mjs (INV-P1-COVERED).",
+  "tc4": {
+    "commit": "d25b7871904228a342c0d80280136d8636833653",
+    "liveJourneys": [
+      "J1",
+      "J2",
+      "J3",
+      "J4",
+      "J5",
+      "J6",
+      "J7",
+      "J8",
+      "J9a",
+      "J9c",
+      "J9d",
+      "J11",
+      "J12",
+      "J13",
+      "J16",
+      "J17",
+      "J18",
+      "J20",
+      "J21",
+      "J22",
+      "J23",
+      "J24",
+      "J25",
+      "J26"
+    ],
+    "specs": [
+      "app-language.spec.ts",
+      "bundled-upgrade.spec.ts",
+      "check-keyboard.spec.ts",
+      "check-project-switch.spec.ts",
+      "check-returns-draft.spec.ts",
+      "compare-card.spec.ts",
+      "ds-labels.spec.ts",
+      "feedback.spec.ts",
+      "guided-fix.spec.ts",
+      "help.spec.ts",
+      "internet-consent.spec.ts",
+      "item-navigation.spec.ts",
+      "j01-create-project.spec.ts",
+      "j02-draft-verse.spec.ts",
+      "j03-get-resources.spec.ts",
+      "j04-check-book.spec.ts",
+      "j05-align-verse.spec.ts",
+      "j06-edit-invalidation.spec.ts",
+      "j07-publish.spec.ts",
+      "j08-resume.spec.ts",
+      "j09-import.spec.ts",
+      "j10-rtl.spec.ts",
+      "j11-share.spec.ts",
+      "j12-upgrade-resources.spec.ts",
+      "j13-gateway-change.spec.ts",
+      "j14-join-isolation.spec.ts",
+      "j15-slow-open.spec.ts",
+      "j16-understand.spec.ts",
+      "j17-open-from-door43.spec.ts",
+      "j20-obs-create.spec.ts",
+      "j21-obs-draft.spec.ts",
+      "j22-obs-check.spec.ts",
+      "j25-obs-understand.spec.ts",
+      "j26-team-sync.spec.ts",
+      "language-suggestions.spec.ts",
+      "language-tags.spec.ts",
+      "settings-contract.spec.ts",
+      "sync-button.spec.ts",
+      "sync-refusal.spec.ts"
+    ]
+  },
+  "journeys": {
+    "J1": {
+      "file": "parity/app/journeys/create.test.mjs",
+      "tests": [
+        "J1: a Bible is created with its language and direction, then a blank book makes it a valid project"
+      ]
+    },
+    "J2": [
+      {
+        "file": "parity/app/journeys/translate.test.mjs",
+        "tests": [
+          "translate_shows_the_source_beside_the_translation_by_section_and_by_verse"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/section.test.mjs",
+        "tests": [
+          "section_editor_saves_only_on_save"
+        ]
+      }
+    ],
+    "J3": [
+      {
+        "file": "parity/app/journeys/guided-fix.test.mjs",
+        "tests": [
+          "guided_fix_download_asks_first_and_a_download_door43_cannot_give_installs_nothing",
+          "guided_fix_file_of_another_commit_installs_nothing_and_the_pinned_one_is_installed",
+          "guided_fix_installed_version_opens_the_repin_confirmation_and_keep_moves_nothing"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/source-texts.test.mjs",
+        "tests": [
+          "Get source texts reads a package only after the internet question, and Not now reads nothing",
+          "j3_a_download_from_the_seeded_fake_installs_the_pinned_version"
+        ]
+      }
+    ],
+    "J4": {
+      "file": "parity/app/journeys/check-writes.test.mjs",
+      "tests": [
+        "j4_a_mark_on_dragged_words_a_comment_and_a_bookmark_are_one_decision_record_on_disk"
+      ]
+    },
+    "J5": {
+      "file": "parity/app/journeys/align.test.mjs",
+      "tests": [
+        "j5_align_steps_that_do_not_save"
+      ]
+    },
+    "J6": {
+      "file": "parity/app/journeys/check-writes.test.mjs",
+      "tests": [
+        "j6_a_verse_edited_in_translate_flags_its_checks_and_keeps_their_decisions"
+      ]
+    },
+    "J7": {
+      "pending": "D2"
+    },
+    "J8": [
+      {
+        "file": "parity/app/journeys/check-keyboard.test.mjs",
+        "tests": [
+          "resume_and_tab_click_open_the_tool_once"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/check-picker.test.mjs",
+        "tests": [
+          "resume_into_a_tool_that_is_not_ready_shows_the_picker_and_its_fix"
+        ]
+      },
+      {
+        "pending": "D1"
+      }
+    ],
+    "J9a": {
+      "pending": "F1"
+    },
+    "J9c": {
+      "pending": "F1"
+    },
+    "J9d": {
+      "pending": "F1"
+    },
+    "J11": [
+      {
+        "file": "parity/app/journeys/j11-sign-in.test.mjs",
+        "tests": [
+          "J11 0. the account menu is the one Door43 item",
+          "J11 1. the sign-in step shows the fields, the box, the notices and the server; Cancel creates and stores nothing"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/share-open.test.mjs",
+        "tests": [
+          "internet-consent d, J11 2. Share: the sign-in, then where it goes with the Recommended organization, then the check step, with one question; Change signs out and asks the sign-in again"
+        ]
+      },
+      {
+        "pending": "E1b"
+      }
+    ],
+    "J12": [
+      {
+        "file": "parity/app/journeys/upgrades.test.mjs",
+        "tests": [
+          "j12_an_upgrade_through_the_screens_moves_the_pin_on_disk"
+        ]
+      }
+    ],
+    "J13": [
+      {
+        "file": "parity/app/journeys/upgrades.test.mjs",
+        "tests": [
+          "Keep leaves the checking language as it was; Change moves the primary set to English",
+          "j13_change_writes_the_primary_set_to_disk"
+        ]
+      }
+    ],
+    "J16": {
+      "file": "parity/app/journeys/comments.test.mjs",
+      "tests": [
+        "j16_three_help_steps_then_three_pauses_and_a_blur_add_one_comment"
+      ]
+    },
+    "J17": [
+      {
+        "file": "parity/app/journeys/share-open.test.mjs",
+        "tests": [
+          "Open a project from Door43: the name follows the repository; a name in use is an error under it; Open project asks the open question; Not now sends nothing; the open ends in its refusal, and no project was added"
+        ]
+      },
+      {
+        "pending": "E1b"
+      }
+    ],
+    "J18": [
+      {
+        "file": "parity/app/journeys/conflict-review.test.mjs",
+        "tests": [
+          "J18 (#679, #724). A refused open keeps the sync toast and its Review; the next Review opens the review and closes the toast; each version shows its teammate and date, newest first; Keep this version writes one resolution however often it is pressed, and the verse, Translate and Home show it",
+          "J18 step 6. With two verses in conflict, Previous and Next step between them, each shown with nothing selected; once one is kept, the other shows and the count goes down",
+          "C7a. A teammate joined Titus 1:4-5 on Door43 while this computer changed 1:5: the review lists one passage conflict with a button per side; Keep Teammate 1’s passage writes one resolution over both verses however often it is pressed, and Translate then holds 4-5 as one verse",
+          "C7a (#78). Every History row but the one shown has Restore this version; a double press writes one restore, the restored text is the one kept, and the replaced version stays in History",
+          "C7a. With two verses in conflict, Keep all of Teammate 1’s keeps their version in both with one request however often it is pressed, and says how many were left"
+        ]
+      },
+      {
+        "pending": [
+          "E1a"
+        ]
+      }
+    ],
+    "J20": {
+      "file": "parity/app/journeys/create.test.mjs",
+      "tests": [
+        "J20: Open Bible Stories are created with fifty stories, and Home shows the project at 0%"
+      ]
+    },
+    "J21": {
+      "file": "parity/app/journeys/story-writes.test.mjs",
+      "tests": [
+        "j21_frame_title_and_reference_save_only_their_own_story_bytes_and_keep_the_rail"
+      ]
+    },
+    "J22": [
+      {
+        "file": "parity/app/journeys/check-writes.test.mjs",
+        "tests": [
+          "j22_a_story_check_marked_in_the_browser_is_stored_under_its_frame_and_a_frame_edit_flags_it"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/story.test.mjs",
+        "tests": [
+          "j22_a_story_check_session_reads_its_quote_and_moves_with_previous_and_next"
+        ]
+      }
+    ],
+    "J23": {
+      "pending": "D2"
+    },
+    "J24": {
+      "pending": "E1b"
+    },
+    "J25": [
+      {
+        "file": "parity/app/journeys/story.test.mjs",
+        "tests": [
+          "j25_a_story_opens_with_its_rail_its_units_and_writable_comment_boxes",
+          "j25_the_rail_moves_the_frame_and_the_helps_panel_follows_it"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/comments.test.mjs",
+        "tests": [
+          "j25_a_frame_comment_uses_its_help_tabs_and_leaves_the_story_unchanged"
+        ]
+      }
+    ],
+    "J26": {
+      "pending": "E1a"
+    }
+  },
+  "specs": {
+    "app-language.spec.ts": {
+      "file": "parity/app/journeys/app-language.test.mjs",
+      "tests": [
+        "a. the row shows the applied language; each selection previews before Apply; Cancel restores English and saves nothing"
+      ]
+    },
+    "bundled-upgrade.spec.ts": [
+      {
+        "rust": "crates/tc-app/tests/app/upgrades.rs",
+        "tests": [
+          "bundled_upgrade_leaves_the_pinned_release_and_the_projects_pins_as_they_were"
+        ]
+      },
+      {
+        "rust": "crates/tc-resources/tests/dcs_install.rs",
+        "tests": [
+          "a_bundled_store_seeds_a_first_run_that_is_offline"
+        ]
+      }
+    ],
+    "check-keyboard.spec.ts": [
+      {
+        "file": "parity/app/journeys/check-keyboard.test.mjs",
+        "tests": [
+          "resume_and_tab_click_open_the_tool_once"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/check-detail.test.mjs",
+        "tests": [
+          "check_keyboard_detail_drawer_words_marks_and_comment"
+        ]
+      }
+    ],
+    "check-project-switch.spec.ts": {
+      "file": "parity/app/journeys/check-writes.test.mjs",
+      "tests": [
+        "check_project_switch_resolves_the_open_projects_own_pins"
+      ]
+    },
+    "check-returns-draft.spec.ts": {
+      "file": "parity/app/journeys/check-writes.test.mjs",
+      "tests": [
+        "check_returns_draft_a_frame_drafted_in_translate_shows_on_the_return"
+      ]
+    },
+    "compare-card.spec.ts": {
+      "file": "parity/app/journeys/check-detail.test.mjs",
+      "tests": [
+        "compare_card_columns_fit_the_width"
+      ]
+    },
+    "ds-labels.spec.ts": {
+      "file": "parity/app/journeys/section.test.mjs",
+      "tests": [
+        "ds_labels_d_a_verse_numbers_name_follows_the_app_language"
+      ]
+    },
+    "feedback.spec.ts": {
+      "file": "parity/app/journeys/feedback.test.mjs",
+      "tests": [
+        "c. opening the report and typing in it go to no other origin and ask nothing but the attachment"
+      ]
+    },
+    "guided-fix.spec.ts": {
+      "file": "parity/app/journeys/guided-fix.test.mjs",
+      "tests": [
+        "guided_fix_download_asks_first_and_a_download_door43_cannot_give_installs_nothing",
+        "guided_fix_file_of_another_commit_installs_nothing_and_the_pinned_one_is_installed",
+        "guided_fix_installed_version_opens_the_repin_confirmation_and_keep_moves_nothing"
+      ]
+    },
+    "help.spec.ts": {
+      "file": "parity/app/journeys/help.test.mjs",
+      "tests": [
+        "a. (Home half) Help and guides sits below the internet switch; the arrows reach it and Enter opens it"
+      ]
+    },
+    "internet-consent.spec.ts": {
+      "file": "parity/app/journeys/internet-consent.test.mjs",
+      "tests": [
+        "a. a launch starts with the internet off: no indicator, the switch off, no question, nothing stored"
+      ]
+    },
+    "item-navigation.spec.ts": {
+      "file": "parity/app/journeys/check-detail.test.mjs",
+      "tests": [
+        "item_navigation_translationNotes_en_marking_row_boundaries_tab_and_wrapping",
+        "item_navigation_translationWords_ar_marking_row_boundaries_tab_and_wrapping"
+      ]
+    },
+    "j01-create-project.spec.ts": {
+      "file": "parity/app/journeys/create.test.mjs",
+      "tests": [
+        "J1: a Bible is created with its language and direction, then a blank book makes it a valid project"
+      ]
+    },
+    "j02-draft-verse.spec.ts": [
+      {
+        "file": "parity/app/journeys/translate.test.mjs",
+        "tests": [
+          "translate_shows_the_source_beside_the_translation_by_section_and_by_verse"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/section.test.mjs",
+        "tests": [
+          "section_editor_saves_only_on_save"
+        ]
+      }
+    ],
+    "j03-get-resources.spec.ts": [
+      {
+        "file": "parity/app/journeys/guided-fix.test.mjs",
+        "tests": [
+          "guided_fix_download_asks_first_and_a_download_door43_cannot_give_installs_nothing",
+          "guided_fix_file_of_another_commit_installs_nothing_and_the_pinned_one_is_installed",
+          "guided_fix_installed_version_opens_the_repin_confirmation_and_keep_moves_nothing"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/source-texts.test.mjs",
+        "tests": [
+          "Get source texts reads a package only after the internet question, and Not now reads nothing",
+          "j3_a_download_from_the_seeded_fake_installs_the_pinned_version"
+        ]
+      }
+    ],
+    "j04-check-book.spec.ts": {
+      "file": "parity/app/journeys/check-writes.test.mjs",
+      "tests": [
+        "j4_a_mark_on_dragged_words_a_comment_and_a_bookmark_are_one_decision_record_on_disk"
+      ]
+    },
+    "j05-align-verse.spec.ts": {
+      "file": "parity/app/journeys/align.test.mjs",
+      "tests": [
+        "j5_align_steps_that_do_not_save"
+      ]
+    },
+    "j06-edit-invalidation.spec.ts": {
+      "file": "parity/app/journeys/check-writes.test.mjs",
+      "tests": [
+        "j6_a_verse_edited_in_translate_flags_its_checks_and_keeps_their_decisions"
+      ]
+    },
+    "j07-publish.spec.ts": {
+      "pending": "D2"
+    },
+    "j08-resume.spec.ts": [
+      {
+        "file": "parity/app/journeys/check-keyboard.test.mjs",
+        "tests": [
+          "resume_and_tab_click_open_the_tool_once"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/check-picker.test.mjs",
+        "tests": [
+          "resume_into_a_tool_that_is_not_ready_shows_the_picker_and_its_fix"
+        ]
+      },
+      {
+        "pending": "D1"
+      }
+    ],
+    "j09-import.spec.ts": {
+      "pending": "F1"
+    },
+    "j10-rtl.spec.ts": {
+      "file": "parity/app/journeys/rtl-project.test.mjs",
+      "tests": [
+        "rtl_project_drafts_checks_and_aligns",
+        "hebrew_original_aligns_right_to_left_on_jonah"
+      ]
+    },
+    "j11-share.spec.ts": [
+      {
+        "file": "parity/app/journeys/j11-sign-in.test.mjs",
+        "tests": [
+          "J11 0. the account menu is the one Door43 item",
+          "J11 1. the sign-in step shows the fields, the box, the notices and the server; Cancel creates and stores nothing"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/share-open.test.mjs",
+        "tests": [
+          "internet-consent d, J11 2. Share: the sign-in, then where it goes with the Recommended organization, then the check step, with one question; Change signs out and asks the sign-in again"
+        ]
+      },
+      {
+        "pending": "E1b"
+      }
+    ],
+    "j12-upgrade-resources.spec.ts": [
+      {
+        "file": "parity/app/journeys/upgrades.test.mjs",
+        "tests": [
+          "j12_an_upgrade_through_the_screens_moves_the_pin_on_disk"
+        ]
+      }
+    ],
+    "j13-gateway-change.spec.ts": [
+      {
+        "file": "parity/app/journeys/upgrades.test.mjs",
+        "tests": [
+          "Keep leaves the checking language as it was; Change moves the primary set to English",
+          "j13_change_writes_the_primary_set_to_disk"
+        ]
+      }
+    ],
+    "j14-join-isolation.spec.ts": {
+      "pending": "E1b"
+    },
+    "j15-slow-open.spec.ts": {
+      "rust": "crates/tc-app/tests/app/store_scenario.rs",
+      "tests": [
+        "j15_a_quick_open_reports_nothing_before_300_ms"
+      ]
+    },
+    "j16-understand.spec.ts": {
+      "file": "parity/app/journeys/comments.test.mjs",
+      "tests": [
+        "j16_three_help_steps_then_three_pauses_and_a_blur_add_one_comment"
+      ]
+    },
+    "j17-open-from-door43.spec.ts": [
+      {
+        "file": "parity/app/journeys/share-open.test.mjs",
+        "tests": [
+          "Open a project from Door43: the name follows the repository; a name in use is an error under it; Open project asks the open question; Not now sends nothing; the open ends in its refusal, and no project was added"
+        ]
+      },
+      {
+        "pending": "E1b"
+      }
+    ],
+    "j20-obs-create.spec.ts": {
+      "file": "parity/app/journeys/create.test.mjs",
+      "tests": [
+        "J20: Open Bible Stories are created with fifty stories, and Home shows the project at 0%"
+      ]
+    },
+    "j21-obs-draft.spec.ts": {
+      "file": "parity/app/journeys/story-writes.test.mjs",
+      "tests": [
+        "j21_frame_title_and_reference_save_only_their_own_story_bytes_and_keep_the_rail"
+      ]
+    },
+    "j22-obs-check.spec.ts": [
+      {
+        "file": "parity/app/journeys/check-writes.test.mjs",
+        "tests": [
+          "j22_a_story_check_marked_in_the_browser_is_stored_under_its_frame_and_a_frame_edit_flags_it"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/story.test.mjs",
+        "tests": [
+          "j22_a_story_check_session_reads_its_quote_and_moves_with_previous_and_next"
+        ]
+      }
+    ],
+    "j25-obs-understand.spec.ts": [
+      {
+        "file": "parity/app/journeys/story.test.mjs",
+        "tests": [
+          "j25_a_story_opens_with_its_rail_its_units_and_writable_comment_boxes",
+          "j25_the_rail_moves_the_frame_and_the_helps_panel_follows_it"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/comments.test.mjs",
+        "tests": [
+          "j25_a_frame_comment_uses_its_help_tabs_and_leaves_the_story_unchanged"
+        ]
+      }
+    ],
+    "j26-team-sync.spec.ts": {
+      "pending": "E1a"
+    },
+    "language-suggestions.spec.ts": {
+      "file": "parity/app/journeys/language-suggestions.test.mjs",
+      "tests": [
+        "New Bible: suggestions from the shipped list, by keyboard and pointer, with nothing sent off this machine"
+      ]
+    },
+    "language-tags.spec.ts": {
+      "file": "parity/app/journeys/create.test.mjs",
+      "tests": [
+        "language-tags: a regional or private-use code is kept whole with its name, and an invalid one is refused with nothing left"
+      ]
+    },
+    "settings-contract.spec.ts": {
+      "file": "parity/app/journeys/source-texts.test.mjs",
+      "tests": [
+        "Settings from Home show the project as its files hold it, and Save waits for them"
+      ]
+    },
+    "sync-button.spec.ts": {
+      "file": "parity/app/journeys/sync-button.test.mjs",
+      "tests": [
+        "#678. Nothing goes to Door43 at launch or after 5 s idle; one press asks, signs in and syncs once, and the result shows until it is dismissed"
+      ]
+    },
+    "sync-refusal.spec.ts": {
+      "pending": "FIX-R"
+    }
+  }
+}

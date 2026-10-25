@@ -1210,7 +1210,13 @@ impl SaveMachine {
     /// save in flight does.
     pub fn gate(&self) -> GateState {
         let fields = || self.fields.values().filter(|f| f.sendable_by_gate());
-        if fields().any(|f| matches!(f.state, FieldSave::Failed(_)) && f.gate_retried) {
+        // A failure no retry in this open can fix (a newer change arrived under a merged
+        // verse) keeps its text and its reason, and does not keep the person from Home
+        // (INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR, tC4 #801).
+        if fields().any(|f| match &f.state {
+            FieldSave::Failed(error) => f.gate_retried && classify::save_error_can_be_fixed(error),
+            _ => false,
+        }) {
             return GateState::Blocked;
         }
         if self.fields.values().any(Field::is_saving) || fields().any(Field::awaits_open) {
@@ -1248,6 +1254,21 @@ impl SaveMachine {
         } else {
             ResendCheck::Nothing
         }
+    }
+
+    /// The fields of `kind` whose save has not landed: typed, on its way, failed or held.
+    pub fn unsaved_keys(&self, kind: FieldKind) -> Vec<BufferKey> {
+        self.fields
+            .iter()
+            .filter(|(key, field)| {
+                key.field.kind == kind
+                    && !matches!(
+                        field.state,
+                        FieldSave::Clean | FieldSave::SavedWithWarning(_)
+                    )
+            })
+            .map(|(key, _)| key.clone())
+            .collect()
     }
 
     pub fn state(&self, key: &BufferKey) -> Option<&FieldSave> {

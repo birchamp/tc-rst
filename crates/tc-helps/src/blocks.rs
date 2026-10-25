@@ -20,6 +20,7 @@
 use std::sync::LazyLock;
 
 use fancy_regex::{Captures, Regex};
+use tc_core::js::trim as js_trim;
 
 /// What a block is: tC4's `kind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -122,25 +123,6 @@ static ITALIC: LazyLock<Regex> = LazyLock::new(|| {
         s = JS_SPACE
     ))
 });
-
-fn is_js_space(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r' | ' ' | '\u{A0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200A}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202F}'
-                | '\u{205F}'
-                | '\u{3000}'
-                | '\u{FEFF}'
-    )
-}
-
-/// JavaScript's `trim()`.
-fn js_trim(text: &str) -> &str {
-    text.trim_matches(is_js_space)
-}
 
 /// The length of `text` as JavaScript counts it: UTF-16 code units.
 pub fn js_len(text: &str) -> usize {

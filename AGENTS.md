@@ -8,7 +8,10 @@ anything that writes project data.
 ## The rules that protect translators' work
 
 - Never lose, hide or silently rewrite a translator's text, alignment, check decision or
-  comment. If two versions disagree, keep both and show the conflict.
+  comment. If two versions of verse text disagree, keep both and show the conflict. For
+  everything else (checks, alignments, comments, settings, books), the newest version wins, the
+  older one stays in History where the translator can restore it, and the Received sheet says
+  what was replaced (owner ruling H5, `.audit/roadmap/rulings/2026-10-24-H5.md`).
 - Every project on disk and every project that leaves the app is a valid Scripture
   Burrito. Code that writes a project validates it in tests.
 - Write files atomically: write a temporary file in the same directory, fsync it, rename
@@ -44,9 +47,10 @@ anything that writes project data.
   fail if the behavior it names breaks.
 - Parsers get round-trip property tests (`proptest`). Merge and storage code gets
   property tests for convergence and no-loss, plus crash-injection tests.
-- Before you commit, run `scripts/gates.sh` (`--list` prints its steps). It is the list CI
-  runs; every step must pass, and main moves only to a commit `scripts/gates.sh --check-receipt`
-  accepts.
+- While you build, run the tests of the crates and journeys you touched. `scripts/gates.sh`
+  (`--list` prints its steps) is the list CI runs on every batch; every step must pass, and main
+  moves only to a commit `scripts/gates.sh --check-receipt` accepts. How a card gets ready:
+  `.audit/roadmap/TRACKING.md` "Checklist: merge an item".
 
 ## Performance
 

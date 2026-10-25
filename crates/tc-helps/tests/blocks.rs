@@ -171,3 +171,25 @@ fn ta_article_with_a_table_renders_a_table() {
     assert_eq!(lone[0].kind, Paragraph);
     assert_eq!(lone[0].text(), "| not a table |");
 }
+
+/// Owner ruling Q38 (tC4 #628): a bare `rc://…` link and a `[[rc://…]]` link in a note or an
+/// article show as their raw address, as tC4 4.0 shows them (its renderer drops only the
+/// brackets, as the vectors above hold); nothing is dropped or turned into a title.
+#[test]
+fn a_bare_rc_link_shows_as_its_raw_text() {
+    for (markdown, shown) in [
+        (
+            "See rc://*/ta/man/translate/figs-metaphor here.",
+            "See rc://*/ta/man/translate/figs-metaphor here.",
+        ),
+        (
+            "See [[rc://en/tw/dict/bible/kt/god]] here.",
+            "See rc://en/tw/dict/bible/kt/god here.",
+        ),
+    ] {
+        let blocks = render_article_blocks(markdown);
+        assert_eq!(blocks.len(), 1, "{markdown}: {blocks:?}");
+        assert_eq!(blocks[0].kind, BlockKind::Paragraph);
+        assert_eq!(blocks[0].text(), shown);
+    }
+}

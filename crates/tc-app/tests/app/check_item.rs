@@ -101,7 +101,27 @@ async fn a_note_shows_its_panes_its_article_and_the_draft_words() {
         OriginalView::Ready {
             testament: Testament::Nt,
             verse: Some(verse),
-        } => assert!(verse.starts_with("Παῦλος"), "{verse}"),
+        } => {
+            assert!(verse.tokens.concat().starts_with("Παῦλος"), "{verse:?}");
+            // Owner ruling Q39 (tC4 #840): the Greek row marks the note's quote.
+            let marked: Vec<&str> = verse
+                .lit
+                .iter()
+                .map(|&i| verse.tokens[i as usize].as_str())
+                .collect();
+            assert_eq!(
+                marked,
+                [
+                    "κατὰ",
+                    "πίστιν",
+                    "ἐκλεκτῶν",
+                    "Θεοῦ",
+                    "καὶ",
+                    "ἐπίγνωσιν",
+                    "ἀληθείας"
+                ]
+            );
+        }
         other => panic!("{other:?}"),
     }
     let GatewayView::Pane {
@@ -259,7 +279,7 @@ const SAMPLE: &str = "sample_burrito";
 /// The app over the `en-pins` scenario written through tc-store, with its resources installed.
 async fn on_the_store() -> (tempfile::TempDir, TestApp, FaultFs) {
     let fs = FaultFs::new();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let (store, _) = ScenarioStore::write(backend, scenario("en-pins")).unwrap();
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(
@@ -269,11 +289,12 @@ async fn on_the_store() -> (tempfile::TempDir, TestApp, FaultFs) {
     .unwrap();
     let projects = dir.path().join("projects");
     std::fs::create_dir_all(&projects).unwrap();
-    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = StoreChoice::Given(Arc::new(store));
     })
     .await;
+    t.watch = Some(watch);
     (dir, t, fs)
 }
 
@@ -504,21 +525,31 @@ async fn a_mark_for_another_check_is_look_again() {
 
 // ---- the check comment's server draft (C4, A-10) --------------------------------------------
 
+/// Waits until the draft writer has put every typed draft in the project's file. A draft is
+/// best effort (STORAGE §5.14) and its reply comes before the write, so a crash right after
+/// typing may lose it; these tests mean a draft that reached the file before the app ended.
+fn drafts_written(t: &TestApp, at: &Scope) {
+    let session = t.app.sessions().reader(at).unwrap();
+    tokio::task::block_in_place(|| session.handle().wait_idle());
+}
+
 /// The next launch over the files an ended app left: a new app on `fs`'s crash image, with the
 /// same app data (the installed resources).
 async fn relaunch(dir: &tempfile::TempDir, fs: &FaultFs) -> TestApp {
-    let backend = backend_over(
+    let (backend, watch) = backend_over(
         &fs.crash(false),
         APP,
         FakePlatform::default(),
         Arc::default(),
     );
     let projects = dir.path().join("projects");
-    TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = StoreChoice::Given(Arc::new(backend));
     })
-    .await
+    .await;
+    t.watch = Some(watch);
+    t
 }
 
 /// A check comment's draft, as the comment editor sends it between saves (`editor/draft`).
@@ -572,6 +603,7 @@ async fn a_check_comment_typed_before_the_app_ended_is_offered_and_kept_beside_t
     )
     .await
     .unwrap();
+    drafts_written(&t, &at);
     drop(t);
 
     let t = relaunch(&dir, &fs).await;
@@ -643,7 +675,7 @@ async fn a_check_comment_typed_before_a_bookmark_outlives_it_and_is_kept_beside_
     .await
     .unwrap();
     // Past the draft file's next write.
-    tokio::time::sleep(std::time::Duration::from_millis(1_500)).await;
+    drafts_written(&t, &at);
     drop(t);
 
     let t = relaunch(&dir, &fs).await;
@@ -696,6 +728,7 @@ async fn a_check_comment_typed_on_an_undecided_check_is_kept_as_its_first_decisi
     )
     .await
     .unwrap();
+    drafts_written(&t, &at);
     drop(t);
 
     let t = relaunch(&dir, &fs).await;
@@ -755,6 +788,7 @@ async fn a_check_comment_typed_before_the_first_mark_is_kept_beside_it() {
     )
     .await
     .unwrap();
+    drafts_written(&t, &at);
     drop(t);
 
     let t = relaunch(&dir, &fs).await;

@@ -587,22 +587,45 @@ impl Index {
         project: ProjectId,
         sections: impl IntoIterator<Item = &'a Section>,
     ) -> Vec<u8> {
+        let mut out = Vec::new();
+        let sections: Vec<&Section> = sections.into_iter().collect();
+        // One allocation of the file's size: a Vec that grows by doubling holds up to twice
+        // the bytes of a whole Bible's cache (65 MB) while it copies.
+        out.reserve_exact(sections.iter().map(|s| s.body().len() + 10).sum::<usize>() + 64);
+        let _: Result<(), std::convert::Infallible> =
+            Self::encode_to(project, sections, &mut |bytes| {
+                out.extend_from_slice(bytes);
+                Ok(())
+            });
+        out
+    }
+
+    /// [`Index::encode`] that hands the bytes to `write` piece by piece, so a caller that
+    /// writes a file never holds the whole index: the sections' bytes go from where they lie.
+    pub fn encode_to<'a, E>(
+        project: ProjectId,
+        sections: impl IntoIterator<Item = &'a Section>,
+        write: &mut dyn FnMut(&[u8]) -> Result<(), E>,
+    ) -> Result<(), E> {
         let mut sections: Vec<&Section> = sections.into_iter().collect();
         sections.sort_by(|a, b| a.key.path.cmp(&b.key.path));
         sections.dedup_by(|a, b| a.key.path == b.key.path);
-        let mut out = Out::default();
-        out.bytes(MAGIC);
-        out.bytes(&INDEX_VERSION.to_le_bytes());
-        out.bytes(&FORMAT_MINOR.to_le_bytes());
-        out.bytes(&stamp().to_le_bytes());
-        out.bytes(project.as_bytes());
-        out.var(sections.len() as u64);
+        let mut head = Out::default();
+        head.bytes(MAGIC);
+        head.bytes(&INDEX_VERSION.to_le_bytes());
+        head.bytes(&FORMAT_MINOR.to_le_bytes());
+        head.bytes(&stamp().to_le_bytes());
+        head.bytes(project.as_bytes());
+        head.var(sections.len() as u64);
+        write(&head.0)?;
         for section in sections {
             let body = section.body();
-            out.var(body.len() as u64);
-            out.bytes(body);
+            let mut len = Out::default();
+            len.var(body.len() as u64);
+            write(&len.0)?;
+            write(body)?;
         }
-        out.0
+        Ok(())
     }
 
     /// Reads an index of project `project`, written by any build of this [`INDEX_VERSION`],
@@ -758,7 +781,7 @@ fn read_pending_header(input: &mut In<'_>) -> R<PendingHeader> {
     let reconciles = match input.u8()? {
         0 => None,
         1 => Some(Reconciles {
-            path: RepoPath::parse(input.str()?)
+            path: RepoPath::parse_source(input.str()?)
                 .map_err(|_| IndexError::Malformed("a reconciled path"))?,
             seen_md5: Md5::from_bytes(input.array()?),
         }),
@@ -786,7 +809,10 @@ fn cause_code(cause: CauseClass) -> u8 {
             unknown_base: false,
         } => 4,
         CauseClass::External { unknown_base: true } => 5,
-        CauseClass::Import => 6,
+        CauseClass::Import {
+            unknown_base: false,
+        } => 6,
+        CauseClass::Import { unknown_base: true } => 11,
         CauseClass::Seed => 7,
         CauseClass::StartOver => 8,
         CauseClass::System => 9,
@@ -804,7 +830,10 @@ fn cause_of(code: u8) -> R<CauseClass> {
             unknown_base: false,
         },
         5 => CauseClass::External { unknown_base: true },
-        6 => CauseClass::Import,
+        6 => CauseClass::Import {
+            unknown_base: false,
+        },
+        11 => CauseClass::Import { unknown_base: true },
         7 => CauseClass::Seed,
         8 => CauseClass::StartOver,
         9 => CauseClass::System,
@@ -930,7 +959,7 @@ fn put_check(out: &mut Out, check: &CheckKey) {
         CheckTarget::Frame { story, frame } => {
             out.u8(1);
             out.u8(story.get());
-            out.var(u64::from(frame.0));
+            out.var(u64::from(frame.get()));
         }
     }
     out.var(u64::from(check.occurrence));
@@ -1051,7 +1080,7 @@ fn put_shape(out: &mut Out, shape: &Shape, resources: &mut Vec<Arc<ResourceRef>>
                 CommentTarget::Frame { story, frame } => {
                     out.u8(2);
                     out.u8(story.get());
-                    out.var(u64::from(frame.0));
+                    out.var(u64::from(frame.get()));
                 }
             }
         }
@@ -1302,7 +1331,7 @@ impl<'a> In<'a> {
     }
 
     fn frame(&mut self) -> R<FrameNo> {
-        Ok(FrameNo(self.var_u16()?))
+        Ok(FrameNo::new(self.var_u16()?))
     }
 
     fn ref_part(&mut self) -> R<RefPart> {

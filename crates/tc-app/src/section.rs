@@ -17,7 +17,7 @@ use tc_api::model::section::{ParaFormat, SectionBuffer};
 use tc_api::write::SaveRefusal;
 use tc_api::{ApiError, NotSaved};
 use tc_journal::record::{ChapterVerse, MarkerWs, VerseValue};
-use tc_journal::{Record, RecordKey, VerseNo};
+use tc_journal::{ChangeId, Record, RecordKey, VerseNo};
 
 use crate::app::App;
 use crate::backend::{EditToken, StoreCommand};
@@ -98,6 +98,20 @@ pub fn splice_gap(layout: &str, marker: Option<ParaFormat>) -> String {
 
 /// The verse a token displayed and the value it showed, for `book`: the one head's value, or
 /// the projected value where the token has several (a conflict, a merge). A token of anything
+/// The value a screen showed at `heads`, as the store reads it for a save over that screen's
+/// token (`Fold::merged_at`), so a sync that moved the heads since does not change it. Heads
+/// in conflict show no one value; the save is refused there, and the projection stands in.
+pub fn shown_record(
+    read: &CountingSnapshot,
+    key: &RecordKey,
+    heads: &[ChangeId],
+) -> Option<Record> {
+    match heads {
+        [head] => read.body(head).map(|body| body.record),
+        _ => read.merged_at(key, heads).or_else(|| read.projected(key)),
+    }
+}
+
 /// but a verse of `book` is a forged or misrouted one.
 pub fn displayed(
     read: &CountingSnapshot,
@@ -110,10 +124,7 @@ pub fn displayed(
     if *of != book {
         return Err(ApiError::NotSaved(NotSaved::BadToken));
     }
-    let record = match token.heads() {
-        [head] => read.body(head).map(|body| body.record),
-        _ => read.projected(token.key()),
-    };
+    let record = shown_record(read, token.key(), token.heads());
     match record {
         Some(Record::Verse { value, .. }) => Ok((verse.get(), value)),
         _ => Err(ApiError::NotSaved(NotSaved::Refused(
@@ -223,6 +234,8 @@ pub fn section_values(
     let keys: Vec<String> = olds.iter().map(|o| label(o.head, o.last)).collect();
     let buffer = SectionBuffer::parse(text, &keys);
     let texts: BTreeMap<String, String> = buffer.verses().into_iter().collect();
+    // The blank lines after a verse's last words that stand for its own breaks (tC4 #812).
+    let own_breaks = buffer.own_breaks();
     // A save that leaves the section with no words changes the verse bodies only: the lines
     // between the verses stay (#600).
     let formats: BTreeMap<String, Option<ParaFormat>> = if buffer.is_empty() {
@@ -247,10 +260,17 @@ pub fn section_values(
         let body = texts.get(&group.key).map_or("", String::as_str);
         let at_head = olds.iter().find(|o| o.head == head);
         let holding = olds.iter().find(|o| (o.head..=o.last).contains(&head));
+        // The card shows poem lines as tabs and breaks as empty lines (tC4 #810, REF1b): a
+        // verse's text goes back to its words by the words it was shown from.
+        let typed = format!(
+            "{body}{}",
+            "\n".repeat(own_breaks.get(&group.key).copied().unwrap_or(0))
+        );
         let words = match at_head {
-            Some(o) if shown_body(&o.words) == body => o.words.clone(),
+            Some(o) if tc_usfm::poem::editor_text(shown_body(&o.words)) == typed => o.words.clone(),
             _ if body.is_empty() => "___".to_owned(),
-            _ => body.to_owned(),
+            Some(o) => tc_usfm::poem::words_from_editor_text(&typed, shown_body(&o.words)),
+            None => tc_usfm::poem::words_from_editor_text(&typed, ""),
         };
         let layout = layout_after.get(&last).copied().unwrap_or("\n");
         let layout = match formats.get(&group.key) {
@@ -317,8 +337,16 @@ impl Handle<SaveSection> for App {
         .requested_by(req.request);
         match handle.submit(command).await {
             Ok(reply) => {
+                // The card names the section's first verse, with that verse's own text (#831).
                 if let Some(first) = tokens.first() {
-                    self.record_translate_edit(&session, first, &req.text, self.inner.clock.now());
+                    let words = match session.read().projected(first.key()) {
+                        Some(tc_journal::Record::Verse {
+                            value: tc_journal::record::VerseValue::Text { words, .. },
+                            ..
+                        }) => words,
+                        _ => String::new(),
+                    };
+                    self.record_translate_edit(&session, first, &words, self.inner.clock.now());
                 }
                 wire::write::section_ack(&reply, &session.read(), &tokens, &req.text, me).map_err(
                     |e| {

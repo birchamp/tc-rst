@@ -1270,7 +1270,7 @@ pub(crate) fn describe_key(key: &RecordKey) -> String {
         RecordKey::ProjectMeta(field) => field.path(),
         RecordKey::Versification => "versification".into(),
         RecordKey::StoryBase(story) => format!("story {}", story.get()),
-        RecordKey::Frame(story, frame) => format!("story {} frame {}", story.get(), frame.0),
+        RecordKey::Frame(story, frame) => format!("story {} frame {}", story.get(), frame.get()),
         RecordKey::StoryRef(story) => format!("story {} reference", story.get()),
         RecordKey::CarriedFile(path) => path.to_string(),
         other => format!("{} {other:?}", other.kind_name()),

@@ -188,6 +188,7 @@ pub struct CardFacts {
 /// card, named after its folder: the project opens, and its open writes the file again.
 pub fn card_facts(
     metadata: &Result<Value, String>,
+    text_direction: Option<&str>,
     folder: &ProjectRef,
     kind: ProjectKind,
 ) -> CardFacts {
@@ -217,13 +218,10 @@ pub fn card_facts(
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned();
-    let dir = match language
-        .and_then(|l| l.get("scriptDirection"))
-        .and_then(Value::as_str)
-    {
-        Some("rtl") => Direction::Rtl,
-        _ => Direction::Ltr,
-    };
+    let dir = crate::direction::project_direction(
+        crate::direction::script_direction(meta),
+        text_direction,
+    );
     let created = meta
         .pointer("/meta/dateCreated")
         .and_then(Value::as_str)
@@ -314,7 +312,7 @@ pub fn card(
                         .iter()
                         .filter_map(|story| {
                             Some(StoryTileView {
-                                story: StoryNo::new(story.number).ok()?,
+                                story: StoryNo::new(story.number)?,
                                 title: story.title.clone(),
                                 drafted: known(story.percent),
                             })
@@ -708,7 +706,12 @@ impl App {
     /// there is none for this stamp.
     fn home_card(&self, entry: &ProjectEntry, peek: &ProjectPeek) -> (HomeCard, i64) {
         let kind = api_kind(entry.kind);
-        let facts = card_facts(&peek.metadata, &entry.folder, kind);
+        let facts = card_facts(
+            &peek.metadata,
+            peek.text_direction.as_deref(),
+            &entry.folder,
+            kind,
+        );
         // With no stamp no summary can be said to be the folder's, and none could be kept.
         let summary = peek
             .stamp

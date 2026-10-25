@@ -142,14 +142,36 @@ end.
 
 ## Checklist: merge an item
 
-1. Make the merge commit, with the card's `done` edit, in a separate worktree; run
-   `scripts/gates.sh` there; main moves only when `scripts/gates.sh --check-receipt` exits 0 on
-   that commit. A fix after a failed gate is a new commit, gated again. The card's log holds a
+Merges go in batches (owner ruling, 2026-10-24, `rulings/2026-10-24-H3-H4-H7-fast-release.md`):
+the integration lane merges three or more finished cards on a `batch/<n>` branch, gates that one
+commit, and moves main; a failing card is dropped from the batch and returned to its lane. A
+roadmap-only change never goes to main on its own: it rides with the next batch.
+
+How a card gets ready (owner ruling, 2026-10-24, `rulings/2026-10-24-test-process.md`):
+
+1. While building, run only the tests of the crates and journeys you touched. The full gate runs
+   once, on GitHub, for the batch.
+2. Before the long checks: run the review lenses the card needs (a no-loss card's loss lens
+   first) and fix what they find. A gate run before the review is wasted when the review changes
+   the code.
+3. Before you hand the card over, run the fast checks that fail CI in seconds:
+   `python3 -I -B .audit/tools/board.py --check`, `node --test .audit/tools/claims.test.mjs` and
+   `node --test parity/app/journeys/coverage.test.mjs`, plus `cargo check` and the wasm clippy
+   with main merged in.
+4. Push the track branch once, when the card is ready for a batch. Track-branch CI runs only the
+   compile and lint jobs; the full test and journey jobs run on `gate/*` and main.
+
+1. Make the merge commit, with the card's `done` edit, in a separate worktree; then either run
+   `scripts/gates.sh` there or `scripts/gates.sh --wait-ci <card>` (it pushes the commit to
+   `gate/<card>` and waits for GitHub's `ci` and `app-e2e` runs, about 30 minutes, with no
+   local run needed); main moves only when `scripts/gates.sh --check-receipt` exits 0 on that
+   commit. A fix after a failed gate is a new commit, gated again. The card's log holds a
    `verify` line per `FUNNEL.md` §8 (who reviewed, the six questions answered in order, the
    evidence path) and a `fix` line for every blocker and every major that harms a translator's
    data or view. A no-loss item has three `verify` lines, one per lens (`GLOSSARY.md`
    "Verification lenses").
-2. The full gate list passes on the exact tree you will merge (INT-3's `scripts/gates.sh`).
+2. The full gate list passes on the exact tree you will merge: `scripts/gates.sh` here, or
+   GitHub's `ci` and `app-e2e` push runs (step 1, INT-8).
 3. Merge into main in a separate worktree, with a merge commit titled `Merge <ID>: <what the
    translator gets>` and a trailer line `Unit: <ID>`.
 4. In the same merge commit: card `state: done`, `merged: <the work's tip sha>`, a log line

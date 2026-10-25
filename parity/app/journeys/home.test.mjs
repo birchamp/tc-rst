@@ -19,6 +19,9 @@ browserTest('a_card_reads_again_on_a_new_home_visit_not_on_a_redraw', async () =
     const requests = recordRequests(page);
     await card(page).waitFor();
     await until('the tiles are known', async () => (await page.getByTestId('book-tile-TIT').textContent()).includes('11%'));
+    // The Home summary job may still be running; its card event makes the page read the card,
+    // which belongs before the count, not in it. Wait for the server, then the page.
+    await until('the server is quiet', async () => !(await env.call('test/quiet', {})).busy);
     await quiet(page);
     // A language preview redraws Home's texts: no read.
     let mark = requests.mark();
@@ -127,7 +130,7 @@ browserTest('an_unusable_folder_shows_its_name_and_reason_and_opens_nothing', as
     assert.match(text, /no ingredients\/tc\/project\.json/);
     assert.equal(await unusable.getByRole('button').count(), 0, 'it offers nothing to press');
     assert.equal(await page.getByText('No projects yet', { exact: false }).count(), 0, 'no invitation to make a project in its place');
-  }, { seed });
+  }, { seed, invalidOnPurpose: { folder: 'broken', why: "the journey seeds it with a metadata.json that is not a Burrito's, to show it cannot be opened" } });
 });
 
 browserTest('a_language_preview_redraws_no_home_node', async () => {

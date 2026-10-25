@@ -45,6 +45,8 @@ runs. If the owner wants more, it is a new H row, not a card.
    starts.
 2. **CI is the gate.** One gate list (INT-3) runs in CI and in every local runner. A red main
    stops every merge until it is green.
+   One merge into main at a time: the orchestrator hands out turns, and main's CI finishes green
+   before the next (owner rule, 2026-10-23; `TRACKING.md` "Checklist: merge an item").
 3. **Build once, then reuse.** Where the remaining units would copy a pattern again, the shared
    structure is built first (M1). This is the Code layer of the funnel, and it gets the most
    effort.
@@ -52,6 +54,10 @@ runs. If the owner wants more, it is a new H row, not a card.
 5. **Every result lands in its card in the same commit** (`TRACKING.md`).
 6. **Simplify before you extend.** Storage gets one simplification pass (S3) before sync adds
    new writers to it.
+7. **tC4 4.0 is the baseline, not the ceiling.** The rebuild matches tC4 4.0's look and
+   behaviour, but where tC4 has an open issue or a planned feature, the rebuild may build it now
+   instead of waiting to copy tC4; REF1 and SWEEP still track tC4's fixes
+   (`rulings/2026-10-23-replace-tc4.md`: the rebuild will most likely replace tC4).
 
 ## Milestones
 
@@ -71,6 +77,7 @@ finished unit took 2.8 h, `ASSESSMENT.md`).
 | INT-5 | Converge the trackers onto this roadmap | integration | INT-4 | 0.5 d |
 | INT-6 | Rescue stray work and free the disk | integration | INT-4, owner OK for deletions | 0.5 d |
 | INT-7 | Prepare the Track B hand-off: freeze the shell contract | integration | INT-4 | 1 d |
+| INT-8 | CI runs are the gate receipt | checks | INT-3; the owner asked for it on 2026-10-23 | 0.5 d |
 
 **Exit:** main holds every built unit and S2; CI on main is green; the gate list is one script;
 every unpushed branch has an off-PC copy; the board is the only tracker.
@@ -79,22 +86,32 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 
 | ID | Item | Lane | Depends on | Size |
 |---|---|---|---|---|
-| CHK-1 | Architecture and I/O boundary checks | checks | INT-4 | 0.5-1 d |
+| CHK-1 | Architecture and I/O boundary checks | checks | INT-4, CHK-1a | 0.5-1 d |
+| CHK-1a | Architecture, I/O and network checks in tc-arch, and ARCHITECTURE.md matching the code | checks | INT-4 | 0.5 d |
 | CHK-2 | Every written project is validated (P5) | checks | S2 | 1-2 d |
-| CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4 | 1 d |
+| CHK-3 | Claimed tests must exist (STORAGE §15, TC4-ISSUES, a P1 journey map, a P-item ledger) | checks | INT-4, CHK-3a | 1 d |
+| CHK-3a | Claimed tests must exist: TC4-ISSUES, the done cards, the P-ledger and the tC4 journey map | checks | INT-4 | 0.5 d |
 | CHK-4 | Deterministic and fast tests | checks | INT-4 | 2-3 d |
 | CHK-5 | Nightly, Windows and no-network jobs; the mutation executor runs nightly | checks | S2, INT-3 | 1-2 d |
-| CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4 | 1 d |
+| CHK-6 | Lint ratchet and fresh P7 captures | checks | INT-4, CHK-6a | 1 d |
+| CHK-6a | Release builds without the test server, every ignored test named, PLAN's reference checked | checks | INT-4 | 0.5 d |
+| CHK-4b | tc-app's tests wait for events, never for a short clock | checks | CHK-4 | 0.5 d |
 | UI-1 | Typed jobs and one job follower | app | INT-4, C7a | 1 d |
 | UI-2 | Ports for sync, share, exchange and import | app | UI-1 | 1-2 d |
-| UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced | app | UI-1 | 2 d |
+| UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced (split into UI-3a and UI-3b) | app | UI-1 | 2 d |
+| UI-3a | One leave path, one network-call helper, one refusal text, Submit | app | UI-1 | 1 d |
+| UI-3b | Dialogs that own their forms, WriteCap enforced | app | UI-3a | 1 d |
 | DOM-1 | One network gate: all network code behind `tc-door43` | domain | S2 | 1-2 d |
 | DOM-2 | One reader per job and one set of identifiers | domain | S2 | 2-3 d |
 | DOM-3 | Capability tokens for project writes and the network | domain | S3, DOM-1 | 2-3 d |
 | S3 | Simplify the store before sync | storage | S2, CHK-1 | core about 1 week; all 1-2 weeks |
 | FIX-R | Fix the tC4 bugs the rebuild repeats; reconcile TC4-ISSUES | app | INT-4 | 2-3 d |
 | FIX-J | Finish the partial P1 journeys J3, J12 and J13 | app | INT-4 | 1-1.5 d |
+| FIX-HIDE | A held leave never hides a verse whose save failed | app | none | 0.5 d |
+| FIX-HIDE2 | A section draft restored after a reload is shown, ready for Save | app | FIX-HIDE | 0.5 d |
 | SWEEP | Sweep tC4 again (b86270f and release/4.0), then every week | integration | INT-4 | 0.5 d |
+| LIC-1 | Move the rebuild to the MIT licence, as tC4 did | integration | SWEEP | 0.5 d |
+| CHK-7 | CI runs the full tests only on gates and main; fast checks before a gate; nightly failures become cards | integration | | 0.5 d |
 
 **Exit:** the checks in `FUNNEL.md` §"Checks the repository must have" all run in CI; the shared
 structures exist and the remaining units' cards point at them; S3's core slices are merged.
@@ -117,14 +134,17 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 |---|---|---|---|
 | C7a | Conflict choices: text and passage | B11 (done) | 3-4 sessions |
 | C7b | Conflict choices: every other kind | C7a, S2, owner H5 (Q-9) | 4.5-6.5 sessions |
-| D1 | Checkpoints and outside edits | S2, UI-3 | 5-6 sessions plus 1-2 of integration |
+| D1 | Checkpoints and outside edits | S2, UI-3a | 5-6 sessions plus 1-2 of integration |
 | D2 | Exports | S2, UI-1 | 4 sessions |
-| E1a | Sync | X, C7a, D1, UI-2, UI-3 | 5-6 sessions |
+| E1a | Sync | X, C7a, D1, UI-2, UI-3a | 5-6 sessions |
 | E1b | Share and open from Door43 | E1a | 3-4 sessions |
-| E2 | USB exchange | X, D2, C7b, UI-2, UI-3 | 4-4.5 sessions |
-| F1 | Import | I, UI-2, UI-3 | 5-7 sessions |
+| E2 | USB exchange | X, D2, C7b, UI-2, UI-3a | 4-4.5 sessions |
+| F1 | Import | I, UI-2, UI-3a | 5-7 sessions |
 | AQ1 | Aquifer helps in the app (P6) | INT-4, UI-1, owner H6 (Q34) | 3-5 sessions |
 | REF1 | Move the tC4 reference and port its changes | SWEEP, owner H7 | 3-5 sessions |
+| OLH-1 | Highlight a note's words in the original-language pane (#840, built ahead of tC4) | INT-4 | 2-3 sessions |
+| REF1b | Poem lines as tabs in the verse editor (tC4 #810) | REF1 | 2-3 sessions |
+| REF1c | Notes by figure, with groups that fold (tC4 #769) | REF1 | 2-3 sessions |
 
 **Exit:** every live tC4 journey (P1) and the team journeys (P2) run in CI; P6 is shown.
 
@@ -134,7 +154,7 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 |---|---|---|---|
 | G5 | Browser journeys in CI, with no skips allowed | INT-2 | 2 d |
 | G1 | The Electronite shell | INT-7 | 20-30 commits |
-| G3 | Release pipeline and installers | G1, owner H3, H4 | 1-2 weeks |
+| G3 | Release pipeline and installers | G1 | 1-2 weeks |
 | G4 | The P8 Graphite probe and right-to-left project journeys | G1 | 2-3 d |
 
 G5 is the most valuable check the project lacks. If Track B has not started it by the end of M0,
@@ -149,6 +169,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path
@@ -229,7 +250,7 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 | H9 | Freeze project format 1.0 | Freeze when T, X and I have landed and V's sample projects pass. If not frozen: no public release. A build may go to named testers only, with "preview" in About and the capsule set named 1.0-draft; a preview project is kept readable by 1.0 through V's older-reader job, or the tester is told it will be imported. DONE waits | V (step 8) |
 | H10 | Who translates the 155 interface strings the rebuild added, in nine languages? | Answered: the owner does the translations himself, soon; the release workflow builds no tagged installer while a rebuild key is untranslated; no English allowlist: `rulings/2026-10-22-H10.md` | G2 (step 4, before the Arabic captures), G3 (the `publish` job and its "Receive the translations" step), DONE |
 | H11 | Fetch the `keyring` crate for "Stay signed in", or let the shell keep the token? | Fetch `keyring` | E1a |
-| H12 | In Check, does a Psalm verse whose words sit on poetry lines count as drafted? Home already says yes; Check says no | Yes, everywhere | FIX-R |
+| H12 | In Check, does a Psalm verse whose words sit on poetry lines count as drafted? Home already says yes; Check says no | Answered: `rulings/2026-10-23-H12.md` ("poetry - yes, everywhere") | FIX-R |
 | H13 | A project imported with no versification file: guess the scheme from its contents and say so, or use English as tC4 does? | Guess, and say which scheme was chosen | I |
 | H14 | Opening a Door43 project under a new name: change only the card, or the project's own name too (#837)? | Only the card, as tC4 does today | E1b |
 | H15 | The help-desk key for "Report a problem" (tC4 sends it through SendGrid) | Use the same service; the owner provides the key to the release pipeline | G1 |
@@ -245,10 +266,11 @@ An answered row keeps only `Answered: rulings/<file>` here; the ruling file hold
 
 | ID | Action | Why | Needed by |
 |---|---|---|---|
-| A1 | Run once on the Linux PC: `sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm` | Lets this PC run CI's Windows clippy, so a local gate pass means a CI pass (INT-3's receipts) | INT-2 step 7, INT-3 step 5 |
+| A1 | ~~Install MinGW and NASM on the Linux PC~~ Done: both are installed (`x86_64-w64-mingw32-gcc` and `nasm` on PATH, confirmed 2026-10-23) | This PC can run CI's Windows clippy locally | done |
 | A2 | Optional: GitHub Pro, to make the CI check required before main changes | GitHub refuses required checks on a private repository on the free plan (HTTP 403). INT-3's merge receipt guards merges without it | none |
 | A3 | Add `eliaspinero` (Elias, H2) as a collaborator on `birchamp/tc-rst` when the owner says the hand-off starts (not yet, 2026-10-22), and confirm GitHub Actions minutes for Windows and macOS runners | Add the second developer as a collaborator on `birchamp/tc-rst`, and confirm GitHub Actions minutes for Windows and macOS runners | Track B pushes `ext/*` branches and runs installers on those runners | Track B start, G3 |
 | A4 | Create the GitHub environment `windows-signing` (deployment branch: the default branch only) and the repository secrets for the Windows signing identity (H4) and the help-desk key (H15); the secret names go into `docs/RELEASE.md` once H4 and H15 are answered. Creating environments and secrets needs repository admin, which a collaborator lacks (inference about GitHub, not cited) | G3's signed run after merge and G1's help-desk key read need them; nobody was assigned to create them | G1 step 7, G3 step 7 |
+| A5 | ~~Relicense the `string-punctuation-tokenizer` npm package to MIT~~ Not needed: version 2.2.0 is already MIT, and tC4 D111 (#838) proved its output equals 2.0.0's on 248,773 verse lines; `tc-usfm` cites 2.2.0 (LIC-1) | The rebuild's `tc-usfm` words module ports it | done |
 
 ## When this plan changes
 

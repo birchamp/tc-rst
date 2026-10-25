@@ -221,7 +221,12 @@ fn card_header(
     lens: Lens,
     rtl_orig: bool,
 ) -> impl IntoView + use<> {
-    let _ = rtl_orig;
+    // The original is right to left only in the Old Testament, which is Hebrew.
+    let (orig_lang, orig_font) = if rtl_orig {
+        ("hbo", "var(--font-hebrew)")
+    } else {
+        ("el", "var(--font-greek)")
+    };
     let index = card.index;
     let gateway = (lens == Lens::Gateway)
         .then(|| card.gateway.clone())
@@ -250,7 +255,7 @@ fn card_header(
         "gap": 2,
     };
     let label = crate::css! {
-        "font-family": if using_gateway { "var(--font-scripture)" } else { "var(--font-greek)" },
+        "font-family": if using_gateway { "var(--font-scripture)" } else { orig_font },
         "font-size": "var(--fs-title)",
         "letter-spacing": "var(--track-17)",
         "font-weight": "var(--fw-bold)",
@@ -258,7 +263,7 @@ fn card_header(
         "white-space": "nowrap",
     };
     let sub = crate::css! {
-        "font-family": "var(--font-greek)",
+        "font-family": orig_font,
         "font-size": "var(--fs-meta)",
         "letter-spacing": "var(--track-11-5)",
         "color": "var(--text-tertiary)",
@@ -285,7 +290,7 @@ fn card_header(
     let first_line = if let Some(text) = gateway.clone() {
         view! { <span style=label.to_style()>{text}</span> }.into_any()
     } else {
-        view! { <span lang="el" style=label.to_style()>{orig_label()}</span> }.into_any()
+        view! { <span lang=orig_lang style=label.to_style()>{orig_label()}</span> }.into_any()
     };
     view! {
         <div
@@ -302,7 +307,7 @@ fn card_header(
                 {split}
             </span>
             {using_gateway.then(|| view! {
-                <span lang="el" title=t(keys::align::SUB_HINT, &[]) style=sub.to_style()>{orig_label()}</span>
+                <span lang=orig_lang title=t(keys::align::SUB_HINT, &[]) style=sub.to_style()>{orig_label()}</span>
             })}
         </div>
     }
@@ -316,6 +321,7 @@ fn word_card(
     armed_now: bool,
     lens: Lens,
     rtl_orig: bool,
+    target_dir: Direction,
 ) -> impl IntoView + use<> {
     let index = card.index;
     let over = RwSignal::new(false);
@@ -488,7 +494,9 @@ fn word_card(
             }
         >
             {header}
-            <div style=body.to_style()>{placed}{suggested}{empty}</div>
+            // The placed words are the translation's: they read in its direction, whatever
+            // the original's (tC4 #830).
+            <div style=body.to_style() dir=dir_name(target_dir)>{placed}{suggested}{empty}</div>
         </div>
     }
 }
@@ -608,9 +616,15 @@ fn ref_band(view: &AlignerView, shown: Lens) -> Option<AnyView> {
         "padding": "13px 20px",
         "border-bottom": "var(--stroke-hair) solid var(--border-hair)",
     };
+    // The original of the Old Testament is Hebrew, of the New Testament Greek.
+    let (orig_lang, orig_font) = match view.testament {
+        Testament::Ot => ("hbo", "var(--font-hebrew)"),
+        Testament::Nt => ("el", "var(--font-greek)"),
+    };
+    let lang = (shown == Lens::Original).then_some(orig_lang);
     let p = crate::css! {
         "text-align": "start",
-        "font-family": if shown == Lens::Original { "var(--font-greek)" } else { "var(--font-scripture)" },
+        "font-family": if shown == Lens::Original { orig_font } else { "var(--font-scripture)" },
         "font-size": "var(--fs-verse)",
         "line-height": "var(--lh-verse)",
         "color": "var(--text-secondary)",
@@ -630,7 +644,7 @@ fn ref_band(view: &AlignerView, shown: Lens) -> Option<AnyView> {
         view! {
             <div data-testid="align-ref-text" style=outer.to_style()>
                 <Overline>{t(label, &[])}</Overline>
-                <p dir=dir style=p.to_style()>{text}</p>
+                <p dir=dir lang=lang style=p.to_style()>{text}</p>
             </div>
         }
         .into_any(),
@@ -1119,15 +1133,38 @@ fn ready(s: &AppState, actions: &Actions, book: BookId, view: AlignerView) -> An
                 armed_now,
                 lens,
                 view.orig_dir == Direction::Rtl,
+                view.target_dir,
             )
             .into_any()
         })
         .collect();
+    // Links a save or an open sent back to the word bank are listed, never silently gone
+    // (owner answer Q30 (a), tC4 #825).
+    let dropped = (!view.dropped.is_empty()).then(|| {
+        let words = view
+            .dropped
+            .iter()
+            .map(|d| d.word.word.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let style = crate::css! {
+            "font-size": "var(--fs-caption-lg)",
+            "color": "var(--tc-warn-text)",
+            "background": "var(--surface-warm)",
+            "border": "var(--stroke) solid var(--tc-warn-border)",
+            "border-radius": "var(--radius-md)",
+            "padding": "10px 12px",
+            "margin": "0 0 14px",
+            "line-height": 1.5,
+        };
+        view! { <p data-testid="align-dropped" style=style.to_style()>{t(keys::align::DROPPED_LINKS, &[("words", &words)])}</p> }
+    });
     let session = view! {
         <div data-testid="align-session">
             {header(s, actions, &view, book)}
             {how_toggle(s)}
             {stale}
+            {dropped}
             <div style=panel.to_style()>
                 {mode_bar(s, lens, view.gateway.is_some(), view.testament)}
                 {ref_band(&view, lens)}

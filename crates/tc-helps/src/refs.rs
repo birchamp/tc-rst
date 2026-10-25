@@ -2,19 +2,30 @@
 //! a chapter, or an Open Bible Stories frame.
 
 use std::fmt;
-use tc_core::{BookId, Reference};
+use tc_core::{BookId, ChapterNo, Reference, VerseNo};
 
 /// A chapter and verse, both counted from 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ChapterVerse {
-    pub chapter: u16,
-    pub verse: u16,
+    chapter: ChapterNo,
+    verse: VerseNo,
 }
 
 impl ChapterVerse {
     /// Returns `None` when either number is zero.
     pub fn new(chapter: u16, verse: u16) -> Option<Self> {
-        (chapter >= 1 && verse >= 1).then_some(Self { chapter, verse })
+        Some(Self {
+            chapter: ChapterNo::new(chapter)?,
+            verse: VerseNo::new(verse)?,
+        })
+    }
+
+    pub fn chapter(self) -> ChapterNo {
+        self.chapter
+    }
+
+    pub fn verse(self) -> VerseNo {
+        self.verse
     }
 }
 
@@ -152,19 +163,18 @@ impl BibleRef {
     /// True when this item is about any verse of `passage`. Introductions, chapter fronts
     /// and references kept as written overlap nothing.
     pub fn overlaps(&self, passage: &Reference) -> bool {
-        if self.book != passage.book {
+        if self.book != passage.book() {
             return false;
         }
         let BibleLocus::Verses(list) = &self.locus else {
             return false;
         };
-        let from = ChapterVerse {
-            chapter: passage.chapter,
-            verse: passage.verses.start(),
-        };
-        let to = ChapterVerse {
-            chapter: passage.chapter,
-            verse: passage.verses.end(),
+        let chapter = passage.chapter().get();
+        let (Some(from), Some(to)) = (
+            ChapterVerse::new(chapter, passage.verses().start()),
+            ChapterVerse::new(chapter, passage.verses().end()),
+        ) else {
+            return false;
         };
         list.0.iter().any(|r| r.overlaps(from, to))
     }
@@ -291,11 +301,11 @@ fn known_tsv_locus(text: &str) -> Option<BibleLocus> {
         };
         let start = point(from, chapter)?;
         let end = match to {
-            Some(to) => point(to, Some(start.chapter))?,
+            Some(to) => point(to, Some(start.chapter.get()))?,
             None => start,
         };
         ranges.push(VerseRange::new(start, end)?);
-        chapter = Some(end.chapter);
+        chapter = Some(end.chapter.get());
     }
     VerseList::new(ranges).map(BibleLocus::Verses)
 }

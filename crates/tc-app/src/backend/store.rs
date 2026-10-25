@@ -137,6 +137,10 @@ pub struct StoreBackend {
     /// The store over the local projects folder: started with this one when the folder exists,
     /// else by the first copy that needs it. Home lists its projects beside this folder's.
     beside: Mutex<Option<Arc<StoreBackend>>>,
+    /// The projects this store opened, so a test can wait until each has written what it was
+    /// asked to (P5's watch reads what the writer saw only then).
+    #[cfg(feature = "test-hooks")]
+    opened: Arc<Mutex<Vec<std::sync::Weak<StoreHandle>>>>,
     /// The names the local projects folder listed last, so a read of one project goes to the
     /// right folder without listing either.
     beside_names: Mutex<std::collections::BTreeSet<ProjectRef>>,
@@ -173,7 +177,28 @@ impl StoreBackend {
             local: None,
             beside: Mutex::default(),
             beside_names: Mutex::default(),
+            #[cfg(feature = "test-hooks")]
+            opened: Arc::default(),
         })
+    }
+
+    /// Waits until every project this store has open has written all it was asked to, and
+    /// answers how many were open. A test hook, never called by the product.
+    #[cfg(feature = "test-hooks")]
+    pub fn idle_waiter(&self) -> impl Fn() -> usize + Send + Sync + 'static {
+        let opened = self.opened.clone();
+        move || {
+            let open: Vec<Arc<StoreHandle>> = lock(&opened)
+                .iter()
+                .filter_map(std::sync::Weak::upgrade)
+                .collect();
+            for handle in &open {
+                ProjectHandle::wait_idle(handle.as_ref());
+            }
+            open.iter()
+                .filter(|handle| handle.inner().is_some())
+                .count()
+        }
     }
 
     /// Names the other projects folder (Q-30): the local one beside the projects folder, or the
@@ -261,6 +286,8 @@ impl StoreBackend {
                 platform: Arc::new(tc_store::StdPlatform),
                 clock: Arc::new(tc_store::SystemClock),
                 threads,
+                // STORAGE §11.1: a program is done writing a file when it has been quiet this long.
+                watch_debounce: std::time::Duration::from_secs(1),
             },
             Arc::default(),
         )
@@ -436,14 +463,29 @@ impl StoreBackend {
         let Ok(folder) = ProjectRef::parse(name) else {
             return unusable(UnusableReason::NameNotAllowed);
         };
+        // The open writes a missing or damaged project.json back from the project's history
+        // (§3.5); the listing reads what the open would.
+        let repaired = || {
+            self.store
+                .repaired_project_json(&path)
+                .and_then(|b| project_json(&b).ok())
+        };
         let bytes = match read {
             Ok(bytes) => bytes,
-            Err(e) if absent(&e) => return unusable(UnusableReason::NoProjectFile),
+            Err(e) if absent(&e) => {
+                return match repaired() {
+                    Some((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
+                    None => unusable(UnusableReason::NoProjectFile),
+                };
+            }
             Err(e) => return unusable(UnusableReason::ProjectFileUnreadable(e.to_string())),
         };
         match project_json(&bytes) {
             Ok((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
-            Err(reason) => unusable(UnusableReason::ProjectFileDamaged(reason)),
+            Err(reason) => match repaired() {
+                Some((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
+                None => unusable(UnusableReason::ProjectFileDamaged(reason)),
+            },
         }
     }
 
@@ -550,8 +592,15 @@ impl ProjectStore for StoreBackend {
             .read(&path.join(SYNC_JSON))
             .ok()
             .and_then(|bytes| sync_remote(&bytes));
+        let text_direction = self
+            .vfs
+            .read(&path.join(tc_journal::fold::DerivedFile::Settings.path()))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .and_then(|doc| doc.get("textDirection")?.as_str().map(str::to_owned));
         Ok(super::ProjectPeek {
             metadata,
+            text_direction,
             remote,
             stamp: self.summary_stamp(folder).ok(),
         })
@@ -695,6 +744,12 @@ impl ProjectStore for StoreBackend {
         let handle = StoreHandle::start(handle).map_err(|reason| OpenFailure::Unreadable {
             reason: format!("the project could not be served: {reason}"),
         })?;
+        #[cfg(feature = "test-hooks")]
+        {
+            let mut opened = lock(&self.opened);
+            opened.retain(|handle| handle.strong_count() > 0);
+            opened.push(Arc::downgrade(&handle));
+        }
         Ok(handle)
     }
 
@@ -1297,6 +1352,10 @@ fn events_loop(
             tc_store::StoreEvent::Notice(notice) => StoreEvent::Notice(notice),
             tc_store::StoreEvent::Mode(mode) => StoreEvent::Mode(session_mode(&mode)),
             tc_store::StoreEvent::Materialized { paths } => StoreEvent::Materialized { paths },
+            // D1 shows the open's progress and the commit; nothing listens yet.
+            tc_store::StoreEvent::Progress { .. } | tc_store::StoreEvent::Checkpointed { .. } => {
+                continue;
+            }
         };
         lock(subscribers)
             .senders
@@ -1399,11 +1458,10 @@ impl ProjectHandle for StoreHandle {
                 }
             });
         };
-        // S1 seals and materializes and makes no commit (S2 does), so a checkpoint that
-        // worked changed no history; the UI shows only a failure ("Checkpoint not saved").
         Box::pin(async move {
             match pending.await {
-                Ok(()) => CheckpointOutcome::Unchanged,
+                Ok(report) if report.commit.is_some() => CheckpointOutcome::Committed,
+                Ok(_) => CheckpointOutcome::Unchanged,
                 Err(error) => CheckpointOutcome::Failed {
                     reason: error.to_string(),
                 },
@@ -1796,6 +1854,7 @@ mod tests {
                 platform: Arc::new(tc_store::FakePlatform::default()),
                 clock: Arc::new(tc_store::ManualClock::at(1_792_195_200_000)),
                 threads: 2,
+                watch_debounce: std::time::Duration::from_millis(20),
             },
             hooks,
         )
@@ -1992,6 +2051,8 @@ mod tests {
             seq,
             changes: vec![change],
             skipped: Vec::new(),
+            kept: Vec::new(),
+            dropped_links: Vec::new(),
         }
     }
 
@@ -2184,7 +2245,8 @@ mod tests {
         hooks.release(tc_store::Point::BeforeCheckpoint);
         dropper.join().unwrap();
         assert!(returned, "the drop returned while the checkpoint is held");
+        // The open's first checkpoint commits the project's first tree (S2).
         let outcome = current_thread().block_on(checkpoint);
-        assert_eq!(outcome, CheckpointOutcome::Unchanged);
+        assert_eq!(outcome, CheckpointOutcome::Committed);
     }
 }

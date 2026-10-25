@@ -104,7 +104,9 @@ fn decisions(tn: &ResourcePin, titus: &str, only: usize) -> Vec<(CheckKey, Decis
             let content = book
                 .verse(
                     chapter.as_str().parse().ok()?,
-                    tc_core::VerseSpan::single(verse.as_str().parse().ok()?),
+                    tc_core::VerseSpan::single(tc_core::VerseNo::new(
+                        verse.as_str().parse().ok()?,
+                    )?),
                 )
                 .ok()?
                 .body()
@@ -257,7 +259,9 @@ fn word_decisions(
             let content = book
                 .verse(
                     chapter.as_str().parse().ok()?,
-                    tc_core::VerseSpan::single(verse.as_str().parse().ok()?),
+                    tc_core::VerseSpan::single(tc_core::VerseNo::new(
+                        verse.as_str().parse().ok()?,
+                    )?),
                 )
                 .ok()?
                 .body()
@@ -316,6 +320,8 @@ struct Opts {
     /// pinned original text, as Mark valid leaves it.
     first_valid: bool,
     trouble: Trouble,
+    /// Door43 is an address nothing listens on: the internet is on, the server gone.
+    dead_door43: bool,
 }
 
 /// What is wrong with the project's records beyond the sample's: what a teammate's sync, a
@@ -466,7 +472,7 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
     }
     let fs = FaultFs::new();
     let hooks = Arc::<tc_store::Hooks>::default();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
+    let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
     let folder = backend
         .store()
         .create(&NewProject {
@@ -492,7 +498,11 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
     let dir = tempfile::tempdir().unwrap();
     let projects = dir.path().join("projects");
     std::fs::create_dir_all(&projects).unwrap();
-    let url = fake.url().to_owned();
+    let url = if opts.dead_door43 {
+        "http://127.0.0.1:9/".to_owned()
+    } else {
+        fake.url().to_owned()
+    };
     if opts.pinned_installed {
         let store = tc_resources::ResourceStore::open(
             dir.path().join("app-data").join(tc_app::RESOURCES_FOLDER),
@@ -512,7 +522,7 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
         tc_resources::install_dcs_zip(&store, &twl, &zip, 1 << 30).unwrap();
     }
     let bundle = opts.bundle.clone();
-    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         config.door43 = url.parse().unwrap();
         config.bundle = bundle;
@@ -526,6 +536,7 @@ async fn build(decided: usize, orphans: usize, vrs: Option<&[u8]>, opts: Opts) -
     }
     let at = open(&t, PROJECT).await;
     internet(&t, true, 1).await;
+    t.watch = Some(watch);
     World {
         _dir: dir,
         t,
@@ -668,7 +679,7 @@ async fn ended(app: &tc_app::App, job: JobId) -> JobState {
             .clone()
     })
     .await
-    .expect("the job ends")
+    .expect("hung: the job ends")
 }
 
 async fn open(t: &TestApp, project: &str) -> Scope {
@@ -2356,5 +2367,32 @@ async fn an_upgrade_over_pins_with_two_heads_that_agree_keeps_both_teammates_cha
             .map(ToString::to_string)
             .as_deref(),
         Some("v91")
+    );
+}
+
+/// tC4 #833.1: a check for updates while Door43 cannot be reached answers one plain sentence,
+/// never the client's own error text.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_offline_update_check_shows_one_plain_sentence() {
+    use tc_api::Refusal;
+    use tc_api::refusal::{ResourceRefusal, UpdateCheckFailure};
+    let w = build(
+        1,
+        0,
+        None,
+        Opts {
+            dead_door43: true,
+            ..Opts::default()
+        },
+    )
+    .await;
+    let error = super::common::post(&w.t.app, &CheckUpdates { at: w.at.clone() })
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error,
+        ApiError::Refused(Refusal::Resources(ResourceRefusal::UpdateCheckFailed {
+            why: UpdateCheckFailure::Unreachable,
+        }))
     );
 }

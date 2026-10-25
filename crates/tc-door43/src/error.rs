@@ -1,4 +1,3 @@
-use crate::git_tree::ObjectId;
 use crate::names::GitOid;
 use std::fmt;
 use std::path::PathBuf;
@@ -184,8 +183,8 @@ pub enum VerificationError {
     #[error("the files hash to git tree {computed}, but commit {commit} has tree {expected}")]
     TreeMismatch {
         commit: GitOid,
-        expected: ObjectId,
-        computed: ObjectId,
+        expected: GitOid,
+        computed: GitOid,
     },
     #[error("there is no metadata.json at the burrito root")]
     MetadataMissing,

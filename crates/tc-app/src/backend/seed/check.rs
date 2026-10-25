@@ -419,11 +419,11 @@ impl Checker<'_> {
         let count = u16::try_from(file.frame_count()).unwrap_or(u16::MAX);
         let mut found = Vec::new();
         for n in 0..=count.saturating_add(1) {
-            let tc4 = file.text(tc_obs::FrameNo(n)).map(str::to_owned);
+            let tc4 = file.text(tc_obs::FrameNo::new(n)).map(str::to_owned);
             let fold = texts
                 .text(&CheckTarget::Frame {
                     story,
-                    frame: FrameNo(n),
+                    frame: FrameNo::new(n),
                 })
                 .map(|t| t.content().to_owned());
             if tc4 != fold {

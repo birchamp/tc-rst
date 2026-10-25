@@ -4,7 +4,7 @@ title: Old projects keep working; freeze format 1.0
 track: A
 lane: storage
 milestone: M2
-state: todo
+state: parked
 owner: none
 branch: none
 worktree: none
@@ -15,8 +15,8 @@ proves: [P10]
 no_loss: true
 size: 1.5-3 d (estimate; nothing comparable has been built)
 merged: none
-updated: 2026-10-22
-next: Claim this card after X, I, T and S3 merge, then do step 1.
+updated: 2026-10-24
+next: Parked until after the first release (rulings/2026-10-24-H3-H4-H7-fast-release.md).
 blocked_by: none
 ---
 
@@ -345,3 +345,4 @@ Plus the `format-older-reader` job, and the capsule tests on the Windows VM gate
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md

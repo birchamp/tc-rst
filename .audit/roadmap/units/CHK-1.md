@@ -4,18 +4,18 @@ title: Architecture and I/O boundary checks
 track: A
 lane: checks
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
-depends: [INT-4]
+state: done
+owner: checks lane (Claude Code 2198ee19)
+branch: track-CHK-1-s5
+worktree: .worktrees/track-CHK-1-s5
+depends: [INT-4, CHK-1a]
 needs_owner: []
 proves: []
 no_loss: false
 size: 0.5-1 d
-merged: none
-updated: 2026-10-22
-next: Claim this card after INT-4 merges, then do step 1.
+merged: 64ad5158
+updated: 2026-10-24
+next: none
 blocked_by: none
 ---
 
@@ -119,7 +119,7 @@ from writing a project file directly or calling the network around the switch.
     `scenario_store.rs`; DOM-3 gives them a token instead.
 - **Checks** (all to create; kind: architecture or lint; runs in: the CI job that runs
   `cargo test --workspace`, and the clippy gates):
-  - `crate_edges_follow_the_architecture_table`, `network_libraries_only_in_door43_and_resources`,
+  - `crate_edges_follow_the_architecture_table`, `network_libraries_only_in_door43`,
     `git_https_only_in_door43`, `pure_crates_have_no_io_dependency`,
     `every_member_uses_the_workspace_edition_and_lints`,
     `shared_dependency_versions_come_from_the_workspace` in `crates/tc-arch/tests/architecture.rs`.
@@ -312,3 +312,16 @@ Plus: `cargo test -p tc-arch` passes, and each planted violation of steps 1, 3 a
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/checks-inventory.md
+- 2026-10-23 23:01 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-1 in .worktrees/track-CHK-1 from main 48d29235. S2 is merging, not done: steps 1-4 and 6 now, step 5 (tc-store and tc-journal clippy) after S2 merges | python3 -I .audit/tools/board.py
+- 2026-10-23 23:04 EDT | checks lane (Claude Code 2198ee19) | step 1 | none | crates/tc-arch (publish = false, workspace package keys and lints, dev-dependency serde_json only). Decided: the pure functions take text (code_lines, scan_io, scan_writes, scan_names, scan_routes, own_versions, uses_workspace_edition_and_lints); cargo metadata is parsed in tests/common.rs, since serde_json is a dev-dependency and the library has no dependency. tests/architecture.rs holds the six checks; the edge table equals today's normal member edges (cargo metadata). Red as the card says: only shared_dependency_versions_come_from_the_workspace failed, "INV-ARCHITECTURE (AGENTS.md: shared versions live in [workspace.dependencies]): crates/tc-door43-fake/Cargo.toml:13 gives futures-util its own version; use `futures-util.workspace = true`". With `tc-store = { path = "../tc-store" }` planted in crates/tc-ui/Cargo.toml: "INV-ARCHITECTURE: tc-ui may depend only on tc-api, tc-core (ARCHITECTURE.md \"Dependency rules\"); crates/tc-ui/Cargo.toml adds tc-store"; reverted. Lib unit tests: 6 pass | cargo test -p tc-arch
+- 2026-10-23 23:04 EDT | checks lane (Claude Code 2198ee19) | step 2 | none | crates/tc-door43-fake/Cargo.toml: futures-util.workspace = true (the workspace entry has default-features = false). tc-arch architecture 6 pass; tc-door43-fake tests pass | cargo test -p tc-door43-fake
+- 2026-10-23 23:06 EDT | checks lane (Claude Code 2198ee19) | step 3 | none | tests/io_boundaries.rs: pure_crates_do_no_io, only_listed_files_write_files, low_level_types_stay_in_their_owning_crate, every_route_is_behind_guard; all pass. allow/fs_writes.txt lists 14 files, each read first, each with its reason; none writes inside a project folder outside tc-store (app data, the resource store, uploads, downloads, the app lock, the installer bundle manifest, the fake server's repos, test hooks). allow/imports.txt holds the card's three rules; no stale reader. Plants, each reverted: std::fs::read in tc-check: "INV-PURE-CRATES-DO-NO-IO: crates/tc-check/src/lib.rs:52 uses std::fs (tc-check is pure logic)"; `pub use tc_usfm::Node;` in tc-check: "INV-ONE-PARSER-OWNER: crates/tc-check/src/lib.rs:52 names tc_usfm::Node; tc_usfm belongs to tc-usfm, call its functions instead"; a .route( after the guard layer: "INV-LOCAL-SERVER-IS-CLOSED: crates/tc-server/src/lib.rs:360 adds a route after the security::guard layer (line 359), so the guard never sees it". tc-server's request_without_token_is_401 now asks every registered path (prepare.html, uploads, download, media/obs, api added) | cargo test -p tc-arch
+- 2026-10-23 23:06 EDT | checks lane (Claude Code 2198ee19) | step 6 | none | ARCHITECTURE.md: rows for tc-corpus and tc-arch; tc-sync and tc-import marked not built yet; the network rule names tc-resources until DOM-1 and the internet switch; a paragraph names crates/tc-arch, its two allow files, and DOM-3's typed capabilities as the compile-time fix | docs/ARCHITECTURE.md
+- 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | step 4 | 6c23dfbe | The gate list ran in CI on the pushed branch (INT-8: GitHub runs are the gate): ci 40056985489 and app-e2e 40056985483 both success, so tc-arch's tests pass on Linux and its code passes the Windows clippy | gh run view 40056985489
+- 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | park | 6c23dfbe | Parked as the card says: step 5 edits crates/tc-store while S2 is merging, not done | python3 -I .audit/tools/board.py
+- 2026-10-24 00:31 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1-4 and 6 are card CHK-1a, merged on its own; this card keeps the rest and depends on CHK-1a | .audit/roadmap/units/CHK-1a.md
+- 2026-10-24 06:10 EDT | checks lane (Claude Code 2198ee19) | step 5 | none | S2 is done (33d2378d); `cargo tree -p tc-store -e features | grep -c 'git2 feature "https"'` prints 0. Branch track-CHK-1-s5 from track-CHK-1 (CHK-1a) with main merged in. crates/tc-store/clippy.toml and crates/tc-journal/clippy.toml copy the root's four keys and forbid std::fs's thirteen mutators with the INV-ATOMIC-WRITES reason. Sites: 7 #[expect] with a reason (file-level in vfs.rs, the real filesystem, and fault.rs, FaultFs's .git mirror; fn-level in history.rs's broken-.git rebuild, repack.rs's loose-object clean-ups, one of them Windows only, and git.rs's stale-lock clean-up, each git's own files, not a project file) and 7 #[allow] with a reason in test code (git.rs's and atomic.rs's test modules, tests/store.rs, examples/storebench.rs, tc-journal's three test files). Clippy clean on Linux and on x86_64-pc-windows-gnu. Plant: a raw `std::fs::write` in tc-store's lib: "error: use of a disallowed method `std::fs::write` ... note: INV-ATOMIC-WRITES: write project files through tc_store::atomic"; reverted | cargo clippy -p tc-store -p tc-journal --all-targets
+- 2026-10-24 10:14 EDT | checks lane (Claude Code 2198ee19) | verify | none | Step 5 review (correctness lens, one subagent, read only; it ran both clippies, Linux and Windows): no blocker, no major. Minors: rustix's filesystem calls and std's symlink and DirBuilder were not on the list (tc-store depends on rustix on Unix); the crate clippy.toml files copy the root's keys, so a key added at the root would not reach them. The expect and allow sites and their reasons hold; main's tc-arch allow list names the same five tc-store files | review report in the session transcript
+- 2026-10-24 10:14 EDT | checks lane (Claude Code 2198ee19) | fix | none | Both crate lists gain std::fs::DirBuilder::create, std::fs::soft_link, std::os::unix::fs::symlink and rustix::fs's openat, renameat, renameat_with, unlinkat and mkdirat (allow-invalid where the path exists only on Unix). A planted rustix::fs::unlinkat in tc-store's lib fails "use of a disallowed method `rustix::fs::unlinkat`"; reverted. Both clippies pass on Linux and Windows. The copied-keys minor stays as is: the crate files say they copy the root's keys | cargo clippy --locked -p tc-store -p tc-journal --all-targets [--target x86_64-pc-windows-gnu] -- -D warnings
+- 2026-10-24 14:25 EDT | checks lane (Claude Code 2198ee19) | note | none | Main merged in (0189cee4, after CHK-1a, CHK-3a, DOM-1 and CHK-4b), no conflict. On the merged tree: clippy for tc-store and tc-journal passes on Linux and Windows, the node step passes (116), the board shows 0 errors. Ready for a merge batch (owner ruling 2026-10-24: merges in batches, run by the integration lane) | cargo clippy --locked -p tc-store -p tc-journal --all-targets [--target x86_64-pc-windows-gnu] -- -D warnings; scripts/gates.sh --step node
+- 2026-10-24 18:35 EDT | integration lane (Claude Code 3d07d5f8) | merge | 64ad5158 | merged into main in batch 2b (INT-6 a4dc42af, FIX-J f1b865b9, G1 137164e8, LIC-1 819efb32, CHK-2 a9c3710f, CHK-1 64ad5158, I 22f77f0d, RULING-H5 8bd03b4b), gated by scripts/gates.sh --wait-ci batch-2b on the batch's last commit. | scripts/gates.sh --wait-ci batch-2b

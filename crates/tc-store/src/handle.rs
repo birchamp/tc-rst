@@ -11,12 +11,12 @@ use crate::counters::{Counters, StoreCounters};
 use crate::drafts::{DraftWriter, OfferedDraft};
 use crate::error::StoreError;
 use crate::hooks::{Hooks, Point};
-use crate::notices::StoreNotice;
+use crate::notices::{CopyIdentity, RetainedNotice, StoreNotice};
 use crate::reply::{CommandError, ReadOnlyReason, StoreReply, Stored};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::task::{Context, Poll, Waker};
@@ -25,7 +25,7 @@ use tc_journal::command::{Command, Draft};
 use tc_journal::fold::{Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
 use tc_journal::{
-    BookId, ChangeId, DeviceId, ProjectId, RecordKey, ShownToken, TokenKey, WallTime,
+    BookId, ChangeId, DeviceId, GitOid, ProjectId, RecordKey, ShownToken, TokenKey, WallTime,
 };
 
 // ---------------------------------------------------------------------------------------
@@ -239,6 +239,23 @@ pub enum StoreEvent {
     Mode(Mode),
     /// Derived files were written (§5.10).
     Materialized { paths: Vec<String> },
+    /// A long action reports where it is (PERFORMANCE.md rule 4): the first report comes
+    /// 300 ms after the action began, and none if it ends sooner.
+    Progress {
+        work: Work,
+        progress: crate::progress::Progress,
+    },
+    /// A checkpoint made a commit and moved the branch to it (§5.13 C5).
+    Checkpointed { commit: GitOid },
+}
+
+/// What a [`StoreEvent::Progress`] is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Work {
+    /// Derived files are written book by book: a book added, removed, restored or
+    /// rescoped, a pin change, a resource upgrade, a sync's intake, or the open's first
+    /// write of many books.
+    Materialize,
 }
 
 /// A book's text read from one snapshot (`docs/TC4-DELTA-2026-10-16.md` §3.10 item 2): a
@@ -258,12 +275,25 @@ pub(crate) struct Shared {
     pub signing: Arc<TokenKey>,
     facts: RwLock<ProjectFacts>,
     subscribers: Mutex<Vec<Sender<StoreEvent>>>,
-    notices: Mutex<Vec<StoreNotice>>,
+    notices: Mutex<Vec<RetainedNotice>>,
     next_notice: AtomicU64,
     pub counters: Arc<Counters>,
     pub hooks: Arc<Hooks>,
+    /// Saves in flight, which the writer's flushes wait behind (PERFORMANCE.md).
+    pub gate: Arc<crate::pace::SaveGate>,
     jobs: Mutex<u32>,
     jobs_done: Condvar,
+    /// Messages and jobs the actor and the writer have taken up, `Sync` aside: `wait_idle`
+    /// asks again until a round of syncs finds this unchanged.
+    traffic: AtomicU64,
+    /// Write groups the actor has opened that the writer has not closed: a checkpoint's seal
+    /// writes packs that `metadata.json` lists only after the files that follow it (I7).
+    open_groups: AtomicU32,
+    /// How many write groups ever began: a look at the folder that saw this number change
+    /// may have read a group's middle.
+    groups_begun: AtomicU64,
+    /// The project is closing: background maintenance (a repack) stops and does not start.
+    closing: Arc<AtomicBool>,
 }
 
 impl Shared {
@@ -290,9 +320,54 @@ impl Shared {
             next_notice: AtomicU64::new(1),
             counters,
             hooks,
+            gate: Arc::default(),
             jobs: Mutex::new(0),
             jobs_done: Condvar::new(),
+            traffic: AtomicU64::new(0),
+            open_groups: AtomicU32::new(0),
+            groups_begun: AtomicU64::new(0),
+            closing: Arc::default(),
         }
+    }
+
+    /// The project closes: maintenance that runs on a thread of its own is told to stop.
+    pub(crate) fn begin_closing(&self) {
+        self.closing.store(true, Ordering::Release);
+    }
+
+    pub(crate) fn is_closing(&self) -> bool {
+        self.closing.load(Ordering::Acquire)
+    }
+
+    /// The flag a long step of libgit2 asks about while it runs.
+    pub(crate) fn stop_flag(&self) -> Arc<AtomicBool> {
+        self.closing.clone()
+    }
+
+    /// A seal is about to write packs that `metadata.json` does not list yet.
+    pub(crate) fn open_group(&self) {
+        self.groups_begun.fetch_add(1, Ordering::AcqRel);
+        self.open_groups.fetch_add(1, Ordering::AcqRel);
+    }
+
+    pub(crate) fn groups_begun(&self) -> u64 {
+        self.groups_begun.load(Ordering::Acquire)
+    }
+
+    /// The materialization that follows the seal has listed them.
+    pub(crate) fn close_group(&self) {
+        let _ = self
+            .open_groups
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1));
+    }
+
+    pub(crate) fn group_open(&self) -> bool {
+        self.open_groups.load(Ordering::Acquire) > 0
+    }
+
+    /// Notes that the actor or the writer took up a message that does work.
+    pub(crate) fn note_traffic(&self) {
+        self.traffic.fetch_add(1, Ordering::AcqRel);
     }
 
     pub(crate) fn publish(&self, fold: FoldState) -> u64 {
@@ -344,6 +419,7 @@ impl Shared {
         &self,
         notice: tc_journal::fold::Notice,
         copy: Option<String>,
+        identity: CopyIdentity,
     ) -> StoreNotice {
         let notice = StoreNotice {
             id: self.next_notice.fetch_add(1, Ordering::Relaxed),
@@ -353,21 +429,35 @@ impl Shared {
         self.notices
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .push(notice.clone());
+            .push(RetainedNotice {
+                visible: notice.clone(),
+                identity,
+            });
         notice
+    }
+
+    pub(crate) fn retained_notice(&self, id: u64) -> Option<RetainedNotice> {
+        self.notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .find(|n| n.visible.id == id)
+            .cloned()
     }
 
     pub(crate) fn remove_notice(&self, id: u64) -> Option<StoreNotice> {
         let mut notices = self.notices.lock().unwrap_or_else(|e| e.into_inner());
-        let at = notices.iter().position(|n| n.id == id)?;
-        Some(notices.remove(at))
+        let at = notices.iter().position(|n| n.visible.id == id)?;
+        Some(notices.remove(at).visible)
     }
 
     pub(crate) fn notices(&self) -> Vec<StoreNotice> {
         self.notices
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .clone()
+            .iter()
+            .map(|n| n.visible.clone())
+            .collect()
     }
 
     /// Takes away the notices that a hold of `rel` raised: the hold ended (§6.2). The byte
@@ -377,12 +467,49 @@ impl Shared {
         self.notices
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .retain(|n| match &n.notice {
+            .retain(|n| match &n.visible.notice {
                 Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. } => {
                     path.as_str() != rel
                 }
                 _ => true,
             });
+    }
+
+    /// Takes away the notices `matching` picks.
+    pub(crate) fn remove_notices_matching(
+        &self,
+        matching: impl Fn(&tc_journal::fold::Notice) -> bool,
+    ) {
+        self.notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|n| !matching(&n.visible.notice));
+    }
+
+    /// Takes away the blocked-materialize notice that names `path` alone: the path was
+    /// written (R16).
+    pub(crate) fn remove_blocked_notice(&self, path: &tc_journal::RepoPath) {
+        use tc_journal::fold::Notice;
+        self.remove_notices_matching(|n| {
+            matches!(n, Notice::MaterializeBlocked { paths, .. } if paths.len() == 1 && paths[0] == *path)
+        });
+    }
+
+    /// Whether a blocked-materialize notice for exactly these paths and this reason is
+    /// listed.
+    pub(crate) fn has_blocked_notice(
+        &self,
+        paths: &[tc_journal::RepoPath],
+        reason: &tc_journal::fold::Blocked,
+    ) -> bool {
+        use tc_journal::fold::Notice;
+        self.notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .any(|n| {
+                matches!(&n.visible.notice, Notice::MaterializeBlocked { paths: p, reason: r } if p == paths && r == reason)
+            })
     }
 
     /// Whether a notice for the hold of `rel` is listed.
@@ -392,7 +519,7 @@ impl Shared {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .iter()
-            .any(|n| match &n.notice {
+            .any(|n| match &n.visible.notice {
                 Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. } => {
                     path.as_str() == rel
                 }
@@ -442,6 +569,56 @@ pub enum CheckpointReason {
     Other(String),
 }
 
+impl CheckpointReason {
+    /// The words of a commit message (§5.13 C5).
+    pub fn words(&self) -> String {
+        match self {
+            Self::LeavingTranslate => "leaving Translate".into(),
+            Self::LeavingProject => "leaving the project".into(),
+            Self::BeforeSync => "before sync".into(),
+            Self::BeforeExport => "before export".into(),
+            Self::AfterImport => "after import".into(),
+            Self::Periodic => "every 30 minutes".into(),
+            Self::Other(words) => words.clone(),
+        }
+    }
+}
+
+/// What a checkpoint did (§5.13).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CheckpointReport {
+    /// The commit the branch now points at, when this checkpoint made one.
+    pub commit: Option<GitOid>,
+    /// The packs the seal wrote.
+    pub sealed: Vec<String>,
+    /// Why no commit was made, when none was.
+    pub skipped: Option<CheckpointSkip>,
+}
+
+/// Why a checkpoint made no commit. Each is a state, not a failure: the work is saved and the
+/// next checkpoint tries again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckpointSkip {
+    /// Nothing changed since the last commit (C4: no empty commits).
+    NoChanges,
+    /// The project is read-only.
+    ReadOnly,
+    /// Another installation is saving into this folder (§5.0).
+    SecondWriter,
+    /// The session has no repository (libgit2 refuses the folder, or it cannot be made).
+    NoHistory,
+    /// The seal failed, or left a pending file it could not read or verify: the tree's files
+    /// would show changes its packs lack.
+    SealFailed,
+    /// An expected pack is missing or unreadable: a commit without it would remove it from
+    /// Door43 (§4.4).
+    PackMissing,
+    /// The tree is not a valid burrito: a bug, nothing is committed (§9.4).
+    TreeInvalid,
+    /// The branch moved while the tree was built; the next checkpoint commits again.
+    HeadMoved,
+}
+
 pub(crate) enum Msg {
     Command {
         command: Box<Command>,
@@ -452,17 +629,42 @@ pub(crate) enum Msg {
         reply: Option<Resolver<Result<(), StoreError>>>,
     },
     Checkpoint {
-        reply: Resolver<Result<(), StoreError>>,
+        reason: CheckpointReason,
+        reply: Resolver<Result<CheckpointReport, StoreError>>,
     },
-    DismissNotice {
-        id: u64,
-        reply: Resolver<Result<(), StoreError>>,
-    },
-    RestoreHeld {
+    /// The writer examined a changed file and plans to record it (§11.1 X4): the actor
+    /// commits the plan as one batch and answers with [`crate::writer::Job::Recorded`].
+    RecordOutside {
         rel: String,
-        reply: Resolver<Result<(), StoreError>>,
+        seen: tc_journal::Md5,
+        plan: Box<tc_journal::outside::OutsidePlan>,
+        /// How many fields of `metadata.json` that the app derives the edit changed.
+        derived: u32,
+        copy: String,
     },
-    StorageCheck(Vec<crate::open::CheckResult>),
+    /// The writer built a commit object (§5.13 C5): the actor moves the branch to it, the
+    /// last step of a checkpoint and the only one the actor takes after the seal (R21).
+    MoveHead {
+        commit: GitOid,
+        /// Where the branch was when the writer read it; `None` for a branch with no commit.
+        expected: Option<GitOid>,
+        tree: GitOid,
+        report: CheckpointReport,
+        reply: Resolver<Result<CheckpointReport, StoreError>>,
+    },
+    /// The writer's checkpoint ended without a commit: the actor answers (a close waits for
+    /// exactly this message while it serves the writer's, so neither waits for the other).
+    CheckpointEnded {
+        result: Result<CheckpointReport, StoreError>,
+        reply: Resolver<Result<CheckpointReport, StoreError>>,
+    },
+    /// The writer's first job failed: the project is read-only and holds no lock (§6.1).
+    WritesFailed {
+        reason: String,
+    },
+    /// The watcher saw a pending or pack file change: the actor looks for one it does not
+    /// know (a second writer, §5.0).
+    JournalChanged,
     Sync {
         reply: Resolver<()>,
     },
@@ -475,15 +677,21 @@ pub(crate) enum Msg {
 pub struct ProjectHandle {
     pub(crate) shared: Arc<Shared>,
     pub(crate) tx: Mutex<Sender<Msg>>,
+    /// The writer's queue: the actor never stands between a person and a derived file's
+    /// notice or a held file's restore.
+    pub(crate) writer: Mutex<Sender<crate::writer::Job>>,
     pub(crate) drafts: Arc<DraftWriter>,
     pub(crate) actor: Mutex<Option<std::thread::JoinHandle<()>>>,
     /// Held while `.tc/index.bin` is written.
     pub(crate) index_lock: Arc<Mutex<()>>,
+    /// The watches of the folder (§11.1), stopped before anything else closes.
+    pub(crate) watcher: Mutex<Option<crate::watch::Watching>>,
 }
 
 /// The work an open leaves to a background thread (§6.1 O8, O14): writing the fold cache,
 /// and reading the paths O9 took as converged without reading them.
 pub(crate) struct Background {
+    pub writer: Sender<crate::writer::Job>,
     pub vfs: Arc<dyn crate::vfs::Vfs>,
     pub counters: Arc<Counters>,
     pub folder: crate::layout::Folder,
@@ -505,6 +713,14 @@ impl ProjectHandle {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .send(msg)
+            .is_ok()
+    }
+
+    fn send_writer(&self, job: crate::writer::Job) -> bool {
+        self.writer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .send(job)
             .is_ok()
     }
 
@@ -575,6 +791,8 @@ impl ProjectHandle {
                 seq: self.shared.seq(),
                 changes: Vec::new(),
                 skipped: Vec::new(),
+                kept: Vec::new(),
+                dropped_links: Vec::new(),
             }));
         }
         let (pending, resolver) = pending(|| Err(CommandError::Closed));
@@ -606,7 +824,7 @@ impl ProjectHandle {
     pub fn dismiss_notice(&self, id: u64) -> Pending<Result<(), StoreError>> {
         let (pending, resolver) =
             pending(|| Err(StoreError::Other("the project is closed".into())));
-        self.send(Msg::DismissNotice {
+        self.send_writer(crate::writer::Job::DismissNotice {
             id,
             reply: resolver,
         });
@@ -618,7 +836,31 @@ impl ProjectHandle {
     pub fn restore_held(&self, path: &str) -> Pending<Result<(), StoreError>> {
         let (pending, resolver) =
             pending(|| Err(StoreError::Other("the project is closed".into())));
-        self.send(Msg::RestoreHeld {
+        self.send_writer(crate::writer::Job::RestoreHeld {
+            rel: path.to_owned(),
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// The window got focus (§11.1): the writer stats every path the app wrote, reads those
+    /// that are not clean by stat, lists the folders for files that are new, and hands what
+    /// differs from the project to be recorded. It projects no file. Resolves when it has
+    /// looked; what it handed over is durable after [`ProjectHandle::wait_idle`].
+    pub fn focus(&self) -> Pending<Result<crate::reply::FocusReport, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::Focus { reply: resolver });
+        pending
+    }
+
+    /// *Take in the file as an edit* for a held file (§6.2, APP-DESIGN R7): its records are
+    /// recorded with no base, each one that differs from the project's a conflict with its
+    /// text, and the hold ends. Resolves when the batch is durable.
+    pub fn take_in_held(&self, path: &str) -> Pending<Result<crate::reply::TakenIn, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::TakeInHeld {
             rel: path.to_owned(),
             reply: resolver,
         });
@@ -627,7 +869,6 @@ impl ProjectHandle {
 
     /// Starts the open's background work (see [`Background`]).
     pub(crate) fn start_background(&self, job: Background) {
-        let tx = self.tx.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let shared = self.shared.clone();
         let index_lock = self.index_lock.clone();
         shared.job_started();
@@ -635,17 +876,9 @@ impl ProjectHandle {
             .name("tc-store background".into())
             .spawn(move || {
                 if let Some(sections) = job.index {
-                    let bytes = tc_journal::index::Index::encode(job.project, sections.iter());
                     let _guard = index_lock.lock().unwrap_or_else(|e| e.into_inner());
                     let dir = job.folder.path(crate::layout::TC);
-                    // A failed write only costs the next open the parse of those files.
-                    let _ = crate::atomic::atomic_write(
-                        &*job.vfs,
-                        &dir,
-                        "index.bin",
-                        &bytes,
-                        crate::atomic::SyncDir::Now,
-                    );
+                    crate::open::write_index_file(&*job.vfs, &dir, job.project, &sections);
                 }
                 if !job.check.is_empty() {
                     let results = crate::open::storage_check(
@@ -655,9 +888,13 @@ impl ProjectHandle {
                         &job.check,
                         job.stamp_ns,
                     );
-                    let _ = tx.send(Msg::StorageCheck(results));
+                    let _ = job.writer.send(crate::writer::Job::StorageCheck(results));
                     let (pending, resolver) = pending(|| ());
-                    if tx.send(Msg::Sync { reply: resolver }).is_ok() {
+                    if job
+                        .writer
+                        .send(crate::writer::Job::Sync { reply: resolver })
+                        .is_ok()
+                    {
                         pending.wait();
                     }
                 }
@@ -707,11 +944,19 @@ impl ProjectHandle {
         pending
     }
 
-    /// Seal and materialize (§5.13 C1, C2); the commit is unit S2's.
-    pub fn checkpoint(&self, _reason: CheckpointReason) -> Pending<Result<(), StoreError>> {
+    /// Seal, materialize and commit (§5.13). Only the seal and the move of the branch run on
+    /// the actor; the files, the tree and the commit object are the writer's work from a
+    /// snapshot, so saves go on meanwhile (R21).
+    pub fn checkpoint(
+        &self,
+        reason: CheckpointReason,
+    ) -> Pending<Result<CheckpointReport, StoreError>> {
         let (pending, resolver) =
             pending(|| Err(StoreError::Other("the project is closed".into())));
-        self.send(Msg::Checkpoint { reply: resolver });
+        self.send(Msg::Checkpoint {
+            reason,
+            reply: resolver,
+        });
         pending
     }
 
@@ -744,17 +989,49 @@ impl ProjectHandle {
     /// Waits until the actor's queue is empty and no background job of the store runs:
     /// tests use it before they count operations or stop the writer.
     pub fn wait_idle(&self) {
-        let (pending, resolver) = pending(|| ());
-        if self.send(Msg::Sync { reply: resolver }) {
-            pending.wait();
+        loop {
+            let before = self.shared.traffic.load(Ordering::Acquire);
+            let (idle, resolver) = pending(|| ());
+            if self.send(Msg::Sync { reply: resolver }) {
+                idle.wait();
+            }
+            // The writer after the actor: what the actor sent it is in its queue by now.
+            let (idle, resolver) = pending(|| ());
+            if self.send_writer(crate::writer::Job::Sync { reply: resolver }) {
+                idle.wait();
+                // And the actor again: what the writer sent it (a branch to move, a recorded
+                // edit) is in its queue by now.
+                let (idle, resolver) = pending(|| ());
+                if self.send(Msg::Sync { reply: resolver }) {
+                    idle.wait();
+                }
+            }
+            self.shared.wait_jobs();
+            // A round that took up any work may have queued more for the other thread.
+            if self.shared.traffic.load(Ordering::Acquire) == before {
+                break;
+            }
         }
-        self.shared.wait_jobs();
         self.drafts.flush();
+    }
+
+    /// Ends the watches and the thread that gathers what they tell, so no job reaches the
+    /// writer after the project's last write.
+    fn stop_watching(&self) {
+        let watching = self
+            .watcher
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        drop(watching);
     }
 
     /// Writes what is due (a seal and a materialization), releases the lock and stops the
     /// actor.
     pub fn close(self) -> Result<(), StoreError> {
+        self.stop_watching();
+        // A repack stops and none starts: closing never waits for maintenance (§9.8).
+        self.shared.begin_closing();
         // The open's background work ends first, while the actor can still answer it; the
         // actor stops the draft writer and releases the lock last, so nothing is written
         // into the folder after the lock is gone (§5.0).
@@ -774,6 +1051,8 @@ impl Drop for ProjectHandle {
     fn drop(&mut self) {
         // A handle dropped without close still stops its actor; what was saved is in
         // pending files, and the next open seals and materializes it.
+        self.stop_watching();
+        self.shared.begin_closing();
         self.shared.wait_jobs();
         let (_pending, resolver) = pending(|| Ok(()));
         self.send(Msg::Close { reply: resolver });

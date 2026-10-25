@@ -3,8 +3,7 @@ use crate::download::{
     DownloadTo, DownloadWatch, DownloadedZip, STOP_CHECK_INTERVAL, Writing, disk,
 };
 use crate::error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
-use crate::git_tree::ObjectId;
-use crate::http::{Http, HttpSpec, ProxyFinder, system_proxy_finder};
+use crate::http::{Http, HttpError, HttpSpec, ProxyFinder, RedirectRule, system_proxy_finder};
 use crate::internet::InternetSwitch;
 use crate::listing::Listing;
 use crate::names::{
@@ -186,18 +185,13 @@ impl Door43Client {
         limits: Limits,
         finder: Option<std::sync::Arc<dyn ProxyFinder>>,
     ) -> Result<Self, Door43Error> {
-        let origin = server.clone();
         // A redirect to another host would carry the request off the configured server;
         // only same-origin redirects are followed.
-        let redirects = reqwest::redirect::Policy::custom(move |attempt| {
-            if attempt.previous().len() >= MAX_REDIRECTS {
-                attempt.error("too many redirects")
-            } else if origin.is_same_origin(attempt.url()) {
-                attempt.follow()
-            } else {
-                attempt.error("a redirect to another server")
-            }
-        });
+        let redirects = RedirectRule {
+            origins: vec![server.as_url().clone()],
+            https_hosts: Vec::new(),
+            max: MAX_REDIRECTS,
+        };
         let spec = HttpSpec {
             user_agent: USER_AGENT,
             connect_timeout: limits.connect_timeout,
@@ -217,6 +211,11 @@ impl Door43Client {
             internet,
             limits,
         })
+    }
+
+    /// The gate this client sends through, for sync's git calls ([`crate::git`]).
+    pub fn http(&self) -> &Http {
+        &self.http
     }
 
     pub fn server(&self) -> &ServerUrl {
@@ -552,7 +551,7 @@ impl Door43Client {
             .map_err(|e| unexpected(&route, format!("the account login: {e}")))
     }
 
-    async fn commit_tree(&self, repo: &RepoRef, commit: &GitOid) -> Result<ObjectId, Door43Error> {
+    async fn commit_tree(&self, repo: &RepoRef, commit: &GitOid) -> Result<GitOid, Door43Error> {
         let mut url = self.repo_api(repo, &["git", "commits", &commit.to_hex()]);
         url.query_pairs_mut()
             .append_pair("stat", "false")
@@ -566,11 +565,8 @@ impl Door43Client {
                 format!("asked for commit {commit}, Door43 answered {:?}", raw.sha),
             ));
         }
-        raw.commit
-            .tree
-            .sha
-            .parse()
-            .map_err(|()| unexpected(&route, "the commit's tree id is not a sha"))
+        GitOid::parse_any_case(&raw.commit.tree.sha)
+            .ok_or_else(|| unexpected(&route, "the commit's tree id is not a sha"))
     }
 
     /// GET `url` into a new file in `to`'s folder. See [`crate::download`].
@@ -827,20 +823,17 @@ fn unexpected(route: &str, reason: impl Into<String>) -> Door43Error {
 }
 
 fn transport_error(route: &str, error: reqwest::Error) -> Door43Error {
-    if error.is_redirect() {
-        return unexpected(
-            route,
-            "Door43 redirected the request to another server, which this client does not follow",
-        );
-    }
-    let cause = if error.is_timeout() {
-        UnreachableCause::Timeout
-    } else if error.is_connect() {
-        UnreachableCause::Connect
-    } else if error.is_body() || error.is_decode() {
-        UnreachableCause::Interrupted
-    } else {
-        UnreachableCause::Other(error.without_url().to_string())
+    let cause = match HttpError::from(error) {
+        HttpError::Redirect => {
+            return unexpected(
+                route,
+                "Door43 redirected the request to another server, which this client does not follow",
+            );
+        }
+        HttpError::Timeout => UnreachableCause::Timeout,
+        HttpError::Connect => UnreachableCause::Connect,
+        HttpError::Interrupted => UnreachableCause::Interrupted,
+        other => UnreachableCause::Other(other.to_string()),
     };
     Door43Error::Unreachable {
         route: route.to_owned(),

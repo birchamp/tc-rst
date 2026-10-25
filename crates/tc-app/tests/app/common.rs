@@ -123,13 +123,13 @@ impl ManualJob {
             let _ = ctx_tx.send(given);
             end_rx.await.unwrap_or(Err(JobEnd::Cancelled))
         });
-        for _ in 0..100 {
+        for () in crate::store_world::for_a_minute() {
             tokio::task::yield_now().await;
             if let Ok(ctx) = ctx_rx.try_recv() {
                 return ManualJob { id, ctx, end };
             }
         }
-        panic!("the job never started");
+        panic!("hung: the job never started");
     }
 
     pub fn finish(self, result: Result<JobOutcome, JobEnd>) {
@@ -287,6 +287,9 @@ pub struct TestApp {
     pub store: Arc<MemoryBackend>,
     pub clock: Arc<ManualClock>,
     pub ender: Arc<RecordingEnder>,
+    /// P5/INV-VALID-BURRITO: the watch of the store this app was given, if any; declared last so
+    /// the app is gone before the watch looks at what the store wrote.
+    pub watch: Option<crate::store_world::BurritoWatch>,
 }
 
 impl TestApp {
@@ -317,6 +320,7 @@ impl TestApp {
             store: parts.store.clone(),
             clock: parts.clock.clone(),
             ender: parts.ender.clone(),
+            watch: None,
         }
     }
 }
@@ -430,13 +434,13 @@ pub async fn store(
 
 /// Waits, in real time, until `cond` holds.
 pub async fn until(what: &str, mut cond: impl FnMut() -> bool) {
-    for _ in 0..5000 {
+    for () in crate::store_world::for_a_minute() {
         if cond() {
             return;
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("never happened: {what}");
+    panic!("hung: never happened: {what}");
 }
 
 pub async fn is_busy(app: &App) -> bool {
@@ -445,13 +449,13 @@ pub async fn is_busy(app: &App) -> bool {
 
 /// Waits until `test/quiet` says nothing is in flight.
 pub async fn until_quiet(app: &App) {
-    for _ in 0..5000 {
+    for () in crate::store_world::for_a_minute() {
         if !is_busy(app).await {
             return;
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    panic!("the app never went quiet");
+    panic!("hung: the app never went quiet");
 }
 
 /// The bytes of the test fields' file.
@@ -498,6 +502,9 @@ pub async fn try_start(
         host,
         files: tc_app::FilesChoice::Given(parts.files.clone()),
         store: tc_app::StoreChoice::Given(parts.store.clone()),
+        sync: Arc::new(tc_app::ports::scripted::ScriptedSyncPort::default()),
+        exchange: Arc::new(tc_app::ports::UnavailableExchange),
+        import: Arc::new(tc_app::ports::UnavailableImport),
         ender: parts.ender.clone(),
         test_keychain: Some(parts.keychain.clone()),
     };

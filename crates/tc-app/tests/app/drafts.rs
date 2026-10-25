@@ -65,10 +65,13 @@ impl Rig {
             world.bible.clone()
         };
         let dir = tempfile::tempdir().unwrap();
-        let t = start(&dir, world.store()).await;
+        let mut t = start(&dir, world.store()).await;
+        let fs = world.fs.clone();
+        let hooks = world.hooks.clone();
+        t.watch = Some(world.watch);
         Rig {
-            fs: world.fs.clone(),
-            hooks: world.hooks.clone(),
+            fs,
+            hooks,
             t,
             dir,
             bible: project,
@@ -88,8 +91,9 @@ impl Rig {
 
     async fn start_over(&mut self, fs: FaultFs, platform: FakePlatform) {
         let hooks = Arc::new(tc_store::Hooks::default());
-        let backend = Arc::new(backend_over(&fs, APP, platform, hooks.clone()));
-        self.t = start(&self.dir, backend).await;
+        let (backend, watch) = backend_over(&fs, APP, platform, hooks.clone());
+        self.t = start(&self.dir, Arc::new(backend)).await;
+        self.t.watch = Some(watch);
         self.fs = fs;
         self.hooks = hooks;
     }
@@ -563,7 +567,7 @@ async fn a_second_writer_makes_the_project_read_only_and_the_copy_carries_its_dr
     page::write_entry(&mut storage, &key_of(&session, "TIT 1:14"), &typed);
 
     // The other computer is told this one is closed, and saves.
-    let theirs = backend_over(
+    let (theirs, _theirs_watch) = backend_over(
         &rig.fs.other_machine(),
         "/app-desktop",
         FakePlatform {
@@ -1050,7 +1054,7 @@ async fn an_older_draft_is_not_offered_over_the_sessions_own_save() {
 /// cannot rely on the browser receiving that Ack and refreshing its draft afterward.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_draft_sent_during_a_save_survives_a_crash() {
-    tokio::time::timeout(std::time::Duration::from_secs(15), async {
+    tokio::time::timeout(std::time::Duration::from_secs(60), async {
         let mut rig = Rig::new().await;
         let session = rig.open(&rig.bible.clone()).await;
         let key = tit(1, 12);
@@ -1142,7 +1146,7 @@ async fn a_draft_sent_during_a_save_survives_a_crash() {
         assert!(versions.contains(&"first words sent, with newer typing".to_owned()));
     })
     .await
-    .expect("the held-save draft recovery scenario must finish");
+    .expect("hung: the held-save draft recovery scenario");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1151,7 +1155,7 @@ async fn resume_follows_confirmed_saves_and_the_drafts_original_keystroke_time()
     use tc_api::prefs::PlaceMode;
     use tc_app::prefs::AppDataPath;
     async fn resume_with(app: &tc_app::App, snippet: &str) -> tc_api::home::LastEditView {
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
                 let home: HomeView = post(app, &List {}).await.unwrap();
                 if let Some(resume) = home.resume
@@ -1163,7 +1167,7 @@ async fn resume_follows_confirmed_saves_and_the_drafts_original_keystroke_time()
             }
         })
         .await
-        .expect("Resume must observe the queued preference update")
+        .expect("hung: Resume never showed the queued preference update")
     }
     let rig = Rig::new().await;
     let session = rig.open(&rig.bible.clone()).await;
@@ -1337,13 +1341,13 @@ async fn obs_title_frame_and_reference_drafts_survive_without_the_browser_buffer
     let story = tc_journal::StoryNo::new(1).unwrap();
     let cases = [
         (
-            RecordKey::Frame(story, tc_journal::FrameNo(0)),
+            RecordKey::Frame(story, tc_journal::FrameNo::TITLE),
             EditorDraftField::Frame,
             "a newer story title",
             DraftKind::Frame,
         ),
         (
-            RecordKey::Frame(story, tc_journal::FrameNo(1)),
+            RecordKey::Frame(story, tc_journal::FrameNo::new(1)),
             EditorDraftField::Frame,
             "newer words of the first frame",
             DraftKind::Frame,
@@ -1481,7 +1485,7 @@ async fn a_tokenless_comment_in_the_shell_mirror_keeps_its_verse_or_frame_target
         assert_eq!(matching.len(), 1, "the exact target receives one comment");
         if stories {
             assert!(
-                matches!(matching[0], tc_journal::record::CommentTarget::Frame { story, frame } if story.get() == 1 && frame.0 == 1)
+                matches!(matching[0], tc_journal::record::CommentTarget::Frame { story, frame } if story.get() == 1 && frame.get() == 1)
             );
         } else {
             assert!(
@@ -1673,8 +1677,8 @@ async fn story_texts_are_saved_and_kept_in_the_form_tc4_stores() {
     let session = rig.open(&rig.bible.clone()).await;
     let story = tc_journal::StoryNo::new(1).unwrap();
     let (title, frame, reference) = (
-        RecordKey::Frame(story, tc_journal::FrameNo(0)),
-        RecordKey::Frame(story, tc_journal::FrameNo(1)),
+        RecordKey::Frame(story, tc_journal::FrameNo::TITLE),
+        RecordKey::Frame(story, tc_journal::FrameNo::new(1)),
         RecordKey::StoryRef(story),
     );
     let stored = |session: &ProjectSession, key: &RecordKey| match session
@@ -1778,4 +1782,42 @@ async fn story_texts_are_saved_and_kept_in_the_form_tc4_stores() {
         "Typed before the crash,\nwith a blank line."
     );
     assert!(rig.offer(&session, &[]).await.offers.is_empty());
+}
+
+/// REF1b, INV-EVERY-POEM-LINE-STAYS: a poem verse's card text, buffered and kept after a
+/// relaunch, reaches the book as `\q` markers, not tabs (the loss review's finding).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn keep_of_a_poem_draft_writes_its_markers() {
+    let mut rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let v4 = tit(1, 4);
+    assert!(matches!(
+        rig.save(&session, 1, &v4, "first line\n\\q1 second line")
+            .await,
+        Answer::Reply { .. }
+    ));
+    session.handle().wait_idle();
+    assert_eq!(
+        words(&session, &v4).as_deref(),
+        Some("first line\n\\q1 second line")
+    );
+    let run = rig.t.app.instance();
+    let typed = entry(
+        run,
+        rig.token(&session, &v4),
+        "first line\n\tsecond line, typed on",
+        None,
+        1_000,
+    );
+    let buffered = vec![line(&key_of(&session, "TIT 1:4"), &typed)];
+    drop(session);
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let offers = rig.offer(&session, &buffered).await;
+    let offer = offer_at(&offers, "TIT 1:4");
+    rig.keep(&session, 40, offer).await.unwrap();
+    assert_eq!(
+        words(&session, &v4).as_deref(),
+        Some("first line\n\\q1 second line, typed on")
+    );
 }

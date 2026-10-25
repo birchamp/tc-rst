@@ -38,10 +38,11 @@ impl Rig {
         let fs = FaultFs::new();
         let hooks = Arc::new(Hooks::default());
         let state = scenario("sample");
-        let backend = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
+        let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
         let (store, _) = ScenarioStore::write(backend, state).unwrap();
         install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
-        let t = start(dir.path(), Arc::new(store)).await;
+        let mut t = start(dir.path(), Arc::new(store)).await;
+        t.watch = Some(watch);
         Self { dir, fs, hooks, t }
     }
 
@@ -61,8 +62,9 @@ impl Rig {
     async fn restart(&mut self, power_cut: bool) {
         let fs = self.fs.crash(power_cut);
         let hooks = Arc::new(Hooks::default());
-        let store = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
+        let (store, watch) = backend_over(&fs, APP, FakePlatform::default(), hooks.clone());
         self.t = start(self.dir.path(), Arc::new(store)).await;
+        self.t.watch = Some(watch);
         self.fs = fs;
         self.hooks = hooks;
     }
@@ -223,19 +225,19 @@ async fn a_save_ack_restores_the_draft_of_links_changed_while_it_waited() {
     let placed = link(&rig, &at, &view).await;
     let hooks = rig.hooks.clone();
     tokio::time::timeout(
-        Duration::from_secs(10),
+        Duration::from_secs(60),
         tokio::task::spawn_blocking(move || {
             hooks.wait_reached(Point::BeforeDurablePending, 1);
         }),
     )
     .await
-    .unwrap()
+    .expect("hung: the save reaching its hold")
     .unwrap();
     let newer = place(&rig.t.app, &at, &placed, 63, "verdad", "ἀληθείας").await;
     assert_eq!(newer.save, AlignSave::Saving);
     rig.hooks.release(Point::BeforeDurablePending);
     // Read the actor until its first save has replied; the newer links have a fresh timer.
-    for _ in 0..1000 {
+    for () in crate::store_world::for_a_minute() {
         if ready(&rig.t.app, &at, 1, 1).await.save == AlignSave::Unsaved {
             break;
         }
@@ -324,8 +326,9 @@ async fn the_timer_saves_links_durably_two_seconds_after_the_last_change() {
     let mut events = rig.t.app.events().subscribe(rig.t.app.events().head());
     tokio::time::advance(Duration::from_millis(500)).await;
     // Advancing the clock does not order the actor's due timer before another request.
-    // Wait for its announcement; the paused clock also handles timer-wheel rounding.
-    tokio::time::timeout(Duration::from_millis(100), async {
+    // Wait for its announcement; the paused clock also handles timer-wheel rounding. The
+    // limit only catches a hang (rulings/2026-10-23-tests-prove-behavior-not-speed.md).
+    tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             if let Next::Frame(frame) = events.next().await
                 && let Event::Session {
@@ -344,7 +347,21 @@ async fn the_timer_saves_links_durably_two_seconds_after_the_last_change() {
     .expect("the due timer announces its save");
     // Real fsync/relay work is not simulated by advancing tokio's clock.
     session.handle().wait_idle();
-    assert_eq!(ready(&rig.t.app, &at, 1, 1).await.save, AlignSave::Saved);
+    // The aligner hears the store's reply on its own task after the store is idle; wait for it,
+    // bounded only to catch a hang (ruling 2026-10-23: behavior, not speed).
+    let started = std::time::Instant::now();
+    loop {
+        let save = ready(&rig.t.app, &at, 1, 1).await.save;
+        if save == AlignSave::Saved {
+            break;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(60),
+            "hung: the aligner still shows {save:?} 60 s after the store went idle"
+        );
+        tokio::task::yield_now().await;
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     assert!(has_link(&stored(&session), "πίστιν", "fe"));
     assert!(has_link(&stored(&session), "ἀληθείας", "verdad"));
     tokio::time::resume();
@@ -426,4 +443,182 @@ async fn mark_valid_survives_quit_and_reopen_on_the_store() {
     drop(session);
     rig.t.app.quit().await;
     rig.assert_burrito();
+}
+
+/// INV-TEXT-DIRECTION-HAS-ONE-SOURCE (tC4 #832.1): a direction changed in Project settings is
+/// the direction Home's card, the open project, Align and Settings show, in this app and in a
+/// new app on the same folders: Settings writes the metadata field every reader reads first.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart() {
+    use tc_api::align::{Open, Opened};
+    use tc_api::home::{Card, HomeCard};
+    use tc_api::settings::{Save, SettingsView, ShownValues, ViewFromHome};
+    use tc_api::shown::Direction;
+    let mut rig = Rig::new().await;
+    let project = folder(SAMPLE);
+    let settings = |t: &TestApp| {
+        let (app, project) = (t.app.clone(), project.clone());
+        async move {
+            post::<ViewFromHome>(&app, &ViewFromHome { project })
+                .await
+                .unwrap()
+        }
+    };
+    let view: SettingsView = settings(&rig.t).await;
+    assert_eq!(view.direction, Direction::Ltr);
+    post(
+        &rig.t.app,
+        &Save {
+            request: request(230),
+            project: project.clone(),
+            shown: ShownValues {
+                direction: view.direction,
+                font: view.font.clone(),
+            },
+            direction: Direction::Rtl,
+            font: view.font.clone().unwrap_or_else(|| "Noto Sans".to_owned()),
+        },
+    )
+    .await
+    .unwrap();
+    for restarted in [false, true] {
+        if restarted {
+            rig.restart(false).await;
+        }
+        let where_ = if restarted {
+            "after a restart"
+        } else {
+            "in this app"
+        };
+        let card: HomeCard = post(
+            &rig.t.app,
+            &Card {
+                project: project.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(card.dir, Direction::Rtl, "Home's card {where_}");
+        let opened = super::super::understand::opened(&rig.t.app).await;
+        assert_eq!(opened.dir, Direction::Rtl, "the open project {where_}");
+        let align = post(
+            &rig.t.app,
+            &Open {
+                at: opened.session.at.clone(),
+                request: request(231),
+                book: BookId::Titus,
+                verse: None,
+            },
+        )
+        .await
+        .unwrap();
+        let Opened::Ready(align) = align else {
+            panic!("{align:?}")
+        };
+        assert_eq!(align.target_dir, Direction::Rtl, "Align {where_}");
+        post(
+            &rig.t.app,
+            &tc_api::session::Close {
+                at: opened.session.at,
+                request: request(232),
+            },
+        )
+        .await
+        .unwrap();
+        rig.t.app.sessions().settled(&project).await;
+        assert_eq!(
+            settings(&rig.t).await.direction,
+            Direction::Rtl,
+            "Settings {where_}"
+        );
+    }
+}
+
+/// tC4 #832.2: a project imported from tC4 names no language in settings.json; Settings then
+/// shows the name the metadata gives the language, not an empty field.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_imported_project_shows_its_metadata_language_name_in_settings() {
+    use tc_api::settings::{SettingsView, ViewFromHome};
+    let rig = Rig::new().await;
+    let view: SettingsView = post(
+        &rig.t.app,
+        &ViewFromHome {
+            project: folder(SAMPLE),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(view.language_name, "Español (Latinoamérica)");
+}
+
+/// tC4 #795: a verse typed in decomposed (NFD) form, aligned and marked valid in the same
+/// session, is still valid after a restart. The aligner and the stored alignment hash the same
+/// text: the stored verse, in NFC.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen() {
+    use tc_api::editor::SaveVerse;
+    let mut rig = Rig::new().await;
+    let session = rig.open().await;
+    let at = session.scope().clone();
+    let key = RecordKey::Verse(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    );
+    let token = session.read().mint(&key, None).unwrap();
+    // "apóstol" with its accent as a combining mark, as some keyboards type it.
+    let nfd = "Pablo, siervo de Dios y apo\u{301}stol de Jesucristo";
+    post(
+        &rig.t.app,
+        &SaveVerse {
+            at: at.clone(),
+            request: request(240),
+            shown: tc_app::wire::token::shown(&token).unwrap(),
+            words: nfd.to_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    let view = ready(&rig.t.app, &at, 1, 1).await;
+    let marked = edit(&rig.t.app, &at, &view, 241, AlignEdit::MarkValid)
+        .await
+        .unwrap();
+    assert_eq!(marked.status.state, RailState::Valid);
+    drop(session);
+    rig.t.app.quit().await;
+    rig.assert_burrito();
+
+    rig.restart(false).await;
+    let session = rig.open().await;
+    let reopened = ready(&rig.t.app, session.scope(), 1, 1).await;
+    assert_eq!(
+        reopened.status.state,
+        RailState::Valid,
+        "the alignment made for the NFD-typed verse stays valid"
+    );
+    // The fold's own check (§7.7): the hash the alignment recorded is the stored verse's, so
+    // the alignment files and the export keep it too.
+    let read = session.read();
+    let Some(Record::Verse {
+        value: tc_journal::record::VerseValue::Text { words, layout, .. },
+        ..
+    }) = read.projected(&key)
+    else {
+        panic!("Titus 1:1 holds text")
+    };
+    let Some(Record::Alignment { value, .. }) = read.projected(&RecordKey::Alignment(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    )) else {
+        panic!("Titus 1:1 is aligned")
+    };
+    assert_eq!(
+        value.target_verse_md5,
+        tc_journal::decision::verse_text_md5_v1(&format!("{words}{layout}")),
+        "one hash for the aligner and the alignment files"
+    );
+    drop(read);
+    drop(session);
+    rig.t.app.quit().await;
 }

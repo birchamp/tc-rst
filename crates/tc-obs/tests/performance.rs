@@ -154,7 +154,7 @@ fn saving_a_frame_reads_and_writes_its_story_once() {
         for text in corpus.iter() {
             let frames = StoryFile::parse(text.as_str()).unwrap().frame_count() as u16;
             let before = lines_touched();
-            let written = write_frame(text, FrameNo(frames), "Texto nuevo.").unwrap();
+            let written = write_frame(text, FrameNo::new(frames), "Texto nuevo.").unwrap();
             assert_eq!(lines_touched() - before, lines(text) + lines(&written));
         }
     }
@@ -214,7 +214,7 @@ fn the_obs_actions_are_quick() {
             "save a frame of the largest story",
             time(runs, || {
                 std::hint::black_box(
-                    write_frame(largest, FrameNo(frames), "Texto nuevo.").unwrap(),
+                    write_frame(largest, FrameNo::new(frames), "Texto nuevo.").unwrap(),
                 );
             }),
         ),

@@ -17,7 +17,7 @@
 use tc_api::check::{
     CheckArticle, CheckArticleRead, CheckItemView, CheckNotice, CheckPlace, CheckSources,
     CheckUnit, Decide, DecideEdit, DecisionStatus, DecisionView, GatewayText, GatewayView, Item,
-    OriginalView, RailRowPatch, Rung, StoryPane, TargetWords, Testament, Tool,
+    OriginalVerse, OriginalView, RailRowPatch, Rung, StoryPane, TargetWords, Testament, Tool,
 };
 use tc_api::helps::{ArticleLink, ArticleView};
 use tc_api::ids::ViewSeq;
@@ -301,7 +301,12 @@ fn pane_verse<'a>(
         .find(|m| m.key.as_str() == verse.as_str())
 }
 
-fn original(loaded: &LoadedBook, book: BookId, place: &CheckPlace) -> OriginalView {
+fn original(
+    loaded: &LoadedBook,
+    book: BookId,
+    place: &CheckPlace,
+    item: &CheckItem,
+) -> OriginalView {
     let testament = testament(book);
     if !matches!(loaded.numbering, Numbering::Same) {
         return OriginalView::CrossFrame { testament };
@@ -309,7 +314,13 @@ fn original(loaded: &LoadedBook, book: BookId, place: &CheckPlace) -> OriginalVi
     match loaded.original() {
         LoadedText::Ready(text) => OriginalView::Ready {
             testament,
-            verse: pane_verse(text, place).map(|m| m.view.text.clone()),
+            verse: pane_verse(text, place).map(|m| OriginalVerse {
+                tokens: one_space_tokens(&m.view.tokens),
+                lit: m.original_lit(
+                    &item.quote,
+                    Occurrence::nth(item.key.occurrence).unwrap_or(Occurrence::NotTied),
+                ),
+            }),
         },
         LoadedText::NotInstalled | LoadedText::Missing => OriginalView::Unavailable { testament },
         LoadedText::Error(reason) => OriginalView::Error {
@@ -504,7 +515,7 @@ impl Handle<Item> for App {
                 };
                 (
                     CheckSources::Verse {
-                        original: original(&loaded, book, &facts.place),
+                        original: original(&loaded, book, &facts.place, &facts.item),
                         gateway: gateway(&loaded, &facts.place, &facts.item),
                     },
                     rung_dir(loaded.pins(), rung),
@@ -752,9 +763,7 @@ impl App {
         };
         let unit = match key.target {
             CheckTarget::Verse { book, .. } => Some(CheckUnit::Book(book)),
-            CheckTarget::Frame { story, .. } => tc_api::ids::StoryNo::new(story.get())
-                .ok()
-                .map(CheckUnit::Story),
+            CheckTarget::Frame { story, .. } => Some(CheckUnit::Story(story)),
         };
         let (Some(tool), Some(unit)) = (crate::plans::api_tool(key.tool), unit) else {
             return Err(ApiError::ToolNotReady);

@@ -150,3 +150,32 @@ browserTest('boot_adds_no_request: one hello, the nine catalogs, the stream and 
     assert.equal(paths.filter((p) => p.startsWith('/help/')).length, 0, 'help loads only when it opens');
   });
 });
+
+// tC4 #599: the mode switch stays centred in the top bar while the save indicator beside it
+// changes its words (unsaved, saving, saved), within 1 px, in English and in Arabic.
+for (const id of ['en', 'ar']) {
+  browserTest(`switcher_stays_centred_while_the_save_indicator_changes (${id})`, async () => {
+    await withApp(async ({ page }) => {
+      const words = catalog(id);
+      const centre = () => page.getByTestId('mode-switch').evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left + r.width / 2 - document.documentElement.clientWidth / 2;
+      });
+      await page.getByTestId('project-sample_burrito').getByRole('button', { name: /Titus|تيطس/ }).first().click();
+      await page.getByTestId('mode-switch').getByRole('tab', { name: words['nav.draft'] }).click();
+      await page.getByTestId('draft-target-text').first().waitFor();
+      const at = [await centre()];
+      await page.getByRole('tab', { name: words['understand.byVerse'], exact: true }).click();
+      await page.getByTitle(words['draft.editVerse']).first().click();
+      const box = page.getByLabel(words['draft.verseLabel'].replace('{n}', '1'), { exact: true });
+      await box.waitFor();
+      await box.fill(`${await box.inputValue()} más`);
+      at.push(await centre());
+      await page.getByRole('button', { name: words['draft.saveVerse'] }).click();
+      await page.locator('[data-testid="save-indicator"][data-state="saved"]').waitFor({ timeout: 60_000 });
+      at.push(await centre());
+      const spread = Math.max(...at) - Math.min(...at);
+      assert.ok(spread <= 1, `the switch moved ${spread}px as the indicator changed: ${at.join(', ')}`);
+    }, { locale: id });
+  });
+}

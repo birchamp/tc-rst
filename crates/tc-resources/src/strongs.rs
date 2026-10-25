@@ -25,6 +25,7 @@
 //! and for every `strong` attribute of the bundled UHB and UGNT; the tests compare.
 
 use tc_core::Testament;
+use tc_core::js::is_space as is_js_whitespace;
 
 /// tC4's two lexicon ids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -165,21 +166,6 @@ fn parse_int(s: &str) -> Option<StrongsNumber> {
             Some(u32::try_from(v).map_or(StrongsNumber::OutOfRange, StrongsNumber::Entry))
         }
     }
-}
-
-/// ECMAScript's `StrWhiteSpaceChar`: what `parseInt` skips at the start.
-fn is_js_whitespace(c: char) -> bool {
-    matches!(
-        c,
-        '\u{9}' | '\u{a}' | '\u{b}' | '\u{c}' | '\u{d}' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200a}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202f}'
-                | '\u{205f}'
-                | '\u{3000}'
-                | '\u{feff}'
-    )
 }
 
 #[cfg(test)]

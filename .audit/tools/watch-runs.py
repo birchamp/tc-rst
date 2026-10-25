@@ -46,33 +46,9 @@ def busy_paths():
             pass
     return busy
 
-def du(path):
-    total = 0
-    for d, _, fs in os.walk(path):
-        for f in fs:
-            try: total += os.lstat(os.path.join(d, f)).st_size
-            except OSError: pass
-    return total
-
-def relocate_idle(free):
-    """Move idle build folders (over 5 GB, not yet links) to the root drive, where /var/tmp has room."""
-    import glob, shutil
-    busy = busy_paths()
-    base = "/var/tmp/tc-rst-target"
-    os.makedirs(base, mode=0o700, exist_ok=True)
-    moved = []
-    for t in [REPO + "/target"] + glob.glob(REPO + "/.claude/worktrees/*/target"):
-        root = os.path.dirname(t)
-        if os.path.islink(t) or not os.path.isdir(t): continue
-        if any(b == root or b.startswith(root + '/') for b in busy): continue
-        size = du(t)
-        if size < 5 * 2**30: continue
-        name = "main" if root == REPO else os.path.basename(root)
-        shutil.rmtree(t, ignore_errors=True)
-        os.makedirs(os.path.join(base, name), exist_ok=True)
-        os.symlink(os.path.join(base, name), t)
-        moved.append(f"{name} ({size // 2**30} GB)")
-    return moved
+def free_gb(path):
+    st = os.statvfs(path)
+    return st.f_bavail * st.f_frsize // 2**30
 
 WIN_DIR = CACHE
 WIN_STATE = os.path.join(WIN_DIR, "win-tested.txt")
@@ -103,6 +79,7 @@ def windows_gate_tick():
         open(WIN_STATE, "w").write(run["sha"]); os.remove(WIN_RUN)
         return
     try:
+        subprocess.run(["git", "-C", REPO, "fetch", "-q", "origin"], timeout=120)
         sha = subprocess.run(["git", "-C", REPO, "rev-parse", "origin/claude/focused-ride-5uzj7p"], capture_output=True, text=True, timeout=30).stdout.strip()
     except Exception:
         return
@@ -118,30 +95,6 @@ def windows_gate_tick():
                     REPO + "/.audit/tools/winvm/run.sh", sha, "powershell -NoProfile -ExecutionPolicy Bypass -File .audit\\tools\\winvm\\gates.ps1"],
                    capture_output=True, text=True, timeout=60)
     json.dump({"unit": unit, "sha": sha}, open(WIN_RUN, "w"))
-
-STATUS_SEEN = {"sha": None}
-
-def status_tick():
-    """Regenerate .audit/STATUS.md on each new main and push it, from a worktree of its own."""
-    try:
-        subprocess.run(["git", "-C", REPO, "fetch", "-q", "origin"], timeout=120)
-        sha = subprocess.run(["git", "-C", REPO, "rev-parse", "origin/claude/focused-ride-5uzj7p"], capture_output=True, text=True, timeout=30).stdout.strip()
-        if not sha or sha == STATUS_SEEN["sha"]: return
-        wt = REPO + "/.claude/worktrees/status"
-        if not os.path.isdir(wt):
-            subprocess.run(["git", "-C", REPO, "worktree", "add", "-q", "--detach", wt, sha], timeout=120, check=True)
-        g = lambda *a: subprocess.run(["git", "-C", wt, *a], capture_output=True, text=True, timeout=120)
-        g("checkout", "-q", "--force", "--detach", sha)
-        out = subprocess.run(["python3", "-I", wt + "/.audit/tools/status.py", sha], capture_output=True, text=True, timeout=120).stdout.strip()
-        if out == "changed":
-            g("add", ".audit/STATUS.md")
-            g("-c", "user.name=Claude", "-c", "user.email=noreply@anthropic.com", "commit", "-q", "-m",
-              "Regenerate the status list\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>")
-            r = g("push", "-q", "origin", "HEAD:claude/focused-ride-5uzj7p")
-            if r.returncode != 0: return  # main moved meanwhile; the next tick tries again
-        STATUS_SEEN["sha"] = sha
-    except Exception as e:
-        print(f"STATUS error: {e}", flush=True)
 
 rseen = remote_windows() or {}
 last_prune = 0
@@ -186,36 +139,21 @@ while True:
     save()
     if i % 15 == 0:
         windows_gate_tick()
-        status_tick()
         r = remote_windows()
         if r is not None:
             for ref, sha in r.items():
                 if rseen.get(ref) != sha:
                     print(f"REMOTE {ref} {sha}", flush=True)
             rseen = r
-        st = os.statvfs("/home")
-        free = st.f_bavail * st.f_frsize // 2**30
-        if free < 100:
-            moved = relocate_idle(free)
-            if moved:
-                st = os.statvfs('/home'); now_free = st.f_bavail * st.f_frsize // 2**30
-                print(f"DISK {free}G free on /home: moved idle build folders to /var/tmp: {', '.join(moved)}; now {now_free}G", flush=True)
-                free = now_free
+        # Builds live on /home, but the root drive filled once (2026-10-21), so watch both.
+        drive = "/" if free_gb("/") < free_gb("/home") else "/home"
+        free = free_gb(drive)
         if free < 60 and time.time() - last_prune > 1800:
             last_prune = time.time()
             import glob
-            targets = [REPO + "/target"] + glob.glob(REPO + "/.claude/worktrees/*/target")
+            targets = [REPO + "/target"] + glob.glob(REPO + "/.claude/worktrees/*/target") + glob.glob(REPO + "/.worktrees/*/target")
             freed = []
-            busy = set()
-            for pid in os.listdir('/proc'):
-                if not pid.isdigit(): continue
-                try:
-                    exe = os.path.basename(os.readlink(f'/proc/{pid}/exe'))
-                    if not exe.startswith(('cargo', 'rustc', 'rustdoc', 'cc', 'ld', 'node')): continue
-                    busy.add(os.readlink(f'/proc/{pid}/cwd'))
-                    busy.update(a for a in open(f'/proc/{pid}/cmdline').read().split('\0') if '/target' in a)
-                except OSError:
-                    pass
+            busy = busy_paths()
             for t in targets:
                 root = os.path.dirname(t)
                 if any(b == root or b.startswith(root + '/') for b in busy):
@@ -225,10 +163,9 @@ while True:
                     if out: freed.append(os.path.basename(os.path.dirname(t)) + ": " + out[-1])
                 except Exception as e:
                     freed.append(f"{t}: {e}")
-            st = os.statvfs("/home")
-            after = st.f_bavail * st.f_frsize // 2**30
-            print(f"DISK was {free}G free; pruned ({'; '.join(freed)}); now {after}G", flush=True)
+            after = free_gb(drive)
+            print(f"DISK {drive} was {free}G free; pruned ({'; '.join(freed)}); now {after}G", flush=True)
             if after < 40:
-                print(f"DISK still only {after}G free after pruning: act", flush=True)
+                print(f"DISK {drive} still only {after}G free after pruning: act", flush=True)
     i += 1
     time.sleep(20)

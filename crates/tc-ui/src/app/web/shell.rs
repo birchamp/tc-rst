@@ -234,7 +234,7 @@ fn TopBar() -> impl IntoView {
         };
         let right = move || {
             view! {
-                <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px; position: relative;">
                     <SaveIndicator />
                     <AccountMenu />
                 </div>

@@ -259,7 +259,7 @@ async fn training_held(s: &Scale) -> CancelTrainingOnDrop {
         },
     )
     .await;
-    let running = tokio::time::timeout(Duration::from_secs(5), async {
+    let running = tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             match events.next().await {
                 Next::Frame(frame) => {
@@ -297,7 +297,7 @@ async fn training_held(s: &Scale) -> CancelTrainingOnDrop {
     }
     let guard = CancelTrainingOnDrop {
         jobs: s.app.jobs().clone(),
-        id: running.expect("the held Train job reports Running"),
+        id: running.expect("hung: the held Train job never reported Running"),
     };
     assert_eq!(
         s.app.holding(),
@@ -329,8 +329,21 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             }
             let mut frames = s.app.events().subscribe(s.app.events().head());
             let measured = tokio::time::timeout(
-                Duration::from_secs(5),
+                Duration::from_secs(60),
                 cost(&s, async |s| {
+                    // The draft writer writes on a one-second timer and the store writes the
+                    // derived files a few seconds after a save, so on a slow run either would
+                    // write inside the count; held, they write after it.
+                    for (n, at) in [(46, HoldPoint::DraftWrite), (48, HoldPoint::Materialize)] {
+                        ok(
+                            &s.app,
+                            &Hold {
+                                request: request(n),
+                                at,
+                            },
+                        )
+                        .await;
+                    }
                     let view = open_verse(s, first_verse(), 2).await;
                     assert_eq!(view.suggest.status, tc_api::align::SuggestStatus::Reading);
                     let (card, word) = view
@@ -369,6 +382,18 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             )
             .await
             .expect("the edited save finishes before training is released");
+            // Released after the count: the draft writer's timer and the store's derived files
+            // are not the save's cost.
+            for (n, at) in [(47, HoldPoint::DraftWrite), (49, HoldPoint::Materialize)] {
+                ok(
+                    &s.app,
+                    &Release {
+                        request: request(n),
+                        at,
+                    },
+                )
+                .await;
+            }
             assert_eq!(s.app.holding(), 1, "the save did not release training");
             assert!(matches!(
                 s.app.jobs().view(train.id).unwrap().state,
@@ -413,11 +438,11 @@ async fn align_save_costs_one_verse_while_model_training_is_held() {
             )
             .await;
             let terminal = tokio::time::timeout(
-                Duration::from_secs(5),
+                Duration::from_secs(60),
                 ended.wait_for(JobRegistry::is_ended),
             )
             .await
-            .expect("the held training cancels")
+            .expect("hung: the held training cancels")
             .unwrap()
             .clone();
             assert_eq!(terminal, JobState::Cancelled);

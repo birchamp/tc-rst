@@ -44,6 +44,23 @@ impl Actions {
         }
     }
 
+    /// The text of verse `chapter`:`verse` while its save has not landed, for the grid to show
+    /// in place of the stored text once its card closed (INV-NEVER-HIDE-UNSAVED-TEXT). Tracks
+    /// every run of the save machine.
+    pub fn unsaved_verse(
+        &self,
+        book: tc_core::BookId,
+        chapter: u16,
+        verse: &str,
+    ) -> Option<String> {
+        let s = self.s();
+        let saves = self.runtime().saves();
+        saves.changes().track();
+        let project = s.project.get_untracked()?;
+        let key = verse_key(&project.at.project, &project.id, book, chapter, verse)?;
+        saves.unsaved_text(&key)
+    }
+
     /// The card closes (tC4 `blurVerse`): its field saves as on a blur when the card goes.
     pub fn close_verse(&self) {
         self.s().editing.try_set(Editing::None);
@@ -65,6 +82,52 @@ impl Actions {
                 key,
                 keys: keys.to_vec(),
             });
+        }
+    }
+
+    /// A section draft whose save has not landed, for `chapter` of `book`, with no card open (a
+    /// reload restored it): its card opens over the same verses, so the draft is on the page
+    /// and Save can store it (FIX-HIDE2, INV-NEVER-HIDE-UNSAVED-TEXT).
+    pub fn reopen_unsaved_section(
+        &self,
+        book: tc_core::BookId,
+        chapter: u16,
+        chapter_keys: &[String],
+    ) {
+        let s = self.s();
+        if !matches!(s.editing.get_untracked(), Editing::None) {
+            return;
+        }
+        let Some(project) = s.project.get_untracked() else {
+            return;
+        };
+        let saves = self.runtime().saves();
+        for key in saves.unsaved_keys(tc_api::buffer::FieldKind::Section) {
+            if key.project != project.at.project || key.id != project.id {
+                continue;
+            }
+            // A save on its way lands or fails; only a draft that waits for the person opens.
+            if matches!(
+                saves.state(&key),
+                Some(crate::app::save::FieldSave::Saving { .. })
+            ) {
+                continue;
+            }
+            let Some((b, c, range)) =
+                crate::app::translate::parse_verse_place(key.field.place.as_str())
+            else {
+                continue;
+            };
+            if b != book || c != chapter {
+                continue;
+            }
+            let keys = crate::app::translate::section_keys_of(&range, chapter_keys);
+            // The stored key, not one rebuilt from today's verses: a span a teammate joined
+            // since can widen the rebuilt place, and the draft would stay hidden.
+            if !keys.is_empty() && saves.write_cap(&project.at).is_some() {
+                s.editing.try_set(Editing::Section { key, keys });
+                return;
+            }
         }
     }
 

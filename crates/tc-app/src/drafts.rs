@@ -81,7 +81,8 @@ fn field_text(kind: DraftKind, record: Option<Record>) -> Option<String> {
                 value: VerseValue::Text { words, .. },
                 ..
             },
-        ) => Some(words),
+            // A draft holds the editor text the card showed (tC4 #810, REF1b).
+        ) => Some(tc_usfm::poem::editor_text(&words)),
         (
             DraftKind::Layout,
             Record::Verse {
@@ -112,14 +113,14 @@ fn place_of(key: &RecordKey) -> String {
         }
         RecordKey::ChapterFront(book, chapter) => format!("{} {chapter}", book.code()),
         RecordKey::BookHeader(book) | RecordKey::BookLayout(book) => book.code().to_owned(),
-        RecordKey::Frame(story, frame) => format!("{:02}-{:02}", story.get(), frame.0),
+        RecordKey::Frame(story, frame) => format!("{:02}-{:02}", story.get(), frame.get()),
         RecordKey::StoryRef(story) => format!("{:02}", story.get()),
         RecordKey::Check(check) => match &check.target {
             CheckTarget::Verse { book, .. } => {
                 let (chapter, verse) = check.target.parts();
                 format!("{} {chapter}:{verse}", book.code())
             }
-            CheckTarget::Frame { story, frame } => format!("{:02}-{:02}", story.get(), frame.0),
+            CheckTarget::Frame { story, frame } => format!("{:02}-{:02}", story.get(), frame.get()),
         },
         other => wire::scope::record_ref(other).map_or_else(|| format!("{other:?}"), String::from),
     }
@@ -696,7 +697,7 @@ impl App {
         // A story draft holds the text as typed; it is kept in the form a save stores.
         let line = match (kind, shown.first().map(DraftToken::key)) {
             (DraftKind::StoryRef, _) => Some(tc_api::story::StoryLine::Reference),
-            (DraftKind::Frame, Some(RecordKey::Frame(_, tc_journal::FrameNo(0)))) => {
+            (DraftKind::Frame, Some(RecordKey::Frame(_, tc_journal::FrameNo::TITLE))) => {
                 Some(tc_api::story::StoryLine::Title)
             }
             (DraftKind::Frame, _) => Some(tc_api::story::StoryLine::Frame),
@@ -704,6 +705,22 @@ impl App {
         };
         let text = match line {
             Some(line) => tc_api::story::stored_text(line, &text),
+            None if kind == DraftKind::Words => {
+                // A verse draft holds the card's text (poem lines as tabs, tC4 #810): it goes
+                // back to the words by the version it was typed over, as a save does (REF1b).
+                let read = session.read();
+                let opened = shown.first().and_then(|token| {
+                    crate::section::shown_record(&read, token.key(), token.heads())
+                });
+                let opened = match opened {
+                    Some(Record::Verse {
+                        value: VerseValue::Text { words, .. },
+                        ..
+                    }) => words,
+                    _ => String::new(),
+                };
+                tc_usfm::poem::words_from_editor_text(&text, &opened)
+            }
             None => text,
         };
         let me = handle.facts().device;

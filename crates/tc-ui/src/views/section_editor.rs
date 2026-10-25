@@ -334,6 +334,7 @@ pub fn SectionEditor(
             SendWrapper::new(key.clone()),
         );
         let span = span.clone();
+        let pins = pins.clone();
         move || match mode.get() {
             Mode::Type => type_field(
                 &saves,
@@ -343,6 +344,7 @@ pub fn SectionEditor(
                 area,
                 dir,
                 &span,
+                &pins,
                 typed.get_untracked(),
                 saving,
             ),
@@ -402,9 +404,11 @@ fn type_field(
     area: NodeRef<html::Textarea>,
     dir: &'static str,
     span: &str,
+    pins: &[String],
     initial: String,
     saving: Memo<bool>,
 ) -> AnyView {
+    let pins = pins.to_vec();
     let on_input = {
         let (saves, key) = (saves.clone(), key.clone());
         move |event: leptos::ev::Event| {
@@ -444,7 +448,7 @@ fn type_field(
         let caret = el.selection_start().ok().flatten().unwrap_or(0) as usize;
         let delta = if event.shift_key() { -1 } else { 1 };
         let now = el.value();
-        let (next, at) = indent_line(&now, caret, delta);
+        let (next, at) = indent_line(&now, caret, delta, &pins);
         if next != now {
             // The value and the caret together, before the signal writes the same value again.
             el.set_value(&next);

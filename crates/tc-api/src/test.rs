@@ -23,6 +23,32 @@ pub struct QuietView {
     pub busy: bool,
 }
 
+/// `test/validate`: every project folder in the projects folder, checked as a Scripture
+/// Burrito once the open projects have settled (P5, INV-VALID-BURRITO), so a journey ends
+/// knowing the folders it left are valid.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Validate {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateView {
+    /// How many folders were checked: 0 when the projects are not on disk.
+    pub checked: u32,
+    pub invalid: Vec<InvalidProject>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct InvalidProject {
+    /// The folder's name in the projects folder.
+    pub folder: String,
+    pub problems: Vec<String>,
+}
+
 /// `test/echo`: a reply of about the size asked for, so the loopback round trip of the
 /// aligner's click can be measured with a reply of its size (APP-DESIGN §8.3, unit A2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

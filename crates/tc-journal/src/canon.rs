@@ -513,11 +513,11 @@ impl Wire for StoryNo {
 
 impl Wire for FrameNo {
     fn to_json(&self) -> Json {
-        Json::from(self.0)
+        Json::from(self.get())
     }
 
     fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
-        u16::from_json(j, cx).map(FrameNo)
+        u16::from_json(j, cx).map(FrameNo::new)
     }
 }
 
@@ -1815,7 +1815,9 @@ impl Wire for ExternalSource {
             let mut o = In::new(inner, cx)?;
             let value = match name {
                 "localFile" => Self::LocalFile {
-                    path: o.req("path")?,
+                    path: o.req_with("path", |j| {
+                        RepoPath::parse_source(string(j)?).map_err(DecodeError::identity)
+                    })?,
                     seen_md5: o.req("seenMd5")?,
                 },
                 "door43" => Self::Door43 {
@@ -1845,7 +1847,16 @@ impl Wire for ImportSource {
             ),
             Self::Tc4Reconcile => unit("tc4Reconcile"),
             Self::Tc3 { user } => variant("tc3", Out::new().o("user", user.as_ref()).done()),
-            Self::Usfm { file_name } => variant("usfm", Out::new().f("fileName", file_name).done()),
+            Self::Usfm {
+                file_name,
+                unknown_base,
+            } => variant(
+                "usfm",
+                Out::new()
+                    .f("fileName", file_name)
+                    .o("unknownBase", unknown_base.then_some(&true))
+                    .done(),
+            ),
             Self::Burrito { file_name } => {
                 variant("burrito", Out::new().f("fileName", file_name).done())
             }
@@ -1873,6 +1884,7 @@ impl Wire for ImportSource {
                 },
                 "usfm" => Self::Usfm {
                     file_name: o.req("fileName")?,
+                    unknown_base: o.opt::<bool>("unknownBase")?.unwrap_or(false),
                 },
                 "burrito" => Self::Burrito {
                     file_name: o.req("fileName")?,
@@ -2074,6 +2086,16 @@ impl<'a> HeaderReader<'a> {
 
     pub(crate) fn req<T: Wire>(&mut self, key: &'static str) -> Result<T, String> {
         self.0.req(key).map_err(|e| e.into_violation().to_string())
+    }
+
+    /// A path as the file of an outside edit: any [`RepoPath`], or `metadata.json`
+    /// ([`RepoPath::parse_source`]).
+    pub(crate) fn req_source_path(&mut self, key: &'static str) -> Result<RepoPath, String> {
+        self.0
+            .req_with(key, |j| {
+                RepoPath::parse_source(string(j)?).map_err(DecodeError::identity)
+            })
+            .map_err(|e| e.into_violation().to_string())
     }
 }
 

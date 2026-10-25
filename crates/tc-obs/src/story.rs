@@ -45,7 +45,7 @@ fn emit(lines: &[&str]) -> String {
 /// story with more frames than a `FrameNo` can number.
 fn frame_no(index: usize) -> FrameNo {
     u16::try_from(index + 1)
-        .map(FrameNo)
+        .map(FrameNo::new)
         .unwrap_or_else(|_| unreachable!("split reads at most {} frames", u16::MAX))
 }
 
@@ -322,7 +322,7 @@ impl StoryFile {
         if frame.is_title() {
             return Some(self.title());
         }
-        let f = self.frames.get(usize::from(frame.0) - 1)?;
+        let f = self.frames.get(usize::from(frame.get()) - 1)?;
         Some(match f.text {
             // The lines of one paragraph are adjacent, so the paragraph is one slice.
             Some((first, last)) => &self.text[self.lines[first].start..self.lines[last].end],
@@ -438,7 +438,7 @@ pub fn write_frame(bytes: &str, frame: FrameNo, text: &str) -> Result<String, Wr
         return Err(WriteError::FrameText(problem));
     }
     let s = split(bytes)?;
-    let f = usize::from(frame.0);
+    let f = usize::from(frame.get());
     if f > s.frames.len() {
         return Err(WriteError::NoSuchFrame {
             story: s.number,
@@ -539,7 +539,7 @@ pub fn apply_story_state(base: &str, state: &StoryState) -> Result<String, Write
             return Err(error);
         }
         match frame {
-            Some(f) if usize::from(f.0) > s.frames.len() => {
+            Some(f) if usize::from(f.get()) > s.frames.len() => {
                 return Err(WriteError::NoSuchFrame {
                     story: s.number,
                     frames: s.frames.len(),
@@ -662,7 +662,7 @@ impl StoryRecords {
         }
         for (number, text) in (1..=u16::MAX).zip(&self.frames) {
             if let Some(text) = text {
-                frames.insert(FrameNo(number), text.clone());
+                frames.insert(FrameNo::new(number), text.clone());
             }
         }
         StoryState {

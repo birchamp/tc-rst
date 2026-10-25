@@ -2,6 +2,7 @@
   "addBook.notAdded": "{file} was not added: {reason}",
   "addBook.usfmDamaged": "{file} cannot be added: {reason}",
   "addBook.usfmReading": "Reading the file…",
+  "align.droppedLinks": "Sent back to the word bank after the text changed: {words}",
   "align.unavailable.alignedInText.body": "This verse came from a file that holds its alignment inside the text, and aligning it here would write over that. Nothing is lost. The rest of {book} aligns normally.",
   "align.unavailable.alignedInText.title": "This verse already holds its alignment",
   "check.markLookAgain": "This check was not saved: the check or its verse changed while you were looking. Look at it again, then mark it again. Nothing was lost.",
@@ -168,6 +169,10 @@
   "syncResult.receivedKept": "Your teammates' changes were received and kept.",
   "translate.changedWhileTyping": "{name} changed this verse while you were typing. Your text will be kept as a second version.",
   "translate.changedWhileTypingUnnamed": "This verse was changed while you were typing. Your text will be kept as a second version.",
+  "upgrade.checkFailedRefused": "Could not check for updates: Door43 turned the request away. Try again later.",
+  "upgrade.checkFailedServer": "Could not check for updates: Door43 did not answer properly. Try again later.",
+  "upgrade.checkFailedUnreachable": "Could not check for updates: Door43 cannot be reached. Check the connection and try again.",
   "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed.",
-  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code."
+  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code.",
+  "check.sort.byCategory": "By category"
 }

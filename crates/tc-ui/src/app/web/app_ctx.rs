@@ -1235,9 +1235,11 @@ impl Actions {
                     this.s().syncing.try_set(None);
                     return;
                 }
-                // No usable answer: the next press sends the same request (A-27).
-                NetEnd::Transport(error) => {
-                    this.sync_attempt(&project, |submit| submit.lost(error.to_string()));
+                // No usable answer: the next press is a new sync. Resending this request could,
+                // much later, replay a sync that ran before the translator's newer work and show
+                // it as done (review, races lens); a second sync of the same work is harmless.
+                NetEnd::Transport(_) => {
+                    this.sync_attempt(&project, |submit| submit.next(js::random_request_id()));
                     this.s().syncing.try_set(None);
                     let end = SyncEnd::Unreached;
                     this.s()

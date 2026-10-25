@@ -273,3 +273,50 @@ fn the_parity_account_is_the_baselines_fake_user() {
         "the same number of organizations"
     );
 }
+
+/// The releases of `owner`'s repositories, as the catalog search lists them: `name@tag` for
+/// each published release.
+async fn catalog(url: &str, owner: &str) -> Vec<String> {
+    let found: Value = http()
+        .get(format!("{url}/api/v1/catalog/search?owner={owner}"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .map(|body| serde_json::from_str(&body).unwrap())
+        .unwrap();
+    let mut out: Vec<String> = found["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            format!(
+                "{}@{}",
+                entry["name"].as_str().unwrap(),
+                entry["release"]["tag_name"].as_str().unwrap_or("")
+            )
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// FIX-J: the fake the browser tests start publishes unfoldingWord's resource releases, the
+/// same ones the Rust tests' seeded fake holds, so a download or an upgrade through the screens
+/// has something to fetch and both kinds of test agree on what exists.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_seeded_fake_publishes_the_en_pins_versions() {
+    let running = start();
+    let seeded = tc_door43_fake::FakeDoor43::start_seeded().await.unwrap();
+    let served = catalog(&running.url, "unfoldingWord").await;
+    assert!(
+        !served.is_empty(),
+        "the binary publishes unfoldingWord's resources"
+    );
+    assert_eq!(served, catalog(seeded.url(), "unfoldingWord").await);
+    assert!(
+        served.iter().any(|r| r.starts_with("en_tn@")),
+        "the notes the sample pins are there: {served:?}"
+    );
+}

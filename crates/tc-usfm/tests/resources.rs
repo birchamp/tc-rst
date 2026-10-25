@@ -30,7 +30,8 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use tc_usfm::{AlignedVerse, Book, Document, Error, Node, parse_aligned, weave};
+use tc_usfm::raw::{Document, Node};
+use tc_usfm::{AlignedVerse, Book, Error, parse_aligned, weave};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -729,4 +730,68 @@ fn every_verse_of_the_scale_psalms_reads_apart_and_weaves_back() {
     };
     assert_eq!(tc4_cut, expected);
     assert_eq!(book_cut, expected);
+}
+
+/// tC4 #812: a layout line inside a verse (`\p`, `\ts\*`, `\b`, `\q3`, `\s`) never cuts the
+/// verse off. Over every book of the ULT and UST v91, the words part the storage codec keeps
+/// of each verse ([`tc_usfm::codec::decompose`]) holds every target word of the verse, and
+/// the layout after it holds none.
+#[test]
+fn every_bundled_ult_and_ust_verse_body_holds_every_target_word() {
+    let mut verses = 0;
+    let mut cut = Vec::new();
+    for archive in ["en_ult_v91.sb.zip", "en_ust_v91.sb.zip"] {
+        for (name, text) in export(archive) {
+            let parts = tc_usfm::codec::decompose(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+            for (c, chapter) in &parts.chapters {
+                for (v, part) in &chapter.verses {
+                    let tc_usfm::codec::VersePart::Text(verse) = part else {
+                        continue;
+                    };
+                    verses += 1;
+                    let whole = format!("{}{}", verse.words, verse.layout);
+                    if tc_usfm::target_words(&verse.words) != tc_usfm::target_words(&whole) {
+                        cut.push(format!("{name} {c}:{v}"));
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(verses, 47_723);
+    assert!(
+        cut.is_empty(),
+        "INV-NO-CUT-AT-A-MID-VERSE-BREAK: {} verses cut off: {cut:?}",
+        cut.len()
+    );
+}
+
+/// REF1b, INV-EVERY-POEM-LINE-STAYS: over every verse of the ULT and UST v91, the words the
+/// editors show come back byte for byte when saved unchanged, and only a few verses keep their
+/// markers because tabs could not give their bytes back.
+#[test]
+fn every_bundled_verse_saves_unchanged_through_the_editor_text() {
+    use tc_usfm::poem::{editor_text, shows_tabs, words_from_editor_text};
+    let (mut verses, mut on_markers) = (0, 0);
+    for archive in ["en_ult_v91.sb.zip", "en_ust_v91.sb.zip"] {
+        for (name, text) in export(archive) {
+            let parts = tc_usfm::codec::decompose(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+            for (c, chapter) in &parts.chapters {
+                for (v, part) in &chapter.verses {
+                    let tc_usfm::codec::VersePart::Text(verse) = part else {
+                        continue;
+                    };
+                    verses += 1;
+                    let words = &verse.words;
+                    assert_eq!(
+                        words_from_editor_text(&editor_text(words), words),
+                        *words,
+                        "{name} {c}:{v}"
+                    );
+                    on_markers += usize::from(!shows_tabs(words));
+                }
+            }
+        }
+    }
+    assert_eq!(verses, 47_723);
+    assert_eq!(on_markers, 0, "verses that keep their markers");
 }

@@ -53,13 +53,14 @@ pub(super) async fn shared() -> World {
     let fake = FakeDoor43::start().await.unwrap();
     tc_door43_fake::seeded::parity_account(&fake).await.unwrap();
     let fs = FaultFs::new();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let state = scenario("shared");
     let (store, _) = ScenarioStore::write(backend, state).unwrap();
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
     let store = Arc::new(store);
-    let t = app_over(dir.path(), store.clone(), fake.url()).await;
+    let mut t = app_over(dir.path(), store.clone(), fake.url()).await;
+    t.watch = Some(watch);
     World {
         t,
         store,
@@ -154,7 +155,7 @@ pub(super) async fn synced(app: &App, n: u8) -> SyncResultView {
 
 /// The card once its summary is computed, after the sync told Home it changed.
 pub(super) async fn card_with_counts(app: &App) -> HomeCard {
-    for _ in 0..1000 {
+    for () in crate::store_world::for_a_minute() {
         let card: HomeCard = post(
             app,
             &Card {
@@ -168,7 +169,7 @@ pub(super) async fn card_with_counts(app: &App) -> HomeCard {
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    panic!("the card's summary never came");
+    panic!("hung: the card's summary never came");
 }
 
 pub(super) fn teammate(n: u16) -> PersonLabel {
