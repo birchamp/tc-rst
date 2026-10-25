@@ -1015,6 +1015,16 @@ impl SessionRegistry {
             .collect()
     }
 
+    /// Every folder with an open, a session or a close, with its session once open, screen
+    /// and side users alike (`test/validate`).
+    #[cfg(feature = "test-hooks")]
+    pub fn all_projects(&self) -> Vec<(ProjectRef, Option<Arc<ProjectSession>>)> {
+        lock(&self.inner.slots)
+            .iter()
+            .map(|(folder, slot)| (folder.clone(), slot.session().cloned()))
+            .collect()
+    }
+
     /// Resolves when no open, leave checkpoint or close of `folder` is running.
     pub async fn settled(&self, folder: &ProjectRef) {
         loop {

@@ -91,9 +91,17 @@ test('INV-BUILDS-ON-WINDOWS: the gate list builds for Windows, and CI runs it', 
   assert.ok(ciSteps.includes('clippy-windows'), 'INV-BUILDS-ON-WINDOWS: ci.yml does not run scripts/gates.sh --step clippy-windows');
 });
 
-test('INV-JOURNEYS-RUN: every browser journey runs in CI on every push', () => {
+test('INV-JOURNEYS-RUN: every browser journey runs in CI on every main and gate push', () => {
   const e2e = read('.github/workflows/app-e2e.yml');
-  assert.match(e2e.split(/^jobs:/m)[0], /^\s+push:/m, 'INV-JOURNEYS-RUN: app-e2e does not run on push');
+  assert.match(e2e.split(/^jobs:/m)[0], /^\s+push:\n\s+branches: \[claude\/focused-ride-5uzj7p, 'gate\/\*\*'\]/m, 'INV-JOURNEYS-RUN: app-e2e does not run on pushes to main and gate/**');
   assert.match(e2e, /scripts\/gates\.sh --step journeys/, 'INV-JOURNEYS-RUN: app-e2e does not run scripts/gates.sh --step journeys');
   assert.match(gates, /node --test[^\n]*parity\/app\/journeys\/\*\.test\.mjs/, 'INV-JOURNEYS-RUN: the journeys step does not run every parity/app/journeys/*.test.mjs');
+});
+
+test('INV-FULL-TESTS-GATE-MERGES: the full tests run on main, gate/* and on request, not on other pushes', () => {
+  const ci = read('.github/workflows/ci.yml');
+  for (const job of ['test', 'alignment-budget', 'parity-baseline']) {
+    const body = ci.split(new RegExp(`^  ${job}:$`, 'm'))[1]?.split(/^  [a-z-]+:$/m)[0] ?? '';
+    assert.match(body, /if: .*refs\/heads\/claude\/focused-ride-5uzj7p.*startsWith\(github\.ref, 'refs\/heads\/gate\/'\).*workflow_dispatch/, `INV-FULL-TESTS-GATE-MERGES: ci.yml job ${job} runs on every push`);
+  }
 });

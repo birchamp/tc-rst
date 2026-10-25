@@ -11,7 +11,7 @@ import { REPO } from '../env-rust.mjs';
 import { browserTest, focused, openMenu, panel, recordRequests, sleep, trigger, until, withApp } from './kit.mjs';
 
 const notice = fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'about', 'LICENSE'), 'utf8');
-const gpl = fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'about', 'COPYING'), 'utf8');
+const copyright = notice.split('\n').find((line) => line.startsWith('Copyright')).trim();
 const aboutDialog = (page) => page.getByRole('dialog', { name: 'About translationCore' });
 const licenseDialog = (page) => page.getByRole('dialog', { name: 'License', exact: true });
 const region = (page) => page.getByRole('region', { name: 'License text' });
@@ -41,8 +41,8 @@ async function walk(page, build) {
   await gone('the menu', panel(page));
   await notWhite(aboutDialog(page).getByText('About translationCore').first());
   assert.equal(await page.getByTestId('about-version').textContent(), `${build.version} (${build.commit})`);
-  assert.equal(await page.getByTestId('about-copyright').textContent(), notice.split('\n')[0]);
-  assert.match(await page.getByTestId('about-license-name').textContent(), /GNU GPL v2 or later/);
+  assert.equal(await page.getByTestId('about-copyright').textContent(), copyright);
+  assert.match(await page.getByTestId('about-license-name').textContent(), /MIT/);
 
   // Read the license closes About and opens License.
   await page.getByTestId('about-read-license').focus();
@@ -50,8 +50,7 @@ async function walk(page, build) {
   await gone('About', aboutDialog(page));
   await notWhite(licenseDialog(page).getByText('License', { exact: true }).first());
   assert.equal(await page.getByTestId('license-notice').textContent(), notice);
-  assert.equal(await page.getByTestId('license-gpl').textContent(), gpl);
-  assert.ok(gpl.includes('GNU GENERAL PUBLIC LICENSE') && gpl.includes('Version 2, June 1991'));
+  assert.equal(await page.getByTestId('license-gpl').count(), 0, 'tC4 since #838 shows the MIT notice alone');
   // The keyboard reaches the text and scrolls it.
   assert.equal(await region(page).getAttribute('tabindex'), '0');
   for (let i = 0; i < 4 && (await focused(page)) !== 'license-text'; i += 1) await page.keyboard.press('Tab');

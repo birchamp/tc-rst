@@ -176,7 +176,11 @@ impl Actor {
                 reply.resolve(result);
             }
             Msg::Materialize { reply } => self.materialize(Origin::Leave, reply),
-            Msg::Checkpoint { reason, reply } => self.checkpoint(reason, Some(reply)),
+            Msg::Checkpoint {
+                reason,
+                intake,
+                reply,
+            } => self.checkpoint(reason, intake, Some(reply)),
             Msg::MoveHead {
                 commit,
                 expected,
@@ -215,6 +219,7 @@ impl Actor {
                 }
             }
             Msg::Sync { reply } => reply.resolve(()),
+            Msg::SyncFile { write, reply } => reply.resolve(self.sync_file(write)),
             Msg::Close { reply } => {
                 let result = self.close();
                 reply.resolve(result);
@@ -229,7 +234,7 @@ impl Actor {
         if self.last_checkpoint.elapsed() >= CHECKPOINT_EVERY {
             self.last_checkpoint = Instant::now();
             if !self.project.journal.pending.is_empty() {
-                self.checkpoint(CheckpointReason::Periodic, None);
+                self.checkpoint(CheckpointReason::Periodic, Vec::new(), None);
             }
         }
     }
@@ -258,6 +263,7 @@ impl Actor {
     fn checkpoint(
         &mut self,
         reason: CheckpointReason,
+        intake: Vec<crate::handle::ReceivedPack>,
         reply: Option<Resolver<Result<CheckpointReport, StoreError>>>,
     ) {
         self.last_checkpoint = Instant::now();
@@ -284,6 +290,13 @@ impl Actor {
         // list yet: a write group (I7).
         self.project.shared.open_group();
         let restored = self.project.restore_expected_packs(false);
+        // A sync's received packs join the project before the seal (§9.3), so the merge
+        // commit holds them.
+        let mut taken = crate::handle::IntakeReport::default();
+        let restored = restored.and_then(|()| {
+            taken = self.project.take_in(intake)?;
+            Ok(())
+        });
         // The commit shows the project as its packs hold it: the fold as the seal starts. A
         // save served between the seal's steps is a pending file the seal never reads, so
         // neither the snapshot nor the marks the writer gets include it (C3); it belongs to
@@ -304,14 +317,60 @@ impl Actor {
         let Some(reply) = reply else {
             // The periodic checkpoint nobody waits for: the writer's answer is dropped.
             let (_unused, resolver) = pending(|| Err(StoreError::Other("no one waits".into())));
-            return self.send_checkpoint(reason, sealed, device, resolver, at_seal, marks);
+            return self.send_checkpoint(reason, taken, sealed, device, resolver, at_seal, marks);
         };
-        self.send_checkpoint(reason, sealed, device, reply, at_seal, marks);
+        self.send_checkpoint(reason, taken, sealed, device, reply, at_seal, marks);
     }
 
+    /// `.tc/sync.json`: read, then written whole when asked (§3.6).
+    fn sync_file(
+        &mut self,
+        write: Option<crate::handle::SyncFileWrite>,
+    ) -> Result<Option<crate::handle::SyncFile>, StoreError> {
+        use crate::handle::{Confirmed, SyncFile, SyncFileWrite};
+        let path = self.project.folder.path(crate::layout::SYNC);
+        let current: Option<SyncFile> = match self.project.vfs.read(&path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).ok(),
+            Err(_) => None,
+        };
+        let next = match write {
+            None => return Ok(current),
+            Some(SyncFileWrite::File(file)) => file,
+            Some(SyncFileWrite::Confirmed(commit)) => {
+                let Some(mut file) = current else {
+                    return Ok(None);
+                };
+                file.confirmed = Some(Confirmed {
+                    commit,
+                    at: crate::appdata::rfc3339(self.project.clock.now()),
+                });
+                file
+            }
+        };
+        if self.read_only().is_some() {
+            return Err(StoreError::Other("the project is read-only".into()));
+        }
+        let mut bytes =
+            serde_json::to_vec_pretty(&next).map_err(|e| StoreError::Other(e.to_string()))?;
+        bytes.push(b'\n');
+        let (dir, name) = self.project.folder.dir_and_name(crate::layout::SYNC);
+        crate::atomic::atomic_create_dirs(&*self.project.vfs, &dir)?;
+        crate::atomic::atomic_write(
+            &*self.project.vfs,
+            &dir,
+            name,
+            &bytes,
+            crate::atomic::SyncDir::Now,
+        )
+        .map_err(|e| e.into_inner())?;
+        Ok(Some(next))
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn send_checkpoint(
         &mut self,
         reason: CheckpointReason,
+        intake: crate::handle::IntakeReport,
         sealed: Result<crate::seal::SealReport, StoreError>,
         device: tc_journal::DeviceId,
         reply: Resolver<Result<CheckpointReport, StoreError>>,
@@ -320,6 +379,7 @@ impl Actor {
     ) {
         let checkpoint = CheckpointJob {
             reason,
+            intake,
             sealed,
             device,
             reply,
@@ -537,7 +597,7 @@ impl Actor {
                     "the checkpoint at close was dropped".into(),
                 ))
             });
-            self.checkpoint(CheckpointReason::LeavingProject, Some(resolver));
+            self.checkpoint(CheckpointReason::LeavingProject, Vec::new(), Some(resolver));
             result = self.wait_serving(done).map(|_| ());
             if self.read_only().is_none()
                 && let Some(sections) = self.project.index_bytes_later()
@@ -612,6 +672,9 @@ impl Actor {
                 }) => self.record_outside(rel, seen, *plan, derived, copy),
                 Ok(Msg::Sync { reply }) => reply.resolve(()),
                 Ok(Msg::ImportKept { reply, .. }) => {
+                    reply.resolve(Err(StoreError::Other("the project is closing".into())));
+                }
+                Ok(Msg::SyncFile { reply, .. }) => {
                     reply.resolve(Err(StoreError::Other("the project is closing".into())));
                 }
                 Ok(Msg::Materialize { reply }) => {

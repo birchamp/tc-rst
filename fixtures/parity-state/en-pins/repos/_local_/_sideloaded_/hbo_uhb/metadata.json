@@ -1,0 +1,88 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.5.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-09-27T00:37:14.977Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "unfoldingWord/hbo_uhb": {
+          "revision": "74022f0fed012a3ef169886f595dd98e7b200543",
+          "timestamp": "2026-09-27T00:37:14.977Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® Hebrew Bible"
+    },
+    "description": {
+      "en": "unfoldingWord® Hebrew Bible"
+    },
+    "abbreviation": {
+      "en": "UHB"
+    }
+  },
+  "languages": [
+    {
+      "tag": "hbo",
+      "name": {
+        "en": "Ancient Hebrew"
+      },
+      "scriptDirection": "rtl"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "scripture",
+      "flavor": {
+        "name": "textTranslation",
+        "usfmVersion": "3.0",
+        "translationType": "revision",
+        "audience": "common",
+        "projectType": "standard"
+      },
+      "currentScope": {
+        "JON": []
+      }
+    }
+  },
+  "confidential": false,
+  "ingredients": {
+    "ingredients/JON.usfm": {
+      "mimeType": "text/plain",
+      "checksum": {
+        "md5": "c2c2cc44a6fc42fd2dce55f8dea14789"
+      },
+      "size": 55663,
+      "scope": {
+        "JON": []
+      }
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© unfoldingWord 2026, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

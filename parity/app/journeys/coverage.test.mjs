@@ -52,7 +52,7 @@ test('INV-P1-COVERED: every live journey is mapped', () => {
 });
 
 test('INV-P1-COVERED: every tC4 spec is mapped', () => {
-  assert.equal(coverage.tc4.specs.length, 37, 'tC4 has 37 e2e specs at d310bf3');
+  assert.equal(coverage.tc4.specs.length, 39, 'tC4 has 39 e2e specs at d25b7871');
   assert.deepEqual(keyProblems('spec', Object.keys(coverage.specs), coverage.tc4.specs), []);
   assert.deepEqual(Object.entries(coverage.specs).flatMap(([id, m]) => problems(id, m)), []);
 });

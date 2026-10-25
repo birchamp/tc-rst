@@ -4,18 +4,18 @@ title: Ports for sync, share, exchange and import
 track: A
 lane: app
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: done
+owner: C7a session (Claude Code 3058c665)
+branch: track-UI-2
+worktree: .worktrees/track-UI-2
 depends: [UI-1]
 needs_owner: []
 proves: [P2, P9]
 no_loss: false
 size: 1-2 d
-merged: none
-updated: 2026-10-22
-next: Claim this card after UI-1 merges, then do step 1.
+merged: 312cef3f
+updated: 2026-10-24
+next: none
 blocked_by: none
 ---
 
@@ -256,3 +256,12 @@ It must print `# fail 0` and `# skipped 0`.
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/health-app.md
+- 2026-10-24 | C7a session (Claude Code 3058c665) | claim | none | cut from track-UI-1 (efe271cd) on the orchestrator's word under the fast-release ruling; UI-1 is not done yet, so the merge waits for it. Start checks: no port exists; sync.rs's in-body branch at 143; `ScriptedOpenDoor43` share.rs:145, `ScriptedSync` sync.rs:118; in-body branches 33 (app.rs 15, dispatch.rs 8, upgrades.rs 3, align/suggest.rs 2, seed.rs 2, fixes.rs 1, sync.rs 1, understand.rs 1); no exchange or import endpoint | grep commands of "Before you start"
+- 2026-10-24 | C7a session (Claude Code 3058c665) | step 1 | none | `no_test_hook_branch_inside_a_business_function` and `scripted_doubles_live_only_in_ports` (tests/app/test_hook_branches.rs), red first: `INV-RELEASE-AND-TESTS-RUN-THE-SAME-CODE: ... src/sync.rs: 1 in-body test branches (lines [143]), 0 allowed` and `INV-ONE-PORT-PER-JOB: ... src/share.rs:145, src/sync.rs:118, src/upgrades.rs:123`. upgrades.rs's `ScriptedResources` is the resources service's double (C8), not one of this card's jobs: allowed by name with that reason. Committed with steps 2 to 4 | cargo test -p tc-app --test app test_hook_branches
+- 2026-10-24 | C7a session (Claude Code 3058c665) | step 2 | none | `crates/tc-app/src/ports.rs`: `SyncPort` (sync and open, outcome types from UI-1), `ExchangePort` and `ImportPort` (no methods: E2 and F1 add them), `UnavailableSync/Exchange/Import`; `AppDeps` holds the three ports and `production()` the unavailable ones. Release clippy of tc-app, tc-server and tc4 pass | cargo clippy -p tc-app --lib -- -D warnings
+- 2026-10-24 | C7a session (Claude Code 3058c665) | step 3 | none | `ports/scripted.rs` `ScriptedSyncPort` holds the scripted syncs and opens and counts its calls; `ScriptedSync` and `ScriptedOpenDoor43` and the inner `open_door43`/`sync` fields are gone; `sync_job` and the `door43/open` job call only the port. Decision: the scripted sync's intake (`App::scripted_sync`, the teammates' writes and the reread) stays an item-level test-hooks method in sync.rs that the port calls, so sync.rs's private helpers stay private; it is not an in-body branch. tc4 picks the scripted port beside the test keychain when `--test-hooks` is on; the tests' common setup picks it too. In-body branches now 32 (app.rs 15 to 14, sync.rs 1 to 0); the allowlist holds today's counts. tests/app/sync.rs and share.rs unchanged | cargo test -p tc-app --test app -- test_hook_branches sync share
+- 2026-10-24 | C7a session (Claude Code 3058c665) | step 4 | none | `sync_port_contract!` (tests/app/port_contract.rs) with the four cases, invoked for the scripted port; E1a's line is a comment. Proofs: (1) a cfg branch back in `sync_job` fails the lint at sync.rs:130; (2) the scripted port writing two teammates' versions before answering a failure fails `a_sync_that_fails_before_intake_changes_nothing` (Titus conflicts 1, not 0); (3) dispatch's internet check answering `None` fails `with_the_internet_off_the_port_is_never_called` (`left: Err(NeedsSignIn(NotSignedIn)) right: Err(NeedsInternet(Sync))`, before the call count) | cargo test -p tc-app --test app port_contract
+- 2026-10-24 | C7a session (Claude Code 3058c665) | gate | none | tc-app: every test binary passes (app 677); clippy clean; journeys sync-button and share-open `# tests 5 # pass 5 # fail 0 # skipped 0`. The full gate list runs on the merge commit after UI-1 | .enjoy-logs/ui2-journeys.log
+- 2026-10-24 | races and protocol lens (Claude Code subagent of 3058c665) | verify | 7e609bd4 | no blocker. Release answers as before; with the feature on and `--test-hooks` off tc4 gets `UnavailableSync`, and `--scenario` journeys get the scripted port; reset still clears scripts. Majors, all in the tests and the script hook: the open case passes for a port that writes nothing (the scripted open answers a project already listed); the sync-fail and refused-open cases match any failure, so a dropped script passes; `test/script` answers Ok when the port is not scripted; `calls()` reads 0 for any other port. Minors: the allowlist is a ceiling, not exact; `is_branch` misses `cfg!` and tabs | cargo test -p tc-app --test app -- port_contract test_hook_branches sync share
+- 2026-10-24 | C7a session (Claude Code 3058c665) | fix | none | each fixture call now returns the exact error its case expects, and the cases compare it (`JobState::Failed(error)`); `OPEN_WRITES` makes a writing port prove the project was not listed before (the scripted port answers a listed one); `test/script` refuses a Door43 script with BadRequest when the port is not scripted (`scripting_a_port_that_is_not_scripted_is_refused`; without the refusal it fails `Ok(())`); `calls()` expects the scripted port. The lint's counts are exact and it catches `cfg!(` and tab indents; the exact count found my log's slip: app.rs still said 15 for 14 branches, now 14. 65 targeted tests pass, clippy clean | cargo test -p tc-app --test app -- port_contract test_hook_branches sync share hooks
+- 2026-10-24 17:36 EDT | integration lane (Claude Code 3d07d5f8) | merge | 312cef3f | merged into main in batch 2a (UI-1 4a86b252, UI-2 312cef3f, SWEEP 21fbbec0, OLH-1 14e0f12b, T a01c188e), gated by scripts/gates.sh --wait-ci batch-2a on the batch's last commit. | scripts/gates.sh --wait-ci batch-2a

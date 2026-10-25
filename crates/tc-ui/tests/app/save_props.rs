@@ -57,6 +57,8 @@ enum Reply {
     StaleScope,
     Reused,
     Fail,
+    /// A refusal no retry in this open can fix (tC4 #801): a newer change under a merged verse.
+    LookAgain,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +87,7 @@ fn reply() -> impl Strategy<Value = Reply> {
         1 => Just(Reply::StaleScope),
         1 => Just(Reply::Reused),
         1 => Just(Reply::Fail),
+        1 => Just(Reply::LookAgain),
     ]
 }
 
@@ -412,6 +415,7 @@ impl World {
             Reply::StaleScope => Answered::Reattach,
             Reply::Reused => Answered::Reissue,
             Reply::Fail => Answered::Failed(SaveError::NotSaved(NotSaved::Disk("full".into()))),
+            Reply::LookAgain => Answered::Failed(SaveError::NotSaved(NotSaved::LookAgain)),
         };
         if !matches!(answered, Answered::Lost) {
             self.settled.insert(flight.sent.request);

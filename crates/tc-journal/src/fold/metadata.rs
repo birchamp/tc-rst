@@ -165,7 +165,10 @@ pub(crate) fn relationships(value: &PinGroupValue) -> Vec<Value> {
         }
         out.push(Value::Object(r));
     };
-    for slot in value.0.values() {
+    // tC4 reads the slots in its `resources.json` order.
+    let mut slots: Vec<_> = value.0.iter().collect();
+    slots.sort_by_key(|(name, _)| (super::project::slot_rank(name.as_str()), name.as_str()));
+    for (_, slot) in slots {
         match &slot.0 {
             Json::Arr(items) => items.iter().for_each(&mut push),
             other => push(other),
@@ -174,12 +177,13 @@ pub(crate) fn relationships(value: &PinGroupValue) -> Vec<Value> {
     out
 }
 
+/// tC4's `relationshipsFromPins` order (`journal/relationships.mjs:24-31`).
 const GROUP_ORDER: [PinGroup; 5] = [
     PinGroup::OriginalLanguage,
+    PinGroup::ExtraScripture,
     PinGroup::Primary,
     PinGroup::Fallback,
     PinGroup::Lexicon,
-    PinGroup::ExtraScripture,
 ];
 
 impl FoldState {
@@ -318,8 +322,12 @@ impl FoldState {
         }
         let mut relationships = Vec::new();
         for group in GROUP_ORDER {
+            // One row per repository, the first one wins, as tC4.
             for r in groups.remove(&group).unwrap_or_default() {
-                if !relationships.contains(&r) {
+                if !relationships
+                    .iter()
+                    .any(|seen: &Value| seen["id"] == r["id"])
+                {
                     relationships.push(r);
                 }
             }

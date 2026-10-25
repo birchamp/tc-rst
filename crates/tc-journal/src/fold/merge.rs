@@ -135,14 +135,22 @@ fn seed_stub_kind(key: &RecordKey) -> bool {
 /// that read no value (the stub rules, divergence from a passage batch) still apply.
 pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[BatchIdx; 1]>) {
     let entry = state.entry(k);
-    let heads: Vec<ChangeIdx> = entry.heads.to_vec();
+    resolve_heads(state, &entry.key, entry.heads.to_vec())
+}
+
+/// [`resolve_local`] for `heads` of `key`, which need not be its current heads: what a
+/// screen showed when they were.
+pub(crate) fn resolve_heads(
+    state: &FoldState,
+    key: &RecordKey,
+    heads: Vec<ChangeIdx>,
+) -> (Local, SmallVec<[BatchIdx; 1]>) {
     match heads.len() {
         0 => return (Local::Empty, SmallVec::new()),
         1 => return (Local::Settled(heads[0]), SmallVec::new()),
         _ => {}
     }
-    let key = entry.key.clone();
-    if let RecordKey::BatchRelease(batch) = &key {
+    if let RecordKey::BatchRelease(batch) = key {
         // Grow-only: the union of what every release lists (§7.4).
         let mut changes: BTreeSet<crate::ids::ChangeId> = BTreeSet::new();
         for h in &heads {
@@ -171,7 +179,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
     // stub, the smallest id stays.
     let mut heads = heads;
     let mut values = values;
-    if seed_stub_kind(&key) {
+    if seed_stub_kind(key) {
         let stubs: Vec<bool> = heads.iter().map(|h| state.meta(*h).stub()).collect();
         if stubs.iter().all(|s| *s) {
             return (Local::ByRule(heads[0]), SmallVec::new());
@@ -215,7 +223,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
     let (Ok(values), Ok(base_values)) = (values, base_values) else {
         return conflict(state, &heads, true);
     };
-    let outcome = merge_units(&key, &values, &base_values);
+    let outcome = merge_units(key, &values, &base_values);
     match outcome.merged {
         Some(merged) => match rebuild_record(state, heads[0], merged) {
             Some(record) => (

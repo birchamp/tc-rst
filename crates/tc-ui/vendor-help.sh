@@ -7,7 +7,7 @@
 #
 #   crates/tc-ui/vendor-help.sh [REV]
 #
-# REV defaults to the pin of tC4's scripts/fetch-help.mjs at d310bf3, the rebuild's reference.
+# REV defaults to the pin of tC4's scripts/fetch-help.mjs at d25b7871, the rebuild's reference.
 # The fetch is tC4's: sparse and shallow, only the blobs of `tc-help/` at REV (about 21 MB). It
 # needs the network; tests never run it.
 set -euo pipefail
@@ -15,7 +15,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 REPO=https://github.com/unfoldingWord/tc-website.git
-REV="${1:-cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7}"
+REV="${1:-dbb7cd03c657637ec97ee4c0f00ed7bae44698d9}"
 OUT="$HERE/help"
 LIST="$HERE/help-pages.txt"
 
@@ -47,9 +47,9 @@ cp -a "$TMP/tc-help" "$OUT"
   echo "# Each line: the file's git blob id in tc-website, then its path below tc-help/."
   echo "repository $REPO"
   echo "commit $REV"
-  echo "# The pin of tC4's scripts/fetch-help.mjs at d310bf3, the rebuild's reference. Licence (Q-19):"
+  echo "# The pin of tC4's scripts/fetch-help.mjs at d25b7871, the rebuild's reference. Licence (Q-19):"
   echo "# tc-website holds no licence file at this commit; tC4 4.0 ships these pages in its"
-  echo "# GPL-2.0-or-later build. The owner was asked to confirm (APP-DESIGN Q-19)."
+  echo "# MIT build since #838. The owner was asked to confirm (APP-DESIGN Q-19)."
   git -C "$TMP" ls-tree -r HEAD tc-help | while read -r _mode type blob path; do
     [ "$type" = blob ] || continue
     echo "$blob ${path#tc-help/}"

@@ -8,7 +8,8 @@ mod common;
 use common::{client, credentials, repo, token_name};
 use std::time::{Duration, Instant};
 use tc_door43::{
-    Door43Client, Door43Error, GitRemote, NewRepoOwner, Session, Token, TokenScope, Visibility, git,
+    Door43Client, Door43Error, FastForwardRefspec, GitRemote, NewRepoOwner, Session, Token,
+    TokenScope, Visibility, git,
 };
 use tc_door43_fake::{FakeDoor43, Fault, FaultRule, seeded};
 
@@ -71,7 +72,13 @@ async fn a_fetch_and_a_push_round_trip_through_the_fake() {
     let http = client.http().clone();
     let (pushed, fetched, advertised) = in_repo(move |local| {
         let pushed = commit(local, "In the beginning");
-        git::push(&http, local, &target, &["refs/heads/main:refs/heads/main"]).unwrap();
+        git::push(
+            &http,
+            local,
+            &target,
+            &FastForwardRefspec::branch("main").unwrap(),
+        )
+        .unwrap();
         let other = tempfile::tempdir().unwrap();
         let other = git2::Repository::init_bare(other.path()).unwrap();
         git::fetch(
@@ -123,7 +130,7 @@ async fn a_refused_push_reads_as_door43s_refusal() {
             &http,
             local,
             &target,
-            &["refs/heads/main:refs/heads/tc-probe"],
+            &FastForwardRefspec::onto("main", "tc-probe").unwrap(),
         )
         .unwrap_err()
     })
@@ -208,7 +215,13 @@ async fn a_push_that_does_not_build_on_the_branch_reads_as_ref_moved() {
     let http = client.http().clone();
     let error = in_repo(move |first| {
         commit(first, "a teammate's work");
-        git::push(&http, first, &target, &["refs/heads/main:refs/heads/main"]).unwrap();
+        git::push(
+            &http,
+            first,
+            &target,
+            &FastForwardRefspec::branch("main").unwrap(),
+        )
+        .unwrap();
         let dir = tempfile::tempdir().unwrap();
         let second = git2::Repository::init_bare(dir.path()).unwrap();
         commit(&second, "this device's work");
@@ -216,7 +229,7 @@ async fn a_push_that_does_not_build_on_the_branch_reads_as_ref_moved() {
             &http,
             &second,
             &target,
-            &["refs/heads/main:refs/heads/main"],
+            &FastForwardRefspec::branch("main").unwrap(),
         )
         .unwrap_err()
     })
@@ -236,7 +249,13 @@ async fn a_refused_token_is_auth_failed_and_offered_once() {
     let http = client.http().clone();
     let error = in_repo(move |local| {
         commit(local, "work");
-        git::push(&http, local, &target, &["refs/heads/main:refs/heads/main"]).unwrap_err()
+        git::push(
+            &http,
+            local,
+            &target,
+            &FastForwardRefspec::branch("main").unwrap(),
+        )
+        .unwrap_err()
     })
     .await;
     assert!(
@@ -255,4 +274,87 @@ async fn a_refused_token_is_auth_failed_and_offered_once() {
         .filter(|r| r.path.contains("synced.git"))
         .count();
     assert!(pack_requests <= 2, "{pack_requests} requests");
+}
+
+/// Q8: whether the account may push, read before a sync fetches anything.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_repository_says_whether_the_account_may_push() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let client = client(&fake);
+    let session = client
+        .mint_token(&credentials(), &token_name(), &TokenScope::FOR_SHARING)
+        .await
+        .unwrap();
+    client
+        .create_repo(
+            &session,
+            &NewRepoOwner::SignedInUser,
+            &"mine".parse().unwrap(),
+            Visibility::Public,
+        )
+        .await
+        .unwrap();
+    let mine = repo(&format!("{}/mine", seeded::USER));
+    assert!(client.repo(&mine, Some(&session)).await.unwrap().can_push);
+    assert!(
+        !client.repo(&mine, None).await.unwrap().can_push,
+        "anonymous"
+    );
+    let read_only = repo(&format!("{}/es-419_tn", seeded::READ_ONLY_ORG));
+    assert!(
+        !client
+            .repo(&read_only, Some(&session))
+            .await
+            .unwrap()
+            .can_push
+    );
+}
+
+/// A push whose reply Door43 cuts off (STORAGE §6.4 Y6): the push is applied, the client
+/// reads an error, and Door43's branch is at the pushed commit, so the next sync finds it
+/// there.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_push_whose_reply_is_cut_off_is_applied_on_door43() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let client = client(&fake);
+    let session = client
+        .mint_token(&credentials(), &token_name(), &TokenScope::FOR_SHARING)
+        .await
+        .unwrap();
+    client
+        .create_repo(
+            &session,
+            &NewRepoOwner::SignedInUser,
+            &"cut".parse().unwrap(),
+            Visibility::Public,
+        )
+        .await
+        .unwrap();
+    let path = format!("{}/cut", seeded::USER);
+    fake.inject(FaultRule::once(
+        "POST",
+        &format!("/{path}.git/git-receive-pack"),
+        Fault::BreakOff { after: 0 },
+    ));
+    let target = remote(&client, &path, Some(session));
+    let http = client.http().clone();
+    let (pushed, result, advertised) = in_repo(move |local| {
+        let pushed = commit(local, "In the beginning");
+        let result = git::push(
+            &http,
+            local,
+            &target,
+            &FastForwardRefspec::branch("main").unwrap(),
+        );
+        let advertised = git::ls_remote(&http, local, &target).unwrap();
+        (pushed, result, advertised)
+    })
+    .await;
+    assert!(result.is_err(), "the reply was cut: {result:?}");
+    assert!(
+        advertised
+            .iter()
+            .any(|(name, oid)| name == "refs/heads/main" && oid.to_string() == pushed.to_string()),
+        "{advertised:?}"
+    );
 }

@@ -3,6 +3,10 @@
 //! operation counts, and the tC4 tests ported (`docs/TC4-DELTA-2026-10-16.md` §4).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test code: damages project folders on purpose, as another program or a crash would"
+)]
 
 #[path = "store/common.rs"]
 mod common;
@@ -21,6 +25,9 @@ mod loss;
 
 #[path = "store/opcount.rs"]
 mod opcount;
+
+#[path = "store/platform.rs"]
+mod platform;
 
 #[path = "store/progress.rs"]
 mod progress;
@@ -84,6 +91,9 @@ mod last_look;
 
 #[path = "store/carried_last_look.rs"]
 mod carried_last_look;
+
+#[path = "store/intake.rs"]
+mod intake;
 
 #[path = "store/update.rs"]
 mod update;

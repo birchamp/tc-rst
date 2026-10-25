@@ -223,8 +223,11 @@ pub enum Fault {
     /// test can act between two chunks of a download and know which bytes arrived. Each
     /// held download waits for a release of its own: see [`FakeDoor43::release_held`].
     HoldBody { after: usize },
-    /// A download sends its first `after` bytes and then the connection breaks, though its
-    /// `Content-Length` promised more.
+    /// A download, or a git smart HTTP reply, sends its first `after` bytes and then the
+    /// connection breaks. A download's `Content-Length` promised more. For git, the request
+    /// has run before its reply is cut: a fetch's pack stops part way, and a push is applied
+    /// on the server but the client never reads that it was (STORAGE §6.4 Y6, "sent, not
+    /// confirmed").
     BreakOff { after: usize },
     /// A download comes without `Content-Length`, as an answer built while it is sent
     /// does.

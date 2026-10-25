@@ -21,6 +21,20 @@ pub struct AlignedRun {
     pub source_sha: Option<GitOid>,
 }
 
+/// The target words of a verse's content, in order, numbered by occurrence as the aligner
+/// reads them.
+pub fn verse_words(content: &str) -> Vec<TargetWord> {
+    tc_usfm::target_words(content)
+        .into_iter()
+        .map(|w| TargetWord {
+            word: w.text,
+            occurrence: w.occurrence,
+            occurrences: w.occurrences,
+            extra: JsonMap::new(),
+        })
+        .collect()
+}
+
 /// Why an alignment no longer vouches for its verse. A record with any of these projects
 /// `"invalid": true` and is kept as it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -72,6 +86,24 @@ impl AlignmentValue {
 
     pub fn is_valid(&self, at: &AlignedRun) -> bool {
         self.staleness(at).is_empty()
+    }
+
+    /// Every target word the record holds: the bank first, then each card's words.
+    pub fn all_target_words(&self) -> impl Iterator<Item = &TargetWord> {
+        self.word_bank
+            .iter()
+            .chain(self.alignments.iter().flat_map(|g| g.bottom_words.iter()))
+    }
+
+    /// Whether the alignment no longer vouches for `verse`, the words of the run's text in
+    /// order ([`verse_words`]): it is stale, or it holds a word, placed or banked, that is
+    /// not a word of the verse by text, occurrence and count, or holds one twice. The one
+    /// rule of the alignment files and the Align rail (INV-ONE-REVIEW-RULE); the rail adds
+    /// only the pin's check (`tc_align::needs_review`).
+    pub fn needs_review(&self, at: &AlignedRun, verse: &[TargetWord]) -> bool {
+        let key = |w: &TargetWord| (w.word.clone(), w.occurrence, w.occurrences);
+        let mut words: std::collections::HashSet<_> = verse.iter().map(key).collect();
+        !self.is_valid(at) || !self.all_target_words().all(|w| words.remove(&key(w)))
     }
 
     /// Puts the word bank and every card's target words in the order they stand in the

@@ -1727,13 +1727,18 @@ layer holds an open project as a handle:
    (`ARCHITECTURE.md`) and in `.tc/drafts.json` (§5.14).
 2. The actor checks the token's MAC and takes the value the token stands for: the displayed
    candidate for a conflict, the merged value for a merged record, the head's value otherwise.
-   The value must be `Text`; structure changes go through `SaveSection`.
+   A merged record whose heads moved since the screen showed it (a sync landed) stands for
+   the merge of the token's heads (`FoldState::merged_at`), so the save is stored beside the
+   newer text, never refused. The value must be `Text`; structure changes go through
+   `SaveSection`.
 3. New value = that value with `words` replaced by the NFC form of the sent text. Rule V3 is
    checked.
 4. If the new value equals the displayed value, nothing is written. A no-op save after a sync
    must not replace a teammate's newer version.
 5. One `Verse` change, `parents = shown.heads`, `cause: Edit`. In the same batch, the verse's
-   alignment carried over to the new text (APP-DESIGN R25): when the alignment keyed by the
+   alignment carried over to the new text (APP-DESIGN R25): when the verse's heads are still
+   the token's (a save from a screen a sync overtook knows only the old text, so it leaves the
+   alignment as it is and its hash marks it for review), the alignment keyed by the
    run's anchor (§7.7) is not in conflict, covers this run's span, is not marked invalid, has a
    card, and its text hash no longer matches, `tc_align::reflow_edit`, from the old text to the
    new, keeps on each card the target words that follow into the new text, at their new
@@ -3724,7 +3729,11 @@ S3  Fetch:
     Errors: ErrorCode::Auth or HTTP 401 → `sync.auth-failed`; 404 → `sync.remote-missing`;
     a network error → `sync.unreachable`. Nothing local has changed. Fetch sends credentials,
     so private repositories work.
-    R = refs/remotes/origin/{b}, or None for an empty repository.
+    R = refs/remotes/origin/{b}, or None for an empty repository. Door43's advertised refs
+    (`ls_remote`) say whether b is there: a repository with history but no b had it deleted
+    by its owner, and S8 pushes this copy as b again, as tC4 does, with the report's
+    `recreated` for the notice "The project was missing from Door43, so tC4 put your copy
+    back. Ask your teammates to sync." (owner ruling, `rulings/2026-10-24-H5.md`).
 S4  If R is None, R == HEAD, or repo.graph_descendant_of(HEAD, R) is Ok(true): go to S8.
     An error from graph_descendant_of (a shallow history) counts as "not a descendant".
 S5  Intake of R (§9.2), on the worker. It reads the object database only.
@@ -3959,8 +3968,8 @@ Refusals: the name exists; offline; auth failed; create rejected (with Door43's 
 3. Write the working tree from R's tree with `atomic_write` (no checkout, so no line-ending
    conversion can touch a byte), except foreign entries and paths that collide (§3.3), which
    stay in the object database and the tree only; set the branch to R, `index.read_tree`.
-4. Mint the Local device, fold, record edits made on Door43 since the last app commit (§11.2),
-   materialize, validate.
+4. Mint the Local device, fold, materialize, validate (the §11.2 walk is dropped: H18 B lists
+   another tool's commits instead, §9.2 N4).
 5. Rename the staging folder into `<projects>/` (§6.4 N1, N2).
 
 A project can also be joined from an exchange file (§10.2), which is smaller than a full clone.
@@ -3969,6 +3978,12 @@ A project can also be joined from an exchange file (§10.2), which is smaller th
 The project ids must match (N2); the first merge commit joins two unrelated histories.
 
 ### 9.7 Exchange report
+
+As built (unit X): `tc_sync::SyncReport { ended, received, confirmed, raced, received_by,
+new_conflicts, other_tools, recreated }` and `tc_sync::exchange::ReceiveReport { intake,
+received_by, new_conflicts, damaged, hand_edited }`; the refusals are tc-api's `SyncFailure`
+(`Blocked(SyncBlock)`, `BeforeIntake(SyncRefusal)`, `AfterIntake(SyncRefusal)`). The sketch
+below is the design's first shape.
 
 ```rust
 pub struct ExchangeReport {

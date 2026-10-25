@@ -838,6 +838,7 @@ impl crate::project::Project {
                         changes,
                         skipped: Vec::new(),
                         kept: Vec::new(),
+                        dropped_links: Vec::new(),
                     },
                     Some(reconciles.clone()),
                 )

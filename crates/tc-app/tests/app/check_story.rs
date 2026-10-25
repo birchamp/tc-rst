@@ -36,7 +36,7 @@ fn list(tool: Tool) -> CheckListRef {
 /// The en-pins scenario on the real store, with the store kept for a teammate's edits.
 async fn on_the_store() -> (tempfile::TempDir, TestApp, FaultFs, Arc<ScenarioStore>) {
     let fs = FaultFs::new();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let (store, _) = ScenarioStore::write(backend, scenario("en-pins")).unwrap();
     let store = Arc::new(store);
     let dir = tempfile::tempdir().unwrap();
@@ -48,11 +48,12 @@ async fn on_the_store() -> (tempfile::TempDir, TestApp, FaultFs, Arc<ScenarioSto
     let projects = dir.path().join("projects");
     std::fs::create_dir_all(&projects).unwrap();
     let given = store.clone();
-    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = StoreChoice::Given(given);
     })
     .await;
+    t.watch = Some(watch);
     (dir, t, fs, store)
 }
 

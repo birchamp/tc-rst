@@ -337,14 +337,19 @@ fn a_verse_with_no_original_words_or_no_target_words_does_not_open() {
     );
 }
 
+/// Owner ruling Q37 (tC4 #814): a record flagged for re-review opens as it is, keeps the flag
+/// through an edit, and only Mark valid clears it.
 #[test]
-fn a_record_flagged_for_re_review_opens_as_it_is_and_the_first_edit_clears_the_flag() {
+fn a_record_flagged_for_re_review_opens_as_it_is_and_keeps_the_flag_until_mark_valid() {
     let mut flagged = paul_and_servant();
     flagged.marked_invalid = true;
     let mut aligner = open(Some(&flagged), TEXT);
     assert_eq!(aligner.value(), &flagged);
     aligner.place(2, &banked(&aligner, "God")).unwrap();
-    assert!(!aligner.value().marked_invalid);
+    assert!(aligner.value().marked_invalid, "an edit keeps the flag");
+    assert!(!aligner.value().done);
+    aligner.mark_valid().unwrap();
+    assert!(!aligner.value().marked_invalid, "Mark valid clears it");
 }
 
 #[test]

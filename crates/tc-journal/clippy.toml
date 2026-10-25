@@ -1,0 +1,34 @@
+# Clippy reads the clippy.toml nearest the crate, so this file replaces the workspace's: its four
+# keys first, as the root's clippy.toml has them.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-dbg-in-tests = true
+
+# INV-ATOMIC-WRITES: a project file is written through tc_store::atomic (temporary file, fsync,
+# rename, fsync of the folder), never in place. A site that must mutate the filesystem itself
+# carries #[expect(clippy::disallowed_methods, reason = "...")] saying why.
+disallowed-methods = [
+  { path = "std::fs::write", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::rename", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::remove_file", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::remove_dir", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::remove_dir_all", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::copy", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::create_dir", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::create_dir_all", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::hard_link", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::set_permissions", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::File::create", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::File::create_new", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::OpenOptions::open", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  # Unix-only or tc-store-only paths resolve only where they are built.
+  { path = "std::fs::DirBuilder::create", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::fs::soft_link", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic" },
+  { path = "std::os::unix::fs::symlink", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::openat", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::renameat", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::renameat_with", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::unlinkat", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+  { path = "rustix::fs::mkdirat", reason = "INV-ATOMIC-WRITES: write project files through tc_store::atomic", allow-invalid = true },
+]

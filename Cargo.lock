@@ -3628,6 +3628,28 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "unicode-normalization",
+ "zip",
+]
+
+[[package]]
+name = "tc-sync"
+version = "0.1.0"
+dependencies = [
+ "git2",
+ "proptest",
+ "serde_json",
+ "tc-api",
+ "tc-burrito",
+ "tc-door43",
+ "tc-door43-fake",
+ "tc-journal",
+ "tc-store",
+ "tc-versification",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "url",
+ "zip",
 ]
 
 [[package]]

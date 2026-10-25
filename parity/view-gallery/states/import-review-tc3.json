@@ -75,8 +75,8 @@
     "door43NotKept": false,
     "sh": null,
     "remoteByProject": {
-      "_local_/_local_/sample_burrito": null,
-      "_local_/_local_/sample_burrito_obs": null
+      "_local_/_local_/sample_burrito_obs": null,
+      "_local_/_local_/sample_burrito": null
     },
     "importToast": null,
     "importedRepo": null,
@@ -513,6 +513,7 @@
     "storyFrame": null,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "testament": null,

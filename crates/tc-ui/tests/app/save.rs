@@ -1967,3 +1967,45 @@ fn an_invalid_text_refusal_keeps_the_field_and_its_actionable_reason_until_retry
     page.deliver_ok();
     assert_eq!(page.state(&k), Some(FieldSave::Clean));
 }
+
+/// INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR (tC4 #801): a save refused for a reason no
+/// retry in this open can fix (a newer change arrived under a merged verse: "look again")
+/// keeps its text and its reason, and after the gate's one retry the gate lets the person go
+/// Home. A disk failure, which a retry may fix, still holds the gate.
+#[test]
+fn a_save_refused_for_good_lets_the_person_go_home_and_keeps_the_text() {
+    let look_again = || Answered::Failed(SaveError::NotSaved(NotSaved::LookAgain));
+    let mut page = Page::new();
+    let k = key("a");
+    page.open(&k, "", 1);
+    page.focus(&k);
+    page.type_text(&k, "kept text");
+    page.blur(&k);
+    page.deliver(look_again());
+    let passed = page.gate(|_, _| look_again(), |_| {});
+    assert!(passed, "the gate lets the person go");
+    assert_eq!(page.sends().len(), 2, "one retry by the gate, no more");
+    assert_eq!(
+        page.state(&k),
+        Some(FieldSave::Failed(SaveError::NotSaved(NotSaved::LookAgain))),
+        "the field still says why"
+    );
+    assert_eq!(
+        page.entry(&k).map(|e| e.text),
+        Some("kept text".to_owned()),
+        "the text stays"
+    );
+    // A disk failure is the other kind: a retry may fix it, so it holds the gate.
+    let mut page = Page::new();
+    page.open(&k, "", 1);
+    page.focus(&k);
+    page.type_text(&k, "later");
+    page.blur(&k);
+    page.deliver(Answered::Failed(SaveError::NotSaved(NotSaved::Disk(
+        "full".into(),
+    ))));
+    assert!(!page.gate(
+        |_, _| Answered::Failed(SaveError::NotSaved(NotSaved::Disk("full".into()))),
+        |_| {}
+    ));
+}

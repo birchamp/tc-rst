@@ -35,6 +35,10 @@ pub struct RepoInfo {
     pub topics: Vec<String>,
     /// DCS's newest release per stage: the one-call answer to "latest release and sha".
     pub catalog: StageReleases,
+    /// The signed-in account may push (Gitea's `permissions.push`). Read anonymously, it is
+    /// false. A sync asks before it fetches, so an account that cannot push changes nothing
+    /// (Q8).
+    pub can_push: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -135,6 +139,14 @@ pub(crate) struct RawRepository {
     topics: Vec<String>,
     #[serde(default)]
     catalog: Option<RawStages>,
+    #[serde(default)]
+    permissions: Option<RawPermissions>,
+}
+
+#[derive(Deserialize)]
+struct RawPermissions {
+    #[serde(default, deserialize_with = "nullable")]
+    push: bool,
 }
 
 #[derive(Deserialize)]
@@ -224,6 +236,7 @@ impl RawRepository {
             language: self.language,
             topics: self.topics,
             catalog,
+            can_push: self.permissions.is_some_and(|p| p.push),
         })
     }
 

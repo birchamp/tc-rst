@@ -14,7 +14,7 @@ use tc_api::settings::{
 };
 use tc_api::shown::Direction;
 use tc_journal::fold::DerivedFile;
-use tc_journal::keys::SettingKey;
+use tc_journal::keys::{MetaField, SettingKey};
 use tc_journal::{Json, Record, RecordKey};
 
 use crate::app::App;
@@ -28,7 +28,7 @@ use crate::resources::package;
 /// with none of them.
 pub fn settings_values(
     settings: Option<&[u8]>,
-) -> Result<(String, Direction, Option<String>), String> {
+) -> Result<(String, Option<String>, Option<String>), String> {
     let doc: Value = match settings {
         None => Value::Null,
         Some(bytes) => serde_json::from_slice(bytes)
@@ -39,13 +39,9 @@ pub fn settings_values(
             .and_then(Value::as_str)
             .filter(|v| !v.is_empty())
     };
-    let direction = match text("textDirection") {
-        Some("rtl") => Direction::Rtl,
-        _ => Direction::Ltr,
-    };
     Ok((
         text("languageName").unwrap_or_default().to_owned(),
-        direction,
+        text("textDirection").map(str::to_owned),
         text("textFont").map(str::to_owned),
     ))
 }
@@ -129,11 +125,25 @@ impl Handle<ViewFromHome> for App {
         } else {
             (settings, resources)
         };
-        let (language_name, direction, font) =
+        let (language_name, text_direction, font) =
             settings_values(settings.as_deref()).map_err(unreadable)?;
+        let metadata = peek.metadata.as_ref().ok();
+        let direction = crate::direction::project_direction(
+            metadata.and_then(crate::direction::script_direction),
+            text_direction.as_deref(),
+        );
+        // tC4 shows an empty field when settings.json names no language (#832.2); the
+        // rebuild shows the metadata's own name of it, a declared difference.
+        let language_name = if language_name.is_empty() {
+            metadata
+                .and_then(metadata_language_name)
+                .unwrap_or_default()
+        } else {
+            language_name
+        };
         let current = pinned_gateway(resources.as_deref()).map_err(unreadable)?;
         let kind = crate::home::api_kind(entry.kind);
-        let books = card_facts(&peek.metadata, &entry.folder, kind)
+        let books = card_facts(&peek.metadata, None, &entry.folder, kind)
             .books
             .unwrap_or_default();
         let options = match self.installed_pins().await {
@@ -157,6 +167,26 @@ impl Handle<ViewFromHome> for App {
             gateway: GatewayCard { current, options },
         })
     }
+}
+
+/// The name the metadata gives the project's language: its name in its own tag, else the
+/// first name it lists.
+fn metadata_language_name(meta: &Value) -> Option<String> {
+    let language = meta.pointer("/languages/0")?;
+    let tag = language
+        .get("tag")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let names = language.get("name")?;
+    let name = match names {
+        Value::String(name) => Some(name.as_str()),
+        Value::Object(names) => names
+            .get(tag)
+            .or_else(|| names.values().next())
+            .and_then(Value::as_str),
+        _ => None,
+    }?;
+    (!name.is_empty()).then(|| name.to_owned())
 }
 
 /// The text of a top-level `settings.json` key as the fold projects it.
@@ -207,10 +237,7 @@ async fn save_settings(
     // token names only heads the dialog's values came from.
     let read = session.read();
     let held = ShownValues {
-        direction: match setting_text(&read, "textDirection").as_deref() {
-            Some("rtl") => Direction::Rtl,
-            _ => Direction::Ltr,
-        },
+        direction: crate::direction::of_fold(&read),
         font: setting_text(&read, "textFont"),
     };
     if held != req.shown {
@@ -235,13 +262,37 @@ async fn save_settings(
         Direction::Rtl => "rtl",
     };
     if direction_changed {
-        let command = write("textDirection", direction_text.to_owned())
-            .map_err(|reason| refused(SettingsRefusal::DirectionNotSaved { reason }))?;
-        handle.submit(command).await.map_err(|error| {
-            refused(SettingsRefusal::DirectionNotSaved {
-                reason: error.to_string(),
-            })
-        })?;
+        // The metadata's scriptDirection is read first everywhere (`crate::direction`), so
+        // the save writes it first; textDirection follows, as tC4 writes it.
+        let not_saved = |reason: String| refused(SettingsRefusal::DirectionNotSaved { reason });
+        let languages = RecordKey::ProjectMeta(MetaField::Languages);
+        let mut value = match read.projected(&languages) {
+            Some(Record::ProjectMeta {
+                value: Some(Json::Arr(languages)),
+                ..
+            }) => languages,
+            _ => Vec::new(),
+        };
+        if let Some(Json::Obj(first)) = value.first_mut() {
+            first.insert(
+                "scriptDirection".to_owned(),
+                Json::Str(direction_text.to_owned()),
+            );
+            let token = read
+                .mint(&languages, None)
+                .map_err(|e| not_saved(e.to_string()))?;
+            let command =
+                StoreCommand::set_meta(token, Some(Json::Arr(value))).requested_by(req.request);
+            handle
+                .submit(command)
+                .await
+                .map_err(|e| not_saved(e.to_string()))?;
+        }
+        let command = write("textDirection", direction_text.to_owned()).map_err(not_saved)?;
+        handle
+            .submit(command)
+            .await
+            .map_err(|error| not_saved(error.to_string()))?;
     }
     if font_changed {
         let command = write("textFont", req.font.clone()).map_err(|reason| {
@@ -266,13 +317,14 @@ mod tests {
 
     #[test]
     fn a_project_with_no_settings_shows_tc4s_defaults() {
-        assert_eq!(
-            settings_values(None).unwrap(),
-            (String::new(), Direction::Ltr, None)
-        );
+        assert_eq!(settings_values(None).unwrap(), (String::new(), None, None));
         assert_eq!(
             settings_values(Some(br#"{"schemaVersion":1,"textDirection":"sideways"}"#)).unwrap(),
-            (String::new(), Direction::Ltr, None)
+            (String::new(), Some("sideways".into()), None)
+        );
+        assert_eq!(
+            crate::direction::project_direction(None, Some("sideways")),
+            Direction::Ltr
         );
     }
 
@@ -282,7 +334,11 @@ mod tests {
             "textFont":"Charis SIL","languageName":"Español"}"#;
         assert_eq!(
             settings_values(Some(settings.as_bytes())).unwrap(),
-            ("Español".into(), Direction::Rtl, Some("Charis SIL".into()))
+            (
+                "Español".into(),
+                Some("rtl".into()),
+                Some("Charis SIL".into())
+            )
         );
         let pins = br#"{"schemaVersion":2,"languageSets":{"primary":{"gatewayLanguage":
             {"languageId":"es-419","owner":"es-419_gl"}}}}"#;

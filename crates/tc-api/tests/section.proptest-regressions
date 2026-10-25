@@ -5,3 +5,5 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 180d794344c62bb7fe02061d2979a3f16d0265958b5c7ef3fe08ad8cfc8c8420 # shrinks to text = "1-4 0\n2", k = ["1-2", "3", "4"], drops = []
+cc f86076213a7ed53bda60b3300a354675b0ad65d8ed9823e467152eb046f84f2d # shrinks to text = "5\n2\n", k = ["1", "2", "3"], drops = []
+cc 36bf001b1ffefe274ea3651b1190ba8441bca1232c65620117004552a26213b4 # shrinks to text = "0\n1-3", k = ["1", "2", "3", "4", "5"]

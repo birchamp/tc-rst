@@ -138,12 +138,14 @@ browserTest('a_failed_cancel_keeps_the_card_buffer_and_draft_until_retry', async
     assert.equal(await typing(page, '9–10').inputValue(), wanted);
     assert.ok((await storageDump(page)).includes(NINE));
     const draftFile = path.join(env.projectsDir, BIBLE, '.tc', 'drafts.json');
-    assert.ok(JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted));
+    // The draft writer writes on a timer, so the file is read until it holds the card.
+    const drafted = () => fs.existsSync(draftFile) && JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted);
+    await until('the card is drafted on the server', drafted);
     assert.equal((await verseOf(env, '9')).words.value, '___');
     await card(page).getByRole('button', { name: 'Retry', exact: true }).click();
     await card(page).waitFor({ state: 'detached' });
     assert.ok(!(await storageDump(page)).includes(NINE));
-    assert.ok(!JSON.parse(fs.readFileSync(draftFile, 'utf8')).some((d) => d.text === wanted));
+    await until('the draft is gone after the retried Cancel', () => !drafted());
   });
 });
 
@@ -601,6 +603,27 @@ browserTest('a_reload_never_saves_a_section_buffer', async () => {
     assert.equal(savesSent(requests, mark), 0, requests.api(mark).join(', '));
     assert.equal((await verseOf(env, '9')).words.value, '___');
     assert.ok((await storageDump(page)).includes(NINE), 'the buffer is still there for the offer');
+  });
+});
+
+// FIX-HIDE2 (never hide a translator's text): a section draft never saved comes back after a
+// reload where the translator sees it, its card open with the typed text, ready for Save.
+browserTest('a_section_draft_restored_after_a_reload_is_on_the_page', async () => {
+  await withApp(async ({ page }) => {
+    await openTitus2(page);
+    await pill(page, '9–10').click();
+    await typing(page, '9–10').fill(`9 ${NINE}\n10 ${TEN}`);
+    await card(page).getByText('Drafting 9–10').click();
+    assert.ok((await storageDump(page)).includes(NINE));
+    await page.reload();
+    await page.getByTestId('account-menu').waitFor();
+    await until('Titus 2 or Home after the reload', async () => (await pill(page, '9–10').isVisible()) || (await titus(page).isVisible()) || (await card(page).isVisible()));
+    if ((await titus(page).isVisible()) && !(await card(page).isVisible())) await openTitus2(page);
+    await until('the draft is on the page', async () => {
+      const inCard = (await typing(page, '9–10').count()) > 0 && (await typing(page, '9–10').inputValue()).includes(NINE);
+      return inCard || (await page.locator('main').innerText()).includes(NINE);
+    }, 20_000);
+    assert.ok((await typing(page, '9–10').inputValue()).includes(NINE), 'the section card is open with the draft, for Save');
   });
 });
 

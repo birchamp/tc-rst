@@ -1,13 +1,13 @@
 {
   "about": "What the four layers of APP-DESIGN §7.3 find for every baseline screen (manifest order) and then every case of the tC4 view-state gallery (cases.json order, APP-DESIGN §7.4): pixels, the DOM, what the DOM shows (meaning) and behaviour, between tC4's record (parity/tc4-baseline for a screen, parity/view-gallery for a case) and the Rust app's captures (captures.json). A case has no meaning layer. crates/tc-ui/tests/screen_record.rs computes it from the committed files and fails when this file differs; UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record rewrites it. Status: same, declared (every difference inside a mask of masks.json), differs (explained in residuals.json), unported (`missing` names the unit that captures each layer), failed (nothing excuses it).",
   "baseline": {
-    "tc4Commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e",
+    "tc4Commit": "d25b7871904228a342c0d80280136d8636833653",
     "machine": {
       "platform": "linux-x64",
       "chromium": "141.0.7390.37",
       "fonts": {
-        "count": 535,
-        "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+        "count": 543,
+        "sha256": "4bcf744c9986c6a703f27642acf47415d77165e153ca80190200ffcc648f5d72"
       }
     }
   },
@@ -16,21 +16,21 @@
       "platform": "linux-x64",
       "chromium": "141.0.7390.37",
       "fonts": {
-        "count": 535,
-        "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+        "count": 543,
+        "sha256": "4bcf744c9986c6a703f27642acf47415d77165e153ca80190200ffcc648f5d72"
       }
     },
     "build": {
-      "ui": "8a97c92765d47ed3",
+      "ui": "13c176632f3754b6",
       "commit": "dev",
       "api": 1
     }
   },
   "totals": {
     "rows": 130,
-    "same": 33,
+    "same": 36,
     "declared": 0,
-    "differs": 79,
+    "differs": 76,
     "unported": 18,
     "failed": 0
   },
@@ -52,8 +52,8 @@
         "diff": "diffs/home.png"
       },
       "dom": {
-        "tc4Sha256": "1b8b22ea71720d5d2db4fc8d6494a724105d22449aa37d324845adb8924ce341",
-        "rustSha256": "6c71bdc8cc52365691e8a9d72da74fb885da0da33f2b93f806ab296cf41fd1da",
+        "tc4Sha256": "4e5ecbe0d909ba1f4e273a3b67226402bcdfb4e75aac97fda874b01554330367",
+        "rustSha256": "2d6a21c4443a268ce37ea7442b60d331f13a7eccfe1e35f0178051fbe919d512",
         "scope": null,
         "same": true,
         "declared": [],
@@ -82,8 +82,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "fa61fa956cbdeb41197a29f0f0a631084b6ec52a98c5ba2a54a8a4c343cf22ee",
-        "rustSha256": "1ee839c7de9312082fdf836d4f1a85faa51016f1e32c2860acdd99a73fe976b6",
+        "tc4Sha256": "fcab7143cfdabd57e67df6f9ad650fd3f803f22ea461a90b8dd5900074b248e7",
+        "rustSha256": "7c80a6e8833d312dabd4cc865bcd8540214bfce9b5eea59c13c4c66e155b06ed",
         "scope": null,
         "same": true,
         "declared": [],
@@ -100,7 +100,7 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "differs",
+      "status": "same",
       "by": "C2",
       "backend": "store",
       "pixels": {
@@ -112,15 +112,12 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "3e27eb9e669b3cf153ed6418ca4a7e7ddb19bc88bbec2d03b415730c91075a7e",
-        "rustSha256": "20a18c41ccd54d9894d4dd2629caf56eee90d06a24c1b11ac6dfd8f78b219ae1",
+        "tc4Sha256": "827e5bd0ae1a22cc1ffee68a1bfe40359280310ea4d52abcba695530a13a742d",
+        "rustSha256": "ccd601729d1a20e5b36528f3b400dac67a6b96bb937044d0d101c46d8a48c204",
         "scope": null,
-        "same": false,
+        "same": true,
         "declared": [],
-        "firstDiffs": [
-          "line 1351: tC4               \"“It is necessary to stop them … they should”\" | rust               \"“It is necessary to stop them”\"",
-          "line 1378: tC4               \"“It is necessary … teaching what they should not”\" | rust               \"“teaching what they should not”\""
-        ]
+        "firstDiffs": []
       },
       "meaning": {
         "same": true,
@@ -145,8 +142,8 @@
         "diff": "diffs/check-picker.png"
       },
       "dom": {
-        "tc4Sha256": "87f8929b4d1c3ea2dcabb9fa8997e66eb0ff338393bce03844b95fbaa0119e49",
-        "rustSha256": "cf2bc10f135ac369372dff4c480dd4a72cb4088b0dd44d6ca981e22c118fd049",
+        "tc4Sha256": "cdd028be51e2c6c4b64fdc03819b2dd33f094860232146dd0c4a7cecd3bd5aa0",
+        "rustSha256": "6263e7044966970cad26c70002e6edd3ce07baf4943171e830eb05639e1b1f06",
         "scope": null,
         "same": false,
         "declared": [],
@@ -170,16 +167,16 @@
       "by": "C4",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "07ad4e490db11161a113349fba1d84b62518c3a451286bb51b31b22f1f02a191",
+        "tc4Sha256": "75336321e43076b017c517cfe80e7b5d2bdcfdc82b6ff719bc9cd5d0dd2eb328",
         "rustSha256": "7583b8fffa79b360f867d08e0a6b40134b768fcfae38d3873d728d76f3f03fd9",
-        "mismatched": 420926,
-        "outsideMasks": 420926,
+        "mismatched": 519,
+        "outsideMasks": 519,
         "masks": [],
         "diff": "diffs/check-tn-session.png"
       },
       "dom": {
-        "tc4Sha256": "5bca731316468791d28941e6aa84ef2287c2824d7af61dc2555a51dc4f5f86ec",
-        "rustSha256": "bcd13ef42f0c776f004eca084f879375913d3736598811105aec0364d1e09d89",
+        "tc4Sha256": "917876683a0729babf0b18b9a20187d2a2052b035b12f4557250f1ae778689aa",
+        "rustSha256": "ea990e99f9bbaf1957b54b1d3cb0bd28e3a02a846031baec4e0b18f04c903a10",
         "scope": null,
         "same": false,
         "declared": [],
@@ -188,7 +185,7 @@
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 512: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…"
         ]
       },
       "meaning": {
@@ -206,16 +203,16 @@
       "by": "B6",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "4806f0b5818dfca6f5ff87043f71475e88fe43d4816564aafab68d96f8d610b0",
+        "tc4Sha256": "8f01c125790516aa98b1f9353809943bb3f415c6580e9ccfebdfb67a1be755d7",
         "rustSha256": "8f01c125790516aa98b1f9353809943bb3f415c6580e9ccfebdfb67a1be755d7",
-        "mismatched": 45720,
-        "outsideMasks": 45720,
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/align-workspace.png"
+        "diff": null
       },
       "dom": {
-        "tc4Sha256": "9fe56c2fe5e44a7ad57d244c225371aabab9eb0f33f050611c5210fdd35a6a0d",
-        "rustSha256": "109dd9ea70c25aab2a985cb98666ba5b785525e1a53683143b1064e8d6de415d",
+        "tc4Sha256": "b0b148dc9aa90bfe4279a2ae9ef732d5f620b578706ff9dcaf479f5da967aed2",
+        "rustSha256": "5783006f7d8f8efc8f4786849f0b031658e898a368171ec9ff16725e24b6adb4",
         "scope": null,
         "same": false,
         "declared": [],
@@ -242,16 +239,16 @@
       "by": "B6",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "e0019b625ec7e70a1209de728765e61535a565c4b69c3145d8151066e7e7da47",
+        "tc4Sha256": "bcf419a1de1cb357faad85eb9fcff3aa1d0a8aa9f96e70e137bc0c2a54b58faa",
         "rustSha256": "bcf419a1de1cb357faad85eb9fcff3aa1d0a8aa9f96e70e137bc0c2a54b58faa",
-        "mismatched": 24682,
-        "outsideMasks": 24682,
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/align-original.png"
+        "diff": null
       },
       "dom": {
-        "tc4Sha256": "650ef40cba639e131f6168814af2cf15ebb962a56f305b58085d31afc04448fb",
-        "rustSha256": "f1132d1d543953d3cde863ed167f95c09700ab941c202f48c44a6a14a8cc2f51",
+        "tc4Sha256": "3dd9e34fac0d912c7753c064d2fd324dd2f2452dfaeda5640761508c7d946a63",
+        "rustSha256": "e2ffb50abff007f25dd3d8afaa6ef79d8b707d15971f5a12653d74e5585a9659",
         "scope": null,
         "same": false,
         "declared": [],
@@ -278,16 +275,16 @@
       "by": "B6",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "d0314087f33005433c559588d7124bd0e3e2eb59a2207db0ac94a3090749c775",
+        "tc4Sha256": "a35887ec546ae6317d1e49a0b49d3c61d1a40dd34088d3c9260408be15abd9bd",
         "rustSha256": "a35887ec546ae6317d1e49a0b49d3c61d1a40dd34088d3c9260408be15abd9bd",
-        "mismatched": 284817,
-        "outsideMasks": 284817,
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/align-workspace-row.png"
+        "diff": null
       },
       "dom": {
-        "tc4Sha256": "943124b6d160acc80a041b3d7218fa1db6e08a873779f8f0a541194197577eee",
-        "rustSha256": "e5d574347ffa10f9fb1c46ade5bdf416fdbc628fe413d7bf8776e14089d0d19d",
+        "tc4Sha256": "6c7b3226bdb6892c9d3b62957fc8356945c9fb9dc15c2dc0301857316d7b4245",
+        "rustSha256": "e15d2642629f09db46216ff73fb024dc9646e4d86df29a454fb77f728215834f",
         "scope": null,
         "same": false,
         "declared": [],
@@ -314,16 +311,16 @@
       "by": "B6",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "cef41294a8f07aec9867b55e62a85ce919c06a2fda5f4d1b6158fbb7526fa62d",
+        "tc4Sha256": "2ee6ebe7fa173d70677fdca270aa087c141701fa053accd6e562adfabea9942a",
         "rustSha256": "2ee6ebe7fa173d70677fdca270aa087c141701fa053accd6e562adfabea9942a",
-        "mismatched": 272950,
-        "outsideMasks": 272950,
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/ar-align-workspace-row.png"
+        "diff": null
       },
       "dom": {
-        "tc4Sha256": "bf307f76c2299caf949e2c89772c14de1f7a614d3fca5299a3d8117fd95d2422",
-        "rustSha256": "63556541631acd2ff1f2a425852fd71047a64dd7642b8e368a892f0188fedcb5",
+        "tc4Sha256": "02a1031e89e5bed2d17e4f90902e3b700cdad441da939d05b180b9f9070d8735",
+        "rustSha256": "1f1704e4073129155603f6296569e3195911cc2d3ba712a81f823cd9195e78d9",
         "scope": null,
         "same": false,
         "declared": [],
@@ -350,16 +347,16 @@
       "by": "B6",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "dee7d41db6dddba12e2dbc9ca5d74ec38b443d0ee5e64e4b938abb8d9fadc7a6",
+        "tc4Sha256": "3cff17ef41f02301cc24afa9787b3710144418a6d9703fd570ba0f69356c565a",
         "rustSha256": "3cff17ef41f02301cc24afa9787b3710144418a6d9703fd570ba0f69356c565a",
-        "mismatched": 40058,
-        "outsideMasks": 40058,
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/align-workspace-620.png"
+        "diff": null
       },
       "dom": {
-        "tc4Sha256": "0c8312f3eea1c8bf9368fce860b7502d96100264bb2a049295651e94080d0a9e",
-        "rustSha256": "3e54aadfca39f4016f25fbc0b4ad527fe70f0192e780fd0f66df8318256f08e9",
+        "tc4Sha256": "eab52364003652998f78eb97d30298481b92eab9078841a26945bc3cd49f81a7",
+        "rustSha256": "a6045d0f74740f034986b8a5692f3c46c9f1dbf93d19be2252475867830552fa",
         "scope": null,
         "same": false,
         "declared": [],
@@ -386,16 +383,16 @@
       "by": "B6",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "f0ad20d4b4a5876cedfe24dfb89f57d917aed5593130a4a934ca69970b7ebd6e",
+        "tc4Sha256": "0f628469ef0539643546ae72570b5e47ffc1d162942ba2b510e43e77028d83dc",
         "rustSha256": "0f628469ef0539643546ae72570b5e47ffc1d162942ba2b510e43e77028d83dc",
-        "mismatched": 39874,
-        "outsideMasks": 39874,
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/ar-align-workspace-620.png"
+        "diff": null
       },
       "dom": {
-        "tc4Sha256": "969b26d67e6a1dc4d86337f5737e83dcd7dbf35c6bfceaf66a5377c51f721437",
-        "rustSha256": "bb7aca993f77708a204901b2ef6dbf999bf2cbd8ec1dcd51271ba707205cf3cd",
+        "tc4Sha256": "df78215b4e384c2e27789a5d7ae007c27b6e9c219ab79376482ba5ab69603202",
+        "rustSha256": "e2a7e36706b3ee8cf93add5cd5ea2883d9b2e0fe1ef3179f18ace8cc3456b0bf",
         "scope": null,
         "same": false,
         "declared": [],
@@ -430,8 +427,8 @@
         "diff": "diffs/project-settings.png"
       },
       "dom": {
-        "tc4Sha256": "378f418fa179da485b3181c2e1cc7da46bebc56843e380f234566aa8576b7d58",
-        "rustSha256": "c2678d76d27935dc7aa14f782d5783db8fc90ad533a9000f173617f58d5dbfff",
+        "tc4Sha256": "48e2869e8a41502a1d52b81a48fca077143b2fe0231825f06cbbe76841386e86",
+        "rustSha256": "99876c99153bfd1f797f154e6bb1ca78d460a6f25487df6f167edde389a97646",
         "scope": null,
         "same": true,
         "declared": [],
@@ -460,8 +457,8 @@
         "diff": "diffs/add-project.png"
       },
       "dom": {
-        "tc4Sha256": "94e798799f28b17d23dffaf76b70e351002ac220a41254f6edb241e88d15399f",
-        "rustSha256": "669cda9cf131741c5ddd9eca98db27bee889536a109d61177a75d16830efda20",
+        "tc4Sha256": "d5cf4b316db0a2b7a94c184c341d50feebbdcd138f04b601519060a1be9b80d3",
+        "rustSha256": "04cb9b0aff3e42878d97792e6425cbc3b95e2a9f024c7f6d41bd03131a54c001",
         "scope": null,
         "same": true,
         "declared": [],
@@ -490,8 +487,8 @@
         "diff": "diffs/new-bible.png"
       },
       "dom": {
-        "tc4Sha256": "c5b5e763f34d9cff9d31a4669b00a717130de2a667eacce6cfbbca8782631c7f",
-        "rustSha256": "86ec01ab30f5f2af235184e24b5090b62be8821e8244a4ae5da82b993ce42379",
+        "tc4Sha256": "ec79956c8cdbb872652f197e8704fb42176a4e62bc33c5e30b65f499434f237f",
+        "rustSha256": "83f251f3893d643dd12a8a57ec9dc1a565467c33621d1fc8c8f2702cc45b0127",
         "scope": null,
         "same": true,
         "declared": [],
@@ -520,8 +517,8 @@
         "diff": "diffs/import.png"
       },
       "dom": {
-        "tc4Sha256": "ce5360f4eac51efe619470873177b1ef8e4f3a756ee725c3f9de583d099e97ae",
-        "rustSha256": "4cb0d77b93bfd247755724d281cef73bbcf297ed1dfa926aeb1f18703776bf6a",
+        "tc4Sha256": "1bded54a54f3ace7c85b085a5da378fa914172d0d5495aab9ced92f340e80e66",
+        "rustSha256": "dac638de2f10f783756992ace261bee01e9ed82bf12d308969d5046d01899da5",
         "scope": null,
         "same": true,
         "declared": [],
@@ -550,8 +547,8 @@
         "diff": "diffs/share-internet-consent.png"
       },
       "dom": {
-        "tc4Sha256": "3ff17019d92c2f01201e24a5a5933ce8a85cb4e40c9549127650e8d92b32d39b",
-        "rustSha256": "bc16976385490fe74e0928811e43a30ca67638a1f998bcbcde075200eae25f2f",
+        "tc4Sha256": "957b968ac67d7c7d7aa9871286e6f7cbe4e2b8252be1cd720add13dd3e8a229d",
+        "rustSha256": "32cfa2a9e4e86a6c12bc6a2f5a5a36c6e3a912de6640370304a5e4c450b102f5",
         "scope": null,
         "same": true,
         "declared": [],
@@ -573,8 +570,8 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "64054d2ff8d9e82c0dbe5082d98757d7455747f57dbd535d3276280667b87ff3",
-        "rustSha256": "46530a67d7dcf78dc1111345553bf098a78684c8f725985300c36e6a7897eb52",
-        "mismatched": 690,
+        "rustSha256": "4038f73c78823439c3c354f5dc0e27070256dc34ec345ffcf7928a3b08b4798b",
+        "mismatched": 716,
         "outsideMasks": 69,
         "masks": [
           "signin-server"
@@ -582,8 +579,8 @@
         "diff": "diffs/share-signin.png"
       },
       "dom": {
-        "tc4Sha256": "50ce0b62fdbbba09090d0cd2a1723dd2279a4be58558ac618f686ca847fa25c5",
-        "rustSha256": "739a6be6e158fafeb637191a0f86b28a5f96b92d17a6922a3c29fa21fc666515",
+        "tc4Sha256": "4470c5670a806be5543198b1bb2a76a1a32550d1c448ea300752c207ec92699c",
+        "rustSha256": "9c065e0aaeb42d9e3abcfe7c4236eb2724e2465e19f5343606e0099639d14cf2",
         "scope": null,
         "same": false,
         "declared": [
@@ -614,8 +611,8 @@
         "diff": "diffs/share-dialog.png"
       },
       "dom": {
-        "tc4Sha256": "58ad2209f14abb71c19a8aecf655590088bc0d9f630c47875083084b8da589ab",
-        "rustSha256": "09442d92884df4b0dde2a3b833229d0620ec9522eb502ce33551a22fd186ca59",
+        "tc4Sha256": "80a6868148bd3e8c8647c47dcf157a0dd465fde6708f698f1271bda589a55985",
+        "rustSha256": "27c89f926269106ca38c7a537a4a1204e90b2ddf9114ac4a8a238be357e97476",
         "scope": null,
         "same": true,
         "declared": [],
@@ -644,8 +641,8 @@
         "diff": "diffs/share-dialog-check.png"
       },
       "dom": {
-        "tc4Sha256": "05d3b8913a0389c3a198127ed7fa26b48c2e0cddacb2835adaefb7c6c4bcff2a",
-        "rustSha256": "94a9bd29b3d6cc32ed5728f10dca0c686b9221e5080b9bf03fad034b629f9b2b",
+        "tc4Sha256": "04d557e1d9c81afec3c21a68eec9eb4302eea5081dd5a348486a7a7d5c6b6a4e",
+        "rustSha256": "a6130dc0bbdea91d685de14c6646ad2b4b5bb272a8cdc44b46bbe108b0041264",
         "scope": null,
         "same": false,
         "declared": [],
@@ -676,8 +673,8 @@
         "diff": "diffs/account-menu.png"
       },
       "dom": {
-        "tc4Sha256": "4100164bf99c99ea1c5c5e261cacef98d26a8fc198dad8351b783aa41643080f",
-        "rustSha256": "3f18a73475f0d0767c1ad5647d08da43fc30569346b8fe24bf06129480758ad5",
+        "tc4Sha256": "e567ccfcfa4a0363ebf4fe14a16aa26e44a18cf7f03113ac57171f6884eecd70",
+        "rustSha256": "3782aa396b5c1ed027097f56102490da2dfa66a08d758b170d62a08f738f18ca",
         "scope": null,
         "same": true,
         "declared": [],
@@ -714,8 +711,8 @@
         "diff": "diffs/app-language.png"
       },
       "dom": {
-        "tc4Sha256": "7523ea5a6320acccf059e220730146e28d3f4b58081cdc47403d233f43b22d6a",
-        "rustSha256": "9ad61183b767b2cb784dbd6a560aa72cc72ae56922bab3589a8a1235fe5b3c91",
+        "tc4Sha256": "0c2f1fe711d6993558e37f3bc54ad49cb97fe89af127d934f9406e29d3298339",
+        "rustSha256": "472928c1295bce9a46e12747e435830eebc8c39a11de28400f5e211d6e6bac8d",
         "scope": null,
         "same": true,
         "declared": [],
@@ -744,16 +741,16 @@
       "by": "B7",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
-        "rustSha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
+        "tc4Sha256": "ca1a6a778cb7794e043d263fe406e67c8920c2cb2531116ba4fb4e0e15b4f305",
+        "rustSha256": "ca1a6a778cb7794e043d263fe406e67c8920c2cb2531116ba4fb4e0e15b4f305",
         "mismatched": 0,
         "outsideMasks": 0,
         "masks": [],
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "70cbde356b4399aa75d1e10c76ba6a789330f0de89438413045c6f4c97496751",
-        "rustSha256": "452318303bc8e667f8c113b815399cba622278e9e81fe9ddcce6327391552cd5",
+        "tc4Sha256": "f7a9844af67d16d8a48b0818fbad3005cf513f6020bb51cb2103583e95e6d5eb",
+        "rustSha256": "d5889f20cc163b81075e8353ba373ce1818a2264001adb4fb9c216d562302b3c",
         "scope": null,
         "same": true,
         "declared": [],
@@ -774,9 +771,9 @@
       "by": "B7",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "5c89cf6c07230a4fa45d799b65ca0289c1111c3a6c0adc618e32024c1040ca50",
-        "rustSha256": "b7a4270f938945e16f17fb03a1fa34b58a2c334f264432faf4c5a1e4bb9046fe",
-        "mismatched": 894,
+        "tc4Sha256": "b2da55963044e46cc4972b4a6642e71466c06ccaff4a236eb244eef7b8790cdb",
+        "rustSha256": "cbbcb0b1a7cac522936aa751ab21b0866962ad2d89a6b1a36b65994217f18194",
+        "mismatched": 923,
         "outsideMasks": 69,
         "masks": [
           "about-build"
@@ -784,8 +781,8 @@
         "diff": "diffs/about.png"
       },
       "dom": {
-        "tc4Sha256": "bdb34c05fd77d1f129490346b90f5003a6a97eb81aa58c06e5208b3117d0768b",
-        "rustSha256": "e92527089424c43603e9bd95536419715f990907f0b51932b775d459807c27ee",
+        "tc4Sha256": "80b7ad317a0ae45f3238b840f24a76a531434dc2a562290f98e4919bb02f4c46",
+        "rustSha256": "28acba384d75f4b7bcf37630c2309c714909ec406a3ade903c3252c755627869",
         "scope": null,
         "same": false,
         "declared": [
@@ -808,7 +805,7 @@
       "by": "B7",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "dba64f1bc9ad562113b1a63f16fd01635ba67831e98afe6eeb7f13f6edecc318",
+        "tc4Sha256": "cfa575472a5fc74836982797f83cf0290814eb060b2cde7c880041cd1ef02bba",
         "rustSha256": "d9bfcf2078fddbbff53fe453e72f0f2d7abbf56243f0b8d5e6bd0a41541db76e",
         "mismatched": 1238,
         "outsideMasks": 41,
@@ -818,8 +815,8 @@
         "diff": "diffs/feedback.png"
       },
       "dom": {
-        "tc4Sha256": "cde6f3aacb3ae32801aaa5594a359e29b68b51ba39957506142d26270cf8582f",
-        "rustSha256": "7bb50be4b77d2ac18b397f4c25dd6062014004a9e4d266426408f238cc44f1a7",
+        "tc4Sha256": "27ec524b738cfdf0eb746b3b6cd5cdb37457982f6b6fa1ec05c8dcb13d3f9a95",
+        "rustSha256": "bcb0d21748fa02e4126b8b25e388f42cd2d1c14fd698bbf026a5b2cfd2f5728c",
         "scope": null,
         "same": false,
         "declared": [
@@ -858,8 +855,8 @@
         "diff": "diffs/new-obs.png"
       },
       "dom": {
-        "tc4Sha256": "0f61298f0df998e2563954fc1487912632ab2859315d5dfbc533ec3175b8ed28",
-        "rustSha256": "523676158aeedcc2812fa5fcef9621e1814a1410ed917499afce360c3fc696ca",
+        "tc4Sha256": "1b46130a08914d1c98572fda8cbc333c1d280c9e98a967d53918cd1710a10ecf",
+        "rustSha256": "da899b7b07148103c33137c787dc25c9cc9da85a769c05e360569ae8033b89ef",
         "scope": null,
         "same": true,
         "declared": [],
@@ -888,8 +885,8 @@
         "diff": "diffs/add-book.png"
       },
       "dom": {
-        "tc4Sha256": "6b1cb42fcde976264c558753a00e143d1927aaee41b7d4abdf6ae01ff7405854",
-        "rustSha256": "34992dfdb25e92f5e92cb93aeaac89b87e446f89a4ea657839daa2d3b0acb8ce",
+        "tc4Sha256": "8252c6b2a74d46377f52ca553d085dc09628223c9b031cf0fd0249c0c9879a0f",
+        "rustSha256": "35eae7317e6dd554a7cfc063a36400a4de2b564b0f6170f7e87204b2fad34b9c",
         "scope": null,
         "same": true,
         "declared": [],
@@ -918,8 +915,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "80291d855a07f2ae56032bd02c847e4b9d5a6ea08e8d4b4f3f4a9b9e1b5e726b",
-        "rustSha256": "b18f63877e6a443863539bbf94a6550cf822e72df163332659734f5c9a19a349",
+        "tc4Sha256": "c745d67bcc916864c7207bcb57110d2805e482b466cc36e02943753a2b1a30eb",
+        "rustSha256": "f4e2a4e79c0a18205f867f88123dab607ca4f80264374caf48217e4064ed2161",
         "scope": null,
         "same": false,
         "declared": [],
@@ -951,8 +948,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "62f3d06f979463ec74b8f5d74e53d3bc60182c1865c03ff489905cfc2ec96ad3",
-        "rustSha256": "519747de0c3ff727ba31951acd35b29b0504040b82fb7368cace8a6c8b735aec",
+        "tc4Sha256": "9ffbdf50f90e6d2238f2b7a0c5bbf90dbc3d22512e9cc8307b2fb5c2ffc67d97",
+        "rustSha256": "05408de07b859650a2407d592aabed582881736180bd248bd96db7d671161db0",
         "scope": null,
         "same": false,
         "declared": [],
@@ -984,8 +981,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "7c41a81c882c24b395fe013375d7e648d974db0a07cc68ab24e22628d3c1b642",
-        "rustSha256": "5c29e89c5113ce1befa1ee6e8e465e754d06b4cf21db1c6aebc0c5a4d2313596",
+        "tc4Sha256": "edd5ebdf364b7c3448a0f9523f82c8da97423ff532ba921a81c94d75dd0fd9b4",
+        "rustSha256": "9aafdcd81a8ec0e69199739f7d77ae9482b978e38327a5e0b493a438d728868b",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1014,8 +1011,8 @@
         "diff": "diffs/obs-translate.png"
       },
       "dom": {
-        "tc4Sha256": "6ec6f45963a5bc0d19c0de3ee2d8baf0347aaa48e3be593c709e1a115a4d58c4",
-        "rustSha256": "1b89cab055a3a77f92217be582d63aba26fb136d2b8cd09d2b1d6d6eb4b6c537",
+        "tc4Sha256": "b00a8e460fc172c627cb3c10ec5a30831c82c23c62fdc3f50c5d10b1bef9b133",
+        "rustSha256": "f30d8dd33dfdff5c08a33f7e40cb47282b5e4692fb1aa1af2768095f867dcfbc",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1046,8 +1043,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "1d69259b1f1c9d83e821d03302c77cf5148b0db17713a6feeecab056477ff58a",
-        "rustSha256": "f31fc1227566a6e71e357dcf5624f7e44df9998fb853a23d39f22d90e187444d",
+        "tc4Sha256": "1ed9ff35cb003337b44fcf2068379d855a282f4843db28d3bf37e979c6e2b913",
+        "rustSha256": "35687d013e473d2e3a46481f09ac65bd44aa4f26cbc1d78142f8d594341d5be2",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1069,8 +1066,8 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "1421eac5e9fd29f49483be96419df6f283cc1d3c9096faae1b11d21a5d6a9f0a",
-        "rustSha256": "36011111f350af971b58a055b37d1c2d6fd7f16f24e1c0b8edb80c82c0a1f182",
-        "mismatched": 153005,
+        "rustSha256": "7aca7cc178fff288f4af9d854ddac78dc46103a43ba34558a7cb0b851a8eef5e",
+        "mismatched": 153052,
         "outsideMasks": 149943,
         "masks": [
           "q3-where"
@@ -1078,8 +1075,8 @@
         "diff": "diffs/open-door43.png"
       },
       "dom": {
-        "tc4Sha256": "278e06ceb1bc8ca07d678bce8808a04af3880ecdb9be575d8f5222a88922e327",
-        "rustSha256": "645fc42ca529356055d992e63f6ac9f702450f3aaa0d2462b275357af6384b82",
+        "tc4Sha256": "5808df23eb8b8b090db57f1844bea635a6bfd974f3a6b1b2d522c88fe0052b43",
+        "rustSha256": "ea97f33956f0cc98dfb2a9f9df8bff0dede1aa5cdb7d64ded109b7933155e460",
         "scope": null,
         "same": false,
         "declared": [
@@ -1103,8 +1100,8 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "46d3c864d5315b453fb3a6e6059ca9582a46eea96789f41c06e7555b0486ef56",
-        "rustSha256": "48017ae17c8080e3834959007395d3fd46c2af005f3c0dd759dc058d94898c51",
-        "mismatched": 120679,
+        "rustSha256": "a0f086503f8e4108d2bb04a37bb11a7fe69134ba7f73a8e329564bb859d506ed",
+        "mismatched": 120726,
         "outsideMasks": 117617,
         "masks": [
           "q3-where"
@@ -1112,8 +1109,8 @@
         "diff": "diffs/open-door43-internet-consent.png"
       },
       "dom": {
-        "tc4Sha256": "f793cb83a00d4bb75a4c19ea1daa158225584ed4ad00100d895130e6b6f58bb1",
-        "rustSha256": "f7956f48f50e5ad85ef650630419b093537e85716c986a1798400cee26af5e20",
+        "tc4Sha256": "dd82cf8507f9522d1bf0e77e2cb2b6b1ecd9963f82076db69e92c102fd2e7473",
+        "rustSha256": "66656dc813008a86c9e48ae94b8ed6182b961a4d105b3bc3e3de5396a2ab221f",
         "scope": null,
         "same": false,
         "declared": [
@@ -1137,8 +1134,8 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "b0b464938b644360ba68430e8b13eb2e3936b49e0b834597769798ff818738f2",
-        "rustSha256": "b9564fcadcc9863d99268247061c1cc0d91965a01daefb1d1a34071408a764c2",
-        "mismatched": 175193,
+        "rustSha256": "bbb80a328c02a5597d0cc6328817a1acf5b587fe597a35fa1785ec17b2f221c5",
+        "mismatched": 175240,
         "outsideMasks": 164851,
         "masks": [
           "q3-where",
@@ -1147,8 +1144,8 @@
         "diff": "diffs/open-door43-refused.png"
       },
       "dom": {
-        "tc4Sha256": "853b8faa7d58888cae07d6249ebb77041f73a811e52eacf92a68f7180a05f882",
-        "rustSha256": "06de8264e27a37ea0e444a28948ad42fc60c12fec555741a0dafc5f46683fa2a",
+        "tc4Sha256": "a50f3ad3c432027882810e2693c29df35fa8020b6d9ea742789704d86f77325f",
+        "rustSha256": "a583daa240526ed0ae44725d0d6279b3820b1d611bdabafd4bc6cf875be19af0",
         "scope": null,
         "same": false,
         "declared": [
@@ -1180,8 +1177,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "318827605f6f48208421dd272fb87561ec9e34ea8ae7e637ee0e2fcdaf7225a8",
-        "rustSha256": "9bb872debc627407f4899b8b1bbc594e5a0eadc676274c56bb0618904fbf44c1",
+        "tc4Sha256": "e1d63c8d845b23defdce75c996e3e8bb3be62def263bf4014aebb4e163814a8d",
+        "rustSha256": "529e03a36b08ad2a44aa847f5999e5983c8e70f3180896e5e13f37d4f182cb33",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1210,8 +1207,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "25e035f09f11dae2548cc040e5d5c2f07df0d39b8f54024c9e15d1662bcc900e",
-        "rustSha256": "8d85625afb03725d4a1ea2f4a846e4b4da6bcb67471c04c7f8d16129178f2109",
+        "tc4Sha256": "c75a11b3b642937bbee9dfe9b87e4e02a46b032c86870269127d3312d519b6b9",
+        "rustSha256": "1e54698a4448437a4c10eb47f748adb8add5a6ad81039b65f22618b5a7a0562f",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1240,8 +1237,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "e864d513658ebc23c4a97a67a7fedaca20110f8bd17ef5d390b081ce978ce569",
-        "rustSha256": "e6fb8ab6105ceba735b9e4e99ebf7d58ae9cb38cf64183cc6d08757d6840325b",
+        "tc4Sha256": "dcbff8e8aa321644aba548b13250bf62a5dfc3eb422f7da1986f6a9021524b1e",
+        "rustSha256": "23a19152f2712791a39726d7a0229dcd6296ab2105da0f539b28fd5e53b60493",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1258,7 +1255,7 @@
       "kind": "screen",
       "scenario": "en-pins",
       "locale": "en",
-      "status": "differs",
+      "status": "same",
       "by": "C2",
       "backend": "store",
       "pixels": {
@@ -1270,14 +1267,12 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "8252bdeb4bb17728b64be6834f74ddc0db7492dc1bb26e3466a73db46b105f9e",
-        "rustSha256": "24a6c502778a2d18194b0709b75c9acfd92d79aae1c6bf49588380fb8ecbce91",
+        "tc4Sha256": "abef2ad34302b0b1bc10a22e8a1d4564761fccba7c1f4044027ed79cc0550735",
+        "rustSha256": "6a0e1a18b723b977d22b5c4084a620524e5b2a3f0950bad625dcba408c09cd04",
         "scope": null,
-        "same": false,
+        "same": true,
         "declared": [],
-        "firstDiffs": [
-          "line 1346: tC4               \"“It is necessary to stop them … they should”\" | rust               \"“It is necessary to stop them”\""
-        ]
+        "firstDiffs": []
       },
       "meaning": {
         "same": true,
@@ -1302,8 +1297,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "b4da7276d8343c2e3f25179752d5720d9e486c342f9656216701443371fc1e2b",
-        "rustSha256": "c7928a9cf0d9873e75bc4db903dc47075a61e0c9124219567490351b9873de61",
+        "tc4Sha256": "387bdf3fbb0e845574744439f54be59decf944e2abadcdeeb4fb39480dd0a99e",
+        "rustSha256": "e2c05f97d2406dcd8b343e29534cb8baa41bbb017b9c854e6293be35e5e1c157",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1332,8 +1327,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "4eadd4501bc0afaf5835272e9a343f38c7273091f49c825608fdc22187d5db82",
-        "rustSha256": "282152c41b6ff8d383f767c2a92ffb965d185900fdf17d73bb5b5eb553478b40",
+        "tc4Sha256": "b2d2899f33c10298100bec3677020d766d8c499f876c1640a47cabc0a2dd0eac",
+        "rustSha256": "88cabd2ec45ad15ad87fcde9cf3ab03e7812d7567496875bb03dc96f4d6fe244",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1362,8 +1357,8 @@
         "diff": "diffs/en-check-picker.png"
       },
       "dom": {
-        "tc4Sha256": "e63dee6ef5db074ad19fc1259180bfbf30ee88fa2fbfe09a86bbbda473d38563",
-        "rustSha256": "7aef7ff053274f4b8fe5a750d7954bae9564b88a1791f3bae72ebc70b79d9e2f",
+        "tc4Sha256": "81eeb28a5711d968a96a1421cbe5936b17ae1d2e451b33fccf19940bfaa49460",
+        "rustSha256": "e2748f5cc279cbd9f98d355b32744d521c8582e12bc9af0ef133beb629c5d85f",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1388,25 +1383,25 @@
       "by": "C4",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "278a4f03c5814c009d70db396de28cecaa7040a9faf161ad4a00879e8713fa3e",
+        "tc4Sha256": "29ec9ec0455941e8c930a6a82d9a24470bb13aa93c843a5687f2b47852bba626",
         "rustSha256": "6d43e30102ddd6fd92a59320aa52f5fe8912260d5ae8f80b889648c7babd5189",
-        "mismatched": 314401,
-        "outsideMasks": 314401,
+        "mismatched": 17038,
+        "outsideMasks": 17038,
         "masks": [],
         "diff": "diffs/en-check-tw-session.png"
       },
       "dom": {
-        "tc4Sha256": "42722932a2449308f770f2601b28c0619ede8136cd072b4fbc70e05f6cb59ed7",
-        "rustSha256": "418f46836e3d485ae2206148f9eb3355111852ea29f77aec84e3569c44391404",
+        "tc4Sha256": "26064a98a81de97a5e9e101d1eb574f43bf29d3d0d423f6d0b4b28498280c54f",
+        "rustSha256": "96407ffb71b15016747e0edfb7b6f907733dcb56091b524365f2ac8d070593c1",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
-          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
-          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
+          "line 75: tC4               \"Fold all\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · primary gateway language\"",
+          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
         ]
       },
       "meaning": {
@@ -1424,25 +1419,25 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "3a9da9304caea4441a70665ea5a3e9ffc35e037a6b50a16df7d351c09b536d7b",
+        "tc4Sha256": "4d8f6a97acf363a2645134b4ddc3f1d83eb32e8d6d039f6327c681bbd1d64e22",
         "rustSha256": "4318772b0143dcc636f96e4536e1f34abf7fb6b5fd09932c17c33aaa5c45c8dd",
-        "mismatched": 178750,
-        "outsideMasks": 178750,
+        "mismatched": 6888,
+        "outsideMasks": 6888,
         "masks": [],
         "diff": "diffs/en-check-tw-article.png"
       },
       "dom": {
-        "tc4Sha256": "b4d49169a9a0a6d40226ab420d409fb597085e7d11af5e5d24ce1c5f14f9e0ce",
-        "rustSha256": "14403065e85edf76765bae40e5b81a91872de1505f814f2b1ed4f5106f6595ab",
+        "tc4Sha256": "7020e2c0b8d4c92c0cc95e1bfe98edd9f32dc9171661cc9a649f7568b08e0136",
+        "rustSha256": "0a5d6672b2a162f52680b0a88322bb24b75cd4ca4cb8a1fbe7525956dda9c5cb",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
-          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
-          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
+          "line 75: tC4               \"Fold all\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · primary gateway language\"",
+          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
         ]
       },
       "meaning": {
@@ -1460,16 +1455,16 @@
       "by": "C4",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "e55099cf15f3f2dbc441e511aa4ffec480c0556040aed9a45e86009abd3ce5d8",
+        "tc4Sha256": "b7e7e2425b94049bdd55457e29843a568807a23e40af58b6e86fa6fbef3f3370",
         "rustSha256": "eb95e50736c2af5a70956b37daff71e00c8acf13da9e1eb184c5719d4567083b",
-        "mismatched": 387707,
-        "outsideMasks": 387707,
+        "mismatched": 484,
+        "outsideMasks": 484,
         "masks": [],
         "diff": "diffs/en-check-tn-session.png"
       },
       "dom": {
-        "tc4Sha256": "5f4b3bfdca2e9687025a74e8582134971aeea09a376513f0c96285d5f7a500ce",
-        "rustSha256": "d6560579697d0039dd1a717957a043ce90c2d6ce0aa5cfedd79be197713980f4",
+        "tc4Sha256": "65cc728b1ccc47cba1d49b17ea6e4e112e2f6865223c1dcf1fb485afc5a2337b",
+        "rustSha256": "ec4641c53021bf3c9dccb7927ae9bb12da31a0717b748727a3b1bcf5926720f2",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1477,8 +1472,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
-          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 73: tC4               \"By figure\" | rust               \"By category\""
         ]
       },
       "meaning": {
@@ -1496,16 +1491,16 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "0aba39a0233cfbf39d367d087ddb04b2f3273372e9a605b2a1533f00a7e8b3b6",
+        "tc4Sha256": "96fec4249dd7799eefdbe324ef1b645d2963ef769626915ed80eee9f4b862b1b",
         "rustSha256": "f5eabe1fd9ddd495b5c719ab836b198dba66c42a414c6baadfdd1d61fbc64247",
-        "mismatched": 212429,
-        "outsideMasks": 212429,
+        "mismatched": 484,
+        "outsideMasks": 484,
         "masks": [],
         "diff": "diffs/en-check-ta-drawer.png"
       },
       "dom": {
-        "tc4Sha256": "599addd7dd4e404cbe3fcaf7c4f4fae03d61b290d60a670ad368d88cbd7b9087",
-        "rustSha256": "1c7567d82e2beeedcdac73493de1ed78607cd052cee68baa8b516e6af4aa5be0",
+        "tc4Sha256": "7a47230c4e6c55524000378059eb1b2a26759d8a137c7aa53e773ccd3c7e43e1",
+        "rustSha256": "cef432ca304b92573e59878eb6d8d923bc8b6c846a88ac49a3629a8fbd690985",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1513,8 +1508,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
-          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 73: tC4               \"By figure\" | rust               \"By category\""
         ]
       },
       "meaning": {
@@ -1540,8 +1535,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "141e41e06def03a80fbab1ad4f720700a57846192ef8736c093aa8a00841ac5d",
-        "rustSha256": "869ceff1d8968c4065e8d98dc66141225ea11944f88c5d1652d1ee3aab0dbe0e",
+        "tc4Sha256": "d60d6c2f4f60371b2e9b1e6be6ef346aac6b2a73045cc0a16734a2198be3dfd2",
+        "rustSha256": "f1c88495563aa419c2363c1133bca8e382f502999ec62935834eda5167832658",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1570,8 +1565,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "baa40c8df8cb08d84f0004fa1e03d48a5d4ed34c3c595ede8c20659de3b7e5fa",
-        "rustSha256": "af8a6c264443ea7d20f24299751f0c9b4012a91ae943c96c3dd5e947d869c067",
+        "tc4Sha256": "3ab44dd13b068206f9a3dd49c8e85b6921ba776e3c9bd91dc6eda9dc79dc1eb2",
+        "rustSha256": "7f02bb54068f59c3056b2a74228d8c7fea513a998c7a8dbbc75b6f95efefb938",
         "scope": null,
         "same": true,
         "declared": [],
@@ -1600,8 +1595,8 @@
         "diff": "diffs/en-obs-translate.png"
       },
       "dom": {
-        "tc4Sha256": "d5e57147b904caf2c5373f9ea7245f64c3d0117e1b3edfb7c262685334432a64",
-        "rustSha256": "f1145a2978bbee0a9b75d71089d6fed7914d65931169d0078b7e56ab7557b8c5",
+        "tc4Sha256": "a81ddf5f84178d2f1bec283c5011730405c1775c6a5720998f0e12fbc7b85fab",
+        "rustSha256": "a3bfafa9c077912bcdbf85d52ecf16ed13a36a0c567f1d9c45cfd5ee2ed29a97",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1624,22 +1619,25 @@
       "by": "C4",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "493e46a7b85805ed7e9e53c4572d98a26d6a0e21eac2b40466df606ab31b1908",
-        "rustSha256": "493e46a7b85805ed7e9e53c4572d98a26d6a0e21eac2b40466df606ab31b1908",
-        "mismatched": 0,
-        "outsideMasks": 0,
+        "tc4Sha256": "94f97cdd7e0be85444ebb398c5ab5f417f11ad99eb8000a389e2cdd0da158d31",
+        "rustSha256": "2f2ecf8613aae093aeac0f8868c5a1818fabfae98f32afadda5a54d3724797a4",
+        "mismatched": 454,
+        "outsideMasks": 454,
         "masks": [],
-        "diff": null
+        "diff": "diffs/en-obs-check-tn-session.png"
       },
       "dom": {
-        "tc4Sha256": "f273aad7f66d88cd953a16040cb275be9c4115964eee2da901d4a20ac335fdd6",
-        "rustSha256": "a419d0851bf0ed14a2859c5518b27f1cae7aab88f66a7f51195fd2afaa3dbf81",
+        "tc4Sha256": "c046df7dd08134f039e80dea02624e92061d232c5116e924e79c256776bc5075",
+        "rustSha256": "31936e9398ca8d2629e53cac1d9c4d97a8f53564fcc6246bd157420b92afdd1e",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 91 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; …",
-          "line 661: tC4               <p aria-label=\"Your translation, word by word\" data-drafted=\"1\" data-testid=\"check-target\" data-words=\"target\" role=\"group\" style=\"color: var(--text-scripture); direction: ltr; font-family: var(--font-scripture); font-size: var(--fs-title-lg); line-height: 1.9; margin-bottom: 0px; marg… | rust               <p aria-label=\"Your translation, word by word\" data-drafted=\"1\" data-testid=\"check-target\" data-words=\"target\" role=\"group\" style=\"color: var(--text-scripture); direction: ltr; font-family: var(--font-scripture); font-size: var(--fs-title-lg); line-height: 1.9; margin-bottom: 0px; marg…"
+          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 73: tC4               \"By figure\" | rust               \"By category\"",
+          "line 80: tC4             <div data-group=\"\" data-testid=\"rail-group-rows\" style=\"column-gap: 6px; display: flex; flex-direction: column; row-gap: 6px\"> | rust             <div  style=\"column-gap: 6px; display: flex; flex-direction: column; row-gap: 6px\">",
+          "line 81: tC4               <button aria-current=\"true\" data-bookmarked=\"0\" data-check-id=\"i6lj\" data-commented=\"0\" data-decided=\"0\" data-i=\"choice\" data-invalid=\"0\" data-rail-index=\"0\" data-rail-stop=\"true\" data-ref=\"1:0\" data-save-error=\"0\" data-selected=\"true\" data-status=\"todo\" data-tone=\"accent\" tabindex=\"0\"… | rust               <button aria-current=\"true\" data-bookmarked=\"0\" data-check-id=\"i6lj\" data-commented=\"0\" data-decided=\"0\" data-i=\"choice\" data-invalid=\"0\" data-rail-index=\"0\" data-ref=\"1:0\" data-save-error=\"0\" data-selected=\"true\" data-status=\"todo\" data-tone=\"accent\" tabindex=\"0\" title=\"1:0 · \" type=\"…"
         ]
       },
       "meaning": {
@@ -1657,25 +1655,25 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "5c7b8d085a48e1f4c93b20ab28626d68f5d3637172be5223cef948a408b1cfaa",
+        "tc4Sha256": "a18f35b0ee9ee37ea2dc66c39a8f11a63c5443d31d5bc36002991e27449c7a56",
         "rustSha256": "f3d317dbfa24176d6e4fd19756d3d8bbea503e364b4b458db65ac68b528805fe",
-        "mismatched": 323670,
-        "outsideMasks": 323670,
+        "mismatched": 16896,
+        "outsideMasks": 16896,
         "masks": [],
         "diff": "diffs/ar-check-tw-session.png"
       },
       "dom": {
-        "tc4Sha256": "5335857c6c9d47166c5ddb2036690bb1067a96f4599da2ef32aceb946f31b216",
-        "rustSha256": "53801e68d1830c03fd8a4d1d7178971a4e02235f7419a85afe9e4d67a617f205",
+        "tc4Sha256": "131526ff2fb35e2d1b61bdba2aaa4c27f6e3aef8495c6d2045b036e4a8594e6e",
+        "rustSha256": "872a998b872656a6137ba03d89e946b0b9cf386d5a96be33bb32e619e5ad8903",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 2 من أصل 182\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
-          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
-          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
+          "line 75: tC4               \"طي الكل\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · اللغة المحورية الأساسية\"",
+          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
         ]
       },
       "meaning": {
@@ -1693,25 +1691,25 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "f19896cc9ea4649a4b9ce3071eac92a048991f0fd615928660040607f011755f",
+        "tc4Sha256": "2c04d24cd3c76a3560f668554fd1626e6c09bb0ef4b91b255819897bcea9a70c",
         "rustSha256": "e7c0f7d87417b14e5e496a49a5af0515887e8b9eb5496e12977d332516fcfabd",
-        "mismatched": 106138,
-        "outsideMasks": 106138,
+        "mismatched": 17038,
+        "outsideMasks": 17038,
         "masks": [],
         "diff": "diffs/en-check-tw-session-620.png"
       },
       "dom": {
-        "tc4Sha256": "9873f927c42a7cee097216deb8b414e00dbf466b2a43d8278612382c20c30971",
-        "rustSha256": "b940b9bb532ddde10cc10b60e34dd810a7c70fe4356576d2a999ce58c20a7f1d",
+        "tc4Sha256": "b506f3852864b7601723cf47f6447e81e7ce0af6f75eb616f45550c15aa43438",
+        "rustSha256": "a83c55773bdfae3834f5a22cc00f8265e5b48afb7c7954c6ccc0aa3fd6157493",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
-          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
-          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
+          "line 75: tC4               \"Fold all\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · primary gateway language\"",
+          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
         ]
       },
       "meaning": {
@@ -1729,25 +1727,25 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "ee47a0f3f72874972a0a4a9977a945f71d6d9b76823bcae06ed99c371346d9b0",
+        "tc4Sha256": "63be0f3eeabf2c6afa3970f01a2d43ccd76f2cef53ac6a87865036286b141097",
         "rustSha256": "6c2e22ab942e61ffd2c1c024afa2981649c49502b0d0b613a80d6f624f95a89d",
-        "mismatched": 94439,
-        "outsideMasks": 94439,
+        "mismatched": 16896,
+        "outsideMasks": 16896,
         "masks": [],
         "diff": "diffs/ar-check-tw-session-620.png"
       },
       "dom": {
-        "tc4Sha256": "76e62fefed2aa0fb22a309bb984ac0ad5abdb5375b5cee8dd0fba5e7d45d38cf",
-        "rustSha256": "fb043601edad25ac2a65ee36f945f53953e69b5fa20057b7d8cb58b968147c73",
+        "tc4Sha256": "7404c5c739fc4c742b2b9ca9425c75123023b5c1da7c14aff29f66f22da0e51f",
+        "rustSha256": "e8cca7e9fd63b1a710573041a2daf1ce60e51a47fc055d28c3a97d80fbb579f6",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 2 من أصل 182\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 1547: tC4         <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: 760px; padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\"> | rust         <div  style=\"padding-bottom: 60px; padding-left: 32px; padding-right: 32px; padding-top: 28px\">",
-          "line 1558: tC4           <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; … | rust           <div data-testid=\"compare-card\" style=\"column-gap: 24px; display: flex; flex-direction: column; row-gap: 24px\">",
-          "line 1559: tC4             <div data-testid=\"orig-pane\" style=\"border-bottom-color: ; border-bottom-style: ; border-bottom-width: ; padding-bottom: 16px; padding-left: 20px; padding-right: 20px; padding-top: 16px\"> | rust             <div data-testid=\"compare-sources\" style=\"column-gap: 6px; display: flex; flex-wrap: wrap; font-family: var(--font-scripture); font-size: var(--fs-verse); row-gap: 6px\">"
+          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
+          "line 75: tC4               \"طي الكل\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · اللغة المحورية الأساسية\"",
+          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
         ]
       },
       "meaning": {
@@ -1765,16 +1763,16 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "0f5e62bcd951a4092b25f47a1ad32a0396eefe2d8915cd69684aa86e0c383a3a",
+        "tc4Sha256": "b7e7e2425b94049bdd55457e29843a568807a23e40af58b6e86fa6fbef3f3370",
         "rustSha256": "eb95e50736c2af5a70956b37daff71e00c8acf13da9e1eb184c5719d4567083b",
-        "mismatched": 509333,
-        "outsideMasks": 509333,
+        "mismatched": 484,
+        "outsideMasks": 484,
         "masks": [],
         "diff": "diffs/en-check-tn-session-row.png"
       },
       "dom": {
-        "tc4Sha256": "0784e877e880d7087ca29abc7ccb5711ddb03aca0ce96c26edbe32a4ce98ef88",
-        "rustSha256": "bfea66b683fe8e247de50250ceca2235642a94f1c31248516b62469439e3ccb0",
+        "tc4Sha256": "905b3b687e22b1e992860de970ef9f33eb21b48fbf12867f278f68a6f915d212",
+        "rustSha256": "30929a6a2ad77fae3b3284f11b9116ceb4ecb9ef34d8c5481b2184ff28a9adf1",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1782,8 +1780,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
-          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 73: tC4               \"By figure\" | rust               \"By category\""
         ]
       },
       "meaning": {
@@ -1801,16 +1799,16 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "91c56b63b44a56edc174cb4a3c28f69abb7a71c4e1d8467bcaee646699ad7402",
+        "tc4Sha256": "4837b92362b950f26e42547cdd3a596fa43892bec7d5f222ea9b711339bc1529",
         "rustSha256": "618e227d4fb645f821483a6f0bec96a3999a9474092b93bdc0cbb8aa602686fa",
-        "mismatched": 477516,
-        "outsideMasks": 477516,
+        "mismatched": 639,
+        "outsideMasks": 639,
         "masks": [],
         "diff": "diffs/ar-check-tn-session-row.png"
       },
       "dom": {
-        "tc4Sha256": "a80aa7b5dd6443598f909aa04811988149616f367494cf8cadd9bb4ee3892de3",
-        "rustSha256": "994e4ca286fe6b124f8a7f02563595adfc6ad3948d0413230276029746c04b2f",
+        "tc4Sha256": "9d701a3e32167bb0ab9813a84040c1482c638f52fa8d5f1f6e539afee78aeb95",
+        "rustSha256": "01d4a177fb90eaa4ca2f0e2d46476e82235a4fdf913193f2d82005a06300a59a",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1818,8 +1816,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 0 من أصل 157\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"غير صالح · 0\" | rust               \"غير صالح · 1\"",
-          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
-          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 73: tC4               \"حسب الصورة البلاغية\" | rust               \"حسب الفئة\""
         ]
       },
       "meaning": {
@@ -1837,16 +1835,16 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "22f577c2692653fb04ab53ebc54d96bfa39c385878c6312ed14fb13f3a952b64",
+        "tc4Sha256": "07c711f7b899afad2dfb541f43090e260937fe152825581d10de4bdd691c442c",
         "rustSha256": "cbeb678f7c28c82dc13e6b0f61d5ddcc059bc2334697d48509848fe848243449",
-        "mismatched": 105888,
-        "outsideMasks": 105888,
+        "mismatched": 484,
+        "outsideMasks": 484,
         "masks": [],
         "diff": "diffs/en-check-tn-session-620.png"
       },
       "dom": {
-        "tc4Sha256": "06e81cf07db937d02e57869547cd86b9a4b5733c2867ee76cd5a6db676524647",
-        "rustSha256": "7e8538ee1cc4c87b144976496a56eee2cd9ce37601ff7e577ffd5173de31b237",
+        "tc4Sha256": "2a4944e3c39aa4613a0218de7f1f772338537914e8cfa26fd0ef9b0a931a4fc5",
+        "rustSha256": "73768959088eea2469d0a0943379bbd4a48efaaebf187317a2a22e4283d94eaf",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1854,8 +1852,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
-          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 73: tC4               \"By figure\" | rust               \"By category\""
         ]
       },
       "meaning": {
@@ -1873,16 +1871,16 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "7cd38212ff8871f115033e457c3634f0fcdc8d34ae788054bad80c8499ba5959",
+        "tc4Sha256": "efa314e3a13bc117776503c8423c0d8150a22054afb2e90d28c67e20134734be",
         "rustSha256": "254eb5cbaba546dc291d3e9086eea974a348e14544c649f55575c7f50574769a",
-        "mismatched": 94467,
-        "outsideMasks": 94467,
+        "mismatched": 639,
+        "outsideMasks": 639,
         "masks": [],
         "diff": "diffs/ar-check-tn-session-620.png"
       },
       "dom": {
-        "tc4Sha256": "e0475064415c34699c39081b338ee882e94fd7af16308595cfdb86bd9fe70b4d",
-        "rustSha256": "118bd4b4a485af0814decf3eebd3ecaa351f55feae4e1d164bfbb0a4043756ed",
+        "tc4Sha256": "cf176231e2bf98bc2e2e7f48bb3afed10cd1ac40e83a2eb9bca890f1d4b538c5",
+        "rustSha256": "ef5d21d7dd9d8e364f3ccc63f070e9c2e8e05649a1f7c65130af08a3fbcfe244",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1890,8 +1888,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 0 من أصل 157\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"غير صالح · 0\" | rust               \"غير صالح · 1\"",
-          "line 288: tC4                   \"“It is necessary to stop them … they should”\" | rust                   \"“It is necessary to stop them”\"",
-          "line 630: tC4                   \"“and … of our great God and Savior Jesus Christ”\" | rust                   \"“of our great God and Savior Jesus Christ”\""
+          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 73: tC4               \"حسب الصورة البلاغية\" | rust               \"حسب الفئة\""
         ]
       },
       "meaning": {
@@ -1919,8 +1917,8 @@
         "diff": "diffs/shared-home.png"
       },
       "dom": {
-        "tc4Sha256": "68fada25af73568dd6dcd2396f409970e002f12d12b559bf08701e9e9659b64f",
-        "rustSha256": "ddfbac367b7b998a0a7846ddc0a12ea24e506f9e17ceab4b56272e42f0d4710d",
+        "tc4Sha256": "f1d1bc579f2004b86e4b0b67fc1446ce2f7382befacc50f35137df1badbb5ace",
+        "rustSha256": "bbe8a2d86f8d1388cfdaa122618c034e2064ad5ae79787e3060365305eb8f42d",
         "scope": null,
         "same": false,
         "declared": [
@@ -1955,8 +1953,8 @@
         "diff": "diffs/sync-internet-consent.png"
       },
       "dom": {
-        "tc4Sha256": "db3fd86171d31f6bb125af94b71d35fac6b59fd350f986d7ba26899a58ba0f87",
-        "rustSha256": "6ed3268e42bb09eb437a62637ecaae7ea9f928726e06d2a9857662f01f000abe",
+        "tc4Sha256": "6c413a156f8a25bd9e68b236c141d96a76e9c4319455e08d3113f3bad58f27cf",
+        "rustSha256": "79a8c8da54f44de49b4cbdcdc4988a18d49ae74ac1f69f596b564df3a61b3d70",
         "scope": null,
         "same": false,
         "declared": [
@@ -1991,8 +1989,8 @@
         "diff": "diffs/sync-failed.png"
       },
       "dom": {
-        "tc4Sha256": "aa5bed6dff1d4c21266ca6260597407c50a870452b14333abe6bce3c36477a54",
-        "rustSha256": "adb4b7a9a9ac14bc537bd2fc8e1d80c36b95d6a431b76ef0ae0472ae691a10d8",
+        "tc4Sha256": "168ce966d35cf28fbe201b86fb3b36e272694cc54f0f0971bfd6c49cb9830529",
+        "rustSha256": "529b6b31fbb496492be6d25845db0ba7b159f1b04123e49d365ed5b62a973b29",
         "scope": null,
         "same": false,
         "declared": [
@@ -2027,8 +2025,8 @@
         "diff": "diffs/sync-ok.png"
       },
       "dom": {
-        "tc4Sha256": "9bb43af701a303f5c82c6100319ca7eee7fc0b41fda0c7d1f499e60622409b4b",
-        "rustSha256": "cd755596a0533b224191eb31153e94bacfd707c6e44b0da54e012031f62fa254",
+        "tc4Sha256": "26beca27ba5175a8273ba4b91584a2807d8ec1d66d3c35cf15df0cfe2e4aad85",
+        "rustSha256": "52731bba232e266c1299db986a13de0e8f5e1583735a528a26fbc39f6a2b5c19",
         "scope": null,
         "same": false,
         "declared": [
@@ -2063,8 +2061,8 @@
         "diff": "diffs/sync-ok-teammates.png"
       },
       "dom": {
-        "tc4Sha256": "a01069bc139151d47812a1d8b0706c14687eb6d5ac41e375521ea33ffff000e1",
-        "rustSha256": "d13c9878983b300c4015867425a8297c93c98071bf75d718a35df887c1b6fd55",
+        "tc4Sha256": "1c5f4f6abe86c6d962d8ff8d7b67ba5ece4e8f375bb27623a0faae559e827bc5",
+        "rustSha256": "a827601181d10a0e5a66a6ace25ee730c5a0c38d286bccaf3eab98707b948ea8",
         "scope": null,
         "same": false,
         "declared": [
@@ -2099,8 +2097,8 @@
         "diff": "diffs/sync-ok-restored.png"
       },
       "dom": {
-        "tc4Sha256": "35e4ede29d07ee4426b6e7e78385e8ff8d960a9153b455ef8a5a5b2baca173fe",
-        "rustSha256": "5313c93c2263cdade4dd8e7d4655a32118470e64c0c2a891dedbc5a889821405",
+        "tc4Sha256": "58fc6277224f402c948a7fa01b02257dedf6fc83ed03d36b6e8d676691f6281a",
+        "rustSha256": "ddfe1a66a883e2bfd64a89d79726cdd9046f902fefd13c3011e3f58763b46994",
         "scope": null,
         "same": false,
         "declared": [
@@ -2125,24 +2123,24 @@
       "by": "B11",
       "backend": "memory+scripted",
       "pixels": {
-        "tc4Sha256": "4090f3c11bbb70bb1da30c8e218deef7b7833129ec66ad9bc4017695ccd208d8",
+        "tc4Sha256": "24c9edcf8b41e202d00d487b920bd97bbff11cb8062d1c7eb035537762ea6ec1",
         "rustSha256": "0af3170dceffe7f4761c13910d1e45788326f2401f55f97e3a617c45c5d4b396",
-        "mismatched": 1817,
-        "outsideMasks": 1817,
+        "mismatched": 1898,
+        "outsideMasks": 1898,
         "masks": [],
         "diff": "diffs/conflict-review.png"
       },
       "dom": {
-        "tc4Sha256": "e00e36967ea6c51dd3c39eeb3d7441d301170feeb3e6ed4ea2b5e7fe9ebb6058",
-        "rustSha256": "e1c397d64277d0fd09dbbbb3e551569481a06b8f61dffec431232ebdde6db96f",
+        "tc4Sha256": "42d94319ec1a6df4de75919c6ad18bc71461131ce85ad600846e1fd473962075",
+        "rustSha256": "03675bc198543549345ec9981f170ef6cf09e83c04ff8060a041b5b6f5b2a605",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
-          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:59.763Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
-          "line 92: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
-          "line 95: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:58.763Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
-          "line 103: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:01 AM\"",
+          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 24, 2026 · 07:39 PM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-24T19:39:55.537Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 92: tC4                     \"Oct 24, 2026 · 07:39 PM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
+          "line 95: tC4             <button aria-label=\"Teammate 1, Oct 24, 2026 · 07:39 PM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-24T19:39:54.537Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 103: tC4                     \"Oct 24, 2026 · 07:39 PM\" | rust                     \"Oct 1, 2026 · 12:01 AM\"",
           "line 106: tC4       <div  style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-top-color: ; border-top-style: ; border-top-width: ; box-s… | rust           <button data-i=\"text\" data-testid=\"conflict-history\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; align-self: flex-start; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: i…"
         ]
       }
@@ -2156,24 +2154,24 @@
       "by": "B11",
       "backend": "memory+scripted",
       "pixels": {
-        "tc4Sha256": "cd7d90f37f7380113b84a00f5ab0670813341b9f9ed0f25610484e5c38b3ed40",
+        "tc4Sha256": "45730a1b7a39a7815e8a81e91726d7e4ed56fee6a8d3dcc31d68971df1d4d85c",
         "rustSha256": "249ff1e8faed5b7d690d3c01ddbcc6f046846e03030fe68252261099d304dcb4",
-        "mismatched": 1817,
-        "outsideMasks": 1817,
+        "mismatched": 1898,
+        "outsideMasks": 1898,
         "masks": [],
         "diff": "diffs/conflict-review-selected.png"
       },
       "dom": {
-        "tc4Sha256": "e427e20c7d67eb5bc41f6e2e9029225be95e34db0061437973216981ef9f3d1b",
-        "rustSha256": "055f8025d09d49e5f0ab7c82c2f074cb0670450d7bb3dcd17859a73de5ad265e",
+        "tc4Sha256": "79c0b3975c3cb87fc3d8b17f9099d1c11c71df1fe05c59cdd330deab1c75a748",
+        "rustSha256": "7761a8e50386549a86cb22bef377bd678c7b8b3f6a177d96e757366b86a84b22",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
-          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"true\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:59.763Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background-… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"true\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-cl…",
-          "line 94: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
-          "line 97: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:49 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:49:58.763Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
-          "line 105: tC4                     \"Oct 19, 2026 · 02:49 AM\" | rust                     \"Oct 1, 2026 · 12:01 AM\"",
+          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 24, 2026 · 07:39 PM\" aria-pressed=\"true\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-24T19:39:55.537Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background-… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"true\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-cl…",
+          "line 94: tC4                     \"Oct 24, 2026 · 07:39 PM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
+          "line 97: tC4             <button aria-label=\"Teammate 1, Oct 24, 2026 · 07:39 PM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-24T19:39:54.537Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
+          "line 105: tC4                     \"Oct 24, 2026 · 07:39 PM\" | rust                     \"Oct 1, 2026 · 12:01 AM\"",
           "line 108: tC4       <div  style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-top-color: ; border-top-style: ; border-top-width: ; box-s… | rust           <button data-i=\"text\" data-testid=\"conflict-history\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; align-self: flex-start; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: i…"
         ]
       }
@@ -2187,25 +2185,25 @@
       "by": "B11",
       "backend": "memory+scripted",
       "pixels": {
-        "tc4Sha256": "3e9c18c848b1b2064acc593631ff8952832eb718fe58cd7e99226c440f2f82b4",
-        "rustSha256": "3d2bda1598562b1445ec0a1853000fda5a276636a17a0c34ecc81a4a27060251",
-        "mismatched": 2054,
-        "outsideMasks": 2054,
+        "tc4Sha256": "bd60db26f45aa7e12433ae8b27db65a5d02cf4910ced4042d41a5e1ec12f9ef7",
+        "rustSha256": "62d23c316f8bdb216ed998d3af6a05c7b5e9988e00d84b23afe3f62821beb58d",
+        "mismatched": 172381,
+        "outsideMasks": 172381,
         "masks": [],
         "diff": "diffs/conflict-review-mine.png"
       },
       "dom": {
-        "tc4Sha256": "0642a9bc4f9a274c698b81754ab739c7dc5750a2b4bae05786cd53f35347e4e6",
-        "rustSha256": "fc3f367f0dbf8d6854b92861a08214189eedecf9fbe1a593dfec02c29a8ea92e",
+        "tc4Sha256": "0acf1d4841485ec2067c072c96f638952b80d0d95d986ffa95cf8a87ca6b69e5",
+        "rustSha256": "2bc7f19a2cc402cc40c01af630005e4dbc229919517f504160ede19268f8ce11",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
-          "line 84: tC4             <button aria-label=\"Mine, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"mine\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:29.535Z|0000|a4bbd43216f529e5\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background-color: ; … | rust             <button aria-label=\"Mine, Oct 21, 2026 · 05:27 AM\" aria-pressed=\"false\" data-owner=\"mine\" data-testid=\"conflict-version\" data-ts=\"bda2505ed83df634b4b90c6a16a45df41ab696d89eab3e3a4247264bdcc246ab\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; ba…",
-          "line 92: tC4                     \"Oct 19, 2026 · 02:52 AM\" | rust                     \"Oct 21, 2026 · 05:27 AM\"",
-          "line 95: tC4             <button aria-label=\"Teammate 2, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:27.905Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 2, Oct 1, 2026 · 12:02 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"cca2b8556738fe44440758b0578bf1dc2aa746cc410a7a6f26b6423d9de44dde\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…",
-          "line 103: tC4                     \"Oct 19, 2026 · 02:52 AM\" | rust                     \"Oct 1, 2026 · 12:02 AM\"",
-          "line 106: tC4             <button aria-label=\"Teammate 1, Oct 19, 2026 · 02:52 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-19T02:52:26.905Z|0000|b678teammate0001\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Teammate 1, Oct 1, 2026 · 12:01 AM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"1d151b4adfbd613575d5b4644873a9a053bde52482949c45fcfb79fa4f64c9aa\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-c…"
+          "line 84: tC4             <button aria-label=\"Teammate 2, Oct 24, 2026 · 07:40 PM\" aria-pressed=\"false\" data-owner=\"teammate\" data-testid=\"conflict-version\" data-ts=\"2026-10-24T19:40:01.401Z|0000|c678teammate0002\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; background… | rust             <button aria-label=\"Mine, Oct 24, 2026 · 08:40 PM\" aria-pressed=\"false\" data-owner=\"mine\" data-testid=\"conflict-version\" data-ts=\"228abe99318da27fe3616ee1b7eedf862b714e7ad2ed6464e94002332b19d07c\" type=\"button\" style=\"align-items: flex-start; background-attachment: ; background-clip: ; ba…",
+          "line 89: tC4                   <span data-testid=\"conflict-owner\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; b… | rust                   <span data-testid=\"conflict-owner\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radiu…",
+          "line 90: tC4                     \"Teammate 2\" | rust                     \"Mine\"",
+          "line 92: tC4                     \"Oct 24, 2026 · 07:40 PM\" | rust                     \"Oct 24, 2026 · 08:40 PM\"",
+          "line 94: tC4                   \"Pablo, versión del compañero 2.\" | rust                   \"Pablo, mi versión del versículo.\""
         ]
       }
     },
@@ -2226,8 +2224,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "37081e4b2346559c3464e3ff390105063d5bcfa69a72f992797775c296941f32",
-        "rustSha256": "c153aaee7f221cd5a4533e01a820e99152aa89485944d87ccdf40b4b0b0c5d26",
+        "tc4Sha256": "e428ca7c6008c8aec8cb092242085162a5c90a8d58f0b01a30a859ef481ead75",
+        "rustSha256": "e292044c871716728d8ec8cc2067dab0506f84dcebe903652da8109c78353053",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2251,8 +2249,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "890550050f4e3be2838f4edf7d8ee0b4379e0a99b6e7015e10890a4572161a79",
-        "rustSha256": "582a1debea99f706ad4ee8d074c61d83c1c24028207356ce02c0f8f923e2705b",
+        "tc4Sha256": "0aac411c4f3a9d8233a0b611ea07937eadd7aa7e82f65856af9b0b7e4660d778",
+        "rustSha256": "25f2aca25f5a9b519f174b3e17d0da38b756f0b150084b36b8c1f801ccef9387",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2279,8 +2277,8 @@
         "diff": "diffs/open-progress-journal.png"
       },
       "dom": {
-        "tc4Sha256": "1d0ce687f3ef2d2f6ed1159b9e054472f44477de0b624257f7d3fd0d0d70e464",
-        "rustSha256": "3210e05285bd6529ca6f0aae7b30f53981ae28f902a0b5c7c01b897b7ec7c172",
+        "tc4Sha256": "3fe375803fb4bb4bda4a9e78aecc57bdd5372ae0b34e82b230b6169ae7f420a5",
+        "rustSha256": "96b33927d707e82e4db40943b809d9be88e4eb2024188b8e6a6183083d8c7b67",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2306,8 +2304,8 @@
         "diff": "diffs/open-progress-state.png"
       },
       "dom": {
-        "tc4Sha256": "ba3a412ec330cfa9937945ea7d96939a82f1c41740fb2edc5066fd7e14a1ac65",
-        "rustSha256": "166945703752d2f5c2f9647e05845d63fb991d7f2d006f58b95fdef84ad3051d",
+        "tc4Sha256": "820d96ee04ce5831debf6dbc57c14d2772a1f42033b077e9cd756e1ddb291f7c",
+        "rustSha256": "e373bf3e4d1e6a2bb2ae6176893c66fce49b1e35cb2a262aaee8f2b2c1d69427",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2331,8 +2329,8 @@
         "diff": "diffs/open-progress-prepare.png"
       },
       "dom": {
-        "tc4Sha256": "fdbe6e519ec795b2ee1515aff1b89c3fea5b6165bb23f73a2a51dcaa83a96b4e",
-        "rustSha256": "23b84e5c7d3bae673bbfba11205770018e34e58170c0626596a4112159a784c3",
+        "tc4Sha256": "c15f8b592c84a0105f9ba490b866aa083ef3ec092ef0ae621599352c52c2d697",
+        "rustSha256": "d01d29ce33a80496058cb82615d9f8389527eaa5ad81cbce712cf033780e7489",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2356,8 +2354,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "a574a6d2d41e972c69838729770cf35b90ed54c4a3dd623539e3eda212859718",
-        "rustSha256": "95822d8d8c7e7ee1da659b002d779f074c8bfdd1ef73594806754123f4e44c31",
+        "tc4Sha256": "e2f481114b999067fd334c68446879439de181f14ece5bcc234133207bc96d6e",
+        "rustSha256": "2865263d77addbf7b29cd5aceb18bbfb7dd07044fcacee47bd1d93330433a803",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2384,8 +2382,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "e73b60c709a8658227d64099cae8542286d004baecfe2267945ad3bcfd22fed5",
-        "rustSha256": "e0a32a2447ae16d3348b459b75f405c190b66ba1b523342312853b17efc0a655",
+        "tc4Sha256": "b84f6a3a10a81cf3709bfd958b35e6592623778c3b313c94f1de01b3f6f1f1a2",
+        "rustSha256": "c6c6a9f3191601f5e08e1647fcb5eb0b4b17b651b76bcb8f3acaaa894229e81e",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2412,8 +2410,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "0000d5e4ae3302fe621539135ec912d597f8f28f6d36a7f3630d6324b7a67c90",
-        "rustSha256": "726a1ce19ccdbefaa0a280c606f98254c8e3f7e2b0eb045cc6289bc5e6ee8284",
+        "tc4Sha256": "bd079705154e98d59b44279972e0476242a9708b907c073adb46ba099b69ad27",
+        "rustSha256": "4f809e3a108a48d2c5a54db00df66a22a99794797178f7a599c3cf009d1ce6dd",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2440,8 +2438,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "e9cf88b7b4ecc21b846e59e2fb62dfa7bc643cce8eb4ecbe5bc9fdecd45a9d06",
-        "rustSha256": "12ee68df901015b8d367ad2c0d39f255f6640898d6ca2a5ae8536a751aa7d450",
+        "tc4Sha256": "ee281a93ce73975c64dba2fdda7e81fb2dde0bf50ea1f9fbfdaaab2c8bd231d0",
+        "rustSha256": "71b5de6c609a8a23d329d69d276068835d448035c1c4d0b60d054d008669869e",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2468,8 +2466,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "8391c6a4e1ded09be09a99335bc52e9daee1028f1884f53c660bd7c86afeecfe",
-        "rustSha256": "301987dd0987b54929e7b117a5ab5037f37f3a3fc11c3cab1734f11b49df91c8",
+        "tc4Sha256": "249ebb5c2355c76c9c69bf5545c3fa79fd11be1fa808a6aae0728b9cb530ca63",
+        "rustSha256": "179f63b9db9b409660c0dc69cb52c9b06cab9752c3b1f676e25b7e2ec61e1194",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2496,8 +2494,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "431a203119f84da37ac7d5581127db692d50ae3b20defe608a7a9acb01424ef3",
-        "rustSha256": "b4b563e4faa1c631ef065388b0fdef970e4d7cbbfd8d4f9dd7a3a1c33782812e",
+        "tc4Sha256": "5752d135467163fb07cfb62bd6e23f35346a600852075b4fee7587521e368ecb",
+        "rustSha256": "a2a1d93bd9c4e002bb3ffa1b017fe54cf2be7ebe56f64fd1ca1e16f0b6267ade",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2524,8 +2522,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "40e2b5d497d427db76e6ad24bb7d4bb44639e1031418ea2e65c42047908dceac",
-        "rustSha256": "8baa5062b18d7076a5f02a3d86ff983c724b007639e3f01322a28abd4d2db83c",
+        "tc4Sha256": "dec2a6f24aed6e23ac0283d997f91ba231b73ad83dc3ccf4129ab4fe4fad1d39",
+        "rustSha256": "418b4cf13042f458f192501e0b338aeed314f8c71c0d64f519a87bb3cfdfcc87",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2549,8 +2547,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "e6ec6edc5cf7aadaf7e1c074b9c57e5090d476459bbc5abcdb17190cc9bc9102",
-        "rustSha256": "9f254792060ba210732bd18c166f960d32a10d38a7d34206b4f2f6f0f9d58b66",
+        "tc4Sha256": "ac2507d4264693f320422d2d4cc305f089b6e4e3d3007a5c5e6b0b3d7f82f1ee",
+        "rustSha256": "ddc58bbaa0d02d6335d8709903d2a47aa02bf4afdde6f76c8dd42904ae8a1acb",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2574,8 +2572,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "0ce5e9514d6780aecbcfa809775f2651701f196f7f853dc6091fb8aad65e9398",
-        "rustSha256": "62e7e9495889a6b80aab1e4afd08e8024f70d0f1416b24fb7889ef28d9e1f587",
+        "tc4Sha256": "68b1b863c0773a5082a62c92c049abaf03d19e19ac76a5831984422288b31b17",
+        "rustSha256": "9c2df49e3a553f4a014d0a3ff0d38357ec811d07d4d1c3377be5f74072051433",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2599,8 +2597,8 @@
         "diff": "diffs/gateway-change-error.png"
       },
       "dom": {
-        "tc4Sha256": "307c6512c12e141bd324b7473ab25b7e2dfbea047ef88127c732a741c1048a42",
-        "rustSha256": "d2b6ada2baf4392222f16861dd4cb1bc72164aeebe1d20643121d50668958cd1",
+        "tc4Sha256": "f6e2f592f0c2bfcb36a04bccd22cdbeab5df6f17843719bdcd6cc7c0f430acce",
+        "rustSha256": "f30f21c4306dcfcf75a7f0fdc34d466b6198c196fed5cd1c0c54a91360e5552c",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2626,8 +2624,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "0d8e0376fcf837052d4e3014c2951307222fbd450aa9173ff58b2cd73cfdbe43",
-        "rustSha256": "07f06f137c27edc7f6aff3028dcb9b209b29f067d458cfd9ef49e34826da9f60",
+        "tc4Sha256": "e43fb32fb71a800ccd0c2ffe515943a2322e15d291df2afc6866219226f44d60",
+        "rustSha256": "175974c5831fb15e31a3e1620ec9774f0614c944a51ea09086df78a537105447",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2651,8 +2649,8 @@
         "diff": "diffs/section-empty-confirm.png"
       },
       "dom": {
-        "tc4Sha256": "c0335ad3407c7c23a41602f13db4f97fd06c1e84d3fda079523e832ea99f46aa",
-        "rustSha256": "c74eb6f42db086e07f5c84262bda6f409ac576851f3cd9b00f42c49b906fa4ef",
+        "tc4Sha256": "44881e31e8f237a9a2c4a2bbc6a9c28f32f44c1edb4ae1351eeadceffaa2c4b7",
+        "rustSha256": "0ec406640f349c44f39c7dfeb6c9a2de5435618075421423c851f5d11ec2c016",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2670,20 +2668,20 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "differs",
+      "status": "same",
       "by": "B7",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "e39a73040e1a2c7ec324c19765f47a1e8a35733e85d0074d5a509c34bf6d9c66",
-        "rustSha256": "317fc72d8fa092b4c0ee4fd90d460166aff4a6d10c53aaa85dadd8af48271d72",
-        "mismatched": 41,
-        "outsideMasks": 41,
+        "tc4Sha256": "27aeb8e2ed89b9d1ef92466a7cf4c71d046382eb21557a5313914d222d2c7782",
+        "rustSha256": "27aeb8e2ed89b9d1ef92466a7cf4c71d046382eb21557a5313914d222d2c7782",
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/license.png"
+        "diff": null
       },
       "dom": {
-        "tc4Sha256": "72a64f4130c5e29edf7a05a147b1ac44a825d61fe1150836d73807b406a85dff",
-        "rustSha256": "c50dfedb668af1f7624a68729264ec91c1218bbdba6298099b7b7c7a05bf47f0",
+        "tc4Sha256": "75f8e089eff373cd046a88024da350d921135b050f1bbc5bbd57f3bbb1a4aafe",
+        "rustSha256": "7018b82f7d557a3cca19362d05c7daa6adf0f40a4023ecd72497271e76533c80",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2707,8 +2705,8 @@
         "diff": "diffs/net-failed.png"
       },
       "dom": {
-        "tc4Sha256": "d6c89f7dea144f3e136cd1ea30f4ac4e35865a6c3bfbf51520fa9db7519ae643",
-        "rustSha256": "46fdc2438e40086a214f8e3bd1e8d74e93017bbe03d19be89377f65992dd7804",
+        "tc4Sha256": "a768b24660b72e7cbc31f6b16c18cea78cbcf4ca8610ecc34370d8fa8011b6f9",
+        "rustSha256": "f33369429356cb454a3bac81edab07d75c8822c6d22658ba0fc6bc8240dc15c9",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2831,8 +2829,8 @@
         "diff": "diffs/add-book-pick.png"
       },
       "dom": {
-        "tc4Sha256": "04e374938f7d2155f447d6a5e77e9af88a734b432f6d91a9f65763db107631cc",
-        "rustSha256": "4d08eb494ba92edcd9a77dad95b87a0c98d9db013a98c540100d84c436acb34c",
+        "tc4Sha256": "6d9697fa23fab20770ce78ef0fbb4418a1fa41f2c7a1d7b461cdfa2dfa1c9790",
+        "rustSha256": "afd4ea8a2cf1b0adae1d87d9745523a38671558ef4f32e5483ac1da59ebbc998",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2856,8 +2854,8 @@
         "diff": "diffs/add-book-pick-multi.png"
       },
       "dom": {
-        "tc4Sha256": "7bcd87758ec1760922dce9e47d44847a972648da15b8037eb4a20352e6356e29",
-        "rustSha256": "43fdd3e9537587f04e427bb6300eb0ea7679b6a5ba2071328ea3f29b7131d0ac",
+        "tc4Sha256": "e757594baf24d1b2ae92d572a7aa37d5b0531fcdc3abdca141b2da7c6710f0b2",
+        "rustSha256": "9e03984c24701db37bc7cf4ec3ca393de13ce62a58e891ac39fc64a0c1f640cf",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2881,8 +2879,8 @@
         "diff": "diffs/add-book-usfm.png"
       },
       "dom": {
-        "tc4Sha256": "43ab21cd6c87a9a6db48a5cdc39226c90c493ea2863ca11ccab8f6b861a1ef98",
-        "rustSha256": "f5a9b1edecb9ce3edbedde0eff8398bb7b399d1e252e14b7c893bc1dbe7190ac",
+        "tc4Sha256": "13ff138ab63d1e1b58f079e272f6f3365e3c1d9766a061e55531eb2dbdd1cd6a",
+        "rustSha256": "6a94c6b0795f20541edb775bc0e6257fe5bbe8abe602f3a47e8aaf1a42010771",
         "scope": null,
         "same": true,
         "declared": [],
@@ -2906,8 +2904,8 @@
         "diff": "diffs/add-book-usfm-files.png"
       },
       "dom": {
-        "tc4Sha256": "eaabf6fb5824b5476f13b2e10b7f808cdb2ef06a3bb57e8ffff54de5dec684b5",
-        "rustSha256": "8d1de63899414e44715caebe847dab9c391c4529e3456e2b70c9699dc955ba88",
+        "tc4Sha256": "4a40b4a31d200db33b76c746073e30ea917e981e2dde3375d24428efd5ff4666",
+        "rustSha256": "558df5c42d8a37cd86d0cbe5aec68782696935909975c5819a3bb831e5c3b6d5",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3001,8 +2999,8 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "e8f27e27c26ec3c7c381d498179cb5fdcd9114289c97da0d3e40ce5f0676a393",
-        "rustSha256": "218ff5ebf42d96dc88ce6ad6d3c6df2935386a7edf03a4ba3ad86ab50c9ffd76",
-        "mismatched": 718,
+        "rustSha256": "6bb56b45a246d461edc56795ccabd26f51cfb4acb04dca8de87931dd11ca709a",
+        "mismatched": 720,
         "outsideMasks": 69,
         "masks": [
           "signin-server"
@@ -3010,8 +3008,8 @@
         "diff": "diffs/signin-error.png"
       },
       "dom": {
-        "tc4Sha256": "5bfbedea38b54a0cbd8081d83700fb43b98be3d6310fff7f20485d1c23b7b55f",
-        "rustSha256": "c5eaf6c1fb421c781deaf737fed8fb825b7e0d6f22b91dc6d0ad3e42c4eeb21c",
+        "tc4Sha256": "a7a290a815b9ab74240ca239fcfeeea7df5ef36b38826929902e17ad6d5af4e7",
+        "rustSha256": "c635719ffbe35532aee7b2a27b16a2d3d3ebbbb166c821167b447e9a987c6e53",
         "scope": null,
         "same": false,
         "declared": [
@@ -3037,8 +3035,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "bf348e6f4cf1812879070bc2ce4a9b46bfdb8ba6c33183f515ec3abf55951234",
-        "rustSha256": "305d1f6c2617172b9e025bb584e66926c0c32557d56fdaafa5fc5b4b060cd7d6",
+        "tc4Sha256": "14d9d34f2d830266b14574f3d7500a9f4619bb6fa628a8d5aa85197f0f2692ec",
+        "rustSha256": "c47605ab38b6002772807b07985df941680aea5f2f83ec68125b1e275d0997a7",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3062,8 +3060,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "39f1686ca1ed56e252a106d16cff27db109294767ad0d05dc456cebe57c7b8e2",
-        "rustSha256": "250e4784ad0865c0dc8f11fb6df8e7f7cb20f129c5b08c7500d5f2d3bd179192",
+        "tc4Sha256": "99b84dbe10c619790eca1c2c2f82d4bf6a6f8c9a013a18a991fbe40936c299a9",
+        "rustSha256": "c25e7efe2a070f4a687c250b2f48f7e940de7733df0fc4cc3c542c21175935c3",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3087,8 +3085,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "0e326419c9cd4f25b43cdb3ed928da68db8ba90e626565f21a78e519e585a970",
-        "rustSha256": "9ae0212179f649de697883c1fb1795cb4fa6efd1d359f0cb5db7435b26fc265c",
+        "tc4Sha256": "16baed55944895981fdf6e04d381a1210ae70c392fa6a98da080e585903d193f",
+        "rustSha256": "ec5862be19624c9a869a5f08dbe2968ccb94d61e94eaf056e383c0371e3b813c",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3112,8 +3110,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "f0775cf26bc629b888681ffb66269a967ce841a612928daab0b4d8f95b4683dc",
-        "rustSha256": "c8c88f9e85d9554eeaf2d9ab756b1c2eceb9bb6294f98ae2cc9102083c9ba5d9",
+        "tc4Sha256": "bfdcba067954b1662cdd62be8d1b811c2d3d68ca5316db51afe37dd2187bab81",
+        "rustSha256": "18f6db2da4b2364c2363c8f974ebdf46ecd4fadd04895f2078c3ee1ee92ec5a2",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3137,8 +3135,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "e9e3dabda0d37d08257b281706126aa364b847af9d98974cabfe8f5aff5d655f",
-        "rustSha256": "66a055137c827ce07ef61f502d8e573bec0c62cf8323a8aefeddde91dc78fa0e",
+        "tc4Sha256": "bf28500defd3d09cd65de2aba2596f1598d21c6a1a56f4dd50d8c06c663a1a65",
+        "rustSha256": "f8973485f3bbff82a41c6f66f9e2cd4cb5e985c2a00601d93caea0cde8fb7306",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3162,8 +3160,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "a74a9ecd7c6ca4e15f9b757035432e5df5b06b549963fce59158dec418b6275f",
-        "rustSha256": "58fa84a91bf28ecf40f1f03b1ee07be1ed5dbbc2efd8820996813d45bc777bbd",
+        "tc4Sha256": "12acc17f5e8b4f6c5b59ebc0c24ae17a997c10244a51ca6bc07e58d31ea2748b",
+        "rustSha256": "e46473b81479b80b10ac532715d4122e36662cab92d7b76c2b8068cc3bb90032",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3187,8 +3185,8 @@
         "diff": "diffs/check-error.png"
       },
       "dom": {
-        "tc4Sha256": "211dd37a6fe6872aa8e878a0ff26783c3c6864389fccc02688961dc04c2fa038",
-        "rustSha256": "018a8b8f670bbbde9daed6534995c7af58d94db0710242649b58317ba1d362e8",
+        "tc4Sha256": "d59dc7cfa60bb406e80905b49d1af37c1929f62282f1dcee98fbc3c2d41b268c",
+        "rustSha256": "b918f89ab0ec903dba54a78b37b445ef62f43a1af9ac378272f9acdc12ed57da",
         "scope": null,
         "same": false,
         "declared": [],
@@ -3206,16 +3204,16 @@
       "by": "B5b",
       "backend": "store",
       "pixels": {
-        "tc4Sha256": "ffd98654007b6601bfcb2914279ca95367a4a8087a08510f12e242d8cfc7773e",
+        "tc4Sha256": "8bc18061eb1c18d2116b13308e20f71ec7e926cb4d4da0d9f6e6f2710d4ec090",
         "rustSha256": "823adda095f059620b972189232f70051bc4e5be8454f8d909b4a27aad95be04",
-        "mismatched": 424215,
-        "outsideMasks": 424215,
+        "mismatched": 3808,
+        "outsideMasks": 3808,
         "masks": [],
         "diff": "diffs/check-rail-empty.png"
       },
       "dom": {
-        "tc4Sha256": "ea55ef943049fd5b96cbb0175f3170bbc6a7bd59d4aa3833c5620c5e11ff4d22",
-        "rustSha256": "26c7f034b998a2108a11fd0d3498d2bc1c7f8a77f975a78417b017bda2c0a95c",
+        "tc4Sha256": "3ea79ed5bdf24e82ac0f8b340aa544c1ada57bf1137924a38b827964aad371f9",
+        "rustSha256": "6223712be16ad8c929ffc817c50ef4d8a11cf000771f3642c97b86b2feedbddb",
         "scope": null,
         "same": false,
         "declared": [],
@@ -3245,8 +3243,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "1b6640708fd0885a8b3df3f15f47b6a474e2ceba7592789a2bb9e7b835915694",
-        "rustSha256": "0f4a14d379e7c1672454dd824a44f924716fdd00e99d979afef7e9188b01bbc7",
+        "tc4Sha256": "eb880f9330100d1f5fa118ffc7e3362a45bb8d338722c5fa78ef41acd564fbdb",
+        "rustSha256": "1b5555b7025f23fe740a5d51134f4af2ba4e003e7776b7dd0a65990dde74f6f5",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3270,8 +3268,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "1a34b4c733e831678fefee3be3cdced75a85d7cb8989572ff91327787ae0a059",
-        "rustSha256": "aeda098ed3889c8183382b5ea909a84aeace0889980599fe2399771e80a16069",
+        "tc4Sha256": "86202db6841011e0bc5b3d3075370916badfcc2b95f171d72dc7c577a41cb79e",
+        "rustSha256": "14d2c697c2e96bc61c87600e04c8b1cbc06a2f1f951516559aa09b1c4adb08e4",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3295,8 +3293,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "50c6682e789a014862673acd0d3139bc2f8b9cc05a137b3a4bb8d5b6ca9ac7fe",
-        "rustSha256": "aef89a97ad60c5028deb14643ab267f038beb989a681c280aa3858801c98642f",
+        "tc4Sha256": "ad41449c85418b90a80ebd02856425d63a51c289cb00b6b9a71b70cd56e0469b",
+        "rustSha256": "1e51ef1fc606c226478c19d095c6f3e4f01fea286eed8827ae62c6db2b4ed272",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3320,8 +3318,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "17cac7fea9e1b6303d3be755e641fe5f7a773f384f30fba73b57843007739a01",
-        "rustSha256": "345e95f9e4ed5516dcd5d96b1d16e9c91c59f13bc9422862a84e4f6e4fcf8890",
+        "tc4Sha256": "c764e0bcb17b14610b5ee6553bd7e7087048787dd60e8e63523faf6952435a15",
+        "rustSha256": "8c78614977b700717675e97b455ef572ba56680280b578d88fbed0845cf8a945",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3345,8 +3343,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "16b5b88a6cdea18997a28339c1cdf224596143d705c81f81cf5f66b1f56941ce",
-        "rustSha256": "45b2ba3878e363f03615116da174c145de520ca4f0cf8fba639d536508c6a0c8",
+        "tc4Sha256": "ec26bdcaf7adcae4b6a4b5966eb0c8fc2a279811fd34c0048bf31cf71291afaf",
+        "rustSha256": "6082746d1b4681afaebbae811dc2f181ac3059df424c397fb28778d2ee7b7a6e",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3370,8 +3368,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "5b4ccf406acabffc9010a76dd6faeb255a93e8fe15078f1bbf174481e2034b5c",
-        "rustSha256": "b932cda9ad7f8c0c18c0807d01eef6d841635a431b0aad2f460394db29cc6803",
+        "tc4Sha256": "5d5a88a6cbad58844863871ba9292d493f66a51078816a233e29496c43c9bd02",
+        "rustSha256": "cb3b59d20747288a366b148f04354841fffa7cf9415b321e5d5fbc3aaec902e1",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3395,8 +3393,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "b087bd6fd12ff699bf26cf73e5586f59e34a4ac9c7e9fa6f0911560332e48ae6",
-        "rustSha256": "b6094980e8f93742af0f7544256c308a7b089145693f0eba5bc4261b895485f9",
+        "tc4Sha256": "68b0dc8000a6b86fbf402b5d5c741a6830d85d1d3dbcbcb7333552d83072f63b",
+        "rustSha256": "6affb1ec763986c69fa3f4e3b95ce6fb8aaa5294c86ab8b2a4da536fb2e2ff7b",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3420,8 +3418,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "51b139806bf143033ed4bab2fd9d20577de339697147e44a07988d29e405499f",
-        "rustSha256": "16fb60270ea336f5c24d258d96911bf085be38a177bfd69eacbd6b91eae6a4e5",
+        "tc4Sha256": "18a1439134f91a066357d41da436bd6336f926517424d665017d2033ded05385",
+        "rustSha256": "95f152ecd3b21d78c73dbc4a10631b8c9874cf5795093fa59a28fefcc70f7f53",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3445,8 +3443,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "4d65f84c8f682f57e023729d9bfc4011d2c0f5ee687aeae4415e1cec1da71dbc",
-        "rustSha256": "22a59b8eec05b950471ea5ae6fb12be277da0a8c1dafd6efa1fcb1ac9e1e4ae6",
+        "tc4Sha256": "3b86122e54f0c66581f9cdbf77e0d1971d065b16aa3cd791cfbafd3763964ca7",
+        "rustSha256": "eb9b3674a29830e1c1a4bc5f1d2251d8754de73e5d9a58de34d1a49e675a4636",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3470,8 +3468,8 @@
         "diff": "diffs/align-error.png"
       },
       "dom": {
-        "tc4Sha256": "44381ce33f455721bdc0ab187418ba218b04acb570ae0c49ae498e5aba293c83",
-        "rustSha256": "fcbee7ddf14ad5e2f2ae0f5ee5af37d273195a9f96e3cb7a6de78a364e799b2f",
+        "tc4Sha256": "e82742b2ef2133b0d2190e04db71a58a9842eb2c329f9e55af236f7b9bc240c2",
+        "rustSha256": "5199778f5862dc253038d6de64e9b0fa1d7ade1cf3f192374d9ac982a80d6da6",
         "scope": null,
         "same": false,
         "declared": [],
@@ -3497,8 +3495,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "8c027b627a66278061a8521635d7ae2f083cb92fd5cd74f01232ff3f1a176691",
-        "rustSha256": "cb2c32e22325134b0a20360e083b12a9f01a424a965249f0f27823499936fb38",
+        "tc4Sha256": "ba11451944601eb16bd3a1b689d67739e8a4d76b8f6c28938767c7d1681c52a4",
+        "rustSha256": "6384cadcc9c3f85baea450657cd984227f2855146755a427f5ca7ba37c6e6ec0",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3522,8 +3520,8 @@
         "diff": null
       },
       "dom": {
-        "tc4Sha256": "51a7eba2e0fbdaecd4e08539abd54d27ef5a881223f805f64dc5ed6e5d1faae2",
-        "rustSha256": "3a6bf7e0e1f560dfdc58c88ebfff317303c84b5360d190c4f602f00fe7dfd96b",
+        "tc4Sha256": "a167a72fac33168c872c9c436109b5a685d43f1bcfcfceb4c85ef4c0ecf409e6",
+        "rustSha256": "c275f6c7189cd376c0e9560c0d888b6afde649feae5879037e8265c5f8b04255",
         "scope": null,
         "same": true,
         "declared": [],
@@ -3547,8 +3545,8 @@
         "diff": "diffs/home-list-error.png"
       },
       "dom": {
-        "tc4Sha256": "f00c1f71cd958342d52e1cc961628f4f91dc31a8b73edf4ce2a422e6e5a8533b",
-        "rustSha256": "a18adbe7b458a76c7a6cb6e5c3b53fc43462d98f05c653a2121a1640a5072e90",
+        "tc4Sha256": "7e70c13c827be6a1a0711d514e836509b0f0b5c3cc228d183d63ca3f191e2d51",
+        "rustSha256": "f15f80a135460e79dd66dac6eda7e242b8ee44355a5d3861dbec5241c2391d35",
         "scope": null,
         "same": false,
         "declared": [],
@@ -3574,8 +3572,8 @@
         "diff": "diffs/home-open-error.png"
       },
       "dom": {
-        "tc4Sha256": "ab6d6047fc809622d5d945e827ff8b1e969c82b4f6acc83c73ee339964b783f9",
-        "rustSha256": "66db4791a058fa0ba2a3a65abd9d061daa8e848d7b4fa523fbe2a4f5847b40bf",
+        "tc4Sha256": "4206a78cb4a53b7f5fa147fcc8c959080247669941b49467a47a0aff5fa6c0c7",
+        "rustSha256": "3dc557a9d1a872aced02b6733ee1bd07a3667c9ecd1147ba1223c9e4e8be377f",
         "scope": null,
         "same": false,
         "declared": [],
@@ -3616,8 +3614,8 @@
         "diff": "diffs/home-resume.png"
       },
       "dom": {
-        "tc4Sha256": "4821def3aeeaa7b2a52d1fd0714cc795ef52eb2d79e1df1099b448665a3b63a1",
-        "rustSha256": "12f7e0b3c9cd547a5f05d92e2e92452545b5b99ff33a8ea5c3dd5666c1dc0f8f",
+        "tc4Sha256": "b27381ca7e08fd7a61abd3aa0f8acff839edcd8d9e28bd8150500a63fb462677",
+        "rustSha256": "71c716c91807457f6d9d196d0ba8ecd4c7d04b4f2fe1f2649e636d5cfcff24f2",
         "scope": null,
         "same": true,
         "declared": [],

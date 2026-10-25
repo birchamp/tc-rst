@@ -150,6 +150,9 @@ fn a_held_file_deleted_while_the_project_is_open_is_rebuilt() {
         "held by the compare-and-swap"
     );
     assert_valid_burrito(&rig.fs, &folder);
+    // The writer looks at the folder after its last job; on a slow run that look would come
+    // after the deletion below and blame the store for the file the test took away.
+    handle.wait_idle();
     rig.fs.delete(&usfm).unwrap();
     save_verse(&handle, 1, 3, "grace and peace").unwrap();
     leave(&handle);
@@ -248,6 +251,9 @@ fn a_carried_file_edited_outside_is_recorded_and_listed_as_it_is() {
     assert_valid_burrito(&rig.fs, &folder);
 
     let edited = b"sixteen bytes!!!".to_vec();
+    // The writer looks at the folder after its last job; a look still running when the
+    // file changes below would blame the store for another program's bytes.
+    handle.wait_idle();
     // Unseen, as above: the focus below is the look that finds it.
     rig.fs.put_unseen(&folder.join(AUDIO), &edited, None);
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
@@ -321,6 +327,8 @@ fn a_held_file_that_changes_again_is_kept_again_and_both_copies_stay() {
     second.extend_from_slice(b"\\rem second, and longer\n");
     // Unseen: told of it, the watcher may finish another job before it looks, and the burrito
     // check after that job would see another program's bytes the app has not looked at yet.
+    // For the same reason the writer's look at its last job ends first.
+    handle.wait_idle();
     rig.fs.put_unseen(&usfm, &second, None);
     save_verse(&handle, 1, 3, "grace and peace").unwrap();
     leave(&handle);

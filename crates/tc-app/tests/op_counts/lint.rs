@@ -80,6 +80,8 @@ const COSTS_LESS: &[(&str, &[&str])] = &[
             "change_at",
             "holds",
             "shown_value",
+            // T: the merge of one record's heads, as resolving its current heads does.
+            "merged_at",
         ],
     ),
     (

@@ -1,0 +1,10 @@
+{
+  "name": "tc4-shell",
+  "private": true,
+  "description": "The Electronite shell of translationCore4 (docs/contracts/SHELL.md)",
+  "main": "main.cjs",
+  "scripts": {
+    "test": "node --test test/*.test.cjs",
+    "e2e": "node --test e2e/*.test.cjs"
+  }
+}

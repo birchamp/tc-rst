@@ -255,8 +255,9 @@ fn reopened(after: &[(u16, VerseValue)]) -> (Vec<String>, String) {
                 verse.to_string()
             },
             drafted,
+            // As the app shows the words: poem lines as tabs (tC4 #810, REF1b).
             body: if drafted {
-                body.to_owned()
+                tc_usfm::poem::editor_text(body)
             } else {
                 String::new()
             },
@@ -431,7 +432,7 @@ struct Rig {
 impl Rig {
     async fn over(state: &ScenarioState) -> Rig {
         let fs = FaultFs::new();
-        let (store, _) = scenario_state_on(&fs, state);
+        let (store, _, _watch) = scenario_state_on(&fs, state);
         let dir = tempfile::tempdir().unwrap();
         let t = app_over(dir.path(), Arc::new(store)).await;
         let open = t
@@ -790,7 +791,7 @@ async fn a_poem_comes_back_byte_for_byte(chapter: &str) {
         view.chapters[2]
             .verses
             .iter()
-            .any(|v| v.words.value.contains("\n\\q")),
+            .any(|v| v.words.value.contains("\n\t")),
         "a verse of the poem holds several lines"
     );
     let mut request = 0;
@@ -850,6 +851,189 @@ async fn a_poem_comes_back_byte_for_byte(chapter: &str) {
     rig.finish().await;
 }
 
+/// REF1b, INV-EVERY-POEM-LINE-STAYS: the cards show poem lines as tabs (tC4 #810), and what a
+/// person saves from them is written to the book as `\q` markers, every other line kept.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn tabs_saved_from_a_card_are_written_as_q_markers() {
+    let rig = Rig::over(&with_titus_3(GENESIS_3_14)).await;
+    let view = rig.chapters().await;
+    let fifteen = row(&view, 3, "15");
+    assert_eq!(
+        fifteen.words.value,
+        "I will put hostility between you and the woman,\n\t\tand between your offspring and her offspring.\n\tHe will bruise your head,\n\t\tand you will bruise his heel.\""
+    );
+    // The verse card: one line changed, one line added at the third level.
+    let typed =
+        fifteen.words.value.replace("his heel.\"", "his heel,") + "\n\t\t\tand it will be so.\"";
+    let ack = post(
+        &rig.t.app,
+        &SaveVerse {
+            at: rig.at.clone(),
+            request: rid(70),
+            shown: fifteen.words.token.clone(),
+            words: typed.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert_eq!(
+        ack.saved[0].text, typed,
+        "the card's text comes back as it was typed"
+    );
+    // The section card: verse 16's second line moves to the first level.
+    let after = rig.chapters().await;
+    let sixteen = row(&after, 3, "16").words.value.clone();
+    assert!(sixteen.contains("\n\t\tin pain"), "{sixteen:?}");
+    let verses: Vec<SectionVerse> = ["16"]
+        .iter()
+        .map(|key| SectionVerse {
+            key: (*key).to_owned(),
+            drafted: true,
+            body: sixteen.replace("\n\t\tin pain", "\n\tin pain"),
+            format: row(&after, 3, key).format,
+        })
+        .collect();
+    let text = initial_text(&verses, &expand_keys(&["16".to_owned()]));
+    let ack = rig.save(71, &after, 3, &["16"], &text).await.unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    rig.finish().await;
+    let book = rig
+        .fs
+        .files_under(&Path::new(PROJECTS).join(SAMPLE))
+        .into_iter()
+        .find(|(path, _)| path.ends_with("ingredients/TIT.usfm"))
+        .map(|(_, bytes)| String::from_utf8(bytes).unwrap())
+        .expect("the book is written");
+    assert!(!book.contains('\t'), "no tab reaches the book");
+    assert!(book.contains(
+        "\\v 15 I will put hostility between you and the woman,\n\\q2 and between your offspring and her offspring.\n\\q1 He will bruise your head,\n\\q2 and you will bruise his heel,\n\\q3 and it will be so.\"\n"
+    ), "{book}");
+    assert!(
+        book.contains("\\q1 in pain you will give birth to children."),
+        "{book}"
+    );
+}
+
+/// REF1b (the races review): a card over a verse with two heads that agree converts its text by
+/// the version it showed, not by a teammate's newer one, so a break the card showed keeps its
+/// own marker.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_card_over_two_heads_saves_by_the_version_it_showed() {
+    let rig = Rig::sample().await;
+    let save = async |n: u8, shown: ShownToken, words: &str| {
+        post(
+            &rig.t.app,
+            &SaveVerse {
+                at: rig.at.clone(),
+                request: rid(n),
+                shown,
+                words: words.to_owned(),
+            },
+        )
+        .await
+        .unwrap()
+    };
+    let first = rig.chapters().await;
+    save(
+        80,
+        row(&first, 1, "4").words.token.clone(),
+        "a\n\\q1 b\n\\ts\\*\n\\q2 c",
+    )
+    .await;
+    // Two saves of the same words from one token: two heads that agree.
+    let one = rig.chapters().await;
+    let token = row(&one, 1, "4").words.token.clone();
+    save(81, token.clone(), "a\n\\q1 b\n\\ts\\*\n\\q2 c!").await;
+    save(82, token, "a\n\\q1 b\n\\ts\\*\n\\q2 c!").await;
+    let card = rig.chapters().await;
+    let shown = row(&card, 1, "4").words.clone();
+    assert_eq!(shown.value, "a\n\tb\n\n\t\tc!");
+    // A teammate turns the break into a paragraph meanwhile.
+    save(83, shown.token.clone(), "a\n\\q1 b\n\\p\n\\q2 c!").await;
+    // The card saves over the version it showed.
+    save(84, shown.token, "a\n\tb\n\n\t\tc!!").await;
+    rig.finish().await;
+    let book = rig
+        .fs
+        .files_under(&Path::new(PROJECTS).join(SAMPLE))
+        .into_iter()
+        .find(|(path, _)| path.ends_with("ingredients/TIT.usfm"))
+        .map(|(_, bytes)| String::from_utf8(bytes).unwrap())
+        .expect("the book is written");
+    assert!(book.contains("\\q1 b\n\\ts\\*\n\\q2 c!!"), "{book}");
+}
+
+/// REF1b (the browser review; tC4 j02's #812 case): a section save that clears the words after
+/// a verse's `\ts\*` keeps the `\ts\*` once, in the last verse of the section and before the
+/// next verse alike.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn clearing_the_words_after_a_break_keeps_the_break() {
+    let rig = Rig::sample().await;
+    let view = rig.chapters().await;
+    for (n, verse, words) in [
+        (
+            90,
+            "4",
+            "a Tito,\n\\q2 mi verdadero hijo\n\\ts\\*\n\\q1 en la fe común",
+        ),
+        (
+            91,
+            "5",
+            "Por esta causa,\n\\q2 te dejé en Creta\n\\ts\\*\n\\q1 para que corrigieras",
+        ),
+    ] {
+        post(
+            &rig.t.app,
+            &SaveVerse {
+                at: rig.at.clone(),
+                request: rid(n),
+                shown: row(&view, 1, verse).words.token.clone(),
+                words: words.to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let view = rig.chapters().await;
+    let keys = ["4", "5"];
+    let opening = initial_text(
+        &keys
+            .iter()
+            .map(|key| {
+                let r = row(&view, 1, key);
+                SectionVerse {
+                    key: (*key).to_owned(),
+                    drafted: true,
+                    body: js_trim(&r.words.value).to_owned(),
+                    format: r.format,
+                }
+            })
+            .collect::<Vec<_>>(),
+        &expand_keys(&keys.map(str::to_owned)),
+    );
+    let typed = opening
+        .replace("\ten la fe común", "")
+        .replace("\tpara que corrigieras", "");
+    assert_ne!(typed, opening);
+    let ack = rig.save(92, &view, 1, &keys, &typed).await.unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    rig.finish().await;
+    let book = rig
+        .fs
+        .files_under(&Path::new(PROJECTS).join(SAMPLE))
+        .into_iter()
+        .find(|(path, _)| path.ends_with("ingredients/TIT.usfm"))
+        .map(|(_, bytes)| String::from_utf8(bytes).unwrap())
+        .expect("the book is written");
+    assert!(book.contains("\\q2 mi verdadero hijo\n\\ts\\*\n"), "{book}");
+    assert!(book.contains("\\q2 te dejé en Creta\n\\ts\\*\n"), "{book}");
+    assert!(
+        !book.contains("\\ts\\*\n\\ts\\*"),
+        "each break once: {book}"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_change_section_save_on_psalm_3_writes_nothing() {
     a_poem_comes_back_byte_for_byte(&psalm_3()).await;
@@ -858,4 +1042,66 @@ async fn no_change_section_save_on_psalm_3_writes_nothing() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_change_section_save_on_genesis_3_14_to_17_writes_nothing() {
     a_poem_comes_back_byte_for_byte(GENESIS_3_14).await;
+}
+
+impl Rig {
+    /// Home's Resume card: the verse it names and its opening text.
+    async fn resume(&self) -> (String, String) {
+        let home: tc_api::home::HomeView = post(&self.t.app, &tc_api::home::List {}).await.unwrap();
+        let resume = home.resume.expect("a Resume card");
+        let tc_api::home::ResumePlace::Book { verse, .. } = resume.place else {
+            panic!("{:?}", resume.place)
+        };
+        (verse.as_str().to_owned(), resume.snippet)
+    }
+}
+
+/// tC4 #576: after a section save, Home's Resume card names the verse as it now stands: a
+/// join names the span ("9-10"), a break the first verse of the old span.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn last_edited_names_the_span_then_its_first_verse() {
+    let rig = Rig::sample().await;
+    let view = rig.chapters().await;
+    rig.save(1, &view, 2, &["9", "10"], &format!("9 {NINE}\n10 {TEN}"))
+        .await
+        .unwrap();
+    let view = rig.chapters().await;
+    rig.save(2, &view, 2, &["9", "10"], &format!("9-10 {NINE} {TEN}"))
+        .await
+        .unwrap();
+    assert_eq!(rig.resume().await.0, "9-10", "a join names the span");
+    let view = rig.chapters().await;
+    rig.save(3, &view, 2, &["9-10"], &format!("9 {NINE}\n10 {TEN}"))
+        .await
+        .unwrap();
+    assert_eq!(rig.resume().await.0, "9", "a break names the first verse");
+    rig.finish().await;
+}
+
+/// tC4 #831: the Resume card's text is the text of the verse it names, never the whole
+/// section with its verse numbers, and never the stub "___".
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn resume_card_names_the_verse_of_its_text_and_never_shows_the_stub() {
+    let rig = Rig::sample().await;
+    let view = rig.chapters().await;
+    assert_eq!(row(&view, 2, "9").words.value, "___");
+    // Only verse 10 is drafted: the card names 9, the section's first verse, which holds the
+    // stub, so its text is empty rather than "___" or the section's text.
+    rig.save(1, &view, 2, &["9", "10"], &format!("9 \n10 {TEN}"))
+        .await
+        .unwrap();
+    let (verse, snippet) = rig.resume().await;
+    assert_eq!(verse, "9");
+    assert!(
+        !snippet.contains("___") && !snippet.contains(TEN),
+        "{snippet:?}"
+    );
+    let view = rig.chapters().await;
+    rig.save(2, &view, 2, &["9", "10"], &format!("9 {NINE}\n10 {TEN}"))
+        .await
+        .unwrap();
+    let (verse, snippet) = rig.resume().await;
+    assert_eq!(verse, "9");
+    assert_eq!(snippet, NINE, "the verse's own text, not the section's");
+    rig.finish().await;
 }

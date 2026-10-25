@@ -43,6 +43,9 @@ fn static_routes_serve_the_ui_dir() {
     let help = server.get("/help/index.html");
     assert_eq!(help.body, b"<p>Help</p>");
     assert_eq!(help.header("cache-control"), Some("no-cache"));
+    // A page that describes tC4's folder is served with this app's (H16).
+    let folder = server.get("/help/st-where-projects-live.html");
+    assert_eq!(folder.body, b"<code>~/translationCore4/projects</code>");
     let prepare = server.get("/prepare.html");
     assert_eq!(prepare.body, b"<p>Preparing</p>");
     assert_eq!(prepare.header("cache-control"), Some("no-store"));

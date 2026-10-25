@@ -259,6 +259,8 @@ fn every_shared_type_round_trips() {
             CrashPoint,
             HoldPoint,
             QuietView,
+            ValidateView,
+            InvalidProject,
             FieldLogView,
             StoredText,
             Echo,

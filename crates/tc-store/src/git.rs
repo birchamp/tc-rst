@@ -513,6 +513,32 @@ impl Git {
         self.repo.path()
     }
 
+    /// Whether `commit`'s history holds `ancestor`. An error (a shallow history, a missing
+    /// object) counts as "no", so a merge is made rather than skipped (§9.1 S4).
+    pub fn descends_from(&self, commit: GitOid, ancestor: GitOid) -> bool {
+        let (Ok(commit), Ok(ancestor)) = (
+            git2::Oid::from_bytes(commit.as_bytes()),
+            git2::Oid::from_bytes(ancestor.as_bytes()),
+        ) else {
+            return false;
+        };
+        self.repo
+            .graph_descendant_of(commit, ancestor)
+            .unwrap_or(false)
+    }
+
+    /// The best common ancestor of two commits, when they share history.
+    pub fn merge_base(&self, a: GitOid, b: GitOid) -> Option<GitOid> {
+        let (Ok(a), Ok(b)) = (
+            git2::Oid::from_bytes(a.as_bytes()),
+            git2::Oid::from_bytes(b.as_bytes()),
+        ) else {
+            return None;
+        };
+        let base = self.repo.merge_base(a, b).ok()?;
+        GitOid::parse(&base.to_string())
+    }
+
     /// HEAD's commit; `None` on a branch with no commit yet.
     pub fn head(&self) -> Result<Option<Head>, GitError> {
         let reference = match self.repo.head() {
@@ -1060,6 +1086,10 @@ fn file_mode(mode: u32) -> FileMode {
 /// O2: removes the lock files and half-written packs a stopped process left under `.git`
 /// (`*.lock`, `objects/pack/tmp_*`). Safe because the project lock is ours and the app is
 /// single-instance. Returns how many were removed.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "removes git's stale lock and temporary pack files: git's own files, not a project file"
+)]
 pub fn remove_stale_locks(outside: &Path) -> io::Result<u32> {
     let git = outside.join(".git");
     let mut removed = 0;
@@ -1096,6 +1126,10 @@ pub fn remove_stale_locks(outside: &Path) -> io::Result<u32> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::disallowed_methods,
+        reason = "test code builds and damages scratch .git folders, never a project"
+    )]
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
     use super::*;

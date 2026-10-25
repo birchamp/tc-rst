@@ -45,6 +45,8 @@ mod app {
     mod keychain;
     mod language_search;
     mod memory;
+    mod p5;
+    mod port_contract;
     mod prefs;
     mod projects_root;
     mod replies;
@@ -61,6 +63,7 @@ mod app {
     pub mod store_scenario;
     mod story;
     pub mod sync;
+    mod test_hook_branches;
     mod translate;
     pub mod understand;
     mod upgrades;

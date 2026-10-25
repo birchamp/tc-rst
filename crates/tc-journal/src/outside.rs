@@ -1103,8 +1103,11 @@ impl FoldState {
                     // translator's structure.
                     let fillable = !project_has && heads.len() == 1 && project_shape.is_some();
                     let wanted = compare_key(&change.record, true);
-                    let in_history = self.history(&key).into_iter().any(|id| {
-                        self.body(&id)
+                    // Only the verse's current versions: a file that sets an older text
+                    // back on purpose is a conflict (§13.6 U3), while a rerun or a
+                    // replayed review finds its version already a head.
+                    let is_a_head = heads.iter().any(|id| {
+                        self.body(id)
                             .is_some_and(|b| compare_key(&b.record, true) == wanted)
                     });
                     if file_shape.is_none() || file_shape != project_shape {
@@ -1137,9 +1140,7 @@ impl FoldState {
                             cause: cause(false),
                             record: change.record,
                         });
-                    } else if in_history {
-                        // The file's version is already one of the verse's: an update run
-                        // again, or a review batch replayed, adds no second copy.
+                    } else if is_a_head {
                     } else {
                         verse_review.insert((*c, *v));
                         plan.to_review.push(key);

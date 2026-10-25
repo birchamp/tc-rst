@@ -9,6 +9,7 @@ fn skipped(skip: CheckpointSkip) -> CheckpointOutcome {
         commit: None,
         sealed: Vec::new(),
         skipped: Some(skip),
+        intake: tc_store::IntakeReport::default(),
     }))
 }
 
@@ -229,7 +230,11 @@ async fn a_retry_skipped_as_read_only_keeps_the_failure_shown() {
     use tc_app::backend::CheckpointReason;
     let mut reached = Vec::new();
     for n in 0..20 {
-        let world = crate::store_world::store_world();
+        let mut world = crate::store_world::store_world();
+        world.watch.stop(
+            "a full disk at the seal leaves a journal changes file metadata.json does not list; \
+             the storage lane's bug (side-session note 2026-10-24-store-unlisted-journal-file.md)",
+        );
         let (_dir, t) = store_app(&world).await;
         let open = t
             .app

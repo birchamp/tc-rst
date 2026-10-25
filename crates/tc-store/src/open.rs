@@ -582,6 +582,7 @@ fn open_inner(
             (None, Some(reason)) => Mode::ReadOnly(ReadOnlyReason::WriteFailed(reason.clone())),
             (None, None) => Mode::Writable,
         },
+        git_dir: git.as_ref().map(|g| g.git_dir().to_path_buf()),
     };
     let shared = Arc::new(Shared::new(
         fold.clone(),
@@ -1581,6 +1582,7 @@ impl Project {
             }],
             skipped: Vec::new(),
             kept: Vec::new(),
+            dropped_links: Vec::new(),
         };
         self.commit(plan)
             .map(|_| ())
@@ -1613,6 +1615,7 @@ impl Project {
                 .collect(),
             skipped: Vec::new(),
             kept: Vec::new(),
+            dropped_links: Vec::new(),
         };
         self.commit(plan)
             .map(|_| ())
