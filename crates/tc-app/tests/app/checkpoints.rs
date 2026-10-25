@@ -219,3 +219,61 @@ mod policy {
         ));
     }
 }
+
+/// INV-A-FAILED-CHECKPOINT-IS-SHOWN-UNTIL-RETRIED: a full disk at the seal can leave the project
+/// read-only (the store takes its own half-written pack for a second writer). The retry then
+/// skips without looking, so the failure stays shown: the saved verse is not in the history.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_retry_skipped_as_read_only_keeps_the_failure_shown() {
+    use tc_app::backend::CheckpointReason;
+    let mut reached = Vec::new();
+    for n in 0..20 {
+        let world = crate::store_world::store_world();
+        let (_dir, t) = store_app(&world).await;
+        let open = t
+            .app
+            .sessions()
+            .open_screen(&world.bible, super::common::open_progress())
+            .await
+            .unwrap();
+        let session = t.app.read(&open.at).unwrap();
+        crate::store_world::save(
+            session.handle().as_ref(),
+            &crate::store_world::tit(1, 2),
+            "a change to commit",
+        )
+        .await
+        .unwrap();
+        session.handle().wait_idle();
+        world.fs.fail_op(n, std::io::ErrorKind::StorageFull);
+        let first = t
+            .app
+            .sessions()
+            .checkpoint(&session, CheckpointReason::LeavingTranslate)
+            .await;
+        if !matches!(first, CheckpointOutcome::Failed { .. }) {
+            continue;
+        }
+        let retried = t
+            .app
+            .sessions()
+            .checkpoint(&session, CheckpointReason::Other("retry".into()))
+            .await;
+        if !matches!(
+            session.handle().facts().mode,
+            tc_api::event::SessionMode::ReadOnly(_)
+        ) {
+            continue;
+        }
+        assert!(
+            matches!(retried, CheckpointOutcome::Failed { .. }),
+            "fail point {n}: {retried:?}"
+        );
+        assert_eq!(failed(&t).await.len(), 1, "fail point {n}");
+        reached.push(n);
+    }
+    assert!(
+        !reached.is_empty(),
+        "no fail point left the project read-only"
+    );
+}

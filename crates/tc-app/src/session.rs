@@ -419,9 +419,19 @@ impl SessionRegistry {
             CheckpointReason::LeavingTranslate | CheckpointReason::LeavingMode(_) => "leavingMode",
             CheckpointReason::Other(_) => "other",
         };
-        lock(&self.inner.checkpoints).insert(folder.clone(), CheckpointState::Running);
+        let before = lock(&self.inner.checkpoints).insert(folder.clone(), CheckpointState::Running);
         let started = self.inner.clock.now();
-        let outcome = session.handle.checkpoint(reason).await;
+        let mut outcome = session.handle.checkpoint(reason).await;
+        // A read-only project (a second writer appeared) skips the checkpoint without looking:
+        // an earlier failure's work may still be missing from the history, so it stays shown.
+        if let (
+            CheckpointOutcome::Unchanged,
+            Some(CheckpointState::Ended(failed @ CheckpointOutcome::Failed { .. })),
+        ) = (&outcome, before)
+            && matches!(session.handle.facts().mode, SessionMode::ReadOnly(_))
+        {
+            outcome = failed;
+        }
         lock(&self.inner.checkpoints)
             .insert(folder.clone(), CheckpointState::Ended(outcome.clone()));
         if let CheckpointOutcome::Failed { reason } = &outcome {
