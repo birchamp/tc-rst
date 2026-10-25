@@ -67,7 +67,7 @@ cp -R "$bundle" "$resources/tc4/bundle"
 
 docs="$root"
 [ "$platform" = macos-arm64 ] && docs="$resources"
-cp "$repo/COPYING" "$docs/LICENSE"
+cp "$repo/LICENSE" "$docs/LICENSE"
 
 if [ "$platform" = linux-x64 ]; then
   # tC4 docs/PACKAGING.md "The Chromium sandbox": after unzip chrome-sandbox is not setuid root,

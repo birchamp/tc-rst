@@ -11,11 +11,13 @@ platform=$1 stage=$2 dist=$3
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' "$repo/Cargo.toml")
 mkdir -p "$dist"
+# Absolute, since ISCC reads a relative path against the .iss file's folder.
+stage=$(cd "$stage" && pwd) dist=$(cd "$dist" && pwd)
 case "$platform" in
   linux-x64)
     cp "$stage/translationCore 4/BUILD-MANIFEST.json" "$dist/BUILD-MANIFEST-$platform.json"
     # -y keeps Electronite's symbolic links; unzip keeps the modes (tC4 docs/PACKAGING.md).
-    (cd "$stage" && zip -qry "$OLDPWD/$dist/translationCore4-$version-linux-x64.zip" "translationCore 4")
+    (cd "$stage" && zip -qry "$dist/translationCore4-$version-linux-x64.zip" "translationCore 4")
     ;;
   windows-x64)
     cp "$stage/translationCore 4/BUILD-MANIFEST.json" "$dist/BUILD-MANIFEST-$platform.json"
