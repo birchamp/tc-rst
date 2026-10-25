@@ -155,6 +155,11 @@ of 2026-10-21, `docs/STORAGE-DELTA-2026-10-21.md` §2.11, §2.17):
   P reports R9).
 - The checkpoint commit message, visible in Door43's history, ends with the books:
   "Checkpoint, leaving Translate: TIT (tC)", where tC4's reads "…: TIT text (tC4)".
+- Work found only in a book or story file the app wrote (a save missing from the project's
+  records) is asked about once: "Some recent work was missing from this project's records.
+  Bring it back?" with *Bring it back* and *Not now*; after *Not now* the review lists it with
+  *Bring it back* only, never *Dismiss*. tC4 takes it in on its own at the next open
+  (`reconcileDivergence`) (H22 part 1).
 
 Under the same rule, in the conflict review (B11 and C7a, 2026-10-23):
 
