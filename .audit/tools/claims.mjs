@@ -46,6 +46,12 @@ export function testNames(repo) {
   if (fs.existsSync(report)) {
     for (const row of JSON.parse(fs.readFileSync(report, 'utf8')).rows ?? []) if (row.name) exact.add(row.name);
   }
+  // The Electronite shell's node tests (`shell/test`, `shell/e2e`).
+  for (const file of walk(path.join(repo, 'shell'), (n) => n.endsWith('.test.cjs'))) {
+    const titles = titlesOf(fs.readFileSync(file, 'utf8'));
+    for (const t of titles.exact) exact.add(t);
+    patterns.push(...titles.patterns);
+  }
   const scenarios = path.join(repo, 'parity/ds-gallery/scenarios.mjs');
   if (fs.existsSync(scenarios)) {
     for (const m of fs.readFileSync(scenarios, 'utf8').matchAll(/name:\s*'([^']+)'/g)) exact.add(m[1]);
@@ -82,7 +88,7 @@ export function testFns(text, testFile) {
 export function titlesOf(text) {
   const exact = new Set();
   const patterns = [];
-  for (const m of text.matchAll(/\b(?:browserTest|test|it)\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) {
+  for (const m of text.matchAll(/\b(?:browserTest|shellTest|test|it)\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) {
     const title = m[2];
     if (m[1] === '`' && title.includes('${')) {
       const parts = title.split(/\$\{[^}]*\}/);

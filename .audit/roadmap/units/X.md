@@ -17,7 +17,7 @@ merged: none
 updated: 2026-10-26
 next: local scripts/gates.sh on track-X, then hand it to the integration lane for a batch after T.
 blocked_by: none
-later: [H5 replaced-list in SyncReport and ReceiveReport (by kind and person), once C7b's fold reports what newest-wins replaced]
+later: [C7b from step 5]
 ---
 
 # X: Door43 sync and USB exchange (tc-sync)
@@ -46,6 +46,8 @@ Sync is where a team's work meets. A forced push, a half-received batch or a rev
 erase someone's work without anyone seeing it (tC4 RISKS #5, #6, #11, #12).
 
 ## Before you start
+
+- Every store your tests build goes through `backend_over` and its `BurritoWatch` (CHK-2); a journey ends with `test/validate`. Do not validate by hand only.
 
 Run these from the repository root on your branch:
 

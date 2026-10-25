@@ -327,6 +327,21 @@ impl Store {
     /// Creates a project (§6.4 N1, N2): built and materialized in a staging folder, then
     /// renamed into place without replacing anything.
     pub fn create(&self, new: &NewProject) -> Result<PathBuf, CreateError> {
+        self.make(new, Cause::Seed, StagingKind::Create)
+    }
+
+    /// Creates a project from an import (§13): as [`Store::create`], whole or absent, with
+    /// `cause` (an `Import`) on every record, so History says where the work came from.
+    pub fn create_imported(&self, new: &NewProject, cause: Cause) -> Result<PathBuf, CreateError> {
+        self.make(new, cause, StagingKind::Import)
+    }
+
+    fn make(
+        &self,
+        new: &NewProject,
+        cause: Cause,
+        kind: StagingKind,
+    ) -> Result<PathBuf, CreateError> {
         self.cleanup.wait();
         valid_name(&new.name)?;
         check_details(new)?;
@@ -334,15 +349,21 @@ impl Store {
         if self.env.vfs.metadata(&target).is_ok() {
             return Err(CreateError::NameExists(new.name.clone()));
         }
-        let staging = self.staging(StagingKind::Create);
-        if let Err(e) = self.build(new, &staging, &target) {
+        let staging = self.staging(kind);
+        if let Err(e) = self.build(new, &cause, &staging, &target) {
             let _ = remove_dir_all_held(&*self.env.vfs, &staging, &HeldRetry::SAVE);
             return Err(e);
         }
         self.place(&staging, &new.name)
     }
 
-    fn build(&self, new: &NewProject, staging: &Path, target: &Path) -> Result<(), CreateError> {
+    fn build(
+        &self,
+        new: &NewProject,
+        cause: &Cause,
+        staging: &Path,
+        target: &Path,
+    ) -> Result<(), CreateError> {
         let vfs = &*self.env.vfs;
         let folder = Folder::new(staging);
         vfs.create_dir(staging)
@@ -386,7 +407,7 @@ impl Store {
                     .map(|record| PlannedChange {
                         record: record.clone(),
                         parents: Vec::new(),
-                        cause: Cause::Seed,
+                        cause: cause.clone(),
                     })
                     .collect(),
             };

@@ -4,7 +4,7 @@ title: The storage side of the tC4 issue sweep (what is left)
 track: A
 lane: storage
 milestone: M2
-state: gating
+state: done
 owner: S2 session (Claude Code add49644)
 branch: track-T
 worktree: /home/bot/tc-rst/.worktrees/track-T
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P3, P10]
 no_loss: true
 size: 0.5-1 d (basis: 3ecdcae did two T items in one commit, +395 lines)
-merged: none
-updated: 2026-10-25
-next: wait for the orchestrator's merge turn; then merge main in once, scripts/gates.sh --wait-ci T, fast-forward main, push.
+merged: a01c188e
+updated: 2026-10-24
+next: none
 blocked_by: none
 ---
 
@@ -271,3 +271,4 @@ Plus `cargo test -p tc-align --release --test suggestion_budget -- --ignored --n
 - 2026-10-24 23:45 EDT | S2 session (Claude Code add49644) | fix | none | (1) the store's reflow runs only when the verse's heads are still the token's; a save from an overtaken screen leaves the alignment as it is, and its hash marks it for review (STORAGE §5.1 step 5). New a_save_from_a_screen_a_sync_overtook_keeps_the_teammates_alignment; without the guard it fails at reflow.rs:441. (2) relationships read a group's slots in tC4's resources.json order (`slot_rank`, now also with tC4's OBS slots, so resources.json of an OBS project orders them as tC4 too); the relationships test uses real slot names and fails without the sort (projection.rs:581). Left: extraScripture panes keep their id order where tC4 keeps first-pin order (minor). (3) splice_story writes the reference line after the last frame, as tC4's writeRef, when the base has none; new a_story_whose_base_has_no_reference_line_writes_its_reference failed before the fix (the line was missing). (4) PLAN.md declares that the alignment files carry the review rule and cites #820. The other minors are in .audit/minors.tsv | crates/tc-store/src/commands.rs
 - 2026-10-25 08:55 EDT | S2 session (Claude Code add49644) | gate | none | started scripts/gates.sh in .worktrees/track-T on 677cb0a9 plus this line; log in the session scratchpad, t-gates2.log | scripts/gates.sh
 - 2026-10-25 10:20 EDT | S2 session (Claude Code add49644) | gate | 3a629c39 | passed: scripts/gates.sh, all 14 steps (app-e2e 214 tests, 0 skipped). The three lens findings are fixed (677cb0a9) and the rest are minors. Ready for a merge turn: merge main in, then scripts/gates.sh --wait-ci T | scripts/gates.sh
+- 2026-10-24 17:36 EDT | integration lane (Claude Code 3d07d5f8) | merge | a01c188e | merged into main in batch 2a (UI-1 4a86b252, UI-2 312cef3f, SWEEP 21fbbec0, OLH-1 14e0f12b, T a01c188e, the storage lane's merge of main into T), gated by scripts/gates.sh --wait-ci batch-2a on the batch's last commit. Merged by the integration lane with main (batch 1) itself, as the storage lane was away: the OBS frame test takes T's assertions with FrameNo::new; TC4-ISSUES keeps the sweep's rows plus T's fixes. | scripts/gates.sh --wait-ci batch-2a

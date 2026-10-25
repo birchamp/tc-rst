@@ -145,7 +145,7 @@ fn put_corpus(store: &tc_store::Store, fs: &FaultFs, folder: &Path, corpus: &Cor
 fn on_disk(spec: &Spec) -> FaultFs {
     let corpus = Corpus::generate(spec).expect("the corpus builds");
     let fs = FaultFs::new();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, _backend_watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let folder = Path::new(PROJECTS).join(FOLDER);
     put_corpus(backend.store(), &fs, &folder, &corpus);
     let handle = backend

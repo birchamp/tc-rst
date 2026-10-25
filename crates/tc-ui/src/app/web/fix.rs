@@ -13,6 +13,7 @@ use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::check::CheckUnit;
 use tc_api::event::{Aspect, ChangeParts, ChangeScope};
+use tc_api::jobs::Phase;
 use tc_api::refusal::{Refusal, ResourceRefusal};
 use tc_api::resources::{FixFetch, FixRepin, FixSideload};
 use tc_api::upload::UploadFlow;
@@ -23,6 +24,7 @@ use super::js;
 use super::sources::{api_error, said};
 use crate::app::fix::{self, Fix, FixScreen};
 use crate::app::internet::Pending;
+use crate::app::jobs::JobEnd;
 use crate::i18n::{keys, t};
 
 thread_local! {
@@ -107,24 +109,30 @@ impl Actions {
             };
             let ended = match this.runtime().api().call(&request).await.map_err(api_error) {
                 Ok(job) => {
-                    this.follow_job(job, |repo| {
-                        this.patch_fix(id, |screen| screen.fetching(&repo));
-                    })
+                    this.follow::<FixFetch>(
+                        job,
+                        |progress| {
+                            if let Phase::Install { repo } = &progress.phase {
+                                this.patch_fix(id, |screen| screen.fetching(repo));
+                            }
+                        },
+                        || true,
+                    )
                     .await
                 }
-                Err(error) => Err(Some(error)),
+                Err(error) => JobEnd::Failed(error),
             };
             match ended {
-                Ok(_) => this.finish_fix(id, &asked.at),
-                Err(None) => {
+                JobEnd::Done(()) => this.finish_fix(id, &asked.at),
+                JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
                     this.patch_fix(id, FixScreen::stopped);
                 }
                 // The switch went off after the question: ask once more.
-                Err(Some(ApiError::NeedsInternet(_))) => {
+                JobEnd::Failed(ApiError::NeedsInternet(_)) => {
                     this.patch_fix(id, FixScreen::stopped);
                     this.ask_again(Pending::Fix(id));
                 }
-                Err(Some(error)) => {
+                JobEnd::Failed(error) => {
                     let reason = why_failed(&error);
                     this.patch_fix(id, |screen| screen.install_failed(&reason));
                 }

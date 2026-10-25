@@ -3,7 +3,8 @@
 //! second loopback server, its control port.
 //!
 //! It holds the parity account ([`seeded::parity_account`]: `facilitator-zq`, the user of tC4's
-//! own e2e fake, with its organizations and their repositories) and nothing else. It prints one line on stdout,
+//! own e2e fake, with its organizations and their repositories) and unfoldingWord's resource
+//! releases ([`seeded::unfolding_word_resources`], the ones the Rust tests' seeded fake holds). It prints one line on stdout,
 //! `{"url": "http://127.0.0.1:<port>", "control": "http://127.0.0.1:<port>"}`, and serves until
 //! its stdin closes or reads the line `{"quit":true}`; then its repositories' temporary folder
 //! goes and it exits with 0. A start that fails prints `{"error": "<reason>"}` and exits with 1.
@@ -65,6 +66,9 @@ async fn run() -> ExitCode {
         Err(error) => return failed(&error.to_string()),
     };
     if let Err(error) = seeded::parity_account(&fake).await {
+        return failed(&error.to_string());
+    }
+    if let Err(error) = seeded::unfolding_word_resources(&fake).await {
         return failed(&error.to_string());
     }
     let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
