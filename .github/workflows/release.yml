@@ -164,6 +164,8 @@ jobs:
   # INV-EVERY-INSTALLER-PASSES-THE-SMOKE-TEST: each installer on a fresh runner of its system.
   smoke:
     needs: build
+    # always(): translations is red until H10 is done, and the default would skip every smoke.
+    if: always() && needs.build.result == 'success'
     strategy:
       fail-fast: false
       matrix:
