@@ -30,7 +30,8 @@ case "$platform" in
     resources="$root/resources"
     start=(node "$(np "$here/app-starts.mjs")" --exe "$(np "$root/electron.exe")")
     appdata="$(cygpath -u "$APPDATA")/translationCore4/app-data"
-    uninstall() { MSYS2_ARG_CONV_EXCL='*' "$root/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART; while [ -e "$root/electron.exe" ]; do sleep 1; done; }
+    uninstall() { MSYS2_ARG_CONV_EXCL='*' "$root/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART; # Inno's uninstaller runs a copy of itself and removes the folder last.
+      for _ in $(seq 60); do [ -e "$root" ] || break; sleep 1; done; }
     ;;
   macos-arm64)
     sudo installer -pkg "$(ls "$dist"/translationCore4-*-macos-arm64*.pkg)" -target /
@@ -59,7 +60,7 @@ node "$(np "$here/smoke.mjs")" --tc4 "$(np "$resources/tc4/$exe")" --ui "$(np "$
 cp "$appdata/shell.log" smoke-logs/ 2> /dev/null || true
 
 uninstall
-[ ! -e "$root" ] || { echo "FAIL uninstall_removes_the_app: $root is still there"; exit 1; }
+[ ! -e "$root" ] || { echo "FAIL uninstall_removes_the_app: $root is still there, holding:"; find "$root" | head -20; exit 1; }
 echo "ok uninstall_removes_the_app"
 [ -f "$appdata/app.lock" ] || [ -d "$appdata/resources" ] || { echo "FAIL uninstall_keeps_app_data: $appdata is gone"; exit 1; }
 echo "ok uninstall_keeps_app_data"
