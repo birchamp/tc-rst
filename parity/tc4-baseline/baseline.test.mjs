@@ -257,6 +257,16 @@ test('every screen where a shared OBS card reads "Upload changes" cites Q2', () 
   for (const s of uploads) assert.equal(s.rebuildDiffers?.ruling, 'Q2', `${s.name} shows Upload changes but does not cite Q2`);
 });
 
+// The next tC4 sweep starts from this line (SWEEP card); without it a sweep cannot name its range.
+test('tc4_issues_names_its_swept_range', () => {
+  const issues = fs.readFileSync(path.join(HERE, '..', '..', 'docs', 'TC4-ISSUES.md'), 'utf8');
+  assert.match(
+    issues,
+    /^Swept: tC4 main [0-9a-f]{40}, release\/4\.0 [0-9a-f]{40}, issues updated to \d{4}-\d{2}-\d{2}\.$/m,
+    'INV-THE-SWEEP-NAMES-ITS-RANGE: docs/TC4-ISSUES.md has no line "Swept: tC4 main <40-hex>, release/4.0 <40-hex>, issues updated to <date>."',
+  );
+});
+
 test("PLAN's reference commit is the baseline's", () => {
   const named = plan.match(/the reference is tC4 `main` at\s+commit `([0-9a-f]{7,40})`/)?.[1];
   assert.ok(named, 'PLAN names no reference commit ("the reference is tC4 `main` at commit `<sha>`")');

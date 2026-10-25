@@ -141,6 +141,36 @@ impl Ctx<'_> {
     }
 }
 
+/// One part of "Update a book from USFM" (§13.6, H20). The verses left as they were are
+/// the `Fill` reply's `kept`.
+fn update_book(
+    ctx: &Ctx<'_>,
+    book: BookId,
+    bytes: &[u8],
+    file_name: &str,
+    part: tc_journal::outside::UpdatePart,
+) -> R<Plan> {
+    ctx.require_kind(ProjectKind::Bible)?;
+    let plan = ctx
+        .fold
+        .plan_update_book(book, bytes, file_name)
+        .map_err(|e| refused(Refusal::Book(e)))?;
+    Ok(match part {
+        tc_journal::outside::UpdatePart::Fill => Plan {
+            changes: plan.changes,
+            skipped: Vec::new(),
+            kept: plan.left_as_it_was,
+            dropped_links: Vec::new(),
+        },
+        tc_journal::outside::UpdatePart::Review => Plan {
+            changes: plan.review,
+            skipped: Vec::new(),
+            kept: Vec::new(),
+            dropped_links: Vec::new(),
+        },
+    })
+}
+
 /// B1 for one command.
 pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
     let mut dropped = Vec::new();
@@ -217,6 +247,12 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             plan,
         } => resolve_pins(ctx, conflict, shown, plan)?,
         Command::UndoOutsideEdit { batch } => return undo_outside_edit(ctx, *batch),
+        Command::UpdateBook {
+            book,
+            bytes,
+            file_name,
+            part,
+        } => return update_book(ctx, *book, bytes, file_name, *part),
         Command::ResolveOutsideEdit {
             batch,
             keep,
@@ -1019,7 +1055,7 @@ fn add_book(ctx: &Ctx<'_>, book: BookId, scope: &Scope, source: &str) -> R<Vec<P
         ))));
     }
     check_scope(ctx, book, scope)?;
-    let seeded = crate::seed::seed_book(
+    let seeded = tc_usfm::seed::seed_book(
         source,
         book.code(),
         book.english_name(),
@@ -1076,6 +1112,7 @@ fn add_book_text(
         .map_err(|e| refused(Refusal::Book(format!("the file does not read: {e}"))))?;
     let cause = Cause::Import(ImportSource::Usfm {
         file_name: file_name.into(),
+        unknown_base: false,
     });
     if parts.chapters.is_empty() {
         return Err(refused(Refusal::Book(
@@ -1279,7 +1316,7 @@ fn save_frame(ctx: &Ctx<'_>, shown: &ShownToken, text: &str) -> R<Vec<PlannedCha
     let text = nfc(text);
     let record = match shown.key().clone() {
         RecordKey::Frame(story, frame) => {
-            let problem = if frame.0 == 0 {
+            let problem = if frame.get() == 0 {
                 tc_obs::story::title_text_problem(&text)
             } else {
                 tc_obs::story::frame_text_problem(&text)

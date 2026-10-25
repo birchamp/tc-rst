@@ -566,6 +566,94 @@ pub fn parse_questions(text: &str, scope: TsvScope) -> Result<Vec<Question>, Err
         .collect()
 }
 
+/// The columns of the questions table (`TQ_HEADER`, tC4 `src/data/derive.ts:136`).
+const QUESTION_COLUMNS: usize = 7;
+/// The `Occurrence` column of the questions table, from 0 (`derive.ts:325`).
+const QUESTION_OCCURRENCE: usize = 4;
+
+/// Reads a translation questions table as tC4 reads it, for a book or for the stories
+/// (`deriveTqItems`, `src/data/derive.ts:323-348`, which tC4 uses for both, `:590` and
+/// `:670`): every row is a question, except a row whose `Reference` does not address a
+/// verse of the book or a frame of a story (`story:frame`, story 1 to 50, frame 0 the
+/// title), which tC4 cannot place (`derive.ts:592-594`, R-10.4.1). Only a header that is
+/// not the questions header refuses the table (`tsvRows`, `derive.ts:138-148`).
+///
+/// [`parse_questions`] refuses a whole table for one row it cannot read; tC4 reads past such
+/// a row, so one bad row must not cost a book or fifty stories their questions:
+///
+/// - A row's cells are taken by position (`derive.ts:325`): a missing cell is empty
+///   (tC4's `?? ''`) and a cell past the seventh is not read.
+/// - An `Occurrence` that is not a count (`x`, `1.5`, ` 1`) is held as
+///   [`Occurrence::Unrecorded`](crate::Occurrence::Unrecorded). tC4 holds `NaN`
+///   (`derive.ts:336`), and no view of a question reads it: the questions tab shows the
+///   question, the response and the reference (`src/views/HelpsPanel.jsx:294-309`).
+/// - A row whose `ID` is not a row id (1 to 16 ASCII letters and digits) is left out, and
+///   the rest kept. tC4 shows its question; a question here cannot hold that ID, and this
+///   reader does not make one up (a declared difference).
+///
+/// tC4 reads only the first two parts of a locator and any integers, so it keeps `1:2:3`
+/// as frame 2 of story 1, and `0:1` and `51:1` for stories no project has. A question here
+/// cannot hold any of those, so they are left out too: for `1:2:3`, which tC4 shows on frame
+/// 2, a declared difference (`docs/APP-DESIGN.md`, the questions table).
+///
+/// The questions are read for the screen only: tC4 derives them on each load and never
+/// stores or writes them (`src/state.jsx:2349-2353`, `:2386`).
+pub fn parse_questions_leniently(text: &str, scope: TsvScope) -> Result<Vec<Question>, Error> {
+    let mut lines = text.split('\n').filter(|line| !blank(line));
+    let Some(header) = lines.next() else {
+        // No header at all: the strict reader's refusal, as tC4 throws on it.
+        return parse_questions(text, scope);
+    };
+    parse_questions(header, scope)?;
+    let mut questions = Vec::new();
+    for line in lines.filter(|line| addresses(line, scope)) {
+        let mut cells: Vec<&str> = line.split('\t').take(QUESTION_COLUMNS).collect();
+        cells.resize(QUESTION_COLUMNS, "");
+        let read = match question_row_read(header, &cells, scope) {
+            Err(Error::TsvCell {
+                problem: CellProblem::Occurrence(_),
+                ..
+            }) => {
+                cells[QUESTION_OCCURRENCE] = "";
+                question_row_read(header, &cells, scope)
+            }
+            read => read,
+        };
+        match read {
+            Ok(question) => questions.extend(question),
+            Err(Error::TsvCell {
+                problem: CellProblem::RowId(_),
+                ..
+            }) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(questions)
+}
+
+/// One row of seven cells, read under the table's header. A CR at the end of each cell is
+/// dropped wherever it stands, as tC4 does (`derive.ts:147`), so the cells read as they did
+/// on their own line.
+fn question_row_read(
+    header: &str,
+    cells: &[&str],
+    scope: TsvScope,
+) -> Result<Option<Question>, Error> {
+    let table = format!("{header}\n{}", cells.join("\t"));
+    Ok(parse_questions(&table, scope)?.pop())
+}
+
+/// Whether a row's `Reference` cell, as the TSV reader reads it, addresses a place in
+/// `scope`.
+fn addresses(line: &str, scope: TsvScope) -> bool {
+    let line = line.strip_suffix('\r').unwrap_or(line);
+    let reference = match line.split_once('\t') {
+        Some((first, _)) => first.strip_suffix('\r').unwrap_or(first),
+        None => line,
+    };
+    parse_reference(reference, scope).is_some()
+}
+
 /// Builds one row: each cell as it was read when it still holds the item's value, else in
 /// the writer's own form.
 struct RowWriter<'a> {
@@ -815,7 +903,7 @@ fn legacy_place(locus: &BibleLocus) -> Option<(String, String)> {
             .map(|(c, v)| (c.to_owned(), v.to_owned())),
         BibleLocus::Verses(list) => {
             let [range] = list.ranges() else { return None };
-            if range.start().chapter != range.end().chapter {
+            if range.start().chapter().get() != range.end().chapter().get() {
                 return None;
             }
             let text = TsvLocus(locus).to_string();

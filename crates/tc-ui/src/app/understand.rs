@@ -8,6 +8,7 @@ use tc_api::jobs::{OpenPhase, Phase, Progress};
 use tc_api::model::{ArticleBlock, ArticleSpan, js_len, take_spans};
 use tc_api::token::ShownToken;
 use tc_core::BookId;
+use tc_core::js::is_space as js_space;
 
 use crate::i18n::{Key, keys, t};
 
@@ -475,11 +476,6 @@ pub fn shown_comment(comments: &[CommentView], chapter: u16, unit: &Unit) -> Sho
 
 /// How much of a long note shows before "Show more" (`PREVIEW_CHARS`).
 pub const PREVIEW_CHARS: usize = 400;
-
-/// JavaScript's `\s`.
-fn js_space(c: char) -> bool {
-    crate::app::shell::js_space(c)
-}
 
 /// The first `units` UTF-16 code units of `text`, never half a character.
 fn js_slice(text: &str, units: usize) -> &str {

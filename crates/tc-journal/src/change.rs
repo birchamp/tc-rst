@@ -84,8 +84,11 @@ pub enum ImportSource {
     Tc3 {
         user: Option<Box<str>>,
     },
+    /// A USFM file: a new book, or "Update a book" (§13.6). `unknown_base` marks a change the
+    /// update made with no parents, so it is never the provisional text (§13.6 U3, F7).
     Usfm {
         file_name: Box<str>,
+        unknown_base: bool,
     },
     Burrito {
         file_name: Box<str>,

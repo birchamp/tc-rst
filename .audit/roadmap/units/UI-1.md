@@ -4,7 +4,7 @@ title: Typed jobs and one job follower
 track: A
 lane: app
 milestone: M1
-state: verifying
+state: done
 owner: C7a session (Claude Code 3058c665)
 branch: track-UI-1
 worktree: .worktrees/track-UI-1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 1 d (basis: +150/-200 lines estimated in health-app §8)
-merged: none
+merged: 4a86b252
 updated: 2026-10-24
-next: Reviewed and ready; the merge waits for its dependencies. Merge after C7a: merge main, run scripts/gates.sh --wait-ci UI-1 on the merge commit (or join a batch), fast-forward main.
+next: none
 blocked_by: none
 ---
 
@@ -56,7 +56,7 @@ and export (D2) all start jobs: with one follower they all end the same, correct
   - INV-ONE-JOB-FOLLOWER: the UI reads a job's state (`server.jobs` and `jobs/get`) in one
     function only, `follow`, and every caller handles each of its ends by an exhaustive match.
   - INV-JOB-OUTCOME-IS-TYPED: a job row's outcome type is fixed by its request type, so the
-    follower of a download cannot receive an open's outcome, and the server cannot send one.
+    follower of a download cannot receive an open's outcome, and the server cannot send one (not in code: the type system holds it, so no test prints the name).
   - INV-A-STALE-REPLY-NEVER-SHOWS: a reply to an attempt that a newer attempt replaced changes
     nothing on screen.
 - **Wrong states**:
@@ -313,3 +313,4 @@ It must print `# fail 0` and `# skipped 0`.
 - 2026-10-24 | C7a session (Claude Code 3058c665) | gate | none | the job journeys (source-texts, upgrades, understand, guided-fix, sync-button, share-open) on this branch: `# tests 27 # pass 27 # fail 0 # skipped 0`. Proof 3: with `asked(None)` answering no end, `a_job_the_server_no_longer_knows_ends_lost` fails at jobs.rs:90. The full gate list runs on the merge commit after C7a is on main (the branch is cut from track-C7a, which lacks main's newer merges) | .enjoy-logs/ui1-journeys.log
 - 2026-10-24 | races and protocol lens (Claude Code subagent of 3058c665) | verify | 7a4ac8b0 | no blocker, no major. Each caller's ends match the old meaning except the intended removal of the false "not available yet"; `refresh_projects()` only rereads home/List; polling once a second matches four of the old loops; a stale open reply is dropped by the OPENS check after the follow; every counter bump and read kept its meaning and direction; every typed start sends the same JobOutcome variant, scripted paths included, fixtures unchanged. Minors: (1) a `jobs/get` answer merged over a newer frame delays a Door43 result by a second; (2) a forgotten book open closes its overlay silently; (3) a Lost Door43 open or sync says nothing | cargo test -p tc-ui --test app -- jobs lint latest
 - 2026-10-24 | C7a session (Claude Code 3058c665) | fix | none | minor 1 fixed: the follower merges a `jobs/get` answer with `effects::apply_reread` over the view held before the call, so a frame that came meanwhile is never overwritten (as `read_jobs` does). Minors 2 and 3 logged in minors.tsv: both need a server restart mid-job, and 2 replaces an endless spinner. Job journeys again: `# tests 27 # pass 27 # fail 0 # skipped 0`; wasm clippy and the jobs, lint and latest tests pass | .enjoy-logs/ui1-journeys2.log
+- 2026-10-24 17:36 EDT | integration lane (Claude Code 3d07d5f8) | merge | 4a86b252 | merged into main in batch 2a (UI-1 4a86b252, UI-2 312cef3f, SWEEP 21fbbec0, OLH-1 14e0f12b, T a01c188e), gated by scripts/gates.sh --wait-ci batch-2a on the batch's last commit. | scripts/gates.sh --wait-ci batch-2a

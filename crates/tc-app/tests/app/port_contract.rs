@@ -579,7 +579,7 @@ async fn teammate_b(w: &World) -> Teammate {
     let dir = tempfile::tempdir().unwrap();
     let projects = dir.path().join("projects");
     std::fs::create_dir_all(&projects).unwrap();
-    let backend = crate::store_world::backend_over(
+    let (backend, watch) = crate::store_world::backend_over(
         &tc_store::fault::FaultFs::new(),
         crate::store_world::APP,
         tc_store::FakePlatform {
@@ -601,6 +601,8 @@ async fn teammate_b(w: &World) -> Teammate {
         },
     )
     .await;
+    let mut t = t;
+    t.watch = Some(watch);
     internet_on(&t.app).await;
     sign_in(&t.app).await;
     let job = post(&t.app, &open(40, "titus-b")).await.unwrap();
@@ -713,4 +715,88 @@ async fn sign_in_again(app: &App, n: u8) {
     )
     .await
     .unwrap();
+}
+
+/// Owner ruling of 2026-10-24: Door43's branch deleted by its owner; the next sync puts this
+/// copy back and the toast says so, once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_deleted_branch_is_put_back_and_the_toast_says_so_once() {
+    let w = <Door43 as SyncPortFixture>::world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    synced(app, 50).await;
+    let bare = git2::Repository::open(w.fake.git_dir(PARITY_USER, REPO)).unwrap();
+    bare.find_reference("refs/heads/master")
+        .unwrap()
+        .delete()
+        .unwrap();
+    assert!(
+        synced(app, 51).await.recreated,
+        "the toast says the copy was put back"
+    );
+    assert!(
+        bare.find_reference("refs/heads/master").is_ok(),
+        "the branch is back"
+    );
+    assert!(!synced(app, 52).await.recreated, "said once");
+}
+
+/// Q7, D98: signing in is the consent, so the first confirmed sync writes the username and sends
+/// it at once: right after that one sync, Door43's copy already names this computer's person.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_first_sync_sends_the_username_at_once() {
+    let w = <Door43 as SyncPortFixture>::world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    let device = {
+        let at = app
+            .sessions()
+            .open_screen(&folder(SAMPLE), open_progress())
+            .await
+            .unwrap()
+            .at;
+        let device = app.sessions().reader(&at).unwrap().handle().facts().device;
+        post(
+            app,
+            &Close {
+                at,
+                request: rid(60),
+            },
+        )
+        .await
+        .unwrap();
+        device
+    };
+    synced(app, 61).await;
+    // Door43's copy, opened as a teammate's computer would get it.
+    let job = post(app, &open(62, "door43-names")).await.unwrap();
+    let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) = ended(app, job).await
+    else {
+        panic!("Door43's copy opens");
+    };
+    let at = app
+        .sessions()
+        .open_screen(&project, open_progress())
+        .await
+        .unwrap()
+        .at;
+    let profile = app
+        .sessions()
+        .reader(&at)
+        .unwrap()
+        .read()
+        .projected(&tc_journal::RecordKey::DeviceProfile(device));
+    let name = match profile {
+        Some(Record::DeviceProfile { value, .. }) => {
+            value.door43_username.map(|n| n.as_str().to_owned())
+        }
+        _ => None,
+    };
+    assert_eq!(
+        name.as_deref(),
+        Some(PARITY_USER),
+        "Door43 has the name after one sync"
+    );
 }

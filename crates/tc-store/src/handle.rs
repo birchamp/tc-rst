@@ -292,6 +292,9 @@ pub(crate) struct Shared {
     /// Write groups the actor has opened that the writer has not closed: a checkpoint's seal
     /// writes packs that `metadata.json` lists only after the files that follow it (I7).
     open_groups: AtomicU32,
+    /// How many write groups ever began: a look at the folder that saw this number change
+    /// may have read a group's middle.
+    groups_begun: AtomicU64,
     /// The project is closing: background maintenance (a repack) stops and does not start.
     closing: Arc<AtomicBool>,
 }
@@ -325,6 +328,7 @@ impl Shared {
             jobs_done: Condvar::new(),
             traffic: AtomicU64::new(0),
             open_groups: AtomicU32::new(0),
+            groups_begun: AtomicU64::new(0),
             closing: Arc::default(),
         }
     }
@@ -345,7 +349,12 @@ impl Shared {
 
     /// A seal is about to write packs that `metadata.json` does not list yet.
     pub(crate) fn open_group(&self) {
+        self.groups_begun.fetch_add(1, Ordering::AcqRel);
         self.open_groups.fetch_add(1, Ordering::AcqRel);
+    }
+
+    pub(crate) fn groups_begun(&self) -> u64 {
+        self.groups_begun.load(Ordering::Acquire)
     }
 
     /// The materialization that follows the seal has listed them.
@@ -613,6 +622,12 @@ pub struct SyncFile {
     pub branch: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed: Option<Confirmed>,
+    /// The device that wrote its Door43 username after a signed-in sync (Q7). A folder copied
+    /// to another computer carries this file, and the new device's copied username is not
+    /// its own, so the first signed-in sync there replaces it (#161); a device's own
+    /// confirmed name never changes (first wins).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username_device: Option<String>,
 }
 
 /// "Your work up to 14:32 is on Door43" (§9.5).

@@ -54,6 +54,11 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ("seed.rs", 2, "the seed job's crash points"),
     ("fixes.rs", 1, "the guided fix's scripted fetch"),
     ("understand.rs", 1, "the open job's test pause"),
+    (
+        "backend/store.rs",
+        2,
+        "the P5 watch's list of the projects a test opened (CHK-2); it records, never decides",
+    ),
 ];
 
 fn is_branch(line: &str) -> bool {

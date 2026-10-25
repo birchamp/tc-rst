@@ -593,6 +593,10 @@ fn prune_if_unchanged(listed: &Loose) -> bool {
 
 /// Removes a loose object file. `false` when it could not be removed now; a later repack
 /// tries again.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "removes a loose git object a pack now holds: git's own files, not a project file"
+)]
 fn remove_loose(path: &Path) -> bool {
     if std::fs::remove_file(path).is_ok() {
         return true;
@@ -605,6 +609,10 @@ fn remove_loose(path: &Path) -> bool {
 #[expect(
     clippy::permissions_set_readonly_false,
     reason = "Windows only: clears the read-only attribute; no Unix mode bits are involved"
+)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "makes a loose git object writable and removes it: git's own files, not a project file"
 )]
 fn retry_writable(path: &Path) -> bool {
     let Ok(meta) = std::fs::metadata(path) else {
@@ -622,6 +630,10 @@ fn retry_writable(_path: &Path) -> bool {
 }
 
 /// Removes the two-letter folders a repack emptied (`rmdir` refuses a folder with files).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "empties .git's loose-object folders after a repack: git's own files, not a project file"
+)]
 fn remove_empty_folders(objects: &Path) {
     let Ok(folders) = std::fs::read_dir(objects) else {
         return;

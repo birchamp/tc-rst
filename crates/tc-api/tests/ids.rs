@@ -2,9 +2,11 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use proptest::prelude::*;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tc_api::account::WebUrl;
+use tc_api::check::CheckPlace;
 use tc_api::ids::{
     ChangeRef, ConflictRef, LOCALE_IDS, LocaleId, ProjectId, ProjectRef, RecordRef, RefPart,
     RequestId, ServerInstance, StoryNo, UploadId,
@@ -274,7 +276,7 @@ fn a_story_is_one_of_the_fifty() {
         );
     }
     for number in [0u8, 51, 255] {
-        assert!(StoryNo::new(number).is_err(), "{number}");
+        assert!(StoryNo::new(number).is_none(), "{number}");
         assert!(
             serde_json::from_value::<StoryNo>(json!(number)).is_err(),
             "{number}"
@@ -424,5 +426,41 @@ mod open_from_door43 {
             ProjectName::parse("Titus_2").unwrap().folder(),
             ProjectRef::parse("Titus_2").unwrap()
         );
+    }
+}
+
+/// A value that parses prints a text that parses back to it (INV-IDS-ROUND-TRIP).
+fn round_trips<T: std::str::FromStr + std::fmt::Display + PartialEq + std::fmt::Debug>(
+    text: &str,
+) -> Result<(), TestCaseError> {
+    if let Ok(value) = text.parse::<T>() {
+        let printed = value.to_string();
+        prop_assert_eq!(
+            printed.parse::<T>().ok(),
+            Some(value),
+            "{:?} printed {:?}",
+            text,
+            printed
+        );
+    }
+    Ok(())
+}
+
+/// An identifier the app writes: a text that parses prints back exactly as written.
+fn prints_back<T: std::str::FromStr + std::fmt::Display>(text: &str) -> Result<(), TestCaseError> {
+    if let Ok(value) = text.parse::<T>() {
+        prop_assert_eq!(value.to_string(), text);
+    }
+    Ok(())
+}
+
+proptest! {
+    #[test]
+    fn ids_round_trip(
+        place in "(OBS|TIT|tit|3JN) [+ ]?[1-9][0-9]{0,2}:[+ ]?[0-9]{1,3}",
+    ) {
+        round_trips::<CheckPlace>(&place)?;
+        // A book code is read in either case and written upper, as BookId does.
+        prints_back::<CheckPlace>(&place.replace("tit", "TIT"))?;
     }
 }

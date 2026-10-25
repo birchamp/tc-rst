@@ -699,7 +699,7 @@ fn obs_story_one_after(frame: u16, text: &str) -> (String, String) {
         v: FORMAT_MINOR,
         record: Record::Frame {
             story,
-            frame: tc_journal::FrameNo(frame),
+            frame: tc_journal::FrameNo::new(frame),
             value: text.to_owned(),
         },
         parents: Vec::new(),
@@ -731,10 +731,10 @@ fn obs_frame_edits_project_the_bytes_tc4_writes() {
     assert!(tc_obs::StoryFile::parse(projected).is_ok());
     // An edit of an empty frame: one blank line on each side of the text, as tC4's writer.
     let (base, projected) = obs_story_one_after(3, "Texto nuevo.");
-    let tc4 = tc_obs::story::write_frame(&base, tc_obs::FrameNo(3), "Texto nuevo.").unwrap();
+    let tc4 = tc_obs::story::write_frame(&base, tc_obs::FrameNo::new(3), "Texto nuevo.").unwrap();
     assert_eq!(projected, tc4);
     let read = tc_obs::StoryFile::parse(projected.clone()).unwrap();
-    assert_eq!(read.text(tc_obs::FrameNo(3)), Some("Texto nuevo."));
+    assert_eq!(read.text(tc_obs::FrameNo::new(3)), Some("Texto nuevo."));
     let decoded = tc_obs::decode_story(&projected).unwrap();
     assert!(decoded.reformatted.is_empty(), "{:?}", decoded.reformatted);
 }

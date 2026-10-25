@@ -528,11 +528,11 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     b.close().unwrap();
 }
 
-/// gap-tc4-straggler-sync-safety state 3b: Door43's branch was deleted by its owner. The sync
-/// pushes nothing, so no branch made from this computer replaces the team's, and the person
-/// is told to ask the owner to restore it.
+/// gap-tc4-straggler-sync-safety state 3b, owner ruling 2026-10-24 ("recreate it"): Door43's
+/// branch was deleted by its owner. The sync pushes this copy as the branch again, as tC4
+/// does, and the report says so, so the person can tell the team to sync.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state() {
+async fn a_sync_against_a_repository_with_no_main_branch_recreates_it_and_says_so() {
     let door43 = door43("titus-gone").await;
     let dir = tempfile::tempdir().unwrap();
     let ana = computer(dir.path(), "ana");
@@ -547,18 +547,16 @@ async fn a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_s
         .unwrap();
     save(&a, 1, 1, "Paul, a servant of God");
     let report = sync(&a, &door43).await;
-    assert_eq!(
-        report.ended,
-        Ended::Failed(tc_api::refusal::SyncFailure::Blocked(
-            tc_api::refusal::SyncBlock::BranchMissing
-        )),
-        "{report:?}"
-    );
-    assert_eq!(
-        branch_on_door43(&door43, "titus-gone"),
-        None,
-        "nothing pushed"
-    );
+    synced(&report);
+    assert!(report.recreated, "{report:?}");
+    let local = git2::Repository::open(a.facts().git_dir.unwrap())
+        .unwrap()
+        .head()
+        .unwrap()
+        .target()
+        .unwrap();
+    assert_eq!(branch_on_door43(&door43, "titus-gone"), Some(local));
+    assert!(!sync(&a, &door43).await.recreated, "said once");
     a.close().unwrap();
 }
 
@@ -1013,4 +1011,167 @@ async fn a_merge_that_fails_after_intake_says_the_work_was_kept() {
     synced(&sync(&a, &door43).await);
     a.close().unwrap();
     b.close().unwrap();
+}
+
+fn username_of(handle: &ProjectHandle) -> Option<String> {
+    match handle
+        .snapshot()
+        .fold()
+        .projected(&RecordKey::DeviceProfile(handle.facts().device))
+    {
+        Some(Record::DeviceProfile { value, .. }) => {
+            value.door43_username.map(|u| u.as_str().to_owned())
+        }
+        _ => None,
+    }
+}
+
+/// A session of another account; `record_username` reads only its name.
+fn session_as(user: &str) -> Session {
+    Session {
+        username: user.parse().unwrap(),
+        token: tc_door43::Token::new("a-token-of-another-account".to_owned()).unwrap(),
+    }
+}
+
+/// Q7 and #680: the username is written once, after a sync and the name notice, and another
+/// account signing in later does not change it; without the notice nothing is written.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn username_written_once_after_first_successful_fetch() {
+    let door43 = door43("titus-name").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-name");
+    assert!(matches!(
+        tc_sync::record_username(&a, &door43.session).await,
+        Err(tc_sync::UsernameError::NotSynced)
+    ));
+    synced(&sync(&a, &door43).await);
+    // share_no_username_without_consent: the sync alone writes no name.
+    assert_eq!(username_of(&a), None);
+    assert!(tc_sync::record_username(&a, &door43.session).await.unwrap());
+    assert_eq!(username_of(&a).as_deref(), Some(seeded::USER));
+    let other = session_as("juan-p");
+    assert!(!tc_sync::record_username(&a, &other).await.unwrap());
+    assert_eq!(username_of(&a).as_deref(), Some(seeded::USER), "first wins");
+    a.close().unwrap();
+}
+
+/// #161: a folder copied to another computer copies the name; the first signed-in sync there
+/// replaces it with the account that signs in.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn copied_username_is_replaced_by_the_first_signed_in_fetch() {
+    let door43 = door43("titus-copied").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-copied");
+    synced(&sync(&a, &door43).await);
+    tc_sync::record_username(&a, &door43.session).await.unwrap();
+    a.close().unwrap();
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    assert_eq!(username_of(&b).as_deref(), Some(seeded::USER), "copied");
+    synced(&sync(&b, &door43).await);
+    let other = session_as("juan-p");
+    assert!(tc_sync::record_username(&b, &other).await.unwrap());
+    assert_eq!(username_of(&b).as_deref(), Some("juan-p"));
+    b.close().unwrap();
+}
+
+/// INV-PUSH-IS-NEVER-FORCED: a push refspec is built from branch names only, so one that
+/// would force cannot be made.
+#[test]
+fn push_is_never_forced() {
+    use tc_door43::FastForwardRefspec;
+    assert_eq!(
+        FastForwardRefspec::branch("main").unwrap().as_str(),
+        "refs/heads/main:refs/heads/main"
+    );
+    for bad in [
+        "+main",
+        "-main",
+        "main:other",
+        "ma in",
+        "",
+        "..",
+        "main.lock",
+    ] {
+        assert!(FastForwardRefspec::branch(bad).is_err(), "{bad:?}");
+    }
+}
+
+/// §9.2 N1 and #813/#821: a repository still in tC4's team format is blocked before anything
+/// is taken or sent.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_tc4_team_repository_is_blocked_and_nothing_changes() {
+    let door43 = door43("titus-tc4").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-tc4");
+    synced(&sync(&a, &door43).await);
+    // A tC4 computer turns the repository back into its team format.
+    door43_commit(&door43, "titus-tc4", "ingredients/tc/format.json", None);
+    door43_commit(
+        &door43,
+        "titus-tc4",
+        "ingredients/checking/journal/0001.json",
+        Some(b"{}"),
+    );
+    let tip = on_door43_tip(&door43, "titus-tc4");
+    save(&a, 1, 1, "Paul");
+    let report = sync(&a, &door43).await;
+    assert_eq!(
+        report.ended,
+        Ended::Failed(tc_api::refusal::SyncFailure::Blocked(
+            tc_api::refusal::SyncBlock::Tc4TeamRepository
+        )),
+        "{report:?}"
+    );
+    assert_eq!(on_door43_tip(&door43, "titus-tc4"), tip, "nothing sent");
+    let git = git2::Repository::open(a.facts().git_dir.unwrap()).unwrap();
+    let last = git.find_commit(head(&a).unwrap()).unwrap();
+    assert_eq!(last.parent_count(), 1, "no merge commit");
+    a.close().unwrap();
+}
+
+fn on_door43_tip(door43: &Door43, name: &str) -> git2::Oid {
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, name)).unwrap();
+    bare.refname_to_id("refs/heads/main").unwrap()
+}
+
+/// TC4-REQUEST-MOVED-NOTICE: `ingredients/tc/moved.json`, written once by the team move, is
+/// never rewritten or deleted by a sync.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_sync_never_rewrites_or_deletes_moved_json() {
+    let door43 = door43("titus-moved").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-moved");
+    synced(&sync(&a, &door43).await);
+    let moved = br#"{"format":"tc-moved","version":1,"to":"https://git.door43.org/team/titus"}"#;
+    door43_commit(
+        &door43,
+        "titus-moved",
+        "ingredients/tc/moved.json",
+        Some(moved),
+    );
+    for v in 1..=2 {
+        save(&a, 1, v, "a verse");
+        synced(&sync(&a, &door43).await);
+        assert_eq!(
+            on_door43(&door43, "titus-moved", "ingredients/tc/moved.json").as_deref(),
+            Some(&moved[..]),
+            "sync {v}"
+        );
+    }
+    a.close().unwrap();
 }

@@ -32,10 +32,21 @@ const EDGES: &[(&str, &[&str])] = &[
         "tc-align",
         &["tc-core", "tc-usfm", "tc-versification", "tc-journal"],
     ),
-    ("tc-obs", &["tc-helps"]),
+    ("tc-obs", &["tc-core", "tc-helps"]),
     ("tc-export", &["tc-obs"]),
+    ("tc-import", &["tc-core", "tc-usfm", "tc-journal"]),
     ("tc-ui", &["tc-api", "tc-core"]),
     ("tc-door43-fake", &[]),
+    (
+        "tc-sync",
+        &[
+            "tc-api",
+            "tc-burrito",
+            "tc-door43",
+            "tc-journal",
+            "tc-store",
+        ],
+    ),
     (
         "tc-resources",
         &["tc-core", "tc-door43", "tc-helps", "tc-journal"],

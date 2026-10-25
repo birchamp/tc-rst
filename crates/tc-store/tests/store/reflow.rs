@@ -327,7 +327,11 @@ fn a_translate_save_that_drops_an_unclear_link_lists_it() {
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     dios_dios(&handle);
     let reply = save_verse(&handle, 1, 1, "Dios Pablo").unwrap();
-    assert_eq!(listed(&reply), [(1, 1, vec![(0, 1), (1, 2)])]);
+    assert_eq!(
+        listed(&reply),
+        [(1, 1, vec![(0, 1), (1, 2)])],
+        "INV-A-DROPPED-LINK-IS-LISTED: the save's reply lists the links it could not follow"
+    );
     assert!(placed(&alignment(&handle)).is_empty());
     handle.close().unwrap();
 }

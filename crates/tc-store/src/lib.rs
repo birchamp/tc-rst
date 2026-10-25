@@ -55,7 +55,6 @@ mod repack;
 pub mod reply;
 mod scan;
 pub mod seal;
-pub mod seed;
 pub mod source;
 pub mod store;
 mod temps;
@@ -76,6 +75,7 @@ pub use handle::{
 pub use hooks::{Failure, Hooks, Point};
 pub use notices::StoreNotice;
 pub use open::{LockHolder, OpenError, OpenOptions};
+pub use packs::{PackRead, read_received_pack};
 pub use platform::{FakePlatform, FolderFacts, Platform, StdPlatform, UnsafeFolder};
 pub use progress::{Phase, Progress, ProgressSink};
 pub use reply::{

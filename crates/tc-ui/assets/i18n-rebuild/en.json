@@ -2,6 +2,7 @@
   "addBook.notAdded": "{file} was not added: {reason}",
   "addBook.usfmDamaged": "{file} cannot be added: {reason}",
   "addBook.usfmReading": "Reading the file…",
+  "align.droppedLinks": "Sent back to the word bank after the text changed: {words}",
   "align.unavailable.alignedInText.body": "This verse came from a file that holds its alignment inside the text, and aligning it here would write over that. Nothing is lost. The rest of {book} aligns normally.",
   "align.unavailable.alignedInText.title": "This verse already holds its alignment",
   "check.markLookAgain": "This check was not saved: the check or its verse changed while you were looking. Look at it again, then mark it again. Nothing was lost.",
@@ -157,7 +158,6 @@
   "settings.fontNotSavedAfterDirection": "The font was not saved. The text direction was saved.",
   "syncResult.alignmentsMany": "{n} verses have two alignments to review.",
   "syncResult.alignmentsOne": "1 verse has two alignments to review.",
-  "syncResult.error.branchMissing": "Door43's copy of this project has no main branch, so the sync stopped. Nothing changed. Ask the project's owner on Door43 to restore the branch.",
   "syncResult.error.keptStopped": "Your teammates' changes were received and kept, but the sync stopped. Ask for help.",
   "syncResult.error.needsNewerApp": "A teammate uses a newer translationCore (project format {format}). Update translationCore, then sync again. Nothing changed.",
   "syncResult.error.notSent": "Your teammates' changes were received and kept, but tC4 could not send your changes to Door43. Sync again.",
@@ -170,6 +170,9 @@
   "syncResult.recreated": "The project was missing from Door43, so tC4 put your copy back. Ask your teammates to sync.",
   "translate.changedWhileTyping": "{name} changed this verse while you were typing. Your text will be kept as a second version.",
   "translate.changedWhileTypingUnnamed": "This verse was changed while you were typing. Your text will be kept as a second version.",
+  "upgrade.checkFailedRefused": "Could not check for updates: Door43 turned the request away. Try again later.",
+  "upgrade.checkFailedServer": "Could not check for updates: Door43 did not answer properly. Try again later.",
+  "upgrade.checkFailedUnreachable": "Could not check for updates: Door43 cannot be reached. Check the connection and try again.",
   "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed.",
   "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code."
 }

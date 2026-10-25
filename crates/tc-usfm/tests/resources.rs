@@ -30,7 +30,8 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use tc_usfm::{AlignedVerse, Book, Document, Error, Node, parse_aligned, weave};
+use tc_usfm::raw::{Document, Node};
+use tc_usfm::{AlignedVerse, Book, Error, parse_aligned, weave};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")

@@ -8,13 +8,13 @@ state: todo
 owner: none
 branch: none
 worktree: none
-depends: [AQ1, C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-4, CHK-5, CHK-6, D1, D2, DOM-1, DOM-2, DOM-3, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G2, G3, G4, G5, I, INT-1, INT-2, INT-3, INT-4, INT-5, INT-6, INT-7, P, REF1, S2, S3, SWEEP, T, UI-1, UI-2, UI-3, V, X, INT-8, CHK-1a, CHK-3a, CHK-6a, CHK-4b]
+depends: [AQ1, C7a, C7b, CHK-1, CHK-1a, CHK-2, CHK-3, CHK-3a, CHK-4, CHK-4b, CHK-5, CHK-6, CHK-6a, D1, D2, DOM-1, DOM-2, DOM-3, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G2, G3, G4, G5, I, INT-1, INT-2, INT-3, INT-4, INT-5, INT-6, INT-7, INT-8, LIC-1, OLH-1, P, REF1, REL-1, S2, S3, SWEEP, T, UI-1, UI-2, UI-3, V, X]
 needs_owner: []
 proves: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10]
 no_loss: false
 size: 1-2 d
 merged: none
-updated: 2026-10-22
+updated: 2026-10-24
 next: Claim this card when its dependencies merge.
 blocked_by: none
 ---
@@ -204,3 +204,5 @@ The full gate list (`scripts/gates.sh`, created by INT-3; it holds every command
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
+- 2026-10-23 17:47 EDT | integration lane (Claude Code 3d07d5f8) | note | none | depends gains LIC-1 and OLH-1, the two cards added by the owner's rulings of 2026-10-23 | rulings/2026-10-23-tokenizer-relicense.md, rulings/2026-10-23-Q39-original-language-highlight.md
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md

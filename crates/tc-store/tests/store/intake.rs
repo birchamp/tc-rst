@@ -298,3 +298,47 @@ fn crash_intake_folds_whole_batches_only_and_commits_on_retry() {
     });
     assert!(points > 5, "{points}");
 }
+
+/// §6.4 I1 and I2: receiving an exchange file killed at any write point keeps this computer's
+/// work and the teammate's batch whole or absent; receiving the file again takes the rest.
+#[test]
+fn crash_usb_receive_takes_whole_batches_and_the_rest_on_retry() {
+    use crate::crash::{Outcome, kill_everywhere};
+    let (rig_a, folder) = titus();
+    let a = open(&rig_a, &folder);
+    save_verse(&a, 1, 1, "Paul, as Ana has it").unwrap();
+    checkpoint(&a);
+    a.close().unwrap();
+    let rig_b = rig_as(rig_a.fs.copy(), APP, "host-2");
+    let b = open(&rig_b, &folder);
+    save_verse(&b, 1, 2, "in hope, as Juan has it").unwrap();
+    save_verse(&b, 1, 3, "in his time, as Juan has it").unwrap();
+    checkpoint(&b);
+    b.close().unwrap();
+    let repo_a = repo_of(&rig_a.fs, &folder);
+    let (_, packs) = fetch(&repo_a, &git_dir_of(&rig_b.fs, &folder));
+    let base = rig_a.fs.crash(false);
+    drop(rig_a);
+    let action = |handle: &ProjectHandle| {
+        let _ = handle.receive_packs("Juan".into(), packs.clone()).wait();
+        Outcome::NotSaved
+    };
+    let points = kill_everywhere(&base, &folder, &action, &|handle, _| {
+        assert_eq!(words(handle, 1, 1).as_deref(), Some("Paul, as Ana has it"));
+        let two = words(handle, 1, 2);
+        let three = words(handle, 1, 3);
+        let whole = two.as_deref() == Some("in hope, as Juan has it")
+            && three.as_deref() == Some("in his time, as Juan has it");
+        let absent = two.as_deref() == Some("___") && three.as_deref() == Some("___");
+        assert!(whole || absent, "{two:?} {three:?}");
+        handle
+            .receive_packs("Juan".into(), packs.clone())
+            .wait()
+            .unwrap();
+        assert_eq!(
+            words(handle, 1, 3).as_deref(),
+            Some("in his time, as Juan has it")
+        );
+    });
+    assert!(points > 5, "{points}");
+}

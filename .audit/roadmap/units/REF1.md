@@ -9,13 +9,13 @@ owner: none
 branch: none
 worktree: none
 depends: [SWEEP]
-needs_owner: [H7]
+needs_owner: []
 proves: [P1, P7]
 no_loss: false
 size: 3-5 sessions (estimate)
 merged: none
-updated: 2026-10-22
-next: Wait for the owner's answer to H7, then claim this card.
+updated: 2026-10-24
+next: Claim this card now: H7 is answered, match tC4 4.0 rc.2 (rulings/2026-10-24-H3-H4-H7-fast-release.md).
 blocked_by: none
 ---
 
@@ -80,6 +80,8 @@ pages, and the newest interface words in all ten languages.
     (`crates/tc-ui/tests/vendored_assets.rs`, `crates/tc-ui/tests/help_pages.rs`); only the
     agreement between the records is new.
 - **Checks**:
+  - `parity/app/journeys/about.test.mjs` asserts "License: MIT" and the recaptured about and license
+    screens pass `screen_record` (INV-ONE-LICENCE, card LIC-1); journey and parity gate.
   - `the_reference_is_one_commit_everywhere` (to create) in
     `parity/tc4-baseline/baseline.test.mjs`; kind: ledger; runs in CI's `parity-baseline` job.
     If CHK-6 already added a PLAN-and-manifest test, extend that one instead.
@@ -120,7 +122,11 @@ pages, and the newest interface words in all ten languages.
 ### Step 2: Vendor the catalogs, CSS and help pages from the new reference
 
 - Do:
-  1. `crates/tc-ui/vendor-tc4.sh ~/unfoldingword/tc4-rc2 a5ce0307df90b558f5dc584d6591b3dc57f62fce`.
+  1. `crates/tc-ui/vendor-tc4.sh ~/unfoldingword/tc4-rc2 d25b7871904228a342c0d80280136d8636833653`
+     (tC4 `release/4.0`: rc.2 plus the fixes toward 4.0, among them #838's MIT `LICENSE` and
+     `about.licenseName`, so About says MIT as the rebuild is since LIC-1; decided 2026-10-24).
+     `COPYING` is gone at that commit: drop `GPL_TEXT` and the `license-gpl` block from
+     `crates/tc-ui/src/views/account_menu.rs`, as tC4's dialog shows only `LICENSE` (D111).
   2. `crates/tc-ui/vendor-help.sh dbb7cd03c657637ec97ee4c0f00ed7bae44698d9` (it needs the
      network; tests never run it).
   3. Build. If a key the rebuild uses was removed or renamed, the `keys::` constant fails to
@@ -252,3 +258,5 @@ machine fingerprint in `manifest.json`).
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-coverage.md
+- 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
+- 2026-10-24 17:43 EDT | integration lane (Claude Code 3d07d5f8) | note | none | step 2 vendors tC4 release/4.0 d25b7871 instead of rc.2 a5ce0307, so the About screen's licence line and dialog say MIT (LIC-1 moved that part here; the orchestrator agreed 2026-10-24); added the about check | .audit/roadmap/units/LIC-1.md

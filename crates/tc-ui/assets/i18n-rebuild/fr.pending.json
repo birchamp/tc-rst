@@ -2,6 +2,7 @@
   "addBook.notAdded",
   "addBook.usfmDamaged",
   "addBook.usfmReading",
+  "align.droppedLinks",
   "align.unavailable.alignedInText.body",
   "align.unavailable.alignedInText.title",
   "check.markLookAgain",
@@ -156,7 +157,6 @@
   "settings.fontNotSavedAfterDirection",
   "syncResult.alignmentsMany",
   "syncResult.alignmentsOne",
-  "syncResult.error.branchMissing",
   "syncResult.error.keptStopped",
   "syncResult.error.needsNewerApp",
   "syncResult.error.notSent",
@@ -169,6 +169,9 @@
   "syncResult.recreated",
   "translate.changedWhileTyping",
   "translate.changedWhileTypingUnnamed",
+  "upgrade.checkFailedRefused",
+  "upgrade.checkFailedServer",
+  "upgrade.checkFailedUnreachable",
   "upload.notWritten",
   "wizard.codeNotHeld"
 ]

@@ -151,7 +151,7 @@ impl App {
             })?;
         let handle = lease.session().handle().clone();
         let report = handle.door43_sync(client, Some(session.clone())).await;
-        let (ended, received_by) = match report {
+        let (ended, received_by, recreated) = match report {
             Some(report) => (
                 match report.ended {
                     tc_sync::machine::Ended::Synced { .. } => Ok(()),
@@ -160,10 +160,12 @@ impl App {
                     }
                 },
                 report.received_by,
+                report.recreated,
             ),
             None => (
                 Err(ApiError::Unavailable(tc_api::error::Feature::Sync)),
                 BTreeMap::new(),
+                false,
             ),
         };
         let view = {
@@ -172,8 +174,7 @@ impl App {
             let snapshot = session.read();
             let resources = &self.inner.resources;
             let mut view = synced_view(&snapshot, me, &[], 0, &|pin| resources.has_dcs(pin));
-            // shortcut: X's report does not yet say that the sync put a deleted branch back, so
-            // `recreated` stays false until the storage lane's `SyncReport.recreated` lands.
+            view.recreated = recreated;
             // Unit X counts what came in, by the person who made it (§9.7 `received`).
             view.received = received_by.values().sum();
             view.from = received_by

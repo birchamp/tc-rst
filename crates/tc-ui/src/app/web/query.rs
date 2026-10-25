@@ -326,8 +326,7 @@ impl CachedQuery for tc_api::story::List {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         project_read(
             &self.at,
-            (1..=tc_api::ids::StoryNo::COUNT)
-                .filter_map(|n| tc_api::ids::StoryNo::new(n).ok())
+            tc_api::ids::StoryNo::all()
                 .map(tc_api::query::QueryKey::Story)
                 .collect(),
         )
@@ -354,11 +353,7 @@ impl CachedQuery for tc_api::export::Book {
 impl CachedQuery for tc_api::export::Stories {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         let mut keys = resource_keys();
-        keys.extend(
-            (1..=tc_api::ids::StoryNo::COUNT)
-                .filter_map(|n| tc_api::ids::StoryNo::new(n).ok())
-                .map(tc_api::query::QueryKey::Story),
-        );
+        keys.extend(tc_api::ids::StoryNo::all().map(tc_api::query::QueryKey::Story));
         project_read(&self.at, keys)
     }
 }

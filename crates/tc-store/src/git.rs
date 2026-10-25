@@ -1076,6 +1076,10 @@ fn file_mode(mode: u32) -> FileMode {
 /// O2: removes the lock files and half-written packs a stopped process left under `.git`
 /// (`*.lock`, `objects/pack/tmp_*`). Safe because the project lock is ours and the app is
 /// single-instance. Returns how many were removed.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "removes git's stale lock and temporary pack files: git's own files, not a project file"
+)]
 pub fn remove_stale_locks(outside: &Path) -> io::Result<u32> {
     let git = outside.join(".git");
     let mut removed = 0;
@@ -1112,6 +1116,10 @@ pub fn remove_stale_locks(outside: &Path) -> io::Result<u32> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::disallowed_methods,
+        reason = "test code builds and damages scratch .git folders, never a project"
+    )]
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
     use super::*;

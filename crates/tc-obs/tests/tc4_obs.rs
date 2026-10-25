@@ -401,7 +401,7 @@ fn the_draft_percent_counts_frames_over_the_fifty_stories_and_ignores_title_and_
     project[0] = write_title(&project[0], "La creación").unwrap();
     project[0] = write_reference(&project[0], "Génesis 1-2").unwrap();
     assert_eq!(progress_of(&project, |_| None).percent, Some(0));
-    project[0] = write_frame(&project[0], FrameNo(1), "Al principio.").unwrap();
+    project[0] = write_frame(&project[0], FrameNo::new(1), "Al principio.").unwrap();
     let percent =
         |drafted: usize| Some(((drafted as f64 / total as f64 * 100.0).round() as u8).max(1));
     assert_eq!(progress_of(&project, |_| None).percent, percent(1));
@@ -416,7 +416,12 @@ fn the_draft_percent_counts_frames_over_the_fifty_stories_and_ignores_title_and_
             if i == 0 && f == 1 {
                 continue;
             }
-            *text = write_frame(text, FrameNo(f as u16), &format!("Marco {}:{f}", i + 1)).unwrap();
+            *text = write_frame(
+                text,
+                FrameNo::new(f as u16),
+                &format!("Marco {}:{f}", i + 1),
+            )
+            .unwrap();
             drafted += 1;
         }
     }
@@ -430,12 +435,13 @@ fn fifty_story_tiles_carry_their_own_percent_and_title_or_the_gateway_title() {
     project[0] = write_title(&project[0], "La creación").unwrap();
     project[1] = write_title(&project[1], "").unwrap();
     project[11] = write_title(&project[11], "").unwrap();
-    project[0] = write_frame(&project[0], FrameNo(1), "Al principio.").unwrap();
-    project[11] = write_frame(&project[11], FrameNo(1), "Moisés.").unwrap();
-    project[11] = write_frame(&project[11], FrameNo(2), "El faraón.").unwrap();
+    project[0] = write_frame(&project[0], FrameNo::new(1), "Al principio.").unwrap();
+    project[11] = write_frame(&project[11], FrameNo::new(1), "Moisés.").unwrap();
+    project[11] = write_frame(&project[11], FrameNo::new(2), "El faraón.").unwrap();
     let seven = parse_story(&project[6]).unwrap().frames.len();
     for f in 1..=seven {
-        project[6] = write_frame(&project[6], FrameNo(f as u16), &format!("Marco {f}")).unwrap();
+        project[6] =
+            write_frame(&project[6], FrameNo::new(f as u16), &format!("Marco {f}")).unwrap();
     }
     let progress = progress_of(&project, |n| Some(format!("Gateway {n}")));
     assert_eq!(progress.stories.len(), 50);

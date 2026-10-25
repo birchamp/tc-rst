@@ -81,7 +81,8 @@ fn a_tc4_imported_verse_with_nested_zaln_banks_every_word() {
     );
     let (plain, value) = split_aligned(&content, verse_no(1)).unwrap();
     let hebrew = common::read("fixtures/tc4/test-fixtures/hbo_uhb/GEN-1-1.usfm");
-    let source = SourceVerse::from_book(&Book::parse(&hebrew), 1, VerseSpan::single(1)).unwrap();
+    let source =
+        SourceVerse::from_book(&Book::parse(&hebrew), 1, VerseSpan::range(1, 1).unwrap()).unwrap();
     assert_eq!(source.words().len(), 7);
     let basis = Basis::run(
         verse_no(1),
@@ -130,8 +131,12 @@ fn open_imported(
         source_archive,
         &format!("{source_id}/ingredients/{book}.usfm"),
     );
-    let source =
-        SourceVerse::from_book(&Book::parse(&original), chapter, VerseSpan::single(verse)).unwrap();
+    let source = SourceVerse::from_book(
+        &Book::parse(&original),
+        chapter,
+        VerseSpan::range(verse, verse).unwrap(),
+    )
+    .unwrap();
     let basis = Basis::run(verse_no(verse), verse_no(verse), source_name.into(), None);
     let target = TargetVerse::new(&plain);
     let bank = target.words().iter().map(|w| w.word.clone()).collect();

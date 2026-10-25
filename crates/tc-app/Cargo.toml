@@ -49,6 +49,7 @@ unicode-normalization.workspace = true
 zip = { workspace = true, optional = true }
 
 [dev-dependencies]
+git2 = { workspace = true }
 # The integration tests use the test hooks and the fixture backend's seed, as tc-api's own
 # tests enable its features.
 tc-app = { path = ".", features = ["test-hooks", "fixture-backend"] }

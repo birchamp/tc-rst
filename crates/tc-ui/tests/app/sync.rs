@@ -226,8 +226,7 @@ fn every_failure() -> Vec<SyncFailure> {
         SyncBlock::NotShared
         | SyncBlock::ProjectMismatch
         | SyncBlock::NeedsNewerApp { .. }
-        | SyncBlock::Tc4TeamRepository
-        | SyncBlock::BranchMissing => (),
+        | SyncBlock::Tc4TeamRepository => (),
     };
     let door43 = "protected branch hook declined";
     let path = "/home/ana/translationCore4/projects/equipo/.git/index.lock";
@@ -257,7 +256,6 @@ fn every_failure() -> Vec<SyncFailure> {
             min_reader_minor: 0,
         },
         SyncBlock::Tc4TeamRepository,
-        SyncBlock::BranchMissing,
     ];
     steps.iter().for_each(refusals);
     stops.iter().for_each(blocks);

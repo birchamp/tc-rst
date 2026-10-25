@@ -404,10 +404,6 @@ pub enum SyncBlock {
     NeedsNewerApp { major: u16, min_reader_minor: u16 },
     /// The repository is still in tC4's team format; the team move is offered (N1).
     Tc4TeamRepository,
-    /// Door43's repository has history but not the branch this project syncs: its owner
-    /// deleted it. Pushing a new one from this computer would cut the team off from it, so
-    /// nothing is sent and the owner is asked to restore it (X step 5).
-    BranchMissing,
 }
 
 /// Why a sync step failed, before or after intake (STORAGE §9.1, §9.5; DELTA §3.15.2; tC4
@@ -479,8 +475,7 @@ impl Message for SyncFailure {
             Err(
                 SyncBlock::ProjectMismatch
                 | SyncBlock::NeedsNewerApp { .. }
-                | SyncBlock::Tc4TeamRepository
-                | SyncBlock::BranchMissing,
+                | SyncBlock::Tc4TeamRepository,
             ) => None,
             Ok((R::Offline, _)) => Some("sync.offline"),
             Ok((R::AuthFailed, _)) => Some("sync.auth-failed"),
@@ -501,7 +496,6 @@ impl Message for SyncFailure {
             Err(SyncBlock::ProjectMismatch) => "syncResult.error.projectMismatch",
             Err(SyncBlock::NeedsNewerApp { .. }) => "syncResult.error.needsNewerApp",
             Err(SyncBlock::Tc4TeamRepository) => "syncResult.error.tc4TeamRepository",
-            Err(SyncBlock::BranchMissing) => "syncResult.error.branchMissing",
             Ok((R::Offline, _)) => "syncResult.error.offline",
             Ok((R::NotSignedIn | R::AuthFailed, _)) => "syncResult.error.authFailed",
             Ok((R::NoWriteAccess { .. }, _)) => "syncResult.error.noWriteAccess",
@@ -521,10 +515,7 @@ impl Message for SyncFailure {
                 vec![("format", major.to_string())]
             }
             Self::Blocked(
-                SyncBlock::NotShared
-                | SyncBlock::ProjectMismatch
-                | SyncBlock::Tc4TeamRepository
-                | SyncBlock::BranchMissing,
+                SyncBlock::NotShared | SyncBlock::ProjectMismatch | SyncBlock::Tc4TeamRepository,
             ) => Vec::new(),
             // Q36: Door43's words and an I/O reason, which can hold a path on this computer,
             // never reach the message; the refusal keeps them for the operation report.
@@ -693,8 +684,10 @@ pub enum ResourceRefusal {
     FixFailed {
         reason: String,
     },
+    /// The check for updates could not be made (tC4 #833.1): one fixed sentence per cause,
+    /// never the client's own text.
     UpdateCheckFailed {
-        reason: String,
+        why: UpdateCheckFailure,
     },
     UpgradeFailed {
         reason: String,
@@ -714,6 +707,29 @@ pub enum ResourceRefusal {
     },
 }
 
+/// Why a check for updates could not be made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateCheckFailure {
+    /// No answer from Door43: the connection failed, timed out or broke off.
+    Unreachable,
+    /// Door43 answered but refused the request (a sign-in, a missing repository, a limit).
+    Refused,
+    /// Door43 answered with an error, or something this app cannot read.
+    Server,
+}
+
+impl UpdateCheckFailure {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Unreachable => "upgrade.checkFailedUnreachable",
+            Self::Refused => "upgrade.checkFailedRefused",
+            Self::Server => "upgrade.checkFailedServer",
+        }
+    }
+}
+
 impl Message for ResourceRefusal {
     fn code(&self) -> Option<&'static str> {
         None
@@ -723,7 +739,7 @@ impl Message for ResourceRefusal {
             Self::CatalogUnreadable { .. } => "sources.catalogError",
             Self::SomeFailed { .. } => "sources.someFailed",
             Self::FixFailed { .. } => "fix.failed",
-            Self::UpdateCheckFailed { .. } => "upgrade.checkFailed",
+            Self::UpdateCheckFailed { why } => why.key(),
             Self::UpgradeFailed { .. } => "upgrade.failed",
             Self::GatewayFailed { .. } => "gateway.failed",
             Self::GatewayBlocked { .. } => "gateway.blockedError",
@@ -734,8 +750,8 @@ impl Message for ResourceRefusal {
         match self {
             Self::CatalogUnreadable { reason }
             | Self::FixFailed { reason }
-            | Self::UpdateCheckFailed { reason }
             | Self::UpgradeFailed { reason } => vec![("reason", reason.clone())],
+            Self::UpdateCheckFailed { .. } => Vec::new(),
             Self::SomeFailed { list } => vec![("list", list.clone())],
             Self::GatewayBlocked { books } => vec![("books", books.clone())],
             Self::AdoptFailed { error } => vec![("error", error.clone())],

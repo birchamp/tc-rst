@@ -115,9 +115,7 @@ impl TrainingVerse {
         reference: impl Into<String>,
         body: &str,
     ) -> Result<Option<Self>, tc_usfm::Error> {
-        let doc = tc_usfm::Document::parse(body);
-        let mut walk = AlignedWalk::default();
-        walk.nodes(doc.nodes())?;
+        let walk = tc_usfm::source::aligned_walk(body)?;
         let target = target_seeds(&TargetVerse::new(&walk.plain));
         let position: HashMap<(&str, u32), usize> = target
             .iter()
@@ -126,94 +124,38 @@ impl TrainingVerse {
         let links: Vec<PositionLink> = walk
             .links
             .into_iter()
-            .filter_map(|(source, word, occurrence)| {
-                let p = position.get(&(word.as_str(), occurrence))?;
+            .filter_map(|link| {
+                let p = position.get(&(link.word.as_str(), link.occurrence))?;
                 Some(PositionLink {
-                    source,
+                    source: link.sources,
                     target: vec![*p],
                 })
             })
             .collect();
-        if walk.source.is_empty() || links.is_empty() {
+        let source: Vec<TokenSeed> = walk
+            .sources
+            .into_iter()
+            .enumerate()
+            .map(|(position, word)| TokenSeed {
+                text: word.content,
+                position,
+                occurrence: word.occurrence,
+                occurrences: word.occurrences,
+                strong: word.strong,
+                lemma: word.lemma,
+                morph: word.morph,
+            })
+            .collect();
+        if source.is_empty() || links.is_empty() {
             return Ok(None);
         }
         Ok(Some(Self {
             reference: reference.into(),
-            source: walk.source,
+            source,
             target,
             links,
         }))
     }
-}
-
-/// The walk of [`TrainingVerse::from_aligned_usfm`] over usfm-js's verse objects.
-#[derive(Default)]
-struct AlignedWalk {
-    plain: String,
-    source: Vec<TokenSeed>,
-    open: Vec<usize>,
-    /// Each aligned word: the milestones above it, its text and its written occurrence.
-    links: Vec<(Vec<usize>, String, u32)>,
-}
-
-impl AlignedWalk {
-    fn nodes(&mut self, nodes: &[tc_usfm::Node<'_>]) -> Result<(), tc_usfm::Error> {
-        use tc_usfm::Node;
-        let number = |v: Option<&str>| v.and_then(|v| v.parse::<u32>().ok()).unwrap_or(1);
-        for node in nodes {
-            match node {
-                Node::Text(text) => self.plain.push_str(text),
-                Node::Milestone(m) if m.name() == "zaln-s" => {
-                    let get = |key: &str| -> Result<Option<String>, tc_usfm::Error> {
-                        Ok(match &m.attributes {
-                            Some(a) => a.get(key)?.map(str::to_owned),
-                            None => None,
-                        })
-                    };
-                    let position = self.source.len();
-                    self.source.push(TokenSeed {
-                        text: get("x-content")?.unwrap_or_default(),
-                        position,
-                        occurrence: number(get("x-occurrence")?.as_deref()),
-                        occurrences: number(get("x-occurrences")?.as_deref()),
-                        strong: get("x-strong")?,
-                        lemma: get("x-lemma")?,
-                        morph: get("x-morph")?,
-                    });
-                    self.open.push(position);
-                }
-                Node::Milestone(m) if m.name() == "zaln-e" => {
-                    self.open.pop();
-                }
-                Node::Span(span) if span.name() == "w" => {
-                    let mut text = String::new();
-                    for child in &span.children {
-                        if let Node::Text(t) = child {
-                            text.push_str(t);
-                        }
-                    }
-                    self.plain.push_str(&text);
-                    if !self.open.is_empty() {
-                        let occurrence = match &span.attributes {
-                            Some(a) => number(a.get("x-occurrence")?),
-                            None => 1,
-                        };
-                        self.links.push((self.open.clone(), text, occurrence));
-                    }
-                }
-                // Notes carry no text in usfm-js's verse objects; other character spans
-                // are walked for their words.
-                Node::Span(span) if !is_note(span.name()) => self.nodes(&span.children)?,
-                _ => {}
-            }
-        }
-        Ok(())
-    }
-}
-
-fn is_note(name: &str) -> bool {
-    use tc_usfm::markers::{MarkerClass, classify};
-    classify(name) == MarkerClass::Note || matches!(name, "fig" | "ca" | "va" | "vp" | "cat" | "rq")
 }
 
 /// The open verse as the engine sees it: both sides in positions, and the links the

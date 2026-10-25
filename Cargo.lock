@@ -3328,6 +3328,7 @@ name = "tc-app"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "git2",
  "proptest",
  "ring",
  "serde",
@@ -3404,6 +3405,7 @@ name = "tc-core"
 version = "0.1.0"
 dependencies = [
  "md-5",
+ "proptest",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -3501,6 +3503,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-import"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tc-burrito",
+ "tc-core",
+ "tc-journal",
+ "tc-store",
+ "tc-usfm",
+ "thiserror 2.0.21",
+ "unicode-normalization",
+ "zip",
+]
+
+[[package]]
 name = "tc-journal"
 version = "0.1.0"
 dependencies = [
@@ -3532,6 +3549,7 @@ dependencies = [
  "proptest",
  "serde_json",
  "tc-burrito",
+ "tc-core",
  "tc-helps",
  "tc-resources",
  "thiserror 2.0.21",

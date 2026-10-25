@@ -101,7 +101,27 @@ async fn a_note_shows_its_panes_its_article_and_the_draft_words() {
         OriginalView::Ready {
             testament: Testament::Nt,
             verse: Some(verse),
-        } => assert!(verse.starts_with("Παῦλος"), "{verse}"),
+        } => {
+            assert!(verse.tokens.concat().starts_with("Παῦλος"), "{verse:?}");
+            // Owner ruling Q39 (tC4 #840): the Greek row marks the note's quote.
+            let marked: Vec<&str> = verse
+                .lit
+                .iter()
+                .map(|&i| verse.tokens[i as usize].as_str())
+                .collect();
+            assert_eq!(
+                marked,
+                [
+                    "κατὰ",
+                    "πίστιν",
+                    "ἐκλεκτῶν",
+                    "Θεοῦ",
+                    "καὶ",
+                    "ἐπίγνωσιν",
+                    "ἀληθείας"
+                ]
+            );
+        }
         other => panic!("{other:?}"),
     }
     let GatewayView::Pane {
@@ -259,7 +279,7 @@ const SAMPLE: &str = "sample_burrito";
 /// The app over the `en-pins` scenario written through tc-store, with its resources installed.
 async fn on_the_store() -> (tempfile::TempDir, TestApp, FaultFs) {
     let fs = FaultFs::new();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let (store, _) = ScenarioStore::write(backend, scenario("en-pins")).unwrap();
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(
@@ -269,11 +289,12 @@ async fn on_the_store() -> (tempfile::TempDir, TestApp, FaultFs) {
     .unwrap();
     let projects = dir.path().join("projects");
     std::fs::create_dir_all(&projects).unwrap();
-    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = StoreChoice::Given(Arc::new(store));
     })
     .await;
+    t.watch = Some(watch);
     (dir, t, fs)
 }
 
@@ -515,18 +536,20 @@ fn drafts_written(t: &TestApp, at: &Scope) {
 /// The next launch over the files an ended app left: a new app on `fs`'s crash image, with the
 /// same app data (the installed resources).
 async fn relaunch(dir: &tempfile::TempDir, fs: &FaultFs) -> TestApp {
-    let backend = backend_over(
+    let (backend, watch) = backend_over(
         &fs.crash(false),
         APP,
         FakePlatform::default(),
         Arc::default(),
     );
     let projects = dir.path().join("projects");
-    TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+    let mut t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = StoreChoice::Given(Arc::new(backend));
     })
-    .await
+    .await;
+    t.watch = Some(watch);
+    t
 }
 
 /// A check comment's draft, as the comment editor sends it between saves (`editor/draft`).

@@ -3,8 +3,8 @@
 //! file" takes the zip's packs in through the store, as a sync's intake does, and commits.
 //!
 //! Not built yet: E5's read-back bypassing the page cache (the file is read back and checked
-//! through the cache), R2's "create the project from this file", and R7's `.tc/intake.json`
-//! marker (each pack is taken whole, and receiving a file again adds nothing).
+//! through the cache), and R7's `.tc/intake.json` marker (each pack is taken whole, and
+//! receiving a file again adds nothing).
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -43,6 +43,10 @@ pub enum ExchangeError {
     /// folder, the project is read-only, …): nothing was exported.
     #[error("the latest work could not be committed: {0}")]
     NotCommitted(String),
+    /// The intake failed after some of the file's packs were folded: what was received stays
+    /// in the project, so the person is never told nothing changed (PLAN Q8).
+    #[error("the file was taken in only partly, and what was received was kept: {0}")]
+    PartlyReceived(String),
     #[error("{0}")]
     Io(String),
     #[error(transparent)]
@@ -209,7 +213,7 @@ fn verify(path: &Path, id: tc_journal::ProjectId) -> Result<(), ExchangeError> {
         return Err(ExchangeError::NotVerified(format!("{first:?}")));
     }
     for (name, bytes) in &zip.files {
-        if name.starts_with(PACKS) && !tc_journal::pack::read_pack(name, bytes, id).is_valid() {
+        if name.starts_with(PACKS) && !tc_store::read_received_pack(name, bytes, id).valid {
             return Err(ExchangeError::NotVerified(format!(
                 "{name} does not verify"
             )));
@@ -337,7 +341,20 @@ pub async fn receive(
     let held = project.snapshot();
     let before: std::collections::BTreeSet<ConflictId> =
         held.fold().conflicts().map(|c| c.id).collect();
-    let report = project.receive_packs(from.to_owned(), packs).await?;
+    let report = match project.receive_packs(from.to_owned(), packs).await {
+        Ok(report) => report,
+        Err(e) => {
+            let fold = project.snapshot();
+            let some_held = changes
+                .iter()
+                .any(|(_, id)| fold.fold().change(id).is_some());
+            return Err(if some_held {
+                ExchangeError::PartlyReceived(e.to_string())
+            } else {
+                e.into()
+            });
+        }
+    };
     if let Some(why) = report.skipped.filter(|why| {
         matches!(
             why,
@@ -427,13 +444,11 @@ fn read_received(
     let mut all_valid = zip.damaged.is_empty();
     for (name, bytes) in &zip.files {
         if name.starts_with(PACKS) {
-            let read = tc_journal::pack::read_pack(name, bytes, id);
-            all_valid &= read.is_valid();
-            for line in read.entries {
-                if let tc_journal::change::Verified::Change(change) = line {
-                    changes.push((change.body().device, change.id()));
-                    inputs.push(tc_journal::fold::FoldInput::from(change));
-                }
+            let read = tc_store::read_received_pack(name, bytes, id);
+            all_valid &= read.valid;
+            for change in read.changes {
+                changes.push((change.body().device, change.id()));
+                inputs.push(tc_journal::fold::FoldInput::from(change));
             }
             packs.push(ReceivedPack {
                 path: name.clone(),
@@ -529,6 +544,55 @@ fn unique(destination: &Path, name: &str) -> Result<String, ExchangeError> {
         .map(|n| format!("{stem}-{n}.zip"))
         .find(|candidate| !destination.join(candidate).exists())
         .ok_or_else(|| ExchangeError::Io("no free file name".into()))
+}
+
+/// R2 "Create the project from this file": a newcomer builds the project in a staging folder
+/// from the file's entries (`.tc-root/` back at the root), written with the store's atomic
+/// writes, and places it as `name`. The first open folds the packs and makes the history.
+pub fn receive_new(
+    store: &tc_store::Store,
+    path: &Path,
+    name: &str,
+) -> Result<PathBuf, ExchangeError> {
+    let zip = read_zip(path)?;
+    if !zip.damaged.is_empty() {
+        return Err(ExchangeError::Damaged(zip.damaged.join(", ")));
+    }
+    if !zip.files.contains_key(PROJECT_JSON) {
+        return Err(ExchangeError::OtherProject);
+    }
+    if let Some(bytes) = zip.files.get(FORMAT_JSON)
+        && let Ok(doc) = tc_journal::format::FormatDoc::parse(bytes)
+        && let tc_journal::format::FormatGate::Refused { major } = doc.gate()
+    {
+        return Err(ExchangeError::NeedsNewerApp {
+            major: major.to_string(),
+        });
+    }
+    let staging = store.staging(tc_store::StagingKind::Import);
+    let vfs = store.vfs().clone();
+    let written = (|| -> Result<(), ExchangeError> {
+        for (entry, bytes) in &zip.files {
+            let rel = entry.strip_prefix(ROOT).unwrap_or(entry);
+            // The file's own `.git/` and `.tc/` never shape the new project: a hand-made zip
+            // could connect it to a stranger's repository (join filters the same, Q10).
+            if rel.starts_with(".git/") || rel.starts_with(".tc/") {
+                continue;
+            }
+            let full = staging.join(rel);
+            let (Some(dir), Some(file)) =
+                (full.parent(), full.file_name().and_then(|n| n.to_str()))
+            else {
+                continue;
+            };
+            tc_store::atomic_create_dirs(&*vfs, dir).map_err(io)?;
+            tc_store::atomic_write(&*vfs, dir, file, bytes, tc_store::SyncDir::Now)
+                .map_err(|e| io(e.into_inner()))?;
+        }
+        Ok(())
+    })();
+    written?;
+    store.place(&staging, name).map_err(io)
 }
 
 #[cfg(test)]

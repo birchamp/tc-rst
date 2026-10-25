@@ -1085,7 +1085,7 @@ fn aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records() {
     for id in &reply.changes {
         let body = fold.body(id).unwrap();
         assert!(
-            matches!(&body.cause, Cause::Import(ImportSource::Usfm { file_name }) if &**file_name == "2JN.usfm"),
+            matches!(&body.cause, Cause::Import(ImportSource::Usfm { file_name, unknown_base: false }) if &**file_name == "2JN.usfm"),
             "{:?}",
             body.cause
         );
@@ -1664,7 +1664,7 @@ pub(crate) fn stories() -> (FaultFs, PathBuf) {
 fn frame(story: u8, frame: u16) -> RecordKey {
     RecordKey::Frame(
         tc_journal::StoryNo::new(story).unwrap(),
-        tc_journal::FrameNo(frame),
+        tc_journal::FrameNo::new(frame),
     )
 }
 
