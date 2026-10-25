@@ -304,3 +304,40 @@ browserTest('J7 and J23: each export is named as tC4 names it', async () => {
     });
   }, { init: async (context, env) => { await downloads(context, env); printed = await stubPrintPdf(context, env); } });
 });
+
+browserTest('J7: a save of the book while its export runs leaves the export\'s answer on screen', async () => {
+  // The shell's printPdf held open until the book's preview has refreshed with another save:
+  // the refresh rebuilds the screen, and the export's "Saved" toast must still show.
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let asked = false;
+  await withApp(async ({ page, env }) => {
+    await openTitusPreview(page);
+    await page.getByTestId('export-menu-trigger').click();
+    await page.getByRole('menuitem', { name: en['cc.exportPdf'], exact: true }).click();
+    await until('the print asked', () => asked);
+    const at = (await env.call('app/hello', {})).sessions[0].at;
+    const view = await env.call('editor/chapters', { at, book: 'TIT' });
+    const row = view.chapters[0].verses.find((v) => v.key === '2');
+    const words = 'saved while the export runs';
+    await env.call('editor/saveVerse', { at, request: newRequestId(), shown: row.words.token, words });
+    await page.getByTestId('cc-page').getByText(words).first().waitFor();
+    assert.ok(await page.getByTestId('export-menu-trigger').isDisabled(), 'Export stays off while the export runs');
+    release();
+    const saved = en['cc.exportSaved'].replace('{filename}', 'TIT.pdf');
+    await page.getByTestId('export-toast').getByText(saved, { exact: true }).waitFor();
+    assert.equal(await page.getByTestId('export-toast').count(), 1, 'the toast shows once');
+  }, {
+    init: async (context, env) => {
+      await downloads(context, env);
+      await context.exposeFunction('__tcPrintPdf', async () => {
+        asked = true;
+        await held;
+        return { ok: true, file: 'TIT.pdf' };
+      });
+      await context.addInitScript(() => {
+        window.tc4Shell = { printPdf: (url) => window.__tcPrintPdf(url) };
+      });
+    },
+  });
+});

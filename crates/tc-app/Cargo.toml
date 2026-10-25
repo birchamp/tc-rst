@@ -58,6 +58,8 @@ tc-corpus = { path = "../tc-corpus" }
 # The Door43 account's tests sign in to a fake Door43 on loopback (A8); tests never touch the
 # network.
 tc-door43-fake = { path = "../tc-door43-fake" }
+# The export test reads the commit its checkpoint made (STORAGE §5.13).
+git2.workspace = true
 proptest.workspace = true
 # The git blob id of the vendored language list (assets/README.md).
 sha1.workspace = true

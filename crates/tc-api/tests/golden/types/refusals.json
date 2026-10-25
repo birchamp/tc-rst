@@ -282,6 +282,16 @@
   {
     "wire": {
       "type": "export",
+      "value": "writeFailed"
+    },
+    "code": "export.write-failed",
+    "key": "refusal.export.write-failed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "export",
       "value": "printFailed"
     },
     "code": "export.print-failed",

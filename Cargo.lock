@@ -3327,6 +3327,7 @@ name = "tc-app"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "git2",
  "proptest",
  "ring",
  "serde",

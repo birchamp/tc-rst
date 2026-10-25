@@ -78,6 +78,9 @@ pub enum SkipReason {
     InlineAlignment,
     /// The weave refused the verse, such as one with glossary `\w` words.
     WeaveRefused,
+    /// A plain export could not take the verse's alignment markup out, so the verse keeps
+    /// its stored bytes, markup and all.
+    MarkupKept,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -115,8 +118,6 @@ pub enum ExportError {
     /// tC4's `export.nothing-drafted`: a book with no drafted verse prints nothing.
     #[error("the book has no drafted verse, so the print has nothing to show")]
     NothingDrafted,
-    #[error("the aligned book does not read back as USFM: {0}")]
-    Strip(#[from] tc_usfm::Error),
 }
 
 /// Run `producer` on `input`.
@@ -130,7 +131,7 @@ pub fn produce(
             Ok((Produced::File(usfm.into_bytes()), facts))
         }
         (Producer::PlainUsfm, ExportInput::Book(book)) => {
-            let (usfm, facts) = usfm::plain(book)?;
+            let (usfm, facts) = usfm::plain(book);
             Ok((Produced::File(usfm.into_bytes()), facts))
         }
         (Producer::StoryMarkdown, ExportInput::StoryFiles(files)) => Ok((

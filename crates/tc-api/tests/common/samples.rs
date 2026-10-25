@@ -72,6 +72,7 @@ pub fn export() -> Vec<ExportRefusal> {
     vec![
         ExportRefusal::CheckpointFailed,
         ExportRefusal::ReadFailed,
+        ExportRefusal::WriteFailed,
         ExportRefusal::PrintFailed,
         ExportRefusal::PrintFailedPictures,
         ExportRefusal::NothingDrafted,

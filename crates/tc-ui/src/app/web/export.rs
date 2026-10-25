@@ -11,7 +11,9 @@ use super::app_ctx::Actions;
 use super::sources::{api_error, said};
 use super::{bridge, js};
 use crate::app::jobs::JobEnd;
-use crate::app::print::{ExportOf, ExportPanel, conflict_question, delivered_panel, pdf_panel};
+use crate::app::print::{
+    ExportOf, ExportPanel, conflict_question, delivered_panel, pdf_panel, unfinished_panel,
+};
 
 /// tC4's `deliverFile`: a click on `<a download>`, so the browser or the shell saves it.
 pub(crate) fn deliver(download: &str, file_name: &str) {
@@ -103,7 +105,10 @@ impl Actions {
                     }
                 },
                 JobEnd::Failed(error) => ExportPanel::Failed(said(&error)),
-                JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => ExportPanel::Idle,
+                end => match unfinished_panel(&end) {
+                    Some(shown) => shown,
+                    None => return,
+                },
             };
             panel.try_set(shown);
         });

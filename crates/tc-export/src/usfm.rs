@@ -11,8 +11,11 @@
 //! not named (tC4 F20 wrapped every word in `\w`). Nothing writes `x-ref` (#409).
 //!
 //! Plain USFM is the aligned book with its alignment markup removed
-//! ([`tc_usfm::strip_alignment`]): the stored text, and a verse added from an aligned file
-//! without its `\zaln` markup.
+//! ([`tc_usfm::strip_alignment`]) piece by piece: the stored text, and a verse added from an
+//! aligned file without its `\zaln` markup. A verse whose markup will not strip (an unclosed
+//! `\zaln-s`, a `\w` with another attribute) keeps its stored bytes and is named
+//! ([`SkipReason::MarkupKept`]), so one such verse never fails the whole export (tC4 exports
+//! the stored file).
 
 use std::collections::BTreeMap;
 
@@ -22,7 +25,7 @@ use tc_journal::alignment::AlignedRun;
 use tc_journal::ids::{ChapterNo, VerseNo};
 use tc_usfm::codec::{BookParts, VersePart, join_verse, recompose};
 
-use crate::{ExportError, ExportFacts, SkipReason, SkippedVerse};
+use crate::{ExportFacts, SkipReason, SkippedVerse};
 
 /// One book to export.
 #[derive(Debug, Clone)]
@@ -50,6 +53,11 @@ pub struct VerseAlignment {
 
 /// The aligned book and the verses whose alignment it left out.
 pub fn aligned(input: &BookInput) -> (String, ExportFacts) {
+    let (parts, facts) = aligned_parts(input);
+    (recompose(&parts).usfm, facts)
+}
+
+fn aligned_parts(input: &BookInput) -> (BookParts, ExportFacts) {
     let mut parts = input.parts.clone();
     let mut facts = ExportFacts::default();
     for (&c, chapter) in &mut parts.chapters {
@@ -82,14 +90,51 @@ pub fn aligned(input: &BookInput) -> (String, ExportFacts) {
             }
         }
     }
-    (recompose(&parts).usfm, facts)
+    (parts, facts)
 }
 
-/// The book with no alignment markup. Its facts are empty: a plain export leaves out every
-/// alignment by design.
-pub fn plain(input: &BookInput) -> Result<(String, ExportFacts), ExportError> {
-    let (usfm, _) = aligned(input);
-    Ok((tc_usfm::strip_alignment(&usfm)?, ExportFacts::default()))
+/// The book with no alignment markup. A plain export leaves out every alignment by design,
+/// so its facts name only the verses it kept as stored because their markup would not strip.
+pub fn plain(input: &BookInput) -> (String, ExportFacts) {
+    let (mut parts, _) = aligned_parts(input);
+    let mut facts = ExportFacts::default();
+    // A header or chapter front that will not strip keeps its bytes: no verse to name, and
+    // nothing of the translator's is dropped.
+    if let Ok(header) = tc_usfm::strip_alignment(&parts.header) {
+        parts.header = header;
+    }
+    for (&c, chapter) in &mut parts.chapters {
+        if let Some(front) = &mut chapter.front
+            && let Ok(plain) = tc_usfm::strip_alignment(front)
+        {
+            *front = plain;
+        }
+        for (&v, part) in &mut chapter.verses {
+            let VersePart::Text(text) = part else {
+                continue;
+            };
+            let stored = join_verse(&text.words, &text.layout);
+            match tc_usfm::strip_alignment(&stored) {
+                Ok(plain) if plain == stored => {}
+                Ok(plain) => {
+                    text.words = plain;
+                    text.layout.clear();
+                }
+                Err(_) => {
+                    let last = text.last.max(v);
+                    facts.skip(SkippedVerse {
+                        reference: Reference {
+                            book: input.book,
+                            chapter: c,
+                            verses: VerseSpan::range(v, last).unwrap_or(VerseSpan::single(v)),
+                        },
+                        why: SkipReason::MarkupKept,
+                    });
+                }
+            }
+        }
+    }
+    (recompose(&parts).usfm, facts)
 }
 
 enum Woven {

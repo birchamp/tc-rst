@@ -227,3 +227,73 @@ fn an_export_names_at_most_20_skipped_verses_with_the_total() {
         "the first 20 in book order"
     );
 }
+
+#[test]
+fn a_verse_the_weave_refuses_keeps_its_bytes_and_is_named() {
+    // A glossary `\w` that holds no word leaves the verse's words as the record placed them,
+    // so the record still vouches for the verse, but the weave refuses `\w` markup.
+    let mut parts = stored_book();
+    let words = verse_text(&mut parts, 1, 1);
+    words.push_str(r#" \w |x-tw="rc://*/tw/dict/bible/kt/god"\w*"#);
+    let stored = recompose(&parts).usfm;
+    let (out, facts) = export(&input(
+        parts,
+        vec![((1, 1), aligned(record_1_1(), 1, Some(pin_1_1())))],
+    ));
+    assert_eq!(out, stored, "the verse keeps its stored bytes");
+    assert_eq!(
+        facts,
+        ExportFacts {
+            skipped: vec![SkippedVerse {
+                reference: reference(1, 1),
+                why: SkipReason::WeaveRefused,
+            }],
+            skipped_total: 1,
+        }
+    );
+}
+
+fn plain(input: &ExportInput<'_>) -> (String, ExportFacts) {
+    let (out, facts) = produce(Producer::PlainUsfm, input).unwrap();
+    let Produced::File(bytes) = out else {
+        panic!("plain USFM is one file")
+    };
+    (String::from_utf8(bytes).unwrap(), facts)
+}
+
+#[test]
+fn a_verse_whose_markup_will_not_strip_keeps_its_bytes_in_plain_usfm() {
+    let stored_plain = recompose(&stored_book()).usfm;
+    let mut parts = stored_book();
+    let words = verse_text(&mut parts, 1, 1);
+    *words = tc_align::usfm::weave_verse(words, &record_1_1()).unwrap();
+    // Kept as written on import, the inline alignment strips to the stored text.
+    let (out, facts) = plain(&input(parts.clone(), Vec::new()));
+    assert_eq!(out, stored_plain);
+    assert_eq!(facts, ExportFacts::default());
+
+    // An unclosed `\zaln-s`: that verse keeps its bytes and is named, the rest is plain.
+    let words = verse_text(&mut parts, 1, 1);
+    let end = words.rfind("\\zaln-e\\*").unwrap();
+    words.replace_range(end..end + "\\zaln-e\\*".len(), "");
+    assert!(
+        tc_usfm::strip_alignment(words).is_err(),
+        "the probe will not strip"
+    );
+    let broken = words.clone();
+    let mut want = stored_book();
+    *verse_text(&mut want, 1, 1) = broken.clone();
+    let (out, facts) = plain(&input(parts, Vec::new()));
+    assert_eq!(out, recompose(&want).usfm);
+    assert!(out.contains(&broken));
+    assert_eq!(
+        facts,
+        ExportFacts {
+            skipped: vec![SkippedVerse {
+                reference: reference(1, 1),
+                why: SkipReason::MarkupKept,
+            }],
+            skipped_total: 1,
+        }
+    );
+}

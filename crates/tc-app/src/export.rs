@@ -324,6 +324,7 @@ fn wire_facts(facts: &tc_export::ExportFacts) -> ExportFacts {
                         tc_export::SkipReason::NeedsReview => SkipReason::NeedsReview,
                         tc_export::SkipReason::InlineAlignment => SkipReason::InlineAlignment,
                         tc_export::SkipReason::WeaveRefused => SkipReason::WeaveRefused,
+                        tc_export::SkipReason::MarkupKept => SkipReason::MarkupKept,
                     },
                 })
             })
@@ -734,15 +735,22 @@ impl Handle<RunExport> for App {
                 let written = downloads.dir().join(format!("{}.part", req.request));
                 let name = file_name.clone();
                 let registered = tokio::task::spawn_blocking(move || {
-                    std::fs::write(&written, &bytes).map_err(|e| e.to_string())?;
-                    downloads.add(&written, &name, content_type)
+                    let added = std::fs::write(&written, &bytes)
+                        .map_err(|e| e.to_string())
+                        .and_then(|()| downloads.add(&written, &name, content_type));
+                    if added.is_err() {
+                        // A part file left behind would stay in the downloads folder until
+                        // the next launch; a failed removal is that same leftover.
+                        let _ = std::fs::remove_file(&written);
+                    }
+                    added
                 })
                 .await
                 .map_err(|e| e.to_string())
                 .and_then(|r| r);
                 let download = registered.map_err(|reason| {
                     app.report_export_failure(reason);
-                    failed(ExportRefusal::ReadFailed)
+                    failed(ExportRefusal::WriteFailed)
                 })?;
                 Ok(Exported {
                     file: ExportedFile::Download {

@@ -350,7 +350,7 @@ pub struct SkippedVerse {
     pub why: SkipReason,
 }
 
-/// Why an aligned export kept a verse as stored.
+/// Why an export kept a verse as stored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
@@ -361,4 +361,7 @@ pub enum SkipReason {
     InlineAlignment,
     /// The verse holds markup the weave cannot place words in.
     WeaveRefused,
+    /// A plain export kept the verse as stored, alignment markup and all, because the markup
+    /// would not come out.
+    MarkupKept,
 }

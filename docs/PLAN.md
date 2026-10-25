@@ -263,7 +263,9 @@ And these (unit D2):
   notes list this as a known limit (tC4 D89 point 11).
 - Plain USFM is the aligned book with its alignment markup taken out. tC4 exports the stored
   book file byte for byte. The two differ only for a verse imported with inline `\zaln`
-  (#794), which plain USFM writes without that markup.
+  (#794) whose markup strips, which plain USFM writes without that markup. A verse whose
+  markup will not strip (an unclosed `\zaln-s`, a `\w` with another attribute) is written as
+  stored, as tC4 writes it, and named under the toast.
 - The PDF's print page is titled with the export's file name without `.pdf`, because the
   shell names the saved PDF from the title (`tc4Shell.printPdf`). tC4's print document is
   titled with the book's or the project's name. The printed heading is the same.

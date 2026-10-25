@@ -355,7 +355,18 @@ pub fn export_notice(exported: &Exported) -> ExportNotice {
         if facts.skipped_total as usize > named.len() {
             refs.push_str(", …");
         }
-        t(keys::export::SKIPPED, &[("refs", &refs)])
+        // A plain export names only the verses it kept with their markup, which are in the
+        // file: "not in the file" would be false of them.
+        let key = if facts
+            .skipped
+            .iter()
+            .all(|v| v.why == tc_api::export::SkipReason::MarkupKept)
+        {
+            keys::export::MARKUP_KEPT
+        } else {
+            keys::export::SKIPPED
+        };
+        t(key, &[("refs", &refs)])
     });
     ExportNotice {
         ready: t(keys::cc::EXPORT_READY, &[("filename", file_name)]),
@@ -388,6 +399,22 @@ pub fn pdf_panel(answer: PdfAnswer, exported: &Exported, pictures: bool) -> Expo
             ExportPanel::Failed(t(keys::refusal::export::PRINT_FAILED_PICTURES, &[]))
         }
         PdfAnswer::Failed => ExportPanel::Failed(t(keys::refusal::export::PRINT_FAILED, &[])),
+    }
+}
+
+/// What the menu shows when an export's job ended with neither a file nor a refusal: for a
+/// lost job (the server ran again), tC4's words for an export that made no file; nothing
+/// after a cancel. `None` leaves the menu as it is: a job the page stopped following, and the
+/// ends the caller words itself (a file, a refusal).
+pub fn unfinished_panel<O>(end: &crate::app::jobs::JobEnd<O>) -> Option<ExportPanel> {
+    use crate::app::jobs::JobEnd;
+    match end {
+        JobEnd::Lost => Some(ExportPanel::Failed(t(
+            keys::refusal::export::READ_FAILED,
+            &[],
+        ))),
+        JobEnd::Cancelled => Some(ExportPanel::Idle),
+        JobEnd::Left | JobEnd::Done(_) | JobEnd::Failed(_) => None,
     }
 }
 

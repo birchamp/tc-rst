@@ -20,7 +20,7 @@ use tc_core::BookId;
 use tc_ui::app::print::{
     DownloadDone, ExportOf, ExportPanel, PdfAnswer, Sheet, conflict_question, delivered_panel,
     download_done_panel, export_items, export_notice, flow_markup, flow_style, page_number_style,
-    pdf_panel, print_words, producer_of, px, sheet_style,
+    pdf_panel, print_words, producer_of, px, sheet_style, unfinished_panel,
 };
 use tc_ui::i18n::{keys, t, t_dyn};
 
@@ -435,4 +435,35 @@ fn the_shells_download_report_shows_saved_interrupted_or_nothing() {
             ExportPanel::Idle
         );
     }
+}
+
+#[test]
+fn a_plain_export_says_its_kept_verses_are_in_the_file() {
+    let mut plain = exported(2, 2);
+    for verse in &mut plain.facts.skipped {
+        verse.why = SkipReason::MarkupKept;
+    }
+    assert_eq!(
+        export_notice(&plain).skipped.as_deref(),
+        Some(
+            "These verses are in the file as stored, with their alignment markup, because the app could not take it out: 1:1, 1:2"
+        )
+    );
+}
+
+#[test]
+fn a_lost_export_says_it_failed_and_a_cancelled_one_says_nothing() {
+    use tc_ui::app::jobs::JobEnd;
+    assert_eq!(
+        unfinished_panel(&JobEnd::<()>::Lost),
+        Some(ExportPanel::Failed(t(
+            keys::refusal::export::READ_FAILED,
+            &[]
+        )))
+    );
+    assert_eq!(
+        unfinished_panel(&JobEnd::<()>::Cancelled),
+        Some(ExportPanel::Idle)
+    );
+    assert_eq!(unfinished_panel(&JobEnd::<()>::Left), None);
 }

@@ -141,6 +141,9 @@ fn book_checking(
             book,
         });
         let actions = actions.clone();
+        // Outside the read's closure: a refresh of the book rebuilds the screen, and the
+        // export running meanwhile still answers into this panel.
+        let panel = RwSignal::new(ExportPanel::Idle);
         let title = book.english_name().to_owned();
         let of = ExportOf {
             at: at.clone(),
@@ -157,6 +160,7 @@ fn book_checking(
                     title.clone(),
                     dir,
                     setup,
+                    panel,
                     of.clone(),
                 ),
             })
@@ -171,6 +175,7 @@ fn book_screen(
     title: String,
     dir: Direction,
     setup: RwSignal<PageSetup>,
+    panel: RwSignal<ExportPanel>,
     of: ExportOf,
 ) -> AnyView {
     let undrafted = print.undrafted;
@@ -178,7 +183,7 @@ fn book_screen(
         <div style=root_style().to_style() data-testid="community-checking">
             <main style=main_style().to_style()>{print_pages(print, title, dir, setup)}</main>
             <aside style=aside_style().to_style()>
-                {side_head(actions, ProjectKind::Bible, of, setup)}
+                {side_head(actions, ProjectKind::Bible, of, setup, panel)}
                 {setup_box(book_rows(setup))}
                 {undrafted.then(|| incomplete(keys::cc::INCOMPLETE_BODY))}
             </aside>
@@ -473,6 +478,7 @@ fn side_head(
     kind: ProjectKind,
     of: ExportOf,
     setup: RwSignal<PageSetup>,
+    panel: RwSignal<ExportPanel>,
 ) -> impl IntoView + use<> {
     let back = {
         let actions = actions.clone();
@@ -488,7 +494,7 @@ fn side_head(
             {t(keys::cc::BACK, &[])}
         </Button>
         <h2 style=h2.to_style()>{t(keys::cc::TITLE, &[])}</h2>
-        {export_menu(actions, kind, of, setup)}
+        {export_menu(actions, kind, of, setup, panel)}
     }
 }
 
@@ -500,8 +506,8 @@ fn export_menu(
     kind: ProjectKind,
     of: ExportOf,
     setup: RwSignal<PageSetup>,
+    panel: RwSignal<ExportPanel>,
 ) -> impl IntoView + use<> {
-    let panel = RwSignal::new(ExportPanel::Idle);
     let running = Signal::derive(move || panel.get() == ExportPanel::Running);
     let items = export_items(kind, crate::app::web::bridge::has_print_pdf())
         .into_iter()
@@ -759,6 +765,8 @@ fn story_checking(
     };
     let read = runtime.cache().read(Stories { at });
     let actions = actions.clone();
+    // Outside the read's closure, as for a book.
+    let panel = RwSignal::new(ExportPanel::Idle);
     (move || {
         read.with(|loaded| match loaded {
             Load::Loading => note(t(keys::cc::STORIES_LOADING, &[])),
@@ -768,7 +776,7 @@ fn story_checking(
                     .to_owned(),
             ),
             Load::Ready(print) | Load::Refreshing(print) => {
-                stories_screen(&actions, print.clone(), dir, setup, of.clone())
+                stories_screen(&actions, print.clone(), dir, setup, panel, of.clone())
             }
         })
     })
@@ -780,6 +788,7 @@ fn stories_screen(
     print: Arc<StoriesPrint>,
     dir: Direction,
     setup: RwSignal<PageSetup>,
+    panel: RwSignal<ExportPanel>,
     of: ExportOf,
 ) -> AnyView {
     let d = dir_attr(dir);
@@ -860,7 +869,7 @@ fn stories_screen(
         <div style=root_style().to_style() data-testid="community-checking">
             <main style=main_style().to_style()>{pages}</main>
             <aside style=aside_style().to_style()>
-                {side_head(actions, ProjectKind::Stories, of, setup)}
+                {side_head(actions, ProjectKind::Stories, of, setup, panel)}
                 {setup_box(rows)}
                 {incomplete_note}
             </aside>

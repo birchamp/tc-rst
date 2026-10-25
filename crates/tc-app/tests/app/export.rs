@@ -681,6 +681,8 @@ struct OnDiskExports {
     _dir: tempfile::TempDir,
     projects: PathBuf,
     downloads: Arc<Downloads>,
+    /// The Bible project, open on the screen with TIT 1:2 just saved.
+    bible: Scope,
 }
 
 const BIBLE: &str = "sample_burrito";
@@ -729,7 +731,7 @@ async fn on_disk_exports() -> OnDiskExports {
     let ack = post(
         &t.app,
         &tc_api::editor::SaveVerse {
-            at,
+            at: at.clone(),
             request: rid(80),
             shown: tc_app::wire::token::shown(&minted).unwrap(),
             words: "saved before the export".to_owned(),
@@ -743,6 +745,7 @@ async fn on_disk_exports() -> OnDiskExports {
         _dir: dir,
         projects,
         downloads,
+        bible: at,
     }
 }
 
@@ -899,4 +902,141 @@ async fn every_export_validates() {
         let problems = tc_burrito::validate_dir(&w.projects.join(project));
         assert!(problems.is_empty(), "{project}: {problems:#?}");
     }
+}
+
+/// A carried `content/` file whose bytes this computer lacks fails the story export: a zip
+/// without it would drop the translator's front or back matter.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_story_export_without_a_carried_files_bytes_fails() {
+    let state = super::scenario::scenario("sample");
+    let (seeded, report) = tc_app::backend::memory::MemoryBackend::from_scenario(state).unwrap();
+    let backend = tc_app::backend::memory::MemoryBackend::new();
+    let mut cleared = false;
+    for (folder, _) in report.loaded {
+        let mut project = seeded.project(&folder).unwrap();
+        cleared |= !project.carried.is_empty();
+        project.carried.clear();
+        backend.add(folder, project).unwrap();
+    }
+    assert!(cleared, "the stories carry their front and back matter");
+    let dir = tempfile::tempdir().unwrap();
+    tc_app::backend::scenario::install_resources_into(
+        &dir.path().join("app-data"),
+        &state.resources().unwrap(),
+    )
+    .unwrap();
+    let t =
+        super::common::TestApp::start_with(dir.path(), &super::common::Parts::new(), |_, deps| {
+            deps.store = tc_app::StoreChoice::Given(Arc::new(backend));
+        })
+        .await;
+    let downloads = give_downloads(&t.app);
+    let at = super::story::open_obs(&t.app).await.session.at;
+    let (_, state) = run(
+        &t.app,
+        &export::RunExport {
+            request: rid(71),
+            at,
+            producer: export::Producer::StoryMarkdown,
+            subject: export::Subject::Stories,
+            print: None,
+        },
+    )
+    .await;
+    assert_eq!(
+        state,
+        JobState::Failed(ApiError::Refused(tc_api::Refusal::Export(
+            tc_api::refusal::ExportRefusal::ReadFailed
+        )))
+    );
+    assert!(downloads.files.lock().unwrap().is_empty(), "no zip");
+}
+
+/// The checkpoint before an export (STORAGE §5.13, tC4 `runExport`): the project's last
+/// commit holds what the file holds, a verse saved just before the export included.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_export_commits_the_book_it_exports() {
+    let w = on_disk_exports().await;
+    let at = w.bible.clone();
+    let req = export::RunExport {
+        request: rid(130),
+        at,
+        producer: export::Producer::PlainUsfm,
+        subject: export::Subject::Book {
+            book: BookId::Titus,
+        },
+        print: None,
+    };
+    let (_, state) = run(&w.t.app, &req).await;
+    exported(state);
+    let files = w.downloads.files.lock().unwrap().clone();
+    let [(_, usfm)] = files.as_slice() else {
+        panic!("one file")
+    };
+    assert!(String::from_utf8_lossy(usfm).contains("saved before the export"));
+    let repo = git2::Repository::open(w.projects.join(BIBLE)).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(
+        head.summary().ok().flatten(),
+        Some("Checkpoint, before export: TIT (tC)"),
+        "the export's checkpoint made the last commit"
+    );
+    let entry = head
+        .tree()
+        .unwrap()
+        .get_path(Path::new("ingredients/TIT.usfm"))
+        .unwrap();
+    let committed = repo.find_blob(entry.id()).unwrap();
+    assert_eq!(
+        committed.content(),
+        usfm.as_slice(),
+        "the commit holds the file"
+    );
+}
+
+/// Downloads whose folder takes no file, as on a full disk.
+struct FullDownloads(tempfile::TempDir);
+
+impl tc_app::DownloadFiles for FullDownloads {
+    fn dir(&self) -> PathBuf {
+        self.0.path().to_owned()
+    }
+
+    fn add(&self, _: &Path, _: &str, _: &'static str) -> Result<DownloadId, String> {
+        Err("No space left on device (os error 28)".to_owned())
+    }
+}
+
+/// A file the downloads folder would not take fails the export with the words for a file
+/// not written, and leaves no `.part` behind.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_export_that_cannot_write_its_file_leaves_nothing() {
+    let (_dir, t) = start("sample").await;
+    let downloads = Arc::new(FullDownloads(tempfile::tempdir().unwrap()));
+    t.app.provide_downloads(downloads.clone());
+    let at = opened(&t.app).await.session.at;
+    let (_, state) = run(
+        &t.app,
+        &export::RunExport {
+            request: rid(72),
+            at,
+            producer: export::Producer::PlainUsfm,
+            subject: export::Subject::Book {
+                book: BookId::Titus,
+            },
+            print: None,
+        },
+    )
+    .await;
+    assert_eq!(
+        state,
+        JobState::Failed(ApiError::Refused(tc_api::Refusal::Export(
+            tc_api::refusal::ExportRefusal::WriteFailed
+        )))
+    );
+    let left: Vec<_> = std::fs::read_dir(downloads.0.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
 }

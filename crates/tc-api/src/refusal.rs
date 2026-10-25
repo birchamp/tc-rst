@@ -330,6 +330,8 @@ impl Message for ImportRefusal {
 pub enum ExportRefusal {
     CheckpointFailed,
     ReadFailed,
+    /// The file could not be written into the downloads folder, such as on a full disk.
+    WriteFailed,
     PrintFailed,
     PrintFailedPictures,
     NothingDrafted,
@@ -340,6 +342,7 @@ impl Message for ExportRefusal {
         Some(match self {
             Self::CheckpointFailed => "export.checkpoint-failed",
             Self::ReadFailed => "export.read-failed",
+            Self::WriteFailed => "export.write-failed",
             Self::PrintFailed => "export.print-failed",
             Self::PrintFailedPictures => "export.print-failed-pictures",
             Self::NothingDrafted => "export.nothing-drafted",
@@ -349,6 +352,7 @@ impl Message for ExportRefusal {
         match self {
             Self::CheckpointFailed => "refusal.export.checkpoint-failed",
             Self::ReadFailed => "refusal.export.read-failed",
+            Self::WriteFailed => "refusal.export.write-failed",
             Self::PrintFailed => "refusal.export.print-failed",
             Self::PrintFailedPictures => "refusal.export.print-failed-pictures",
             Self::NothingDrafted => "refusal.export.nothing-drafted",
