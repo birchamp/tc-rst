@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "13c176632f3754b6",
+    "ui": "040e25589343c48b",
     "commit": "dev",
     "api": 1
   },
@@ -2766,6 +2766,31 @@
       "sha256": "6edf81fe6c2dc8a4add50933cb616eb47a446c74a123a33e98533b871618e7a4",
       "dom": "dom/home-open-error.json",
       "domSha256": "3dc557a9d1a872aced02b6733ee1bd07a3667c9ecd1147ba1223c9e4e8be377f"
+    },
+    {
+      "name": "home-checkpoint-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "D1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share",
+        "sample_burrito_obs": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/home-checkpoint-error.png",
+      "sha256": "18074ee24f7d5ce72fbb4e2050790a120dd701bf781fa62ce78628542a479520",
+      "dom": "dom/home-checkpoint-error.json",
+      "domSha256": "e16ac370bdbdd43fb56d5aa41d510f7fedf54cc280ae0e589aa3db2de0a49417"
     },
     {
       "name": "home-resume",
