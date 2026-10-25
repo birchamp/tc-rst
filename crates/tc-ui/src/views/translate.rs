@@ -377,30 +377,7 @@ fn chapter_view(
         let actions = actions.clone();
         Callback::new(move |_| actions.toggle_rail())
     };
-    let entry = {
-        let (sessions, at) = (s.server.sessions.clone(), open.at.clone());
-        Memo::new(move |_| {
-            let kept = sessions.with(|sessions| {
-                sessions
-                    .iter()
-                    .find(|s| s.at == at)
-                    .map_or(0, |s| s.outside.kept.len())
-            });
-            crate::app::outside::review_entry(conflicts.get(), kept)
-        })
-    };
-    let button = {
-        let actions = actions.clone();
-        move || {
-            let (count, tab) = entry.get()?;
-            let actions = actions.clone();
-            conflicts_button(
-                count,
-                off,
-                Callback::new(move |()| actions.open_review(tab, None)),
-            )
-        }
-    };
+    let button = review_entry_button(s, actions, open.at.clone(), conflicts.into(), off);
     let tabs = source_tabs(actions, book_id, panes, chosen);
     let head = target_head(s, actions, cross_frame, mode, off);
     let rows = {
@@ -1309,4 +1286,35 @@ fn VerseEditor(
         FooterPress::KeepsFocus,
         Attrs::default(),
     )
+}
+
+/// The toolbar's way into the conflict review: the open verse conflicts and the kept copies
+/// of outside edits (`review_entry`), in Translate and in a story's Translate.
+pub(super) fn review_entry_button(
+    s: &AppState,
+    actions: &Actions,
+    at: Scope,
+    conflicts: Signal<u32>,
+    off: Signal<bool>,
+) -> impl Fn() -> Option<AnyView> + Send + Sync + 'static {
+    let sessions = s.server.sessions.clone();
+    let entry = Memo::new(move |_| {
+        let kept = sessions.with(|sessions| {
+            sessions
+                .iter()
+                .find(|s| s.at == at)
+                .map_or(0, |s| s.outside.kept.len())
+        });
+        crate::app::outside::review_entry(conflicts.get(), kept)
+    });
+    let actions = actions.clone();
+    move || {
+        let (count, tab) = entry.get()?;
+        let actions = actions.clone();
+        conflicts_button(
+            count,
+            off,
+            Callback::new(move |()| actions.open_review(tab, None)),
+        )
+    }
 }

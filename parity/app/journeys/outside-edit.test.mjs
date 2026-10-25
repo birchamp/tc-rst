@@ -30,6 +30,8 @@ async function editOutside(page, env) {
   fs.writeFileSync(ingredients(env, 'RUT.usfm'), RUT);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await question(page).waitFor();
+  // The watcher may find Titus a moment before Ruth: the one question then grows to name both.
+  await until('one question naming both books', async () => /These books have been changed externally: (Titus, Ruth|Ruth, Titus)\. Would you like to import them into this project\?/.test(await question(page).innerText()));
 }
 
 async function verse11(env) {
@@ -51,7 +53,6 @@ browserTest('two changed books are asked in one question; Not now keeps the text
   await withApp(async ({ page, env }) => {
     await openTranslate(page);
     await editOutside(page, env);
-    assert.match(await question(page).innerText(), /These books have been changed externally: (Titus, Ruth|Ruth, Titus)\. Would you like to import them into this project\?/);
 
     await question(page).getByRole('button', { name: 'Not now' }).click();
     await question(page).waitFor({ state: 'detached' });
@@ -102,5 +103,29 @@ browserTest('Import from the question reports each book, every line drawn alike'
     assert.equal(looks[0].split(' | ')[1], looks[1].split(' | ')[1], looks.join('\n'));
     assert.match(looks.join('\n'), /Ruth: 2 verses imported/);
     assert.match(looks.join('\n'), /Titus: 1 verse imported/);
+  });
+});
+
+browserTest('a story file changed outside: Not now keeps its copy, and the story Translate toolbar opens the notices that list it', async () => {
+  await withApp(async ({ page, env }) => {
+    const OBS = 'sample_burrito_obs';
+    await page.getByTestId(`project-${OBS}`).getByTestId('story-tile-1').click();
+    await page.getByTestId('story-understand').waitFor();
+    await page.getByRole('tab', { name: 'Translate', exact: true }).click();
+    await page.getByTestId('story-draft').waitFor();
+    assert.equal(await page.getByTestId('conflicts-review').count(), 0);
+    const story = path.join(env.projectsDir, OBS, 'ingredients', 'content', '01.md');
+    const md = fs.readFileSync(story, 'utf8');
+    const edited = md.replace(/(\n\n)([^!\n#][^\n]{5})/, '$1STORY OUTSIDE $2');
+    assert.notEqual(edited, md);
+    fs.writeFileSync(story, edited);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await question(page).waitFor();
+    await question(page).getByRole('button', { name: 'Not now' }).click();
+    await question(page).waitFor({ state: 'detached' });
+    assert.equal(await page.getByTestId('conflicts-review').getAttribute('data-count'), '1');
+    await openNotices(page);
+    assert.match(await kept(page).first().innerText(), /^01\.md was changed outside translationCore\. A copy is kept\./);
+    assert.equal(await page.getByTestId('kept-import').count(), 1);
   });
 });

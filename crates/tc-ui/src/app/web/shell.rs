@@ -536,7 +536,19 @@ fn main_view(s: &AppState) -> AnyView {
             .into_any()
         }
         Screen::StoryUnderstand => view! { <StoryUnderstand /> }.into_any(),
-        Screen::StoryDraft => view! { <StoryDraft /> }.into_any(),
+        // The review shows in a story's Translate as in a book's, in place of its columns.
+        Screen::StoryDraft => {
+            let review = s.review.clone();
+            let open = Memo::new(move |_| review.with(Option::is_some));
+            (move || {
+                if open.get() {
+                    view! { <crate::views::review::ConflictReview /> }.into_any()
+                } else {
+                    view! { <StoryDraft /> }.into_any()
+                }
+            })
+            .into_any()
+        }
         Screen::CommunityChecking => {
             view! { <crate::views::community_checking::CommunityChecking /> }.into_any()
         }
