@@ -4,10 +4,10 @@ title: History and Restore on the screens, and the Received sheet's replaced row
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: shell lane (Claude Code e1bb3a0c)
+branch: track-HIST-1
+worktree: .worktrees/track-HIST-1
 depends: [C7b, UI-3b]
 needs_owner: []
 proves: [P2, P3]
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 sessions (basis: C7a's History view exists; this adds entry points and one list of rows)
 merged: none
 updated: 2026-10-25
-next: Claim this card after C7b and UI-3b merge, then do step 1.
+next: Step 1, History and Restore on the Check screen, with the journey half.
 blocked_by: none
 ---
 
@@ -70,3 +70,4 @@ replaced and can put their own version back in two clicks.
 ## Log
 
 - 2026-10-25 | shell lane (Claude Code e1bb3a0c) | created | none | From C7b's parity lens blocker B1 and major M1; the orchestrator chose option (b): C7b gives the calls, this card the screens; it goes in REL-1's and DONE's depends; the G5 session takes it after UI-3b | .audit/roadmap/evidence/2026-10-24/C7b-lens-parity.md
+- 2026-10-25 12:55 EDT | shell lane (Claude Code e1bb3a0c) | claimed | none | The orchestrator asked this lane to take HIST-1 now, cut from track-C7b, before C7b and UI-3b merge; UI-3b (track-UI-3b) also edits web/align.rs, web/check.rs, web/app_ctx.rs and views/check/detail.rs, so whichever lands second merges and adapts
