@@ -31,6 +31,8 @@ pub enum Pending {
     /// A Home card's "Share on Door43" (B2 asks): the sign-in if needed, then the dialog on
     /// its where-it-goes step, reading the organizations (B9b).
     Share(Box<ShareProject>),
+    /// The share dialog's Share (E1b): the run of the form as it stands.
+    ShareRun,
     /// A Home card's "Sync with Door43" (B2 asks; B10 runs the sync).
     Sync(ProjectRef),
     /// The sign-in step's Sign in (M12), sent once the internet is on: tC4 asks when the
@@ -63,7 +65,7 @@ impl Pending {
             Self::Feedback => NetKind::Feedback,
             Self::Link(LinkKind::Help, _) => NetKind::HelpLink,
             Self::Link(LinkKind::Repo, _) => NetKind::RepoLink,
-            Self::Share(_) => NetKind::Share,
+            Self::Share(_) | Self::ShareRun => NetKind::Share,
             Self::Sync(_) => NetKind::Sync,
             Self::SignIn { .. } => NetKind::SignIn,
             Self::CheckSignIn => NetKind::CheckSignIn,

@@ -2,10 +2,13 @@
 //! tC4's `sh` and `od`, and the port of `test/openFromDoor43Dialog.test.tsx` (its clicks and
 //! drawing are the journeys' and the parity captures').
 
-use tc_api::account::{OrgChoice, ShareTargets};
+use tc_api::account::{OrgChoice, ShareTargets, WebUrl};
+use tc_api::door43::{RepoName, RepoSource, ShareOwner, SharedRepo};
 use tc_api::endpoint::NetKind;
 use tc_api::home::{BookTileView, Door43Card, HomeCard, ProjectKind};
 use tc_api::ids::ProjectRef;
+use tc_api::ids::RequestId;
+use tc_api::jobs::SharePhase;
 use tc_api::shown::{Direction, Known};
 use tc_core::BookId;
 use tc_ui::app::internet::{InternetFlow, NetStep, Pending};
@@ -220,11 +223,15 @@ fn org(name: &str, can_create: bool, recommended: bool) -> OrgChoice {
     }
 }
 
+fn rid(n: u8) -> RequestId {
+    RequestId::from_bytes([n; 16])
+}
+
 fn opened() -> ShareForm {
-    ShareForm::open(ShareProject::of(&card(
-        ProjectKind::Bible,
-        Known::Known("es-419".into()),
-    )))
+    ShareForm::open(
+        ShareProject::of(&card(ProjectKind::Bible, Known::Known("es-419".into()))),
+        rid(1),
+    )
 }
 
 #[test]
@@ -284,13 +291,13 @@ fn an_organization_the_person_cannot_create_in_cannot_be_chosen() {
             org("es-419_gl", false, false),
         ],
     }));
-    form.pick(Target::Organization("es-419_gl".into()));
+    form.pick(Target::Organization("es-419_gl".into()), rid(2));
     assert_eq!(form.target, Target::User);
-    form.pick(Target::Organization("Equipo-Ejemplo".into()));
+    form.pick(Target::Organization("Equipo-Ejemplo".into()), rid(2));
     assert_eq!(form.target_org(), Some("Equipo-Ejemplo"));
-    form.pick(Target::Organization("nobody".into()));
+    form.pick(Target::Organization("nobody".into()), rid(2));
     assert_eq!(form.target_org(), Some("Equipo-Ejemplo"));
-    form.pick(Target::User);
+    form.pick(Target::User, rid(2));
     assert_eq!(form.target_org(), None);
 }
 
@@ -304,9 +311,9 @@ fn share_needs_a_name_door43_accepts() {
     }
     let mut form = opened();
     assert!(form.can_submit());
-    form.type_name("my repo".into());
+    form.type_name("my repo".into(), rid(2));
     assert!(!form.can_submit() && form.name_invalid());
-    form.type_name(String::new());
+    form.type_name(String::new(), rid(3));
     assert!(
         !form.can_submit() && !form.name_invalid(),
         "empty is not shown as invalid"
@@ -317,4 +324,124 @@ fn share_needs_a_name_door43_accepts() {
 fn share_asks_the_share_question() {
     let project = ShareProject::of(&card(ProjectKind::Bible, Known::Unknown));
     assert_eq!(Pending::Share(Box::new(project)).kind(), NetKind::Share);
+}
+
+fn on_check() -> ShareForm {
+    let mut form = opened();
+    form.choices_read(Ok(ShareTargets {
+        user: "facilitator-zq".into(),
+        orgs: vec![org("Equipo-Ejemplo", true, true)],
+    }));
+    form.go(ShareStep::Check);
+    form
+}
+
+fn shared_repo() -> SharedRepo {
+    SharedRepo {
+        repo: RepoSource::new("facilitator-zq", "sample_burrito").unwrap(),
+        url: WebUrl::parse("https://git.door43.org/facilitator-zq/sample_burrito").unwrap(),
+    }
+}
+
+#[test]
+fn share_sends_one_request_per_attempt_and_shows_each_progress_line() {
+    let mut form = on_check();
+    form.pick(Target::Organization("Equipo-Ejemplo".into()), rid(2));
+    let (request, owner, name) = form.run().expect("Share runs");
+    assert_eq!(request, rid(2));
+    assert_eq!(
+        owner,
+        ShareOwner::Organization(RepoName::parse("Equipo-Ejemplo").unwrap())
+    );
+    assert_eq!(name.as_str(), "sample_burrito");
+    assert_eq!(form.step, ShareStep::Running(SharePhase::Preparing));
+    assert_eq!(
+        form.run(),
+        None,
+        "a second press while it runs sends nothing"
+    );
+    assert!(!form.can_submit());
+    form.progress(SharePhase::Create);
+    form.progress(SharePhase::Create);
+    form.progress(SharePhase::Push);
+    assert_eq!(form.step, ShareStep::Running(SharePhase::Push));
+    assert_eq!(form.shown, vec![SharePhase::Create, SharePhase::Push]);
+    form.shared(shared_repo());
+    assert_eq!(form.step, ShareStep::Done(shared_repo()));
+    assert_eq!(
+        form.shown,
+        vec![SharePhase::Create, SharePhase::Push],
+        "the done step keeps the lines"
+    );
+    form.go(ShareStep::Check);
+    assert_eq!(
+        form.step,
+        ShareStep::Done(shared_repo()),
+        "Back is not on the done step"
+    );
+}
+
+#[test]
+fn a_refusal_returns_to_the_check_step_with_its_sentence_and_the_next_share_is_new() {
+    let mut form = on_check();
+    let (first, ..) = form.run().unwrap();
+    form.progress(SharePhase::Create);
+    form.refused(
+        Some("share.name-exists"),
+        "That name exists on this account or organization; pick another.".into(),
+        rid(9),
+    );
+    assert_eq!(form.step, ShareStep::Check);
+    assert_eq!(
+        form.error.as_ref().and_then(|e| e.code.as_deref()),
+        Some("share.name-exists")
+    );
+    form.type_name("sample_burrito_2".into(), rid(10));
+    assert_eq!(form.error, None, "typing takes the refusal away");
+    let (second, _, name) = form.run().unwrap();
+    assert_ne!(second, first);
+    assert_eq!(name.as_str(), "sample_burrito_2");
+}
+
+#[test]
+fn a_lost_reply_sends_the_same_request_again_and_not_now_sends_nothing() {
+    let mut form = on_check();
+    let (first, ..) = form.run().unwrap();
+    form.lost("the connection to the app was lost".into());
+    assert_eq!(form.step, ShareStep::Check);
+    assert!(form.error.is_some());
+    assert_eq!(
+        form.run().map(|(r, ..)| r),
+        Some(first),
+        "the reply cache answers it (A-27)"
+    );
+    form.not_sent();
+    assert_eq!(form.step, ShareStep::Check);
+    assert_eq!(form.run().map(|(r, ..)| r), Some(first));
+    form.interrupted(rid(7));
+    assert_eq!(
+        form.run().map(|(r, ..)| r),
+        Some(rid(7)),
+        "after the sign-in step, a new attempt"
+    );
+}
+
+#[test]
+fn the_done_step_names_team_access_for_every_project() {
+    for kind in [ProjectKind::Bible, ProjectKind::Stories] {
+        let form = ShareForm::open(ShareProject::of(&card(kind, Known::Unknown)), rid(1));
+        assert_eq!(
+            form.done_lines(),
+            vec![
+                keys::share_dialog::DONE_TEXT,
+                keys::share_dialog::TEAM_ACCESS
+            ],
+            "{kind:?}: teammates need write access to sync, stories too (#724)"
+        );
+    }
+}
+
+#[test]
+fn the_run_asks_the_share_question() {
+    assert_eq!(Pending::ShareRun.kind(), NetKind::Share);
 }

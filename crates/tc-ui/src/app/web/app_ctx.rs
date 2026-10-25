@@ -17,10 +17,11 @@ use send_wrapper::SendWrapper;
 use tc_api::account::{
     CancelSignIn, HelpLink, Orgs, ProfileLink, RepoLink, Resume, SignOut, WebUrl,
 };
-use tc_api::door43::{OpenDoor43, SyncProject};
+use tc_api::door43::{OpenDoor43, ShareOnDoor43, SyncProject};
 use tc_api::feedback::Compose;
 use tc_api::home::{HomeCard, LanguageSuggestion};
 use tc_api::ids::{LocaleId, ProjectRef, ReportId};
+use tc_api::jobs::{Phase, Progress};
 use tc_api::net::Set as NetSet;
 use tc_api::prefs::SetLocale;
 use tc_api::refusal::FeedbackRefusal;
@@ -668,6 +669,7 @@ impl Actions {
             Pending::Profile => self.profile_now(),
             Pending::Share(project) => self.share_now(*project),
             Pending::OpenDoor43 => self.open_door43_now(),
+            Pending::ShareRun => self.share_run_now(),
             Pending::Sync(project) => self.sync_now(project),
             Pending::Catalog => self.catalog_now(),
             Pending::Download => self.download_now(),
@@ -692,6 +694,7 @@ impl Actions {
             Pending::OpenDoor43 => {
                 self.patch_od(|od| od.submit.not_sent());
             }
+            Pending::ShareRun => self.patch_sh(ShareForm::not_sent),
             Pending::Catalog => self.catalog_dropped(),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
             // Not now: the download never started, and the guided fix is as it was.
@@ -1350,7 +1353,7 @@ impl Actions {
     }
 
     fn open_share(&self, project: &ShareProject) {
-        let form = ShareForm::open(project.clone());
+        let form = ShareForm::open(project.clone(), js::random_request_id());
         self.s().layers.dialog.try_set(Some(Dialog::Share(form)));
     }
 
@@ -1377,11 +1380,137 @@ impl Actions {
     }
 
     pub fn pick_share_target(&self, target: Target) {
-        self.patch_sh(|sh| sh.pick(target));
+        self.patch_sh(|sh| sh.pick(target, js::random_request_id()));
     }
 
-    /// The check step's Share: the run is unit E1b's (`door43/share`).
-    pub fn share_run(&self) {}
+    pub fn type_share_name(&self, name: String) {
+        self.patch_sh(|sh| sh.type_name(name, js::random_request_id()));
+    }
+
+    /// The check step's Share (tC4 `shareRun`): the internet question first when it is off.
+    pub fn share_run(&self) {
+        let ready = self.s().layers.dialog.try_update(|dialog| match dialog {
+            Some(Dialog::Share(sh)) => sh.can_submit().then_some(()),
+            _ => None,
+        });
+        if ready.flatten().is_some() {
+            self.internet_task(Pending::ShareRun);
+        }
+    }
+
+    /// The run of the form as it stands: `door43/share`, its progress lines, then the done step
+    /// or the refusal on the check step. The answer goes to this dialog's form only.
+    fn share_run_now(&self) {
+        let form = self.s().layers.dialog.try_update(|dialog| match dialog {
+            Some(Dialog::Share(sh)) => sh.run().map(|run| (sh.project.project.clone(), run)),
+            _ => None,
+        });
+        let Some(Some((project, (attempt, owner, name)))) = form else {
+            self.drop_pending(Pending::ShareRun);
+            return;
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            let request = ShareOnDoor43 {
+                request: attempt,
+                project,
+                owner,
+                name,
+            };
+            let ours = {
+                let this = this.clone();
+                move || this.share_attempt() == Some(attempt)
+            };
+            let ended = match this.run_net(Pending::ShareRun, &request).await {
+                NetEnd::Ok(job) => {
+                    let progress = {
+                        let this = this.clone();
+                        move |p: &Progress| {
+                            if let Phase::Share(phase) = p.phase {
+                                this.patch_sh(|sh| sh.progress(phase));
+                            }
+                        }
+                    };
+                    this.follow::<ShareOnDoor43>(job, progress, ours.clone())
+                        .await
+                }
+                NetEnd::Asked => {
+                    this.patch_sh(|sh| sh.interrupted(js::random_request_id()));
+                    return;
+                }
+                NetEnd::Dropped => {
+                    this.patch_sh(ShareForm::not_sent);
+                    return;
+                }
+                NetEnd::Failed(error) => JobEnd::Failed(error),
+                NetEnd::Transport(error) => {
+                    this.patch_sh(|sh| sh.lost(error.to_string()));
+                    return;
+                }
+            };
+            if !ours() {
+                return;
+            }
+            match ended {
+                JobEnd::Done(repo) => {
+                    this.patch_sh(|sh| sh.shared(repo));
+                    this.refresh_projects();
+                }
+                JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
+                    this.patch_sh(|sh| sh.interrupted(js::random_request_id()));
+                    this.refresh_projects();
+                }
+                JobEnd::Failed(error) => match this.net_refusal(Pending::ShareRun, error) {
+                    None => this.patch_sh(|sh| sh.interrupted(js::random_request_id())),
+                    Some(ApiError::Refused(refusal)) => {
+                        let text = crate::i18n::refusal_text(&refusal);
+                        this.patch_sh(|sh| {
+                            sh.refused(refusal.code(), text, js::random_request_id())
+                        });
+                    }
+                    Some(other) => {
+                        let text = other.to_string();
+                        this.patch_sh(|sh| sh.refused(None, text, js::random_request_id()));
+                    }
+                },
+            }
+        });
+    }
+
+    /// The done step's Copy link (tC4 `shareCopyLink`).
+    pub fn share_copy_link(&self) {
+        let url = self
+            .s()
+            .layers
+            .dialog
+            .with_untracked(|dialog| match dialog {
+                Some(Dialog::Share(sh)) => match &sh.step {
+                    ShareStep::Done(repo) => Some(repo.url.as_str().to_owned()),
+                    _ => None,
+                },
+                _ => None,
+            });
+        let Some(url) = url else { return };
+        let this = self.clone();
+        spawn_local(async move {
+            if js::copy_text(&url).await {
+                this.patch_sh(|sh| sh.copied = true);
+            }
+        });
+    }
+
+    /// The request of the share dialog's run in flight, if the dialog showing is a share.
+    fn share_attempt(&self) -> Option<tc_api::ids::RequestId> {
+        self.s()
+            .layers
+            .dialog
+            .with_untracked(|dialog| match dialog {
+                Some(Dialog::Share(sh)) if matches!(sh.step, ShareStep::Running(_)) => {
+                    Some(sh.submit.request())
+                }
+                _ => None,
+            })
+    }
 
     /// "Change" (D86 point 7): signs out, then the sign-in step, then the dialog again.
     pub fn change_sign_in(&self) {

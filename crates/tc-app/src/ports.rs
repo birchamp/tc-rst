@@ -3,24 +3,35 @@
 //! Release builds get ports that answer `Unavailable`; tests and journeys get a scripted one,
 //! so release and tests run the same business code.
 
-use tc_api::door43::{ProjectName, RepoSource};
+use tc_api::door43::{ProjectName, RepoName, RepoSource, ShareOwner, SharedRepo};
 use tc_api::error::ApiError;
 use tc_api::ids::ProjectRef;
 use tc_api::jobs::SyncResultView;
 
 use crate::app::App;
 use crate::backend::BoxFuture;
-use crate::jobs::JobEnd;
+use crate::jobs::{JobEnd, ProgressSink};
 
 pub mod door43;
 #[cfg(feature = "test-hooks")]
 pub mod scripted;
 
-/// Sync, share and open from Door43. E1a adds the real sync and open; E1b adds share's push.
+/// Sync, share and open from Door43 (E1a, E1b).
 pub trait SyncPort: Send + Sync {
     /// One sync of `folder`, after its checkpoint. `app` is the app the sync's intake writes
     /// the received changes through.
     fn sync(&self, app: App, folder: ProjectRef) -> BoxFuture<Result<SyncResultView, JobEnd>>;
+
+    /// The first share of `folder`: its checkpoint, the repository `name` under `owner`, the
+    /// push. Each step goes to `progress` as a `SharePhase` when it begins.
+    fn share(
+        &self,
+        app: App,
+        folder: ProjectRef,
+        owner: ShareOwner,
+        name: RepoName,
+        progress: ProgressSink,
+    ) -> BoxFuture<Result<SharedRepo, JobEnd>>;
 
     /// The open of Door43's `repo` as the project `name`: the project it added.
     fn open(

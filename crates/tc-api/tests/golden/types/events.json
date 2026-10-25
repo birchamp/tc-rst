@@ -115,6 +115,24 @@
   {
     "type": "job",
     "value": {
+      "id": 13,
+      "kind": "share",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "shared",
+          "value": {
+            "repo": "es-419_gl/es-419_tit_equipo",
+            "url": "https://git.door43.org/es-419_gl/es-419_tit_equipo"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "job",
+    "value": {
       "id": 12,
       "kind": "gatewayPlan",
       "project": "sample_burrito",

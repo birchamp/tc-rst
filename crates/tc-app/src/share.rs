@@ -7,16 +7,17 @@
 
 use serde_json::json;
 use tc_api::account::{LinkView, OrgChoice, Orgs, RepoLink, ShareTargets};
-use tc_api::door43::OpenDoor43;
+use tc_api::door43::{OpenDoor43, ShareOnDoor43};
 use tc_api::endpoint::NetKind;
 use tc_api::ids::JobId;
-use tc_api::jobs::{JobKind, Phase, SyncPhase};
+use tc_api::jobs::{JobKind, Phase, SharePhase, SyncPhase};
 use tc_api::refusal::{OpenDoor43Refusal, ShareRefusal};
 use tc_api::{ApiError, Refusal};
 use tc_door43::{Door43Error, Session};
 
 use crate::app::App;
 use crate::dispatch::Handle;
+use crate::flows::FlowRequest;
 use crate::jobs::{JobEnd, JobSpec};
 use crate::reports::facts;
 
@@ -142,6 +143,38 @@ impl App {
         if let Some(scripted) = self.inner.sync.scripted() {
             scripted.script_open(outcome);
         }
+    }
+}
+
+impl App {
+    /// The outcome of the next `door43/share` job on the scripted port.
+    #[cfg(feature = "test-hooks")]
+    pub fn script_share(&self, outcome: Result<tc_api::door43::SharedRepo, ApiError>) {
+        if let Some(scripted) = self.inner.sync.scripted() {
+            scripted.script_share(outcome);
+        }
+    }
+}
+
+impl Handle<ShareOnDoor43> for App {
+    /// tC4's `shareRun`: a Door43 sign-in first, one share at a time (AD31), then the job,
+    /// once the project's saves have settled so the checkpoint holds what the person saw.
+    async fn handle(&self, req: ShareOnDoor43) -> Result<JobId, ApiError> {
+        self.door43_session().await?;
+        let pass = self.inner.flows.enter(FlowRequest::Share)?;
+        let spec = JobSpec::new(JobKind::Share, Phase::Share(SharePhase::Preparing))
+            .project(req.project.clone())
+            .pass(pass);
+        let app = self.clone();
+        Ok(self
+            .inner
+            .jobs
+            .start_typed::<ShareOnDoor43, _, _>(spec, move |ctx| async move {
+                app.inner.sessions.settled(&req.project).await;
+                let port = app.inner.sync.clone();
+                port.share(app, req.project, req.owner, req.name, ctx.progress)
+                    .await
+            }))
     }
 }
 

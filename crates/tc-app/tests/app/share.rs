@@ -3,7 +3,9 @@
 //! `test/share/recommend.test.ts` and of the server half of `test/openFromDoor43Dialog.test.tsx`.
 
 use tc_api::account::{OrgChoice, Orgs, RepoLink, ShareTargets, SignIn, WebUrl};
-use tc_api::door43::{OpenDoor43, ProjectName, RepoSource};
+use tc_api::door43::{
+    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+};
 use tc_api::endpoint::NetKind;
 use tc_api::error::{Feature, SignInReason};
 use tc_api::ids::{ProjectRef, RequestId};
@@ -350,5 +352,46 @@ async fn a_scripted_open_ends_with_its_project_or_its_refusal() {
         JobState::Failed(ApiError::Refused(Refusal::OpenDoor43(
             OpenDoor43Refusal::NoJournal
         )))
+    );
+}
+
+fn share(id: u8) -> ShareOnDoor43 {
+    ShareOnDoor43 {
+        request: rid(id),
+        project: ProjectRef::parse("KR_ulb").unwrap(),
+        owner: ShareOwner::Mine,
+        name: RepoName::parse("KR_ulb").unwrap(),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_scripted_share_ends_with_its_repository_or_its_refusal() {
+    let fake = fake().await;
+    let dir = tempfile::tempdir().unwrap();
+    let t = app_on(dir.path(), fake.url()).await;
+    assert_eq!(
+        post(&t.app, &share(2)).await,
+        Err(ApiError::NeedsInternet(NetKind::Share)),
+        "the share asks the internet question"
+    );
+    internet(&t.app, true, 1).await;
+    sign_in(&t.app).await;
+    let repo = SharedRepo {
+        repo: RepoSource::new(PARITY_USER, "KR_ulb").unwrap(),
+        url: WebUrl::parse(&format!("{}/{PARITY_USER}/KR_ulb", fake.url())).unwrap(),
+    };
+    t.app.script_share(Ok(repo.clone()));
+    t.app.script_share(Err(ApiError::Refused(Refusal::Share(
+        ShareRefusal::NameExists,
+    ))));
+    let first = post(&t.app, &share(3)).await.unwrap();
+    assert_eq!(
+        ended(&t.app, first).await,
+        JobState::Done(JobOutcome::Shared(repo))
+    );
+    let second = post(&t.app, &share(4)).await.unwrap();
+    assert_eq!(
+        ended(&t.app, second).await,
+        JobState::Failed(ApiError::Refused(Refusal::Share(ShareRefusal::NameExists)))
     );
 }

@@ -34,6 +34,90 @@ pub struct SyncProject {
     pub project: ProjectRef,
 }
 
+/// `door43/share`: a first share of `project` (tC4 `shareRun`, #362): its checkpoint, a new
+/// repository `name` under `owner`, and a push of the project's `main` without force. A name
+/// that exists under that owner is refused (`share.name-exists`) before anything is pushed.
+/// The job ends with `JobOutcome::Shared`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ShareOnDoor43 {
+    pub request: RequestId,
+    pub project: ProjectRef,
+    pub owner: ShareOwner,
+    pub name: RepoName,
+}
+
+/// Where a share creates its repository (D84 point 3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ShareOwner {
+    /// The signed-in person's own account.
+    Mine,
+    Organization(RepoName),
+}
+
+/// What a share made: the repository, and its page on Door43, which the done step shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct SharedRepo {
+    pub repo: RepoSource,
+    pub url: crate::account::WebUrl,
+}
+
+/// A repository or account name Door43 accepts (tC4's `nameOk`): letters, digits, dots,
+/// dashes and underscores, starting and ending with a letter or a digit.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct RepoName(String);
+
+impl RepoName {
+    /// The typed name, without the spaces around it.
+    pub fn parse(text: &str) -> Result<Self, IdError> {
+        let name = text.trim();
+        let bytes = name.as_bytes();
+        let ends_ok = matches!((bytes.first(), bytes.last()),
+            (Some(first), Some(last)) if first.is_ascii_alphanumeric() && last.is_ascii_alphanumeric());
+        if !ends_ok
+            || name.len() > MAX_PART
+            || !bytes
+                .iter()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        {
+            return Err(IdError {
+                what: "Door43 name",
+                reason: "letters, digits, dots, dashes and underscores, starting and ending with a letter or a digit",
+            });
+        }
+        Ok(Self(name.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for RepoName {
+    type Error = IdError;
+    fn try_from(text: String) -> Result<Self, IdError> {
+        Self::parse(&text)
+    }
+}
+
+impl From<RepoName> for String {
+    fn from(name: RepoName) -> Self {
+        name.0
+    }
+}
+
 /// A repository on the app's Door43 server: `owner/name`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -213,7 +297,7 @@ mod arbitrary {
     use proptest::arbitrary::Arbitrary;
     use proptest::strategy::{BoxedStrategy, Strategy};
 
-    use super::{ProjectName, RepoSource};
+    use super::{ProjectName, RepoName, RepoSource};
 
     fn pattern(re: &str) -> impl Strategy<Value = String> {
         // The patterns are literals that compile.
@@ -231,6 +315,16 @@ mod arbitrary {
                 .prop_filter_map("a valid source", |(owner, name)| {
                     RepoSource::new(&owner, &name).ok()
                 })
+                .boxed()
+        }
+    }
+
+    impl Arbitrary for RepoName {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+        fn arbitrary_with((): ()) -> Self::Strategy {
+            pattern("[A-Za-z0-9]([A-Za-z0-9_.-]{0,10}[A-Za-z0-9])?")
+                .prop_map(RepoName)
                 .boxed()
         }
     }

@@ -5,15 +5,15 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use tc_api::door43::{ProjectName, RepoSource};
+use tc_api::door43::{ProjectName, RepoName, RepoSource, ShareOwner, SharedRepo};
 use tc_api::error::{ApiError, Feature};
 use tc_api::ids::ProjectRef;
-use tc_api::jobs::SyncResultView;
+use tc_api::jobs::{Phase, SharePhase, SyncResultView};
 
 use super::SyncPort;
 use crate::app::{App, lock};
 use crate::backend::BoxFuture;
-use crate::jobs::JobEnd;
+use crate::jobs::{JobEnd, ProgressSink};
 
 #[derive(Default)]
 pub struct ScriptedSyncPort {
@@ -22,6 +22,8 @@ pub struct ScriptedSyncPort {
     syncs: Mutex<HashMap<ProjectRef, tc_api::test::ScriptedSync>>,
     /// The outcomes of the next opens, in order; `Unavailable(Sync)` when none is left.
     opens: Mutex<VecDeque<Result<ProjectRef, ApiError>>>,
+    /// The outcomes of the next shares, in order; `Unavailable(Sync)` when none is left.
+    shares: Mutex<VecDeque<Result<SharedRepo, ApiError>>>,
     calls: AtomicUsize,
     /// The next sync waits for [`ScriptedSyncPort::release`] before it ends.
     hold: AtomicBool,
@@ -37,13 +39,18 @@ impl ScriptedSyncPort {
         lock(&self.opens).push_back(outcome);
     }
 
+    pub fn script_share(&self, outcome: Result<SharedRepo, ApiError>) {
+        lock(&self.shares).push_back(outcome);
+    }
+
     /// Forgets everything scripted (a test reset).
     pub fn clear(&self) {
         lock(&self.syncs).clear();
         lock(&self.opens).clear();
+        lock(&self.shares).clear();
     }
 
-    /// How many syncs and opens reached the port.
+    /// How many syncs, shares and opens reached the port.
     pub fn calls(&self) -> usize {
         self.calls.load(Ordering::SeqCst)
     }
@@ -72,6 +79,28 @@ impl SyncPort for ScriptedSyncPort {
                 Some(outcome) => app.scripted_sync(folder, outcome).await,
                 None => Err(JobEnd::Failed(ApiError::Unavailable(Feature::Sync))),
             }
+        })
+    }
+
+    fn share(
+        &self,
+        _app: App,
+        _folder: ProjectRef,
+        _owner: ShareOwner,
+        _name: RepoName,
+        progress: ProgressSink,
+    ) -> BoxFuture<Result<SharedRepo, JobEnd>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let next = lock(&self.shares)
+            .pop_front()
+            .unwrap_or(Err(ApiError::Unavailable(Feature::Sync)));
+        Box::pin(async move {
+            // A scripted share that Door43 took went through both steps the dialog names.
+            if next.is_ok() {
+                progress.phase(Phase::Share(SharePhase::Create), None);
+                progress.phase(Phase::Share(SharePhase::Push), None);
+            }
+            next.map_err(JobEnd::Failed)
         })
     }
 

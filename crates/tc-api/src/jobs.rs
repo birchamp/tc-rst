@@ -90,6 +90,7 @@ pub struct Progress {
 pub enum Phase {
     Open(OpenPhase),
     Sync(SyncPhase),
+    Share(SharePhase),
     /// Installing one resource repository.
     Install {
         repo: String,
@@ -137,6 +138,17 @@ pub enum SyncPhase {
     Confirm,
 }
 
+/// The progress lines of a share (D84 point 5): before its first step, the repository's
+/// creation, the push.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum SharePhase {
+    Preparing,
+    Create,
+    Push,
+}
+
 /// A finished job's result. It stays readable through `jobs/get` for 10 minutes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -160,6 +172,8 @@ pub enum JobOutcome {
     },
     /// A sync that completed (B10): what its toast shows.
     Synced(SyncResultView),
+    /// A first share that pushed the project (E1b).
+    Shared(crate::door43::SharedRepo),
     /// An upgrade, a gateway change or a re-pin planned (C8): the plan to read and confirm.
     PlanReady(Box<crate::resources::PlanView>),
 }
@@ -237,6 +251,9 @@ starts_job! {
     }
     crate::door43::SyncProject => SyncResultView {
         JobOutcome::Synced(view) => view, view => JobOutcome::Synced(view)
+    }
+    crate::door43::ShareOnDoor43 => crate::door43::SharedRepo {
+        JobOutcome::Shared(repo) => repo, repo => JobOutcome::Shared(repo)
     }
     crate::session::Open => Box<crate::session::OpenedProject> {
         JobOutcome::Opened(opened) => opened, opened => JobOutcome::Opened(opened)

@@ -78,6 +78,7 @@ const PHASE_0: &[&str] = &[
     "resources/fixState",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",
+    "door43/share",
     // B6: the aligner's rail, its session and its save.
     "align/index",
     "align/open",
@@ -127,6 +128,7 @@ const PHASE_0: &[&str] = &[
     "test/reset",
     "test/lastEdit",
     "test/script",
+    "test/connectDoor43",
     "test/validate",
 ];
 
@@ -194,6 +196,7 @@ fn the_list_and_the_impls_agree() {
                 | "account/orgs"
                 | "door43/open"
                 | "door43/sync"
+                | "door43/share"
                 | "resources/catalog"
                 | "resources/download"
                 | "resources/checkUpdates"

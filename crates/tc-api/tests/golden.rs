@@ -44,7 +44,10 @@ use tc_api::create::{
     AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
     UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
 };
-use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
+use tc_api::door43::{
+    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+    SyncProject,
+};
 use tc_api::editor::{
     AddComment, Book, BookView, ChapterText, Chapters, ChaptersView, CommentView,
     DiscardDraft as EditorDiscardDraft, Draft as EditorDraft, DraftField as EditorDraftField,
@@ -101,13 +104,13 @@ use tc_api::settings::{
 };
 use tc_api::shown::{Computer, ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::story;
+use tc_api::test::{ConnectDoor43, InvalidProject, Validate, ValidateView};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
     TeammatesEdit, TeammatesJoin, TokenBase,
 };
-use tc_api::test::{ConnectDoor43, InvalidProject, Validate, ValidateView};
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
@@ -538,6 +541,17 @@ impl Example for SyncProject {
         SyncProject {
             request: request(21),
             project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for ShareOnDoor43 {
+    fn example() -> Self {
+        ShareOnDoor43 {
+            request: request(22),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            owner: ShareOwner::Organization(RepoName::parse("es-419_gl").unwrap()),
+            name: RepoName::parse("es-419_tit_equipo").unwrap(),
         }
     }
 }
@@ -3393,6 +3407,15 @@ fn events() -> Vec<Event> {
                 restored: 0,
                 missing_pins: 5,
                 recreated: false,
+            })),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(13),
+            kind: JobKind::Share,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Shared(SharedRepo {
+                repo: RepoSource::new("es-419_gl", "es-419_tit_equipo").unwrap(),
+                url: WebUrl::parse("https://git.door43.org/es-419_gl/es-419_tit_equipo").unwrap(),
             })),
         }),
         Event::Job(JobView {
