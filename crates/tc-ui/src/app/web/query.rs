@@ -438,7 +438,6 @@ impl CachedQuery for tc_api::conflicts::List {
     }
 }
 
-/// A record's History: every change of the record, and a resolution of its conflict.
 /// The token names the record and its heads, so a write or a sync that changes the record gives
 /// the screen a new token, and with it a new read.
 impl CachedQuery for tc_api::conflicts::Versions {
@@ -452,6 +451,7 @@ impl CachedQuery for tc_api::conflicts::Versions {
     }
 }
 
+/// A record's History: every change of the record, and a resolution of its conflict.
 impl CachedQuery for tc_api::conflicts::History {
     fn read_of(&self) -> crate::app::cache::ReadOf {
         project_read(

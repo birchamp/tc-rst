@@ -1237,29 +1237,29 @@ pub(crate) fn history_section(
                 view.versions
                     .iter()
                     .map(|v| {
-                        let restore = (!v.version.shown).then(|| {
-                            let from = v.version.change.clone();
-                            let on_click = Callback::new(move |_| restore.run(from.clone()));
-                            view! {
-                                <Button variant=ButtonVariant::Ghost size=Size::Sm disabled=busy on_click=on_click
-                                    style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }
-                                    attrs=Attrs::new().with("data-testid", "history-restore").with("data-ts", v.version.change.as_str().to_owned())>
-                                    {t(keys::review::RESTORE, &[])}
-                                </Button>
-                            }
-                        });
-                        let text = version_text(&v.version.value).unwrap_or_default();
                         let meta = format!(
                             "{} · {} · {}",
                             made_by(&v.version.by),
                             version_date(v.version.at.0),
                             cause_label(v.cause)
                         );
+                        let restore = (!v.version.shown).then(|| {
+                            let from = v.version.change.clone();
+                            let on_click = Callback::new(move |_| restore.run(from.clone()));
+                            view! {
+                                <Button variant=ButtonVariant::Ghost size=Size::Sm disabled=busy on_click=on_click
+                                    style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }
+                                    attrs=Attrs::new().with("data-testid", "history-restore").with("data-ts", v.version.change.as_str().to_owned()).with("aria-label", format!("{} · {}", t(keys::review::RESTORE, &[]), meta.clone()))>
+                                    {t(keys::review::RESTORE, &[])}
+                                </Button>
+                            }
+                        });
+                        let text = version_text(&v.version.value).unwrap_or_default();
                         view! {
                             <li data-testid="history-version" data-shown=v.version.shown.to_string()
                                 style="display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: var(--stroke-hair) solid var(--border-hair);">
                                 <span style="font-size: var(--fs-caption); font-weight: var(--fw-bold); color: var(--uw-slate);">{meta}</span>
-                                <span style="font-family: var(--font-scripture); font-size: var(--fs-verse); line-height: var(--lh-verse); color: var(--text-scripture); white-space: pre-wrap;">{text}</span>
+                                <span dir="auto" style="font-family: var(--font-scripture); font-size: var(--fs-verse); line-height: var(--lh-verse); color: var(--text-scripture); white-space: pre-wrap;">{text}</span>
                                 {restore}
                             </li>
                         }

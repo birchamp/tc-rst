@@ -497,7 +497,7 @@ fn last_sync_link(actions: &Actions, project: &ProjectRef) -> impl IntoView + us
             view! {
                 <button type="button" data-testid=format!("last-sync-{project}") data-count=n.to_string()
                     on:click=move |_| actions.show_last_sync(project.clone(), view.clone())
-                    style="border: 0; background: transparent; padding: 0; margin-inline-start: 8px; font: inherit; color: var(--uw-ocean); font-weight: var(--fw-bold); cursor: pointer;">
+                    style="border: 0; background: transparent; padding: 0; margin-inline-start: 8px; font: inherit; white-space: nowrap; color: var(--uw-ocean); font-weight: var(--fw-bold); cursor: pointer;">
                     {t(if n == 1 { keys::home::LAST_SYNC_REPLACED_ONE } else { keys::home::LAST_SYNC_REPLACED_MANY }, &[("n", &n.to_string())])}
                 </button>
             }

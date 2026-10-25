@@ -573,12 +573,14 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
         .with_untracked(|p| p.as_ref().map(|p| p.dir))
         .unwrap_or(TextDir::Ltr);
 
+    // A verse holds several checks: the title says which one's History this is.
     let history = check_history(
         s,
         actions,
         format!(
-            "{unit} {}",
-            t(keys::check::REF, &[("c", &chapter), ("v", &verse)])
+            "{unit} {} · {}",
+            t(keys::check::REF, &[("c", &chapter), ("v", &verse)]),
+            view.title
         ),
     );
 

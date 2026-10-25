@@ -105,7 +105,20 @@ pub fn SyncResult(
         view! { <span data-testid="sync-received-from" style=note_style()>{names}</span> }
     });
     let notes = toast.notes().into_iter().map(note).collect_view();
-    let replaced = toast.replaced().into_iter().map(note).collect_view();
+    // tC4's list of replaced alignments (#791), one item per record, right after "Changes
+    // from"; it scrolls so the toast's line and buttons stay on screen.
+    let replaced = toast.replaced();
+    let replaced = (!replaced.is_empty()).then(|| {
+        let items = replaced
+            .into_iter()
+            .map(|part| view! { <li data-testid=part.test_id style=note_style()>{part.text}</li> })
+            .collect_view();
+        view! {
+            <ul data-testid="sync-replaced-list" style="margin: 0; padding-inline-start: 18px; max-height: 30vh; overflow-y: auto;">
+                {items}
+            </ul>
+        }
+    });
     let review = toast
         .review()
         .then(|| link("sync-review", t(keys::sync_result::REVIEW, &[]), on_review));
@@ -149,8 +162,8 @@ pub fn SyncResult(
             <div style=column.to_style()>
                 {line}
                 {from}
-                {notes}
                 {replaced}
+                {notes}
             </div>
             {review}
             {download}

@@ -194,11 +194,15 @@ fn replaced(
             let Some(whose) = labels.get(&loser) else {
                 continue;
             };
-            // A setting's two records of one direction say it once.
+            // One row per record, as tC4 lists each replaced alignment (#791), so the person can
+            // find each one; a direction's two records say it once.
             match rows.iter_mut().find(|(device, row)| {
-                *device == (winner_device, loser) && row.kind == kind && row.was == was
+                *device == (winner_device, loser)
+                    && row.kind == kind
+                    && row.was.is_some()
+                    && row.was == was
             }) {
-                Some((_, row)) => row.count += 1,
+                Some(_) => {}
                 None => rows.push((
                     (winner_device, loser),
                     tc_api::jobs::ReplacedView {

@@ -228,3 +228,7 @@ C7b	The book restore race is on the Text tab but its card offers no choice there
 C7b	A path-case clash gives no Received row and no count	evidence/2026-10-24/C7b-lens-parity.md
 HIST-1	The aligner's History token is the last view's: after an autosave the open History misses the newest version until the next edit (a Restore reads the current token, so it is not affected)	evidence/2026-10-25/HIST-1-lens-loss.md
 HIST-1	The last sync result behind the Home card's link lives in memory: it is gone after the app quits	shell lane, 2026-10-25
+HIST-1	An aligner Restore ignores a rail click or a tool close made while it runs and opens the restored verse again (an edit on the other verse fails visibly as a stale session)	evidence/2026-10-25/HIST-1-lens-races.md
+HIST-1	A mark clicked while a check's Restore waits on the save gate is written first, and the Restore then lands over it (the mark stays in History)	evidence/2026-10-25/HIST-1-lens-races.md
+HIST-1	A Restore whose reply was lost after it was saved says it was not restored; the read that follows shows it restored	evidence/2026-10-25/HIST-1-lens-races.md
+HIST-1	History rows draw their labels (Selected:, Comment:, Aligned:) in the scripture font	evidence/2026-10-25/HIST-1-lens-parity.md

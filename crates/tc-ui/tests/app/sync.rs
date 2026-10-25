@@ -402,10 +402,10 @@ fn the_received_sheet_names_each_replaced_version() {
             ("sync-replaced", 1, "Titus 1:1: juan's alignment replaced yours. Your version is in History.".to_owned()),
             ("sync-replaced", 3, "Titus 1:2 and 2 more: juan's alignments replaced yours. Your version is in History.".to_owned()),
             ("sync-replaced", 1, "Titus 1:4 · Translation Notes: juan's check replaced Teammate 2's. The older version is in History.".to_owned()),
-            ("sync-replaced", 1, "juan's project settings replaced yours. Settings can set it back.".to_owned()),
-            ("sync-replaced", 1, "juan's text font replaced yours (was Noto Sans). Settings can set it back.".to_owned()),
-            ("sync-replaced", 1, "juan's text direction replaced yours (was Right to left). Settings can set it back.".to_owned()),
-            ("sync-replaced", 1, "juan's resource choices replaced yours (was en_tn v90, en_ta v90). Settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's project settings replaced yours. Project settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's text font replaced yours (was Noto Sans). Project settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's text direction replaced yours (was Right to left). Project settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's resource choices replaced yours (was en_tn v90, en_ta v90). Project settings can set it back.".to_owned()),
             ("sync-replaced", 1, "Jonah: juan removed this book.".to_owned()),
         ]
     );

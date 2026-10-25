@@ -66,7 +66,7 @@ pub fn record_history(h: RecordHistory) -> AnyView {
             <div data-testid=test_id style="display: flex; flex-direction: column; gap: 8px; margin: 14px 0;">
                 <Button variant=ButtonVariant::Ghost size=Size::Sm on_click=toggle
                     style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }
-                    attrs=Attrs::new().with("data-testid", "history-toggle")>
+                    attrs=Attrs::new().with("data-testid", "history-toggle").with("aria-expanded", open.get().to_string())>
                     {label}
                 </Button>
                 {move || failed.get().then(|| view! {
