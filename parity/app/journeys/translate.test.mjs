@@ -203,6 +203,9 @@ browserTest('a_held_leave_keeps_a_failed_verse_text_on_the_page', async () => {
     await indicator(page).getByRole('button', { name: 'Retry' }).click();
     await until('retry saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     assert.equal((await verse(env, 3)).words.value, wanted);
+  });
+});
+
 // REF1b, tC4 #810 (j02's poetry cases): the verse card shows a poem verse's inner lines with one
 // tab per level, and what is typed at a level is saved as that level's marker.
 browserTest('poem_lines_show_as_tabs_and_save_as_their_markers', async () => {
