@@ -42,6 +42,7 @@ use tc_api::test::{
     HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, MAX_ECHO, Quiet,
     QuietView, Release, Reset, StoredDraft, StoredText, TokenBase,
 };
+use tc_api::test::{InvalidProject, Validate, ValidateView};
 use tc_api::write::{Ack, ConflictBrief, SavedValue, Stored, TokenUpdate};
 use tc_api::{ALL, ApiError, NotSaved, Shown, ShownToken};
 use tokio::sync::Notify;
@@ -698,6 +699,108 @@ impl Handle<Quiet> for App {
             || hooks.holds.holding() > 0;
         Ok(QuietView { busy })
     }
+}
+
+impl Handle<Validate> for App {
+    /// Every folder in the projects folder as a Scripture Burrito (P5, INV-VALID-BURRITO),
+    /// once no open, leave checkpoint, close or write runs and each open store has written all
+    /// it was asked to.
+    async fn handle(&self, _req: Validate) -> Result<ValidateView, ApiError> {
+        self.hooks()?;
+        self.settle_for_validate().await?;
+        let root = self.projects_root().path.clone();
+        let first = validate_projects(&root).map_err(|e| self.validate_failed(&root, &e))?;
+        if first.invalid.is_empty() {
+            return Ok(first);
+        }
+        // A write that began after the wait may be between an ingredient and its listing:
+        // only what is still wrong once the app is quiet again counts.
+        self.settle_for_validate().await?;
+        validate_projects(&root).map_err(|e| self.validate_failed(&root, &e))
+    }
+}
+
+impl App {
+    /// Waits until no session is busy and every open project's store is idle; a wait that
+    /// lasts a minute is a hang, not slowness, and says which projects were open.
+    async fn settle_for_validate(&self) -> Result<(), ApiError> {
+        let sessions = self.sessions();
+        let settle = async {
+            loop {
+                for (folder, session) in sessions.all_projects() {
+                    sessions.settled(&folder).await;
+                    if let Some(session) = session {
+                        let handle = session.handle().clone();
+                        // `wait_idle` blocks until the store's actor and writer are done.
+                        let _ = tokio::task::spawn_blocking(move || handle.wait_idle()).await;
+                    }
+                }
+                if !sessions.busy() {
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        };
+        if tokio::time::timeout(std::time::Duration::from_secs(60), settle)
+            .await
+            .is_err()
+        {
+            let open: Vec<String> = sessions
+                .all_projects()
+                .into_iter()
+                .map(|(folder, _)| folder.as_str().to_owned())
+                .collect();
+            return Err(self.internal(
+                "hung: test/validate waited a minute for the projects to settle",
+                crate::reports::facts(json!({ "projects": open })),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_failed(&self, root: &Path, error: &std::io::Error) -> ApiError {
+        self.internal(
+            "test/validate could not read the projects folder",
+            crate::reports::facts(
+                json!({ "folder": root.display().to_string(), "reason": error.to_string() }),
+            ),
+        )
+    }
+}
+
+/// Each folder of `root` checked as a Scripture Burrito. Dot folders are the store's staging
+/// and are not projects.
+fn validate_projects(root: &Path) -> std::io::Result<ValidateView> {
+    let mut folders: Vec<(String, PathBuf)> = Vec::new();
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str()
+            && !name.starts_with('.')
+        {
+            folders.push((name.to_owned(), entry.path()));
+        }
+    }
+    folders.sort();
+    let invalid = folders
+        .iter()
+        .filter_map(|(folder, path)| {
+            let problems: Vec<String> = tc_burrito::validate_dir(path)
+                .into_iter()
+                .map(|p| format!("{p:?}"))
+                .collect();
+            (!problems.is_empty()).then(|| InvalidProject {
+                folder: folder.clone(),
+                problems,
+            })
+        })
+        .collect();
+    Ok(ValidateView {
+        checked: u32::try_from(folders.len()).unwrap_or(u32::MAX),
+        invalid,
+    })
 }
 
 impl Handle<Echo> for App {

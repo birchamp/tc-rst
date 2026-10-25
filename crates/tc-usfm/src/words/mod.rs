@@ -1,7 +1,9 @@
 //! Word tokens, split exactly as tC4 splits them.
 //!
 //! tC4 decides word identity (alignment, check selections, suggestions) with
-//! `string-punctuation-tokenizer` 2.0.0 on `xregexp` 4.4.1 (`src/data/align/tokenize.ts`).
+//! `string-punctuation-tokenizer` 2.0.0 on `xregexp` 4.4.1 (`src/data/align/tokenize.ts`). tC4 now
+//! pins 2.2.0 (MIT), whose output equals 2.0.0's on 248,773 verse lines (tC4 D111,
+//! `docs/evidence/tokenizer-2.2.0-equivalence-2026-10-21.md`), so this port follows 2.2.0's licence.
 //! This module reproduces that tokenizer, quirks included, because a word's identity is
 //! its text plus its occurrence number, and both must match what tC4 recorded:
 //!

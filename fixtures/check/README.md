@@ -46,10 +46,10 @@ node crates/tc-check/tools/gen-psalms-vectors.cjs /path/to/translationcore4
 The verses, quotes and slugs come from the tC4 fixtures in `../tc4/` and keep the licenses
 stated in `../README.md`: unfoldingWord content is CC BY-SA 4.0, © unfoldingWord. The ids
 and references in `psalms-vectors.json` come from the en_tn and en_twl v91 releases (CC BY-SA
-4.0, © unfoldingWord), and the file holds what tC4's code (GPL-2.0-or-later) computes from
+4.0, © unfoldingWord), and the file holds what tC4's code (MIT) computes from
 them, not the code. The tables in `reference-forms-vectors.json` were written for that file
 and are in the public domain; the file holds what tC4's code computes from them. The
 hand-written cases were written for this file and are in the public domain. The file holds
 only the libraries' output, no library code. The libraries are `bible-reference-range`
 (MIT), `word-aligner-lib` (MIT), `string-punctuation-tokenizer` (GPL-2.0) and `usfm-js`
-(ISC); the generator script is part of this repository (GPL-2.0-or-later).
+(ISC); the generator script is part of this repository (MIT).
