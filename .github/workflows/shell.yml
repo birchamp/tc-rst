@@ -11,7 +11,8 @@ on:
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' }}
+  # As in ci.yml: a superseded track run is cancelled; main and gate/* runs always finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
 env:
   ELECTRONITE: v37.1.0-graphite
 jobs:
@@ -84,6 +85,9 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+        working-directory: parity/tc4-baseline
+      # Playwright's own Chromium, which has no Graphite: the probe's proof that it can fail (G4).
+      - run: npx playwright install --with-deps chromium
         working-directory: parity/tc4-baseline
       - name: end to end
         timeout-minutes: 25

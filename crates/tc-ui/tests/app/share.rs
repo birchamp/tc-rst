@@ -21,13 +21,13 @@ fn od(repo: &str, name: &str) -> OpenForm {
     OpenForm {
         repo: repo.into(),
         name: name.into(),
-        ..OpenForm::default()
+        ..OpenForm::new(tc_api::ids::RequestId::from_bytes([1; 16]))
     }
 }
 
 #[test]
 fn the_name_follows_the_repository_name_until_the_person_types_one() {
-    let mut form = OpenForm::default();
+    let mut form = OpenForm::new(tc_api::ids::RequestId::from_bytes([1; 16]));
     form.type_repo(
         "https://git.door43.org/anna_k/titus-team-draft".into(),
         HOST,
@@ -43,7 +43,7 @@ fn the_name_follows_the_repository_name_until_the_person_types_one() {
 
 #[test]
 fn a_repository_name_with_a_dot_gives_a_valid_default_name() {
-    let mut form = OpenForm::default();
+    let mut form = OpenForm::new(tc_api::ids::RequestId::from_bytes([1; 16]));
     form.type_repo("anna_k/en_ult.v2".into(), HOST);
     assert_eq!(form.name, "en_ult-v2");
     // A repository box that does not parse leaves no name to follow.
@@ -75,7 +75,7 @@ fn open_project_runs_and_a_repository_on_another_server_cannot_be_opened() {
 #[test]
 fn while_the_open_runs_open_project_is_off() {
     let mut form = od("anna_k/titus-team-draft", "titus-team-draft");
-    form.busy = true;
+    form.submit.press();
     assert_eq!(form.ready(HOST, std::iter::empty()), None);
 }
 
@@ -87,12 +87,16 @@ fn a_name_in_use_is_an_inline_error_under_the_name_and_open_project_is_off() {
     assert_eq!(form.refusal(), None);
     // The same when the server refused the name.
     let mut form = od("anna_k/titus-team-draft", "titus-team-draft");
-    form.busy = true;
-    form.refused(Some("open-door43.name-exists"), String::new());
+    form.submit.press();
+    form.refused(
+        Some("open-door43.name-exists"),
+        String::new(),
+        tc_api::ids::RequestId::from_bytes([2; 16]),
+    );
     assert_eq!(form.error, Some(OpenProblem::NameInUse));
     assert_eq!(form.name_error(std::iter::empty()), Some(NameError::InUse));
     assert_eq!(form.refusal(), None);
-    assert!(!form.busy);
+    assert!(!form.busy());
     // A name that is no folder name.
     assert_eq!(
         od("a/b", "my project").name_error(std::iter::empty()),
@@ -104,10 +108,18 @@ fn a_name_in_use_is_an_inline_error_under_the_name_and_open_project_is_off() {
 #[test]
 fn a_change_takes_the_last_refusal_away() {
     let mut form = od("anna_k/titus-team-draft", "titus-team-draft");
-    form.refused(Some("open-door43.no-journal"), "no journal".into());
+    form.refused(
+        Some("open-door43.no-journal"),
+        "no journal".into(),
+        tc_api::ids::RequestId::from_bytes([2; 16]),
+    );
     form.type_repo("anna_k/titus-team-draft2".into(), HOST);
     assert_eq!(form.error, None);
-    form.refused(None, "Door43 cannot be reached".into());
+    form.refused(
+        None,
+        "Door43 cannot be reached".into(),
+        tc_api::ids::RequestId::from_bytes([2; 16]),
+    );
     form.type_name("other".into());
     assert_eq!(form.error, None);
 }
@@ -115,7 +127,11 @@ fn a_change_takes_the_last_refusal_away() {
 #[test]
 fn a_refusal_shows_its_code_and_each_code_its_own_sentence() {
     let mut form = od("anna_k/titus-team-draft", "titus-team-draft");
-    form.refused(Some("sync.incoming-invalid"), "1 journal file fails".into());
+    form.refused(
+        Some("sync.incoming-invalid"),
+        "1 journal file fails".into(),
+        tc_api::ids::RequestId::from_bytes([2; 16]),
+    );
     let refusal = form.refusal().unwrap();
     assert_eq!(refusal.code.as_deref(), Some("sync.incoming-invalid"));
     assert_eq!(refusal.reason, "1 journal file fails");

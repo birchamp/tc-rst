@@ -4,7 +4,7 @@
     {
       "id": "about-build",
       "ruling": "build",
-      "why": "The line names the program that runs: tC4 4.0.0-rc.1 (d310bf3) there, the rebuild's own version and build here.",
+      "why": "The line names the program that runs: tC4 4.0.0-rc.2 (d25b787) there, the rebuild's own version and build here.",
       "target": {
         "testid": "about-version"
       },
@@ -12,8 +12,8 @@
       "rects": {
         "about": {
           "x": 482,
-          "y": 314,
-          "width": 124,
+          "y": 324,
+          "width": 127,
           "height": 17
         }
       },

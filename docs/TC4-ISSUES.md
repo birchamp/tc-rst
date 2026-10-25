@@ -38,15 +38,15 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 | Area | rebuild bug | unit todo | reference change | covered | owner question | not applicable | Rows |
 |---|---|---|---|---|---|---|---|
 | Align | 1 | 4 | 1 | 30 | 0 | 1 | 37 |
-| USFM, Translate and helps | 0 | 6 | 1 | 38 | 0 | 9 | 54 |
+| USFM, Translate and helps | 0 | 5 | 1 | 39 | 0 | 9 | 54 |
 | Check and resources | 0 | 2 | 2 | 37 | 1 | 22 | 64 |
 | Sync, storage and import | 0 | 19 | 3 | 28 | 2 | 13 | 65 |
-| Shell, startup, languages and help | 0 | 15 | 1 | 42 | 0 | 18 | 76 |
-| All area rows | 1 | 46 | 8 | 175 | 3 | 63 | 296 |
+| Shell, startup, languages and help | 0 | 13 | 1 | 44 | 0 | 18 | 76 |
+| All area rows | 1 | 43 | 8 | 178 | 3 | 63 | 296 |
 
-Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep, T, G1 and I. A row counts once
-per area table. All area rows: 296; 1 rebuild bug, 46 unit todo, 8 reference
-change, 175 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
+Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep, T, G1, I, REF1 and G4. A row counts once
+per area table. All area rows: 296; 1 rebuild bug, 43 unit todo, 8 reference
+change, 178 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
 added 24 area rows (271 before) and changed 31, and its commit range holds 59 items
 (`TC4-DELTA-2026-10-23.md`; 25 covered, 7 unit todo, 8 reference change, 19 not applicable).
 Earlier: the 2026-10-19 range added 22 items (`TC4-DELTA-2026-10-19.md` §2). §1 lists the
@@ -233,7 +233,7 @@ the rebuild fixed it or does as tC4 does:
 | #650 | An Arabic gateway package end to end | covered | B3 | journey `arabic_helps_panes_are_rtl_in_an_english_interface` | Done by B3: each helps slot carries its gateway's direction (`rung_dir`), and the cards, questions, simplified text and article read in it. |
 | #29 | Right-to-left and complex scripts end to end | unit todo | G2 (B4a's case, B5b and B6's case done) | J10 `rtl_project_drafts_checks_and_aligns`; B4a `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`; B6 `a_right_to_left_project_aligns_with_its_bank_right_to_left` | Each journey adds the Arabic case; G2 captures the `ar` screens. B4a: Arabic typed through an IME composition into the verse card while a teammate's change arrives keeps every keystroke and saves as a second version. B6: a project created right to left with Titus added from an Arabic file opens Titus 1:1 with its bank right to left and the Greek cards left to right, a repeated Arabic word numbered in verse order, and a placement saved to the store; the Arabic interface's Align screens are captured (`ar-align-workspace-row`, `ar-align-workspace-620`). |
 | #614 | Four English literals in design-system props | covered | A5 (C6, B4b and B5b done) | port of tC4's ds-labels a–d; `ds_labels_d_a_verse_numbers_name_follows_the_app_language`; `academy_drawer_close_label_is_in_the_shown_language` | C6 passes catalog strings to Add a book; B4b passes `draft.moveVerse` to each `VerseMarker`; B5b passes the Check drawer eyebrow, title and close label from the catalog. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` (pending: G4) | Use logical properties where tC4's physical ones break right to left, and record it. |
+| #29 | Right-to-left and complex scripts end to end | covered | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` | Use logical properties where tC4's physical ones break right to left, and record it. |
 | #614 | Four English literals in design-system props | covered | B4b, C6, A5 (B5b done) | `ds_labels_d_a_verse_numbers_name_follows_the_app_language`; `academy_drawer_close_label_is_in_the_shown_language` | As in §3. |
 | #702 | Text zoom sliders | not applicable | — | — | tC4 4.1.0. |
 | #719 | Add source Bibles to a project | not applicable | later B9a | — | tC4 4.1.0. |
@@ -400,7 +400,7 @@ the rebuild fixed it or does as tC4 does:
 | #686 | Bundle Noto Sans Arabic | covered | tc-ui; A5 | port tC4 app-language case j, with a check that the font file answers 200 | None in tc-ui. |
 | #657 | Mirror the interface for a right-to-left language | covered | A5, B3, C6 (B4a's half done) | tC4 app-language cases h and i; B4a `app_language_i_scripture_follows_the_project_under_an_arabic_interface` | Window-control room stays on the physical side. B4a: under Arabic the page reads right to left and a left-to-right project's source, translation and verse card read left to right; a right-to-left project under English needs C6's create. |
 | #642 | Remove the Linux native title bar | covered | G1 | `linux_window_keeps_native_frame` | Match 4.0. |
-| #613 | Bundle a Devanagari interface font | unit todo | G4 | `hindi_label_renders_in_the_bundled_face_offline` | No Devanagari face is vendored yet (G1 bundles none; moved to G4, the complex-script probe, in batch 2b). Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
+| #613 | Bundle a Devanagari interface font | unit todo | G2 | `hindi_label_renders_in_the_bundled_face_offline` | No Devanagari face is vendored yet (neither G1 nor G4 bundles one; it waits with G2, whose P7 review covers how each script looks). Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
 | #606 | Third-party licenses in About | unit todo | G3 (A5 if tC4 ships it) | release check: every crate in `Cargo.lock` has a notice (pending: G3) | Generate notices from `Cargo.lock`, fonts, vendored tC4 assets, Electronite and resources. Include the crates' own `NOTICE` files: `crates/tc-align/NOTICE`, and `crates/tc-door43/NOTICE` (proxy-watch's MIT notice, Windows builds). |
 | #569 | Keyboard shortcuts for Understand, Translate and Check | unit todo | A5; FIX-R reconciles | the Switcher key port | Match 4.0 (no shortcuts). Port tC4's if it adds them. |
 | #525 | Choose the app language automatically | covered | tc-app | `hello_answers_real_state` | C1a adds a relaunch test that the saved language survives. |
@@ -408,7 +408,7 @@ the rebuild fixed it or does as tC4 does:
 | #278 | Show the build in the app | unit todo | G3 (A5 and G1 done: G1 passes the build to both builds) | `about_commit_matches_the_release_record` (pending: G3) | G1 sets `TC4_BUILD_COMMIT` for server and wasm. |
 | #167 | Which interface languages | covered | tc-ui | `the_registry_names_the_ten_decided_locales_each_with_a_catalog` | None. |
 | #37 | Unused catalog keys | not applicable | tc-ui | — | Optional: check that each rebuild key is used. |
-| #29 | Right-to-left and complex scripts end to end | unit todo | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` (pending: G4) | Use logical properties where tC4's physical ones break right to left, and record it. |
+| #29 | Right-to-left and complex scripts end to end | covered | B6, G4 (B4a's IME case and B5b done; G1's shell runs the probe) | Arabic IME Playwright case (B4a: `refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_ime`); Graphite probe; `graphite_shapes_awami_nastaliq_in_the_shell` and `rtl_project_drafts_checks_and_aligns` | Use logical properties where tC4's physical ones break right to left, and record it. |
 | #701 | Urdu (Devanagari) direction | covered | tc-resources | `ur_deva_helps_read_left_to_right_and_are_named_in_devanagari` | See §1 row 12. |
 | #548 | Dropdown follow-ups | covered | tc-ui | `a_book_matches_by_name_or_code_prefix`; gallery `select-search` | None. |
 | #552 | Move the dropdown onto a library | covered | tc-ui | ds-gallery case Select/disabled-while-open in `parity/ds-gallery/diff-report.json` | See §1 row 13. |
@@ -462,7 +462,7 @@ the rebuild fixed it or does as tC4 does:
 | #58 | Pilot program | not applicable | — | — | Process. |
 | #832 | Home badge keeps left to right after Settings says right to left; empty language name | covered | tc-app; FIX-R step 1 | `a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart`; `an_imported_project_shows_its_metadata_language_name_in_settings` | See §1 row 20; fixed by FIX-R step 1 (declared differences #832.1, #832.2). |
 | #833 | rc.2 polish: offline update error, Save dialog title, import codes, right-click, source text version | unit todo | .1 FIX-R step 2; .2 G1, D2; .3 F1; .4 G1; .5 FIX-R step 5 | .1 `an_offline_update_check_shows_one_plain_sentence`; .2 export_save_dialog_has_a_readable_title, .3 an_import_refusal_shows_a_sentence_not_a_code, .4 a_text_field_right_click_offers_cut_copy_paste (to create); .5 none needed | .1 is §1 row 21, fixed by FIX-R step 2. .5 cannot occur: Get source texts lists no version, only "n installed" (FIX-R step 5). .2 to .4 are unit todos. |
-| #838 | About says "License: MIT" (D111) | unit todo | REF1 | `parity/app/journeys/about.test.mjs` (asserts MIT after REF1) | The rebuild is MIT since LIC-1 (owner rulings of 2026-10-23); About's line and dialog follow with REF1's re-vendor from tC4 release/4.0. |
+| #838 | About says "License: MIT" (D111) | covered | REF1 | `parity/app/journeys/about.test.mjs` (case i reads the vendored MIT licence file) | The rebuild is MIT since LIC-1; REF1 re-vendored About's line and dialog from tC4 release/4.0 d25b7871. |
 | #839 | The single-instance guard is only in the packaged app | not applicable | G1 | `new_tc4_waits_for_the_old_one_then_names_the_holder` | tC4 rig machinery; the rebuild's guard is the app-data lock. |
 
 ## 7. Not triaged yet

@@ -1,3 +1,4 @@
 {
-  "openDoor43.whereAny": "Проєкт відкривається з {host}."
+  "openDoor43.whereAny": "Проєкт відкривається з {host}.",
+  "check.sort.byCategory": "За категорією"
 }

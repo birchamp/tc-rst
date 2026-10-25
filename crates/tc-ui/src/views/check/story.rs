@@ -9,16 +9,7 @@ use crate::i18n::{keys, t};
 
 const SCRIPTURE: &str = "var(--font-scripture)";
 
-/// A pane's label row (tC4 `paneLabelRow`).
-fn pane_row() -> crate::css::Css {
-    crate::css! {
-        "padding": "16px 20px",
-        "border-bottom": "var(--stroke-hair) solid var(--border-hair)",
-        "background": "var(--surface-app)",
-    }
-}
-
-/// The compare card's gateway row (tC4 `StoryPane`).
+/// The compare card's gateway story card (tC4 `StoryPane`, `sourceCardStyle` since #762).
 pub(super) fn story_pane(pane: &StoryPane) -> AnyView {
     let body = match pane {
         StoryPane::Text { tokens, lit } => {
@@ -30,6 +21,7 @@ pub(super) fn story_pane(pane: &StoryPane) -> AnyView {
                 "color": "var(--text-scripture)",
                 "white-space": "pre-wrap",
                 "margin": "8px 0 0",
+                "max-width": "80ch",
             };
             let mark = crate::css! {
                 "background": "var(--tc-highlight-soft)",
@@ -66,7 +58,7 @@ pub(super) fn story_pane(pane: &StoryPane) -> AnyView {
         }
     };
     view! {
-        <div data-testid="story-pane" style=pane_row().to_style()>
+        <div data-testid="story-pane" style=super::detail::source_card().to_style()>
             <Overline tone=crate::ds::OverlineTone::Muted>{t(keys::check::GATEWAY_STORY_LABEL, &[])}</Overline>
             {body}
         </div>

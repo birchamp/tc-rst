@@ -7,18 +7,20 @@ fixtures on disk. A Playwright script drives the real tC4 client against the moc
 PNG and one DOM snapshot per screen. The screens, the steps that reach them and the way each is
 photographed live in `parity/app`, which the Rust app's capture shares (see "The harness").
 
-- tC4 source: commit **`d310bf304cfee784f4ca45dee474a3faf0d5616e`** (2026-10-16, `main`,
-  `package.json` version `4.0.0-rc.1`, clean tree), built from a separate clone of
-  `/home/user/unfoldingword/translationcore4` (see "Capture another tC4 commit").
-- Reference version: tC4 4.0 has no tag yet. Until it has one, this commit is the reference
-  (`docs/PLAN.md`, "The reference version"). When the v4.0.0 tag exists on `release/4.0`,
-  capture again at the tag and record it here.
-- The first baseline was captured at `d494a9d6ba9f4cdcc09faff9038c93159106045b` (2026-10-14).
-  "Changes since d494a9d" lists the screens that changed. The old images of those screens are
-  in `history/d494a9d/`.
-- Help pages: tc-website `cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7`, the commit that tC4 pins in
-  `scripts/fetch-help.mjs`. The pin is the same at both commits.
-- Output: 62 screenshots at device scale 1, in `screens/`, 8,058,301 bytes (7.7 MiB) in total.
+- tC4 source: commit **`d25b7871904228a342c0d80280136d8636833653`** (2026-10-22, `release/4.0`,
+  `package.json` version `4.0.0-rc.2`, clean tree), built from a separate clone,
+  `~/unfoldingword/tc4-rc2` (see "Capture another tC4 commit").
+- Reference version: the owner chose tC4 4.0 rc.2 (H7, 2026-10-24). This commit is the tag
+  `v4.0.0-rc.2` plus the fixes picked onto `release/4.0` after it (`docs/PLAN.md`, "The
+  reference version"). When the v4.0.0 tag exists on `release/4.0`, capture again at the tag and
+  record it here.
+- The first baseline was captured at `d494a9d6ba9f4cdcc09faff9038c93159106045b` (2026-10-14),
+  the second at `d310bf304cfee784f4ca45dee474a3faf0d5616e` (2026-10-16). "Changes since d494a9d"
+  and "Changes since d310bf3" list the screens that changed; the old images are in
+  `history/d494a9d/` and `history/d310bf3/`.
+- Help pages: tc-website `dbb7cd03c657637ec97ee4c0f00ed7bae44698d9`, the commit that tC4 pins in
+  `scripts/fetch-help.mjs` at d25b7871.
+- Output: 62 screenshots at device scale 1, in `screens/`, 8,108,785 bytes (7.7 MiB) in total.
   Each is 1280x800, except the six screens whose name ends in `-620`, which are 620x800. 49 are
   complete and 13 are incomplete. `manifest.json` lists each screenshot with the steps that
   reach it and its sha256. The 42 screens of the first baseline were captured again; 20 screens
@@ -29,9 +31,11 @@ photographed live in `parity/app`, which the Rust app's capture shares (see "The
   on the owner's Linux PC, run as Playwright's Ubuntu 24.04 build
   (`PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`,
   `docs/evidence/linux-machine-2026-10-18.md`).
-- Machine: the screenshots were captured on the owner's Linux PC on 2026-10-18 ("Recaptured on
-  the Linux PC"). `manifest.json` `machine` records the platform, the Chromium version and the
-  sha256 of the system's font list (`fc-list`, 535 lines, `a15fd0433b66…`), because fallback
+- Machine: the screenshots were captured on the owner's Linux PC, first on 2026-10-18
+  ("Recaptured on the Linux PC") and again at d25b7871 on 2026-10-24. `manifest.json` `machine`
+  records the platform, the Chromium version and the sha256 of the system's font list
+  (`fc-list`, 543 lines, `4bcf744c9986…`; it was 535 lines, `a15fd0433b66…`, on 2026-10-18;
+  the 40 screens tC4 did not change are byte-identical across the two lists), because fallback
   glyphs come from the machine. The Rust capture (`parity/app`) compares pixels only with a
   capture whose machine has the same fingerprint; the DOM and what the DOM shows compare on any
   machine.
@@ -478,6 +482,42 @@ The other rulings change no captured screen. For example, the Align screens show
 which has a saved alignment, so tC4 already shows its word bank in verse order there (Q15).
 On `sync-ok-teammates` and `sync-ok-restored` the one conflict is a verse conflict, so the
 rebuild shows Review there too (Q5).
+
+## Changes since d310bf3
+
+22 of the 62 screens changed from `d310bf3` to `d25b7871`. The other 40 are byte-identical. The
+mock, its data and the capture steps are the same for both commits, so tC4 made every change.
+"Pixels" counts the pixels that differ. `history/d310bf3/` has the old image of each screen and
+the old `manifest.json`. Every DOM snapshot changed by one style: a top-bar flex container is now
+`position: relative`; it moves no pixel.
+
+| Screen | Pixels | What changed | tC4 change |
+|---|---:|---|---|
+| `check-tn-session` | 421,279 | The sort reads "By figure". The note and the texts became cards: the source texts side by side, "Your translation" in its own card, and the marking row ("← Previous", Mark valid, Invalid, To do, "Next →") on screen. The note has "Show more". | #769, compare card |
+| `en-check-tn-session` | 388,095 | The same as `check-tn-session`. | #769, compare card |
+| `en-check-tn-session-620` | 106,276 | The same, at 620 px. | compare card |
+| `en-check-tn-session-row` | 509,721 | The same, scrolled to the marking row. | compare card |
+| `ar-check-tn-session-620` | 95,010 | The same, in Arabic at 620 px. | compare card |
+| `ar-check-tn-session-row` | 478,059 | The same, in Arabic, at the marking row. | compare card |
+| `en-check-ta-drawer` | 212,817 | The same as `en-check-tn-session`, behind the drawer. | compare card |
+| `en-obs-check-tn-session` | 299,111 | The same card layout for an OBS story. | compare card |
+| `en-check-tw-session` | 331,377 | The tW check shows the same card layout. | compare card |
+| `en-check-tw-session-620` | 123,114 | The same, at 620 px. | compare card |
+| `ar-check-tw-session` | 340,504 | The same, in Arabic. | compare card |
+| `ar-check-tw-session-620` | 111,273 | The same, in Arabic at 620 px. | compare card |
+| `en-check-tw-article` | 185,576 | The same, behind the article drawer. | compare card |
+| `align-workspace` | 45,720 | Align shows a card for every source word (Titus 1:1 now shows all 17 Greek words), so the cards wrap onto more rows. | #816 |
+| `align-original` | 24,682 | The same as `align-workspace`. | #816 |
+| `align-workspace-620` | 40,058 | The same, at 620 px. | #816 |
+| `align-workspace-row` | 284,817 | The same, scrolled down. | #816 |
+| `ar-align-workspace-620` | 39,874 | The same, in Arabic at 620 px. | #816 |
+| `ar-align-workspace-row` | 272,950 | The same, in Arabic, scrolled down. | #816 |
+| `about` | 106,627 | Version 4.0.0-rc.2 (d25b787). The copyright line has no e-mail address. "License: MIT". | #838 |
+| `help` | 215,224 | The help home has no pre-release callout and no build number; "What's new" became "Release notes". | #763 (tc-website dbb7cd0) |
+| `feedback` | 334 | The build commit in the attachment line reads `d25b787`. This is not a design change. | none |
+
+"Compare card" is tC4's compare card of 9ad4d5c (`docs/TC4-DELTA-2026-10-19.md` §3.12.1 item 1),
+which B5b and B7 build. "By figure" with its folding groups is REF1c.
 
 ## Changes since d494a9d
 

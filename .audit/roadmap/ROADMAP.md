@@ -98,7 +98,9 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | CHK-4b | tc-app's tests wait for events, never for a short clock | checks | CHK-4 | 0.5 d |
 | UI-1 | Typed jobs and one job follower | app | INT-4, C7a | 1 d |
 | UI-2 | Ports for sync, share, exchange and import | app | UI-1 | 1-2 d |
-| UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced | app | UI-1 | 2 d |
+| UI-3 | One leave path, one network-call helper, one refusal text, Submit, dialogs that own their forms, WriteCap enforced (split into UI-3a and UI-3b) | app | UI-1 | 2 d |
+| UI-3a | One leave path, one network-call helper, one refusal text, Submit | app | UI-1 | 1 d |
+| UI-3b | Dialogs that own their forms, WriteCap enforced | app | UI-3a | 1 d |
 | DOM-1 | One network gate: all network code behind `tc-door43` | domain | S2 | 1-2 d |
 | DOM-2 | One reader per job and one set of identifiers | domain | S2 | 2-3 d |
 | DOM-3 | Capability tokens for project writes and the network | domain | S3, DOM-1 | 2-3 d |
@@ -129,15 +131,17 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 |---|---|---|---|
 | C7a | Conflict choices: text and passage | B11 (done) | 3-4 sessions |
 | C7b | Conflict choices: every other kind | C7a, S2, owner H5 (Q-9) | 4.5-6.5 sessions |
-| D1 | Checkpoints and outside edits | S2, UI-3 | 5-6 sessions plus 1-2 of integration |
+| D1 | Checkpoints and outside edits | S2, UI-3a | 5-6 sessions plus 1-2 of integration |
 | D2 | Exports | S2, UI-1 | 4 sessions |
-| E1a | Sync | X, C7a, D1, UI-2, UI-3 | 5-6 sessions |
+| E1a | Sync | X, C7a, D1, UI-2, UI-3a | 5-6 sessions |
 | E1b | Share and open from Door43 | E1a | 3-4 sessions |
-| E2 | USB exchange | X, D2, C7b, UI-2, UI-3 | 4-4.5 sessions |
-| F1 | Import | I, UI-2, UI-3 | 5-7 sessions |
+| E2 | USB exchange | X, D2, C7b, UI-2, UI-3a | 4-4.5 sessions |
+| F1 | Import | I, UI-2, UI-3a | 5-7 sessions |
 | AQ1 | Aquifer helps in the app (P6) | INT-4, UI-1, owner H6 (Q34) | 3-5 sessions |
 | REF1 | Move the tC4 reference and port its changes | SWEEP, owner H7 | 3-5 sessions |
 | OLH-1 | Highlight a note's words in the original-language pane (#840, built ahead of tC4) | INT-4 | 2-3 sessions |
+| REF1b | Poem lines as tabs in the verse editor (tC4 #810) | REF1 | 2-3 sessions |
+| REF1c | Notes by figure, with groups that fold (tC4 #769) | REF1 | 2-3 sessions |
 
 **Exit:** every live tC4 journey (P1) and the team journeys (P2) run in CI; P6 is shown.
 
@@ -162,7 +166,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
-| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X | 1 d |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path
