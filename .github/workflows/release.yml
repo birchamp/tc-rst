@@ -75,6 +75,8 @@ jobs:
         with:
           name: release-common
           path: release
+          # A pinned archive's dotfiles are installed files too; the default drops them.
+          include-hidden-files: true
           retention-days: 7
 
   build:
