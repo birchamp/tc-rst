@@ -281,6 +281,9 @@ impl Handle<tc_api::test::Script> for App {
                 self.script_open_door43(Err(ApiError::Refused(tc_api::Refusal::Sync(failure))))
             }
             Scripted::Sync { project, outcome } => self.script_sync(project, outcome),
+            Scripted::CheckpointFails { project } => {
+                self.inner.sessions.script_checkpoint_failure(project);
+            }
             next @ (Scripted::Updates(_) | Scripted::Plan(_)) => {
                 self.inner.scripted_resources.script(next);
             }

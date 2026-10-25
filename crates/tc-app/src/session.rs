@@ -303,6 +303,9 @@ struct RegistryInner {
     switched: Mutex<BTreeMap<ProjectRef, WallMs>>,
     /// Woken whenever an open, a leave checkpoint or a close ends.
     changed: tokio::sync::Notify,
+    /// The folders whose next checkpoint fails as `test/script` said.
+    #[cfg(feature = "test-hooks")]
+    scripted_failures: Mutex<std::collections::BTreeSet<ProjectRef>>,
 }
 
 /// Every open project of this server run. Clones share the registry.
@@ -403,6 +406,8 @@ impl SessionRegistry {
                 checkpoints: Mutex::new(BTreeMap::new()),
                 switched: Mutex::new(BTreeMap::new()),
                 changed: tokio::sync::Notify::new(),
+                #[cfg(feature = "test-hooks")]
+                scripted_failures: Mutex::new(std::collections::BTreeSet::new()),
             }),
         }
     }
@@ -423,7 +428,10 @@ impl SessionRegistry {
         };
         let before = lock(&self.inner.checkpoints).insert(folder.clone(), CheckpointState::Running);
         let started = self.inner.clock.now();
-        let mut outcome = session.handle.checkpoint(reason).await;
+        let mut outcome = match self.scripted_failure(&folder) {
+            Some(failed) => failed,
+            None => session.handle.checkpoint(reason).await,
+        };
         // A read-only project (a second writer appeared) skips the checkpoint without looking:
         // an earlier failure's work may still be missing from the history, so it stays shown.
         if let (
@@ -452,6 +460,27 @@ impl SessionRegistry {
             event: SessionEvent::Checkpoint(outcome.clone()),
         });
         outcome
+    }
+
+    /// `test/script`: the next checkpoint of `folder` fails.
+    #[cfg(feature = "test-hooks")]
+    pub(crate) fn script_checkpoint_failure(&self, folder: ProjectRef) {
+        lock(&self.inner.scripted_failures).insert(folder);
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn scripted_failure(&self, folder: &ProjectRef) -> Option<CheckpointOutcome> {
+        lock(&self.inner.scripted_failures)
+            .remove(folder)
+            .then(|| CheckpointOutcome::Failed {
+                reason: "Failed to fetch".to_owned(),
+                code: None,
+            })
+    }
+
+    #[cfg(not(feature = "test-hooks"))]
+    fn scripted_failure(&self, _folder: &ProjectRef) -> Option<CheckpointOutcome> {
+        None
     }
 
     /// A mode switch (`session/leave`): the checkpoint runs when the policy says it is due.

@@ -143,7 +143,10 @@
         ]
       },
       {
-        "pending": "D1"
+        "file": "parity/app/journeys/j08-resume.test.mjs",
+        "tests": [
+          "commits happen at exactly the checkpoints: a mode switch and leaving the project commit pending work; a switch with nothing pending commits nothing"
+        ]
       }
     ],
     "J9a": {
@@ -427,7 +430,10 @@
         ]
       },
       {
-        "pending": "D1"
+        "file": "parity/app/journeys/j08-resume.test.mjs",
+        "tests": [
+          "commits happen at exactly the checkpoints: a mode switch and leaving the project commit pending work; a switch with nothing pending commits nothing"
+        ]
       }
     ],
     "j09-import.spec.ts": {

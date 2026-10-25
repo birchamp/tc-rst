@@ -183,6 +183,49 @@ async fn links_saved_when_quitting_within_2_s() {
     rig.assert_burrito();
 }
 
+/// Whether the project's last commit links πίστιν to "fe" in its alignments of Titus.
+fn committed_link(rig: &Rig) -> bool {
+    use tc_store::Vfs;
+    let dir = rig
+        .fs
+        .outside_dir(&Path::new(PROJECTS).join(SAMPLE))
+        .unwrap();
+    let repo = git2::Repository::open(dir).unwrap();
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+    let Ok(entry) = tree.get_path(Path::new("ingredients/checking/alignments/TIT.json")) else {
+        return false;
+    };
+    let blob = repo.find_blob(entry.id()).unwrap();
+    let text = std::str::from_utf8(blob.content()).unwrap();
+    text.split(r#""word":"πίστιν"}],"bottomWords":["#)
+        .nth(1)
+        .and_then(|bottom| bottom.split(']').next())
+        .is_some_and(|bottom| bottom.contains(r#""word":"fe""#))
+}
+
+/// INV-QUIT-SAVES-LINKS-THEN-CHECKPOINTS (D1, RT-4): a quit with the aligner's links still
+/// unsaved saves them before the leave checkpoint, so the commit Door43 receives holds them,
+/// and it is the leave checkpoint that commits them, whose failure the screens would show (the
+/// store's own commit at close tells no one).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_quit_commit_holds_the_aligner_links() {
+    let rig = Rig::new().await;
+    let session = rig.open().await;
+    let at = session.scope().clone();
+    let view = ready(&rig.t.app, &at, 1, 1).await;
+    assert!(!committed_link(&rig));
+    let placed = link(&rig, &at, &view).await;
+    assert_eq!(placed.save, AlignSave::Unsaved);
+    drop(session);
+    rig.t.app.quit().await;
+    assert!(committed_link(&rig), "the quit's commit holds the link");
+    assert_eq!(
+        rig.t.app.sessions().checkpoint_state(&folder(SAMPLE)),
+        tc_app::session::CheckpointState::Ended(tc_api::event::CheckpointOutcome::Committed),
+        "the leave checkpoint made the commit"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_crash_offers_the_aligners_links_with_both_displayed_tokens() {
     let mut rig = Rig::new().await;

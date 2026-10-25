@@ -373,6 +373,9 @@ pub enum Scripted {
     /// carry-over counts of another change. The server keeps no plan under it, so confirming it
     /// answers `PlanStale`, which is what tC4's gallery shows for a failed upgrade.
     Plan(Box<crate::resources::PlanView>),
+    /// The next checkpoint of `project` fails without running, with the reason tC4's gallery
+    /// capture of Home's banner shows (D1's `home-checkpoint-error`).
+    CheckpointFails { project: ProjectRef },
 }
 
 /// How a scripted sync ends: what Door43 held, as a person's sync would find it.
