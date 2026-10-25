@@ -213,8 +213,8 @@ impl Writer {
     }
 
     /// At an open that found no manifest: every copy in `.tc/external/` of a book file or
-    /// story that no entry names is listed again with no base, since its entry may have been
-    /// in the lost manifest. An open that has the manifest never calls this, so a copy whose
+    /// story that no entry names and that still brings something in is listed again with no
+    /// base, since its entry may have been in the lost manifest. An open that has the manifest never calls this, so a copy whose
     /// entry ended by *Import* or *Dismiss* stays unlisted.
     pub(crate) fn relist_unnamed_copies(&mut self) -> Result<(), StoreError> {
         let dir = self.folder.path(EXTERNAL);
@@ -248,6 +248,9 @@ impl Writer {
             {
                 continue;
             }
+            if !self.copy_brings_anything(&rel, &bytes) {
+                continue;
+            }
             self.manifest.kept.push(Kept {
                 path: rel,
                 copy,
@@ -260,6 +263,51 @@ impl Writer {
             self.manifest_changed = true;
         }
         Ok(())
+    }
+
+    /// Whether an *Import* of `bytes` with no base would change anything: a copy an earlier
+    /// *Import* took in (or whose every value History holds) brings nothing. The `reconciles`
+    /// header of an import's pending file would say so too, but a seal removes that file.
+    /// shortcut: a story copy is always listed again; it needs "Update a story" to be asked.
+    fn copy_brings_anything(&self, rel: &str, bytes: &[u8]) -> bool {
+        match DerivedFile::from_path(rel) {
+            Some(file @ DerivedFile::Usfm(book)) if self.fold.projects_file(&file) => {
+                let name = rel.rsplit('/').next().unwrap_or(rel);
+                self.fold
+                    .plan_update_book(book, bytes, name)
+                    .map_or(true, |plan| {
+                        !plan.changes.is_empty() || !plan.review.is_empty()
+                    })
+            }
+            _ => true,
+        }
+    }
+
+    /// Whether `.tc/external/` holds a copy of `rel` with the md5 `md5`.
+    fn has_copy_of(&self, rel: &str, md5: &str) -> Result<bool, StoreError> {
+        let dir = self.folder.path(EXTERNAL);
+        let entries = match self.vfs.read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) if is_not_found(&e) => return Ok(false),
+            Err(e) => return Err(StoreError::io("list", &dir, e)),
+        };
+        for entry in entries {
+            let Ok(name) = entry.name.into_string() else {
+                continue;
+            };
+            if entry.kind != EntryKind::File || source_of_copy(&name).as_deref() != Some(rel) {
+                continue;
+            }
+            let path = dir.join(&name);
+            let bytes = self
+                .vfs
+                .read(&path)
+                .map_err(|e| StoreError::io("read the kept copy", &path, e))?;
+            if Md5::of(&bytes).to_hex() == md5 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// The bases the live entries of `rel` name: their heads stay in the path's heads file.
@@ -324,6 +372,13 @@ impl Writer {
                 .rev()
                 .find(|k| k.path == rel)
                 .map_or(KeptBase::None, |k| k.base.clone()),
+            // These bytes were kept before (an earlier hold whose manifest was lost): HEAD may
+            // have moved since with the person's saves, so it is no base for them.
+            _ if base == ledger::Base::Head
+                && self.has_copy_of(rel, &Md5::of(bytes).to_hex())? =>
+            {
+                KeptBase::None
+            }
             _ => KeptBase::of(
                 &base,
                 self.git
@@ -473,7 +528,9 @@ impl Writer {
             .kept_entries()
             .into_iter()
             .find(|k| k.copy == copy)
-            .ok_or_else(|| StoreError::Other(format!("{copy} is not a kept copy")))?;
+            .ok_or_else(|| StoreError::NotKept {
+                copy: copy.to_owned(),
+            })?;
         let path = self.folder.path(&entry.copy);
         let bytes = self
             .vfs
@@ -551,10 +608,16 @@ impl Writer {
     ) {
         let result = result.and_then(|report| {
             self.begin_newest();
-            let entry = self.kept_entries().into_iter().find(|k| k.copy == copy);
-            if let Some(entry) = entry {
-                self.end_import(&entry, bytes)?;
-            }
+            // An earlier *Import* of the same copy ended its entry while this one waited
+            // for the actor: this one took nothing in, and the earlier one has the report.
+            let entry = self
+                .kept_entries()
+                .into_iter()
+                .find(|k| k.copy == copy)
+                .ok_or_else(|| StoreError::NotKept {
+                    copy: copy.to_owned(),
+                })?;
+            self.end_import(&entry, bytes)?;
             Ok(report)
         });
         reply.resolve(result);

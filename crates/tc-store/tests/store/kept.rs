@@ -346,6 +346,36 @@ fn import_of_a_header_changed_on_both_sides_is_a_conflict_with_both_texts() {
     handle.close().unwrap();
 }
 
+/// A second *Import* of the same copy (two windows, or a reload during an Import) is refused
+/// with `NotKept` once the first ended the entry, never answered "0 imported, 0 to review"
+/// while the first made a conflict.
+#[test]
+fn a_second_import_of_an_ended_copy_is_refused() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 2, "in the hope").unwrap();
+    let copy = handle.kept_copies()[0].copy.clone();
+    let first = handle.import_kept(&copy);
+    let second = handle.import_kept(&copy);
+    let first = first.wait().unwrap();
+    assert_eq!((first.imported, first.to_review), (0, 1), "{first:?}");
+    let second = second.wait();
+    assert!(
+        matches!(&second, Err(tc_store::StoreError::NotKept { copy: c }) if *c == copy),
+        "{second:?}"
+    );
+    handle.wait_idle();
+    let third = handle.import_kept(&copy).wait();
+    assert!(
+        matches!(third, Err(tc_store::StoreError::NotKept { .. })),
+        "{third:?}"
+    );
+    assert_eq!(conflicts(&handle), 1);
+    handle.close().unwrap();
+}
+
 /// INV-EVERY-KEPT-COPY-HAS-ITS-ENTRY: a second save of a held file is kept under its own entry
 /// with the same base; the question imports the newest, and the first stays listed.
 #[test]
@@ -560,10 +590,10 @@ fn a_kept_copy_is_listed_again_after_the_manifest_is_lost() {
     }
 }
 
-/// A file held against HEAD (`.tc/` knew nothing of it) is compared at *Import* with no
-/// base, not with the HEAD of the time of the Import: a verse the translator saved and
-/// committed after the hold keeps the translator's text (to review at most), never the file's
-/// older words with no question.
+/// A file held against HEAD (`.tc/` knew nothing of it) is compared at *Import* with the
+/// HEAD recorded when it was held, not with the HEAD of the time of the Import: a verse the
+/// translator saved and committed after the hold keeps the translator's text (to review at
+/// most), never the file's older words with no question.
 #[test]
 fn import_of_a_head_based_copy_never_replaces_newer_text() {
     let (rig, folder) = titus();
@@ -618,6 +648,91 @@ fn import_of_a_head_based_copy_never_replaces_newer_text() {
         report.to_review >= 1,
         "the file's 1:3 is to review: {report:?}"
     );
+    handle.close().unwrap();
+}
+
+/// The same bytes held again after a second loss of the manifest, once HEAD moved with the
+/// translator's saves: the new entry has no base (the copy was kept before, against an older
+/// HEAD), so its Import never replaces the newer text without a question.
+#[test]
+fn bytes_held_again_after_a_second_lost_manifest_have_no_base() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "which God promised").unwrap();
+    leave(&handle);
+    handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    handle.close().unwrap();
+    let written = rig.fs.peek(&usfm_path(&folder)).unwrap();
+    rig.fs.put(
+        &usfm_path(&folder),
+        &set_verse(&written, 1, 3, "which God promised long ago"),
+        None,
+    );
+    let manifest = folder.join(".tc/materialized.json");
+    rig.fs.delete(&manifest).unwrap();
+    let handle = open(&rig, &folder);
+    assert!(matches!(
+        handle.waiting_books()[0].kept.base,
+        KeptBase::Head(Some(_))
+    ));
+    save_verse(&handle, 1, 3, "which God, who never lies, promised").unwrap();
+    let moved = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(moved.commit.is_some(), "{moved:?}");
+    handle.close().unwrap();
+    rig.fs.advance(std::time::Duration::from_secs(5));
+    rig.fs.delete(&manifest).unwrap();
+
+    let handle = open(&rig, &folder);
+    let books = handle.waiting_books();
+    assert_eq!(books.len(), 1, "{books:?}");
+    assert_eq!(books[0].kept.base, KeptBase::None, "{books:?}");
+    let report = handle.import_kept(&books[0].kept.copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("which God, who never lies, promised"),
+        "{report:?}"
+    );
+    handle.close().unwrap();
+}
+
+/// After a lost manifest, a copy an earlier *Import* took in is not listed again; a copy
+/// never imported still is.
+#[test]
+fn an_imported_copy_is_not_listed_again_after_the_manifest_is_lost() {
+    let (rig, folder, written) = saved_and_closed();
+    let first = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &first, None);
+    let handle = open(&rig, &folder);
+    rig.fs.advance(std::time::Duration::from_secs(5));
+    let second = set_verse(&written, 1, 3, "which God promised");
+    rig.fs.put(&usfm_path(&folder), &second, None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    let kept = handle.kept_copies();
+    assert_eq!(kept.len(), 2, "{kept:?}");
+    handle.import_kept(&kept[1].copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(handle.kept_copies(), vec![kept[0].clone()]);
+    leave(&handle);
+    handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    handle.close().unwrap();
+    rig.fs
+        .delete(&folder.join(".tc/materialized.json"))
+        .unwrap();
+
+    let handle = open(&rig, &folder);
+    let listed: Vec<String> = handle.kept_copies().into_iter().map(|k| k.copy).collect();
+    assert_eq!(listed, vec![kept[0].copy.clone()]);
     handle.close().unwrap();
 }
 
