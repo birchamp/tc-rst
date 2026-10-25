@@ -118,19 +118,24 @@ browserTest('cc_the_page_setup_resets_the_sheets_and_keeps_every_word', async ()
   });
 });
 
-browserTest('cc_the_export_menu_lists_the_exports_and_runs_none_until_d2', async () => {
+// D2 turned the USFM items on; the Burrito zip stays off until E2 (j07-export runs each export).
+browserTest('cc_the_export_menu_lists_the_exports_and_keeps_the_burrito_zip_off', async () => {
   await withApp(async ({ page }) => {
     await openTitusPreview(page);
     const requests = recordRequests(page);
-    const mark = requests.mark();
     await page.getByTestId('export-menu-trigger').click();
     const items = page.getByRole('menuitem');
     await items.first().waitFor();
     assert.deepEqual(await items.allTextContents(), ['USFM, aligned', 'USFM, plain', 'Scripture Burrito (.zip)'], 'a browser has no PDF item');
-    for (const item of await items.all()) assert.equal(await item.isDisabled(), true);
-    await items.first().click({ force: true });
+    assert.deepEqual(
+      await Promise.all((await items.all()).map((item) => item.isDisabled())),
+      [false, false, true],
+      'the USFM items run; the Burrito zip waits for E2',
+    );
+    const mark = requests.mark();
+    await items.last().click({ force: true });
     await page.keyboard.press('Escape');
-    assert.deepEqual(requests.api(mark), [], 'no export runs');
+    assert.deepEqual(requests.api(mark), [], 'the Burrito zip runs no export');
   });
 });
 

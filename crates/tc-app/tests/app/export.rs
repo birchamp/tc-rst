@@ -724,6 +724,11 @@ async fn on_disk_exports() -> OnDiskExports {
         super::scenario::scenario("sample"),
     )
     .unwrap();
+    for name in [BIBLE, STORIES] {
+        crate::store_world::assert_valid_burrito_files(&super::store::files_on_disk(
+            &projects.join(name),
+        ));
+    }
     let t = super::store_scenario::app_over(dir.path(), Arc::new(store)).await;
     let downloads = give_downloads(&t.app);
     let at = open_on_screen(&t.app, BIBLE).await;
