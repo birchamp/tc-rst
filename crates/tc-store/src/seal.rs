@@ -86,6 +86,9 @@ pub(crate) struct SealRun {
     packs: Vec<EncodedPack>,
     written: Vec<Written>,
     set_aside: BTreeSet<ChangeId>,
+    /// Changes a pack of this session holds already (a seal that stopped after its pack was
+    /// in place): not packed again, and their pending files may go.
+    sealed_before: BTreeSet<ChangeId>,
     /// The changes a verified pack holds or that were set aside: a pending file whose changes
     /// are all in it may go.
     held: BTreeSet<ChangeId>,
@@ -156,8 +159,22 @@ impl Project {
         let rel = pack.path.to_string();
         let (dir, name) = self.folder.dir_and_name(&rel);
         atomic_create_dirs(&*self.vfs, &dir)?;
-        atomic_write(&*self.vfs, &dir, name, &pack.bytes, SyncDir::Now)
-            .map_err(|e| e.into_inner())?;
+        // A pack renamed into place whose folder flush failed is in the folder: it is
+        // registered, so `metadata.json` lists it (I7) and no later checkpoint takes it for
+        // a second writer's; but it may still go on a power cut, so the seal stops here and
+        // the pending files stay (K2: the open takes a pending file a valid pack holds).
+        let not_durable = match atomic_write(&*self.vfs, &dir, name, &pack.bytes, SyncDir::Now) {
+            Ok(()) => None,
+            Err(crate::atomic::WriteError::WrittenNotDurable(e)) => {
+                // One more try at the flush: a disk that answered once often answers again.
+                if self.vfs.sync_dir(&dir).is_ok() {
+                    None
+                } else {
+                    Some(e)
+                }
+            }
+            Err(crate::atomic::WriteError::NotWritten(e)) => return Err(e),
+        };
         let abs = self.folder.path(&rel);
         let back = self
             .vfs
@@ -200,13 +217,24 @@ impl Project {
                 valid: true,
                 sealer: Some(self.device),
                 replaces: replaces_copy,
-                ids: Vec::new(),
+                // The ids are kept only for a pack the seal stopped at, so the next seal
+                // packs none of its changes again.
+                ids: if not_durable.is_some() {
+                    ids.iter().copied().collect()
+                } else {
+                    Vec::new()
+                },
                 blob,
                 seen: None,
                 damaged: false,
             },
         );
         self.dirty.metadata = true;
+        if let Some(e) = not_durable {
+            return Err(StoreError::Other(format!(
+                "the pack {rel} was written, but its folder could not be flushed: {e}; the pending files are kept"
+            )));
+        }
         Ok(Written {
             rel,
             number,
@@ -453,7 +481,18 @@ impl Project {
 
     /// The pack of the lines read, and K2 for the lines no pack can hold.
     fn seal_build(&mut self, run: &mut SealRun) -> Result<(), StoreError> {
-        let lines = std::mem::take(&mut run.lines);
+        let mut lines = std::mem::take(&mut run.lines);
+        // A change a pack of this session already holds (one whose seal stopped after the
+        // pack was in place) is not packed again; its pending file goes once the pack holds
+        // every change of it.
+        run.sealed_before = self
+            .journal
+            .packs
+            .values()
+            .filter(|p| p.valid)
+            .flat_map(|p| p.ids.iter().copied())
+            .collect();
+        lines.retain(|l| !run.sealed_before.contains(&l.id()));
         let sealed = seal(&self.pack_spec(), &lines)
             .map_err(|e| StoreError::Other(format!("the seal could not build a pack: {e}")))?;
         if !sealed.set_aside.is_empty() {
@@ -476,7 +515,7 @@ impl Project {
         drop(lines);
         run.packs = sealed.packs;
         run.phase = if run.packs.is_empty() {
-            run.held = run.set_aside.clone();
+            run.held = run.set_aside.union(&run.sealed_before).copied().collect();
             SealPhase::Remove
         } else {
             SealPhase::Pack
@@ -509,6 +548,7 @@ impl Project {
                         .iter()
                         .flat_map(|w| w.ids.iter().copied())
                         .chain(run.set_aside.iter().copied())
+                        .chain(run.sealed_before.iter().copied())
                         .collect();
                     run.phase = SealPhase::Remove;
                 }
