@@ -21,6 +21,8 @@ pub struct RecordHistory {
     pub shown: Signal<Option<ShownToken>>,
     pub open: ArcRwSignal<bool>,
     pub busy: Signal<bool>,
+    /// The last Restore was not saved.
+    pub failed: Signal<bool>,
     /// "History of {ref}"'s place.
     pub reference: String,
     pub restore: Callback<ChangeRef>,
@@ -34,6 +36,7 @@ pub fn record_history(h: RecordHistory) -> AnyView {
         shown,
         open,
         busy,
+        failed,
         reference,
         restore,
     } = h;
@@ -66,6 +69,11 @@ pub fn record_history(h: RecordHistory) -> AnyView {
                     attrs=Attrs::new().with("data-testid", "history-toggle")>
                     {label}
                 </Button>
+                {move || failed.get().then(|| view! {
+                    <p data-testid="history-not-restored" role="alert" style="margin: 0; font-size: var(--fs-meta); color: var(--tc-invalid);">
+                        {t(keys::review::RESTORE_NOT_SAVED, &[])}
+                    </p>
+                })}
                 {list}
             </div>
         })

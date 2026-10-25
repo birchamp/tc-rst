@@ -533,6 +533,63 @@ impl Example for OpenDoor43 {
     }
 }
 
+impl Example for tc_api::door43::LastSync {
+    fn example() -> Self {
+        tc_api::door43::LastSync {
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for tc_api::door43::LastSyncView {
+    fn example() -> Self {
+        use tc_api::jobs::{ReplacedKind, ReplacedValue, ReplacedView};
+        let juan = PersonLabel {
+            who: Who::Username("juan".into()),
+            computer: None,
+        };
+        let mine = PersonLabel {
+            who: Who::Mine,
+            computer: None,
+        };
+        let setting = |kind, was| ReplacedView {
+            by: juan.clone(),
+            whose: mine.clone(),
+            kind,
+            place: tc_api::conflicts::ReviewPlace::Book {
+                book: BookId::Titus,
+            },
+            count: 1,
+            was: Some(was),
+        };
+        tc_api::door43::LastSyncView {
+            view: Some(SyncResultView {
+                received: 3,
+                from: vec![juan.clone()],
+                kept_newest: 3,
+                verse_conflicts: 0,
+                alignments: 0,
+                restored: 0,
+                missing_pins: 0,
+                replaced: vec![
+                    setting(
+                        ReplacedKind::Setting,
+                        ReplacedValue::Font("Noto Sans".into()),
+                    ),
+                    setting(
+                        ReplacedKind::Setting,
+                        ReplacedValue::Direction(Direction::Ltr),
+                    ),
+                    setting(
+                        ReplacedKind::Resources,
+                        ReplacedValue::Resources(vec!["en_tn v90".into()]),
+                    ),
+                ],
+            }),
+        }
+    }
+}
+
 impl Example for SyncProject {
     fn example() -> Self {
         SyncProject {
@@ -2890,7 +2947,15 @@ fn review_values() -> Vec<VersionValue> {
         VersionValue::Absent,
         VersionValue::Check {
             selected: vec!["siervo".into()],
+            nothing_to_select: false,
+            status: Some(tc_api::check::DecisionStatus::Valid),
+            bookmarked: true,
             comment: Some("Revisar".into()),
+        },
+        VersionValue::Alignment {
+            pairs: vec!["Παῦλος = Pablo".into()],
+            done: true,
+            marked_invalid: false,
         },
         VersionValue::NotShown,
     ]
@@ -3423,6 +3488,7 @@ fn events() -> Vec<Event> {
                         verse: 1,
                     },
                     count: 1,
+                    was: None,
                 }],
             })),
         }),

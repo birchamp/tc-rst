@@ -226,3 +226,5 @@ C7b	When a book's newest head cannot be read the record shows nothing and editin
 C7b	A removed book's count of hidden edits is dropped (BookView::Removed carries none), so the Received row cannot say how many edits are in History	storage review minor 4, 2026-10-25
 C7b	The book restore race is on the Text tab but its card offers no choice there yet	evidence/2026-10-24/C7b-lens-parity.md
 C7b	A path-case clash gives no Received row and no count	evidence/2026-10-24/C7b-lens-parity.md
+HIST-1	The aligner's History token is the last view's: after an autosave the open History misses the newest version until the next edit (a Restore reads the current token, so it is not affected)	evidence/2026-10-25/HIST-1-lens-loss.md
+HIST-1	The last sync result behind the Home card's link lives in memory: it is gone after the app quits	shell lane, 2026-10-25

@@ -196,7 +196,30 @@ fn value_of(record: &Record) -> VersionValue {
             selected: (d.judgement.selections.iter().flatten())
                 .map(|s| s.text.clone())
                 .collect(),
+            nothing_to_select: d.judgement.nothing_to_select,
+            status: d.judgement.status.map(|s| match s {
+                tc_journal::record::UserStatus::Valid => tc_api::check::DecisionStatus::Valid,
+                tc_journal::record::UserStatus::Invalid => tc_api::check::DecisionStatus::Invalid,
+                tc_journal::record::UserStatus::Todo => tc_api::check::DecisionStatus::Todo,
+            }),
+            bookmarked: d.bookmarked,
             comment: d.comment.clone(),
+        },
+        Record::Comment { value, .. } => VersionValue::Text(value.text.trim().to_owned()),
+        Record::Alignment { value, .. } => VersionValue::Alignment {
+            pairs: (value.alignments.iter())
+                .filter(|g| !g.bottom_words.is_empty())
+                .map(|g| {
+                    let words = |w: Vec<&str>| w.join(" ");
+                    format!(
+                        "{} = {}",
+                        words(g.top_words.iter().map(|w| w.word.as_str()).collect()),
+                        words(g.bottom_words.iter().map(|w| w.word.as_str()).collect())
+                    )
+                })
+                .collect(),
+            done: value.done,
+            marked_invalid: value.marked_invalid,
         },
         _ => VersionValue::NotShown,
     }

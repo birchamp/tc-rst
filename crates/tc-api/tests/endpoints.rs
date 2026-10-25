@@ -78,6 +78,8 @@ const PHASE_0: &[&str] = &[
     "resources/fixState",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",
+    // HIST-1: the last sync result, readable after its toast.
+    "door43/lastSync",
     // B6: the aligner's rail, its session and its save.
     "align/index",
     "align/open",

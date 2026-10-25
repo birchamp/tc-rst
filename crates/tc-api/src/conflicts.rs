@@ -235,13 +235,24 @@ pub enum VersionValue {
     Joined { by: u16 },
     /// The record holds nothing: an absent verse, a removed book.
     Absent,
-    /// A check's decision: the words selected, and its comment.
+    /// A check's decision: what the person chose, so two versions can be told apart.
     Check {
         #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
         selected: Vec<String>,
+        nothing_to_select: bool,
+        status: Option<crate::check::DecisionStatus>,
+        bookmarked: bool,
         comment: Option<String>,
     },
-    /// A value the review does not draw (an alignment, a setting).
+    /// A verse's alignment: each card's original words and the words placed on it, as
+    /// `Παῦλος = Paul`, and its marks.
+    Alignment {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        pairs: Vec<String>,
+        done: bool,
+        marked_invalid: bool,
+    },
+    /// A value the review does not draw (a setting).
     NotShown,
 }
 

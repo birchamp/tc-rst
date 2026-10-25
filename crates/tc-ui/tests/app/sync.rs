@@ -336,7 +336,7 @@ fn one_label_for_a_person() {
 fn the_received_sheet_names_each_replaced_version() {
     use tc_api::check::{CheckPlace, Tool};
     use tc_api::conflicts::ReviewPlace;
-    use tc_api::jobs::{ReplacedKind, ReplacedView};
+    use tc_api::jobs::{ReplacedKind, ReplacedValue, ReplacedView};
     use tc_core::BookId;
     let titus_1 = |verse| ReviewPlace::Verse {
         book: BookId::Titus,
@@ -349,6 +349,7 @@ fn the_received_sheet_names_each_replaced_version() {
         kind,
         place,
         count,
+        was: None,
     };
     let check = ReviewPlace::Check {
         tool: Some(Tool::TranslationNotes),
@@ -364,6 +365,21 @@ fn the_received_sheet_names_each_replaced_version() {
             row(Who::Mine, ReplacedKind::Alignment, titus_1(2), 3),
             row(Who::Teammate(2), ReplacedKind::Check, check, 1),
             row(Who::Mine, ReplacedKind::Setting, titus_1(1), 1),
+            ReplacedView {
+                was: Some(ReplacedValue::Font("Noto Sans".into())),
+                ..row(Who::Mine, ReplacedKind::Setting, titus_1(1), 1)
+            },
+            ReplacedView {
+                was: Some(ReplacedValue::Direction(tc_api::shown::Direction::Rtl)),
+                ..row(Who::Mine, ReplacedKind::Setting, titus_1(1), 1)
+            },
+            ReplacedView {
+                was: Some(ReplacedValue::Resources(vec![
+                    "en_tn v90".into(),
+                    "en_ta v90".into(),
+                ])),
+                ..row(Who::Mine, ReplacedKind::Resources, titus_1(1), 1)
+            },
             row(
                 Who::Mine,
                 ReplacedKind::Book,
@@ -387,6 +403,9 @@ fn the_received_sheet_names_each_replaced_version() {
             ("sync-replaced", 3, "Titus 1:2 and 2 more: juan's alignments replaced yours. Your version is in History.".to_owned()),
             ("sync-replaced", 1, "Titus 1:4 · Translation Notes: juan's check replaced Teammate 2's. The older version is in History.".to_owned()),
             ("sync-replaced", 1, "juan's project settings replaced yours. Settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's text font replaced yours (was Noto Sans). Settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's text direction replaced yours (was Right to left). Settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's resource choices replaced yours (was en_tn v90, en_ta v90). Settings can set it back.".to_owned()),
             ("sync-replaced", 1, "Jonah: juan removed this book.".to_owned()),
         ]
     );

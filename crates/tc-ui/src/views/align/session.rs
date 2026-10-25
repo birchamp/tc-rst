@@ -1193,7 +1193,7 @@ fn align_history(s: &AppState, actions: &Actions, view: &AlignerView, book: Book
         keys::align::REF,
         &[("book", &book.english_name()), ("ref", &view.place.label())],
     );
-    let restoring = s.a.restoring.clone();
+    let (restoring, failed) = (s.a.restoring.clone(), s.a.restore_failed.clone());
     let actions = actions.clone();
     crate::views::history::record_history(crate::views::history::RecordHistory {
         test_id: "align-history",
@@ -1201,6 +1201,7 @@ fn align_history(s: &AppState, actions: &Actions, view: &AlignerView, book: Book
         shown: Signal::stored(shown),
         open: s.a.history_open.clone(),
         busy: Signal::derive(move || restoring.get()),
+        failed: Signal::derive(move || failed.get()),
         reference,
         restore: Callback::new(move |from| actions.restore_alignment(from)),
     })

@@ -6,9 +6,9 @@
 use tc_api::ApiError;
 use tc_api::conflicts::ReviewPlace;
 use tc_api::ids::ProjectRef;
-use tc_api::jobs::{ReplacedKind, ReplacedView, SyncResultView};
+use tc_api::jobs::{ReplacedKind, ReplacedValue, ReplacedView, SyncResultView};
 use tc_api::refusal::{Message, Refusal};
-use tc_api::shown::{Computer, PersonLabel, Who};
+use tc_api::shown::{Computer, Direction, PersonLabel, Who};
 
 use crate::i18n::{Key, keys, t, t_dyn};
 
@@ -267,10 +267,29 @@ pub fn replaced_text(row: &ReplacedView) -> String {
         },
         ReplacedKind::Check => (t(many(k::CHECK, k::CHECKS), &args), Some(in_history)),
         ReplacedKind::Comment => (t(many(k::COMMENT, k::COMMENTS), &args), Some(in_history)),
-        ReplacedKind::Setting => (t(k::SETTING, &args), Some(k::IN_SETTINGS)),
-        ReplacedKind::Resources => (t(k::RESOURCES, &args), Some(k::IN_SETTINGS)),
+        ReplacedKind::Setting | ReplacedKind::Resources => {
+            let was =
+                |key: Key, was: &str| t(key, &[("name", &name), ("whose", &whose), ("was", &was)]);
+            let sentence = match &row.was {
+                Some(ReplacedValue::Font(font)) => was(k::FONT, font),
+                Some(ReplacedValue::Direction(dir)) => was(
+                    k::DIRECTION,
+                    &t(
+                        match dir {
+                            Direction::Ltr => keys::wizard::LTR,
+                            Direction::Rtl => keys::wizard::RTL,
+                        },
+                        &[],
+                    ),
+                ),
+                Some(ReplacedValue::Resources(pins)) => was(k::RESOURCE_VERSIONS, &pins.join(", ")),
+                None if row.kind == ReplacedKind::Setting => t(k::SETTING, &args),
+                None => t(k::RESOURCES, &args),
+            };
+            (sentence, Some(k::IN_SETTINGS))
+        }
         ReplacedKind::Book => (t(k::BOOK, &args), None),
-        ReplacedKind::File => (t(many(k::FILE, k::FILES), &args), Some(k::BOTH_KEPT)),
+        ReplacedKind::File => (t(many(k::FILE, k::FILES), &args), None),
     };
     match after {
         Some(after) => format!("{sentence} {}", t(after, &[])),

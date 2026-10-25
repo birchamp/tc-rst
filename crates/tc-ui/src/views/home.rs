@@ -480,6 +480,31 @@ fn first_book(card: Signal<Option<HomeCard>>) -> Option<tc_core::BookId> {
     })
 }
 
+/// What the project's last sync replaced, readable after its toast (owner ruling H5): the link
+/// shows the toast again. Nothing before a sync that replaced something.
+fn last_sync_link(actions: &Actions, project: &ProjectRef) -> impl IntoView + use<> {
+    let read = crate::app::web::use_runtime().map(|runtime| {
+        runtime.cache().read(tc_api::door43::LastSync {
+            project: project.clone(),
+        })
+    });
+    let (actions, project) = (actions.clone(), project.clone());
+    move || {
+        let view = read?.with(|l| l.value().and_then(|v| v.view.clone()))?;
+        let n: u32 = view.replaced.iter().map(|row| row.count).sum();
+        (n > 0).then(|| {
+            let (actions, project) = (actions.clone(), project.clone());
+            view! {
+                <button type="button" data-testid=format!("last-sync-{project}") data-count=n.to_string()
+                    on:click=move |_| actions.show_last_sync(project.clone(), view.clone())
+                    style="border: 0; background: transparent; padding: 0; margin-inline-start: 8px; font: inherit; color: var(--uw-ocean); font-weight: var(--fw-bold); cursor: pointer;">
+                    {t(if n == 1 { keys::home::LAST_SYNC_REPLACED_ONE } else { keys::home::LAST_SYNC_REPLACED_MANY }, &[("n", &n.to_string())])}
+                </button>
+            }
+        })
+    }
+}
+
 /// The card's conflict count (#679): nothing while unknown or none.
 fn conflicts_chip(
     actions: &Actions,
@@ -634,6 +659,7 @@ fn header(
                 <span style=META_STYLE>
                     <span data-testid=if stories { "obs-progress" } else { "project-summary" }>{line}</span>
                     {share_meta(card, project)}
+                    {last_sync_link(actions, project)}
                 </span>
             </div>
             {share_action(s, actions, card, project)}

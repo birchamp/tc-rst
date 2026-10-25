@@ -400,6 +400,11 @@ impl Saves {
         self.run(commands);
     }
 
+    /// The tokens the field's next save is made over: the newest its saves and reads told.
+    pub fn base(&self, key: &BufferKey) -> Option<Vec<tc_api::ShownToken>> {
+        self.machine(|m| m.base(key).map(<[_]>::to_vec))
+    }
+
     pub fn state(&self, key: &BufferKey) -> Option<FieldSave> {
         self.machine(|m| m.state(key).cloned())
     }

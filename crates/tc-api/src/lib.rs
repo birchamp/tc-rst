@@ -121,6 +121,7 @@ macro_rules! endpoint_table {
 
             job [Open] "door43/open": $crate::door43::OpenDoor43 => $crate::ids::JobId;
             job [Sync] "door43/sync": $crate::door43::SyncProject => $crate::ids::JobId;
+            query "door43/lastSync": $crate::door43::LastSync => $crate::door43::LastSyncView;
 
             query "feedback/compose": $crate::feedback::Compose => $crate::feedback::FeedbackDraft;
 

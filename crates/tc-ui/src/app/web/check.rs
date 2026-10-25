@@ -114,6 +114,8 @@ pub struct CheckState {
     pub history_open: ArcRwSignal<bool>,
     /// A *Restore this version* of the active check is being written.
     pub restoring: ArcRwSignal<bool>,
+    /// The last *Restore this version* of the active check was not saved.
+    pub restore_failed: ArcRwSignal<bool>,
 }
 
 impl CheckState {
@@ -134,6 +136,7 @@ impl CheckState {
             comment_open: ArcRwSignal::new(false),
             history_open: ArcRwSignal::new(false),
             restoring: ArcRwSignal::new(false),
+            restore_failed: ArcRwSignal::new(false),
         }
     }
 }
@@ -624,6 +627,7 @@ impl Actions {
         let c = &self.s().c;
         c.comment_open.try_set(false);
         c.history_open.try_set(false);
+        c.restore_failed.try_set(false);
         c.academy.try_set(None);
         c.marking.try_set(Marking::Idle);
     }
@@ -798,9 +802,17 @@ impl Actions {
             .and_then(|project| comment_key(list.tool, &project, &view));
         let (place, check_id) = (view.place.clone(), view.check_id.clone());
         c.restoring.try_set(true);
-        c.marking.try_set(Marking::Idle);
+        c.restore_failed.try_set(false);
         let this = self.clone();
         spawn_local(async move {
+            // The comment being typed saves first, so its save never lands over the restore
+            // (loss lens M2); a save that cannot be made leaves the restore undone.
+            if !this.runtime().saves().gate().await {
+                let c = &this.s().c;
+                c.restoring.try_set(false);
+                c.restore_failed.try_set(true);
+                return;
+            }
             let writes = WRITES.with(DecisionWrites::clone);
             let result = {
                 let _turn = writes.turn().await;
@@ -832,9 +844,7 @@ impl Actions {
             if !shown {
                 return;
             }
-            if let Err(error) = &result {
-                c.marking.try_set(Marking::Failed(MarkFailure::of(error)));
-            }
+            c.restore_failed.try_set(result.is_err());
             this.refresh_item();
         });
     }

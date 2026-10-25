@@ -1347,7 +1347,7 @@ fn check_history(s: &AppState, actions: &Actions, reference: String) -> AnyView 
             _ => None,
         })
     });
-    let restoring = c.restoring.clone();
+    let (restoring, failed) = (c.restoring.clone(), c.restore_failed.clone());
     let actions = actions.clone();
     crate::views::history::record_history(crate::views::history::RecordHistory {
         test_id: "check-history",
@@ -1355,6 +1355,7 @@ fn check_history(s: &AppState, actions: &Actions, reference: String) -> AnyView 
         shown: shown.into(),
         open: c.history_open.clone(),
         busy: Signal::derive(move || restoring.get()),
+        failed: Signal::derive(move || failed.get()),
         reference,
         restore: Callback::new(move |from| actions.restore_check(from)),
     })

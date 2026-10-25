@@ -7,6 +7,7 @@
 //! every teammate's version cream (owner ruling 2026-10-13, #679). One label function names a
 //! person here and on the sync result (#680, [`crate::app::sync::person_label`]).
 
+use tc_api::check::DecisionStatus;
 use tc_api::conflicts::{
     ConflictEntry, ConflictKind, KeepChoice, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount,
     Version, VersionCause, VersionValue,
@@ -595,16 +596,56 @@ pub fn version_text(value: &VersionValue) -> Option<String> {
         VersionValue::Text(text) => Some(text.trim().to_owned()),
         VersionValue::Joined { by } => Some(t(v::JOINED, &[("by", by)])),
         VersionValue::Absent => Some(t(v::ABSENT, &[])),
-        VersionValue::Check { selected, comment } => {
-            let selected = if selected.is_empty() {
+        VersionValue::Check {
+            selected,
+            nothing_to_select,
+            status,
+            bookmarked,
+            comment,
+        } => {
+            let mut line = vec![if *nothing_to_select {
+                t(v::NO_SELECTION_NEEDED, &[])
+            } else if selected.is_empty() {
                 t(v::NONE_SELECTED, &[])
             } else {
                 t(v::SELECTED, &[("words", &selected.join(" … "))])
-            };
+            }];
+            line.extend(status.map(|status| {
+                t(
+                    match status {
+                        DecisionStatus::Valid => v::status::VALID,
+                        DecisionStatus::Invalid => v::status::INVALID,
+                        DecisionStatus::Todo => v::status::TODO,
+                    },
+                    &[],
+                )
+            }));
+            if *bookmarked {
+                line.push(t(v::BOOKMARKED, &[]));
+            }
+            let line = line.join(" · ");
             Some(match comment {
-                Some(text) => format!("{selected}\n{}", t(v::COMMENT, &[("text", text)])),
-                None => selected,
+                Some(text) => format!("{line}\n{}", t(v::COMMENT, &[("text", text)])),
+                None => line,
             })
+        }
+        VersionValue::Alignment {
+            pairs,
+            done,
+            marked_invalid,
+        } => {
+            let mut line = vec![if pairs.is_empty() {
+                t(v::NOTHING_ALIGNED, &[])
+            } else {
+                t(v::ALIGNED, &[("pairs", &pairs.join(" · "))])
+            }];
+            if *done {
+                line.push(t(v::ALIGN_DONE, &[]));
+            }
+            if *marked_invalid {
+                line.push(t(v::ALIGN_INVALID, &[]));
+            }
+            Some(line.join(" · "))
         }
         VersionValue::NotShown => None,
     }

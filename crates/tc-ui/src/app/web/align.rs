@@ -137,6 +137,8 @@ pub struct AlignState {
     pub history_open: ArcRwSignal<bool>,
     /// A *Restore this version* of the open verse's alignment is on its way.
     pub restoring: ArcRwSignal<bool>,
+    /// The last *Restore this version* of the open verse was not saved.
+    pub restore_failed: ArcRwSignal<bool>,
 }
 
 impl AlignState {
@@ -154,6 +156,7 @@ impl AlignState {
             remembered: ArcRwSignal::new(Vec::new()),
             history_open: ArcRwSignal::new(false),
             restoring: ArcRwSignal::new(false),
+            restore_failed: ArcRwSignal::new(false),
         }
     }
 }
@@ -334,6 +337,7 @@ impl Actions {
             });
         }
         a.history_open.try_set(false);
+        a.restore_failed.try_set(false);
         a.verse.try_set(Some(place));
         self.open_align(Some(place));
     }
@@ -489,7 +493,13 @@ impl Actions {
         a.restoring.try_set(true);
         let this = self.clone();
         spawn_local(async move {
-            if this.flush_aligner().await {
+            // Every field and the verse's links are saved first, and no click reaches the
+            // aligner until it opens again: a link placed meanwhile would be saved over the
+            // restore (loss lens M1).
+            let saved = this.runtime().saves().gate().await;
+            a.screen.try_set(Screen::Loading);
+            let mut restored = false;
+            if saved && this.flush_aligner().await {
                 let api = this.runtime().api();
                 let open = Open {
                     at: at.clone(),
@@ -506,9 +516,7 @@ impl Actions {
                         shown,
                         from,
                     };
-                    if let Err(error) = api.call(&restore).await {
-                        a.edit_error.try_set(Some(error.to_string()));
-                    }
+                    restored = api.call(&restore).await.is_ok();
                     let close = Close {
                         at,
                         request: js::random_request_id(),
@@ -518,6 +526,7 @@ impl Actions {
                 }
             }
             a.restoring.try_set(false);
+            a.restore_failed.try_set(!restored);
             this.open_align(Some(place));
         });
     }

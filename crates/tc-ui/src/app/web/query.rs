@@ -230,6 +230,13 @@ impl CachedQuery for tc_api::home::Card {
     }
 }
 
+impl CachedQuery for tc_api::door43::LastSync {
+    /// A sync ends with its card's event, so the card's topic reads it again.
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        crate::app::cache::ReadOf::App(vec![AppTopic::HomeCard(self.project.clone())])
+    }
+}
+
 /// The project reads of Understand (B3), each read again by the changes its value is made of.
 fn project_read(at: &Scope, keys: Vec<tc_api::query::QueryKey>) -> crate::app::cache::ReadOf {
     crate::app::cache::ReadOf::Project {
