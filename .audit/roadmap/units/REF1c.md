@@ -4,7 +4,7 @@ title: Notes by figure, with groups that fold (tC4 #769)
 track: A
 lane: app
 milestone: M3
-state: gating
+state: done
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-REF1c
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1, P7]
 no_loss: false
 size: 2-3 sessions (basis: tC4's state.jsx and Check.jsx changed by about 800 lines)
-merged: none
+merged: ebaffe99
 updated: 2026-10-25
-next: The integration lane batches track-REF1c; CI runs on the push.
+next: none
 blocked_by: none
 ---
 
@@ -63,7 +63,7 @@ match rc.2.
   - Removed: `SortMode::ByCategory` and the ten `check.sort.byCategory` rebuild keys.
 - **Checks**:
   - `rail_groups_by_figure_in_first_note_order`, `group_counts_ignore_the_filter`,
-    `fold_survives_a_restart`, `next_into_a_folded_group_unfolds_it`,
+    `fold_survives_a_restart`, Next into a folded group unfolds it (journey `tn_by_figure_headings_fold_and_count`),
     `fold_all_keeps_the_active_group_open` (the #769 row's tests), red first.
   - Journeys in `parity/app/journeys/check-picker.test.mjs` or `check-keyboard.test.mjs`:
     headings with `aria-expanded`, the list one Tab stop, Left (Right in right-to-left) to the
@@ -117,3 +117,4 @@ line, and a `fix` line for every blocker and every major that harms a translator
 - 2026-10-25 10:40 EDT | REF1 session (Claude Code 56b3f56d) | verify | 3490bc6a | One review by an independent reviewer (subagent of this session, did not write the code), FUNNEL §8 in order: 1 Code: one entry point each (open_groups, fold_all, term_progress), ByCategory gone in both crates; group ids are plain strings (no newtype); 2 Checks: the named tests exist but next_into_a_folded_group_unfolds_it lives only inside the journey, and no test folded on the windowed rail; 3 Reach yes; 4 Siblings: the windowed list's keyed lines were not checked; 5 No loss n/a; 6 Prose and Human yes. Major: on the windowed (Psalms-sized) rail a heading line was keyed by its position only, so after a fold it kept its old aria-expanded and click value (a folded group could not be unfolded from its heading) and a sort change could leave By verse's heading in place; shown with a scratch journey on the 8,212-row rail. Minors: Left went to the active check's heading, not the focused row's (nothing when a filter hides the active check); the layout read the selection even under By verse, grouping the rail again on each move; heading Up/Down/Home/End reach only the mounted lines of the windowed rail. Matched tC4: groups, counts, which sorts fold, a click on the active group's heading, Fold all and its label, Next/Previous unfolding, RTL, the Tab stop, railFolded keys, fold state fresh from each check/open | this log
 - 2026-10-25 10:40 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | Major fixed: a windowed heading line's key holds its label, open state and fold mode, so it is drawn again when they change; journey windowed_rail_headings_follow_their_folds (fold and unfold from the heading at scroll 700, a sort change redraws the first heading), fails with the old key. Minors fixed: Left goes to the focused row's own group (group_of by the row's index); only a folding sort with a group folded reads the selection; select_check's fold check returns before its walk of the rows when nothing is folded (a shortcut comment says when to index it). Logged: heading keys reach the mounted lines only on the windowed rail. check-keyboard 6 pass, the other check, story and community journeys 47 pass; wasm app clippy clean | TC4_BIN=… node --test parity/app/journeys/check-keyboard.test.mjs
 - 2026-10-25 10:48 EDT | REF1 session (Claude Code 56b3f56d) | gate | 69c4f2cf | Hand-off checks with main 4956ac52 merged in (REF1 and REF1b are on main): cargo fmt --check ok; board 0 errors; node step 366 tests, 0 fail (claims and coverage included); cargo check --workspace --all-targets ok; wasm-ui-app and wasm-api clippy clean; tc-app, tc-api, tc-check clippy clean; tc-arch pass; tc-check rail 9, tc-api rail 9 and golden 6, tc-app check and prefs 30, tc-ui screen_record 48 and i18n 7+7 pass. Pushed once for the integration lane | target/ref1c-prehandoff.log
+- 2026-10-25 11:56 EDT | integration lane (Claude Code 3d07d5f8) | merge | ebaffe99 | merged into main in batch 6 (D2 533a09fc, REF1c ebaffe99), gated by scripts/gates.sh --wait-ci batch-6 on the batch's last commit | scripts/gates.sh --wait-ci batch-6
