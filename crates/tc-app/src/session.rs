@@ -257,7 +257,8 @@ pub const MODE_SWITCH_POLICY: CheckpointPolicy =
     CheckpointPolicy::AtMostEvery(std::time::Duration::from_secs(120));
 
 /// Whether a checkpoint for `reason` runs now: leaving the project always checks for changes;
-/// a mode switch follows `policy`, from the start of the folder's last mode-switch checkpoint.
+/// a mode switch follows `policy`, from the start of the folder's last mode-switch checkpoint
+/// that committed.
 pub fn checkpoint_due(
     policy: CheckpointPolicy,
     last: Option<WallMs>,
@@ -297,7 +298,8 @@ struct RegistryInner {
     slots: Mutex<BTreeMap<ProjectRef, Slot>>,
     /// Each folder's last checkpoint, kept after its session closes so a reload finds it (D1).
     checkpoints: Mutex<BTreeMap<ProjectRef, CheckpointState>>,
-    /// When each folder's last mode-switch checkpoint started (D1, the policy's clock).
+    /// When each folder's last mode-switch checkpoint that committed started (D1, the policy's
+    /// clock).
     switched: Mutex<BTreeMap<ProjectRef, WallMs>>,
     /// Woken whenever an open, a leave checkpoint or a close ends.
     changed: tokio::sync::Notify,
@@ -460,15 +462,17 @@ impl SessionRegistry {
     ) -> Option<CheckpointOutcome> {
         let folder = session.scope.project.clone();
         let now = self.inner.clock.now();
-        {
-            let mut switched = lock(&self.inner.switched);
-            let last = switched.get(&folder).copied();
-            if !checkpoint_due(MODE_SWITCH_POLICY, last, now, &reason) {
-                return None;
-            }
-            switched.insert(folder, now);
+        let last = lock(&self.inner.switched).get(&folder).copied();
+        if !checkpoint_due(MODE_SWITCH_POLICY, last, now, &reason) {
+            return None;
         }
-        Some(self.checkpoint(session, reason).await)
+        let outcome = self.checkpoint(session, reason).await;
+        // Only a commit starts the wait: after a switch with nothing to commit, or a failed
+        // one, the next switch's work is committed at once.
+        if outcome == CheckpointOutcome::Committed {
+            lock(&self.inner.switched).insert(folder, now);
+        }
+        Some(outcome)
     }
 
     /// The session's outside edits as the store lists them now, told to every page (D1).
@@ -533,6 +537,7 @@ impl SessionRegistry {
     ) -> Result<OpenSession, OpenFailure> {
         let (session, mut guard) = self.join(folder, Role::Screen, progress).await?;
         self.claim_screen(folder, guard.slot);
+        self.retry_owed_checkpoint(&session);
         // The screen stays a user until it leaves: `leave_screen`, a screen open elsewhere,
         // or `close_all`.
         guard.armed = false;
@@ -543,6 +548,26 @@ impl SessionRegistry {
             role: SessionRole::Screen,
             outside: session.handle.outside_edits(),
         })
+    }
+
+    /// The project just opened owes the checkpoint that failed when it was last left or
+    /// switched: it runs again now, behind the open (tC4 `retryOwedCheckpoint`), as Home's
+    /// "Open the project again to retry" says.
+    fn retry_owed_checkpoint(&self, session: &ProjectSession) {
+        let owed = matches!(
+            self.checkpoint_state(&session.scope.project),
+            CheckpointState::Ended(CheckpointOutcome::Failed { .. })
+        );
+        // The lease keeps the session open until the retry ends.
+        let Some(lease) = owed.then(|| self.writer(&session.scope)).flatten() else {
+            return;
+        };
+        let registry = self.clone();
+        self.inner.runtime.spawn(async move {
+            registry
+                .checkpoint(lease.session(), CheckpointReason::Other("retry".to_owned()))
+                .await;
+        });
     }
 
     /// A screen open returns: the screen is the person's, unless it was given away while the

@@ -278,3 +278,128 @@ async fn a_retry_skipped_as_read_only_keeps_the_failure_shown() {
         "no fail point left the project read-only"
     );
 }
+
+/// tC4 `retryOwedCheckpoint`: opening a project whose last checkpoint failed runs it again, so
+/// Home's "Open the project again to retry" is true; a commit clears the banner.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn opening_the_project_again_retries_its_failed_checkpoint() {
+    use tc_app::session::CheckpointState;
+    let world = crate::store_world::store_world();
+    let (_dir, t) = store_app(&world).await;
+    let open = t
+        .app
+        .sessions()
+        .open_screen(&world.bible, super::common::open_progress())
+        .await
+        .unwrap();
+    let session = t.app.read(&open.at).unwrap();
+    crate::store_world::save(
+        session.handle().as_ref(),
+        &crate::store_world::tit(1, 2),
+        "a change to commit",
+    )
+    .await
+    .unwrap();
+    session.handle().wait_idle();
+    drop(session);
+    let before = commits(&world);
+    world.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+    t.app.sessions().leave_screen(&open.at).unwrap();
+    t.app.sessions().settled(&world.bible).await;
+    world.fs.fail_writes(None);
+    assert_eq!(failed(&t).await.len(), 1);
+    t.app
+        .sessions()
+        .open_screen(&world.bible, super::common::open_progress())
+        .await
+        .unwrap();
+    let stop = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    let state = loop {
+        let state = t.app.sessions().checkpoint_state(&world.bible);
+        if !matches!(
+            state,
+            CheckpointState::Running | CheckpointState::Ended(CheckpointOutcome::Failed { .. })
+        ) || std::time::Instant::now() > stop
+        {
+            break state;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    };
+    // The store's open may commit the owed work itself first; the retry then finds it done.
+    assert!(
+        matches!(
+            state,
+            CheckpointState::Ended(CheckpointOutcome::Committed | CheckpointOutcome::Unchanged)
+        ),
+        "the open retried the owed checkpoint: {state:?}"
+    );
+    assert!(failed(&t).await.is_empty());
+    assert_eq!(commits(&world), before + 1);
+}
+
+/// The commits of the Bible project on the store world's filesystem.
+fn commits(world: &crate::store_world::StoreWorld) -> usize {
+    use tc_store::Vfs;
+    let path = std::path::Path::new(crate::store_world::PROJECTS).join(world.bible.as_str());
+    let repo = git2::Repository::open(world.fs.outside_dir(&path).unwrap()).unwrap();
+    let mut walk = repo.revwalk().unwrap();
+    walk.push_head().unwrap();
+    walk.count()
+}
+
+/// Q-5's two minutes count from a mode switch whose checkpoint committed: a switch with
+/// nothing to commit starts no wait, so the next switch's work is committed at once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_switch_that_commits_nothing_starts_no_wait() {
+    use tc_app::backend::CheckpointReason;
+    let world = crate::store_world::store_world();
+    let (_dir, t) = store_app(&world).await;
+    let open = t
+        .app
+        .sessions()
+        .open_screen(&world.bible, super::common::open_progress())
+        .await
+        .unwrap();
+    let session = t.app.read(&open.at).unwrap();
+    let sessions = t.app.sessions();
+    // What the open itself wrote is committed first, outside the policy's clock.
+    sessions
+        .checkpoint(&session, CheckpointReason::Other("open".into()))
+        .await;
+    assert_eq!(
+        sessions
+            .mode_switch(&session, CheckpointReason::LeavingTranslate)
+            .await,
+        Some(CheckpointOutcome::Unchanged)
+    );
+    crate::store_world::save(
+        session.handle().as_ref(),
+        &crate::store_world::tit(1, 2),
+        "a change to commit",
+    )
+    .await
+    .unwrap();
+    session.handle().wait_idle();
+    assert_eq!(
+        sessions
+            .mode_switch(&session, CheckpointReason::LeavingTranslate)
+            .await,
+        Some(CheckpointOutcome::Committed),
+        "the switch after one that committed nothing"
+    );
+    crate::store_world::save(
+        session.handle().as_ref(),
+        &crate::store_world::tit(1, 3),
+        "another change",
+    )
+    .await
+    .unwrap();
+    session.handle().wait_idle();
+    assert_eq!(
+        sessions
+            .mode_switch(&session, CheckpointReason::LeavingTranslate)
+            .await,
+        None,
+        "within two minutes of a commit"
+    );
+}
