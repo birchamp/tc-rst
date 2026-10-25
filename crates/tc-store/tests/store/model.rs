@@ -4280,3 +4280,49 @@ fn a_kept_book_copy_after_a_lost_manifest() -> Vec<Step> {
 fn a_kept_book_copy_after_a_lost_manifest_is_listed_again() {
     assert_kept(&a_kept_book_copy_after_a_lost_manifest());
 }
+
+/// The history `random_histories_lose_no_work` shrank to after the merge of track-D1 and main
+/// (2026-10-25): a book file the open could not read, a crash, saves and kills, then the file
+/// reverted twice to earlier versions of itself while the project is open.
+fn two_reverts_of_a_book_file_after_crashes() -> Vec<Step> {
+    vec![
+        Step::Open,
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        killed(Act::Close, 0),
+        Step::Open,
+        act(Act::Save(1)),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Usfm,
+            on: false,
+        },
+        killed(Act::Close, 0),
+        Step::Delete { file: File::Usfm },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Leave),
+        Step::Revert {
+            file: File::Usfm,
+            back: 1,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn two_reverts_of_a_book_file_after_crashes_lose_nothing() {
+    assert_kept(&two_reverts_of_a_book_file_after_crashes());
+}

@@ -382,9 +382,16 @@ impl Writer {
                     .map(|head| head.commit),
             ),
         };
+        // A second save is compared with the project, not with the waiting copy's base: bytes
+        // equal to that older base set back what the person saved since (a revert), and only
+        // a difference of line ends from the project asks nothing.
+        let compared = match self.state_of(rel) {
+            State::Held { .. } => ledger::Base::Unknown,
+            _ => base.ledger(),
+        };
         let copy = self.copy_external(rel, bytes)?;
         let md5 = Md5::of(bytes);
-        let unreadable = match self.examine_copied(rel, bytes, &base.ledger()) {
+        let unreadable = match self.examine_copied(rel, bytes, &compared) {
             Examined::Nothing => {
                 self.forget_examined(rel);
                 self.accept(rel, md5, bytes, None)?;
