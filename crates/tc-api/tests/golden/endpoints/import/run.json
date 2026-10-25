@@ -13,7 +13,15 @@
     "details": {
       "name": "Tita tC3",
       "code": "cfm"
-    }
+    },
+    "found": [
+      {
+        "slot": "translationNotes",
+        "repoPath": "git.door43.org/unfoldingWord/en_tn",
+        "tag": "v87",
+        "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a"
+      }
+    ]
   },
   "reply": {
     "type": "ok",

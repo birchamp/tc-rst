@@ -18,14 +18,18 @@ use tc_api::jobs::{JobKind, Phase};
 use tc_api::refusal::{CreateRefusal, ImportRefusal};
 use tc_api::shown::Direction;
 use tc_api::{ApiError, Refusal};
+use tc_check::Collection;
+use tc_check::carry::{self, Outcome, StoredDecision};
 use tc_core::BookId;
 use tc_import::SourceFile;
 use tc_import::tc3::{DecisionPins, Slot, Tc3Import, VersionRequest};
 use tc_journal::fold::ProjectKind;
 use tc_journal::keys::ToolId;
 use tc_journal::outside::UpdatePart;
+use tc_journal::record::CheckValue;
 use tc_journal::{Cause, ImportSource, RecordKey};
-use tc_resources::SetSlot;
+use tc_journal::{Record, keys::PinGroup};
+use tc_resources::{BookCoverage, GatewayLanguage, ProjectPins, ResourcePin, SetSlot};
 use tc_usfm::codec::{BookParts, VersePart};
 use tc_versification::StandardScheme;
 
@@ -34,6 +38,7 @@ use crate::backend::{BoxFuture, CommandError, CreateFailure, NewProjectSpec, Sto
 use crate::dispatch::Handle;
 use crate::flows::FlowRequest;
 use crate::jobs::{JobCtx, JobEnd, JobSpec};
+use crate::plans::{self, ListSource, PlanError, PlanSources, UnitSpec};
 use crate::ports::ImportPort;
 use crate::session::ProjectSession;
 use crate::wire;
@@ -276,6 +281,7 @@ impl Handle<Run> for App {
             .import_target(&req.details)
             .await?
             .map_err(ApiError::Refused)?;
+        let found = found_pins(&req.found)?;
         let files = self.uploaded(&req.files).await?;
         let pass = self.inner.flows.enter(FlowRequest::Import)?;
         let app = self.clone();
@@ -286,7 +292,7 @@ impl Handle<Run> for App {
             .start_typed::<Run, _, _>(spec, move |ctx| async move {
                 let port = app.inner.import.clone();
                 let made = port
-                    .run(app.clone(), files, req.details, folder, ctx)
+                    .run(app.clone(), files, req.details, found, folder, ctx)
                     .await?;
                 app.imported(&made);
                 app.drop_uploads(&req.files);
@@ -395,6 +401,256 @@ fn candidates(requests: &[VersionRequest]) -> BTreeMap<Slot, Option<Vec<(String,
         .collect()
 }
 
+/// The versions the person accepted, as pins. A translationWords version comes with its links
+/// or not at all (tC4 D97 ruling 8): the decisions of the words tool are stored on the links.
+fn found_pins(found: &[FoundVersion]) -> Result<Vec<(VersionSlot, ResourcePin)>, ApiError> {
+    let pins = found
+        .iter()
+        .map(|f| {
+            let bad = |what: &str| ApiError::BadRequest {
+                field: "found".to_owned(),
+                reason: format!("{} {}: not {what}", f.repo_path, f.tag),
+            };
+            let repo = f.repo_path.parse().map_err(|_| bad("a repository"))?;
+            let sha = f.sha.parse().map_err(|_| bad("a commit"))?;
+            let tag = f.tag.parse().map_err(|_| bad("a tag"))?;
+            Ok((f.slot, ResourcePin::new(repo, sha).with_version(tag)))
+        })
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    let has = |slot| pins.iter().any(|(s, _)| *s == slot);
+    if has(VersionSlot::TranslationWords) != has(VersionSlot::TranslationWordsLinks) {
+        return Err(ApiError::BadRequest {
+            field: "found".to_owned(),
+            reason: "a translationWords version comes with its links".to_owned(),
+        });
+    }
+    Ok(pins)
+}
+
+/// The gateway a `<language>_tw` repository is of, by its owner and language (tC4
+/// `gatewayOfTw`): the owner decides whether a `_twl` repository exists (D97 ruling 7).
+fn gateway_of_tw(repo: &tc_door43::RepoRef) -> Option<&'static tc_resources::gateways::Gateway> {
+    let language = repo.name.as_str().strip_suffix("_tw")?;
+    tc_resources::gateways::find(language, repo.owner.as_str())
+}
+
+/// `git.door43.org/<owner>/<name>` as the client's repository.
+fn door43_repo(repo_path: &str) -> Option<tc_door43::RepoRef> {
+    repo_path.strip_prefix("git.door43.org/")?.parse().ok()
+}
+
+/// Seconds since 1970 of a Door43 date (`2024-05-01T12:34:56Z`, or with an offset), as tC4's
+/// `Date.parse` reads it; `None` when it does not read.
+fn epoch_seconds(text: &str) -> Option<i64> {
+    let num = |at: &str, from: usize, to: usize| at.get(from..to)?.parse::<i64>().ok();
+    let (y, mo, d) = (num(text, 0, 4)?, num(text, 5, 7)?, num(text, 8, 10)?);
+    let (h, mi, s) = (num(text, 11, 13)?, num(text, 14, 16)?, num(text, 17, 19)?);
+    let zone = text
+        .get(19..)?
+        .trim_start_matches(|c: char| c == '.' || c.is_ascii_digit());
+    let offset = match zone.as_bytes().first() {
+        None | Some(b'Z') => 0,
+        Some(b'+') => num(zone, 1, 3)? * 3600 + num(zone, 4, 6)? * 60,
+        Some(b'-') => -(num(zone, 1, 3)? * 3600 + num(zone, 4, 6)? * 60),
+        Some(_) => return None,
+    };
+    // Days from the civil date (Howard Hinnant's algorithm), with March as the year's start.
+    let y = if mo <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * ((mo + 9) % 12) + 2) / 5 + d - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    Some(days * 86_400 + h * 3600 + mi * 60 + s - offset)
+}
+
+/// The links pin that goes with a found translationWords version (tC4 `twlFor`, D97 ruling
+/// 8). An owner with no `_twl` repository takes the bundled `en_twl`, with no lookup.
+/// Otherwise the `<language>_twl` release closest in date to the words release (the latest
+/// when that one has no date), each candidate's tag resolved to its commit, closest first.
+/// `None` when none can be pinned or Door43 did not answer: then the words stay unresolved.
+async fn twl_for(client: &tc_door43::Door43Client, tw: &FoundVersion) -> Option<FoundVersion> {
+    let repo = door43_repo(&tw.repo_path)?;
+    let gateway = gateway_of_tw(&repo);
+    if gateway.is_some_and(|g| !g.has_twl) {
+        let pin = tc_resources::suite::english_twl();
+        return Some(FoundVersion {
+            slot: VersionSlot::TranslationWordsLinks,
+            repo_path: pin.repo.to_string(),
+            tag: pin.version.as_ref().map(ToString::to_string)?,
+            sha: pin.sha.to_hex(),
+        });
+    }
+    if !repo.name.as_str().ends_with("_tw") {
+        return None;
+    }
+    let twl_path = format!("{}l", tw.repo_path);
+    let twl_repo = door43_repo(&twl_path)?;
+    let tw_releases = match client.releases(&repo).await {
+        Ok(listing) => listing.items,
+        Err(tc_door43::Door43Error::NotFound { .. }) => Vec::new(),
+        Err(_) => return None,
+    };
+    let mut twl_releases = client.releases(&twl_repo).await.ok()?.items;
+    let tw_at = tw_releases
+        .iter()
+        .find(|r| r.tag.to_string() == tw.tag)
+        .and_then(|r| epoch_seconds(&r.created_at));
+    twl_releases.sort_by_key(|r| match (tw_at, epoch_seconds(&r.created_at)) {
+        (Some(at), Some(date)) => (date - at).abs(),
+        (None, Some(date)) => -date,
+        (_, None) => i64::MAX,
+    });
+    for release in twl_releases {
+        match client.tag_commit(&twl_repo, &release.tag).await {
+            Ok(sha) => {
+                return Some(FoundVersion {
+                    slot: VersionSlot::TranslationWordsLinks,
+                    repo_path: twl_path,
+                    tag: release.tag.to_string(),
+                    sha: sha.to_hex(),
+                });
+            }
+            Err(tc_door43::Door43Error::NotFound { .. }) => continue,
+            Err(_) => return None,
+        }
+    }
+    None
+}
+
+/// The found version of `slot`.
+fn found_of(found: &[(VersionSlot, ResourcePin)], slot: VersionSlot) -> Option<&ResourcePin> {
+    found.iter().find(|(s, _)| *s == slot).map(|(_, pin)| pin)
+}
+
+/// The found versions laid over a new project's pins (tC4 `applyVersions`): each keeps the
+/// flavor of the pin it replaces. A helps pin records the books tC3 checked against it, and
+/// the set takes the gateway language the decisions were made in.
+fn lay_over(pins: &mut ProjectPins, found: &[(VersionSlot, ResourcePin)], import: &Tc3Import) {
+    let over = |old: Option<&ResourcePin>, new: &ResourcePin| ResourcePin {
+        flavor: Some(
+            old.and_then(|o| o.flavor.clone())
+                .unwrap_or_else(|| "scripture/textTranslation".to_owned()),
+        ),
+        ..new.clone()
+    };
+    let Some(primary) = pins.primary.as_mut() else {
+        return;
+    };
+    for (slot, pin) in found {
+        let set_slot = match slot {
+            VersionSlot::TranslationNotes => SetSlot::TranslationNotes,
+            VersionSlot::TranslationWords => SetSlot::TranslationWords,
+            VersionSlot::TranslationWordsLinks => SetSlot::TranslationWordsLinks,
+            VersionSlot::OriginalNewTestament => {
+                pins.original_language.nt = Some(over(pins.original_language.nt.as_ref(), pin));
+                continue;
+            }
+            VersionSlot::OriginalOldTestament => {
+                pins.original_language.ot = Some(over(pins.original_language.ot.as_ref(), pin));
+                continue;
+            }
+        };
+        let laid = over(primary.pins.get(&set_slot), pin);
+        primary.pins.insert(set_slot, laid);
+    }
+    // The bundled `en_twl` of an owner with no `_twl` was not looked up: it gets no claim.
+    let words = found_of(found, VersionSlot::TranslationWords)
+        .filter(|tw| gateway_of_tw(tw.repo.repo()).is_none_or(|g| g.has_twl));
+    let claims = [
+        (
+            found_of(found, VersionSlot::TranslationNotes),
+            ToolId::TranslationNotes,
+            SetSlot::TranslationNotes,
+        ),
+        (
+            words,
+            ToolId::TranslationWords,
+            SetSlot::TranslationWordsLinks,
+        ),
+    ];
+    for (pin, tool, slot) in claims {
+        let books: Vec<BookId> = import
+            .books
+            .iter()
+            .filter(|b| b.decision_count(tool) > 0)
+            .map(|b| b.book)
+            .collect();
+        if pin.is_some()
+            && !books.is_empty()
+            && let Some(held) = primary.pins.get_mut(&slot)
+        {
+            held.books = Some(BookCoverage::Books(books));
+        }
+    }
+    let helps = [VersionSlot::TranslationNotes, VersionSlot::TranslationWords];
+    if helps.iter().any(|&slot| found_of(found, slot).is_some())
+        && let Ok(owner) = import.gateway.1.parse()
+    {
+        primary.gateway = GatewayLanguage {
+            language: import.gateway.0.clone(),
+            owner,
+        }
+        .into();
+    }
+}
+
+/// tC4 `carryOverDecisions` for `tool`'s decisions when its tC3 version was not found: each
+/// book's decisions are placed on the check list of `source`, the installed version they are
+/// stored against. One placed on another check moves there; one with no check on the list
+/// keeps its record, marked invalid, so it never counts as done against a list it was not made
+/// on. None is dropped.
+fn carry_over(
+    records: Vec<Record>,
+    tool: ToolId,
+    source: &ListSource,
+    sources: &dyn PlanSources,
+) -> Result<Vec<Record>, PlanError> {
+    let mut out = Vec::with_capacity(records.len());
+    let mut by_book: BTreeMap<BookId, Vec<StoredDecision>> = BTreeMap::new();
+    for record in records {
+        match record {
+            Record::Check {
+                key,
+                value: CheckValue::Decision(decision),
+            } if key.tool == tool
+                && let Some(book) = key.book() =>
+            {
+                by_book
+                    .entry(book)
+                    .or_default()
+                    .push(StoredDecision::of(key, decision));
+            }
+            other => out.push(other),
+        }
+    }
+    let frame = StandardScheme::DEFAULT.scheme();
+    let spec = UnitSpec { frame, scope: &[] };
+    for (book, stored) in by_book {
+        let list = sources.list(tool, Collection::Book(book), source, &spec)?;
+        let plan = carry::plan(&list.items, &source.list, &stored);
+        let written: BTreeMap<RecordKey, Record> =
+            plans::carry_changes(&|_| Vec::new(), &plan, &list.items, PinGroup::Primary)
+                .into_iter()
+                .map(|change| (change.record.key(), change.record))
+                .collect();
+        for entry in plan.entries {
+            if written.contains_key(&RecordKey::Check(entry.key.clone())) {
+                continue;
+            }
+            let mut decision = entry.decision;
+            if entry.outcome == Outcome::Unplaced {
+                decision.imported_invalid = true;
+            }
+            out.push(Record::Check {
+                key: entry.key,
+                value: CheckValue::Decision(decision),
+            });
+        }
+        out.extend(written.into_values());
+    }
+    Ok(out)
+}
+
 impl ImportPort for TcImport {
     fn review(&self, files: Vec<SourceFile>) -> BoxFuture<Result<ImportFound, ApiError>> {
         Box::pin(async move { Ok(found(&read_tc3(files).await?)) })
@@ -442,6 +698,20 @@ impl ImportPort for TcImport {
                     None => view.unresolved.push(slot_of(slot)),
                 }
             }
+            // The words tool's two pins resolve together or not at all (D97 ruling 8).
+            if let Some(at) = view
+                .found
+                .iter()
+                .position(|f| f.slot == VersionSlot::TranslationWords)
+            {
+                match twl_for(&client, &view.found[at]).await {
+                    Some(links) => view.found.push(links),
+                    None => {
+                        let words = view.found.remove(at);
+                        view.unresolved.push(words.slot);
+                    }
+                }
+            }
             Ok(view)
         })
     }
@@ -454,6 +724,7 @@ impl ImportPort for TcImport {
         app: App,
         files: Vec<SourceFile>,
         details: ImportDetails,
+        found: Vec<(VersionSlot, ResourcePin)>,
         folder: ProjectRef,
         ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {
@@ -462,7 +733,15 @@ impl ImportPort for TcImport {
             let import = read_tc3(files).await?;
             ctx.progress.add(1);
             ctx.cancel.check()?;
-            let pins = installed_pins().ok_or(ApiError::Unavailable(Feature::Import))?;
+            let installed = installed_pins().ok_or(ApiError::Unavailable(Feature::Import))?;
+            let mut project_pins = tc_resources::suite::project_pins();
+            lay_over(&mut project_pins, &found, &import);
+            let pins = DecisionPins {
+                translation_notes: found_of(&found, VersionSlot::TranslationNotes)
+                    .map_or(installed.translation_notes, ResourcePin::resource),
+                translation_words: found_of(&found, VersionSlot::TranslationWordsLinks)
+                    .map_or(installed.translation_words, ResourcePin::resource),
+            };
             let mut records = crate::create::project_records(
                 &create_details(&details),
                 &folder,
@@ -472,11 +751,62 @@ impl ImportPort for TcImport {
                 None,
             )
             .map_err(|_| refused(ImportRefusal::WriteFailed))?;
-            records.extend(
-                import
-                    .records(&pins)
-                    .map_err(|e| refused(import_refusal(e)))?,
-            );
+            for record in &mut records {
+                if let Record::Pins { group, value } = record {
+                    *value = project_pins
+                        .group_value(*group)
+                        .map_err(|_| refused(ImportRefusal::WriteFailed))?;
+                }
+            }
+            let mut imported = import
+                .records(&pins)
+                .map_err(|e| refused(import_refusal(e)))?;
+            let carried = [
+                (VersionSlot::TranslationNotes, ToolId::TranslationNotes),
+                (VersionSlot::TranslationWords, ToolId::TranslationWords),
+            ]
+            .into_iter()
+            .filter(|(slot, _)| found_of(&found, *slot).is_none())
+            .map(|(_, tool)| tool)
+            .collect::<Vec<_>>();
+            if !carried.is_empty() {
+                let store = app.inner.resources.clone();
+                let notes = pins.translation_notes.clone();
+                let links = pins.translation_words.clone();
+                let articles = tc_resources::suite::english_helps()
+                    .pin(SetSlot::TranslationWords)
+                    .map(ResourcePin::resource);
+                imported = tokio::task::spawn_blocking(move || {
+                    let sources = crate::upgrades::StoreSources::new(&store);
+                    carried.into_iter().try_fold(imported, |records, tool| {
+                        let source = match tool {
+                            ToolId::TranslationNotes => ListSource {
+                                list: notes.clone(),
+                                articles: None,
+                            },
+                            _ => ListSource {
+                                list: links.clone(),
+                                articles: articles.clone(),
+                            },
+                        };
+                        carry_over(records, tool, &source, &sources)
+                    })
+                })
+                .await
+                .map_err(|e| {
+                    refused(ImportRefusal::Unreadable {
+                        file: String::new(),
+                        problem: e.to_string(),
+                    })
+                })?
+                .map_err(|PlanError::Unreadable(problem)| {
+                    refused(ImportRefusal::Unreadable {
+                        file: String::new(),
+                        problem,
+                    })
+                })?;
+            }
+            records.extend(imported);
             let spec = NewProjectSpec {
                 folder: folder.clone(),
                 kind: ProjectKind::Bible,
@@ -569,5 +899,22 @@ impl ImportPort for TcImport {
                     .any(|k| matches!(k, RecordKey::BookPresence(_))),
             })
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::epoch_seconds;
+
+    #[test]
+    fn door43_dates_read_as_seconds_since_1970() {
+        assert_eq!(epoch_seconds("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(epoch_seconds("2000-02-29T00:00:00Z"), Some(951_782_400));
+        assert_eq!(epoch_seconds("2026-08-03T15:05:55Z"), Some(1_785_769_555));
+        assert_eq!(
+            epoch_seconds("2026-08-03T17:05:55.123+02:00"),
+            Some(1_785_769_555)
+        );
+        assert_eq!(epoch_seconds("2026-08-03"), None);
     }
 }

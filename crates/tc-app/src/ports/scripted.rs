@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use tc_api::door43::{ProjectName, RepoSource};
 use tc_api::error::{ApiError, Feature};
 use tc_api::ids::ProjectRef;
-use tc_api::import::{ImportDetails, ImportFound, UpdateReport, VersionsView};
+use tc_api::import::{ImportDetails, ImportFound, UpdateReport, VersionSlot, VersionsView};
 use tc_api::jobs::SyncResultView;
 use tc_core::BookId;
 use tc_import::SourceFile;
@@ -159,6 +159,7 @@ impl ImportPort for ScriptedImportPort {
         _app: App,
         _files: Vec<SourceFile>,
         _details: ImportDetails,
+        _found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
         _folder: ProjectRef,
         ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {

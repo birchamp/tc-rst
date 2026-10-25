@@ -121,10 +121,10 @@ pub struct VersionsView {
     pub unresolved: Vec<VersionSlot>,
 }
 
-/// One slot's version, found on Door43.
+/// One slot's version, found on Door43. `import/run` sends back the ones the person accepted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FoundVersion {
     pub slot: VersionSlot,
     /// `git.door43.org/unfoldingWord/en_tn`.
@@ -141,6 +141,10 @@ pub struct FoundVersion {
 pub enum VersionSlot {
     TranslationNotes,
     TranslationWords,
+    /// The links that go with a found translationWords version, which tC3 does not record:
+    /// the `<language>_twl` release closest in date to it (tC4 `twlFor`, D97 ruling 8). Found
+    /// with that version or not at all, and never unresolved on its own.
+    TranslationWordsLinks,
     OriginalNewTestament,
     OriginalOldTestament,
 }
@@ -155,6 +159,12 @@ pub struct Run {
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub files: Vec<ImportFile>,
     pub details: ImportDetails,
+    /// The versions the person accepted from `import/versions`: the project pins them and
+    /// their slots' decisions stay on them. Every other slot takes the installed version, and
+    /// its decisions carry over to that version's checks; one with no check there is kept,
+    /// marked invalid (tC4 `applyVersions`). Empty when nothing was looked up.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub found: Vec<FoundVersion>,
 }
 
 /// `import/updateBook`: "Update a book from USFM" on the open project (STORAGE §13.6). A

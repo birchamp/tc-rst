@@ -3093,6 +3093,7 @@ impl Example for ImportRun {
             request: request(61),
             files: import_files(),
             details: import_details(),
+            found: VersionsView::example().found,
         }
     }
 }

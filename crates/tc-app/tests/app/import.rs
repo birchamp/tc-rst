@@ -10,13 +10,18 @@ use tc_api::ApiError;
 use tc_api::Refusal;
 use tc_api::create::{Bible, Details};
 use tc_api::ids::{JobId, ProjectRef, Scope, UploadId};
-use tc_api::import::{ImportDetails, ImportFile, Review, Run, UpdateBook, UpdateReport};
+use tc_api::import::{
+    FoundVersion, ImportDetails, ImportFile, Review, Run, UpdateBook, UpdateReport, VersionSlot,
+    Versions, VersionsView,
+};
 use tc_api::jobs::{JobOutcome, JobState};
 use tc_api::refusal::{CreateRefusal, ImportRefusal};
 use tc_api::shown::Direction;
 use tc_app::StoreChoice;
 use tc_core::BookId;
-use tc_journal::record::VerseValue;
+use tc_door43_fake::{CommitSeed, FakeDoor43, ReleaseKind, RepoSeed};
+use tc_journal::keys::{PinGroup, ToolId};
+use tc_journal::record::{CheckValue, DecisionRecord, VerseValue};
 use tc_journal::{Record, RecordKey};
 use tc_store::hooks::Point;
 
@@ -43,17 +48,73 @@ pub(super) fn aligned_titus() -> String {
     .unwrap()
 }
 
+/// The notes a new project pins, installed at their commit as the app's seed leaves them.
+/// Installed before the app starts.
+pub(super) fn install_notes(dir: &Path) {
+    use std::io::Write;
+    let pin = tc_resources::suite::english_helps()
+        .pin(tc_resources::SetSlot::TranslationNotes)
+        .unwrap()
+        .clone();
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for file in super::upgrades::export("en_tn@v91", "unfoldingWord/en_tn") {
+        let bytes = if file.path == "metadata.json" {
+            let mut metadata: serde_json::Value = serde_json::from_slice(&file.bytes).unwrap();
+            for value in metadata["identification"]["primary"]["dcs"]
+                .as_object_mut()
+                .unwrap()
+                .values_mut()
+            {
+                value["revision"] = serde_json::json!(pin.sha.to_hex());
+            }
+            serde_json::to_vec(&metadata).unwrap()
+        } else {
+            file.bytes
+        };
+        writer
+            .start_file(&file.path, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(&bytes).unwrap();
+    }
+    let zip = writer.finish().unwrap().into_inner();
+    let store =
+        tc_resources::ResourceStore::open(dir.join("app-data").join(tc_app::RESOURCES_FOLDER))
+            .unwrap();
+    tc_resources::install_dcs_zip(&store, &pin, &zip, 1 << 30).unwrap();
+}
+
 /// An app over a store world's tc-store, importing with `TcImport`.
 pub(super) async fn app() -> (tempfile::TempDir, TestApp, StoreWorld) {
+    app_with(None).await
+}
+
+/// An app that looks up on `door43`, with the internet on.
+async fn app_with(door43: Option<&FakeDoor43>) -> (tempfile::TempDir, TestApp, StoreWorld) {
     let world = store_world();
     let store = world.store();
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(dir.path().join("app-data/uploads")).unwrap();
-    let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
+    install_notes(dir.path());
+    let url = door43.map(|fake| fake.url().to_owned());
+    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+        if let Some(url) = &url {
+            config.door43 = url.parse().unwrap();
+        }
         deps.store = StoreChoice::Given(store);
         deps.import = Arc::new(tc_app::import::TcImport);
     })
     .await;
+    if door43.is_some() {
+        post(
+            &t.app,
+            &tc_api::net::Set {
+                request: rid(200),
+                on: true,
+            },
+        )
+        .await
+        .unwrap();
+    }
     (dir, t, world)
 }
 
@@ -79,6 +140,7 @@ pub(super) fn run(n: u8, file: &ImportFile, details: ImportDetails) -> Run {
         request: rid(n),
         files: vec![file.clone()],
         details,
+        found: Vec::new(),
     }
 }
 
@@ -512,4 +574,295 @@ async fn an_import_keeps_x_ref() {
         Some("\"1:6\"".to_owned()),
         "#409: the source word keeps x-ref: {first:?}"
     );
+}
+
+/// A Door43 repository of unfoldingWord with one published release per tag, each holding
+/// `fixture`'s files.
+async fn add_releases(fake: &FakeDoor43, name: &str, fixture: &str, tags: &[&str]) {
+    fake.add_repo(RepoSeed {
+        owner: "unfoldingWord".into(),
+        name: name.into(),
+        subject: name.into(),
+        language: "en".into(),
+        topics: vec!["tc-ready".into()],
+        private: false,
+        commits: tags
+            .iter()
+            .map(|tag| CommitSeed {
+                message: format!("Release {tag}"),
+                files: super::upgrades::export(fixture, &format!("unfoldingWord/{name}")),
+                tag: Some((*tag).to_owned()),
+                release: Some(ReleaseKind::Published),
+            })
+            .collect(),
+    })
+    .await
+    .unwrap();
+}
+
+/// The Titus project with a translationWords decision too (a bookmark on `admonish`), and the
+/// translationWords version `en_tw` v87 in its manifest.
+fn titus_with_words() -> Vec<u8> {
+    titus_edited(&|name, json| {
+        if name == "manifest.json" {
+            json["externalResources"]["tWordsGateway"] =
+                "https://git.door43.org/unfoldingWord/en_tw/archive/v87.zip".into();
+        } else if name == "apps/translationCore/index/translationWords/tit/admonish.json" {
+            json[0]["reminders"] = true.into();
+        }
+    })
+}
+
+/// The Titus project with its `gu55` notes decision on a check no release of the notes has
+/// (`zz99`, on words the verse's notes never quote): a check tC3's version had and the installed
+/// one dropped.
+fn titus_with_a_dropped_check() -> Vec<u8> {
+    titus_edited(&|name, json| {
+        if !name.starts_with("apps/translationCore/index/translationNotes/tit/") {
+            return;
+        }
+        for item in json.as_array_mut().into_iter().flatten() {
+            let Some(context) = item.get_mut("contextId") else {
+                continue;
+            };
+            if context["checkId"] == "gu55" {
+                context["checkId"] = "zz99".into();
+                context["quote"] = "οὐδέν".into();
+                context["quoteString"] = "οὐδέν".into();
+            }
+        }
+    })
+}
+
+/// The Titus project with each JSON file passed through `edit`.
+fn titus_edited(edit: &dyn Fn(&str, &mut serde_json::Value)) -> Vec<u8> {
+    use std::io::{Read, Write};
+    let mut source = zip::ZipArchive::new(std::io::Cursor::new(tc3_titus())).unwrap();
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for n in 0..source.len() {
+        let mut entry = source.by_index(n).unwrap();
+        let name = entry.name().to_owned();
+        if entry.is_dir() {
+            writer
+                .add_directory(&name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            continue;
+        }
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).unwrap();
+        if name.ends_with(".json")
+            && let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(&bytes)
+        {
+            let before = json.clone();
+            edit(&name, &mut json);
+            if json != before {
+                bytes = serde_json::to_vec(&json).unwrap();
+            }
+        }
+        writer
+            .start_file(&name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(&bytes).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+async fn looked_up(t: &TestApp, file: &ImportFile) -> VersionsView {
+    let job = post(
+        &t.app,
+        &Versions {
+            request: rid(100),
+            files: vec![file.clone()],
+        },
+    )
+    .await
+    .unwrap();
+    match ended(&t.app, job).await {
+        JobState::Done(JobOutcome::VersionsFound(view)) => view,
+        other => panic!("the lookup ended {other:?}"),
+    }
+}
+
+async fn imported(t: &TestApp, file: &ImportFile, found: Vec<FoundVersion>) -> Scope {
+    let job = post(
+        &t.app,
+        &Run {
+            found,
+            ..run(1, file, details("cfm_fbt", "cfm"))
+        },
+    )
+    .await
+    .unwrap();
+    let JobState::Done(JobOutcome::Created { project }) = ended(&t.app, job).await else {
+        panic!("not imported")
+    };
+    t.app
+        .sessions()
+        .open_screen(&project, open_progress())
+        .await
+        .unwrap()
+        .at
+}
+
+/// Each decision of `tool` the project holds, by its check id.
+fn decisions(t: &TestApp, at: &Scope, tool: ToolId) -> Vec<(String, DecisionRecord)> {
+    let session = t.app.read(at).unwrap();
+    let snapshot = session.handle().snapshot();
+    let fold = snapshot.fold();
+    fold.record_keys()
+        .into_iter()
+        .filter_map(|key| match fold.projected(&key)? {
+            Record::Check {
+                key,
+                value: CheckValue::Decision(decision),
+            } if key.tool == tool => Some((key.check_id.as_str().to_owned(), decision)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A slot of one of the project's pin groups, as tC4 writes it in `resources.json`.
+fn pinned(t: &TestApp, at: &Scope, group: PinGroup, slot: &str) -> serde_json::Value {
+    let session = t.app.read(at).unwrap();
+    let Some(Record::Pins { value, .. }) = session
+        .handle()
+        .snapshot()
+        .fold()
+        .projected(&RecordKey::Pins(group))
+    else {
+        panic!("no {group:?} pins")
+    };
+    serde_json::from_slice(&value.slot(slot).unwrap().to_canonical()).unwrap()
+}
+
+/// The lookup resolves each slot's tag to its commit on Door43, derives the links of a found
+/// translationWords version from the `_twl` releases (tC4 `twlFor`), and leaves unresolved a
+/// slot whose version Door43 does not have.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_version_lookup_answers_from_a_fake_door43() {
+    let fake = FakeDoor43::start().await.unwrap();
+    add_releases(&fake, "en_tn", "en_tn@v91", &["v87"]).await;
+    add_releases(&fake, "el-x-koine_ugnt", "en_ult@v89", &["v0.35"]).await;
+    add_releases(&fake, "en_twl", "en_twl@v86", &["v86"]).await;
+    add_releases(&fake, "en_tw", "en_tw@v87", &["v87"]).await;
+    let sha = |name: &'static str, tag: &'static str| {
+        let fake = &fake;
+        async move { fake.resolve("unfoldingWord", name, tag).await.unwrap() }
+    };
+    let (dir, t, _world) = app_with(Some(&fake)).await;
+    let file = upload(dir.path(), 1, TC3_TITUS, &titus_with_words());
+    let view = looked_up(&t, &file).await;
+    let found = |name: &str, slot, tag: &str, sha: String| FoundVersion {
+        slot,
+        repo_path: format!("git.door43.org/unfoldingWord/{name}"),
+        tag: tag.to_owned(),
+        sha,
+    };
+    assert_eq!(
+        view.found,
+        vec![
+            found(
+                "en_tn",
+                VersionSlot::TranslationNotes,
+                "v87",
+                sha("en_tn", "v87").await
+            ),
+            found(
+                "en_tw",
+                VersionSlot::TranslationWords,
+                "v87",
+                sha("en_tw", "v87").await
+            ),
+            found(
+                "en_twl",
+                VersionSlot::TranslationWordsLinks,
+                "v86",
+                sha("en_twl", "v86").await
+            ),
+        ],
+        "the tags resolve to their commits, and the words bring their links"
+    );
+    assert_eq!(
+        view.unresolved,
+        vec![VersionSlot::OriginalNewTestament],
+        "Door43 has no UGNT v0.34"
+    );
+}
+
+/// tC4 `applyVersions`: a version found on Door43 is the project's pin, it records the books
+/// checked against it, and the decisions stay on it, valid, with no carry-over.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_import_pins_the_versions_found_on_door43() {
+    let fake = FakeDoor43::start().await.unwrap();
+    add_releases(&fake, "en_tn", "en_tn@v91", &["v87"]).await;
+    add_releases(&fake, "el-x-koine_ugnt", "en_ult@v89", &["v0.34"]).await;
+    let tn = fake.resolve("unfoldingWord", "en_tn", "v87").await.unwrap();
+    let ugnt = fake
+        .resolve("unfoldingWord", "el-x-koine_ugnt", "v0.34")
+        .await
+        .unwrap();
+    let (dir, t, _world) = app_with(Some(&fake)).await;
+    let file = upload(dir.path(), 1, TC3_TITUS, &tc3_titus());
+    let view = looked_up(&t, &file).await;
+    let at = imported(&t, &file, view.found).await;
+
+    let notes = pinned(&t, &at, PinGroup::Primary, "translationNotes");
+    assert_eq!(
+        (
+            notes["repoPath"].as_str(),
+            notes["version"].as_str(),
+            notes["sha"].as_str()
+        ),
+        (
+            Some("git.door43.org/unfoldingWord/en_tn"),
+            Some("v87"),
+            Some(tn.as_str())
+        ),
+        "the project pins the notes tC3 checked against"
+    );
+    assert_eq!(notes["books"], serde_json::json!(["TIT"]));
+    let greek = pinned(&t, &at, PinGroup::OriginalLanguage, "nt");
+    assert_eq!(greek["sha"].as_str(), Some(ugnt.as_str()));
+
+    let decided = decisions(&t, &at, ToolId::TranslationNotes);
+    assert_eq!(decided.len(), 5);
+    for (id, decision) in &decided {
+        assert_eq!(
+            (decision.resource.sha.to_hex(), decision.imported_invalid),
+            (tn.clone(), false),
+            "{id} stays on the version it was made against"
+        );
+    }
+}
+
+/// tC4 `carryOverDecisions`: with no version found, the decisions move to the installed notes,
+/// and one whose check those notes lack keeps its record, marked invalid.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_import_marks_invalid_a_decision_whose_check_the_installed_pin_lacks() {
+    let (dir, t, _world) = app().await;
+    let file = upload(dir.path(), 1, TC3_TITUS, &titus_with_a_dropped_check());
+    let at = imported(&t, &file, Vec::new()).await;
+    let installed = tc_resources::suite::english_helps()
+        .pin(tc_resources::SetSlot::TranslationNotes)
+        .unwrap()
+        .resource();
+    let decided = decisions(&t, &at, ToolId::TranslationNotes);
+    let mut ids: Vec<&str> = decided.iter().map(|(id, _)| id.as_str()).collect();
+    ids.sort_unstable();
+    assert_eq!(
+        ids,
+        ["fyf8", "rtc9", "swi9", "u0gk", "zz99"],
+        "no decision is dropped"
+    );
+    for (id, decision) in &decided {
+        assert_eq!(
+            decision.resource, installed,
+            "{id} is on the installed notes"
+        );
+        assert_eq!(
+            decision.imported_invalid,
+            id == "zz99",
+            "{id}: only the decision whose check the installed notes lack is invalid"
+        );
+    }
 }

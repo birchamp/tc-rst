@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tc_api::door43::{ProjectName, RepoSource};
 use tc_api::error::{ApiError, Feature};
 use tc_api::ids::ProjectRef;
-use tc_api::import::{ImportDetails, ImportFound, UpdateReport, VersionsView};
+use tc_api::import::{ImportDetails, ImportFound, UpdateReport, VersionSlot, VersionsView};
 use tc_api::jobs::SyncResultView;
 use tc_core::BookId;
 use tc_import::SourceFile;
@@ -57,11 +57,13 @@ pub trait ImportPort: Send + Sync {
     -> BoxFuture<Result<VersionsView, JobEnd>>;
 
     /// Makes the project `folder` from the files with `details`: one whole project, or none.
+    /// `found` are the versions the person accepted from the lookup, one per slot.
     fn run(
         &self,
         app: App,
         files: Vec<SourceFile>,
         details: ImportDetails,
+        found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
         folder: ProjectRef,
         ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>>;
@@ -125,6 +127,7 @@ impl ImportPort for UnavailableImport {
         _app: App,
         _files: Vec<SourceFile>,
         _details: ImportDetails,
+        _found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
         _folder: ProjectRef,
         _ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {

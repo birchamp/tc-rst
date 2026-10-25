@@ -240,6 +240,7 @@ mod import_ports {
         let store = world.store();
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("app-data/uploads")).unwrap();
+        super::super::import::install_notes(dir.path());
         let port: Arc<dyn tc_app::ports::ImportPort> = match &scripted {
             Some(port) => port.clone(),
             None => Arc::new(tc_app::import::TcImport),
