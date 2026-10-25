@@ -751,6 +751,28 @@ impl FakeDoor43 {
         self.shared.git.repo_dir(owner, name)
     }
 
+    /// Points `branch` at `sha`, as when someone replaces it with an older copy (E1a: "Door43
+    /// lost a teammate's change").
+    pub async fn set_branch(
+        &self,
+        owner: &str,
+        name: &str,
+        branch: &str,
+        sha: &str,
+    ) -> Result<(), FakeError> {
+        let dir = self.git_dir(owner, name);
+        self.shared
+            .git
+            .run(
+                Some(&dir),
+                &["update-ref", &format!("refs/heads/{branch}"), sha],
+                None,
+                &[],
+            )
+            .await
+            .map(|_| ())
+    }
+
     /// The commit `rev` (a tag, branch or sha) names in a repository.
     pub async fn resolve(&self, owner: &str, name: &str, rev: &str) -> Result<String, FakeError> {
         self.shared

@@ -46,8 +46,8 @@ browserTest('J26 [G1]. Three computers: B and C change verses, A takes their wor
     await dismiss(page);
     const b = await teammate('teammate-b');
     const c = await teammate('teammate-c');
-    const pb = await b.join(FOLDER, 'titus-b');
-    const pc = await c.join(FOLDER, 'titus-c');
+    const pb = await b.join(env.door43Repo(BIBLE), 'titus-b');
+    const pc = await c.join(env.door43Repo(BIBLE), 'titus-c');
     await b.saveVerse(pb, 1, 1, B_WORDS);
     await b.sync(pb);
     await c.saveVerse(pc, 1, 2, C_WORDS);
@@ -76,7 +76,7 @@ browserTest('J26 [G6]. A and B change the same verse: both versions are kept, an
     assert.equal(await syncA(page, true), '1');
     await dismiss(page);
     const b = await teammate('teammate-b');
-    const pb = await b.join(FOLDER, 'titus-b');
+    const pb = await b.join(env.door43Repo(BIBLE), 'titus-b');
     await b.saveVerse(pb, 1, 3, 'y a su debido tiempo, como B lo dijo');
     await b.sync(pb);
     await saveTitus(env.call, FOLDER, 1, 3, 'y a su debido tiempo, como A lo dijo');

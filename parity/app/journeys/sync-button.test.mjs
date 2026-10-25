@@ -132,7 +132,7 @@ browserTest('E1a. A real sync pushes the project to Door43; a cut connection fai
     await toast(page).waitFor();
     assert.equal(await toast(page).getAttribute('data-ok'), '1', 'a second sync with nothing new');
     await dismiss(page);
-    await env.door43.fault({ method: 'GET', path: `/${DOOR43_TEAM}/${FOLDER}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } });
+    await env.door43.fault({ method: 'GET', path: `/${DOOR43_TEAM}/${env.door43Repo(BIBLE)}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } });
     await button(page).click();
     await toast(page).waitFor();
     assert.equal(await toast(page).getAttribute('data-ok'), '0', 'the cut sync failed');

@@ -120,6 +120,7 @@ fn control_router(fake: Arc<FakeDoor43>) -> Router {
         .route("/tokens", post(issue_token))
         .route("/repos", post(add_repo))
         .route("/users", post(add_user))
+        .route("/branch", post(branch))
         .route("/tokens/{login}", get(tokens_of))
         .route("/secret/{login}/{name}", get(secret))
         .with_state(fake)
@@ -231,6 +232,33 @@ async fn issue_token(State(fake): Fake, body: axum::body::Bytes) -> Response {
     let scopes: Vec<&str> = body.scopes.iter().map(String::as_str).collect();
     match fake.issue_token(&body.login, &body.name, &scopes) {
         Ok(secret) => axum::Json(json!({ "secret": secret })).into_response(),
+        Err(error) => bad(error.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BranchBody {
+    owner: String,
+    name: String,
+    branch: String,
+    /// Moves the branch here when given; the answer is the branch's commit either way.
+    sha: Option<String>,
+}
+
+/// A branch's commit, read or moved (E1a: Door43 loses the newest pushes).
+async fn branch(State(fake): Fake, body: axum::body::Bytes) -> Response {
+    let body: BranchBody = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(error) => return bad(error.to_string()),
+    };
+    if let Some(sha) = &body.sha
+        && let Err(error) = fake.set_branch(&body.owner, &body.name, &body.branch, sha).await
+    {
+        return bad(error.to_string());
+    }
+    match fake.resolve(&body.owner, &body.name, &body.branch).await {
+        Ok(sha) => axum::Json(json!({ "sha": sha })).into_response(),
         Err(error) => bad(error.to_string()),
     }
 }
