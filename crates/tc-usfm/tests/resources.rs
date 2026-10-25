@@ -758,5 +758,40 @@ fn every_bundled_ult_and_ust_verse_body_holds_every_target_word() {
         }
     }
     assert_eq!(verses, 47_723);
-    assert!(cut.is_empty(), "{} verses cut off: {cut:?}", cut.len());
+    assert!(
+        cut.is_empty(),
+        "INV-NO-CUT-AT-A-MID-VERSE-BREAK: {} verses cut off: {cut:?}",
+        cut.len()
+    );
+}
+
+/// REF1b, INV-EVERY-POEM-LINE-STAYS: over every verse of the ULT and UST v91, the words the
+/// editors show come back byte for byte when saved unchanged, and only a few verses keep their
+/// markers because tabs could not give their bytes back.
+#[test]
+fn every_bundled_verse_saves_unchanged_through_the_editor_text() {
+    use tc_usfm::poem::{editor_text, shows_tabs, words_from_editor_text};
+    let (mut verses, mut on_markers) = (0, 0);
+    for archive in ["en_ult_v91.sb.zip", "en_ust_v91.sb.zip"] {
+        for (name, text) in export(archive) {
+            let parts = tc_usfm::codec::decompose(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+            for (c, chapter) in &parts.chapters {
+                for (v, part) in &chapter.verses {
+                    let tc_usfm::codec::VersePart::Text(verse) = part else {
+                        continue;
+                    };
+                    verses += 1;
+                    let words = &verse.words;
+                    assert_eq!(
+                        words_from_editor_text(&editor_text(words), words),
+                        *words,
+                        "{name} {c}:{v}"
+                    );
+                    on_markers += usize::from(!shows_tabs(words));
+                }
+            }
+        }
+    }
+    assert_eq!(verses, 47_723);
+    assert_eq!(on_markers, 0, "verses that keep their markers");
 }

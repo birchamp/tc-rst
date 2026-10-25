@@ -78,7 +78,7 @@ const record = (text, keys) => {
   if (d.words.length === 0) return out;
   out.groups = sectionGroups(d.markers, pins, keys);
   out.newKeys = sectionKeys(d.markers, pins, keys);
-  out.verses = sectionVerses(d.words, d.seps, d.markers, pins, keys);
+  out.verses = sectionVerses(d.words, d.seps, d.markers, pins, keys, d.blocks);
   out.serialized = serializeDraft(d.words, d.seps, d.markers, pins, keys, d.blocks);
   // The words each pin may begin at (0 to one past the last word), and up to four of the drops
   // `canDrop` allows with the markers `dropPin` gives.
@@ -146,11 +146,15 @@ for (let i = 0; i < 160; i++) {
 }
 
 const indent = [];
-for (const text of ['10 b', '\t10 b', '\t\t10 b', '9 a\n10 b', '9 a\n\t10 b', '9 a\n\t\t10 b', '\n9 a', '', '\t', 'é\n10 ñ', '😀\n\t10 b']) {
-  for (let caret = 0; caret <= text.length + 1; caret++) {
-    for (const delta of [1, -1, 0]) {
-      const r = indentLine(text, caret, delta);
-      indent.push({ text, caret, delta, out: r.text, caretOut: r.caret });
+// As SectionEditor.jsx calls it: with the section's pins, a line inside a verse takes a third
+// tab (#812); without them, every line takes two at most.
+for (const pins of [undefined, ['9', '10']]) {
+  for (const text of ['10 b', '\t10 b', '\t\t10 b', '9 a\n10 b', '9 a\n\t10 b', '9 a\n\t\t10 b', '\n9 a', '', '\t', 'é\n10 ñ', '😀\n\t10 b', '9 a\nb', '9 a\n\t\tb']) {
+    for (let caret = 0; caret <= text.length + 1; caret++) {
+      for (const delta of [1, -1, 0]) {
+        const r = indentLine(text, caret, delta, pins);
+        indent.push({ text, caret, delta, pins: pins ?? [], out: r.text, caretOut: r.caret });
+      }
     }
   }
 }

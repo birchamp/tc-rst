@@ -215,7 +215,8 @@ fn field_text(field: &DraftField, record: Option<&Record>) -> Option<String> {
                 value: VerseValue::Text { words, .. },
                 ..
             },
-        ) => Some(words.clone()),
+            // A verse draft holds the card's text, poem lines as tabs (tC4 #810, REF1b).
+        ) => Some(tc_usfm::poem::editor_text(words)),
         (
             DraftField::Layout,
             Record::Verse {

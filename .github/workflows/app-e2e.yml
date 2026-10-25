@@ -6,8 +6,10 @@ name: app-e2e
 permissions:
   contents: read
 on:
+  # The journeys gate a merge: they run on main and gate/* (and on request), not on every
+  # track push (rulings/2026-10-24-test-process.md).
   push:
-  pull_request:
+    branches: [claude/focused-ride-5uzj7p, 'gate/**']
   workflow_dispatch:
 concurrency:
   # The event name too, so a dispatched run never cancels a push run on the same branch.

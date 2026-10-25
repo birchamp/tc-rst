@@ -135,11 +135,12 @@ fn target_paragraphs_open_at_a_marker_with_its_poetry_indent() {
     );
 }
 
-/// #786: the box holds every line of a poem verse, markers included; only the stub of an
-/// undrafted verse shows as an empty box.
+/// #786, #810: the box holds every line of a poem verse as the server sends it (poem lines as
+/// tabs since tC4 rc.2, a first line's own marker as written); only the stub of an undrafted
+/// verse shows as an empty box.
 #[test]
 fn verse_editor_shows_every_poem_line() {
-    let poem = "Recuérdales\n\\q2 que se sujeten";
+    let poem = "Recuérdales\n\t\tque se sujeten";
     assert_eq!(box_text(poem), poem);
     assert_eq!(box_text("\\q2 que no hablen mal"), "\\q2 que no hablen mal");
     assert_eq!(box_text("___"), "");
@@ -365,4 +366,18 @@ fn a_card_opens_on_its_rows_and_is_based_on_every_verse_it_displays() {
         [token(1), token(7), token(8)],
         "each verse's token, then the verses it covers"
     );
+}
+
+/// FIX-HIDE2: a restored section's place names the verses its card was opened over, spans
+/// included, and nothing outside its range.
+#[test]
+fn a_section_place_names_the_verses_its_card_covered() {
+    use tc_ui::app::translate::section_keys_of;
+    let keys: Vec<String> = ["8", "9", "10-11", "12"]
+        .iter()
+        .map(|k| (*k).to_owned())
+        .collect();
+    assert_eq!(section_keys_of("9-11", &keys), ["9", "10-11"]);
+    assert_eq!(section_keys_of("12", &keys), ["12"]);
+    assert!(section_keys_of("x-2", &keys).is_empty());
 }
