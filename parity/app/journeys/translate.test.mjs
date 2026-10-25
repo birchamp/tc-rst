@@ -203,6 +203,27 @@ browserTest('a_held_leave_keeps_a_failed_verse_text_on_the_page', async () => {
     await indicator(page).getByRole('button', { name: 'Retry' }).click();
     await until('retry saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     assert.equal((await verse(env, 3)).words.value, wanted);
+// REF1b, tC4 #810 (j02's poetry cases): the verse card shows a poem verse's inner lines with one
+// tab per level, and what is typed at a level is saved as that level's marker.
+browserTest('poem_lines_show_as_tabs_and_save_as_their_markers', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTranslate(page);
+    await teammateWrites(env, 4, 'a Tito,\n\\q2 mi verdadero hijo\n\\ts\\*\n\\q1 en la fe común');
+    await openVerse(page, 4);
+    assert.equal(await box(page, 4).inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\n\ten la fe común');
+    const typed = 'a Tito,\n\t\tmi verdadero hijo\n\n\ten la fe común:\n\t\t\tgracia y paz';
+    await box(page, 4).fill(typed);
+    await page.getByRole('button', { name: 'Save verse' }).click();
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    assert.equal((await verse(env, 4)).words.value, typed);
+    // The grid shows the words alone, every line kept.
+    assert.equal((await verse(env, 4)).text, 'a Tito, mi verdadero hijo en la fe común: gracia y paz');
+    // Home and back: the card reads the verse from the server again.
+    await page.getByTestId('project-switch').click();
+    await titus(page).click();
+    await page.getByTestId('mode-switch').getByRole('tab', { name: 'Translate' }).click();
+    await openVerse(page, 4);
+    assert.equal(await box(page, 4).inputValue(), typed, 'the card opens again as it was typed');
   });
 });
 

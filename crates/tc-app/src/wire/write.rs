@@ -83,7 +83,8 @@ fn text_ack(
                         value: VerseValue::Text { words, layout, .. },
                         ..
                     } => Some(match part {
-                        TextPart::Words => words,
+                        // The card's text is the editor text (tC4 #810, REF1b).
+                        TextPart::Words => tc_usfm::poem::editor_text(&words),
                         TextPart::Layout => layout,
                     }),
                     _ => None,

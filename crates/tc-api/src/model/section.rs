@@ -135,13 +135,16 @@ fn escapable(line: &str, pins: &[String]) -> bool {
     (after.is_empty() || after.starts_with(js_space)) && run_of(token, pins).is_some()
 }
 
-/// Indent every continuation line of a body that would read as a marker.
+/// Indent every continuation line of a body that would read as a marker. An inner poem line
+/// keeps its leading tabs; the space goes after them (tC4 #786).
 fn escape_body(body: &str, pins: &[String]) -> String {
     body.split('\n')
         .enumerate()
         .map(|(i, line)| {
-            if i > 0 && escapable(line, pins) {
-                format!(" {line}")
+            let rest = line.trim_start_matches('\t');
+            let tabs = &line[..line.len() - rest.len()];
+            if i > 0 && escapable(rest, pins) {
+                format!("{tabs} {rest}")
             } else {
                 line.to_owned()
             }
@@ -150,9 +153,11 @@ fn escape_body(body: &str, pins: &[String]) -> String {
         .join("\n")
 }
 
-/// Add (`delta` > 0, at most two) or remove (`delta` < 0) one leading tab at the caret's line
-/// (#54). The caret is a UTF-16 offset, as a text field reports it; the new one is too.
-pub fn indent_line(text: &str, caret: usize, delta: i32) -> (String, usize) {
+/// Add (`delta` > 0) or remove (`delta` < 0) one leading tab at the caret's line (#54). A verse
+/// line holds two at most (its format: `\q1` or `\q2`); with the section's `pins`, a line inside
+/// a verse holds three (`\q3`, tC4 #812). The caret is a UTF-16 offset, as a text field reports
+/// it; the new one is too.
+pub fn indent_line(text: &str, caret: usize, delta: i32, pins: &[String]) -> (String, usize) {
     let units: Vec<u16> = text.encode_utf16().collect();
     let caret = caret.min(units.len());
     let tab = u16::from(b'\t');
@@ -170,7 +175,14 @@ pub fn indent_line(text: &str, caret: usize, delta: i32) -> (String, usize) {
         .count();
     let rebuilt = |units: Vec<u16>, caret: usize| (String::from_utf16_lossy(&units), caret);
     if delta > 0 {
-        if tabs >= 2 {
+        let line_end = units
+            .iter()
+            .skip(line_start)
+            .position(|&u| u == u16::from(b'\n'))
+            .map_or(units.len(), |n| line_start + n);
+        let line = String::from_utf16_lossy(units.get(line_start..line_end).unwrap_or_default());
+        let inner = !pins.is_empty() && marker_line(line.trim_start_matches('\t'), pins).is_none();
+        if tabs >= if inner { 3 } else { 2 } {
             return (text.to_owned(), caret);
         }
         let mut out = units;
@@ -262,6 +274,9 @@ pub struct SectionBuffer {
     own: BTreeMap<usize, ParaFormat>,
     /// The pins typed on a line of their own, with the format that line asks for.
     bare: BTreeMap<String, Option<ParaFormat>>,
+    /// The leading tabs (one to three) of each line that holds words, by its first word: a
+    /// line inside a verse keeps them, as its poem level (tC4 #786, #810).
+    tabs: BTreeMap<usize, usize>,
 }
 
 fn tokenize_line(rest: &str, words: &mut Vec<String>, seps: &mut Vec<String>, is_last: bool) {
@@ -318,6 +333,7 @@ impl SectionBuffer {
         let mut blocks: BTreeMap<usize, ParaFormat> = BTreeMap::new();
         let mut own: BTreeMap<usize, ParaFormat> = BTreeMap::new();
         let mut bare: BTreeMap<String, Option<ParaFormat>> = BTreeMap::new();
+        let mut line_tabs: BTreeMap<usize, usize> = BTreeMap::new();
         let lines: Vec<&str> = text.split('\n').collect();
         let last_line = lines.len().saturating_sub(1);
         let mut preceded_by_blank = false;
@@ -363,7 +379,11 @@ impl SectionBuffer {
             {
                 rest = stripped;
             }
+            let first = words.len();
             tokenize_line(rest, &mut words, &mut seps, li == last_line);
+            if tabs > 0 && words.len() > first {
+                line_tabs.insert(first, tabs.min(3));
+            }
         }
         if words.is_empty() {
             return Self {
@@ -375,6 +395,7 @@ impl SectionBuffer {
                 blocks: BTreeMap::new(),
                 own: BTreeMap::new(),
                 bare,
+                tabs: BTreeMap::new(),
             };
         }
         let markers = resolve_pins(&found, words.len());
@@ -387,6 +408,7 @@ impl SectionBuffer {
             blocks,
             own,
             bare,
+            tabs: line_tabs,
         }
     }
 
@@ -513,10 +535,26 @@ impl SectionBuffer {
     /// keyed as the save writes them (tC4's `sectionVerses`). Verses joined into a span are one
     /// paragraph: a blank line inside one becomes a space (#575).
     pub fn verses(&self) -> Vec<(String, String)> {
+        let (groups, text) = self.group_texts();
+        groups
+            .into_iter()
+            .zip(text)
+            .filter_map(|(group, text)| {
+                // A verse's own blank lines after its last words are `own_breaks`.
+                let mut text = js_trim(&text).to_owned();
+                // #575: verses joined into a span now are one paragraph; a span the book
+                // already has keeps its blank lines, its own breaks (tC4 #812).
+                if group.members.len() > 1 && !self.keys.contains(&group.key) {
+                    text = collapse_blank_lines(&text);
+                }
+                (!text.is_empty()).then_some((group.key, text))
+            })
+            .collect()
+    }
+
+    /// Each group with its text as typed, words joined by their separators, untrimmed.
+    fn group_texts(&self) -> (Vec<Group>, Vec<String>) {
         let groups = self.groups();
-        if groups.is_empty() {
-            return Vec::new();
-        }
         let begins: BTreeMap<usize, usize> = groups
             .iter()
             .enumerate()
@@ -526,25 +564,57 @@ impl SectionBuffer {
         // Words before any pin belong to the first verse.
         let mut current = 0;
         for (i, word) in self.words.iter().enumerate() {
-            if let Some(&g) = begins.get(&i) {
+            let begins_verse = begins.get(&i);
+            if let Some(&g) = begins_verse {
                 current = g;
             }
             if let Some(buf) = text.get_mut(current) {
+                // A line inside a verse keeps its tabs; spaces typed after them go (tC4 #810).
+                // The line's format, as tC4 reads it from `blocks`; a line typed with three tabs
+                // is `\q3`, which `blocks` holds as `\q2`.
+                let tabs = match self.blocks.get(&i) {
+                    Some(ParaFormat::Q1) => Some(1),
+                    Some(ParaFormat::Q2) => Some(self.tabs.get(&i).copied().unwrap_or(2).max(2)),
+                    _ => None,
+                };
+                if begins_verse.is_none()
+                    && i > 0
+                    && let Some(tabs) = tabs
+                {
+                    let kept = buf.trim_end_matches(' ').len();
+                    if buf[..kept].ends_with('\n') {
+                        buf.truncate(kept);
+                    }
+                    buf.push_str(&"\t".repeat(tabs));
+                }
                 buf.push_str(word);
                 buf.push_str(self.seps.get(i).map_or("", String::as_str));
             }
         }
-        groups
-            .into_iter()
-            .zip(text)
-            .filter_map(|(group, text)| {
-                let mut text = js_trim(&text).to_owned();
-                if group.members.len() > 1 {
-                    text = collapse_blank_lines(&text);
-                }
-                (!text.is_empty()).then_some((group.key, text))
-            })
-            .collect()
+        (groups, text)
+    }
+
+    /// The blank lines after each verse's last words that are its own (tC4 `ownText`): the
+    /// breaks a save gives back to the verse, as tC4 rc.2 does (#812). The line end before the
+    /// next verse's line is not one, nor the blank line that gives that verse its `\p`.
+    pub fn own_breaks(&self) -> BTreeMap<String, usize> {
+        let (groups, text) = self.group_texts();
+        let mut out = BTreeMap::new();
+        for (g, (group, text)) in groups.iter().zip(&text).enumerate() {
+            let next = groups.iter().skip(g + 1).find_map(|next| next.at);
+            let next_is_p = next.is_some_and(|at| self.blocks.get(&at) == Some(&ParaFormat::P));
+            let end = &text[text.trim_end_matches(js_space).len()..];
+            let blanks = end
+                .matches('\n')
+                .count()
+                .saturating_sub(usize::from(next.is_some()) + usize::from(next_is_p));
+            // A span joined now is one paragraph (#575) and keeps none.
+            let joined_now = group.members.len() > 1 && !self.keys.contains(&group.key);
+            if blanks > 0 && !joined_now && !js_trim(text).is_empty() {
+                out.insert(group.key.clone(), blanks);
+            }
+        }
+        out
     }
 
     /// The marker before each verse after the first, as the typed lines ask: `formats[i]` is
@@ -575,6 +645,7 @@ impl SectionBuffer {
     pub fn serialize(&self) -> String {
         let verses = self.verses();
         let groups = self.groups();
+        // Each line with whether it is a number alone (a verse with no words).
         let line = |i: usize, g: &Group, key: &str| {
             let (text, format) = match verses.iter().find(|(key, _)| *key == g.key) {
                 Some((_, text)) => (
@@ -586,7 +657,10 @@ impl SectionBuffer {
                 None => ("", *self.bare.get(g.members.first()?)?),
             };
             let line = format!("{key} {}", escape_body(text, &self.pins));
-            Some(if i == 0 { line } else { indented(format, line) })
+            Some((
+                if i == 0 { line } else { indented(format, line) },
+                text.is_empty(),
+            ))
         };
         let mut lines = Vec::new();
         let mut overrides = Vec::new();
@@ -629,7 +703,11 @@ impl SectionBuffer {
             i = end + 1;
         }
         lines.extend(overrides);
-        lines.join("\n")
+        lines
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// May `pin` begin at word `index`? Never the first verse (fixed), never past a later

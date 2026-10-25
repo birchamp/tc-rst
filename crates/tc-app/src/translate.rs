@@ -191,7 +191,8 @@ impl App {
                 before: trailing.last().copied(),
                 words: Shown {
                     marker: marker(read, &text.key),
-                    value: text.words,
+                    // Poem lines as tabs, breaks as empty lines (tC4 #810, REF1b).
+                    value: tc_usfm::poem::editor_text(&text.words),
                     token: minted,
                 },
                 format: gap,
@@ -251,11 +252,24 @@ impl Handle<SaveVerse> for App {
         let handle = session.handle().clone();
         let shown = wire::token::edit_token(handle.as_ref(), &req.shown)?;
         let me = handle.facts().device;
+        // The editor text back to the words, by the verse the card showed (its token).
+        let words = {
+            let read = session.read();
+            let opened = match shown.key() {
+                RecordKey::Verse(book, ..) => match crate::section::displayed(&read, &shown, *book)
+                {
+                    Ok((_, VerseValue::Text { words, .. })) => words,
+                    _ => String::new(),
+                },
+                _ => String::new(),
+            };
+            tc_usfm::poem::words_from_editor_text(&req.words, &opened)
+        };
         let command =
-            StoreCommand::save_verse(shown.clone(), req.words.clone()).requested_by(req.request);
+            StoreCommand::save_verse(shown.clone(), words.clone()).requested_by(req.request);
         match handle.submit(command).await {
             Ok(reply) => {
-                self.record_translate_edit(&session, &shown, &req.words, self.inner.clock.now());
+                self.record_translate_edit(&session, &shown, &words, self.inner.clock.now());
                 wire::write::ack(&reply, &session.read(), &shown, &req.words, me).map_err(|e| {
                     self.internal(
                         "a save's reply could not be written",

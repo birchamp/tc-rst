@@ -176,13 +176,32 @@ fn the_port_reads_every_text_as_tc4_does() {
         assert_eq!(groups, wanted, "groups of {at}");
         assert_eq!(b.new_keys(), strings(&case["newKeys"]), "keys of {at}");
         let verses: BTreeMap<String, String> = b.verses().into_iter().collect();
+        // tC4 rc.2 keeps a verse's blank lines after its last words in its text (`ownText`); the
+        // port reports them apart, as `own_breaks`, which the section save gives back (REF1b).
         let wanted: BTreeMap<String, String> = case["verses"]
             .as_object()
             .unwrap()
             .iter()
-            .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    v.as_str().unwrap().trim_end_matches('\n').to_owned(),
+                )
+            })
             .collect();
         assert_eq!(verses, wanted, "verses of {at}");
+        // The blank lines tC4 keeps after a verse's last words are the port's own breaks.
+        let own: BTreeMap<String, usize> = case["verses"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| {
+                let v = v.as_str().unwrap();
+                (k.clone(), v.len() - v.trim_end_matches('\n').len())
+            })
+            .filter(|(_, n)| *n > 0)
+            .collect();
+        assert_eq!(b.own_breaks(), own, "own breaks of {at}");
         // A declared difference (B4b): when the section's first verse has no text, the first
         // line written keeps the paragraph or poetry line typed before it, which tC4's
         // `serializeDraft` drops, so a Place session's text saves the formats it holds.
@@ -209,6 +228,21 @@ fn the_port_reads_every_text_as_tc4_does() {
             }
             assert_eq!(back.verses(), b.verses(), "verses of {at}");
             assert_eq!(back.formats(), b.formats(), "formats of {at}");
+        } else if case["verses"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|v| v.as_str().unwrap().ends_with('\n'))
+        {
+            // tC4 writes a verse's own blank lines back into the Type text; the port keeps them
+            // as `own_breaks` (REF1b), so the lines with words must agree.
+            let lines = |t: &str| {
+                t.split('\n')
+                    .filter(|l| !l.trim().is_empty())
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(lines(&ours), lines(&theirs), "serialized {at}");
         } else {
             assert_eq!(ours, theirs, "serialized {at}");
         }
@@ -284,7 +318,8 @@ fn the_port_indents_as_tc4_does() {
         let text = case["text"].as_str().unwrap();
         let caret = case["caret"].as_u64().unwrap() as usize;
         let delta = case["delta"].as_i64().unwrap() as i32;
-        let (out, at) = indent_line(text, caret, delta);
+        let pins = case.get("pins").map_or_else(Vec::new, strings);
+        let (out, at) = indent_line(text, caret, delta, &pins);
         assert_eq!(out, case["out"].as_str().unwrap(), "{case}");
         assert_eq!(at, case["caretOut"].as_u64().unwrap() as usize, "{case}");
     }
@@ -634,17 +669,20 @@ fn rule_3_tab_gives_q1_a_second_tab_q2_and_tabs_win_over_a_blank_line() {
     assert_eq!(at("9 a\n\t10 b"), Some(ParaFormat::Q1));
     assert_eq!(at("9 a\n\t\t10 b"), Some(ParaFormat::Q2));
     assert_eq!(at("9 a\n\n\t10 b"), Some(ParaFormat::Q1));
-    assert_eq!(indent_line("10 b", 0, 1), ("\t10 b".to_owned(), 1));
-    assert_eq!(indent_line("\t10 b", 1, 1), ("\t\t10 b".to_owned(), 2));
+    assert_eq!(indent_line("10 b", 0, 1, &[]), ("\t10 b".to_owned(), 1));
+    assert_eq!(indent_line("\t10 b", 1, 1, &[]), ("\t\t10 b".to_owned(), 2));
     assert_eq!(
-        indent_line("\t\t10 b", 2, 1),
+        indent_line("\t\t10 b", 2, 1, &[]),
         ("\t\t10 b".to_owned(), 2),
         "at most two"
     );
-    assert_eq!(indent_line("\t\t10 b", 2, -1), ("\t10 b".to_owned(), 1));
-    assert_eq!(indent_line("\t10 b", 1, -1), ("10 b".to_owned(), 0));
     assert_eq!(
-        indent_line("10 b", 0, -1),
+        indent_line("\t\t10 b", 2, -1, &[]),
+        ("\t10 b".to_owned(), 1)
+    );
+    assert_eq!(indent_line("\t10 b", 1, -1, &[]), ("10 b".to_owned(), 0));
+    assert_eq!(
+        indent_line("10 b", 0, -1, &[]),
         ("10 b".to_owned(), 0),
         "no tabs"
     );
@@ -954,11 +992,11 @@ proptest! {
         text in "[\t a-z\n]{0,12}",
         caret in 0usize..16,
     ) {
-        let (up, _) = indent_line(&text, caret, 1);
-        let (twice, _) = indent_line(&up, caret + 1, 1);
-        let (thrice, _) = indent_line(&twice, caret + 2, 1);
+        let (up, _) = indent_line(&text, caret, 1, &[]);
+        let (twice, _) = indent_line(&up, caret + 1, 1, &[]);
+        let (thrice, _) = indent_line(&twice, caret + 2, 1, &[]);
         prop_assert!(thrice.len() <= text.len() + 2);
-        let (down, at) = indent_line(&up, caret + 1, -1);
+        let (down, at) = indent_line(&up, caret + 1, -1, &[]);
         prop_assert!(at <= down.encode_utf16().count());
     }
 }
