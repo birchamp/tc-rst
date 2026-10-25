@@ -173,7 +173,7 @@ pub(crate) fn resolve_heads(
         heads.iter().map(|h| value_of(state, *h)).collect();
     let mut unreadable = values.iter().any(Result::is_err);
     if !unreadable && values.iter().all(|v| *v == values[0]) {
-        return equal_values(state, &key, &heads);
+        return equal_values(state, key, &heads);
     }
     // Stub rules: a seed stub is absorbed by any head that is not one; if every head is a
     // stub, the smallest id stays.
@@ -213,7 +213,7 @@ pub(crate) fn resolve_heads(
             values = kept.into_iter().map(|(_, v)| v).collect();
             unreadable = values.iter().any(Result::is_err);
             if !unreadable && values.iter().all(|v| *v == values[0]) {
-                return equal_values(state, &key, &heads);
+                return equal_values(state, key, &heads);
             }
         }
     }
@@ -235,7 +235,7 @@ pub(crate) fn resolve_heads(
         ancestry.bases.iter().map(|b| value_of(state, *b)).collect();
     let values: Result<Vec<Option<Json>>, Unreadable> = values.into_iter().collect();
     let (Ok(values), Ok(base_values)) = (values, base_values) else {
-        return conflict(state, &key, &heads, true);
+        return conflict(state, key, &heads, true);
     };
     let outcome = merge_units(key, &values, &base_values);
     match outcome.merged {
@@ -249,9 +249,9 @@ pub(crate) fn resolve_heads(
             ),
             // A merged value that does not decode is a conflict; so is a template whose
             // bytes could not be read again, until they can.
-            None => conflict(state, &key, &heads, state.bytes(heads[0]).is_none()),
+            None => conflict(state, key, &heads, state.bytes(heads[0]).is_none()),
         },
-        None => conflict(state, &key, &heads, false),
+        None => conflict(state, key, &heads, false),
     }
 }
 

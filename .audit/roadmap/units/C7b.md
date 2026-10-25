@@ -4,7 +4,7 @@ title: Newest wins outside verse text (H5), and the conflict screens that stay
 track: A
 lane: app
 milestone: M3
-state: building
+state: verifying
 owner: shell lane (Claude Code e1bb3a0c)
 branch: track-C7b
 worktree: .worktrees/track-C7b
@@ -15,7 +15,7 @@ no_loss: true
 size: 3-5 sessions (basis: the design in the 2026-10-24 log; the fold already orders heads, so the rule is small, the tests and goldens are most of it)
 merged: none
 updated: 2026-10-24
-next: Step 8, the journey (a teammate's newer check and alignment arrive with no question; History restores the older one) and PLAN.md's declared differences; then the races and parity lenses.
+next: Pushed once; with the integration lane for a batch.
 blocked_by: none
 ---
 
@@ -205,3 +205,7 @@ Plus:
 - 2026-10-25 11:18 EDT | shell lane (Claude Code e1bb3a0c) | ruling | none | The orchestrator chose option (b) for the parity blocker: C7b gives the record-keyed calls and the restore logic with tests; a new card HIST-1 (depends on C7b) adds History and Restore on the Check screen, in the aligner and for settings and pins, and draws the Received sheet's replaced rows; C7b merges on its own
 - 2026-10-25 11:18 EDT | shell lane (Claude Code e1bb3a0c) | fix | none | Parity B1, C7b's part: conflicts/history was already keyed by record; new command conflicts/restore { at, request, shown, from } restores a version of a record that is in no conflict, over every head the shown token names (StoreCommand::restore, tc-journal's Command::Restore); a_record_outside_a_conflict_restores_an_older_version_from_history (tc-app) restores Teammate 1's older decision after Teammate 2's newer one won. Endpoint lists and goldens follow; tc-api, tc-server routes and the tc-ui wasm32 clippy pass
 - 2026-10-25 11:18 EDT | shell lane (Claude Code e1bb3a0c) | step 8 | none | parity/app/journeys/conflict-kinds.test.mjs newest_version_wins_and_history_restores_the_older: a scripted sync brings two versions of a check and an alignment; the toast reads tC4's '2 conflicts kept the newest version', no Review link, jobs/get carries the replaced rows, the Alignments and Checks tabs list nothing, the Check screen and TIT.json hold Teammate 2's comment; 3 runs in a row pass, 0 skipped; with the expected comment changed it fails at conflict-kinds.test.mjs:102. The restore half through the UI waits for HIST-1's History buttons. Written by a subagent of this lane, reviewed here | node --test parity/app/journeys/conflict-kinds.test.mjs
+- 2026-10-25 11:30 EDT | races lens (subagent of shell lane (Claude Code e1bb3a0c)) | verify | cb7ccc7a | 1 Code: one rule, total order; 2 Checks: property tests sound, gaps noted; 3 Reach: M1 reachable once a real sync exists; 4 Siblings: upgrades, downloads and outside edits checked (PlanStale refuses a changed plan); 5 No loss: no blocker; M1 a teammate's newer removal of a book over unseen edits gave no Received row; 6 minors | .audit/roadmap/evidence/2026-10-24/C7b-lens-races.md
+- 2026-10-25 11:30 EDT | shell lane (Claude Code e1bb3a0c) | fix | none | Races M1: a received removal that removed a book is a Received row (by the remover, kind book, place the book); TeammatesKind::BookRemoved scripts it; received_says_a_teammate_removed_a_book. The minors of the three lenses and the storage reviews are in .audit/minors.tsv
+- 2026-10-25 11:30 EDT | shell lane (Claude Code e1bb3a0c) | note | none | Main 4956ac52 merged in (86920510; one PLAN.md conflict: kept main's removal of the aligner bullet and H5's bullet); HIST-1 card created and added to ROADMAP, REL-1's and DONE's depends
+- 2026-10-25 12:40 EDT | shell lane (Claude Code e1bb3a0c) | verify | none | After the merge of main: change_kind moved to its own test-hooks impl block (main's test_hook_branches lint), clippy borrow and single-match fixes; tc-journal, tc-store, tc-api, tc-app and tc-ui tests with test-hooks pass (tc-app app 698/698), workspace and tc-ui/tc-api wasm32 clippy clean, conflict-kinds.test.mjs 1/1, board.py --check 0 errors, claims 4/4 | cargo test -p tc-journal -p tc-store -p tc-api -p tc-app -p tc-ui --features tc-api/test-hooks; node --test parity/app/journeys/conflict-kinds.test.mjs

@@ -2285,9 +2285,8 @@ async fn a_download_adopts_pins_over_two_versions_and_keeps_the_other_in_history
         },
     )
     .await;
-    match ended(&w.t.app, job).await {
-        JobState::Failed(error) => panic!("{error:?}"),
-        _ => {}
+    if let JobState::Failed(error) = ended(&w.t.app, job).await {
+        panic!("{error:?}");
     }
     handle(&w).wait_idle();
     assert_eq!(heads(&w, &key).len(), 1);

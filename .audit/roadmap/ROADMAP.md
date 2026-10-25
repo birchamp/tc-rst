@@ -133,7 +133,8 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | C7a | Conflict choices: text and passage | B11 (done) | 3-4 sessions |
-| C7b | Conflict choices: every other kind | C7a, S2, owner H5 (Q-9) | 4.5-6.5 sessions |
+| C7b | Newest wins outside verse text (H5), and the conflict screens that stay | C7a, S2, owner H5 (ruled) | 4.5-6.5 sessions |
+| HIST-1 | History and Restore on the screens, and the Received sheet's replaced rows | C7b, UI-3b | 2-3 sessions |
 | D1 | Checkpoints and outside edits | S2, UI-3a | 5-6 sessions plus 1-2 of integration |
 | D2 | Exports | S2, UI-1 | 4 sessions |
 | E1a | Sync | X, C7a, D1, UI-2, UI-3a | 5-6 sessions |
@@ -169,7 +170,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
-| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c | 1 d |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1 | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path

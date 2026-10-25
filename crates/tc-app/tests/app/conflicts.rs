@@ -1151,3 +1151,43 @@ async fn a_record_outside_a_conflict_restores_an_older_version_from_history() {
     );
     assert_eq!(read.heads(&key).len(), 1);
 }
+
+/// Owner ruling H5: a teammate's newer removal removes the book with no question; the Received
+/// sheet says so, as the removal replaced this person's book.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn received_says_a_teammate_removed_a_book() {
+    use tc_api::jobs::ReplacedKind;
+
+    let w = shared().await;
+    w.t.clock.set(START_MS);
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    script(
+        app,
+        41,
+        ScriptedSync::Synced {
+            teammates: None,
+            joined: None,
+            kinds: vec![TeammatesKind::BookRemoved],
+            restored: 0,
+        },
+    )
+    .await;
+    let synced = synced(app, 42).await;
+    let rows: Vec<_> = synced
+        .replaced
+        .iter()
+        .map(|r| (r.by.clone(), r.kind, r.place.clone()))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![(
+            teammate(1),
+            ReplacedKind::Book,
+            ReviewPlace::Book {
+                book: BookId::Jonah
+            }
+        )]
+    );
+}

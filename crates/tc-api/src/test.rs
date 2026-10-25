@@ -450,6 +450,8 @@ pub enum TeammatesKind {
     Pins,
     /// Jonah: one restores its text, the other starts it empty.
     BookPresence,
+    /// Jonah: Teammate 1 removes it, having seen nobody's work on it.
+    BookRemoved,
     /// A carried file Teammate 1 added, which both then replace.
     CarriedFile,
     /// Two carried files whose paths differ only in case, one by each.

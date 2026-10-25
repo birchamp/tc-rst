@@ -970,11 +970,69 @@ pub mod teammates {
             Ok(changes)
         }
 
+        /// Teammate `n` signed in to Door43 as `username`: their device's profile, so the
+        /// screens name them by it, and two teammates with one username are one person's
+        /// computers (STORAGE §8.5).
+        pub fn sign_in(
+            &mut self,
+            fold: &FoldState,
+            n: u8,
+            username: &str,
+        ) -> Result<Change, MemoryError> {
+            let device = device(n);
+            let value = DeviceProfileValue {
+                display_name: None,
+                door43_username: Some(
+                    Door43Username::parse(username)
+                        .map_err(|e| MemoryError::Change(e.to_string()))?,
+                ),
+                legacy: None,
+            };
+            let parents = fold.heads(&RecordKey::DeviceProfile(device));
+            let record = Record::DeviceProfile { device, value };
+            let mut next = self.clone();
+            let change = next.change(n, record, parents, None)?;
+            *self = next;
+            Ok(change)
+        }
+
+        /// The next change of teammate `n`: `record` over `parents`, in `batch` with its
+        /// time, or in a batch of its own dated a day after the teammate's last change.
+        fn change(
+            &mut self,
+            n: u8,
+            record: Record,
+            parents: Vec<ChangeId>,
+            batch: Option<(BatchRef, WallTime)>,
+        ) -> Result<Change, MemoryError> {
+            let seq = self.last.get(&n).map_or(1, |seq| seq + 1);
+            let device = device(n);
+            let (batch, at) = match batch {
+                Some(batch) => batch,
+                None => (batch_ref(device, seq, 1)?, at_of(n, seq)),
+            };
+            let change = Change::new(ChangeBody {
+                v: 0,
+                record,
+                parents,
+                device,
+                seq: DeviceSeq(seq),
+                at,
+                batch,
+                cause: Cause::Edit,
+            })
+            .map_err(|e| MemoryError::Change(e.to_string()))?;
+            self.last.insert(n, seq);
+            Ok(change)
+        }
+    }
+
+    #[cfg(feature = "test-hooks")]
+    impl Teammates {
         /// Teammates 1 and 2's versions of one record of `kind`, both from its current heads in
         /// `fold` and each different from them and from the other, so the fold holds a conflict
         /// of the kind (C7b). A carried file is first added by Teammate 1, so both versions
         /// replace one version (CF 3). Nothing is counted when the record cannot be made.
-        #[cfg(feature = "test-hooks")]
         pub fn change_kind(
             &mut self,
             fold: &FoldState,
@@ -1110,6 +1168,15 @@ pub mod teammates {
                         with(PresentHow::StartedEmpty),
                     )?
                 }
+                Kind::BookRemoved => {
+                    // Teammate 1 removes Jonah without having seen anyone's work on it.
+                    let removal = Record::BookPresence {
+                        book: BookId::Jonah,
+                        value: BookPresence::Removed { seen: Vec::new() },
+                    };
+                    let parents = fold.heads(&removal.key());
+                    vec![next.change(1, removal, parents, None)?]
+                }
                 Kind::CarriedFile => {
                     const PATH: &str = "ingredients/audio/jon_01.wav";
                     let added = carried(PATH, "la grabación")?;
@@ -1143,62 +1210,6 @@ pub mod teammates {
             };
             *self = next;
             Ok(changes)
-        }
-
-        /// Teammate `n` signed in to Door43 as `username`: their device's profile, so the
-        /// screens name them by it, and two teammates with one username are one person's
-        /// computers (STORAGE §8.5).
-        pub fn sign_in(
-            &mut self,
-            fold: &FoldState,
-            n: u8,
-            username: &str,
-        ) -> Result<Change, MemoryError> {
-            let device = device(n);
-            let value = DeviceProfileValue {
-                display_name: None,
-                door43_username: Some(
-                    Door43Username::parse(username)
-                        .map_err(|e| MemoryError::Change(e.to_string()))?,
-                ),
-                legacy: None,
-            };
-            let parents = fold.heads(&RecordKey::DeviceProfile(device));
-            let record = Record::DeviceProfile { device, value };
-            let mut next = self.clone();
-            let change = next.change(n, record, parents, None)?;
-            *self = next;
-            Ok(change)
-        }
-
-        /// The next change of teammate `n`: `record` over `parents`, in `batch` with its
-        /// time, or in a batch of its own dated a day after the teammate's last change.
-        fn change(
-            &mut self,
-            n: u8,
-            record: Record,
-            parents: Vec<ChangeId>,
-            batch: Option<(BatchRef, WallTime)>,
-        ) -> Result<Change, MemoryError> {
-            let seq = self.last.get(&n).map_or(1, |seq| seq + 1);
-            let device = device(n);
-            let (batch, at) = match batch {
-                Some(batch) => batch,
-                None => (batch_ref(device, seq, 1)?, at_of(n, seq)),
-            };
-            let change = Change::new(ChangeBody {
-                v: 0,
-                record,
-                parents,
-                device,
-                seq: DeviceSeq(seq),
-                at,
-                batch,
-                cause: Cause::Edit,
-            })
-            .map_err(|e| MemoryError::Change(e.to_string()))?;
-            self.last.insert(n, seq);
-            Ok(change)
         }
     }
 

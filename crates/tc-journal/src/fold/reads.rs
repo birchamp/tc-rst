@@ -138,7 +138,7 @@ impl FoldState {
             .collect::<Option<_>>()?;
         self.sort_by_id(&mut idx);
         match super::merge::resolve_heads(self, key, idx).0 {
-            Local::Settled(c) | Local::ByRule(c) => super::merge::record_of(self, c),
+            Local::Settled(c) | Local::ByRule { head: c, .. } => super::merge::record_of(self, c),
             Local::Merged(merged) => Some((*merged.0).clone()),
             Local::Empty | Local::Conflict(_) | Local::Passage => None,
         }

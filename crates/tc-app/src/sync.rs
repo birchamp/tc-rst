@@ -136,6 +136,32 @@ fn replaced(
         if !seen.insert(key.clone()) {
             continue;
         }
+        // A teammate's removal that removed a book: its verses and the rest stay in History, and
+        // the sheet says so even though no second version of the book's presence lost.
+        if let RecordKey::BookPresence(book) = &key
+            && matches!(
+                body.record,
+                tc_journal::Record::BookPresence {
+                    value: tc_journal::record::BookPresence::Removed { .. },
+                    ..
+                }
+            )
+            && snapshot.book(*book) == tc_journal::fold::BookView::Removed
+            && let Some(by) = labels.get(&body.device)
+            && labels.get(&body.device) != Some(&tc_journal::fold::PersonLabel::Mine)
+        {
+            rows.push((
+                (body.device, body.device),
+                tc_api::jobs::ReplacedView {
+                    by: crate::wire::scope::person_label(by),
+                    whose: crate::wire::scope::person_label(&tc_journal::fold::PersonLabel::Mine),
+                    kind,
+                    place: crate::conflicts::place_of(&key),
+                    count: 1,
+                },
+            ));
+            continue;
+        }
         // Every record a received change touched that settled on its newest head: the received
         // change won, or lost (a teammate's decision at a check that moved), never silently.
         let Some(state) = snapshot.key_state(&key) else {
