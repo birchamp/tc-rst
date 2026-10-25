@@ -263,6 +263,89 @@ fn import_of_a_verse_changed_on_both_sides_is_a_conflict() {
     handle.close().unwrap();
 }
 
+/// `bytes` with the book's `\toc1` line replaced.
+fn set_toc1(bytes: &[u8], text: &str) -> Vec<u8> {
+    let s = String::from_utf8(bytes.to_vec()).unwrap();
+    let at = s.find("\\toc1 ").unwrap() + "\\toc1 ".len();
+    let end = at + s[at..].find('\n').unwrap();
+    format!("{}{}{}", &s[..at], text, &s[end..]).into_bytes()
+}
+
+fn header(handle: &ProjectHandle) -> String {
+    match handle
+        .snapshot()
+        .fold()
+        .projected(&tc_journal::RecordKey::BookHeader(TIT))
+    {
+        Some(tc_journal::record::Record::BookHeader { value, .. }) => value.0,
+        other => panic!("no header: {other:?}"),
+    }
+}
+
+/// A header the translator never touched (`\toc1` changed in another program) comes in with
+/// no question, and the project's header record holds the file's text.
+#[test]
+fn import_of_a_header_only_change_takes_it_in() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_toc1(&written, "Paul's letter to Titus");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let handle = open(&rig, &folder);
+    let copy = handle.waiting_books()[0].kept.copy.clone();
+    let report = handle.import_kept(&copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+    assert!(
+        header(&handle).contains("\\toc1 Paul's letter to Titus"),
+        "{}",
+        header(&handle)
+    );
+    let file = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
+    assert!(file.contains("\\toc1 Paul's letter to Titus"), "{file}");
+    assert!(handle.kept_copies().is_empty());
+    handle.close().unwrap();
+}
+
+/// A header changed on both sides (two saves of the file, the newer imported first) is a
+/// conflict whose two versions each hold their header text.
+#[test]
+fn import_of_a_header_changed_on_both_sides_is_a_conflict_with_both_texts() {
+    let (rig, folder, written) = saved_and_closed();
+    let first = set_toc1(&written, "First title");
+    rig.fs.put(&usfm_path(&folder), &first, None);
+    let handle = open(&rig, &folder);
+    rig.fs.advance(std::time::Duration::from_secs(5));
+    let second = set_toc1(&written, "Second title");
+    rig.fs.put(&usfm_path(&folder), &second, None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    let kept = handle.kept_copies();
+    assert_eq!(kept.len(), 2, "{kept:?}");
+    handle.import_kept(&kept[1].copy).wait().unwrap();
+    handle.wait_idle();
+    let report = handle.import_kept(&kept[0].copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!((report.imported, report.to_review), (0, 1), "{report:?}");
+    let snapshot = handle.snapshot();
+    let conflict = snapshot
+        .fold()
+        .conflicts()
+        .find(|c| c.kind == ConflictKind::BookHeader)
+        .expect("a header conflict");
+    let mut texts: Vec<String> = conflict
+        .candidates
+        .iter()
+        .map(|c| match &c.value {
+            tc_journal::record::Record::BookHeader { value, .. } => value.0.clone(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    texts.sort();
+    assert_eq!(texts.len(), 2, "{texts:?}");
+    assert!(texts[0].contains("\\toc1 First title"), "{texts:?}");
+    assert!(texts[1].contains("\\toc1 Second title"), "{texts:?}");
+    handle.close().unwrap();
+}
+
 /// INV-EVERY-KEPT-COPY-HAS-ITS-ENTRY: a second save of a held file is kept under its own entry
 /// with the same base; the question imports the newest, and the first stays listed.
 #[test]
