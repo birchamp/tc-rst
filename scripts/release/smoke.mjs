@@ -48,10 +48,12 @@ function bounded(promise, what) {
 
 async function until(what, poll) {
   const deadline = Date.now() + HANG_MS;
+  let last;
   for (;;) {
-    const value = await poll();
+    const value = await poll((seen) => { last = seen; });
     if (value) return value;
-    if (Date.now() > deadline) throw new Hung(what);
+    // The last state seen tells a slow step from a stuck one.
+    if (Date.now() > deadline) throw new Hung(last === undefined ? what : `${what}; last seen ${JSON.stringify(last)}`);
     await pause(200);
   }
 }
@@ -136,7 +138,7 @@ async function step(name, run) {
     await run();
     console.log(`ok ${name}`);
   } catch (error) {
-    console.log(`FAIL ${name}: ${error instanceof Hung ? `hung: ${name}` : error.message}`);
+    console.log(`FAIL ${name}: ${error instanceof Hung ? `hung: ${error.message}` : error.message}`);
     for (const app of running) app.kill();
     process.exit(1);
   }
@@ -161,8 +163,9 @@ await step('bundled_resources_without_network', async () => {
   if (first.type !== 'preparing' || !(first.value.total > 0)) {
     throw new Error(`a first start has nothing to install from the bundle: ${JSON.stringify(first)}`);
   }
-  const end = await until('bundled_resources_without_network', async () => {
+  const end = await until('bundled_resources_without_network', async (seen) => {
     const now = (await state.app.call('app/hello')).startup;
+    seen(now);
     return now.type !== 'preparing' && now;
   });
   if (end.type !== 'ready') throw new Error(`installing the bundle ended ${JSON.stringify(end)}`);
