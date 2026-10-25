@@ -18,6 +18,10 @@
 //!
 //! Paths are absolute, `/`-separated, without `.` or `..`.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "FaultFs's mirror: the real folder beside the model where libgit2 keeps a test project's .git, made, copied and removed for tests"
+)]
 use crate::vfs::{
     DirEntry, EntryKind, FileMeta, HeldByAnotherProgram, LockHandle, ReadHandle, Vfs, WriteHandle,
 };
@@ -666,6 +670,12 @@ impl FaultFs {
     /// Whether the writer was stopped.
     pub fn is_dead(&self) -> bool {
         self.model().faults.dead
+    }
+
+    /// How many `.tc/lock` files are held: a project's lock goes only after its last write
+    /// (STORAGE §5.0), so none held means every open project has finished writing.
+    pub fn locks_held(&self) -> usize {
+        self.locks.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// The write point `n` from now fails with `kind`, and the writer goes on.

@@ -12,7 +12,7 @@ use tc_api::ids::AlignerId;
 use tc_api::shown::Direction;
 use tc_core::{BookId, Reference, VerseSpan};
 use tc_journal::record::{AlignmentValue, ChapterVerse, ResourceRef, VerseValue};
-use tc_journal::{ChapterNo, MetaField, Record, RecordKey, VerseNo};
+use tc_journal::{ChapterNo, Record, RecordKey, VerseNo};
 use tc_resources::{Missing, TextRole, TextStatus};
 
 use super::view::{Facts, Gateway};
@@ -72,25 +72,6 @@ pub(super) fn original_language(
         }
         None => (None, String::new()),
     }
-}
-
-/// The direction the project's language reads in.
-pub(super) fn project_dir(read: &CountingSnapshot) -> Direction {
-    let rtl = match read.projected(&RecordKey::ProjectMeta(MetaField::Languages)) {
-        Some(Record::ProjectMeta {
-            value: Some(tc_journal::Json::Arr(languages)),
-            ..
-        }) => {
-            languages
-                .first()
-                .and_then(tc_journal::Json::as_obj)
-                .and_then(|language| language.get("scriptDirection"))
-                .and_then(tc_journal::Json::as_str)
-                == Some("rtl")
-        }
-        _ => false,
-    };
-    if rtl { Direction::Rtl } else { Direction::Ltr }
 }
 
 fn count(n: u16) -> Option<ChapterNo> {
@@ -202,11 +183,7 @@ pub(super) async fn prepare(
     let Some(span) = VerseSpan::range(verse, last) else {
         return Err(bad("a span that ends before it starts"));
     };
-    let reference = Reference {
-        book,
-        chapter,
-        verses: span,
-    };
+    let reference = Reference::new(book, c, span);
     let source_at = match source_reference(loaded.numbering.project_scheme(), reference) {
         Ok(at) => at,
         Err(NoSourceVerse::UnknownFrame) => {
@@ -264,7 +241,7 @@ pub(super) async fn prepare(
             tc_core::Testament::Old => Testament::Ot,
             tc_core::Testament::New => Testament::Nt,
         },
-        target_dir: project_dir(&read),
+        target_dir: crate::direction::of_fold(&read),
         // The Hebrew Bible reads right to left (tC4 `origDir`).
         orig_dir: match book.testament() {
             tc_core::Testament::Old => Direction::Rtl,

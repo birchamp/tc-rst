@@ -23,6 +23,32 @@ pub struct QuietView {
     pub busy: bool,
 }
 
+/// `test/validate`: every project folder in the projects folder, checked as a Scripture
+/// Burrito once the open projects have settled (P5, INV-VALID-BURRITO), so a journey ends
+/// knowing the folders it left are valid.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Validate {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateView {
+    /// How many folders were checked: 0 when the projects are not on disk.
+    pub checked: u32,
+    pub invalid: Vec<InvalidProject>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct InvalidProject {
+    /// The folder's name in the projects folder.
+    pub folder: String,
+    pub problems: Vec<String>,
+}
+
 /// `test/echo`: a reply of about the size asked for, so the loopback round trip of the
 /// aligner's click can be measured with a reply of its size (APP-DESIGN §8.3, unit A2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -391,9 +417,26 @@ pub enum ScriptedSync {
     /// `restored` is how many changes Door43 had lost and the sync sends again.
     Synced {
         teammates: Option<TeammatesEdit>,
+        /// Teammate 1 joined a run of verses into one on Door43, in one batch, from the
+        /// verses as Door43 held them: the sync receives the join (C7a's passage conflict
+        /// when this computer changed one of the verses meanwhile).
+        #[serde(default)]
+        joined: Option<TeammatesJoin>,
         restored: u32,
     },
     Failed(crate::refusal::SyncFailure),
+}
+
+/// Teammate 1's join of the verses `first` to `last` of one chapter into one span.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TeammatesJoin {
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+    pub book: tc_core::BookId,
+    pub chapter: u16,
+    pub first: u16,
+    pub last: u16,
 }
 
 /// Teammates' versions of one verse.

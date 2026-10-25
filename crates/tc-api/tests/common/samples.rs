@@ -168,7 +168,7 @@ pub fn resources() -> Vec<ResourceRefusal> {
             reason: s("the archive is damaged"),
         },
         ResourceRefusal::UpdateCheckFailed {
-            reason: s("the catalog answered 502"),
+            why: tc_api::refusal::UpdateCheckFailure::Unreachable,
         },
         ResourceRefusal::UpgradeFailed {
             reason: s("the archive is damaged"),

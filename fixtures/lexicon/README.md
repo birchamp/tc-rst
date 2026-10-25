@@ -15,5 +15,5 @@ own (tC4 `docs/PACKAGING.md:996-997`, issue #703). Read `crates/tc-resources/src
 
 en_uhl, UHB and UGNT are © unfoldingWord, CC BY-SA 4.0. The vectors hold attributes of those
 texts and what word-aligner-lib (MIT) computes from them. The generator is part of this
-repository (GPL-2.0-or-later); it runs word-aligner-lib and fflate (MIT) from tC4's
+repository (MIT); it runs word-aligner-lib and fflate (MIT) from tC4's
 `node_modules` without copying them.

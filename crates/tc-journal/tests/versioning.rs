@@ -3,6 +3,10 @@
 //! compute the same keys.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test code writes its own fixture and snapshot files, never a project"
+)]
 
 mod common;
 

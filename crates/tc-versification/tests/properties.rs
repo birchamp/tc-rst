@@ -318,3 +318,33 @@ fn standard_schemes_map_to_org_and_back_unchanged_outside_lossy_entries() {
         );
     }
 }
+
+/// A value that parses prints a text that parses back to it (INV-IDS-ROUND-TRIP).
+fn round_trips<T: std::str::FromStr + std::fmt::Display + PartialEq + std::fmt::Debug>(
+    text: &str,
+) -> Result<(), TestCaseError> {
+    if let Ok(value) = text.parse::<T>() {
+        let printed = value.to_string();
+        prop_assert_eq!(
+            printed.parse::<T>().ok(),
+            Some(value),
+            "{:?} printed {:?}",
+            text,
+            printed
+        );
+    }
+    Ok(())
+}
+
+proptest! {
+    #[test]
+    fn ids_round_trip(
+        verse in "[A-Za-z1-3]{3} [0-9]{1,3}:[0-9]{1,3}",
+        book in "[A-Za-z0-9]{3}",
+        part in "[0-9a-z,+ -]{0,5}",
+    ) {
+        round_trips::<VerseRef>(&verse)?;
+        round_trips::<BookCode>(&book)?;
+        round_trips::<tc_versification::RefPart>(&part)?;
+    }
+}

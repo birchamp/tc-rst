@@ -36,9 +36,9 @@ use tc_api::check::{
     CheckEmpty, CheckItemView, CheckListRef, CheckNotice, CheckPlace, CheckProgress,
     CheckSessionView, CheckSources, CheckUnit, Decide, DecideEdit, DecisionStatus, DecisionView,
     Dot, DroppedNote, GatewayText, GatewayView, Item, NextCheck, NoteCategory, Open as CheckOpen,
-    OriginalView, Picker, PickerView, PinCitation, RailProgress, RailRow, RailRowPatch, RailRows,
-    RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung, TargetWords,
-    Testament as CheckTestament, Tool, ToolCard, ToolState,
+    OriginalVerse, OriginalView, Picker, PickerView, PinCitation, RailProgress, RailRow,
+    RailRowPatch, RailRows, RailSince, ResourceCitation, RowFlags, Rows, RowsView, Rung,
+    TargetWords, Testament as CheckTestament, Tool, ToolCard, ToolState,
 };
 use tc_api::create::{
     AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
@@ -105,8 +105,9 @@ use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
-    TeammatesEdit, TokenBase,
+    TeammatesEdit, TeammatesJoin, TokenBase,
 };
+use tc_api::test::{InvalidProject, Validate, ValidateView};
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
@@ -115,9 +116,10 @@ use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ReviewToken, ShownToken};
 use tc_core::BookId;
 
 use tc_api::conflicts::{
-    ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion, HistoryView,
-    List as ConflictList, MadeBy, NoticeEntry, NoticeView, Resolve, ReviewEntries, ReviewPlace,
-    ReviewTab, ReviewView, TabCount, Version, VersionCause, VersionValue,
+    BulkConflict, BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History,
+    HistoryVersion, HistoryView, KeepChoice, List as ConflictList, MadeBy, NoticeEntry, NoticeView,
+    Resolve, ResolveBulk, ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version,
+    VersionCause, VersionValue,
 };
 
 /// An example value for a golden file.
@@ -817,7 +819,7 @@ impl Example for UpdatesView {
                     published: None,
                 },
             }],
-            texts_error: Some("Door43 did not answer".into()),
+            texts_error: Some(tc_api::refusal::UpdateCheckFailure::Unreachable),
         }
     }
 }
@@ -1038,6 +1040,26 @@ impl Example for Quiet {
 impl Example for QuietView {
     fn example() -> Self {
         QuietView { busy: false }
+    }
+}
+
+impl Example for Validate {
+    fn example() -> Self {
+        Validate {}
+    }
+}
+
+impl Example for ValidateView {
+    fn example() -> Self {
+        ValidateView {
+            checked: 1,
+            invalid: vec![InvalidProject {
+                folder: "en_ult_tit_book".into(),
+                problems: vec![
+                    "ChecksumMismatch { path: \"ingredients/TIT.usfm\", listed: \"00000000000000000000000000000000\", actual: \"1ce94f44dd0f1c4e87fa88a7a80f9216\" }".into(),
+                ],
+            }],
+        }
     }
 }
 
@@ -2550,7 +2572,16 @@ impl Example for CheckItemView {
             sources: CheckSources::Verse {
                 original: OriginalView::Ready {
                     testament: CheckTestament::Nt,
-                    verse: Some("Παῦλος, δοῦλος Θεοῦ".into()),
+                    verse: Some(OriginalVerse {
+                        tokens: vec![
+                            "Παῦλος".into(),
+                            ", ".into(),
+                            "δοῦλος".into(),
+                            " ".into(),
+                            "Θεοῦ".into(),
+                        ],
+                        lit: vec![4],
+                    }),
                 },
                 gateway: GatewayView::Pane {
                     pane: "ult".into(),
@@ -2607,6 +2638,11 @@ fn titus_1_1() -> RecordRef {
 fn version(change: char, who: Who, at: i64, shown: bool, text: &str) -> Version {
     Version {
         change: ChangeRef::parse(&change.to_string().repeat(64)).unwrap(),
+        place: ReviewPlace::Verse {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 1,
+        },
         by: MadeBy::Person(PersonLabel {
             who,
             computer: None,
@@ -2718,7 +2754,45 @@ impl Example for Resolve {
             review: vec![review_token(
                 "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
             )],
-            keep: ChangeRef::parse(&"a".repeat(64)).unwrap(),
+            choice: KeepChoice::Passage {
+                picks: vec![
+                    ChangeRef::parse(&"a".repeat(64)).unwrap(),
+                    ChangeRef::parse(&"b".repeat(64)).unwrap(),
+                ],
+            },
+        }
+    }
+}
+
+impl Example for ResolveBulk {
+    fn example() -> Self {
+        ResolveBulk {
+            at: scope(),
+            request: request(26),
+            person: Who::Username("juan".into()),
+            conflicts: vec![
+                BulkConflict {
+                    conflict: ConflictRef::parse(&"c".repeat(64)).unwrap(),
+                    review: vec![review_token(
+                        "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                    )],
+                },
+                BulkConflict {
+                    conflict: ConflictRef::parse(&"d".repeat(64)).unwrap(),
+                    review: vec![review_token(
+                        "eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+                    )],
+                },
+            ],
+        }
+    }
+}
+
+impl Example for BulkKept {
+    fn example() -> Self {
+        BulkKept {
+            ack: Ack::example(),
+            left: vec![ConflictRef::parse(&"d".repeat(64)).unwrap()],
         }
     }
 }
@@ -2837,6 +2911,12 @@ impl Example for Script {
                         chapter: 1,
                         verse: 1,
                         texts: vec!["Pablo, siervo".into(), "Pablo, esclavo".into()],
+                    }),
+                    joined: Some(TeammatesJoin {
+                        book: BookId::Titus,
+                        chapter: 1,
+                        first: 4,
+                        last: 5,
                     }),
                     restored: 0,
                 },
@@ -3066,6 +3146,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "align/open",
             "check/decide",
             "conflicts/resolve",
+            "conflicts/resolveBulk",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
@@ -3248,6 +3329,9 @@ fn not_saved() -> Vec<NotSaved> {
         NotSaved::Refused(SaveRefusal::IncoherentView),
         NotSaved::Refused(SaveRefusal::InvalidText {
             reason: "a comment needs text".into(),
+        }),
+        NotSaved::Refused(SaveRefusal::Choice {
+            reason: "the chosen version is not one of the conflict's versions".into(),
         }),
         NotSaved::Disk("The disk is full.".into()),
         NotSaved::ReadOnly(ReadOnlyReason::SecondWriter),

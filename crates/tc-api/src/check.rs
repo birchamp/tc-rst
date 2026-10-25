@@ -132,7 +132,7 @@ impl FromStr for CheckPlace {
             let story = canonical_number::<u8>(first).ok_or(refuse("a story is a number"))?;
             let frame = canonical_number::<u16>(second).ok_or(refuse("a frame is a number"))?;
             return Ok(Self::Frame {
-                story: StoryNo::new(story)?,
+                story: StoryNo::new(story).ok_or(refuse("not a story from 1 to 50"))?,
                 frame,
             });
         }
@@ -658,7 +658,7 @@ pub enum OriginalView {
     /// The verse, or `None` when the original has no text at the check's place.
     Ready {
         testament: Testament,
-        verse: Option<String>,
+        verse: Option<OriginalVerse>,
     },
     /// The project's numbering differs from the original's.
     CrossFrame { testament: Testament },
@@ -668,6 +668,18 @@ pub enum OriginalView {
         testament: Testament,
         reason: String,
     },
+}
+
+/// The original verse as tokens, and the tokens of the check's quote (owner ruling Q39, tC4
+/// #840).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct OriginalVerse {
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub tokens: Vec<String>,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub lit: Vec<u32>,
 }
 
 /// The testament of the book the original text is of: its label and its script.

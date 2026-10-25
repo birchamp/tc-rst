@@ -15,8 +15,8 @@ use std::sync::Arc;
 
 use tc_api::endpoint::NetKind;
 use tc_api::ids::{JobId, PlanId, Scope};
-use tc_api::jobs::{JobKind, JobOutcome, Phase};
-use tc_api::refusal::{Refusal, ResourceRefusal};
+use tc_api::jobs::{JobKind, Phase};
+use tc_api::refusal::{Refusal, ResourceRefusal, UpdateCheckFailure};
 use tc_api::resources::{
     ApplyPlan, CheckUpdates, GatewayChange, GatewayRef, ImageChange, OfferRef, PlanApplied,
     PlanGateway, PlanUpgrade, PlanView, PlanWhat, RepoMove, SetOffer as SetOfferView, SetRung,
@@ -660,11 +660,36 @@ fn pin_changes(
 // resources/checkUpdates
 // ---------------------------------------------------------------------------------------
 
+/// Why a check could not be made, by what Door43 did: one arm per failure, so the screen
+/// says one plain sentence (tC4 #833.1).
+fn check_failure(error: &Door43Error) -> UpdateCheckFailure {
+    match error {
+        Door43Error::Offline { .. } | Door43Error::Unreachable { .. } => {
+            UpdateCheckFailure::Unreachable
+        }
+        Door43Error::AuthFailed { .. }
+        | Door43Error::NoWriteAccess { .. }
+        | Door43Error::RefRejected { .. }
+        | Door43Error::RefMoved { .. }
+        | Door43Error::NameExists { .. }
+        | Door43Error::RateLimited { .. }
+        | Door43Error::Rejected { .. } => UpdateCheckFailure::Refused,
+        Door43Error::Server { .. }
+        | Door43Error::NotFound { .. }
+        | Door43Error::UnexpectedResponse { .. }
+        | Door43Error::TooLarge { .. }
+        | Door43Error::Verification { .. }
+        | Door43Error::Cancelled { .. }
+        | Door43Error::Disk { .. }
+        | Door43Error::Setup { .. } => UpdateCheckFailure::Server,
+    }
+}
+
 fn net_error(error: &Door43Error) -> ApiError {
     match error {
         Door43Error::Offline { .. } => ApiError::NeedsInternet(NetKind::Sources),
         other => ApiError::Refused(Refusal::Resources(ResourceRefusal::UpdateCheckFailed {
-            reason: other.to_string(),
+            why: check_failure(other),
         })),
     }
 }
@@ -728,7 +753,7 @@ impl Handle<CheckUpdates> for App {
             .collect();
         let (texts, texts_error) = match updates::latest_releases(&client, &text_repos).await {
             Ok(latest) => (updates::text_offers(&pins, &testaments, &latest).0, None),
-            Err(error) => (Vec::new(), Some(error.to_string())),
+            Err(error) => (Vec::new(), Some(check_failure(&error))),
         };
         Ok(UpdatesView {
             sets,
@@ -812,9 +837,10 @@ impl Handle<PlanUpgrade> for App {
         if let Some(view) = self.scripted_plan() {
             let spec = JobSpec::new(JobKind::UpgradePlan, Phase::Plan { book: None })
                 .project(session.scope().project.clone());
-            return Ok(self.inner.jobs.start_async(spec, move |_ctx| async move {
-                Ok(JobOutcome::PlanReady(Box::new(view)))
-            }));
+            return Ok(self.inner.jobs.start_typed::<PlanUpgrade, _, _>(
+                spec,
+                move |_ctx| async move { Ok(Box::new(view)) },
+            ));
         }
         let client = self.resources_client()?;
         let spec = JobSpec::new(
@@ -825,51 +851,60 @@ impl Handle<PlanUpgrade> for App {
         )
         .project(session.scope().project.clone());
         let app = self.clone();
-        Ok(self.inner.jobs.start_async(spec, move |ctx| async move {
-            let read = session.read();
-            let pins = crate::resources::project_pins(&read)?.ok_or_else(stale)?;
-            let testaments: Vec<Testament> = read
-                .projected_books()
-                .into_iter()
-                .map(BookId::testament)
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect();
-            let recipe = find_offer(&client, &pins, &testaments, &req.offer).await?;
-            // Every resource of the release is installed and verified before the plan is made;
-            // a failure or a cancel leaves the pins as they are.
-            let store = &app.inner.resources;
-            for pin in pins_to_install(&recipe) {
-                ctx.cancel.check()?;
-                let phase = Phase::Install {
-                    repo: pin.repo.repo().name.to_string(),
-                };
-                ctx.progress.phase(phase.clone(), None);
-                let watch = JobWatch {
-                    progress: ctx.progress.clone(),
-                    cancel: ctx.cancel.clone(),
-                    phase,
-                };
-                match install_dcs_watched(store, &client, &pin, Packaging::for_pin(&pin), &watch)
+        Ok(self
+            .inner
+            .jobs
+            .start_typed::<PlanUpgrade, _, _>(spec, move |ctx| async move {
+                let read = session.read();
+                let pins = crate::resources::project_pins(&read)?.ok_or_else(stale)?;
+                let testaments: Vec<Testament> = read
+                    .projected_books()
+                    .into_iter()
+                    .map(BookId::testament)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+                let recipe = find_offer(&client, &pins, &testaments, &req.offer).await?;
+                // Every resource of the release is installed and verified before the plan is made;
+                // a failure or a cancel leaves the pins as they are.
+                let store = &app.inner.resources;
+                for pin in pins_to_install(&recipe) {
+                    ctx.cancel.check()?;
+                    let phase = Phase::Install {
+                        repo: pin.repo.repo().name.to_string(),
+                    };
+                    ctx.progress.phase(phase.clone(), None);
+                    let watch = JobWatch {
+                        progress: ctx.progress.clone(),
+                        cancel: ctx.cancel.clone(),
+                        phase,
+                    };
+                    match install_dcs_watched(
+                        store,
+                        &client,
+                        &pin,
+                        Packaging::for_pin(&pin),
+                        &watch,
+                    )
                     .await
-                {
-                    Ok(_) => {}
-                    Err(InstallError::Door43(Door43Error::Cancelled { .. })) => {
-                        return Err(JobEnd::Cancelled);
+                    {
+                        Ok(_) => {}
+                        Err(InstallError::Door43(Door43Error::Cancelled { .. })) => {
+                            return Err(JobEnd::Cancelled);
+                        }
+                        Err(InstallError::Door43(Door43Error::Offline { .. })) => {
+                            return Err(JobEnd::Failed(ApiError::NeedsInternet(NetKind::Sources)));
+                        }
+                        Err(e) => return Err(JobEnd::Failed(refused_upgrade(e.to_string()))),
                     }
-                    Err(InstallError::Door43(Door43Error::Offline { .. })) => {
-                        return Err(JobEnd::Failed(ApiError::NeedsInternet(NetKind::Sources)));
-                    }
-                    Err(e) => return Err(JobEnd::Failed(refused_upgrade(e.to_string()))),
                 }
-            }
-            ctx.progress.phase(Phase::Plan { book: None }, None);
-            let view = app.plan_recipe(&session, recipe, Some(&ctx)).await;
-            // What was missing may be here now (tC4 bumps `installEpoch`).
-            session.books().forget().await;
-            let view = view?.ok_or(JobEnd::Cancelled)?;
-            Ok(JobOutcome::PlanReady(Box::new(view)))
-        }))
+                ctx.progress.phase(Phase::Plan { book: None }, None);
+                let view = app.plan_recipe(&session, recipe, Some(&ctx)).await;
+                // What was missing may be here now (tC4 bumps `installEpoch`).
+                session.books().forget().await;
+                let view = view?.ok_or(JobEnd::Cancelled)?;
+                Ok(Box::new(view))
+            }))
     }
 }
 
@@ -880,18 +915,22 @@ impl Handle<PlanGateway> for App {
             .project(session.scope().project.clone());
         #[cfg(feature = "test-hooks")]
         if let Some(view) = self.scripted_plan() {
-            return Ok(self.inner.jobs.start_async(spec, move |_ctx| async move {
-                Ok(JobOutcome::PlanReady(Box::new(view)))
-            }));
+            return Ok(self.inner.jobs.start_typed::<PlanGateway, _, _>(
+                spec,
+                move |_ctx| async move { Ok(Box::new(view)) },
+            ));
         }
         let app = self.clone();
-        Ok(self.inner.jobs.start_async(spec, move |ctx| async move {
-            let view = app
-                .plan_recipe(&session, Recipe::Gateway(req.gateway), Some(&ctx))
-                .await?
-                .ok_or(JobEnd::Cancelled)?;
-            Ok(JobOutcome::PlanReady(Box::new(view)))
-        }))
+        Ok(self
+            .inner
+            .jobs
+            .start_typed::<PlanGateway, _, _>(spec, move |ctx| async move {
+                let view = app
+                    .plan_recipe(&session, Recipe::Gateway(req.gateway), Some(&ctx))
+                    .await?
+                    .ok_or(JobEnd::Cancelled)?;
+                Ok(Box::new(view))
+            }))
     }
 }
 

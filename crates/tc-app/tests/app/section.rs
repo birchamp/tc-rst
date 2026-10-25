@@ -431,7 +431,7 @@ struct Rig {
 impl Rig {
     async fn over(state: &ScenarioState) -> Rig {
         let fs = FaultFs::new();
-        let (store, _) = scenario_state_on(&fs, state);
+        let (store, _, _watch) = scenario_state_on(&fs, state);
         let dir = tempfile::tempdir().unwrap();
         let t = app_over(dir.path(), Arc::new(store)).await;
         let open = t
@@ -858,4 +858,66 @@ async fn no_change_section_save_on_psalm_3_writes_nothing() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_change_section_save_on_genesis_3_14_to_17_writes_nothing() {
     a_poem_comes_back_byte_for_byte(GENESIS_3_14).await;
+}
+
+impl Rig {
+    /// Home's Resume card: the verse it names and its opening text.
+    async fn resume(&self) -> (String, String) {
+        let home: tc_api::home::HomeView = post(&self.t.app, &tc_api::home::List {}).await.unwrap();
+        let resume = home.resume.expect("a Resume card");
+        let tc_api::home::ResumePlace::Book { verse, .. } = resume.place else {
+            panic!("{:?}", resume.place)
+        };
+        (verse.as_str().to_owned(), resume.snippet)
+    }
+}
+
+/// tC4 #576: after a section save, Home's Resume card names the verse as it now stands: a
+/// join names the span ("9-10"), a break the first verse of the old span.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn last_edited_names_the_span_then_its_first_verse() {
+    let rig = Rig::sample().await;
+    let view = rig.chapters().await;
+    rig.save(1, &view, 2, &["9", "10"], &format!("9 {NINE}\n10 {TEN}"))
+        .await
+        .unwrap();
+    let view = rig.chapters().await;
+    rig.save(2, &view, 2, &["9", "10"], &format!("9-10 {NINE} {TEN}"))
+        .await
+        .unwrap();
+    assert_eq!(rig.resume().await.0, "9-10", "a join names the span");
+    let view = rig.chapters().await;
+    rig.save(3, &view, 2, &["9-10"], &format!("9 {NINE}\n10 {TEN}"))
+        .await
+        .unwrap();
+    assert_eq!(rig.resume().await.0, "9", "a break names the first verse");
+    rig.finish().await;
+}
+
+/// tC4 #831: the Resume card's text is the text of the verse it names, never the whole
+/// section with its verse numbers, and never the stub "___".
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn resume_card_names_the_verse_of_its_text_and_never_shows_the_stub() {
+    let rig = Rig::sample().await;
+    let view = rig.chapters().await;
+    assert_eq!(row(&view, 2, "9").words.value, "___");
+    // Only verse 10 is drafted: the card names 9, the section's first verse, which holds the
+    // stub, so its text is empty rather than "___" or the section's text.
+    rig.save(1, &view, 2, &["9", "10"], &format!("9 \n10 {TEN}"))
+        .await
+        .unwrap();
+    let (verse, snippet) = rig.resume().await;
+    assert_eq!(verse, "9");
+    assert!(
+        !snippet.contains("___") && !snippet.contains(TEN),
+        "{snippet:?}"
+    );
+    let view = rig.chapters().await;
+    rig.save(2, &view, 2, &["9", "10"], &format!("9 {NINE}\n10 {TEN}"))
+        .await
+        .unwrap();
+    let (verse, snippet) = rig.resume().await;
+    assert_eq!(verse, "9");
+    assert_eq!(snippet, NINE, "the verse's own text, not the section's");
+    rig.finish().await;
 }

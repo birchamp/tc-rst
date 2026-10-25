@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
+use tc_api::StartsJob;
 use tc_api::error::ApiError;
 use tc_api::event::Event;
 use tc_api::ids::{JobId, ProjectRef};
@@ -353,6 +354,25 @@ impl JobRegistry {
         });
         self.spawn_reporter(id, kind, progress, work);
         id
+    }
+
+    /// [`Self::start_blocking`] for a job row: `f` ends with that row's own outcome type.
+    pub fn start_typed_blocking<E, F>(&self, spec: JobSpec, f: F) -> JobId
+    where
+        E: StartsJob,
+        F: FnOnce(JobCtx) -> Result<E::Outcome, JobEnd> + Send + 'static,
+    {
+        self.start_blocking(spec, move |ctx| f(ctx).map(E::wrap))
+    }
+
+    /// [`Self::start_async`] for a job row: `f` ends with that row's own outcome type.
+    pub fn start_typed<E, F, Fut>(&self, spec: JobSpec, f: F) -> JobId
+    where
+        E: StartsJob,
+        F: FnOnce(JobCtx) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<E::Outcome, JobEnd>> + Send + 'static,
+    {
+        self.start_async(spec, move |ctx| async move { f(ctx).await.map(E::wrap) })
     }
 
     /// Starts a job that waits on the network or other tasks. Must run inside a tokio

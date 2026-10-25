@@ -23,6 +23,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use tc_core::js::trim as js_trim;
 
 /// The most verses one book may hold, counting each verse of a span (§13.5). Psalms, the
 /// longest book, has 2,461. Each verse is a record, and a span marker of a few bytes such as
@@ -255,11 +256,6 @@ fn ends_body(line: &str) -> bool {
     let tag = &rest[..len];
     tag.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
         && (tag == "v" || tag == "c" || is_para_marker(tag))
-}
-
-/// JavaScript's `String.prototype.trim`: Unicode `White_Space` but U+0085, and U+FEFF.
-fn js_trim(text: &str) -> &str {
-    text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
 }
 
 // ---------------------------------------------------------------------------------------

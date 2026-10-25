@@ -1,7 +1,9 @@
 //! Word tokens, split exactly as tC4 splits them.
 //!
 //! tC4 decides word identity (alignment, check selections, suggestions) with
-//! `string-punctuation-tokenizer` 2.0.0 on `xregexp` 4.4.1 (`src/data/align/tokenize.ts`).
+//! `string-punctuation-tokenizer` 2.0.0 on `xregexp` 4.4.1 (`src/data/align/tokenize.ts`). tC4 now
+//! pins 2.2.0 (MIT), whose output equals 2.0.0's on 248,773 verse lines (tC4 D111,
+//! `docs/evidence/tokenizer-2.2.0-equivalence-2026-10-21.md`), so this port follows 2.2.0's licence.
 //! This module reproduces that tokenizer, quirks included, because a word's identity is
 //! its text plus its occurrence number, and both must match what tC4 recorded:
 //!
@@ -131,7 +133,7 @@ fn next_match(text: &str, at: usize) -> Option<(usize, TokenKind)> {
         if is_word(c) {
             return Some((start, TokenKind::Word));
         }
-        if is_whitespace(c) {
+        if in_whitespace_table(c) {
             return Some((start, TokenKind::Whitespace));
         }
         if (offset == 0 && is_punctuation(c))
@@ -155,7 +157,7 @@ fn match_end(text: &str, start: usize, kind: TokenKind) -> usize {
     };
     match kind {
         TokenKind::Word => run(is_word),
-        TokenKind::Whitespace => run(is_whitespace),
+        TokenKind::Whitespace => run(in_whitespace_table),
         TokenKind::Number => run(is_number),
         TokenKind::Punctuation => {
             // `<` and `>` are not `\p{P}`, so punctuation that starts with one is a pair of
@@ -199,7 +201,8 @@ fn is_punctuation(c: char) -> bool {
     in_table(tables::PUNCTUATION, c)
 }
 
-fn is_whitespace(c: char) -> bool {
+/// The tokenizer's own whitespace table (string-punctuation-tokenizer), not JavaScript's `\s`.
+fn in_whitespace_table(c: char) -> bool {
     in_table(tables::WHITESPACE, c)
 }
 

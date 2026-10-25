@@ -23,9 +23,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use tc_api::ids::ProjectRef;
 use tc_journal::fold::{FoldState, ProjectKind};
 use tc_journal::pack::{EncodedPack, PackSpec, encode_pack};
-use tc_journal::{ChangeId, ProjectId, RecordKey, Verified, WallTime};
+use tc_journal::{BookId, Change, ChangeId, ProjectId, RecordKey, Verified, WallTime};
 use tc_store::{SyncDir, Vfs, atomic_create_dirs, atomic_write};
 
+use super::memory::MemoryError;
 use super::memory::teammates::Teammates;
 use super::scenario::{ScenarioError, ScenarioReport, ScenarioState};
 use super::seed::{StateSeed, fixture_project_id, tc4_state_seed};
@@ -267,15 +268,53 @@ impl ScenarioStore {
     }
 
     /// Teammates' edits of `key` (AD36, B10): one change per text, each by its own teammate,
-    /// all from the record's heads in Door43's copy, each sealed into a pack by the teammate's own
-    /// device and written into the project while no session holds it. A project a session
-    /// holds is refused and nothing is written: S1's only intake while a project is open is a
-    /// second writer, which would turn it read-only.
+    /// all from the record's heads in Door43's copy, written into the project as
+    /// [`Self::teammates_write`] does.
     pub fn teammates_edit_verse(
         &self,
         folder: &ProjectRef,
         key: &RecordKey,
         texts: &[&str],
+    ) -> Result<Vec<ChangeId>, ScenarioError> {
+        self.teammates_write(folder, |next, base| next.edit_verse(base, key, texts))
+    }
+
+    /// Teammate 1's join of the verses `first` to `last` (C7a), one batch from the verses'
+    /// heads in Door43's copy, written into the project as [`Self::teammates_write`] does.
+    pub fn teammates_join_verses(
+        &self,
+        folder: &ProjectRef,
+        book: BookId,
+        chapter: tc_journal::ChapterNo,
+        first: tc_journal::VerseNo,
+        last: tc_journal::VerseNo,
+    ) -> Result<Vec<ChangeId>, ScenarioError> {
+        self.teammates_write(folder, |next, base| {
+            next.join_verses(base, book, chapter, first, last)
+        })
+    }
+
+    /// Teammate `n` signed in to Door43 as `username` (STORAGE §8.5), written into the project
+    /// as [`Self::teammates_write`] does.
+    pub fn teammates_sign_in(
+        &self,
+        folder: &ProjectRef,
+        n: u8,
+        username: &str,
+    ) -> Result<Vec<ChangeId>, ScenarioError> {
+        self.teammates_write(folder, |next, base| {
+            next.sign_in(base, n, username).map(|change| vec![change])
+        })
+    }
+
+    /// Teammates' changes made by `make` over Door43's copy of `folder`'s project, each batch
+    /// sealed into a pack by the teammate's own device and written into the project while no
+    /// session holds it. A project a session holds is refused and nothing is written: S1's
+    /// only intake while a project is open is a second writer, which would turn it read-only.
+    fn teammates_write(
+        &self,
+        folder: &ProjectRef,
+        make: impl FnOnce(&mut Teammates, &FoldState) -> Result<Vec<Change>, MemoryError>,
     ) -> Result<Vec<ChangeId>, ScenarioError> {
         let path = self.backend.projects().join(folder.as_str());
         let handle = self
@@ -296,20 +335,32 @@ impl ScenarioStore {
         let base = lock(&self.door43).get(folder).cloned().unwrap_or(fold);
         let mut teammates = lock(&self.teammates);
         let mut next = teammates.get(folder).cloned().unwrap_or_default();
-        let changes = next
-            .edit_verse(&base, key, texts)
-            .map_err(|e| ScenarioError::Teammates(e.to_string()))?;
+        let changes =
+            make(&mut next, &base).map_err(|e| ScenarioError::Teammates(e.to_string()))?;
         let vfs = self.backend.vfs();
         lock(&self.touched).insert(folder.clone());
-        let mut ids = Vec::with_capacity(changes.len());
+        let ids: Vec<ChangeId> = changes.iter().map(Change::id).collect();
+        // A batch stays whole in one pack, as a teammate's sealer keeps it.
+        let mut packs: Vec<(PackSpec, Vec<Verified>)> = Vec::new();
         for change in changes {
             let spec = PackSpec {
                 project,
                 sealer: change.body().device,
                 sealed: change.body().at,
             };
-            ids.push(change.id());
-            let pack = encode_pack(&spec, &[Verified::from(change)], &[])
+            let batch = change.body().batch.id;
+            match packs.last_mut() {
+                Some((last, verified))
+                    if *last == spec
+                        && verified.last().is_some_and(|v| batch_of(v) == Some(batch)) =>
+                {
+                    verified.push(Verified::from(change));
+                }
+                _ => packs.push((spec, vec![Verified::from(change)])),
+            }
+        }
+        for (spec, verified) in packs {
+            let pack = encode_pack(&spec, &verified, &[])
                 .map_err(|e| ScenarioError::Teammates(e.to_string()))?;
             put(&**vfs, &path, &pack.path.to_string(), &pack.bytes).map_err(|problem| {
                 ScenarioError::Write {
@@ -320,6 +371,14 @@ impl ScenarioStore {
         }
         teammates.insert(folder.clone(), next);
         Ok(ids)
+    }
+}
+
+/// The batch of a verified change, for keeping a batch in one pack.
+fn batch_of(verified: &Verified) -> Option<tc_journal::BatchId> {
+    match verified {
+        Verified::Change(change) => Some(change.body().batch.id),
+        _ => None,
     }
 }
 
@@ -455,6 +514,19 @@ impl ProjectStore for ScenarioStore {
         texts: &[&str],
     ) -> Result<Vec<ChangeId>, StoreError> {
         ScenarioStore::teammates_edit_verse(self, folder, key, texts)
+            .map_err(|e| StoreError::Other(e.to_string()))
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn teammates_join_verses(
+        &self,
+        folder: &ProjectRef,
+        book: BookId,
+        chapter: tc_journal::ChapterNo,
+        first: tc_journal::VerseNo,
+        last: tc_journal::VerseNo,
+    ) -> Result<Vec<ChangeId>, StoreError> {
+        ScenarioStore::teammates_join_verses(self, folder, book, chapter, first, last)
             .map_err(|e| StoreError::Other(e.to_string()))
     }
 

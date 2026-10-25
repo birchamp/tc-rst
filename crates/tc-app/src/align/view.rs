@@ -256,7 +256,12 @@ mod tests {
         };
         assert!(gateway.has_alignment());
         let hebrew = SourceBook::parse(&fixture("hbo_uhb/GEN-1-1.usfm"));
-        let source = hebrew.verse(1, tc_core::VerseSpan::single(1)).unwrap();
+        let source = hebrew
+            .verse(
+                1,
+                tc_core::VerseSpan::single(tc_core::VerseNo::new(1).unwrap()),
+            )
+            .unwrap();
         let labels = |nfc: bool| -> Vec<Option<String>> {
             source
                 .words()

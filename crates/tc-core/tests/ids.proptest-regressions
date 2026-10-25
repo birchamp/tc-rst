@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 1f02e79f19b8f963fa723e7201f42300504e87f8c49faca7a66c6096193b3648 # shrinks to book = "1A1", span = "40-40", reference = "TIT 1:1", hex = "AaAaaa00AaaAAA0aa0aAAaAAAA0aa0a0"
+cc 03117cf71f6bb2253a92f10565d9d26e0aaf3ed003b0b54fcebaf7bf6961698d # shrinks to book = "aaa", span = "1", reference = "TIT +1:1", hex = "a0A00aA0a0AaaA000aAA0A00a0aAAAAa"

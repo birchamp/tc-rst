@@ -4,7 +4,7 @@
 // Test helpers fail the test by panicking.
 #![allow(clippy::unwrap_used, clippy::panic)]
 
-use tc_core::{Reference, VerseSpan};
+use tc_core::{Reference, VerseNo, VerseSpan};
 use tc_versification::{
     BookCode, MAX_SPAN_VERSES, MapOutcome, RefPart, RowReference, Scheme, SchemeReference,
     StandardScheme, Unplaceable, Versification, map_reference,
@@ -152,7 +152,7 @@ fn chapter_zero_is_malformed() {
     let input = SchemeReference {
         book: "GEN".parse().unwrap(),
         chapter: 0,
-        verses: VerseSpan::single(1),
+        verses: VerseSpan::single(VerseNo::new(1).unwrap()),
     };
     assert_eq!(
         map_reference(Eng.scheme(), Rsc.scheme(), &input.into()),
@@ -171,24 +171,10 @@ fn verse_zero_is_malformed_across_frames() {
         reason: Unplaceable::MalformedReference,
         candidates: vec![],
     };
-    // tc-core's VerseSpan::single does not refuse 0.
-    let zero: RowReference = SchemeReference {
-        book: "PSA".parse().unwrap(),
-        chapter: 51,
-        verses: VerseSpan::single(0),
-    }
-    .into();
-    for to in [Org, Lxx, Rsc, Vul] {
-        assert_eq!(map_reference(Eng.scheme(), to.scheme(), &zero), malformed);
-    }
+    // A verse 0 cannot be built as a `VerseSpan`; written in a row, it is malformed.
     for verse in ["0", "00", "0-2"] {
         assert_eq!(map_row(Eng, Org, &row("PSA", "51", verse)), malformed);
     }
-    // The same frame never looks.
-    assert_eq!(
-        map_reference(Eng.scheme(), Eng.scheme(), &zero),
-        MapOutcome::SameFrame(zero.clone())
-    );
 }
 
 #[test]
@@ -255,12 +241,12 @@ fn deuterocanonical_books_map_like_any_other() {
     let s3y = SchemeReference {
         book: "S3Y".parse().unwrap(),
         chapter: 1,
-        verses: VerseSpan::single(1),
+        verses: VerseSpan::single(VerseNo::new(1).unwrap()),
     };
     let dag = SchemeReference {
         book: "DAG".parse().unwrap(),
         chapter: 3,
-        verses: VerseSpan::single(24),
+        verses: VerseSpan::single(VerseNo::new(24).unwrap()),
     };
     assert_eq!(
         map_reference(Eng.scheme(), Vul.scheme(), &s3y.into()),

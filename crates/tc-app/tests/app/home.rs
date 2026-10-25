@@ -538,13 +538,14 @@ fn debug_card_names_qa_server() {
         kind: tc_journal::fold::ProjectKind::Bible,
     };
     let peek = |host: &str| ProjectPeek {
+        text_direction: None,
         metadata: Err("not read".into()),
         remote: Door43Remote::parse_url(&format!("https://{host}/o/r.git")),
         stamp: SummaryStamp::parse_hex(&"0".repeat(64)),
     };
     let place = |host: &str, server: &ServerUrl| {
         let peek = peek(host);
-        let facts = card_facts(&peek.metadata, &entry.folder, ProjectKind::Bible);
+        let facts = card_facts(&peek.metadata, None, &entry.folder, ProjectKind::Bible);
         match card(&entry, &facts, &peek, None, server).door43 {
             Door43Card::Shared { place } => place,
             Door43Card::Local => panic!("shared"),
@@ -573,7 +574,12 @@ fn debug_card_names_qa_server() {
 /// its language and books unknown.
 #[test]
 fn a_card_without_metadata_is_named_after_its_folder() {
-    let facts = card_facts(&Err("gone".into()), &folder("mine"), ProjectKind::Bible);
+    let facts = card_facts(
+        &Err("gone".into()),
+        None,
+        &folder("mine"),
+        ProjectKind::Bible,
+    );
     assert_eq!(facts.name, "mine");
     assert_eq!((facts.tag, facts.books, facts.created), (None, None, 0));
 }
@@ -685,7 +691,7 @@ async fn peek_and_summary_agree_on_the_store_and_in_memory() {
             .find(|e| e.folder == *name)
             .unwrap();
         let peek = store.peek(name).unwrap();
-        let facts = card_facts(&peek.metadata, name, ProjectKind::Bible);
+        let facts = card_facts(&peek.metadata, None, name, ProjectKind::Bible);
         let watch = SummaryWatch {
             cancel: Default::default(),
             counters: Default::default(),
@@ -913,11 +919,12 @@ fn a_story_card_has_stories_and_no_chip() {
         kind: tc_journal::fold::ProjectKind::Stories,
     };
     let peek = ProjectPeek {
+        text_direction: None,
         metadata: Ok(serde_json::json!({"identification": {"name": {"en": "Historias"}}})),
         remote: None,
         stamp: SummaryStamp::parse_hex(&"0".repeat(64)),
     };
-    let facts = card_facts(&peek.metadata, &entry.folder, ProjectKind::Stories);
+    let facts = card_facts(&peek.metadata, None, &entry.folder, ProjectKind::Stories);
     let unknown = card(&entry, &facts, &peek, None, &ServerUrl::production());
     assert_eq!(unknown.books, Known::Known(Vec::new()));
     assert_eq!(unknown.conflicts, Known::Unknown);

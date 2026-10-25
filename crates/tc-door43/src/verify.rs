@@ -41,7 +41,7 @@
 //! debris macOS Finder adds is dropped, and a `metadata.json` may start with a UTF-8 BOM.
 
 use crate::error::VerificationError;
-use crate::git_tree::{ObjectId, tree_id};
+use crate::git_tree::tree_id;
 use crate::names::GitOid;
 use crate::unpack::{FileMode, Layout, UnpackedFile, unpack_from};
 use md5::{Digest, Md5};
@@ -52,7 +52,7 @@ use std::io::{Cursor, Read, Seek};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedArchive {
     pub commit: GitOid,
-    pub tree: ObjectId,
+    pub tree: GitOid,
     /// Sorted by path, relative to the repository root. A symbolic link in the commit is
     /// here too, as its target text: never create it as a link ([`FileMode::Symlink`]).
     pub files: Vec<UnpackedFile>,
@@ -81,7 +81,7 @@ pub struct VerifiedSbExport {
 pub fn verify_archive(
     zip: &[u8],
     commit: &GitOid,
-    commit_tree: &ObjectId,
+    commit_tree: &GitOid,
     max_unpacked: u64,
 ) -> Result<VerifiedArchive, VerificationError> {
     verify_archive_from(Cursor::new(zip), commit, commit_tree, max_unpacked)
@@ -91,7 +91,7 @@ pub fn verify_archive(
 pub(crate) fn verify_archive_from<R: Read + Seek>(
     zip: R,
     commit: &GitOid,
-    commit_tree: &ObjectId,
+    commit_tree: &GitOid,
     max_unpacked: u64,
 ) -> Result<VerifiedArchive, VerificationError> {
     let unpacked = unpack_from(zip, Layout::GitArchive, max_unpacked)?;
@@ -480,7 +480,7 @@ mod tests {
         )
     }
 
-    fn tree_of(readme: &[u8]) -> ObjectId {
+    fn tree_of(readme: &[u8]) -> GitOid {
         let files = [UnpackedFile {
             path: "README.md".into(),
             mode: FileMode::Regular,

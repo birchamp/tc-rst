@@ -1,7 +1,7 @@
 # License of the conformance content
 
-The harness CODE in this directory is under the repository license: GPL-2.0-or-later
-(see `../LICENSE`).
+The harness CODE in this directory is under the repository license: MIT
+(see `../../LICENSE`).
 
 The sample project CONTENT in `sample-burrito/` is under CC BY-SA 4.0
 (<https://creativecommons.org/licenses/by-sa/4.0/>). The `metadata.json` copyright

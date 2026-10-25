@@ -25,6 +25,7 @@ h.shellTest('window_is_painted_within_1_s_of_the_click', async () => {
   }
 });
 
+// INV-ONE-INSTANCE: a second launch starts no tc4, quits, and the running window comes forward.
 h.shellTest('second_launch_focuses_the_running_window_and_starts_no_server', async () => {
   const dir = h.appDataDir('second');
   const app = await h.launch(dir);
@@ -37,8 +38,8 @@ h.shellTest('second_launch_focuses_the_running_window_and_starts_no_server', asy
     const ended = await second.exited;
     assert.equal(ended.code, 0, 'the second launch quits');
     await h.until('the running window focused', () => h.logOf(dir).some((l) => l.ev === 'window focused'), 30000);
-    const minimized = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized());
-    assert.equal(minimized, false, 'the window is restored');
+    // macOS restores a minimized window with an animation, so the state follows a moment later.
+    await h.until('the window restored', async () => !(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized())), 30000);
     assert.deepEqual(h.tc4Pids(dir), before, 'no second tc4');
     assert.equal(h.started(dir).length, 1);
   } finally {

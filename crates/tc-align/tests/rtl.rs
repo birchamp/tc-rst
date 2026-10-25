@@ -11,8 +11,10 @@ use tc_align::Alignment;
 use tc_align::bootstrap;
 
 use common::*;
-use tc_align::usfm::{from_aligned, weave_verse};
+use tc_align::usfm::weave_verse;
 use tc_align::{Aligner, AlignmentValue, Click, SourceVerse, TargetVerse, reflow};
+use tc_journal::alignment::split_aligned;
+use tc_journal::ids::VerseNo;
 
 /// Jonah 1's verses as tC4 hashed them, with their UHB words.
 fn jonah_1() -> Vec<(String, TargetVerse, SourceVerse)> {
@@ -62,7 +64,9 @@ fn hebrew_verses_align_word_for_word_and_read_back_from_aligned_usfm() {
         let woven = weave_verse(verse.text(), &value).unwrap();
         let aligned = tc_usfm::parse_aligned(&woven).unwrap();
         assert_eq!(aligned.plain, verse.text(), "{reference}");
-        let back = from_aligned(&aligned, Some(source));
+        let (_, read) = split_aligned(&woven, VerseNo::new(1).unwrap()).unwrap();
+        let back = Aligner::open(Some(&read), None, verse.clone(), source, basis(1)).unwrap();
+        let back = back.value();
         assert_eq!(back.alignments, value.alignments, "{reference}");
         assert!(back.word_bank.is_empty(), "{reference}");
     }

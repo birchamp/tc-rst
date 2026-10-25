@@ -6,6 +6,8 @@
 //! The walk is a marker stream over the raw text, not a line walk: aligned sources put
 //! `\v N` mid-line after a paragraph marker (`\q1 \v 3 \zaln-s …`).
 
+use tc_core::BookId;
+
 /// tC4's `PARA_TAGS`.
 const PARA_TAGS: &[&str] = &[
     "p", "pi", "pi1", "pi2", "pi3", "q", "q1", "q2", "q3", "q4", "qr", "qc", "qm", "qm1", "qm2",
@@ -130,6 +132,34 @@ pub fn seed_book(
         }
     }
     saw_content.then(|| out.join("\n") + "\n")
+}
+
+/// A blank book with no text to take its shape from: every chapter of `verse_counts` and
+/// every verse of the chapter as the stub `___`, which is what tC4's platform wrote for a
+/// book (`add_cv`).
+pub fn skeleton(book: BookId, verse_counts: &[u16]) -> String {
+    let mut out = format!("\\id {}\n", book.code());
+    for (index, verses) in verse_counts.iter().enumerate() {
+        out.push_str(&format!("\\c {}\n\\p\n", index + 1));
+        for verse in 1..=*verses {
+            out.push_str(&format!("\\v {verse} ___\n"));
+        }
+    }
+    out
+}
+
+/// The book a USFM file's `\id` line names (tC4's parser reads the code of the line).
+pub fn id_book(header: &str) -> Option<BookId> {
+    header.lines().find_map(|line| {
+        let rest = line
+            .trim_start_matches('\u{feff}')
+            .trim_start()
+            .strip_prefix("\\id")?;
+        if !rest.starts_with(char::is_whitespace) {
+            return None;
+        }
+        rest.split_whitespace().next()?.parse().ok()
+    })
 }
 
 #[cfg(test)]

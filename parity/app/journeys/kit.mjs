@@ -36,7 +36,30 @@ export function browserTest(name, body, { hooks = false, door43 = false, timeout
   let skip = setup.skip ?? false;
   if (!skip && hooks && !setup.hooks) skip = 'set TC4_UI_HOOKS (build-app.sh --test-hooks --out target/tc-ui-app-hooks)';
   if (!skip && door43 && !setup.door43) skip = 'set TC4_DOOR43_FAKE (cargo build -p tc-door43-fake)';
-  return test(name, { skip, timeout }, body);
+  return test(name, { skip, timeout }, (t) => {
+    running = name;
+    return body(t);
+  });
+}
+
+/** The browser test that is running, for the P5 message (a file's tests run one at a time). */
+let running = 'this test';
+
+/**
+ * P5/INV-VALID-BURRITO after a journey: every project folder it left is a valid Scripture
+ * Burrito (`test/validate`). A named scenario always has projects, so checking none means the
+ * check did not happen; a seeded folder may hold none.
+ */
+async function assertValidProjects(env, { seeded, excused }) {
+  if (!env.alive()) {
+    console.log(`P5: ${running} ended tc4, so test/validate could not run`);
+    return;
+  }
+  const view = await env.call('test/validate', {});
+  if (excused) console.log(`P5: ${running} leaves ${excused.folder} not a valid Burrito on purpose: ${excused.why}`);
+  const invalid = view.invalid.filter((p) => p.folder !== excused?.folder).map((p) => `P5/INV-VALID-BURRITO: after ${running}, ${p.folder} is not a valid Scripture Burrito: ${p.problems.join('; ')}`);
+  if (invalid.length > 0) assert.fail(invalid.join('\n'));
+  if (!seeded) assert.ok(view.checked > 0, `P5/INV-VALID-BURRITO: after ${running}, test/validate checked no project folder`);
 }
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -71,8 +94,10 @@ export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
  * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass. With
  * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`). With `hooks`, the page is the
  * test build's (`TC4_UI_HOOKS`), which also includes the no-loss probe. Translate saves use production endpoints in either build.
+ * After `body`, every project folder must be a valid Scripture Burrito (P5);
+ * `invalidOnPurpose: { folder, why }` excuses the one folder a journey leaves invalid on purpose.
  */
-export async function withApp(body, { locale = 'en', probe = false, hooks = false, init, seed, door43: fake = false, scenario: named = 'sample' } = {}) {
+export async function withApp(body, { locale = 'en', probe = false, hooks = false, init, seed, door43: fake = false, scenario: named = 'sample', invalidOnPurpose } = {}) {
   const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });
   const door43 = fake ? await startDoor43Fake(setup.door43) : undefined;
   const scenario = seed ? 'store' : named;
@@ -100,6 +125,7 @@ export async function withApp(body, { locale = 'en', probe = false, hooks = fals
     assert.deepEqual(unexpected, [], 'no page error and no console error');
     const failures = await page.locator('[data-testid="view-error"], [data-testid="boot-error"]').count();
     assert.equal(failures, 0, 'no view error or boot error left on the page');
+    await assertValidProjects(env, { seeded: Boolean(seed), excused: invalidOnPurpose });
     return result;
   } finally {
     await env.close();

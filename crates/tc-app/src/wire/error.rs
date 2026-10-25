@@ -34,6 +34,12 @@ pub fn command_error(error: CommandError) -> Result<ApiError, UnwordedRefusal> {
         CommandError::Refused(RuleRefusal::LastBook) => {
             ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook))
         }
+        // The review says why a choice could not be made (C7a).
+        CommandError::Refused(refusal @ (RuleRefusal::Resolve(_) | RuleRefusal::Unreadable)) => {
+            ApiError::NotSaved(NotSaved::Refused(SaveRefusal::Choice {
+                reason: refusal.to_string(),
+            }))
+        }
         // A review token in a save, or an edit token in a resolution, got past the seam's
         // types and tc-app's parse: a bug, reported as a bad token is.
         CommandError::Refused(RuleRefusal::WrongTokenKind) => {

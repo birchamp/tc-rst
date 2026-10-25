@@ -126,7 +126,7 @@ pub(super) enum Key {
 }
 
 impl Key {
-    fn named(name: &[u16]) -> Self {
+    pub(super) fn named(name: &[u16]) -> Self {
         const NAMES: &[(&str, Key)] = &[
             ("open", Key::Open),
             ("tag", Key::Tag),
@@ -155,6 +155,9 @@ pub(super) struct Item {
     props: BTreeMap<Key, Val>,
     /// `Some` for an array.
     elems: Option<Vec<Ref>>,
+    /// The property names in the order they were first assigned, which `Object.keys`
+    /// follows and the writer (`tc3.rs`) prints attributes in.
+    order: Vec<Key>,
 }
 
 #[derive(Debug, Default)]
@@ -163,7 +166,7 @@ pub(super) struct Heap {
 }
 
 impl Heap {
-    fn obj(&mut self) -> Ref {
+    pub(super) fn obj(&mut self) -> Ref {
         self.items.push(Item::default());
         self.items.len() - 1
     }
@@ -172,6 +175,7 @@ impl Heap {
         self.items.push(Item {
             props: BTreeMap::new(),
             elems: Some(Vec::new()),
+            order: Vec::new(),
         });
         self.items.len() - 1
     }
@@ -192,16 +196,50 @@ impl Heap {
         self.get(r, key).is_some_and(truthy)
     }
 
-    fn set(&mut self, r: Ref, key: Key, value: Val) {
-        self.items[r].props.insert(key, value);
+    pub(super) fn set(&mut self, r: Ref, key: Key, value: Val) {
+        let item = &mut self.items[r];
+        if item.props.insert(key.clone(), value).is_none() {
+            item.order.push(key);
+        }
     }
 
-    fn set_s(&mut self, r: Ref, key: Key, value: JsStr) {
+    pub(super) fn set_s(&mut self, r: Ref, key: Key, value: JsStr) {
         self.set(r, key, Val::Str(value));
     }
 
-    fn del(&mut self, r: Ref, key: &Key) {
-        self.items[r].props.remove(key);
+    pub(super) fn del(&mut self, r: Ref, key: &Key) {
+        let item = &mut self.items[r];
+        if item.props.remove(key).is_some() {
+            item.order.retain(|k| k != key);
+        }
+    }
+
+    /// `Object.keys(object)` of an object: integer indices ascending, then the other
+    /// names in the order they were first assigned.
+    pub(super) fn keys(&self, r: Ref) -> Vec<Key> {
+        let mut keys = self.items[r].order.clone();
+        keys.sort_by_key(|key| match key {
+            Key::Other(name) => array_index(name).map_or((1, 0), |n| (0, n)),
+            _ => (1, 0),
+        });
+        keys
+    }
+
+    /// The number of keys `Object.keys` gives: an array's indices and any properties.
+    pub(super) fn key_count(&self, r: Ref) -> usize {
+        self.items[r].props.len() + self.elems(r).len()
+    }
+
+    /// `{ ...object }`: a new plain object with the same properties in the same order.
+    pub(super) fn copy(&mut self, r: Ref) -> Ref {
+        let item = &self.items[r];
+        let copy = Item {
+            props: item.props.clone(),
+            elems: None,
+            order: item.order.clone(),
+        };
+        self.items.push(copy);
+        self.items.len() - 1
     }
 
     /// `object[key] = String(object[key]) + suffix`, extending a string in place: the
@@ -714,6 +752,7 @@ struct State {
     current_verse: Pos,
     verses: Vec<(JsStr, Ref)>,
     headers: Ref,
+    chapters: Vec<JsStr>,
     phrase: Option<Vec<Ref>>,
     phrase_parent: Option<Ref>,
     on_same_chapter: bool,
@@ -1563,7 +1602,11 @@ impl State {
         self.in_header = false;
         self.terminate_phrases();
         let number = self.heap.string_of(self.heap.get(marker, &Key::Number));
-        self.current_chapter = Pos::Str(strip_leading_zeros(&number));
+        let chapter = strip_leading_zeros(&number);
+        if !self.chapters.contains(&chapter) {
+            self.chapters.push(chapter.clone());
+        }
+        self.current_chapter = Pos::Str(chapter);
         self.on_same_chapter = false;
         self.current_verse = Pos::Zero;
     }
@@ -1775,6 +1818,11 @@ fn split_lines(text: &[u16]) -> Vec<&[u16]> {
 pub(super) struct Parsed {
     pub(super) heap: Heap,
     pub(super) verses: Vec<(JsStr, Ref)>,
+    /// `headers`, before the library's `cleanupHeaderNewLines`: what the chunk holds
+    /// outside every verse, after a `\c` before the next `\v`.
+    pub(super) headers: Ref,
+    /// The keys of `chapters`, in `Object.keys` order; each chapter is empty in a chunk.
+    pub(super) chapters: Vec<JsStr>,
     /// The library throws on this input; `heap` and `verses` hold what it had built.
     pub(super) thrown: bool,
 }
@@ -1799,6 +1847,7 @@ pub(super) fn to_json_chunk(usfm: &[u16]) -> Parsed {
         current_verse: Pos::Zero,
         verses: Vec::new(),
         headers,
+        chapters: Vec::new(),
         phrase: None,
         phrase_parent: None,
         on_same_chapter: false,
@@ -1956,9 +2005,13 @@ pub(super) fn to_json_chunk(usfm: &[u16]) -> Parsed {
     }
     let mut verses = st.verses;
     order_keys(&mut verses);
+    let mut chapters = st.chapters;
+    chapters.sort_by_key(|key| array_index(key).map_or((1, 0), |n| (0, n)));
     Parsed {
         heap: st.heap,
         verses,
+        headers: st.headers,
+        chapters,
         thrown: st.thrown,
     }
 }
@@ -1986,19 +2039,21 @@ fn extract_number_from_content(heap: &mut Heap, marker: Ref) {
     heap.set_s(marker, Key::Content, substr(&content, 2, None).to_vec());
 }
 
+/// The array index a property name stands for, which `Object.keys` lists first.
+pub(super) fn array_index(key: &[u16]) -> Option<u64> {
+    let text = super::js::to_string(key);
+    let canonical = text == "0" || (!text.starts_with('0') && !text.is_empty());
+    if !canonical || !text.bytes().all(|b| b.is_ascii_digit()) || text.len() > 10 {
+        return None;
+    }
+    text.parse::<u64>()
+        .ok()
+        .filter(|n| *n < u64::from(u32::MAX))
+}
+
 /// `Object.keys` order: integer indices ascending, then the other keys as inserted.
 fn order_keys(verses: &mut [(JsStr, Ref)]) {
-    let index_of_key = |key: &[u16]| -> Option<u64> {
-        let text = super::js::to_string(key);
-        let canonical = text == "0" || (!text.starts_with('0') && !text.is_empty());
-        if !canonical || !text.bytes().all(|b| b.is_ascii_digit()) || text.len() > 10 {
-            return None;
-        }
-        text.parse::<u64>()
-            .ok()
-            .filter(|n| *n < u64::from(u32::MAX))
-    };
-    verses.sort_by_key(|(key, _)| match index_of_key(key) {
+    verses.sort_by_key(|(key, _)| match array_index(key) {
         Some(n) => (0, n),
         None => (1, 0),
     });
@@ -2623,9 +2678,12 @@ pub(super) fn cyclic_verse() -> Parsed {
     heap.push(parent_kids, child);
     heap.push(child_kids, parent);
     heap.push(verse, parent);
+    let headers = heap.arr();
     Parsed {
         heap,
         verses: vec![(js("1"), verse)],
+        headers,
+        chapters: Vec::new(),
         thrown: false,
     }
 }

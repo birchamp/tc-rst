@@ -42,7 +42,7 @@ fn heavy_stories() -> MemoryProject {
             let record = if frame % 2 == 0 {
                 Record::Frame {
                     story: journal_story(story),
-                    frame: FrameNo(frame),
+                    frame: FrameNo::new(frame),
                     value: "Un texto largo de un fotograma. "
                         .repeat(40)
                         .trim()
@@ -56,7 +56,7 @@ fn heavy_stories() -> MemoryProject {
                     value: CommentValue {
                         target: CommentTarget::Frame {
                             story: journal_story(story),
-                            frame: FrameNo(frame),
+                            frame: FrameNo::new(frame),
                         },
                         text: "Una nota larga sobre este fotograma. ".repeat(20),
                     },
@@ -186,7 +186,7 @@ async fn a_story_project_has_no_book() {
 /// The existing light/heavy OBS pair on the real store as valid story Burritos.
 fn story_disk(project: &MemoryProject) -> FaultFs {
     let fs = FaultFs::new();
-    let backend = crate::store_world::backend_over(
+    let (backend, _backend_watch) = crate::store_world::backend_over(
         &fs,
         // A separate importing installation gives the measured writer the same initial
         // sequence width in both projects; record-count digits must not mask a scan.
@@ -223,7 +223,7 @@ async fn a_story_save_costs_its_record(reference: bool) {
         let key = if reference {
             tc_journal::RecordKey::StoryRef(journal_story(1))
         } else {
-            tc_journal::RecordKey::Frame(journal_story(1), FrameNo(1))
+            tc_journal::RecordKey::Frame(journal_story(1), FrameNo::new(1))
         };
         let shown = tc_app::wire::token::shown(
             &s.app

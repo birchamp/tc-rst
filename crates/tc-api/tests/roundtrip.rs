@@ -209,6 +209,10 @@ fn every_shared_type_round_trips() {
             tc_api::conflicts::NoticeView,
             tc_api::conflicts::HistoryView,
             tc_api::conflicts::VersionCause,
+            // the choices (C7a)
+            tc_api::conflicts::KeepChoice,
+            tc_api::conflicts::BulkConflict,
+            tc_api::conflicts::BulkKept,
             // Home (B2)
             HomeView,
             HomeCard,
@@ -252,6 +256,8 @@ fn every_shared_type_round_trips() {
             CrashPoint,
             HoldPoint,
             QuietView,
+            ValidateView,
+            InvalidProject,
             FieldLogView,
             StoredText,
             Echo,

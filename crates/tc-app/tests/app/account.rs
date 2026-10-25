@@ -642,6 +642,56 @@ async fn a_cancel_after_the_sign_in_ended_signs_that_session_out_and_forgets_its
     assert!(the_keychain(&t).is_some());
 }
 
+/// The token calls replace the `translationCore` token an earlier session kept, so a cancel
+/// that comes once they started cannot leave that token saved: it signs out, as tC4's cancel
+/// does. A cancel that comes before them sends nothing and keeps it (APP-DESIGN §5.6 item 6).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_cancel_once_the_token_calls_started_forgets_the_token_an_earlier_session_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = fake().await;
+    let secret = fake.issue_token(USER, "translationCore", &SCOPES).unwrap();
+    let parts = Parts::new();
+    parts.keychain.seed(token(&secret));
+    let t = app_on(dir.path(), &fake, &parts).await;
+
+    cancel(&t.app, 9, 5).await;
+    assert_eq!(sign_in(&t.app, 5, true).await.unwrap().user, None);
+    assert_eq!(fake.requests(), Vec::new());
+    assert_eq!(state(&t.app).await.kept, KeepState::Kept);
+    assert_eq!(kept_secret(&t).as_deref(), Some(secret.as_str()));
+
+    fake.inject(FaultRule::once(
+        "POST",
+        &format!("/api/v1/users/{USER}/tokens"),
+        Fault::Hold,
+    ));
+    let app = t.app.clone();
+    let signing = tokio::spawn(async move { sign_in(&app, 1, true).await });
+    until("the token create is held", || {
+        fake.requests()
+            .iter()
+            .any(|r| r.method == "POST" && r.path.ends_with("/tokens"))
+    })
+    .await;
+    assert_eq!(
+        fake.token_secret(USER, "translationCore"),
+        None,
+        "Door43 deleted the earlier session's token"
+    );
+
+    cancel(&t.app, 2, 1).await;
+    assert_eq!(signing.await.unwrap().unwrap().user, None);
+    fake.release_held();
+    settle_a_while().await;
+    let view = state(&t.app).await;
+    assert_eq!((view.user, view.kept), (None, KeepState::NotKept));
+    assert_eq!(the_keychain(&t), None);
+    assert_eq!(
+        resume(&t.app, 3).await.unwrap().outcome,
+        ResumeOutcome::NoneKept
+    );
+}
+
 /// tC4's `signInFlight`: a second sign-in waits for the first, and is never refused as busy.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sign_ins_take_turns_and_the_last_one_keeps_its_session() {

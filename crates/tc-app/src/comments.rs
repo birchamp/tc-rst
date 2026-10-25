@@ -30,7 +30,7 @@ pub(crate) fn target(target: CommentTarget) -> Result<tc_journal::record::Commen
         },
         CommentTarget::Frame { story, frame } => tc_journal::record::CommentTarget::Frame {
             story: tc_journal::StoryNo::new(story.get()).ok_or_else(invalid)?,
-            frame: FrameNo(frame),
+            frame: FrameNo::new(frame),
         },
     })
 }
@@ -86,12 +86,9 @@ impl App {
                 }
             }
             tc_journal::record::CommentTarget::Frame { story, frame } => {
-                let Ok(story) = tc_api::ids::StoryNo::new(story.get()) else {
-                    return;
-                };
                 crate::prefs::EditUnit::Story {
-                    story,
-                    frame: frame.0,
+                    story: *story,
+                    frame: frame.get(),
                 }
             }
             tc_journal::record::CommentTarget::Check(_) => return,

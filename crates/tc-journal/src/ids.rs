@@ -6,7 +6,6 @@ pub use tc_core::{GitOid, Md5};
 use crate::sha::sha256;
 use crate::text::{base32, hex, unbase32, unhex};
 use std::fmt;
-use std::num::NonZeroU16;
 use unicode_normalization::is_nfc;
 
 macro_rules! hex_id {
@@ -284,53 +283,7 @@ impl fmt::Debug for ProjectId {
 // Numbers
 // ---------------------------------------------------------------------------------------
 
-/// A chapter number, 1 to 65,535.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct ChapterNo(NonZeroU16);
-
-/// A verse number, 1 to 65,535.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct VerseNo(NonZeroU16);
-
-macro_rules! nonzero_number {
-    ($name:ident) => {
-        impl $name {
-            pub fn new(n: u16) -> Option<Self> {
-                NonZeroU16::new(n).map(Self)
-            }
-
-            pub fn get(self) -> u16 {
-                self.0.get()
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}", self.0)
-            }
-        }
-    };
-}
-nonzero_number!(ChapterNo);
-nonzero_number!(VerseNo);
-
-/// An Open Bible Stories story, 1 to 50.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct StoryNo(u8);
-
-impl StoryNo {
-    pub fn new(n: u8) -> Option<Self> {
-        (1..=50).contains(&n).then_some(Self(n))
-    }
-
-    pub fn get(self) -> u8 {
-        self.0
-    }
-}
-
-/// A frame of a story; frame 0 is the story's title.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct FrameNo(pub u16);
+pub use tc_core::{ChapterNo, FrameNo, StoryNo, VerseNo};
 
 // ---------------------------------------------------------------------------------------
 // Paths

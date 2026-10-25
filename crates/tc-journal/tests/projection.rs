@@ -39,6 +39,7 @@ fn import(dev: &mut Dev, book: BookId, usfm: &str) -> Vec<tc_journal::Change> {
         items,
         Cause::Import(ImportSource::Usfm {
             file_name: "book.usfm".into(),
+            unknown_base: false,
         }),
     )
 }
@@ -250,7 +251,7 @@ fn a_chapter_projects_alone() {
 fn a_story_splices_its_frames_and_reference_into_the_template() {
     let mut ana = Dev::new(1);
     let story = tc_journal::StoryNo::new(1).expect("story");
-    let frame = tc_journal::FrameNo;
+    let frame = tc_journal::FrameNo::new;
     let template = "# The Creation\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)\n\nThis is how God made everything.\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg)\n\nBut the earth was empty.\n\n_A Bible story from: Genesis 1-2_\n";
     let changes = vec![
         ana.one(
@@ -312,7 +313,7 @@ fn story_one_with(template: &str, frame_zero: Option<&str>) -> String {
         changes.push(ana.one(
             Record::Frame {
                 story,
-                frame: tc_journal::FrameNo(0),
+                frame: tc_journal::FrameNo::TITLE,
                 value: title.into(),
             },
             vec![],
@@ -323,6 +324,116 @@ fn story_one_with(template: &str, frame_zero: Option<&str>) -> String {
         changes.into_iter().map(FoldInput::from),
     );
     String::from_utf8(state.render(&DerivedFile::Story(story)).expect("story")).expect("utf-8")
+}
+
+fn story_with_frames(template: &str, frames: &[(u16, &str)]) -> String {
+    let mut ana = Dev::new(1);
+    let story = tc_journal::StoryNo::new(1).expect("story");
+    let mut changes = vec![ana.one(
+        Record::StoryBase {
+            story,
+            value: template.into(),
+        },
+        vec![],
+    )];
+    for &(frame, text) in frames {
+        changes.push(ana.one(
+            Record::Frame {
+                story,
+                frame: tc_journal::FrameNo::new(frame),
+                value: text.into(),
+            },
+            vec![],
+        ));
+    }
+    let state = FoldState::fold(
+        ProjectKind::Stories,
+        changes.into_iter().map(FoldInput::from),
+    );
+    String::from_utf8(state.render(&DerivedFile::Story(story)).expect("story")).expect("utf-8")
+}
+
+/// tC4's `writeFrame` replaces a frame's whole region, from its image line to the next image
+/// or reference line, with a blank line, the text and a blank line, and an empty text with the
+/// template's empty form. An empty frame of the template is three blank lines; splicing only
+/// its paragraph wrote `\n\n\n\nTexto nuevo.\n`, which reads back as reformatted
+/// (docs/evidence/state-seed-check-2026-10-18.md §5.2).
+#[test]
+fn an_empty_frame_is_spliced_as_tc4_writes_it() {
+    let image =
+        |n: u8| format!("![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-0{n}.jpg)");
+    let template = format!(
+        "# 1. The Creation\n\n{}\n\nOne.\n\n{}\n\n\n\n{}\n\n\n\n\n\n",
+        image(1),
+        image(2),
+        image(3)
+    );
+    let between = |out: &str| -> String {
+        let from = out.find(&image(2)).expect("frame 2") + image(2).len();
+        let to = out.find(&image(3)).expect("frame 3");
+        out[from..to].to_owned()
+    };
+    assert_eq!(
+        between(&story_with_frames(&template, &[(2, "Texto nuevo.")])),
+        "\n\nTexto nuevo.\n\n",
+        "INV-DERIVED-BYTES-EQUAL-TC4: an empty frame gets one blank line on each side, as tC4 writes it"
+    );
+    let last = story_with_frames(&template, &[(3, "Fin.")]);
+    assert!(
+        last.ends_with(&format!("{}\n\nFin.\n", image(3))),
+        "{last:?}"
+    );
+    assert_eq!(
+        story_with_frames(&template, &[(2, ""), (3, "")]),
+        template,
+        "an empty text writes the template's empty form"
+    );
+    assert_eq!(
+        between(&story_with_frames(&template, &[(2, "Uno.\nDos.")])),
+        "\n\nUno.\nDos.\n\n"
+    );
+}
+
+/// A story file read back with its reference line taken out of the base (the line is a
+/// record of its own) still writes the line: after the last frame's paragraph, as tC4's
+/// `writeRef` adds it to a story that has none.
+#[test]
+fn a_story_whose_base_has_no_reference_line_writes_its_reference() {
+    let image = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)";
+    let render = |template: &str| {
+        let mut ana = Dev::new(1);
+        let story = tc_journal::StoryNo::new(1).expect("story");
+        let changes = vec![
+            ana.one(
+                Record::StoryBase {
+                    story,
+                    value: template.into(),
+                },
+                vec![],
+            ),
+            ana.one(
+                Record::StoryRef {
+                    story,
+                    value: Some("A Bible story from: Genesis 1-2".into()),
+                },
+                vec![],
+            ),
+        ];
+        let state = FoldState::fold(
+            ProjectKind::Stories,
+            changes.into_iter().map(FoldInput::from),
+        );
+        String::from_utf8(state.render(&DerivedFile::Story(story)).expect("story")).expect("utf-8")
+    };
+    assert_eq!(
+        render(&format!("# 1. The Creation\n\n{image}\n\nOne.\n")),
+        format!("# 1. The Creation\n\n{image}\n\nOne.\n\n_A Bible story from: Genesis 1-2_\n")
+    );
+    assert_eq!(
+        render(&format!("# 1. The Creation\n\n{image}\n\n\n\n\n\n")),
+        format!("# 1. The Creation\n\n{image}\n\n\n\n_A Bible story from: Genesis 1-2_\n"),
+        "an empty last frame keeps tC4's spacing"
+    );
 }
 
 /// tC4's `TITLE_RE` and `writeTitle`: frame 0 is what follows `# N. `, and the number is the
@@ -370,7 +481,7 @@ fn a_story_titles_check_text_has_no_number() {
     let texts = seed.check_texts(tc_journal::pins::Collection::Stories);
     let target = tc_journal::CheckTarget::Frame {
         story,
-        frame: tc_journal::FrameNo(0),
+        frame: tc_journal::FrameNo::TITLE,
     };
     let title = texts.text(&target).expect("the title has a text");
     assert_eq!(title.content(), "How God made it");
@@ -421,6 +532,110 @@ fn a_pin_that_is_no_scripture_has_no_relationship_and_makes_no_anomaly() {
     assert_eq!(ids, ["dcs::uW/en_obs-tn"]);
 }
 
+/// tC4's `relationshipsFromPins` (`journal/relationships.mjs:24-42`): the original
+/// languages, the extra scripture, the primary set, the fallback set, then the lexicons, with
+/// one row per repository where the first one wins, and inside a group the slots in tC4's
+/// `resources.json` order (docs/evidence/state-seed-check-2026-10-18.md §4.3).
+#[test]
+fn relationships_follow_tc4_order_and_keep_the_first_row_per_repository() {
+    let mut ana = Dev::new(1);
+    let slot = |repo: &str, version: &str, flavor: &str| {
+        obj(&[
+            ("repoPath", Json::from(repo)),
+            ("version", Json::from(version)),
+            ("flavor", Json::from(flavor)),
+        ])
+    };
+    let scripture = "scripture/textTranslation";
+    let changes = vec![
+        ana.one(
+            support::pins(
+                PinGroup::Lexicon,
+                &[(
+                    "ugl",
+                    slot("git.door43.org/uW/en_ugl", "v1", "peripheral/x-lexicon"),
+                )],
+            ),
+            vec![],
+        ),
+        ana.one(
+            support::pins(
+                PinGroup::Fallback,
+                &[(
+                    "gatewayLanguage",
+                    slot("git.door43.org/uW/en_ult", "v2", scripture),
+                )],
+            ),
+            vec![],
+        ),
+        ana.one(
+            support::pins(
+                PinGroup::Primary,
+                &[
+                    (
+                        "gatewayLanguage",
+                        slot("git.door43.org/uW/en_ult", "v1", scripture),
+                    ),
+                    (
+                        "translationNotes",
+                        slot("git.door43.org/uW/en_tn", "v1", "parascriptural/x-tn"),
+                    ),
+                    (
+                        "translationWordsLinks",
+                        slot("git.door43.org/uW/en_twl", "v1", "parascriptural/x-twl"),
+                    ),
+                    (
+                        "translationWords",
+                        slot("git.door43.org/uW/en_tw", "v1", "peripheral/x-tw"),
+                    ),
+                ],
+            ),
+            vec![],
+        ),
+        ana.one(
+            support::pins(
+                PinGroup::ExtraScripture,
+                &[("glt", slot("git.door43.org/uW/fr_glt", "v1", scripture))],
+            ),
+            vec![],
+        ),
+        ana.one(
+            support::pins(
+                PinGroup::OriginalLanguage,
+                &[(
+                    "ugnt",
+                    slot("git.door43.org/uW/el-x-koine_ugnt", "v0.34", scripture),
+                )],
+            ),
+            vec![],
+        ),
+    ];
+    let state = fold(&changes);
+    let source = state.metadata_source((1, 0));
+    let rows: Vec<(&str, &str)> = source
+        .relationships
+        .iter()
+        .map(|r| {
+            (
+                r["id"].as_str().expect("id"),
+                r["revision"].as_str().expect("revision"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("dcs::uW/el-x-koine_ugnt", "v0.34"),
+            ("dcs::uW/fr_glt", "v1"),
+            ("dcs::uW/en_ult", "v1"),
+            ("dcs::uW/en_tn", "v1"),
+            ("dcs::uW/en_twl", "v1"),
+            ("dcs::uW/en_tw", "v1"),
+            ("dcs::uW/en_ugl", "v1"),
+        ]
+    );
+}
+
 /// A story's check session reads that story's decisions and comments only (R1): the other
 /// forty-nine are never touched, however many they hold.
 #[test]
@@ -449,7 +664,7 @@ fn a_story_reads_its_own_decisions_and_comments() {
         check_id: CheckId::parse(id).expect("id"),
         target: CheckTarget::Frame {
             story: story(n),
-            frame: FrameNo(1),
+            frame: FrameNo::new(1),
         },
         occurrence: 1,
     };
@@ -461,7 +676,7 @@ fn a_story_reads_its_own_decisions_and_comments() {
     }
     let on_frame = |n: u8| CommentTarget::Frame {
         story: story(n),
-        frame: FrameNo(1),
+        frame: FrameNo::new(1),
     };
     changes.push(ana.one(comment(1, on_frame(1), "uno"), vec![]));
     changes.push(ana.one(comment(2, on_frame(2), "dos"), vec![]));

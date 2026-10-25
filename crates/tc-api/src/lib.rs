@@ -58,7 +58,7 @@ pub mod upload;
 pub mod write;
 
 pub use endpoint::{
-    ALL, API_VERSION, Endpoint, EndpointInfo, Kind, NetKind, Reply, ReplyOf, Write,
+    ALL, API_VERSION, Endpoint, EndpointInfo, Kind, NetKind, Reply, ReplyOf, StartsJob, Write,
 };
 pub use error::ApiError;
 pub use ids::{RequestId, Scope};
@@ -172,6 +172,8 @@ macro_rules! endpoint_table {
             query "conflicts/history": $crate::conflicts::History
                 => $crate::conflicts::HistoryView;
             command "conflicts/resolve": $crate::conflicts::Resolve => $crate::write::Ack;
+            command "conflicts/resolveBulk": $crate::conflicts::ResolveBulk
+                => $crate::conflicts::BulkKept;
 
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;
@@ -229,6 +231,7 @@ macro_rules! test_hook_table {
             command "test/reset": $crate::test::Reset => ();
             command "test/lastEdit": $crate::test::LastEdit => ();
             command "test/script": $crate::test::Script => ();
+            query "test/validate": $crate::test::Validate => $crate::test::ValidateView;
         }
     };
 }
