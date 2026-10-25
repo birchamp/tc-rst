@@ -1243,6 +1243,36 @@ fn lost_work_stays_lost_work_after_the_manifest_is_lost() {
     handle.close().unwrap();
 }
 
+/// A write that fails while lost work is kept (the `.lost` mark among them), then a lost
+/// manifest: the save is still in the book file and asked about again, or listed as lost work,
+/// which cannot be dismissed. Never an outside change Dismiss could delete.
+#[test]
+fn a_failed_write_while_keeping_lost_work_never_makes_it_dismissable() {
+    let mut reached = 0;
+    for n in 0..40 {
+        let (rig, folder) = lost_work();
+        rig.fs.fail_op(n, std::io::ErrorKind::StorageFull);
+        if let Ok(handle) = rig.store.open(&folder, &OpenOptions::default()) {
+            handle.wait_idle();
+            handle.close().ok();
+        }
+        let _ = rig.fs.delete(&folder.join(".tc/materialized.json"));
+        let handle = open(&rig, &folder);
+        let saved = "saved before the file was deleted";
+        let in_file =
+            String::from_utf8_lossy(&rig.fs.peek(&usfm_path(&folder)).unwrap()).contains(saved);
+        for k in handle.kept_copies() {
+            let copy = rig.fs.peek(&folder.join(&k.copy)).unwrap_or_default();
+            if String::from_utf8_lossy(&copy).contains(saved) && !in_file {
+                assert_eq!(k.why, tc_store::KeptWhy::Lost, "fail point {n}: {k:?}");
+                reached += 1;
+            }
+        }
+        handle.close().ok();
+    }
+    assert!(reached > 0, "no fail point left the save only in a copy");
+}
+
 /// H22 part 1, row N4: a save the journal lost (its pending file deleted before a crash) that
 /// the book file the app wrote still shows. The text is kept in a copy listed with
 /// `why: lost` and asked about once; nothing comes back on its own; the file is written from

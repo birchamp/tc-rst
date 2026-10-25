@@ -492,14 +492,25 @@ impl Writer {
         base: &ledger::Base,
     ) -> Result<Next, StoreError> {
         let copy = self.copy_external(rel, bytes)?;
-        self.mark(&copy, LOST);
+        // The mark is what keeps the copy undismissable after a manifest loss, so a failed one
+        // stops here, before the entry: the open finds the lost save again.
+        self.mark(&copy, LOST)?;
         let md5 = Md5::of(bytes).to_hex();
-        if !self
+        let same = self
             .manifest
             .kept
             .iter()
-            .any(|k| k.path == rel && k.md5 == md5)
-        {
+            .position(|k| k.path == rel && k.md5 == md5);
+        if let Some(i) = same {
+            // Another program's bytes equal to the lost save: it is the translator's work, so
+            // the entry turns lost and can no longer be dismissed.
+            let entry = &mut self.manifest.kept[i];
+            if entry.why != KeptWhy::Lost {
+                entry.why = KeptWhy::Lost;
+                let copy = entry.copy.clone();
+                self.mark(&copy, LOST)?;
+            }
+        } else {
             self.manifest.kept.push(Kept {
                 path: rel.to_owned(),
                 copy,
@@ -800,7 +811,9 @@ impl Writer {
         self.manifest.kept.retain(|k| k.copy != entry.copy);
         self.manifest_changed = true;
         self.write_manifest()?;
-        self.mark(&entry.copy, IMPORTED);
+        // A mark that cannot be written only lets an open that lost the manifest list the
+        // imported copy again, as an outside change to answer.
+        let _ = self.mark(&entry.copy, IMPORTED);
         if let Some(file) =
             DerivedFile::from_path(&entry.path).filter(|f| self.fold.projects_file(f))
         {
@@ -810,17 +823,25 @@ impl Writer {
     }
 
     /// Marks a copy with an empty file beside it ([`IMPORTED`], [`LOST`]), which an open that
-    /// lost the manifest reads; the copy keeps its name and bytes. A mark that cannot be
-    /// written only lets that open list the copy as an outside change.
-    fn mark(&self, copy: &str, mark: &str) {
+    /// lost the manifest reads; the copy keeps its name and bytes.
+    fn mark(&self, copy: &str, mark: &str) -> Result<(), StoreError> {
         let (dir, name) = self.folder.dir_and_name(copy);
-        let _ = crate::atomic::atomic_create(
+        match crate::atomic::atomic_create(
             &*self.vfs,
             &dir,
             &format!("{name}{mark}"),
             b"",
             SyncDir::Now,
-        );
+        ) {
+            Ok(()) => Ok(()),
+            // An earlier keep of the same copy marked it already.
+            Err(crate::atomic::WriteError::NotWritten(e))
+                if e.kind() == Some(std::io::ErrorKind::AlreadyExists) =>
+            {
+                Ok(())
+            }
+            Err(e) => Err(e.into_inner()),
+        }
     }
 
     /// *Not now* for a held book file or story: the file is written again from the project
