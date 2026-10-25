@@ -9,7 +9,7 @@
 
 use tc_api::conflicts::{
     ConflictEntry, ConflictKind, KeepChoice, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount,
-    Version, VersionCause,
+    Version, VersionCause, VersionValue,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, RecordRef, RequestId};
 use tc_api::shown::{PersonLabel, Who};
@@ -586,6 +586,28 @@ pub fn tabs_shown(tabs: &[TabCount], shown: ReviewTab) -> Vec<TabCount> {
         .filter(|t| t.count > 0 || t.tab == shown || t.tab == ReviewTab::Text)
         .copied()
         .collect()
+}
+
+/// What a version of History holds, as its row draws it; nothing for a value no row draws.
+pub fn version_text(value: &VersionValue) -> Option<String> {
+    use keys::review::value as v;
+    match value {
+        VersionValue::Text(text) => Some(text.trim().to_owned()),
+        VersionValue::Joined { by } => Some(t(v::JOINED, &[("by", by)])),
+        VersionValue::Absent => Some(t(v::ABSENT, &[])),
+        VersionValue::Check { selected, comment } => {
+            let selected = if selected.is_empty() {
+                t(v::NONE_SELECTED, &[])
+            } else {
+                t(v::SELECTED, &[("words", &selected.join(" … "))])
+            };
+            Some(match comment {
+                Some(text) => format!("{selected}\n{}", t(v::COMMENT, &[("text", text)])),
+                None => selected,
+            })
+        }
+        VersionValue::NotShown => None,
+    }
 }
 
 /// How a version of History came to be.

@@ -20,7 +20,7 @@ use tc_ui::app::net::NetEnd;
 use tc_ui::app::review::{
     BackTo, Choices, KeepOutcome, KeepPhase, KeepReply, Owner, Press, ReviewState, back_label,
     choices, consequence, failure_text, group_others, keep_passage_label, kept_name, made_by,
-    notice_text, persons, picks_of, place_book, place_label, tabs_shown,
+    notice_text, persons, picks_of, place_book, place_label, tabs_shown, version_text,
 };
 use tc_ui::app::sync::{SyncEnd, SyncToast, person_label};
 
@@ -669,4 +669,22 @@ fn the_packet_draws_every_screen_the_ruling_kept() {
     ] {
         assert!(screen(gone).is_none(), "{gone}");
     }
+}
+
+/// A check's version in History names the words it selected and its comment, so the person can
+/// tell the version to restore (owner ruling H5).
+#[test]
+fn a_checks_version_names_its_selection_and_comment() {
+    let check = |selected: &[&str], comment: Option<&str>| {
+        version_text(&VersionValue::Check {
+            selected: selected.iter().map(|w| (*w).to_owned()).collect(),
+            comment: comment.map(str::to_owned),
+        })
+    };
+    assert_eq!(
+        check(&["siervo", "Dios"], Some("Revisar")).as_deref(),
+        Some("Selected: siervo … Dios\nComment: Revisar")
+    );
+    assert_eq!(check(&[], None).as_deref(), Some("Nothing selected"));
+    assert_eq!(version_text(&VersionValue::NotShown), None);
 }

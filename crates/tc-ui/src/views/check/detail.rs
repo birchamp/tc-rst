@@ -573,6 +573,15 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
         .with_untracked(|p| p.as_ref().map(|p| p.dir))
         .unwrap_or(TextDir::Ltr);
 
+    let history = super::history::check_history(
+        s,
+        actions,
+        format!(
+            "{unit} {}",
+            t(keys::check::REF, &[("c", &chapter), ("v", &verse)])
+        ),
+    );
+
     // ---- the header
     let header = {
         let row = crate::css! { "display": "flex", "align-items": "center", "gap": 10, "margin-bottom": 14 };
@@ -908,6 +917,7 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
             {compare}
             {marking_row}
             {marks}
+            {history}
         </div>
     }
     .into_any()

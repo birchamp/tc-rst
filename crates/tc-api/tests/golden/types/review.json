@@ -162,6 +162,15 @@
       "type": "absent"
     },
     {
+      "type": "check",
+      "value": {
+        "selected": [
+          "siervo"
+        ],
+        "comment": "Revisar"
+      }
+    },
+    {
       "type": "notShown"
     }
   ],

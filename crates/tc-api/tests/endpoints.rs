@@ -113,6 +113,8 @@ const PHASE_0: &[&str] = &[
     // C7a: the bulk keep.
     "conflicts/resolveBulk",
     "conflicts/restore",
+    // HIST-1: the History of a record a screen shows.
+    "conflicts/versions",
     // B8: what the Community Checking preview prints.
     "export/book",
     "export/stories",

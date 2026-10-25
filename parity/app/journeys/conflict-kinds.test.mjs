@@ -3,12 +3,10 @@
 // Teammates 1 and 2's changes, from one version, of the first Translation Notes decision of Titus
 // and of the first alignment (tc-app backend/memory.rs `Teammates::change_kind`), Teammate 2's
 // newer: the toast says tC4's "2 conflicts kept the newest version", the review asks nothing,
-// and the Check screen and the decision file hold Teammate 2's comment.
+// and the Check screen holds Teammate 2's comment.
 //
-// Not here yet: History and *Restore this version* for a check. The Check screen has no History
-// (only views/review.rs draws one, for a listed conflict), and the API's restore is a choice of
-// `conflicts/resolve`, which needs a conflict id (tc-api conflicts.rs `Resolve`); a check that
-// settled newest-wins has none, and no check view names its record for `conflicts/history`.
+// Then the Check screen's History (HIST-1) lists both versions, and *Restore this version* on
+// Teammate 1's brings it back: the Check screen and the decision file hold Teammate 1's comment.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
 //     node --test parity/app/journeys/conflict-kinds.test.mjs
@@ -42,7 +40,7 @@ async function comments(env) {
   }
 }
 
-browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s newer check and alignment arrive with no question, and the Check screen and the decision file hold the newer comment', async () => {
+browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s newer check and alignment arrive with no question; the Check screen\'s History restores the older decision, and the decision file holds it', async () => {
   await withApp(async ({ page, env }) => {
     await page.getByTestId(`share-${FOLDER}`).waitFor();
     await env.call('test/script', {
@@ -108,11 +106,26 @@ browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s n
     await until('the comment shows', async () => (await page.getByTestId('comment-text').inputValue()) === TWO);
     await page.keyboard.press('Escape');
 
+    // History keeps Teammate 1's older decision, and *Restore this version* brings it back.
+    await page.getByTestId('check-history-toggle').click();
+    const versions = page.getByTestId('check-history').getByTestId('history-version');
+    await until('the check\'s History lists both versions', async () => (await versions.count()) >= 2);
+    assert.equal(await versions.first().getAttribute('data-shown'), 'true', 'the newest is shown, first');
+    assert.match(await versions.first().textContent(), new RegExp(TWO));
+    const older = versions.filter({ hasText: ONE });
+    assert.equal(await older.getAttribute('data-shown'), 'false');
+    await older.getByTestId('history-restore').click();
+    await until('the restored comment shows', async () => (await comments(env)).some((c) => c.comment === ONE));
+    await until('History shows the restored version', async () => (await versions.first().textContent()).includes(ONE));
+    if (!(await page.getByTestId('comment-text').isVisible())) await page.getByTestId('comment-toggle').click();
+    await until('the comment shows the restored text', async () => (await page.getByTestId('comment-text').inputValue()) === ONE);
+    await page.keyboard.press('Escape');
+
     await page.getByTitle(/Switch project/).click();
     await page.getByTestId(`project-${FOLDER}`).waitFor();
     await env.call('settings/viewFromHome', { project: FOLDER });
     const file = JSON.parse(fs.readFileSync(path.join(env.projectsDir, FOLDER, 'ingredients', 'checking', 'translationNotes', 'TIT.json'), 'utf8'));
     const held = file.decisions.map((d) => d.comments).filter((c) => c === ONE || c === TWO);
-    assert.deepEqual(held, [TWO], 'the decision file holds the newest comment');
+    assert.deepEqual(held, [ONE], 'the decision file holds the restored comment');
   }, opts);
 });

@@ -14,7 +14,7 @@ use tc_api::conflicts::{
     BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion,
     HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk, Restore,
     ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version, VersionCause,
-    VersionValue,
+    VersionValue, Versions,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, WallMs};
 use tc_api::shown::{Computer, PersonLabel, Who};
@@ -22,7 +22,7 @@ use tc_api::write::{Ack, SaveRefusal};
 use tc_api::{ApiError, NotSaved};
 use tc_journal::command::Choice;
 use tc_journal::fold::{Anomaly, Conflict, ConflictId, ConflictKind as Kind, Notice};
-use tc_journal::record::{BookPresence, ChapterFront, VerseValue};
+use tc_journal::record::{BookPresence, ChapterFront, CheckValue, VerseValue};
 use tc_journal::{Cause, ChangeId, DeviceId, DeviceKind, Record, RecordKey, WallTime};
 
 use crate::app::App;
@@ -189,6 +189,15 @@ fn value_of(record: &Record) -> VersionValue {
             value: BookPresence::Removed { .. },
             ..
         } => VersionValue::Absent,
+        Record::Check {
+            value: CheckValue::Decision(d),
+            ..
+        } => VersionValue::Check {
+            selected: (d.judgement.selections.iter().flatten())
+                .map(|s| s.text.clone())
+                .collect(),
+            comment: d.comment.clone(),
+        },
         _ => VersionValue::NotShown,
     }
 }
@@ -543,9 +552,25 @@ impl Handle<List> for App {
 
 impl Handle<History> for App {
     async fn handle(&self, req: History) -> Result<HistoryView, ApiError> {
-        let session = self.read(&req.at)?;
-        let read = session.read();
         let key = wire::scope::record_key(&req.record)?;
+        self.history(&req.at, &key)
+    }
+}
+
+impl Handle<Versions> for App {
+    async fn handle(&self, req: Versions) -> Result<HistoryView, ApiError> {
+        let session = self.read(&req.at)?;
+        let shown = wire::token::edit_token(session.handle().as_ref(), &req.shown)?;
+        drop(session);
+        self.history(&req.at, shown.key())
+    }
+}
+
+impl App {
+    fn history(&self, at: &tc_api::ids::Scope, key: &RecordKey) -> Result<HistoryView, ApiError> {
+        let session = self.read(at)?;
+        let read = session.read();
+        let key = key.clone();
         let me = session.handle().facts().device;
         let labels = read.person_labels(me);
         let now = self.inner.clock.now();

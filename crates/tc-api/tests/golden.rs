@@ -2719,6 +2719,15 @@ impl Example for History {
     }
 }
 
+impl Example for tc_api::conflicts::Versions {
+    fn example() -> Self {
+        tc_api::conflicts::Versions {
+            at: scope(),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+        }
+    }
+}
+
 impl Example for HistoryView {
     fn example() -> Self {
         HistoryView {
@@ -2878,6 +2887,10 @@ fn review_values() -> Vec<VersionValue> {
         VersionValue::Text("Pablo, siervo de Dios".into()),
         VersionValue::Joined { by: 4 },
         VersionValue::Absent,
+        VersionValue::Check {
+            selected: vec!["siervo".into()],
+            comment: Some("Revisar".into()),
+        },
         VersionValue::NotShown,
     ]
 }

@@ -4,7 +4,7 @@ title: History and Restore on the screens, and the Received sheet's replaced row
 track: A
 lane: app
 milestone: M3
-state: claimed
+state: building
 owner: shell lane (Claude Code e1bb3a0c)
 branch: track-HIST-1
 worktree: .worktrees/track-HIST-1
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 sessions (basis: C7a's History view exists; this adds entry points and one list of rows)
 merged: none
 updated: 2026-10-25
-next: Step 1, History and Restore on the Check screen, with the journey half.
+next: Step 2, History and Restore in the aligner and for settings and pins.
 blocked_by: none
 ---
 
@@ -71,3 +71,4 @@ replaced and can put their own version back in two clicks.
 
 - 2026-10-25 | shell lane (Claude Code e1bb3a0c) | created | none | From C7b's parity lens blocker B1 and major M1; the orchestrator chose option (b): C7b gives the calls, this card the screens; it goes in REL-1's and DONE's depends; the G5 session takes it after UI-3b | .audit/roadmap/evidence/2026-10-24/C7b-lens-parity.md
 - 2026-10-25 12:55 EDT | shell lane (Claude Code e1bb3a0c) | claimed | none | The orchestrator asked this lane to take HIST-1 now, cut from track-C7b, before C7b and UI-3b merge; UI-3b (track-UI-3b) also edits web/align.rs, web/check.rs, web/app_ctx.rs and views/check/detail.rs, so whichever lands second merges and adapts
+- 2026-10-25 13:40 EDT | shell lane (Claude Code e1bb3a0c) | step 1 | none | New query conflicts/versions { at, shown }: the History of the record a screen shows, by its token (the token names the record, so no view needs a RecordRef); a check's version carries VersionValue::Check { selected, comment }. The Check screen draws a History toggle under the marks (views/check/history.rs, reusing review.rs's history_section); *Restore this version* goes through the decision write queue (Actions::restore_check, conflicts/restore) and reads the check again. conflict-kinds.test.mjs now restores Teammate 1's decision: the server, History, the comment field and TIT.json hold it; a_record_outside_a_conflict_restores_an_older_version_from_history checks conflicts/versions equals conflicts/history; a_checks_version_names_its_selection_and_comment (tc-ui) | node --test parity/app/journeys/conflict-kinds.test.mjs

@@ -235,7 +235,13 @@ pub enum VersionValue {
     Joined { by: u16 },
     /// The record holds nothing: an absent verse, a removed book.
     Absent,
-    /// A value the review does not draw (an alignment, a decision, a setting).
+    /// A check's decision: the words selected, and its comment.
+    Check {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        selected: Vec<String>,
+        comment: Option<String>,
+    },
+    /// A value the review does not draw (an alignment, a setting).
     NotShown,
 }
 
@@ -330,6 +336,17 @@ pub enum NoticeView {
 pub struct History {
     pub at: Scope,
     pub record: RecordRef,
+}
+
+/// `conflicts/versions`: the History of the record a screen shows by its token (owner ruling
+/// H5), for a check, an alignment, a setting or a pin that holds no conflict; the review names
+/// its records instead.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Versions {
+    pub at: Scope,
+    pub shown: crate::ShownToken,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

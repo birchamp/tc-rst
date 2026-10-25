@@ -171,6 +171,8 @@ macro_rules! endpoint_table {
             query "conflicts/list": $crate::conflicts::List => $crate::conflicts::ReviewView;
             query "conflicts/history": $crate::conflicts::History
                 => $crate::conflicts::HistoryView;
+            query "conflicts/versions": $crate::conflicts::Versions
+                => $crate::conflicts::HistoryView;
             command "conflicts/resolve": $crate::conflicts::Resolve => $crate::write::Ack;
             command "conflicts/restore": $crate::conflicts::Restore => $crate::write::Ack;
             command "conflicts/resolveBulk": $crate::conflicts::ResolveBulk
