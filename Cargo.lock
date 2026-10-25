@@ -3292,7 +3292,7 @@ dependencies = [
 
 [[package]]
 name = "tc-align"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "proptest",
  "serde",
@@ -3308,7 +3308,7 @@ dependencies = [
 
 [[package]]
 name = "tc-api"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "proptest",
  "proptest-derive",
@@ -3324,7 +3324,7 @@ dependencies = [
 
 [[package]]
 name = "tc-app"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "base64 0.22.1",
  "git2",
@@ -3361,14 +3361,14 @@ dependencies = [
 
 [[package]]
 name = "tc-arch"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "tc-burrito"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "jsonschema",
  "md-5",
@@ -3384,7 +3384,7 @@ dependencies = [
 
 [[package]]
 name = "tc-check"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "proptest",
  "serde_json",
@@ -3400,7 +3400,7 @@ dependencies = [
 
 [[package]]
 name = "tc-core"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "md-5",
  "proptest",
@@ -3411,7 +3411,7 @@ dependencies = [
 
 [[package]]
 name = "tc-corpus"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "rayon",
  "ring",
@@ -3428,7 +3428,7 @@ dependencies = [
 
 [[package]]
 name = "tc-door43"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "base64 0.22.1",
  "git2",
@@ -3456,7 +3456,7 @@ dependencies = [
 
 [[package]]
 name = "tc-door43-fake"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -3473,7 +3473,7 @@ dependencies = [
 
 [[package]]
 name = "tc-export"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "proptest",
  "serde_json",
@@ -3490,7 +3490,7 @@ dependencies = [
 
 [[package]]
 name = "tc-helps"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "fancy-regex",
  "md-5",
@@ -3507,7 +3507,7 @@ dependencies = [
 
 [[package]]
 name = "tc-import"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "serde_json",
  "tc-burrito",
@@ -3522,7 +3522,7 @@ dependencies = [
 
 [[package]]
 name = "tc-journal"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "hmac",
  "im",
@@ -3546,7 +3546,7 @@ dependencies = [
 
 [[package]]
 name = "tc-obs"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "md-5",
  "proptest",
@@ -3562,7 +3562,7 @@ dependencies = [
 
 [[package]]
 name = "tc-resources"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "axum",
  "md-5",
@@ -3585,7 +3585,7 @@ dependencies = [
 
 [[package]]
 name = "tc-server"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -3605,7 +3605,7 @@ dependencies = [
 
 [[package]]
 name = "tc-store"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "getrandom 0.3.4",
  "git2",
@@ -3658,7 +3658,7 @@ dependencies = [
 
 [[package]]
 name = "tc-ui"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "base64 0.22.1",
  "console_error_panic_hook",
@@ -3685,7 +3685,7 @@ dependencies = [
 
 [[package]]
 name = "tc-usfm"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "md-5",
  "proptest",
@@ -3697,7 +3697,7 @@ dependencies = [
 
 [[package]]
 name = "tc-versification"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "proptest",
  "serde",
@@ -3708,7 +3708,7 @@ dependencies = [
 
 [[package]]
 name = "tc4"
-version = "0.1.0"
+version = "4.1.0"
 dependencies = [
  "percent-encoding",
  "serde_json",
