@@ -483,40 +483,63 @@ impl Writer {
         Ok(Next::Write)
     }
 
-    /// The base of a `why: lost` entry, fixed now: a record whose heads in the placement name a
-    /// change the journal lost stands on the heads the fold holds for it at this moment, the
-    /// versions the lost save was made over, with no digest so it is compared. *Bring it back*
-    /// then restores the save while the project still holds those heads, and a save made since
-    /// makes it a conflict. Written after the entry: a crash before this leaves the lost heads,
+    /// The base of a `why: lost` entry, fixed now: a record every head of which in the
+    /// placement is a change the journal lost stands on the heads the fold holds for it at this
+    /// moment, when an earlier placement of the file named those same heads (what the lost save
+    /// was made over), with no digest so it is compared. *Bring it back* then restores the save
+    /// while the project still holds those heads, and a save made since makes it a conflict. Written after the entry: a crash before this leaves the lost heads,
     /// which compare as no base (a conflict, nothing lost), and the next open pins them.
     fn pin_lost_base(&mut self, rel: &str, md5: &str) -> Result<(), StoreError> {
-        let Some(placed) = self
-            .heads_of(rel)
-            .and_then(|file| file.placements.into_iter().find(|p| p.md5 == md5))
-        else {
+        let Some(file) = self.heads_of(rel) else {
+            return Ok(());
+        };
+        let Some(placed) = file.placements.iter().find(|p| p.md5 == md5).cloned() else {
             return Ok(());
         };
         let current = self.current_heads(rel);
         let mut changed = false;
         let mut records = placed.records;
         for record in &mut records {
-            let lost = record
-                .heads
-                .iter()
-                .any(|id| !self.shows_held(&tc_journal::ChangeId::from_bytes(*id), &current));
-            let key = tc_journal::json::parse(record.key.as_bytes())
-                .ok()
-                .and_then(|j| tc_journal::canon::decode_key(&j).ok());
-            if let (true, Some(key)) = (lost, key) {
-                record.heads = self
-                    .fold
-                    .heads(&key)
+            // Only a record every head of which is lost: a head the fold still holds is a
+            // version the save stood beside (a teammate's, a conflict), never one it replaced.
+            let all_lost = !record.heads.is_empty()
+                && record
+                    .heads
                     .iter()
-                    .map(|id| *id.as_bytes())
-                    .collect();
-                record.shown = None;
-                changed = true;
+                    .all(|id| !self.shows_held(&tc_journal::ChangeId::from_bytes(*id), &current));
+            if !all_lost {
+                continue;
             }
+            let Some(key) = tc_journal::json::parse(record.key.as_bytes())
+                .ok()
+                .and_then(|j| tc_journal::canon::decode_key(&j).ok())
+            else {
+                continue;
+            };
+            let mut now: Vec<[u8; 32]> = self
+                .fold
+                .heads(&key)
+                .iter()
+                .map(|id| *id.as_bytes())
+                .collect();
+            now.sort();
+            // Only onto heads an earlier placement of this file named for the record: what the
+            // file showed before the lost save. A head that came since (a teammate's change
+            // received) is newer than the save, so the lost heads stay and *Bring it back* is a
+            // conflict.
+            let earlier = file.placements.iter().filter(|p| p.md5 != md5).any(|p| {
+                p.records.iter().any(|r| {
+                    let mut heads = r.heads.clone();
+                    heads.sort();
+                    r.key == record.key && heads == now
+                })
+            });
+            if now.is_empty() || !earlier {
+                continue;
+            }
+            record.heads = now;
+            record.shown = None;
+            changed = true;
         }
         if !changed {
             return Ok(());
