@@ -606,6 +606,27 @@ browserTest('a_reload_never_saves_a_section_buffer', async () => {
   });
 });
 
+// FIX-HIDE2 (never hide a translator's text): a section draft never saved comes back after a
+// reload where the translator sees it, its card open with the typed text, ready for Save.
+browserTest('a_section_draft_restored_after_a_reload_is_on_the_page', async () => {
+  await withApp(async ({ page }) => {
+    await openTitus2(page);
+    await pill(page, '9–10').click();
+    await typing(page, '9–10').fill(`9 ${NINE}\n10 ${TEN}`);
+    await card(page).getByText('Drafting 9–10').click();
+    assert.ok((await storageDump(page)).includes(NINE));
+    await page.reload();
+    await page.getByTestId('account-menu').waitFor();
+    await until('Titus 2 or Home after the reload', async () => (await pill(page, '9–10').isVisible()) || (await titus(page).isVisible()) || (await card(page).isVisible()));
+    if ((await titus(page).isVisible()) && !(await card(page).isVisible())) await openTitus2(page);
+    await until('the draft is on the page', async () => {
+      const inCard = (await typing(page, '9–10').count()) > 0 && (await typing(page, '9–10').inputValue()).includes(NINE);
+      return inCard || (await page.locator('main').innerText()).includes(NINE);
+    }, 20_000);
+    assert.ok((await typing(page, '9–10').inputValue()).includes(NINE), 'the section card is open with the draft, for Save');
+  });
+});
+
 // STORAGE 5.2: a change that arrived under the open card becomes a second version beside the
 // card's save, never a revert and never a refusal.
 browserTest('a_teammates_change_under_a_section_card_becomes_a_conflict', async () => {

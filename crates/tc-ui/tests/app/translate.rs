@@ -366,3 +366,17 @@ fn a_card_opens_on_its_rows_and_is_based_on_every_verse_it_displays() {
         "each verse's token, then the verses it covers"
     );
 }
+
+/// FIX-HIDE2: a restored section's place names the verses its card was opened over, spans
+/// included, and nothing outside its range.
+#[test]
+fn a_section_place_names_the_verses_its_card_covered() {
+    use tc_ui::app::translate::section_keys_of;
+    let keys: Vec<String> = ["8", "9", "10-11", "12"]
+        .iter()
+        .map(|k| (*k).to_owned())
+        .collect();
+    assert_eq!(section_keys_of("9-11", &keys), ["9", "10-11"]);
+    assert_eq!(section_keys_of("12", &keys), ["12"]);
+    assert!(section_keys_of("x-2", &keys).is_empty());
+}

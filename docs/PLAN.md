@@ -225,6 +225,9 @@ And these (unit B10):
   alignment can disappear unannounced (#791). Since #806 (D108, in rc.2) tC4 names each such
   verse in its own row ("{book} {ref}: {name}'s alignment replaced yours."), but still keeps
   only the newest alignment; the rebuild keeps both.
+- A section draft not yet saved survives a reload, and its card opens again with the typed
+  text when Translate shows its chapter, ready for Save or Cancel. tC4 4.0 keeps the draft only
+  in the open card, so a reload or crash loses it (FIX-HIDE2).
 - A sync that stops for a reason no sentence names says so in one fixed sentence. Door43's
   words and the reason, which can name a file on the translator's computer, stay in the
   problem report. tC4 4.0 shows "The sync stopped: {reason}" (#724, Q36).
