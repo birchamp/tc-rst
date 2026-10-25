@@ -234,6 +234,8 @@ pub fn section_values(
     let keys: Vec<String> = olds.iter().map(|o| label(o.head, o.last)).collect();
     let buffer = SectionBuffer::parse(text, &keys);
     let texts: BTreeMap<String, String> = buffer.verses().into_iter().collect();
+    // The blank lines after a verse's last words that stand for its own breaks (tC4 #812).
+    let own_breaks = buffer.own_breaks();
     // A save that leaves the section with no words changes the verse bodies only: the lines
     // between the verses stay (#600).
     let formats: BTreeMap<String, Option<ParaFormat>> = if buffer.is_empty() {
@@ -260,11 +262,15 @@ pub fn section_values(
         let holding = olds.iter().find(|o| (o.head..=o.last).contains(&head));
         // The card shows poem lines as tabs and breaks as empty lines (tC4 #810, REF1b): a
         // verse's text goes back to its words by the words it was shown from.
+        let typed = format!(
+            "{body}{}",
+            "\n".repeat(own_breaks.get(&group.key).copied().unwrap_or(0))
+        );
         let words = match at_head {
-            Some(o) if tc_usfm::poem::editor_text(shown_body(&o.words)) == body => o.words.clone(),
+            Some(o) if tc_usfm::poem::editor_text(shown_body(&o.words)) == typed => o.words.clone(),
             _ if body.is_empty() => "___".to_owned(),
-            Some(o) => tc_usfm::poem::words_from_editor_text(body, shown_body(&o.words)),
-            None => tc_usfm::poem::words_from_editor_text(body, ""),
+            Some(o) => tc_usfm::poem::words_from_editor_text(&typed, shown_body(&o.words)),
+            None => tc_usfm::poem::words_from_editor_text(&typed, ""),
         };
         let layout = layout_after.get(&last).copied().unwrap_or("\n");
         let layout = match formats.get(&group.key) {

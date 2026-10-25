@@ -188,6 +188,7 @@ browserTest('poem_lines_show_as_tabs_and_save_as_their_markers', async () => {
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     assert.equal((await verse(env, 4)).words.value, typed);
     // The grid shows the words alone, every line kept.
+    assert.equal((await verse(env, 4)).text, 'a Tito, mi verdadero hijo en la fe común: gracia y paz');
     // Home and back: the card reads the verse from the server again.
     await page.getByTestId('project-switch').click();
     await titus(page).click();

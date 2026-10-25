@@ -964,6 +964,76 @@ async fn a_card_over_two_heads_saves_by_the_version_it_showed() {
     assert!(book.contains("\\q1 b\n\\ts\\*\n\\q2 c!!"), "{book}");
 }
 
+/// REF1b (the browser review; tC4 j02's #812 case): a section save that clears the words after
+/// a verse's `\ts\*` keeps the `\ts\*` once, in the last verse of the section and before the
+/// next verse alike.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn clearing_the_words_after_a_break_keeps_the_break() {
+    let rig = Rig::sample().await;
+    let view = rig.chapters().await;
+    for (n, verse, words) in [
+        (
+            90,
+            "4",
+            "a Tito,\n\\q2 mi verdadero hijo\n\\ts\\*\n\\q1 en la fe común",
+        ),
+        (
+            91,
+            "5",
+            "Por esta causa,\n\\q2 te dejé en Creta\n\\ts\\*\n\\q1 para que corrigieras",
+        ),
+    ] {
+        post(
+            &rig.t.app,
+            &SaveVerse {
+                at: rig.at.clone(),
+                request: rid(n),
+                shown: row(&view, 1, verse).words.token.clone(),
+                words: words.to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let view = rig.chapters().await;
+    let keys = ["4", "5"];
+    let opening = initial_text(
+        &keys
+            .iter()
+            .map(|key| {
+                let r = row(&view, 1, key);
+                SectionVerse {
+                    key: (*key).to_owned(),
+                    drafted: true,
+                    body: js_trim(&r.words.value).to_owned(),
+                    format: r.format,
+                }
+            })
+            .collect::<Vec<_>>(),
+        &expand_keys(&keys.map(str::to_owned)),
+    );
+    let typed = opening
+        .replace("\ten la fe común", "")
+        .replace("\tpara que corrigieras", "");
+    assert_ne!(typed, opening);
+    let ack = rig.save(92, &view, 1, &keys, &typed).await.unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    rig.finish().await;
+    let book = rig
+        .fs
+        .files_under(&Path::new(PROJECTS).join(SAMPLE))
+        .into_iter()
+        .find(|(path, _)| path.ends_with("ingredients/TIT.usfm"))
+        .map(|(_, bytes)| String::from_utf8(bytes).unwrap())
+        .expect("the book is written");
+    assert!(book.contains("\\q2 mi verdadero hijo\n\\ts\\*\n"), "{book}");
+    assert!(book.contains("\\q2 te dejé en Creta\n\\ts\\*\n"), "{book}");
+    assert!(
+        !book.contains("\\ts\\*\n\\ts\\*"),
+        "each break once: {book}"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_change_section_save_on_psalm_3_writes_nothing() {
     a_poem_comes_back_byte_for_byte(&psalm_3()).await;

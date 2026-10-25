@@ -535,10 +535,26 @@ impl SectionBuffer {
     /// keyed as the save writes them (tC4's `sectionVerses`). Verses joined into a span are one
     /// paragraph: a blank line inside one becomes a space (#575).
     pub fn verses(&self) -> Vec<(String, String)> {
+        let (groups, text) = self.group_texts();
+        groups
+            .into_iter()
+            .zip(text)
+            .filter_map(|(group, text)| {
+                // A verse's own blank lines after its last words are `own_breaks`.
+                let mut text = js_trim(&text).to_owned();
+                // #575: verses joined into a span now are one paragraph; a span the book
+                // already has keeps its blank lines, its own breaks (tC4 #812).
+                if group.members.len() > 1 && !self.keys.contains(&group.key) {
+                    text = collapse_blank_lines(&text);
+                }
+                (!text.is_empty()).then_some((group.key, text))
+            })
+            .collect()
+    }
+
+    /// Each group with its text as typed, words joined by their separators, untrimmed.
+    fn group_texts(&self) -> (Vec<Group>, Vec<String>) {
         let groups = self.groups();
-        if groups.is_empty() {
-            return Vec::new();
-        }
         let begins: BTreeMap<usize, usize> = groups
             .iter()
             .enumerate()
@@ -575,22 +591,30 @@ impl SectionBuffer {
                 buf.push_str(self.seps.get(i).map_or("", String::as_str));
             }
         }
-        groups
-            .into_iter()
-            .zip(text)
-            .filter_map(|(group, text)| {
-                // tC4 `ownText` keeps a verse's blank lines after its last words, as the breaks
-                // tC4 stores in the verse; the rebuild keeps them in the verse's layout, which a
-                // section save carries over (a declared difference, REF1b).
-                let mut text = js_trim(&text).to_owned();
-                // #575: verses joined into a span now are one paragraph; a span the book
-                // already has keeps its blank lines, its own breaks (tC4 #812).
-                if group.members.len() > 1 && !self.keys.contains(&group.key) {
-                    text = collapse_blank_lines(&text);
-                }
-                (!text.is_empty()).then_some((group.key, text))
-            })
-            .collect()
+        (groups, text)
+    }
+
+    /// The blank lines after each verse's last words that are its own (tC4 `ownText`): the
+    /// breaks a save gives back to the verse, as tC4 rc.2 does (#812). The line end before the
+    /// next verse's line is not one, nor the blank line that gives that verse its `\p`.
+    pub fn own_breaks(&self) -> BTreeMap<String, usize> {
+        let (groups, text) = self.group_texts();
+        let mut out = BTreeMap::new();
+        for (g, (group, text)) in groups.iter().zip(&text).enumerate() {
+            let next = groups.iter().skip(g + 1).find_map(|next| next.at);
+            let next_is_p = next.is_some_and(|at| self.blocks.get(&at) == Some(&ParaFormat::P));
+            let end = &text[text.trim_end_matches(js_space).len()..];
+            let blanks = end
+                .matches('\n')
+                .count()
+                .saturating_sub(usize::from(next.is_some()) + usize::from(next_is_p));
+            // A span joined now is one paragraph (#575) and keeps none.
+            let joined_now = group.members.len() > 1 && !self.keys.contains(&group.key);
+            if blanks > 0 && !joined_now && !js_trim(text).is_empty() {
+                out.insert(group.key.clone(), blanks);
+            }
+        }
+        out
     }
 
     /// The marker before each verse after the first, as the typed lines ask: `formats[i]` is

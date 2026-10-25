@@ -176,8 +176,8 @@ fn the_port_reads_every_text_as_tc4_does() {
         assert_eq!(groups, wanted, "groups of {at}");
         assert_eq!(b.new_keys(), strings(&case["newKeys"]), "keys of {at}");
         let verses: BTreeMap<String, String> = b.verses().into_iter().collect();
-        // A declared difference (REF1b): tC4 rc.2 keeps a verse's blank lines after its last
-        // words in its text (`ownText`); the rebuild keeps them in the verse's layout.
+        // tC4 rc.2 keeps a verse's blank lines after its last words in its text (`ownText`); the
+        // port reports them apart, as `own_breaks`, which the section save gives back (REF1b).
         let wanted: BTreeMap<String, String> = case["verses"]
             .as_object()
             .unwrap()
@@ -190,6 +190,18 @@ fn the_port_reads_every_text_as_tc4_does() {
             })
             .collect();
         assert_eq!(verses, wanted, "verses of {at}");
+        // The blank lines tC4 keeps after a verse's last words are the port's own breaks.
+        let own: BTreeMap<String, usize> = case["verses"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| {
+                let v = v.as_str().unwrap();
+                (k.clone(), v.len() - v.trim_end_matches('\n').len())
+            })
+            .filter(|(_, n)| *n > 0)
+            .collect();
+        assert_eq!(b.own_breaks(), own, "own breaks of {at}");
         // A declared difference (B4b): when the section's first verse has no text, the first
         // line written keeps the paragraph or poetry line typed before it, which tC4's
         // `serializeDraft` drops, so a Place session's text saves the formats it holds.
@@ -222,7 +234,8 @@ fn the_port_reads_every_text_as_tc4_does() {
             .values()
             .any(|v| v.as_str().unwrap().ends_with('\n'))
         {
-            // The declared difference above (REF1b): tC4 writes a verse's own blank lines back.
+            // tC4 writes a verse's own blank lines back into the Type text; the port keeps them
+            // as `own_breaks` (REF1b), so the lines with words must agree.
             let lines = |t: &str| {
                 t.split('\n')
                     .filter(|l| !l.trim().is_empty())
