@@ -76,6 +76,10 @@ pub fn seed_ui(root: &std::path::Path) -> std::path::PathBuf {
         ("ui/style.css", b"body{}"),
         ("help/index.html", b"<p>Help</p>"),
         ("help/sub/page.html", b"<p>Sub</p>"),
+        (
+            "help/st-where-projects-live.html",
+            b"<code>~/pankosmia/tc4-projects</code>",
+        ),
         ("prepare.html", b"<p>Preparing</p>"),
     ] {
         let path = site.join(file);

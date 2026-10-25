@@ -13,7 +13,7 @@ pub enum ConfirmState {
 }
 
 /// The one request of a dialog.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Confirm {
     request: RequestId,
     state: ConfirmState,
@@ -45,6 +45,10 @@ impl Confirm {
 
     pub fn answered(&mut self) {
         self.state = ConfirmState::Answered;
+    }
+
+    pub fn request(&self) -> RequestId {
+        self.request
     }
 
     pub fn state(&self) -> ConfirmState {

@@ -47,9 +47,10 @@ anything that writes project data.
   fail if the behavior it names breaks.
 - Parsers get round-trip property tests (`proptest`). Merge and storage code gets
   property tests for convergence and no-loss, plus crash-injection tests.
-- Before you commit, run `scripts/gates.sh` (`--list` prints its steps). It is the list CI
-  runs; every step must pass, and main moves only to a commit `scripts/gates.sh --check-receipt`
-  accepts.
+- While you build, run the tests of the crates and journeys you touched. `scripts/gates.sh`
+  (`--list` prints its steps) is the list CI runs on every batch; every step must pass, and main
+  moves only to a commit `scripts/gates.sh --check-receipt` accepts. How a card gets ready:
+  `.audit/roadmap/TRACKING.md` "Checklist: merge an item".
 
 ## Performance
 

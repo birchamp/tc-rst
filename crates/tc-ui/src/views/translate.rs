@@ -302,6 +302,27 @@ fn chapter_view(
                 .and_then(|v| v.chapters.iter().find(|c| c.chapter == chapter).cloned())
         })
     });
+    // A section draft a reload restored, with no card open: its card opens over the same
+    // verses, so the draft is on the page for Save (FIX-HIDE2).
+    {
+        let actions = SendWrapper::new(actions.clone());
+        let changes = runtime.saves().changes();
+        let editing = s.editing.clone();
+        Effect::new(move |_| {
+            changes.track();
+            if editing.with(Editing::is_open) {
+                return;
+            }
+            let keys: Vec<String> = chapter_text.with(|c| {
+                c.as_ref().map_or_else(Vec::new, |c| {
+                    c.verses.iter().map(|v| v.key.as_str().to_owned()).collect()
+                })
+            });
+            if !keys.is_empty() {
+                actions.reopen_unsaved_section(book_id, chapter, &keys);
+            }
+        });
+    }
     let mode = {
         let unit = s.u.unit_mode.clone();
         Memo::new(move |_| {
@@ -979,6 +1000,11 @@ fn target_verse(
 ) -> AnyView {
     let key = v.key.as_str().to_owned();
     let number = view! { <sup style=sup()>{key.clone()}</sup> }.into_any();
+    // One memo per verse: a keystroke redraws only the verse whose unsaved text it changes.
+    let unsaved = {
+        let (actions, key) = (SendWrapper::new(actions.clone()), key.clone());
+        Memo::new(move |_| actions.unsaved_verse(book, chapter, &key))
+    };
     let verse = {
         let (actions, v, key) = (actions.clone(), v.clone(), key.clone());
         move || {
@@ -999,14 +1025,21 @@ fn target_verse(
                 return Some(view! { <span style=style.to_style()>{t(keys::draft::EDITING_BELOW, &[])}</span> }.into_any());
             }
             let verse_mode = mode.get() == UnitMode::Verse;
-            if v.drafted {
+            // A closed card whose save has not landed: its text, not the stored one, stays on
+            // the page until it is stored (INV-NEVER-HIDE-UNSAVED-TEXT); an emptied verse shows
+            // its pill, as an undrafted one does.
+            let unsaved = unsaved.get();
+            let cleared = unsaved.as_deref().is_some_and(|t| t.trim().is_empty());
+            let unsaved = unsaved.filter(|t| !t.trim().is_empty());
+            if (v.drafted && !cleared) || unsaved.is_some() {
                 let word = crate::css! {
                     "display": "inline-block",
                     "border-radius": "var(--radius-xs)",
                     "padding": "0 .06em",
                 }
                 .to_style();
-                let words = shown_words(&v.text)
+                let text = unsaved.as_deref().unwrap_or(&v.text);
+                let words = shown_words(text)
                     .into_iter()
                     .map(|w| view! { <span data-i="quiet" style=word.clone()>{w.to_owned()}</span>" " })
                     .collect_view();

@@ -1,8 +1,8 @@
 {
-  "generated": "2026-10-09",
-  "target_build": "b04c70f",
-  "target_label": "build b04c70f, which includes v4.0.0-rc.1 plus later fixes",
-  "latest_release": "v4.0.0-rc.1",
+  "generated": "2026-10-16",
+  "target_build": "2545c2e",
+  "target_label": "build 2545c2e, which includes v4.0.0-rc.2 plus later fixes",
+  "latest_release": "v4.0.0-rc.2",
   "feature_count": 66,
   "by_section_status": {
     "getting-started": {
@@ -35,9 +35,9 @@
       "shipped": 2
     },
     "troubleshooting": {
-      "shipped": 4,
+      "shipped": 5,
       "partial": 1,
-      "not-yet": 2
+      "not-yet": 1
     }
   },
   "features": [
@@ -62,6 +62,12 @@
           "file": "img/gs-install-1.png",
           "caption": "Home the first time tC4 starts: the heading Your projects, the + Add a project button, and the message No projects yet. Select + Add a project to start.",
           "exists": true
+        },
+        {
+          "n": 2,
+          "file": "img/gs-install-2.png",
+          "caption": "The small window Preparing translationCore4 on the first start: Getting resources ready for offline use. Preparing resources: 2 of 16.",
+          "exists": true
         }
       ],
       "page": "gs-install.html"
@@ -80,6 +86,7 @@
         "About translationCore",
         "Add a book",
         "App language",
+        "Help and guides",
         "Import a project",
         "New Bible",
         "New Open Bible Stories",
@@ -110,7 +117,7 @@
         {
           "n": 3,
           "file": "img/gs-home-3.png",
-          "caption": "The account menu, open: Sign in to Door43, Use the internet, App language, Report a problem and About translationCore.",
+          "caption": "The account menu, open: Sign in to Door43, Use the internet, Help and guides, App language, Report a problem and About translationCore.",
           "exists": true
         }
       ],
@@ -502,6 +509,7 @@
         "Questions",
         "Save section",
         "Section",
+        "Toggle helps panel",
         "Translate",
         "ULT",
         "UST",
@@ -733,7 +741,6 @@
         "Translate",
         "UST",
         "Understand",
-        "Widen the helps panel",
         "Words"
       ],
       "steps": [],
@@ -1058,7 +1065,7 @@
         {
           "n": 1,
           "file": "img/ck-translation-words-1.png",
-          "caption": "Translation Words for Sample Titus, item 1 of 182: “Paul” in Titus 1:1. Labels point to All checking tools, Learn more, the gateway text with Paul highlighted, the Greek of the verse, Previous and Next, the filters, Back to translating, the check list grouped by word with Paul selected, the decision buttons (Mark valid, Invalid, To do), Your translation, and Add a comment.",
+          "caption": "Translation Words for Titus (English project), en_twl v91, item 1 of 182: “Paul” in Titus 1:1. Labels point to All checking tools, Learn more, the gateway text with Paul highlighted, the Greek of the verse, Previous and Next, the filters, Back to translating, the check list grouped by word with Paul selected, the decision buttons (Mark valid, Invalid, To do), Your translation, and Add a comment.",
           "exists": true
         }
       ],
@@ -1075,6 +1082,8 @@
       "summary": "For each check, select the words in your translation, then mark the item valid or invalid, or leave it to do.",
       "ui_labels": [
         "Invalid",
+        "Next",
+        "Previous",
         "To do",
         "Translate",
         "Your translation",
@@ -1088,6 +1097,12 @@
           "n": 1,
           "file": "img/ck-decide-1.png",
           "caption": "A Translation Words item, Paul in Titus 1:1. Your translation is marked 1, with the hint Tap the word(s) in your translation that render the highlighted quote. The buttons ✓ Mark valid, Invalid and To do are marked 2, and the → Next item arrow at the top right is marked 3.",
+          "exists": true
+        },
+        {
+          "n": 2,
+          "file": "img/ck-decide-2.png",
+          "caption": "A Translation Notes item in build 4.0.0-rc.2, Titus 1:1. A drag across your translation selected la fe de los escogidos, shown in yellow like the quote in the source.",
           "exists": true
         }
       ],
@@ -1281,6 +1296,18 @@
           "n": 1,
           "file": "img/al-link-words-1.png",
           "caption": "Align on Titus 1:1. In the word bank the word Pablo is selected (filled blue), marked 1. The source word cards below now have blue outlines; the card Paul (Παῦλος) is marked 2.",
+          "exists": true
+        },
+        {
+          "n": 2,
+          "file": "img/al-link-words-2.png",
+          "caption": "The word bank for Titus 1:1 in build 4.0.0-rc.2. Words that appear more than once in the verse carry a small number: de¹ to de⁵, y¹ and y², la¹ to la³. The cards of God show Dios¹ under Θεοῦ¹ and Dios² under Θεοῦ².",
+          "exists": true
+        },
+        {
+          "n": 3,
+          "file": "img/al-link-words-3.png",
+          "caption": "After la¹, fe and los were selected together and placed on the card the faith (πίστιν) in one move, the card shows them in verse order: la¹ fe los.",
           "exists": true
         }
       ],
@@ -1908,7 +1935,7 @@
       "status": "shipped",
       "since": "new",
       "where": "",
-      "summary": "Show translationCore's menus, buttons and dialogs in English, Spanish (Latin America), French or Hindi.",
+      "summary": "Show translationCore's menus, buttons and dialogs in English, Spanish (Latin America), French, Hindi, and five more languages shipped after #522.",
       "ui_labels": [
         "Aplicar",
         "App language",
@@ -1931,7 +1958,7 @@
         {
           "n": 2,
           "file": "img/st-app-language-2.png",
-          "caption": "The App language dialog with the Language list open: English (checked), Español (Latinoamérica), Français and हिन्दी.",
+          "caption": "The App language dialog with the Language list open: English (checked), Español (Latinoamérica), Français, हिन्दी, Português (Brasil), Bahasa Indonesia, Українська, Русский and Tiếng Việt.",
           "exists": true
         },
         {
@@ -2073,11 +2100,13 @@
       "title": "Working as a team on several computers",
       "section": "troubleshooting",
       "section_title": "Troubleshooting and known limits",
-      "status": "not-yet",
+      "status": "shipped",
       "since": "",
       "where": "",
-      "summary": "Each computer keeps its own copy of a project. Syncing a project between computers isn’t built yet.",
-      "ui_labels": [],
+      "summary": "Share a Bible project on Door43, then each teammate opens it from Door43 and uses Sync with Door43 to swap work.",
+      "ui_labels": [
+        "Share on Door43"
+      ],
       "steps": [],
       "expected": [],
       "screenshots": [],
@@ -2142,6 +2171,11 @@
       "id": "wn-rc1",
       "title": "What's new in 4.0 rc.1",
       "page": "wn-rc1.html"
+    },
+    {
+      "id": "wn-rc2",
+      "title": "What's new in 4.0 rc.2",
+      "page": "wn-rc2.html"
     }
   ]
 }

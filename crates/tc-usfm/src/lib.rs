@@ -29,6 +29,7 @@ pub mod derivations;
 mod doc;
 mod lex;
 pub mod markers;
+pub mod poem;
 /// The lossless syntax tree: what a reader inside this crate works on. A crate outside it
 /// asks for what it needs (words, verses, alignments) instead (INV-ONE-PARSER-OWNER).
 pub mod raw {

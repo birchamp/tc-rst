@@ -200,6 +200,13 @@ impl CountingSnapshot {
     }
 
     /// One change's body: who wrote it, when, and the record it holds.
+    /// The value a screen showed for `key` at `heads` (`Fold::merged_at`): what a save over
+    /// that screen's token is stored against.
+    pub fn merged_at(&self, key: &RecordKey, heads: &[ChangeId]) -> Option<Record> {
+        self.count(AppCounter::RecordsRead, 1);
+        self.snapshot.fold().merged_at(key, heads)
+    }
+
     pub fn body(&self, change: &ChangeId) -> Option<ChangeBody> {
         self.count(AppCounter::RecordsRead, 1);
         self.snapshot.fold().body(change)

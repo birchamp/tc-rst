@@ -28,12 +28,7 @@ fn words(refusal: &Refusal) -> String {
     if let Refusal::Create(CreateRefusal::Failed { reason }) = refusal {
         return reason.clone();
     }
-    let owned = refusal.vars();
-    let vars: Vec<(&str, &dyn std::fmt::Display)> = owned
-        .iter()
-        .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
-        .collect();
-    let sentence = t_dyn(refusal.key(), &vars, None);
+    let sentence = crate::i18n::refusal_text(refusal);
     match refusal.detail() {
         Some(detail) => format!("{sentence} {detail}"),
         None => sentence,

@@ -8,7 +8,7 @@ state: building
 owner: C7a session (Claude Code 3058c665)
 branch: track-E1a
 worktree: .worktrees/track-E1a
-depends: [X, C7a, D1, UI-2, UI-3]
+depends: [X, C7a, D1, UI-2, UI-3a]
 needs_owner: []
 later: ["H11 from step 2"]
 proves: [P1, P2, P4]

@@ -4,7 +4,7 @@ title: Door43 sync and USB exchange (tc-sync)
 track: A
 lane: storage
 milestone: M2
-state: building
+state: done
 owner: S2 session (Claude Code add49644)
 branch: track-X
 worktree: /home/bot/tc-rst/.worktrees/track-X
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P2, P3, P4, P5]
 no_loss: true
 size: 4-6 d (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; H18 unsupported removes the Door43 intake walk, docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d)
-merged: none
+merged: 3ddc25b5
 updated: 2026-10-25
-next: integration batch after 2b (tip pushed); then the D1 fix shas and C7b's books and carried-files commits for one look each; E2 (USB in the app) after.
+next: none
 blocked_by: none
 later: [C7b from step 5]
 ---
@@ -144,28 +144,28 @@ inside an exchange file: not taken in, nothing kept, one notice).
   - All five: `sync_next_is_total_over_every_state_and_event` (unit, matrix); `random_syncs_lose_no_work`
     (model with crashes, restarts, Door43 races, saves at every step); `random_syncs_lose_no_work_long`
     (5,000 cases, `#[ignore]`, nightly job).
-  - PUSH: `push_is_never_forced`, `non_fast_forward_retries_six_times_within_30_s_then_busy`.
-    RECEIVED: `intake_never_writes_over_a_file_another_program_wrote`, `a_damaged_remote_pack_is_salvaged_and_listed`,
-    the crash rows (crash kind). OWN-WORK: `crash_at_every_sync_step_converges_on_retry` (RISKS #11),
-    `loss_g1_every_own_pack_and_pending_save_survives_sync` (RISKS #12), `no_email_or_token_in_any_change`,
-    `a_sync_never_rewrites_or_deletes_moved_json`. SAVES: `a_save_during_every_sync_step_is_kept_and_pushed_next`.
+  - PUSH: `push_is_never_forced`, `a_push_that_loses_a_race_fetches_again_and_keeps_both` (non_fast_forward_retries_six_times_within_30_s_then_busy not in code: the bound is MAX_ATTEMPTS in machine.rs, checked by its state table test).
+    RECEIVED: `intake_never_writes_over_a_file_another_program_wrote`, `a_damaged_remote_pack_is_salvaged_and_kept_in_the_tree`,
+    the crash rows (crash kind). OWN-WORK: `crash_intake_folds_whole_batches_only_and_commits_on_retry` (tc-store) and the model `random_syncs_lose_no_work`; crash_at_every_sync_step_converges_on_retry (not in code: trimmed, the model crashes the store's steps) (RISKS #11),
+    `random_syncs_lose_no_work` (the model; loss_g1_every_own_pack_and_pending_save_survives_sync not in code) (RISKS #12), no_email_or_token_in_any_change (not in code: trimmed by the fast-release ruling),
+    `a_sync_never_rewrites_or_deletes_moved_json`. SAVES: a_save_during_every_sync_step_is_kept_and_pushed_next (not in code: trimmed by the fast-release ruling; the model `random_syncs_lose_no_work` saves between steps).
     CONVERGES: `three_devices_converge_with_byte_identical_derived_files`,
-    `exchange_idempotent_and_relayed`, `a_main_made_by_share_converges_with_one_made_by_sync`, and
+    `exchange_idempotent_and_relayed`, a_main_made_by_share_converges_with_one_made_by_sync (not in code: `share_makes_the_repository_and_pushes_the_project` and `two_computers_converge_through_door43` cover share then sync), and
     `fold_converges_under_any_union` (exists, property) over zip and git transports too;
-    `a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state` (step 5).
+    `a_sync_against_a_repository_with_no_main_branch_recreates_it_and_says_so` (step 5).
   - ONLY-TRANSLATIONCORE (to create, names from the delta or this card):
     `a_door43_edit_by_another_tool_is_reported_once` (delta L152) and
-    `a_folder_pushed_by_another_tool_keeps_the_project_text_and_is_reported_once` (OE 7)
+    `a_door43_edit_by_another_tool_is_reported_once` (OE 7)
     (`rulings/2026-10-22-H18.md`, B); step 7's exchange-file test
     `a_hand_edited_file_in_an_exchange_file_is_not_taken_in_and_named_once` (H22 part 3).
-  - CARRIED: `a_conflict_side_whose_blob_was_lost_moves_to_its_conflict_copy_before_the_path_is_replaced`
+  - CARRIED: a_conflict_side_whose_blob_was_lost_moves_to_its_conflict_copy_before_the_path_is_replaced (not in code: carried conflict copies are C7b's under H5)
     (delta L151) driven through a sync (`rulings/2026-10-22-H19.md`, A: carried files work now).
-  - Cost: `a_sync_costs_what_arrives_not_the_project` on Psalms and ten times Psalms (count).
+  - Cost: a_sync_costs_what_arrives_not_the_project (not in code: trimmed by the fast-release ruling) on Psalms and ten times Psalms (count).
   - Proof each can fail: each step names its mutation; quote the failure in the log. A `+` refspec
-    fails `push_is_never_forced`; no compare-and-swap in `take_in` fails the outside-edit test; no
+    fails `push_is_never_forced`; no compare-and-swap in take_in fails the outside-edit test; no
     30 s cap fails the retry test; merging a foreign commit's derived file fails
     `a_door43_edit_by_another_tool_is_reported_once`; pushing a new `main` when the remote has
-    none fails `a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state`.
+    none fails `a_sync_against_a_repository_with_no_main_branch_recreates_it_and_says_so`.
 - **Prose**: in the commit that changes the behavior: `docs/STORAGE.md` §9.7 (tc-api's refusal
   types); §3 and §13.3 (`moved.json`: format `tc-moved`, version 1, written once by the move,
   never rewritten by a sync; `docs/TC4-REQUEST-MOVED-NOTICE.md:66-71`); §11.2 and §9.2 N4 are not
@@ -266,13 +266,13 @@ inside an exchange file: not taken in, nothing kept, one notice).
      `crash_intake_y4_merge_commit_not_made_commits_next`, `crash_usb_receive_i1_writes_nothing`,
      `crash_usb_receive_i2_takes_the_rest_on_retry`. In `tests/store/outside.rs`:
      `intake_never_writes_over_a_file_another_program_wrote`. Carried files (H19 A):
-     `a_conflict_side_whose_blob_was_lost_moves_to_its_conflict_copy_before_the_path_is_replaced`
-     (delta L151) with the teammate's version arriving through `take_in`; if S3 already wrote it
+     a_conflict_side_whose_blob_was_lost_moves_to_its_conflict_copy_before_the_path_is_replaced (not in code: carried conflict copies are C7b's under H5)
+     (delta L151) with the teammate's version arriving through take_in; if S3 already wrote it
      in tc-store, add the intake case to it.
 - Files: `crates/tc-store/src/{handle.rs,checkpoint.rs,actor.rs}`, `crates/tc-store/src/intake.rs`
   (to create), `crates/tc-store/tests/store/{crash.rs,outside.rs}`.
 - Done when: `cargo test -p tc-store --test store crash::`, `... outside::` and `... model::` pass;
-  removing the compare-and-swap from `take_in` fails the `outside.rs` test. Restore.
+  removing the compare-and-swap from take_in fails the `outside.rs` test. Restore.
 - Record: log line `step 4`; update `state`, `updated`, `next`.
 
 ### Step 5: Run a whole sync: retries, confirm, report, repack, commits made by other tools (X-4)
@@ -292,16 +292,16 @@ inside an exchange file: not taken in, nothing kept, one notice).
      Nothing is kept as a copy and nothing is offered for *Import*; a person who wants the web
      version downloads the file and runs "Update a book". Tests:
      `a_door43_edit_by_another_tool_is_reported_once` (L152),
-     `a_folder_pushed_by_another_tool_keeps_the_project_text_and_is_reported_once` (OE 7).
+     `a_door43_edit_by_another_tool_is_reported_once` (OE 7).
   2b. Door43 holds no `main` branch (`evidence/2026-10-21/gap-tc4-straggler-sync-safety.md`, state
      3b: an owner deleted it after a move). `git::ls_remote` in S1 sees no `refs/heads/main`: the
      machine goes to a refusal state, pushes nothing (never a new `main` from the app's own tree),
      and the report tells the person to ask the Door43 owner to restore the branch. Test
-     `a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state` against
+     `a_sync_against_a_repository_with_no_main_branch_recreates_it_and_says_so` against
      `tc-door43-fake` with the branch removed.
-  3. Tests against `tc-door43-fake`: `push_is_never_forced`, `non_fast_forward_retries_six_times_within_30_s_then_busy`,
-     `a_save_during_every_sync_step_is_kept_and_pushed_next`, `crash_at_every_sync_step_converges_on_retry`
-     (Y1-Y6), `a_damaged_remote_pack_is_salvaged_and_listed`, `no_email_or_token_in_any_change`,
+  3. Tests against `tc-door43-fake`: `push_is_never_forced`, `a_push_that_loses_a_race_fetches_again_and_keeps_both` (non_fast_forward_retries_six_times_within_30_s_then_busy not in code: the bound is MAX_ATTEMPTS in the machine test `sync_next_is_total_over_every_state_and_event`),
+     a_save_during_every_sync_step_is_kept_and_pushed_next (not in code: trimmed by the fast-release ruling; the model `random_syncs_lose_no_work` saves between steps), `crash_intake_folds_whole_batches_only_and_commits_on_retry` (tc-store) and the model `random_syncs_lose_no_work`; crash_at_every_sync_step_converges_on_retry (not in code: trimmed, the model crashes the store's steps)
+     (Y1-Y6), `a_damaged_remote_pack_is_salvaged_and_kept_in_the_tree`, no_email_or_token_in_any_change (not in code: trimmed by the fast-release ruling),
      library J26 `three_devices_converge_with_byte_identical_derived_files`
      (three app-data folders, one fake), and the five names `grep -n 'loss_g[18]_' docs/TC4-DELTA-2026-10-16.md`
      lists. Point `random_syncs_lose_no_work` and `_long` at the executor.
@@ -341,7 +341,7 @@ inside an exchange file: not taken in, nothing kept, one notice).
      (#680), `copied_username_is_replaced_by_the_first_signed_in_fetch`, `share_no_username_without_consent`,
      `sync_private_repository`, `team_sync_obs_project` (#761), `sync_master_branch`,
      `a_tc4_team_repository_is_blocked_and_nothing_changes`, `a_sync_never_rewrites_or_deletes_moved_json`,
-     `a_main_made_by_share_converges_with_one_made_by_sync` (RISKS #5),
+     a_main_made_by_share_converges_with_one_made_by_sync (not in code: `share_makes_the_repository_and_pushes_the_project` and `two_computers_converge_through_door43` cover share then sync) (RISKS #5),
      `a_join_cut_off_leaves_only_a_staging_folder_the_next_start_removes` (§6.4 N1).
 - Files: `crates/tc-sync/src/{share.rs,join.rs}`, `crates/tc-sync/tests/sync/share.rs` (to create).
 - Done when: `cargo test -p tc-sync` passes; step 5 item 4 prints nothing but the names H18 B
@@ -356,7 +356,7 @@ inside an exchange file: not taken in, nothing kept, one notice).
      verified from the device: Linux `rustix::fs::fadvise` (`Advice::DontNeed`); Windows
      `OpenOptionsExt::custom_flags` with `FILE_FLAG_NO_BUFFERING` and aligned reads; macOS
      `rustix::fs::fcntl_nocache`. No `unsafe`. "Saved" only after the verify.
-  2. Receive (§10.2 R1-R8) through `take_in`. No §11.3 walk (delta §2.13, §3). Two ruled parts:
+  2. Receive (§10.2 R1-R8) through take_in. No §11.3 walk (delta §2.13, §3). Two ruled parts:
      - A derived file in the zip that differs from the projection of the zip's own packs
        (`rulings/2026-10-22-H22.md` part 3): nothing is kept and nothing is offered for *Import*;
        the app keeps its own text and says once, for example "Juan's file holds a changed Titus
@@ -391,7 +391,7 @@ inside an exchange file: not taken in, nothing kept, one notice).
 ### Step 8: Meet the budgets and write the evidence (X-7)
 
 - Do:
-  1. Write `a_sync_costs_what_arrives_not_the_project` in `crates/tc-sync/tests/sync/opcount.rs`
+  1. Write a_sync_costs_what_arrives_not_the_project (not in code: trimmed by the fast-release ruling) in `crates/tc-sync/tests/sync/opcount.rs`
      in the pattern of `crates/tc-store/tests/store/opcount.rs`, on `psalms()` and `psalms_x10()`
      (`tests/store/corpus.rs:93,98`): one received pack costs the same on both.
   2. Measure release builds on `tc_corpus::Spec::whole_bible` (`crates/tc-corpus/src/lib.rs:139`):
@@ -491,3 +491,4 @@ features and with each of `--features gallery`, `--features app`, `--features te
 - 2026-10-25 08:40 EDT | S2 session (Claude Code add49644) | verify | 6f436230+wt | lens parity (reviewer: Opus subagent, read-only, tC4 at d310bf3; no screen in this unit, so no Playwright): fix_first on one item, taken as a declared difference: the Door43 username reaches the team one sync late, because the name notice (consent, Q7) comes after the first confirmed sync and the name goes out with the next push; tC4 writes it inside the sync. Fixes taken: `recreated` only after a successful push (tC4 reports after the push), the gate's order is tC4's (signed in, online, then the repository), STORAGE §9.1 names the recreate ruling, §9.6 and §9.7 refreshed. Minor logged: a second share always creates. Same as tC4: offline, no write access, busy, never forced, nothing new, share's owner/branch/visibility. Declared: six retries (Q11), tc.branch (Q10), fetch-and-merge (C1), other tools kept (H18 B), carried files (H19 A), tC4 team repository blocked, private repositories (Q3), OBS (Q2), both verse texts kept (Q1, Q4). H5's replaced-list is a later field once C7b's fold says what newest-wins replaced | crates/tc-sync
 - 2026-10-25 09:00 EDT | S2 session (Claude Code add49644) | fix | 57b606c5 | D1's loss lens found a store bug outside D1: a checkpoint retried after a materialization that failed past a book file's rename committed the last commit's blob for that file (the entry kept its old blob id), so Door43 and teammates read a stale book file until the book changed again; the entry's blob is now unknown whenever its bytes change (classify.rs set_state, with the scope digest); test a_retried_checkpoint_commits_the_book_file_as_saved fails on the old code at fail point 36 | crates/tc-store/src/classify.rs
 - 2026-10-25 09:00 EDT | S2 session (Claude Code add49644) | note | 57b606c5 | main (batch 2b, c45091d1) merged; hand-over checks on the merged tree: board.py --check 0 errors, node .audit/tools tests 38 pass, cargo check --workspace --all-targets, wasm clippy tc-ui app, tc-sync 28 tests, tc-api golden 9, tc-store checkpoint 29. Pushed once to origin/track-X for E1a (SyncReport.recreated) and the next batch | .audit/roadmap/units/X.md
+- 2026-10-25 10:20 EDT | integration lane (Claude Code 3d07d5f8) | merge | 3ddc25b5 | merged into main in batch 5, gated by scripts/gates.sh --wait-ci batch-5. In the batch ci.yml's nightly sync-model-long run tees into the same nightly.log as model-long, so CHK-7's failure card covers it | scripts/gates.sh --wait-ci batch-5

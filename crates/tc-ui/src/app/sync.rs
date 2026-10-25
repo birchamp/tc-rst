@@ -23,6 +23,8 @@ pub enum SyncEnd {
     Synced(SyncResultView),
     /// Any error but the internet question and the sign-in, which the flow answers itself.
     Failed(ApiError),
+    /// The app's own server gave no usable answer to the start of the sync.
+    Unreached,
 }
 
 /// The toast's dot: red for a failed sync, Kindle when something waits for the person (a
@@ -65,7 +67,7 @@ impl SyncToast {
     pub fn synced(&self) -> Option<&SyncResultView> {
         match &self.end {
             SyncEnd::Synced(view) => Some(view),
-            SyncEnd::Failed(_) => None,
+            SyncEnd::Failed(_) | SyncEnd::Unreached => None,
         }
     }
 
@@ -185,10 +187,11 @@ impl SyncToast {
     /// The sentence after "The sync did not complete.": the refusal's own, with the note that
     /// the teammates' work was kept after intake; one fixed sentence for anything else.
     pub fn failure(&self) -> Option<String> {
-        let SyncEnd::Failed(error) = &self.end else {
-            return None;
-        };
-        Some(failure_text(error))
+        match &self.end {
+            SyncEnd::Synced(_) => None,
+            SyncEnd::Failed(error) => Some(failure_text(error)),
+            SyncEnd::Unreached => Some(t(keys::sync_result::error::UNEXPECTED, &[])),
+        }
     }
 }
 
@@ -197,12 +200,7 @@ pub fn failure_text(error: &ApiError) -> String {
     let ApiError::Refused(Refusal::Sync(failure)) = error else {
         return t(keys::sync_result::error::UNEXPECTED, &[]);
     };
-    let vars = failure.vars();
-    let vars: Vec<(&str, &dyn std::fmt::Display)> = vars
-        .iter()
-        .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
-        .collect();
-    let sentence = t_dyn(failure.key(), &vars, None);
+    let sentence = crate::i18n::refusal_text(failure);
     match failure.kept_note() {
         Some(note) => format!("{sentence} {}", t_dyn(note, &[], None)),
         None => sentence,

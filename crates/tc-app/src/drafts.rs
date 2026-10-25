@@ -81,7 +81,8 @@ fn field_text(kind: DraftKind, record: Option<Record>) -> Option<String> {
                 value: VerseValue::Text { words, .. },
                 ..
             },
-        ) => Some(words),
+            // A draft holds the editor text the card showed (tC4 #810, REF1b).
+        ) => Some(tc_usfm::poem::editor_text(&words)),
         (
             DraftKind::Layout,
             Record::Verse {
@@ -704,6 +705,22 @@ impl App {
         };
         let text = match line {
             Some(line) => tc_api::story::stored_text(line, &text),
+            None if kind == DraftKind::Words => {
+                // A verse draft holds the card's text (poem lines as tabs, tC4 #810): it goes
+                // back to the words by the version it was typed over, as a save does (REF1b).
+                let read = session.read();
+                let opened = shown.first().and_then(|token| {
+                    crate::section::shown_record(&read, token.key(), token.heads())
+                });
+                let opened = match opened {
+                    Some(Record::Verse {
+                        value: VerseValue::Text { words, .. },
+                        ..
+                    }) => words,
+                    _ => String::new(),
+                };
+                tc_usfm::poem::words_from_editor_text(&text, &opened)
+            }
             None => text,
         };
         let me = handle.facts().device;
