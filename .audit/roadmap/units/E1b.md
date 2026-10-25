@@ -4,10 +4,10 @@ title: Share and open from Door43
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: REF1 session (Claude Code 56b3f56d)
+branch: track-E1b
+worktree: .worktrees/track-REF1
 depends: [E1a]
 needs_owner: []
 later: ["H14 from step 6"]
@@ -15,8 +15,8 @@ proves: [P1, P2]
 no_loss: true
 size: 3-4 sessions (basis: B9b)
 merged: none
-updated: 2026-10-22
-next: Claim this card after E1a merges, then do step 1.
+updated: 2026-10-25
+next: Step 1: the share job with the scripted port, progress and done step.
 blocked_by: none
 ---
 
@@ -258,3 +258,4 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/app-remaining.md
+- 2026-10-25 16:10 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed at the audit session's request before E1a merges: cut from track-E1a at e5b30962 (journeys sync for real against the fake), so E1a's later commits come in by merge; the app lane owns share-open.test.mjs and env-rust.mjs until it says otherwise | git log --oneline -1 e5b30962
