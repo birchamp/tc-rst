@@ -26,15 +26,17 @@ use tc_journal::outside::{Base as PlanBase, OutsideFile, OutsidePlan};
 use tc_journal::{BookId, Md5, RepoPath};
 
 /// What a kept copy was compared with: the version of the project the outside file was
-/// written from (delta §2.3). Written as `placed:<md5>`, `head` or `none`.
+/// written from (delta §2.3). Written as `placed:<md5>`, `head:<commit>`, `head` or `none`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum KeptBase {
     /// The placement the change was found against; its heads are in the path's heads file
     /// for as long as the entry lives.
     Placed(String),
-    /// What HEAD's packs hold (`.tc/` was lost, and HEAD is this app's).
-    Head,
+    /// What HEAD's packs held (`.tc/` was lost, and HEAD is this app's), as of the commit
+    /// that was HEAD when the file was found: HEAD moves with the person's later saves. With
+    /// no commit (an earlier build's entry) *Import* compares with no base.
+    Head(Option<tc_journal::GitOid>),
     /// No base: every difference with text on both sides is one to review.
     None,
 }
@@ -43,7 +45,8 @@ impl From<KeptBase> for String {
     fn from(base: KeptBase) -> Self {
         match base {
             KeptBase::Placed(md5) => format!("placed:{md5}"),
-            KeptBase::Head => "head".into(),
+            KeptBase::Head(Some(commit)) => format!("head:{}", commit.to_hex()),
+            KeptBase::Head(None) => "head".into(),
             KeptBase::None => "none".into(),
         }
     }
@@ -54,21 +57,31 @@ impl TryFrom<String> for KeptBase {
 
     fn try_from(text: String) -> Result<Self, Self::Error> {
         match text.as_str() {
-            "head" => Ok(Self::Head),
+            "head" => Ok(Self::Head(None)),
             "none" => Ok(Self::None),
-            _ => match text.strip_prefix("placed:") {
-                Some(md5) if Md5::parse(md5).is_some() => Ok(Self::Placed(md5.to_owned())),
-                _ => Err(format!("not a kept base: {text}")),
-            },
+            _ => {
+                if let Some(md5) = text.strip_prefix("placed:")
+                    && Md5::parse(md5).is_some()
+                {
+                    return Ok(Self::Placed(md5.to_owned()));
+                }
+                match text
+                    .strip_prefix("head:")
+                    .and_then(tc_journal::GitOid::parse)
+                {
+                    Some(commit) => Ok(Self::Head(Some(commit))),
+                    None => Err(format!("not a kept base: {text}")),
+                }
+            }
         }
     }
 }
 
 impl KeptBase {
-    fn of(base: &ledger::Base) -> Self {
+    fn of(base: &ledger::Base, head: Option<tc_journal::GitOid>) -> Self {
         match base {
             ledger::Base::Placed(md5) => Self::Placed(md5.clone()),
-            ledger::Base::Head => Self::Head,
+            ledger::Base::Head => Self::Head(head),
             ledger::Base::Unknown => Self::None,
         }
     }
@@ -76,7 +89,7 @@ impl KeptBase {
     fn ledger(&self) -> ledger::Base {
         match self {
             Self::Placed(md5) => ledger::Base::Placed(md5.clone()),
-            Self::Head => ledger::Base::Head,
+            Self::Head(_) => ledger::Base::Head,
             Self::None => ledger::Base::Unknown,
         }
     }
@@ -257,7 +270,7 @@ impl Writer {
             .filter(|k| k.path == rel)
             .filter_map(|k| match &k.base {
                 KeptBase::Placed(md5) => Some(md5.clone()),
-                KeptBase::Head | KeptBase::None => None,
+                KeptBase::Head(_) | KeptBase::None => None,
             })
             .collect()
     }
@@ -311,7 +324,13 @@ impl Writer {
                 .rev()
                 .find(|k| k.path == rel)
                 .map_or(KeptBase::None, |k| k.base.clone()),
-            _ => KeptBase::of(&base),
+            _ => KeptBase::of(
+                &base,
+                self.git
+                    .as_ref()
+                    .and_then(|git| git.head().ok().flatten())
+                    .map(|head| head.commit),
+            ),
         };
         let copy = self.copy_external(rel, bytes)?;
         let md5 = Md5::of(bytes);
@@ -389,8 +408,8 @@ impl Writer {
                     .unwrap_or_default();
                 self.read_base(&entry.path, &entry.base.ledger(), &digests)
             }
-            KeptBase::Head => self.head_base(&entry.path),
-            KeptBase::None => PlanBase::Unknown,
+            KeptBase::Head(Some(commit)) => self.head_base_at(&entry.path, *commit),
+            KeptBase::Head(None) | KeptBase::None => PlanBase::Unknown,
         }
     }
 
@@ -470,7 +489,16 @@ impl Writer {
                     .to_owned(),
                 base: self.import_base(&entry, &file, &bytes),
             },
-            _ => match self.examine_copied(&entry.path, &bytes, &entry.base.ledger()) {
+            // A story's planner reads HEAD as it is now, which may hold the person's later
+            // saves: compared with it, the file's older words would come in unasked.
+            _ => match self.examine_copied(
+                &entry.path,
+                &bytes,
+                &match entry.base {
+                    KeptBase::Head(_) => ledger::Base::Unknown,
+                    ref base => base.ledger(),
+                },
+            ) {
                 Examined::Plan(plan, _) => {
                     self.forget_examined(&entry.path);
                     ImportWhat::Story { plan }
@@ -759,7 +787,20 @@ impl crate::project::Project {
 
 #[cfg(test)]
 mod tests {
-    use super::source_of_copy;
+    use super::{KeptBase, source_of_copy};
+
+    #[test]
+    fn a_head_base_keeps_its_commit_and_reads_an_earlier_builds_head() {
+        let commit = tc_journal::GitOid::parse("c354b8ae0a8a0e1e47b4c36d0b5e6e8a2c3f4d5e").unwrap();
+        let text = String::from(KeptBase::Head(Some(commit)));
+        assert_eq!(text, "head:c354b8ae0a8a0e1e47b4c36d0b5e6e8a2c3f4d5e");
+        assert_eq!(KeptBase::try_from(text), Ok(KeptBase::Head(Some(commit))));
+        assert_eq!(
+            KeptBase::try_from("head".to_owned()),
+            Ok(KeptBase::Head(None))
+        );
+        assert!(KeptBase::try_from("head:xyz".to_owned()).is_err());
+    }
 
     #[test]
     fn a_copys_name_gives_its_book_file_and_nothing_else() {

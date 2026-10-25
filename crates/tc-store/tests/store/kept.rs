@@ -477,6 +477,67 @@ fn a_kept_copy_is_listed_again_after_the_manifest_is_lost() {
     }
 }
 
+/// A file held against HEAD (`.tc/` knew nothing of it) is compared at *Import* with no
+/// base, not with the HEAD of the time of the Import: a verse the translator saved and
+/// committed after the hold keeps the translator's text (to review at most), never the file's
+/// older words with no question.
+#[test]
+fn import_of_a_head_based_copy_never_replaces_newer_text() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 2, "in hope").unwrap();
+    save_verse(&handle, 1, 3, "which God promised").unwrap();
+    leave(&handle);
+    let first = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(first.commit.is_some(), "{first:?}");
+    handle.close().unwrap();
+    let written = rig.fs.peek(&usfm_path(&folder)).unwrap();
+    rig.fs.put(
+        &usfm_path(&folder),
+        &set_verse(
+            &set_verse(&written, 1, 2, "in hope of eternal life"),
+            1,
+            3,
+            "which God promised long ago",
+        ),
+        None,
+    );
+    rig.fs
+        .delete(&folder.join(".tc/materialized.json"))
+        .unwrap();
+    let handle = open(&rig, &folder);
+    let books = handle.waiting_books();
+    assert_eq!(books.len(), 1, "{books:?}");
+    assert!(
+        matches!(books[0].kept.base, KeptBase::Head(Some(_))),
+        "{books:?}"
+    );
+    save_verse(&handle, 1, 3, "which God, who never lies, promised").unwrap();
+    let second = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(second.commit.is_some(), "HEAD moves: {second:?}");
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(handle.waiting_books(), books, "still waits");
+    let report = handle.import_kept(&books[0].kept.copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("which God, who never lies, promised"),
+        "{report:?}"
+    );
+    assert!(
+        report.to_review >= 1,
+        "the file's 1:3 is to review: {report:?}"
+    );
+    handle.close().unwrap();
+}
+
 /// A copy whose entry ended by *Import* stays unlisted at a reopen that has the manifest; only
 /// an open that lost the manifest lists unnamed copies again.
 #[test]
