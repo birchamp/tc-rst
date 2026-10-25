@@ -12,11 +12,15 @@ use crate::ds::{Attrs, Button, ButtonVariant, Callout, CalloutTone, Spinner, Tex
 use crate::i18n::{keys, t};
 
 fn callout(testid: &'static str, tone: CalloutTone, text: String) -> impl IntoView {
+    let role = match tone {
+        CalloutTone::Warn => "alert",
+        _ => "status",
+    };
     view! {
         <Callout
             tone=tone
             style=crate::css! { "overflow-wrap": "anywhere" }
-            attrs=Attrs::from([("role", "status"), ("data-testid", testid)])
+            attrs=Attrs::from([("role", role), ("data-testid", testid)])
         >
             {text}
         </Callout>
@@ -26,9 +30,34 @@ fn callout(testid: &'static str, tone: CalloutTone, text: String) -> impl IntoVi
 fn working(testid: &'static str, line: String) -> impl IntoView {
     view! {
         <div data-testid=testid style="display: flex; align-items: center; gap: 10px;">
-            <Spinner />
+            <Spinner label=line.clone() />
             <Text role=TextRole::Body>{line}</Text>
         </div>
+    }
+}
+
+/// Cancel while nothing runs, Close once the run ended; nothing while it runs (the dialog
+/// cannot close meanwhile either).
+fn leave_button(
+    actions: crate::app::web::Actions,
+    busy: Signal<bool>,
+    ended: Signal<bool>,
+    testid: &'static str,
+) -> impl IntoView {
+    view! {
+        {move || (!busy.get()).then(|| {
+            let actions = actions.clone();
+            let key = if ended.get() { keys::common::CLOSE } else { keys::exchange::save::CANCEL };
+            view! {
+                <Button
+                    variant=ButtonVariant::Secondary
+                    attrs=Attrs::from([("data-testid", testid)])
+                    on_click=Callback::new(move |_| actions.close_modal())
+                >
+                    {move || t(key, &[])}
+                </Button>
+            }
+        })}
     }
 }
 
@@ -40,19 +69,20 @@ pub fn SaveForTeammate() -> impl IntoView {
     };
     let ex = s.ex.clone();
     let form = Memo::new(move |_| ex.get());
+    let busy = Signal::derive(move || form.get().is_some_and(|f| f.busy()));
+    let done = Signal::derive(move || {
+        form.get()
+            .is_some_and(|f| matches!(f.step, ExportStep::Done(_)))
+    });
     let footer: ChildrenFn = {
         let actions = actions.clone();
         Arc::new(move || {
             let actions = actions.clone();
             let can_save = Signal::derive(move || form.get().is_some_and(|f| f.can_save()));
-            let done = move || {
-                form.get()
-                    .is_some_and(|f| matches!(f.step, ExportStep::Done(_)))
-            };
-            let close = actions.clone();
             view! {
+                {leave_button(actions.clone(), busy, done, "save-for-teammate-leave")}
                 <div style="flex: 1;"></div>
-                {move || (!done()).then(|| {
+                {move || (!done.get()).then(|| {
                     let actions = actions.clone();
                     view! {
                         <Button
@@ -62,18 +92,6 @@ pub fn SaveForTeammate() -> impl IntoView {
                             on_click=Callback::new(move |_| actions.save_for_teammate())
                         >
                             {move || t(keys::exchange::save::BUTTON, &[])}
-                        </Button>
-                    }
-                })}
-                {move || done().then(|| {
-                    let close = close.clone();
-                    view! {
-                        <Button
-                            variant=ButtonVariant::Primary
-                            attrs=Attrs::from([("data-testid", "save-for-teammate-close")])
-                            on_click=Callback::new(move |_| close.close_modal())
-                        >
-                            {move || t(keys::common::CLOSE, &[])}
                         </Button>
                     }
                 })}
@@ -88,7 +106,7 @@ pub fn SaveForTeammate() -> impl IntoView {
             view! {
                 {move || form.get().map(|f: ExportForm| {
                     let actions = actions.clone();
-                    let choosing = f.step == ExportStep::Choosing;
+                    let choosing = f.choosing();
                     let folder = f
                         .destination
                         .as_ref()
@@ -139,6 +157,7 @@ pub fn SaveForTeammate() -> impl IntoView {
         width: Some(560.into()),
         close_label: Some(Signal::derive(|| t(keys::common::CLOSE, &[]))),
         on_close: Some(Callback::new(move |()| close.close_modal())),
+        closable: Signal::derive(move || !busy.get()),
         footer: Some(footer),
         attrs: Attrs::from([("data-testid", "save-for-teammate-modal")]),
         children: Some(children),
@@ -156,20 +175,20 @@ pub fn ReceiveWork() -> impl IntoView {
     let rx = s.rx.clone();
     let form = Memo::new(move |_| rx.get());
     let input: NodeRef<leptos::html::Input> = NodeRef::new();
+    let busy = Signal::derive(move || form.get().is_some_and(|f| f.busy()));
+    let received = Signal::derive(move || {
+        form.get()
+            .is_some_and(|f| matches!(f.step, ReceiveStep::Received(_)))
+    });
     let footer: ChildrenFn = {
         let actions = actions.clone();
         Arc::new(move || {
             let actions = actions.clone();
             let can_receive = Signal::derive(move || form.get().is_some_and(|f| f.can_receive()));
-            let ended = move || {
-                form.get().is_some_and(|f| {
-                    matches!(f.step, ReceiveStep::Received(_) | ReceiveStep::Failed(_))
-                })
-            };
-            let close = actions.clone();
             view! {
+                {leave_button(actions.clone(), busy, received, "receive-work-leave")}
                 <div style="flex: 1;"></div>
-                {move || (!ended()).then(|| {
+                {move || (!received.get()).then(|| {
                     let actions = actions.clone();
                     view! {
                         <Button
@@ -179,18 +198,6 @@ pub fn ReceiveWork() -> impl IntoView {
                             on_click=Callback::new(move |_| actions.receive_work())
                         >
                             {move || t(keys::exchange::receive::BUTTON, &[])}
-                        </Button>
-                    }
-                })}
-                {move || ended().then(|| {
-                    let close = close.clone();
-                    view! {
-                        <Button
-                            variant=ButtonVariant::Primary
-                            attrs=Attrs::from([("data-testid", "receive-work-close")])
-                            on_click=Callback::new(move |_| close.close_modal())
-                        >
-                            {move || t(keys::common::CLOSE, &[])}
                         </Button>
                     }
                 })}
@@ -235,7 +242,8 @@ pub fn ReceiveWork() -> impl IntoView {
                 />
                 {move || form.get().map(|f: ReceiveForm| {
                     let project = f.project.name.clone();
-                    let choosing = f.step == ReceiveStep::Choosing;
+                    let choosing = f.choosing();
+                    let uploading = f.step == ReceiveStep::Uploading;
                     let identifying = f.step == ReceiveStep::Identifying;
                     let confirm = match &f.step {
                         ReceiveStep::Confirm(view) => Some(t(
@@ -269,6 +277,7 @@ pub fn ReceiveWork() -> impl IntoView {
                                 {move || t(keys::exchange::receive::CHOOSE_FILE, &[])}
                             </Button>
                         })}
+                        {uploading.then(|| working("receive-work-uploading", t(keys::exchange::receive::UPLOADING, &[])))}
                         {identifying.then(|| working("receive-work-identifying", t(keys::exchange::receive::IDENTIFYING, &[])))}
                         {confirm.map(|text| view! {
                             <Text role=TextRole::Body attrs=Attrs::from([("data-testid", "receive-work-confirm")])>
@@ -305,6 +314,7 @@ pub fn ReceiveWork() -> impl IntoView {
         width: Some(560.into()),
         close_label: Some(Signal::derive(|| t(keys::common::CLOSE, &[]))),
         on_close: Some(Callback::new(move |()| close.close_modal())),
+        closable: Signal::derive(move || !busy.get()),
         footer: Some(footer),
         attrs: Attrs::from([("data-testid", "receive-work-modal")]),
         children: Some(children),

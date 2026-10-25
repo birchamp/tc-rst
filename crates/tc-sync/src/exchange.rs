@@ -53,6 +53,18 @@ pub enum ExchangeError {
     Store(#[from] tc_store::StoreError),
 }
 
+/// Why the store skipped the checkpoint, in a translator's words (the reason reaches the
+/// screen inside the refusal's sentence).
+fn skip_words(why: tc_store::CheckpointSkip) -> String {
+    match why {
+        tc_store::CheckpointSkip::ReadOnly => "the project is read-only".to_owned(),
+        tc_store::CheckpointSkip::SecondWriter => {
+            "another translationCore is saving into this project".to_owned()
+        }
+        other => format!("{other:?}"),
+    }
+}
+
 fn io(e: impl std::fmt::Display) -> ExchangeError {
     ExchangeError::Io(e.to_string())
 }
@@ -71,7 +83,7 @@ pub async fn export(
         .skipped
         .filter(|why| *why != tc_store::CheckpointSkip::NoChanges)
     {
-        return Err(ExchangeError::NotCommitted(format!("{why:?}")));
+        return Err(ExchangeError::NotCommitted(skip_words(why)));
     }
     let facts = project.facts();
     let git_dir = facts.git_dir.ok_or(ExchangeError::NoHistory)?;
@@ -397,7 +409,7 @@ pub async fn receive(
             tc_store::CheckpointSkip::ReadOnly | tc_store::CheckpointSkip::SecondWriter
         )
     }) {
-        return Err(ExchangeError::NotCommitted(format!("{why:?}")));
+        return Err(ExchangeError::NotCommitted(skip_words(why)));
     }
     let snapshot = project.snapshot();
     // Received: new before the file, and in the project after it.

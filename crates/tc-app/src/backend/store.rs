@@ -1546,31 +1546,34 @@ impl ProjectHandle for StoreHandle {
     }
 
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>> {
-        let taken = {
-            let mut inner = self.inner.write().unwrap_or_else(PoisonError::into_inner);
-            let taken = inner.take();
-            if let Some(handle) = &taken {
-                let _ = self.closed.set(Closed {
-                    snapshot: Snapshot::new(StoreSnapshot(handle.snapshot())),
-                    facts: facts(&handle.facts()),
-                    counters: handle.counters(),
-                });
-            }
-            taken
-        };
+        let taken = self
+            .inner
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
         let Some(handle) = taken else {
             // A second close.
             return Box::pin(async { Ok(()) });
         };
         // An exchange holds the handle only while its job runs, and the job holds the
-        // session: by the time the session closes, nothing else has it.
-        let Ok(handle) = Arc::try_unwrap(handle) else {
-            return Box::pin(async {
-                Err(StoreError::Other(
-                    "the project is still in use by an exchange".into(),
-                ))
-            });
+        // session: by the time the session closes, nothing else has it. Should one still,
+        // the handle goes back, so the exchange reads a live project, not a closed one.
+        let handle = match Arc::try_unwrap(handle) {
+            Ok(handle) => handle,
+            Err(shared) => {
+                *self.inner.write().unwrap_or_else(PoisonError::into_inner) = Some(shared);
+                return Box::pin(async {
+                    Err(StoreError::Other(
+                        "the project is still in use by an exchange".into(),
+                    ))
+                });
+            }
         };
+        let _ = self.closed.set(Closed {
+            snapshot: Snapshot::new(StoreSnapshot(handle.snapshot())),
+            facts: facts(&handle.facts()),
+            counters: handle.counters(),
+        });
         // The relay waits for the replies already queued: the actor answers every command
         // queued before its close.
         lock(&self.relay).take();

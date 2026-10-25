@@ -84,23 +84,27 @@ impl Actions {
                     .map(|(request, destination)| (project, request, destination))
             })
             .flatten();
-        let Some((project, request, destination)) = pressed else {
+        let Some((project, attempt, destination)) = pressed else {
             return;
         };
         let this = self.clone();
         spawn_local(async move {
             let request = Export {
-                request,
+                request: attempt,
                 project,
                 destination,
             };
             let ended = match this.runtime().api().call(&request).await {
+                Err(CallError::Dropped | CallError::Transport(_)) => {
+                    this.patch_ex(|ex| ex.reply_lost(attempt));
+                    return;
+                }
                 Ok(job) => {
                     this.follow::<Export>(
                         job,
                         |progress| {
                             if let Some(phase) = phase_of(progress) {
-                                this.patch_ex(|ex| ex.progress(phase));
+                                this.patch_ex(|ex| ex.progress(attempt, phase));
                             }
                         },
                         || this.s().ex.with_untracked(Option::is_some),
@@ -109,7 +113,7 @@ impl Actions {
                 }
                 Err(error) => JobEnd::Failed(api_error(error)),
             };
-            this.patch_ex(|ex| ex.ended(ended, js::random_request_id()));
+            this.patch_ex(|ex| ex.ended(attempt, ended, js::random_request_id()));
         });
     }
 
@@ -152,6 +156,7 @@ impl Actions {
             self.patch_rx(ReceiveForm::too_large);
             return;
         }
+        self.patch_rx(ReceiveForm::uploading);
         let this = self.clone();
         spawn_local(async move {
             match this
@@ -161,7 +166,7 @@ impl Actions {
                 .await
             {
                 Ok(upload) => this.receive_identify(ExchangeFile::Upload(upload.id)),
-                Err(error) => this.patch_rx(|rx| rx.identified(Err(api_error(error)))),
+                Err(error) => this.patch_rx(|rx| rx.too_large_or_failed(api_error(error))),
             }
         });
     }
@@ -173,10 +178,10 @@ impl Actions {
             let answer = this
                 .runtime()
                 .api()
-                .call(&Identify { file })
+                .call(&Identify { file: file.clone() })
                 .await
                 .map_err(api_error);
-            this.patch_rx(|rx| rx.identified(answer));
+            this.patch_rx(|rx| rx.identified(&file, answer));
         });
     }
 
@@ -191,23 +196,27 @@ impl Actions {
                 rx.press().map(|(request, file)| (project, request, file))
             })
             .flatten();
-        let Some((project, request, file)) = pressed else {
+        let Some((project, attempt, file)) = pressed else {
             return;
         };
         let this = self.clone();
         spawn_local(async move {
             let request = Receive {
-                request,
+                request: attempt,
                 project,
                 file,
             };
             let ended = match this.runtime().api().call(&request).await {
+                Err(CallError::Dropped | CallError::Transport(_)) => {
+                    this.patch_rx(|rx| rx.reply_lost(attempt));
+                    return;
+                }
                 Ok(job) => {
                     this.follow::<Receive>(
                         job,
                         |progress| {
                             if let Some(phase) = phase_of(progress) {
-                                this.patch_rx(|rx| rx.progress(phase));
+                                this.patch_rx(|rx| rx.progress(attempt, phase));
                             }
                         },
                         || this.s().rx.with_untracked(Option::is_some),
@@ -216,7 +225,7 @@ impl Actions {
                 }
                 Err(error) => JobEnd::Failed(api_error(error)),
             };
-            this.patch_rx(|rx| rx.ended(ended, js::random_request_id()));
+            this.patch_rx(|rx| rx.ended(attempt, ended, js::random_request_id()));
         });
     }
 }

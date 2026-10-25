@@ -95,7 +95,8 @@ impl ExchangePort for UsbExchange {
             let written = tc_sync::exchange::export(&handle, &destination, &person)
                 .await
                 .map_err(|e| refused(e, true));
-            drop(handle);
+            // tc-store's drop may block (the last owner closes the project): never on a worker.
+            let _ = tokio::task::spawn_blocking(move || drop(handle)).await;
             drop(lease);
             app.sessions().settled(&project).await;
             Ok(ExportedView {
@@ -141,57 +142,91 @@ impl ExchangePort for UsbExchange {
     ) -> BoxFuture<Result<ReceivedView, JobEnd>> {
         Box::pin(async move {
             let path = app.exchange_path(&file);
-            let from = file_stem(&path);
-            let progress = ProgressSink::new(Phase::Exchange(ExchangePhase::Read));
-            let lease = app
-                .sessions()
-                .open_side(&project, progress)
-                .await
-                .map_err(|e| JobEnd::Failed(crate::wire::error::open_failure(e)))?;
-            let handle = lease
-                .session()
-                .handle()
-                .store_handle()
-                .ok_or_else(unavailable)?;
-            let report = tc_sync::exchange::receive(&handle, &path, &from)
-                .await
-                .map_err(|e| refused(e, false));
-            drop(handle);
-            let view = report.map(|report| {
-                let session = lease.session();
-                let snapshot = session.read();
-                let tally = ConflictTally::of(snapshot.conflict_counts());
-                ReceivedView {
-                    received: report.received_by.values().sum(),
-                    from: report
-                        .received_by
-                        .keys()
-                        .map(crate::wire::scope::person_label)
-                        .collect(),
-                    kept_newest: tally.others,
-                    verse_conflicts: tally.verse,
-                    alignments: tally.alignments,
-                    hand_edited: report
-                        .hand_edited
-                        .into_iter()
-                        .map(|path| HandEdited {
-                            path,
-                            outcome: HandEditOutcome::NotTakenIn,
-                        })
-                        .collect(),
-                }
-            });
-            drop(lease);
-            app.sessions().settled(&project).await;
-            app.inner
-                .bus
-                .publish(tc_api::event::Event::HomeCard { project });
+            let result = receive_into(&app, &project, &path).await;
+            // The upload is read once, whatever came of it; a file the shell chose stays.
             if let ExchangeFile::Upload(id) = &file {
                 app.remove_upload(id);
             }
-            view
+            result
         })
     }
+}
+
+async fn receive_into(
+    app: &App,
+    project: &ProjectRef,
+    path: &Path,
+) -> Result<ReceivedView, JobEnd> {
+    let from = file_stem(path);
+    let progress = ProgressSink::new(Phase::Exchange(ExchangePhase::Read));
+    let lease = app
+        .sessions()
+        .open_side(project, progress)
+        .await
+        .map_err(|e| JobEnd::Failed(crate::wire::error::open_failure(e)))?;
+    let handle = lease
+        .session()
+        .handle()
+        .store_handle()
+        .ok_or_else(unavailable)?;
+    let report = tc_sync::exchange::receive(&handle, path, &from).await;
+    // tc-store's drop may block (the last owner closes the project): never on a worker.
+    tokio::task::spawn_blocking(move || drop(handle))
+        .await
+        .map_err(|e| {
+            JobEnd::Failed(app.internal(
+                "the exchange handle was not released",
+                crate::reports::facts(serde_json::json!({ "reason": e.to_string() })),
+            ))
+        })?;
+    let view = match report {
+        Ok(report) => {
+            let session = lease.session();
+            let snapshot = session.read();
+            let tally = ConflictTally::of(snapshot.conflict_counts());
+            Ok(ReceivedView {
+                received: report.received_by.values().sum(),
+                from: report
+                    .received_by
+                    .keys()
+                    .map(crate::wire::scope::person_label)
+                    .collect(),
+                kept_newest: tally.others,
+                verse_conflicts: tally.verse,
+                alignments: tally.alignments,
+                hand_edited: report
+                    .hand_edited
+                    .into_iter()
+                    .map(|path| HandEdited {
+                        path,
+                        outcome: HandEditOutcome::NotTakenIn,
+                    })
+                    .collect(),
+            })
+        }
+        // The refusal names the file's project, as the dialog does before a receive.
+        Err(ExchangeError::OtherProject) => {
+            let name = tokio::task::spawn_blocking({
+                let path = path.to_owned();
+                move || tc_sync::exchange::identify(&path).map(|i| i.name)
+            })
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .unwrap_or_default();
+            Err(JobEnd::Failed(ApiError::Refused(Refusal::Exchange(
+                ExchangeRefusal::OtherProject { name },
+            ))))
+        }
+        Err(e) => Err(refused(e, false)),
+    };
+    // The side session ends and the card reads the project again, whatever came of it.
+    drop(lease);
+    app.sessions().settled(project).await;
+    app.inner.bus.publish(tc_api::event::Event::HomeCard {
+        project: project.clone(),
+    });
+    view
 }
 
 /// The file's name without its extension: what the checkpoint names as the sender when the

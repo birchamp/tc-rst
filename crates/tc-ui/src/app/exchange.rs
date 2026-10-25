@@ -60,8 +60,18 @@ impl ExportForm {
         }
     }
 
+    /// Whether the folder may be chosen: before the first press, or after a failure.
+    pub fn choosing(&self) -> bool {
+        matches!(self.step, ExportStep::Choosing | ExportStep::Failed(_))
+    }
+
     pub fn can_save(&self) -> bool {
-        self.destination.is_some() && self.step == ExportStep::Choosing && !self.submit.busy()
+        self.destination.is_some() && self.choosing() && !self.submit.busy()
+    }
+
+    /// The job runs: the dialog stays open and its buttons are off.
+    pub fn busy(&self) -> bool {
+        matches!(self.step, ExportStep::Working(_))
     }
 
     /// The Save press: the request to send, once per attempt.
@@ -74,14 +84,31 @@ impl ExportForm {
         Some((request, self.destination.clone().unwrap_or_default()))
     }
 
-    pub fn progress(&mut self, phase: ExchangePhase) {
-        if matches!(self.step, ExportStep::Working(_)) {
+    /// No usable reply to the attempt `request` (the connection failed): the folder step is
+    /// back, and the next press sends the same request, which the server's reply cache
+    /// answers with the job it started (A-27), so a run that went on is never lost sight of.
+    pub fn reply_lost(&mut self, request: RequestId) {
+        if self.submit.request() == request && self.busy() {
+            self.submit.lost(t(keys::exchange::error::LOST_REPLY, &[]));
+            self.step = ExportStep::Choosing;
+        }
+    }
+
+    /// A report of the attempt `request`; one of an older attempt (a dialog closed and opened
+    /// again while its job ran) changes nothing.
+    pub fn progress(&mut self, request: RequestId, phase: ExchangePhase) {
+        if self.submit.request() == request && matches!(self.step, ExportStep::Working(_)) {
             self.step = ExportStep::Working(Some(phase));
         }
     }
 
-    /// The job ended; `next` is the request of the next attempt after a failure.
-    pub fn ended(&mut self, end: JobEnd<ExportedView>, next: RequestId) {
+    /// The job of the attempt `request` ended; `next` is the request of the next attempt
+    /// after a failure. An older attempt's end never reaches this form
+    /// (INV-REMOVE-THE-STICK-ONLY-AFTER-VERIFY: the sentence is this attempt's own).
+    pub fn ended(&mut self, request: RequestId, end: JobEnd<ExportedView>, next: RequestId) {
+        if self.submit.request() != request || !self.busy() {
+            return;
+        }
         self.submit.answered();
         self.step = match end {
             JobEnd::Done(view) => ExportStep::Done(view),
@@ -126,6 +153,8 @@ impl ExportForm {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReceiveStep {
     Choosing,
+    /// A browser's file is being sent to the server.
+    Uploading,
     /// The file is being read for its project.
     Identifying,
     /// The file's project is known; the person confirms.
@@ -139,6 +168,8 @@ pub enum ReceiveStep {
 pub struct ReceiveForm {
     pub project: ExchangeProject,
     pub file: Option<ExchangeFile>,
+    /// The file's project as identified, kept so a lost reply can return to Confirm.
+    pub identified: Option<IdentifyView>,
     pub submit: Submit,
     pub step: ReceiveStep,
 }
@@ -153,6 +184,7 @@ impl ReceiveForm {
         Self {
             project,
             file: None,
+            identified: None,
             submit: Submit::new(request),
             step: ReceiveStep::Choosing,
         }
@@ -161,8 +193,14 @@ impl ReceiveForm {
     /// A file was chosen (a path from the shell, or an upload): it is read for its project.
     pub fn chose_file(&mut self, file: ExchangeFile, next: RequestId) {
         self.file = Some(file);
+        self.identified = None;
         self.submit.edited(next);
         self.step = ReceiveStep::Identifying;
+    }
+
+    /// The upload itself failed: nothing was sent, so the file may be chosen again.
+    pub fn too_large_or_failed(&mut self, error: ApiError) {
+        self.step = ReceiveStep::Failed(failure_text(&error));
     }
 
     /// A browser file too large to send: refused before anything is sent.
@@ -170,15 +208,20 @@ impl ReceiveForm {
         self.step = ReceiveStep::Failed(t(keys::exchange::receive::TOO_LARGE, &[]));
     }
 
-    /// `exchange/identify` answered.
-    pub fn identified(&mut self, answer: Result<IdentifyView, ApiError>) {
+    /// `exchange/identify` answered for `file`; an answer for another file (chosen before
+    /// this one), or one that comes after the press, changes nothing.
+    pub fn identified(&mut self, file: &ExchangeFile, answer: Result<IdentifyView, ApiError>) {
+        if self.file.as_ref() != Some(file) || self.step != ReceiveStep::Identifying {
+            return;
+        }
         self.step = match answer {
             Ok(view) if view.project.as_ref() == Some(&self.project.project) => {
+                self.identified = Some(view.clone());
                 ReceiveStep::Confirm(view)
             }
             Ok(view) => ReceiveStep::Failed(t(
-                keys::exchange::error::OTHER_PROJECT,
-                &[("name", &view.name)],
+                keys::exchange::receive::OTHER_PROJECT,
+                &[("name", &view.name), ("project", &self.project.name)],
             )),
             Err(error) => ReceiveStep::Failed(failure_text(&error)),
         };
@@ -186,6 +229,24 @@ impl ReceiveForm {
 
     pub fn can_receive(&self) -> bool {
         matches!(self.step, ReceiveStep::Confirm(_)) && self.file.is_some() && !self.submit.busy()
+    }
+
+    /// Whether a file may be chosen: before one is read, or after a failure.
+    pub fn choosing(&self) -> bool {
+        matches!(self.step, ReceiveStep::Choosing | ReceiveStep::Failed(_))
+    }
+
+    /// The file is being sent or read, or the job runs: the dialog stays open.
+    pub fn busy(&self) -> bool {
+        matches!(
+            self.step,
+            ReceiveStep::Uploading | ReceiveStep::Identifying | ReceiveStep::Working(_)
+        )
+    }
+
+    /// A browser file is being sent (up to 4 GB): nothing else may start meanwhile.
+    pub fn uploading(&mut self) {
+        self.step = ReceiveStep::Uploading;
     }
 
     /// The Receive press: the request and the file to send, once per attempt.
@@ -198,13 +259,29 @@ impl ReceiveForm {
         Some((request, self.file.clone()?))
     }
 
-    pub fn progress(&mut self, phase: ExchangePhase) {
-        if matches!(self.step, ReceiveStep::Working(_)) {
+    /// As [`ExportForm::reply_lost`]: back to Confirm, the same request next.
+    pub fn reply_lost(&mut self, request: RequestId) {
+        if self.submit.request() != request || !matches!(self.step, ReceiveStep::Working(_)) {
+            return;
+        }
+        self.submit.lost(t(keys::exchange::error::LOST_REPLY, &[]));
+        self.step = match self.identified.clone() {
+            Some(view) => ReceiveStep::Confirm(view),
+            None => ReceiveStep::Choosing,
+        };
+    }
+
+    pub fn progress(&mut self, request: RequestId, phase: ExchangePhase) {
+        if self.submit.request() == request && matches!(self.step, ReceiveStep::Working(_)) {
             self.step = ReceiveStep::Working(Some(phase));
         }
     }
 
-    pub fn ended(&mut self, end: JobEnd<ReceivedView>, next: RequestId) {
+    /// As [`ExportForm::ended`]: an older attempt's end never reaches this form.
+    pub fn ended(&mut self, request: RequestId, end: JobEnd<ReceivedView>, next: RequestId) {
+        if self.submit.request() != request || !matches!(self.step, ReceiveStep::Working(_)) {
+            return;
+        }
         self.submit.answered();
         self.step = match end {
             JobEnd::Done(view) => ReceiveStep::Received(view),
@@ -212,9 +289,11 @@ impl ReceiveForm {
                 self.submit.refused(String::new(), next);
                 ReceiveStep::Failed(failure_text(&error))
             }
+            // A run the page lost sight of (the server restarted, the dialog left) may have
+            // taken some of the file in already: what arrived is kept, never "nothing changed".
             JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
                 self.submit.refused(String::new(), next);
-                ReceiveStep::Failed(t(keys::exchange::error::UNEXPECTED, &[]))
+                ReceiveStep::Failed(t(keys::exchange::receive::STOPPED, &[]))
             }
         };
     }
@@ -226,24 +305,24 @@ impl ReceiveForm {
             return Vec::new();
         };
         let mut lines = Vec::new();
-        if view.received == 0 {
-            lines.push(t(keys::exchange::receive::NONE, &[]));
-        } else {
-            let from: Vec<String> = view
-                .from
-                .iter()
-                .map(crate::app::sync::person_label)
-                .collect();
-            lines.push(t(
+        let from: Vec<String> = view
+            .from
+            .iter()
+            .map(crate::app::sync::person_label)
+            .collect();
+        let from = from.join(" · ");
+        lines.push(match view.received {
+            0 => t(keys::exchange::receive::NONE, &[]),
+            1 => t(keys::exchange::receive::RECEIVED_ONE, &[("from", &from)]),
+            n => t(
                 keys::exchange::receive::RECEIVED,
-                &[("n", &view.received), ("from", &from.join(" · "))],
-            ));
-        }
-        if view.verse_conflicts > 0 {
-            lines.push(t(
-                keys::exchange::receive::CONFLICTS,
-                &[("n", &view.verse_conflicts)],
-            ));
+                &[("n", &n), ("from", &from)],
+            ),
+        });
+        match view.verse_conflicts {
+            0 => {}
+            1 => lines.push(t(keys::exchange::receive::CONFLICTS_ONE, &[])),
+            n => lines.push(t(keys::exchange::receive::CONFLICTS, &[("n", &n)])),
         }
         for file in &view.hand_edited {
             lines.push(t(
