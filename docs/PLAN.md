@@ -255,9 +255,9 @@ And these (unit D2):
 
 - Aligned USFM weaves a verse's alignment only when the verse needs no review and its words
   match. Any other verse keeps its stored text and markup, and the export names it (at most
-  20, then the total). This is tC4's rule from e2bfd8c3 (#796), which is on tC4 `main` only,
-  newer than the reference d310bf3 and not in v4.0.0-rc.2; d310bf3 leaves such an alignment
-  out of the file without a word.
+  20, then the total). This is tC4's rule from e2bfd8c3 (#796), which v4.0.0-rc.2 also has
+  through #814 (7baa1257: `cc.exportSkipped` and the `export-skipped` callout). Both are newer
+  than the reference d310bf3, which leaves such an alignment out of the file without a word.
 - An aligned word inside a character span such as `\add` keeps the span in aligned USFM
   (#420). tC4 4.0 moves the word out of the span, so the file loses its style; its v4.0.0
   notes list this as a known limit (tC4 D89 point 11).
@@ -269,6 +269,12 @@ And these (unit D2):
 - The PDF's print page is titled with the export's file name without `.pdf`, because the
   shell names the saved PDF from the title (`tc4Shell.printPdf`). tC4's print document is
   titled with the book's or the project's name. The printed heading is the same.
+- An export of a book or the stories with verses in conflict first asks, under the menu,
+  whether to review them, with Review and Export anyway (STORAGE §8.5). tC4 exports the
+  version shown without a word, so the person cannot know the file holds only one of two
+  versions. The question is inline, never modal.
+- The file name's date is today's date in UTC. tC4 writes the local date. The two differ only
+  near midnight; the server has no time zone to read, so it waits until the app carries one.
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

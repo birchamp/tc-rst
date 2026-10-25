@@ -946,7 +946,9 @@ async fn a_story_export_without_a_carried_files_bytes_fails() {
     assert_eq!(
         state,
         JobState::Failed(ApiError::Refused(tc_api::Refusal::Export(
-            tc_api::refusal::ExportRefusal::ReadFailed
+            tc_api::refusal::ExportRefusal::ReadFailed {
+                error: "ingredients/content/back/intro.md has no bytes here".into()
+            }
         )))
     );
     assert!(downloads.files.lock().unwrap().is_empty(), "no zip");
@@ -994,6 +996,57 @@ async fn an_export_commits_the_book_it_exports() {
     );
 }
 
+/// A PDF of a book with no drafted verse fails as tC4's does: its diagnosis names the book in
+/// the print's title, then the recovery sentence (tC4 `printDocument`, `failureText`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_pdf_of_a_book_with_nothing_drafted_names_the_book() {
+    let w = on_disk_exports().await;
+    let (t, at) = (&w.t, w.bible.clone());
+    let session = t.app.sessions().reader(&at).unwrap();
+    for verse in 1..=5u8 {
+        let minted = session
+            .read()
+            .mint(&super::common::tit(1, verse.into()), None)
+            .unwrap();
+        post(
+            &t.app,
+            &tc_api::editor::SaveVerse {
+                at: at.clone(),
+                request: rid(140 + verse),
+                shown: tc_app::wire::token::shown(&minted).unwrap(),
+                words: String::new(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let (_, state) = run(
+        &t.app,
+        &export::RunExport {
+            request: rid(150),
+            at,
+            producer: export::Producer::PrintHtml,
+            subject: export::Subject::Book {
+                book: BookId::Titus,
+            },
+            print: Some(export::PrintRequest {
+                setup: Default::default(),
+                title: "Tito".into(),
+                words: english_words(),
+            }),
+        },
+    )
+    .await;
+    assert_eq!(
+        state,
+        JobState::Failed(ApiError::Refused(tc_api::Refusal::Export(
+            tc_api::refusal::ExportRefusal::NothingDrafted {
+                error: "Tito has no drafted verse yet, so the PDF has nothing to print.".into()
+            }
+        )))
+    );
+}
+
 /// Downloads whose folder takes no file, as on a full disk.
 struct FullDownloads(tempfile::TempDir);
 
@@ -1031,7 +1084,9 @@ async fn an_export_that_cannot_write_its_file_leaves_nothing() {
     assert_eq!(
         state,
         JobState::Failed(ApiError::Refused(tc_api::Refusal::Export(
-            tc_api::refusal::ExportRefusal::WriteFailed
+            tc_api::refusal::ExportRefusal::WriteFailed {
+                error: "No space left on device (os error 28)".into()
+            }
         )))
     );
     let left: Vec<_> = std::fs::read_dir(downloads.0.path())

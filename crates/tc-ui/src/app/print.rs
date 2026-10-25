@@ -6,16 +6,18 @@
 //! `PrintParts` to static markup in its measuring sheet, and the sheets show the same markup,
 //! so what was measured is what shows. The parts come from `tc_api::model::print`.
 
+use tc_api::ApiError;
 use tc_api::export::{
     Exported, ExportedFile, PrintRequest, PrintWords, Producer, Run, RunExport, StoryRun, Subject,
 };
 use tc_api::home::ProjectKind;
 use tc_api::ids::{RequestId, Scope};
-use tc_api::model::print::{FlowBlock, Opening, PAGE_MARGIN_MM, PageSetup, VerseLine};
+use tc_api::model::print::{FlowBlock, Opening, PAGE_MARGIN_MM, PageSetup, Pictures, VerseLine};
+use tc_api::refusal::Message as _;
 use tc_api::shown::Direction;
 
 use crate::css::Css;
-use crate::i18n::{Key, keys, t};
+use crate::i18n::{Key, keys, t, t_dyn};
 use crate::tokens::ToastTone;
 
 /// React's escaping of text and attribute values.
@@ -327,22 +329,12 @@ pub struct ExportNotice {
     pub ready: String,
     /// Info for "Export ready", success for "Saved", warn for an interrupted download (tC4).
     pub tone: ToastTone,
-    /// `/download/<id>/<name>`, unescaped; a print has none, since the shell saves it.
-    pub download: Option<(String, String)>,
     pub skipped: Option<String>,
 }
 
 pub fn export_notice(exported: &Exported) -> ExportNotice {
-    let (file_name, download) = match &exported.file {
-        ExportedFile::Download {
-            download,
-            file_name,
-        } => (
-            file_name,
-            Some((download.as_str().to_owned(), file_name.clone())),
-        ),
-        ExportedFile::Print { file_name } => (file_name, None),
-    };
+    let (ExportedFile::Download { file_name, .. } | ExportedFile::Print { file_name }) =
+        &exported.file;
     let facts = &exported.facts;
     let skipped = (!facts.skipped.is_empty()).then(|| {
         let named = facts
@@ -371,9 +363,36 @@ pub fn export_notice(exported: &Exported) -> ExportNotice {
     ExportNotice {
         ready: t(keys::cc::EXPORT_READY, &[("filename", file_name)]),
         tone: ToastTone::Info,
-        download,
         skipped,
     }
+}
+
+/// A failed export's words, as tC4's `ExportMenu` `failureText` puts them: the diagnosis,
+/// then the recovery sentence of its code.
+pub fn failure_text(error: &ApiError) -> String {
+    let ApiError::Refused(refusal) = error else {
+        return error.to_string();
+    };
+    let owned = refusal.vars();
+    let vars: Vec<(&str, &dyn std::fmt::Display)> = owned
+        .iter()
+        .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
+        .collect();
+    let recovery = t_dyn(refusal.key(), &vars, None);
+    match refusal.detail() {
+        Some(diagnosis) => format!("{diagnosis} {recovery}"),
+        None => recovery,
+    }
+}
+
+/// Whether a failed print of `run` says to set Pictures off: only a stories print has
+/// pictures; tC4's `pdf.ts` passes false for a book.
+pub fn prints_pictures(run: &RunExport) -> bool {
+    run.subject == Subject::Stories
+        && run
+            .print
+            .as_ref()
+            .is_some_and(|p| p.setup.pictures == Pictures::Shown)
 }
 
 /// The shell's answer to `printPdf` (G1's contract): `{ok: true, file}` is the file it saved;
@@ -472,7 +491,6 @@ pub fn download_done_panel(done: DownloadDone, shown: &ExportPanel) -> ExportPan
     ExportPanel::Ready(ExportNotice {
         ready,
         tone,
-        download: None,
         skipped,
     })
 }

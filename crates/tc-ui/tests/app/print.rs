@@ -13,14 +13,16 @@ use tc_api::home::ProjectKind;
 use tc_api::ids::RefPart;
 use tc_api::ids::{DownloadId, Epoch, ProjectRef, RequestId, Scope};
 use tc_api::model::print::{
-    ChapterOpening, ChapterPart, PageSetup, Paper, Piece, PrintPart, VerseNumbers, print_parts,
+    ChapterOpening, ChapterPart, PageSetup, Paper, Pictures, Piece, PrintPart, VerseNumbers,
+    print_parts,
 };
 use tc_api::shown::Direction;
 use tc_core::BookId;
 use tc_ui::app::print::{
     DownloadDone, ExportOf, ExportPanel, PdfAnswer, Sheet, conflict_question, delivered_panel,
-    download_done_panel, export_items, export_notice, flow_markup, flow_style, page_number_style,
-    pdf_panel, print_words, producer_of, px, sheet_style, unfinished_panel,
+    download_done_panel, export_items, export_notice, failure_text, flow_markup, flow_style,
+    page_number_style, pdf_panel, print_words, prints_pictures, producer_of, px, sheet_style,
+    unfinished_panel,
 };
 use tc_ui::i18n::{keys, t, t_dyn};
 
@@ -309,6 +311,62 @@ fn a_press_sends_one_request_and_only_a_print_carries_the_page_setup() {
     assert_eq!(print.words, print_words());
 }
 
+#[test]
+fn only_a_stories_print_says_to_set_pictures_off() {
+    let of = |subject| ExportOf {
+        at: Scope {
+            project: ProjectRef::parse("en_ult_tit_book").unwrap(),
+            epoch: Epoch::new(1),
+        },
+        subject,
+        title: "Titus".to_owned(),
+    };
+    let request = RequestId::from_bytes([7; 16]);
+    let setup = |pictures| PageSetup {
+        pictures,
+        ..PageSetup::default()
+    };
+    let book = Subject::Book {
+        book: BookId::Titus,
+    };
+    // tC4's `pdf.ts` passes false for a book: a Bible has no Pictures control to set off.
+    let run = |subject, pictures| {
+        prints_pictures(&of(subject).run(request, Producer::PrintHtml, setup(pictures)))
+    };
+    assert!(!run(book, Pictures::Shown));
+    assert!(!run(book, Pictures::Hidden));
+    assert!(run(Subject::Stories, Pictures::Shown));
+    assert!(!run(Subject::Stories, Pictures::Hidden));
+}
+
+/// tC4's `failureText`: the diagnosis, then the recovery sentence of its code.
+#[test]
+fn a_failed_export_says_what_went_wrong_then_what_to_do() {
+    use tc_api::ApiError;
+    use tc_api::refusal::{ExportRefusal, Refusal};
+    let said = |why| failure_text(&ApiError::Refused(Refusal::Export(why)));
+    assert_eq!(
+        said(ExportRefusal::NothingDrafted {
+            error: "Titus has no drafted verse yet, so the PDF has nothing to print.".into()
+        }),
+        "Titus has no drafted verse yet, so the PDF has nothing to print. Draft at least one \
+         verse of this book, then export the PDF again."
+    );
+    assert_eq!(
+        said(ExportRefusal::WriteFailed {
+            error: "No space left on device (os error 28)".into()
+        }),
+        format!(
+            "No space left on device (os error 28) {}",
+            t(keys::refusal::export::WRITE_FAILED, &[])
+        )
+    );
+    assert_eq!(
+        said(ExportRefusal::PrintFailed),
+        t(keys::refusal::export::PRINT_FAILED, &[])
+    );
+}
+
 fn exported(skipped: u16, total: u32) -> Exported {
     Exported {
         file: ExportedFile::Download {
@@ -332,10 +390,6 @@ fn exported(skipped: u16, total: u32) -> Exported {
 fn the_toast_names_at_most_20_skipped_verses() {
     let none = export_notice(&exported(0, 0));
     assert_eq!(none.ready, "Export ready: TIT-2026-10-24.usfm");
-    assert_eq!(
-        none.download,
-        Some(("a".repeat(32), "TIT-2026-10-24.usfm".to_owned()))
-    );
     assert_eq!(none.skipped, None);
 
     let two = export_notice(&exported(2, 2));
@@ -360,7 +414,6 @@ fn the_toast_names_at_most_20_skipped_verses() {
         facts: ExportFacts::default(),
     });
     assert_eq!(print.ready, "Export ready: TIT-2026-10-24.pdf");
-    assert_eq!(print.download, None);
 }
 
 #[test]
@@ -380,7 +433,6 @@ fn the_shells_print_answer_shows_saved_nothing_or_the_print_failure() {
         panic!("{saved:?}")
     };
     assert_eq!(notice.ready, "Saved Tito-2026-10-24.pdf");
-    assert_eq!(notice.download, None);
     assert_eq!(
         pdf_panel(PdfAnswer::Cancelled, &print, true),
         ExportPanel::Idle
@@ -415,7 +467,6 @@ fn the_shells_download_report_shows_saved_interrupted_or_nothing() {
     };
     assert_eq!(saved.ready, "Saved TIT-2026-10-24.usfm");
     assert_eq!(saved.tone, ToastTone::Success);
-    assert_eq!(saved.download, None);
     assert_eq!(saved.skipped, browser.skipped, "the skipped verses stay");
 
     let ExportPanel::Ready(cut) =

@@ -20,7 +20,6 @@
   "export.anyway": "Export anyway",
   "export.conflictsMany": "{n} verses have two versions. The export uses the version shown. Review first?",
   "export.conflictsOne": "1 verse has two versions. The export uses the version shown. Review first?",
-  "export.download": "Download",
   "export.markupKept": "These verses are in the file as stored, with their alignment markup, because the app could not take it out: {refs}",
   "export.review": "Review",
   "export.skipped": "Your alignment of these verses is not in the file. Check them in Align: {refs}",

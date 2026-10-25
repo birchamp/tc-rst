@@ -571,16 +571,12 @@ fn export_menu(
             .into_any()
         }
         ExportPanel::Ready(notice) => {
-            let download = notice.download.map(|(id, name)| {
-                Callback::new(move |_| crate::app::web::export::deliver(&id, &name))
-            });
-            let action_label = download.is_some().then(|| t(keys::export::DOWNLOAD, &[]));
             // The side panel is narrower than the toast's 300px minimum width (tC4).
             let toast = Toast(ToastProps {
                 tone: notice.tone,
                 message: notice.ready,
-                action: download,
-                action_label,
+                action: None,
+                action_label: None,
                 on_dismiss: Some(Callback::new(move |_| panel.set(ExportPanel::Idle))),
                 dismiss_label: Some(t(keys::common::DISMISS, &[])),
                 style: crate::css! { "margin-top": 10, "--toast-w-min": "0px" },

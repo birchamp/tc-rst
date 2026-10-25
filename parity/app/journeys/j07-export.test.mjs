@@ -9,16 +9,19 @@
 // the project"). The rules of each producer are tested in tc-export and tc-app; this file is
 // what a person sees and gets.
 //
-//   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/j07-export.test.mjs
+//   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
+//     node --test parity/app/journeys/j07-export.test.mjs
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { newRequestId } from '../env-rust.mjs';
+import { FAKE_USER } from '../../tc4-baseline/mock-server/fake-door43.mjs';
+import { REPO, newRequestId } from '../env-rust.mjs';
+import { BIBLE as BIBLE_REPO } from '../screens.mjs';
 import { browserTest, catalog, until, withApp } from './kit.mjs';
 
-const en = catalog('en');
+const en = { ...catalog('en'), ...JSON.parse(fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'i18n-rebuild', 'en.json'), 'utf8')) };
 const BIBLE = 'sample_burrito';
 const OBS = 'sample_burrito_obs';
 const DATE = String.raw`\d{4}-\d{2}-\d{2}`;
@@ -125,6 +128,10 @@ async function download(page, item) {
   const bytes = fs.readFileSync(await file.path());
   const name = file.suggestedFilename();
   await page.getByTestId('export-toast').getByText(`Export ready: ${name}`, { exact: true }).waitFor();
+  // tC4's toast has only Dismiss: the browser has the file already.
+  const buttons = page.getByTestId('export-toast').getByRole('button');
+  assert.equal(await buttons.count(), 1, 'one button');
+  assert.equal(await page.getByTestId('export-toast').getByRole('button', { name: en['common.dismiss'], exact: true }).count(), 1, 'Dismiss');
   assert.equal(await page.getByTestId('export-failure').count(), 0, 'no export failure');
   return { name, bytes };
 }
@@ -341,3 +348,32 @@ browserTest('J7: a save of the book while its export runs leaves the export\'s a
     },
   });
 });
+
+browserTest('J7: Review in the export\'s conflicts question opens the conflict review over Community Checking', async () => {
+  await withApp(async ({ page, env }) => {
+    // A teammate's version of Titus 1:1 arrives by a sync from Home, as conflict-review.test.mjs
+    // makes one.
+    await page.getByTestId(`share-${BIBLE}`).waitFor();
+    await env.teammatesChangeOneVerse(BIBLE_REPO);
+    await page.getByTestId(`share-${BIBLE}`).click();
+    await page.getByTestId('net-confirm').click();
+    await page.getByTestId('share-signin').waitFor();
+    await page.getByLabel(en['signIn.login']).fill(FAKE_USER.username);
+    await page.getByLabel(en['signIn.password'], { exact: true }).fill(FAKE_USER.password);
+    await page.getByTestId('signin-submit').click();
+    await page.getByTestId('sync-result').locator('[data-testid="sync-count-conflicts"][data-count="1"]').waitFor({ timeout: 60_000 });
+    await openTitusPreview(page);
+    await page.getByTestId('export-menu-trigger').click();
+    await page.getByRole('menuitem', { name: en['cc.exportUsfmAligned'], exact: true }).click();
+    const question = page.getByTestId('export-conflicts');
+    await question.getByText(en['export.conflictsOne'], { exact: true }).waitFor();
+    await question.getByRole('button', { name: en['export.review'], exact: true }).click();
+    await page.getByTestId('conflict-review').waitFor();
+    assert.equal(await page.getByTestId('conflict-ref').textContent(), 'Titus 1:1');
+    assert.equal(await page.getByTestId('export-conflicts').count(), 0, 'the question closes');
+    // Back leaves Community Checking as it was, with no review left open.
+    await page.getByTestId('conflict-back').click();
+    await page.getByTestId('conflict-review').waitFor({ state: 'detached' });
+    await page.getByTestId('cc-page').first().waitFor();
+  }, { door43: true, scenario: 'shared', init: downloads });
+}, { door43: true });

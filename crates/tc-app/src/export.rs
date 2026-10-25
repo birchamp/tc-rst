@@ -431,23 +431,25 @@ impl App {
         print: Option<PrintRequest>,
     ) -> Result<Made, JobEnd> {
         let today = self.inner.clock.now();
+        let title = print.as_ref().map(|p| p.title.clone()).unwrap_or_default();
         let made = |produced: Result<(Produced, tc_export::ExportFacts), ExportError>,
                     name: String,
                     ext: &str|
          -> Result<Made, JobEnd> {
             let (produced, facts) = produced.map_err(|e| match e {
-                ExportError::NothingDrafted => failed(ExportRefusal::NothingDrafted),
-                other => {
-                    self.report_export_failure(other.to_string());
-                    failed(ExportRefusal::ReadFailed)
-                }
+                // tC4 `printDocument`'s diagnosis, in its English as tC4 writes it.
+                ExportError::NothingDrafted => failed(ExportRefusal::NothingDrafted {
+                    error: format!(
+                        "{title} has no drafted verse yet, so the PDF has nothing to print."
+                    ),
+                }),
+                other => self.read_failed(other.to_string()),
             })?;
             let bytes = match produced {
                 Produced::File(bytes) => bytes,
-                Produced::Files(files) => zip_files(&files).map_err(|reason| {
-                    self.report_export_failure(reason);
-                    failed(ExportRefusal::ReadFailed)
-                })?,
+                Produced::Files(files) => {
+                    zip_files(&files).map_err(|reason| self.read_failed(reason))?
+                }
             };
             Ok(Made {
                 bytes,
@@ -472,10 +474,9 @@ impl App {
             }
             (Producer::StoryMarkdown, Subject::Stories, None) => {
                 let project_name = self.export_name(session).await;
-                let files = story_files(session).await.map_err(|Unread(reason)| {
-                    self.report_export_failure(reason);
-                    failed(ExportRefusal::ReadFailed)
-                })?;
+                let files = story_files(session)
+                    .await
+                    .map_err(|Unread(reason)| self.read_failed(reason))?;
                 if files.is_empty() {
                     return Err(JobEnd::Failed(ApiError::BadRequest {
                         field: "subject".to_owned(),
@@ -549,8 +550,9 @@ impl App {
                     for (frame, uri) in frames {
                         // tC4 fails the export on a picture it cannot read.
                         let Some(data) = inline_picture(self, &uri).await else {
-                            self.report_export_failure(format!("picture {uri} could not be read"));
-                            return Err(failed(ExportRefusal::ReadFailed));
+                            return Err(
+                                self.read_failed(format!("picture {uri} could not be read"))
+                            );
                         };
                         inlined.insert(frame, data);
                     }
@@ -598,6 +600,12 @@ impl App {
             .map(|p| p.metadata)
             .unwrap_or_else(|| Err("the project's metadata could not be read".to_owned()));
         crate::home::card_facts(&metadata, &folder, kind).name
+    }
+
+    /// tC4's `export.read-failed`, its diagnosis the reason, reported.
+    fn read_failed(&self, reason: String) -> JobEnd {
+        self.report_export_failure(reason.clone());
+        failed(ExportRefusal::ReadFailed { error: reason })
     }
 
     fn report_export_failure(&self, reason: String) {
@@ -707,8 +715,8 @@ impl Handle<RunExport> for App {
                     .await
                 {
                     CheckpointOutcome::Failed { reason } => {
-                        app.report_export_failure(reason);
-                        return Err(failed(ExportRefusal::CheckpointFailed));
+                        app.report_export_failure(reason.clone());
+                        return Err(failed(ExportRefusal::CheckpointFailed { error: reason }));
                     }
                     CheckpointOutcome::Committed | CheckpointOutcome::Unchanged => {}
                 }
@@ -749,8 +757,8 @@ impl Handle<RunExport> for App {
                 .map_err(|e| e.to_string())
                 .and_then(|r| r);
                 let download = registered.map_err(|reason| {
-                    app.report_export_failure(reason);
-                    failed(ExportRefusal::WriteFailed)
+                    app.report_export_failure(reason.clone());
+                    failed(ExportRefusal::WriteFailed { error: reason })
                 })?;
                 Ok(Exported {
                     file: ExportedFile::Download {

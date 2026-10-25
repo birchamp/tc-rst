@@ -3,16 +3,17 @@
 
 use leptos::prelude::*;
 use tc_api::export::{ExportedFile, Preflight, Producer, RunExport};
-use tc_api::model::print::{PageSetup, Pictures};
+use tc_api::model::print::PageSetup;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use super::app_ctx::Actions;
-use super::sources::{api_error, said};
+use super::sources::api_error;
 use super::{bridge, js};
 use crate::app::jobs::JobEnd;
 use crate::app::print::{
-    ExportOf, ExportPanel, conflict_question, delivered_panel, pdf_panel, unfinished_panel,
+    ExportOf, ExportPanel, conflict_question, delivered_panel, failure_text, pdf_panel,
+    prints_pictures, unfinished_panel,
 };
 
 /// tC4's `deliverFile`: a click on `<a download>`, so the browser or the shell saves it.
@@ -68,7 +69,7 @@ impl Actions {
                     None => this.export_run(panel, run),
                 },
                 Err(error) => {
-                    panel.try_set(ExportPanel::Failed(said(&error)));
+                    panel.try_set(ExportPanel::Failed(failure_text(&error)));
                 }
             }
         });
@@ -79,14 +80,11 @@ impl Actions {
         panel.try_set(ExportPanel::Running);
         let this = self.clone();
         spawn_local(async move {
-            let pictures = run
-                .print
-                .as_ref()
-                .is_some_and(|p| p.setup.pictures == Pictures::Shown);
+            let pictures = prints_pictures(&run);
             let job = match this.runtime().api().call(&run).await.map_err(api_error) {
                 Ok(job) => job,
                 Err(error) => {
-                    panel.try_set(ExportPanel::Failed(said(&error)));
+                    panel.try_set(ExportPanel::Failed(failure_text(&error)));
                     return;
                 }
             };
@@ -104,7 +102,7 @@ impl Actions {
                         pdf_panel(answer, &exported, pictures)
                     }
                 },
-                JobEnd::Failed(error) => ExportPanel::Failed(said(&error)),
+                JobEnd::Failed(error) => ExportPanel::Failed(failure_text(&error)),
                 end => match unfinished_panel(&end) {
                     Some(shown) => shown,
                     None => return,
