@@ -578,10 +578,11 @@ impl Actor {
             });
         }
         let device = writer.unwrap_or(self.project.device);
-        self.project.notice(Notice::SecondWriter { device }, None);
+        // The mode first: a listener the notice wakes reads the read-only state.
         self.project
             .shared
             .set_mode(Mode::ReadOnly(ReadOnlyReason::SecondWriter { device }));
+        self.project.notice(Notice::SecondWriter { device }, None);
         Ok(true)
     }
 

@@ -862,8 +862,10 @@ impl Writer {
             }
         }
         if answered {
+            // The answer was to the lost-work question alone: a changed copy of the same file
+            // waits for its own question.
             self.manifest_changed = true;
-            self.write_manifest()?;
+            return self.write_manifest();
         }
         let State::Held { held } = self.state_of(rel) else {
             return Ok(());

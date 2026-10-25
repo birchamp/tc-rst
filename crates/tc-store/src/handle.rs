@@ -959,6 +959,11 @@ impl ProjectHandle {
     /// The book files and stories that wait for the person's answer, each with its newest
     /// kept copy: one question names them all (delta §2.11 Q3). The list survives a reopen.
     pub fn waiting_books(&self) -> Vec<crate::kept::WaitingBook> {
+        // A project that turned read-only (a second writer) asks nothing, as a read-only open
+        // does: every answer would be refused, and the question would block the screen.
+        if matches!(self.facts().mode, Mode::ReadOnly(_)) {
+            return Vec::new();
+        }
         self.shared.kept_view().waiting
     }
 

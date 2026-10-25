@@ -764,6 +764,78 @@ mod outside {
         world
     }
 
+    /// A second writer appears while a book waits (a synced folder): the project turns
+    /// read-only, so the question goes, as a read-only open asks nothing; an answer would be
+    /// refused and the dialog would block the screen.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_second_writer_mid_session_takes_the_question_away() {
+        use tc_app::backend::{CheckpointReason, ProjectStore};
+        let world = store_world();
+        let (_d, t, at) = opened(&world).await;
+        edit(&world, TIT, 1, 1, "Paul, from another program");
+        assert_eq!(focus(&t, &at, 1).await.waiting.len(), 1);
+        let (theirs, _theirs_watch) = crate::store_world::backend_over(
+            &world.fs.other_machine(),
+            "/app-desktop",
+            tc_store::FakePlatform {
+                machine: "machine-2".to_owned(),
+                host: "host-2".to_owned(),
+                ..tc_store::FakePlatform::default()
+            },
+            std::sync::Arc::default(),
+        );
+        theirs.trust_lock(&world.bible);
+        let handle = theirs
+            .open(&world.bible, crate::store_world::progress())
+            .unwrap();
+        save(handle.as_ref(), &tit(1, 15), "from the other computer")
+            .await
+            .unwrap();
+        handle.wait_idle();
+        let session = t.app.read(&at).unwrap();
+        session
+            .handle()
+            .checkpoint(CheckpointReason::Other("test".to_owned()))
+            .await;
+        assert!(
+            matches!(
+                session.handle().facts().mode,
+                tc_api::event::SessionMode::ReadOnly(_)
+            ),
+            "{:?}",
+            session.handle().facts().mode
+        );
+        let outside = hello_outside(&t, &at).await;
+        assert!(outside.waiting.is_empty(), "{outside:?}");
+        assert_eq!(outside.kept.len(), 1, "the copy stays listed");
+        drop(handle);
+    }
+
+    /// *Not now* on lost work answers that question alone: a changed copy of the same book
+    /// that another program saved meanwhile is still asked, and the file keeps its bytes.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn not_now_on_lost_work_leaves_a_changed_copy_asked() {
+        let world = lost_work_world();
+        let (_d, t, at) = opened(&world).await;
+        edit(&world, TIT, 1, 3, "a change from another program");
+        let both = focus(&t, &at, 1).await;
+        assert_eq!(both.waiting.len(), 2, "{both:?}");
+        let after = post(
+            &t.app,
+            &NotNow {
+                request: request(2),
+                at: at.clone(),
+                file: TIT.into(),
+            },
+        )
+        .await
+        .unwrap();
+        let whys: Vec<KeptWhy> = after.waiting.iter().map(|w| w.why).collect();
+        assert_eq!(whys, vec![KeptWhy::Changed], "{after:?}");
+        let file = String::from_utf8(world.fs.peek(&path(&world, TIT)).unwrap()).unwrap();
+        assert!(file.contains("a change from another program"), "{file}");
+    }
+
     /// H22 part 1: *Not now* on the lost-work question answers it for good: it is not asked
     /// again after a reload, and the copy stays in the notices with *Bring it back*.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
