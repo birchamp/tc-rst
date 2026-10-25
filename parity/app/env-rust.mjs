@@ -67,6 +67,8 @@ export function scenarioArgs(scenario, dir, backend = 'store') {
 /** A port nothing listens on: Door43 stays on this machine even if the internet switch were
  * turned on. A run that signs in passes a started tc-door43-fake instead (A8). */
 const DEAD_DOOR43 = 'http://127.0.0.1:9/';
+/** The fake Door43's seeded user, whom the journeys sign in as. */
+const DOOR43_USER = 'facilitator-zq';
 
 /** A plain HTTP request to the fake Door43's control port; answers the parsed JSON body. */
 function controlCall(base, method, route, body) {
@@ -121,6 +123,8 @@ export async function startDoor43Fake(bin) {
     issueToken: async (login, name, scopes) => (await control('POST', '/tokens', { login, name, scopes })).secret,
     tokens: (login) => control('GET', `/tokens/${encodeURIComponent(login)}`),
     secret: async (login, name) => (await control('GET', `/secret/${encodeURIComponent(login)}/${encodeURIComponent(name)}`)).secret,
+    /** An empty repository of `owner`, which a first real sync fills (E1a). */
+    addRepo: (owner, name) => control('POST', '/repos', { owner, name }),
     async close() {
       if (child.exitCode !== null || child.signalCode !== null) return;
       child.stdin.write('{"quit":true}\n');
@@ -183,7 +187,7 @@ function apiCall(base, token, endpoint, body) {
  * `door43` is a started fake Door43 (`startDoor43Fake`), which `tc4` then signs in to;
  * without it Door43 is a port nothing listens on.
  */
-export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 'store', runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
+export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync = false, backend = 'store', runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
   if (!PROJECTS[scenario]) throw new Error(`no scenario ${scenario}; the scenarios are ${Object.keys(PROJECTS).join(', ')}`);
   const dir = path.join(runDir, scenario);
   fs.rmSync(dir, { recursive: true, force: true });
@@ -195,7 +199,7 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
   // stdin stays open: a closed stdin makes tc4 quit.
   const child = spawn(path.resolve(tc4), [
     'serve', '--app-data', path.join(dir, 'appdata'), '--projects', path.join(dir, 'projects'), '--ui', path.resolve(ui),
-    '--door43', door43?.url ?? DEAD_DOOR43, '--test-hooks', ...(scenario === 'store' ? [] : scenarioArgs(scenario, dir, backend)),
+    '--door43', door43?.url ?? DEAD_DOOR43, '--test-hooks', ...(realSync ? ['--real-sync'] : []), ...(scenario === 'store' ? [] : scenarioArgs(scenario, dir, backend)),
   ], { stdio: ['pipe', 'pipe', 'inherit'] });
   const lines = readline.createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));
@@ -227,6 +231,17 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
   }
   const refused = new Set();
   const projects = PROJECTS[scenario];
+  // With `realSync` (E1a), Door43 is the fake for real: a project syncs to a repository of the
+  // fake's user, which `pushToDoor43` makes and connects the project to once.
+  const connected = new Set();
+  const connectToFake = async (repo) => {
+    if (!door43) throw new Error('realSync needs the fake Door43 (door43: true)');
+    if (connected.has(repo)) return;
+    const project = projects[repo];
+    await door43.addRepo(DOOR43_USER, project);
+    await call('test/connectDoor43', { request: newRequestId(), project, owner: DOOR43_USER, name: project, branch: 'master' });
+    connected.add(repo);
+  };
   const scriptSync = (repo, outcome) => {
     const project = projects[repo];
     if (!project) throw new Error(`the ${scenario} scenario has no project for ${repo}`);
@@ -288,7 +303,7 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 
     // Door43 until unit X (APP-DESIGN AD6, B10): each step sets how the next sync of the
     // project ends, as what Door43 then holds would end it, through `test/script`.
     journalAtFirstOpen: false,
-    pushToDoor43: (repo) => scriptSync(repo, synced()),
+    pushToDoor43: (repo) => (realSync ? connectToFake(repo) : scriptSync(repo, synced())),
     dropNextClone: (repo) => scriptSync(repo, { type: 'failed', value: { type: 'beforeIntake', value: { type: 'unreachable' } } }),
     teammatesChangeOneVerse: async (repo) => {
       await scriptSync(repo, synced({ teammates: { book: 'TIT', chapter: 1, verse: 1, texts: TEAMMATE_TEXTS } }));

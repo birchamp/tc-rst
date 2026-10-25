@@ -913,7 +913,11 @@ pub struct Door43Remote {
 impl Door43Remote {
     /// `https://<host>/<owner>/<repo>`, with or without `.git`.
     pub fn parse_url(url: &str) -> Option<Self> {
-        let rest = url.strip_prefix("https://")?;
+        // http too: the app writes this from its own `--door43`, a plain-http server on loopback
+        // in tests (the fake Door43) and on a development machine.
+        let rest = url
+            .strip_prefix("https://")
+            .or_else(|| url.strip_prefix("http://"))?;
         let rest = rest.strip_suffix(".git").unwrap_or(rest);
         match rest.split('/').collect::<Vec<_>>().as_slice() {
             [host, owner, repo] if !host.is_empty() && !owner.is_empty() && !repo.is_empty() => {

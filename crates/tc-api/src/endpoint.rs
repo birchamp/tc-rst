@@ -225,6 +225,7 @@ unscoped!(
     crate::test::Reset,
     crate::test::LastEdit,
     crate::test::Script,
+    crate::test::ConnectDoor43,
 );
 
 /// What an endpoint answers inside an HTTP 200 (AD9). On the wire it follows the crate's

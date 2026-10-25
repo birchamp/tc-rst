@@ -118,6 +118,7 @@ fn control_router(fake: Arc<FakeDoor43>) -> Router {
         .route("/faults", post(add_fault))
         .route("/release", post(release))
         .route("/tokens", post(issue_token))
+        .route("/repos", post(add_repo))
         .route("/tokens/{login}", get(tokens_of))
         .route("/secret/{login}/{name}", get(secret))
         .with_state(fake)
@@ -229,6 +230,34 @@ async fn issue_token(State(fake): Fake, body: axum::body::Bytes) -> Response {
     let scopes: Vec<&str> = body.scopes.iter().map(String::as_str).collect();
     match fake.issue_token(&body.login, &body.name, &scopes) {
         Ok(secret) => axum::Json(json!({ "secret": secret })).into_response(),
+        Err(error) => bad(error.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RepoBody {
+    owner: String,
+    name: String,
+}
+
+/// An empty repository of `owner`, which a first sync fills (E1a: journeys that sync for real).
+async fn add_repo(State(fake): Fake, body: axum::body::Bytes) -> Response {
+    let body: RepoBody = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(error) => return bad(error.to_string()),
+    };
+    let seed = tc_door43_fake::RepoSeed {
+        owner: body.owner,
+        name: body.name,
+        subject: "Bible".to_owned(),
+        language: "es-419".to_owned(),
+        topics: Vec::new(),
+        private: false,
+        commits: Vec::new(),
+    };
+    match fake.add_repo(seed).await {
+        Ok(_) => axum::Json(json!({})).into_response(),
         Err(error) => bad(error.to_string()),
     }
 }

@@ -107,7 +107,7 @@ use tc_api::test::{
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
     TeammatesEdit, TeammatesJoin, TokenBase,
 };
-use tc_api::test::{InvalidProject, Validate, ValidateView};
+use tc_api::test::{ConnectDoor43, InvalidProject, Validate, ValidateView};
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
@@ -2897,6 +2897,18 @@ fn review_entries() -> Vec<ReviewEntries> {
             },
         }]),
     ]
+}
+
+impl Example for ConnectDoor43 {
+    fn example() -> Self {
+        ConnectDoor43 {
+            request: request(23),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            owner: "facilitator-zq".into(),
+            name: "sample_burrito".into(),
+            branch: "master".into(),
+        }
+    }
 }
 
 impl Example for Script {

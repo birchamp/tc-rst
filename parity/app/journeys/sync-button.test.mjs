@@ -113,3 +113,29 @@ browserTest('#678, #724 item 6. Every refusal a sync can end with shows its own 
     assert.equal(await button(page).isDisabled(), false);
   }, opts);
 });
+
+// E1a: the sync for real, on the fake Door43. The shared project is connected to an empty
+// repository of the fake's user; a press pushes it and the toast says synced; a second press
+// syncs again with nothing new; a connection cut during the fetch fails before anything came in.
+browserTest('E1a. A real sync pushes the project to Door43; a cut connection fails and changes nothing', async () => {
+  await withApp(async ({ page, env }) => {
+    await button(page).waitFor();
+    await env.pushToDoor43(BIBLE);
+    await env.door43.clear();
+    await syncSignedIn(page);
+    await toast(page).waitFor();
+    assert.equal(await toast(page).getAttribute('data-ok'), '1', await toast(page).textContent());
+    const pushed = (await env.door43.requests()).filter((r) => r.path.endsWith('/git-receive-pack'));
+    assert.ok(pushed.length > 0, 'the project went to Door43');
+    await dismiss(page);
+    await button(page).click();
+    await toast(page).waitFor();
+    assert.equal(await toast(page).getAttribute('data-ok'), '1', 'a second sync with nothing new');
+    await dismiss(page);
+    await env.door43.fault({ method: 'GET', path: `/${FAKE_USER.username}/${FOLDER}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } });
+    await button(page).click();
+    await toast(page).waitFor();
+    assert.equal(await toast(page).getAttribute('data-ok'), '0', 'the cut sync failed');
+    assert.notEqual(await page.getByTestId('sync-message').textContent(), en['syncResult.error.keptStopped'], 'nothing came in, so nothing is said to be kept');
+  }, { ...opts, realSync: true });
+});

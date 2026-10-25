@@ -360,6 +360,19 @@ impl Handle<SyncProject> for App {
 }
 
 #[cfg(feature = "test-hooks")]
+impl Handle<tc_api::test::ConnectDoor43> for App {
+    async fn handle(&self, req: tc_api::test::ConnectDoor43) -> Result<(), ApiError> {
+        self.hooks()?;
+        self.connect_door43(&req.project, &req.owner, &req.name, &req.branch)
+            .await
+            .map_err(|reason| ApiError::BadRequest {
+                field: "project".to_owned(),
+                reason,
+            })
+    }
+}
+
+#[cfg(feature = "test-hooks")]
 impl Handle<tc_api::test::Script> for App {
     async fn handle(&self, req: tc_api::test::Script) -> Result<(), ApiError> {
         use tc_api::test::Scripted;

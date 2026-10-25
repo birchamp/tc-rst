@@ -362,6 +362,20 @@ pub struct KeychainView {
     pub forgets: u32,
 }
 
+/// `test/connectDoor43`: points `project`'s repository at Door43's `owner/name` and its
+/// `branch`, as share would have (E1a): journeys that sync with a fake Door43 for real start
+/// from a project already shared.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConnectDoor43 {
+    pub request: RequestId,
+    pub project: ProjectRef,
+    pub owner: String,
+    pub name: String,
+    pub branch: String,
+}
+
 /// `test/script`: how the next job of a kind ends, until units X and E1b bring the real Door43
 /// open and sync (AD6, B10). A job with nothing scripted answers `Unavailable(Sync)`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
