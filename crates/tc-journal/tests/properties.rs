@@ -546,12 +546,15 @@ fn newest_wins_converges() {
                     }) => prop_assert_eq!(
                         head,
                         newest,
-                        "fold {} settles {:?} on another head",
+                        "INV-NEWEST-WINS-CONVERGES: fold {} settles {:?} on another head",
                         n,
                         key
                     ),
                     Some(Resolved::Conflict(_)) if !restore_race(state, &key) => {
-                        prop_assert!(false, "fold {n} lists {key:?} as a conflict")
+                        prop_assert!(
+                            false,
+                            "INV-NEWEST-WINS-CONVERGES: fold {n} lists {key:?} as a conflict"
+                        )
                     }
                     _ => {}
                 }
@@ -622,7 +625,10 @@ fn the_loser_stays_in_history() {
             let history = state.history(&key);
             let heads = state.heads(&key);
             for h in &heads {
-                prop_assert!(history.contains(h), "{key:?}: head {h:?} not in History");
+                prop_assert!(
+                    history.contains(h),
+                    "INV-THE-LOSER-STAYS-IN-HISTORY: {key:?}: head {h:?} not in History"
+                );
             }
             // A carried file's other versions are files beside it, not versions to restore.
             if matches!(key, RecordKey::CarriedFile(_)) {
@@ -678,7 +684,7 @@ fn only_text_conflicts() {
                 ) || (conflict.kind == ConflictKind::BookPresence
                     && restore_race(view.state, &conflict.key))
                     || outside_without_base(view.state, &conflict.key),
-                "{:?} listed at {:?}",
+                "INV-ONLY-TEXT-CONFLICTS: {:?} listed at {:?}",
                 conflict.kind,
                 conflict.key
             );
