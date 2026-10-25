@@ -800,3 +800,50 @@ async fn the_first_sync_sends_the_username_at_once() {
         "Door43 has the name after one sync"
     );
 }
+
+/// tC4's sync-ok-restored: Door43 lost a teammate's change this computer already holds; the next
+/// sync sends it again and the toast says so, counting the change once and no username record.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_change_door43_lost_is_sent_again_and_counted_once() {
+    let w = <Door43 as SyncPortFixture>::world().await;
+    let a = &w.t.app;
+    internet_on(a).await;
+    sign_in(a).await;
+    synced(a, 70).await;
+    let b = teammate_b(&w).await;
+    let before = w.fake.resolve(PARITY_USER, REPO, "master").await.unwrap();
+    save_titus(
+        &b.t.app,
+        &b.project,
+        2,
+        71,
+        "Lo que B escribio, que Door43 perdera",
+    )
+    .await;
+    sign_in_again(&b.t.app, 73).await;
+    let job = post(
+        &b.t.app,
+        &SyncProject {
+            request: rid(74),
+            project: b.project.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(ended(&b.t.app, job).await, JobState::Done(_)));
+    sign_in_again(a, 75).await;
+    let first = synced(a, 76).await;
+    assert_eq!(
+        first.received, 1,
+        "B's verse, not B's username record: {first:?}"
+    );
+    w.fake
+        .set_branch(PARITY_USER, REPO, "master", &before)
+        .await
+        .unwrap();
+    let again = synced(a, 77).await;
+    assert_eq!(
+        again.restored, 1,
+        "the lost change is sent again: {again:?}"
+    );
+}

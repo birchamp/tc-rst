@@ -295,6 +295,9 @@ async fn add_user(State(fake): Fake, body: axum::body::Bytes) -> Response {
 struct RepoBody {
     owner: String,
     name: String,
+    /// Remove a repository of that name first, so it starts empty again.
+    #[serde(default)]
+    replace: bool,
 }
 
 /// An empty repository of `owner`, which a first sync fills (E1a: journeys that sync for real).
@@ -303,6 +306,11 @@ async fn add_repo(State(fake): Fake, body: axum::body::Bytes) -> Response {
         Ok(body) => body,
         Err(error) => return bad(error.to_string()),
     };
+    if body.replace
+        && let Err(error) = fake.remove_repo(&body.owner, &body.name)
+    {
+        return bad(error.to_string());
+    }
     let seed = tc_door43_fake::RepoSeed {
         owner: body.owner,
         name: body.name,

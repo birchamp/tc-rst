@@ -1497,6 +1497,7 @@ impl ProjectHandle for StoreHandle {
                     *report.received_by.entry(person).or_default() += n;
                 }
                 report.recreated |= next.recreated;
+                report.restored += next.restored;
                 if !matches!(next.ended, tc_sync::machine::Ended::Synced { .. }) {
                     report.ended = next.ended;
                 }

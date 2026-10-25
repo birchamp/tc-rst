@@ -69,9 +69,9 @@ export function scenarioArgs(scenario, dir, backend = 'store') {
 const DEAD_DOOR43 = 'http://127.0.0.1:9/';
 /** The fake Door43's seeded user, whom the journeys sign in as. */
 const DOOR43_USER = 'facilitator-zq';
-/** The team organization that holds the projects a real sync shares (E1a); the seeded user and
- * each teammate may push there. */
-export const DOOR43_TEAM = 'Equipo-Ejemplo';
+/** Who owns the repositories a real sync shares (E1a): the seeded user, as in tC4's captures;
+ * each teammate pushes there as a collaborator. */
+export const DOOR43_OWNER = DOOR43_USER;
 
 /** A plain HTTP request to the fake Door43's control port; answers the parsed JSON body. */
 function controlCall(base, method, route, body) {
@@ -127,7 +127,7 @@ export async function startDoor43Fake(bin) {
     tokens: (login) => control('GET', `/tokens/${encodeURIComponent(login)}`),
     secret: async (login, name) => (await control('GET', `/secret/${encodeURIComponent(login)}/${encodeURIComponent(name)}`)).secret,
     /** An empty repository of `owner`, which a first real sync fills (E1a). */
-    addRepo: (owner, name) => control('POST', '/repos', { owner, name }),
+    addRepo: (owner, name, replace = false) => control('POST', '/repos', { owner, name, replace }),
     /** A teammate: another user, a member of `org` who may push there (E1a). */
     addUser: (login, password, org) => control('POST', '/users', { login, password, org }),
     /** `branch`'s commit, moved to `sha` first when it is given. */
@@ -240,17 +240,18 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
   const projects = PROJECTS[scenario];
   // With `realSync` (E1a), Door43 is the fake for real: a project syncs to a repository of the
   // fake's user, which `pushToDoor43` makes and connects the project to once.
-  // `test/reset` writes the scenario's projects again, which drops their connection: each reset
-  // starts a fresh repository name, so no screen syncs into what an earlier one left.
-  let generation = 0;
+  // `test/reset` writes the scenario's projects again, which drops their connection: the next
+  // connection replaces the repository, so no screen syncs into what an earlier one left. It is
+  // the parity user's own, named as the project (tC4's captures), with teammates as
+  // collaborators.
   const connected = new Set();
-  const door43Repo = (repo) => `${projects[repo]}-${generation}`;
+  const door43Repo = (repo) => projects[repo];
   const connectToFake = async (repo) => {
     if (!door43) throw new Error('realSync needs the fake Door43 (door43: true)');
     if (connected.has(repo)) return;
     const project = projects[repo];
-    await door43.addRepo(DOOR43_TEAM, door43Repo(repo));
-    await call('test/connectDoor43', { request: newRequestId(), project, owner: DOOR43_TEAM, name: door43Repo(repo), branch: 'master' });
+    await door43.addRepo(DOOR43_OWNER, door43Repo(repo), true);
+    await call('test/connectDoor43', { request: newRequestId(), project, owner: DOOR43_OWNER, name: door43Repo(repo), branch: 'master' });
     connected.add(repo);
   };
   // A's project on Door43 before a teammate can open it: one sync through the API, signed in
@@ -309,7 +310,6 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
      */
     async load(page, { locale }) {
       await call('test/reset', { request: newRequestId() });
-      generation += 1;
       connected.clear();
       pushed.clear();
       before.clear();
@@ -338,7 +338,7 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
     pushToDoor43: (repo) => (realSync ? connectToFake(repo) : scriptSync(repo, synced())),
     // With `realSync`, the next fetch's connection breaks before anything is received.
     dropNextClone: (repo) => (realSync
-      ? door43.fault({ method: 'GET', path: `/${DOOR43_TEAM}/${door43Repo(repo)}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } })
+      ? door43.fault({ method: 'GET', path: `/${DOOR43_OWNER}/${door43Repo(repo)}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } })
       : scriptSync(repo, { type: 'failed', value: { type: 'beforeIntake', value: { type: 'unreachable' } } })),
     // With `realSync`, two teammates on other computers each change Titus 1:1 and sync.
     teammatesChangeOneVerse: async (repo) => {
@@ -354,7 +354,7 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
           }
           for (const { name, t, text, project } of team) {
             await t.saveVerse(project, 1, 1, text);
-            before.set(name, await door43.branch(DOOR43_TEAM, door43Repo(repo), 'master'));
+            before.set(name, await door43.branch(DOOR43_OWNER, door43Repo(repo), 'master'));
             await t.sync(project);
           }
         } finally {
@@ -372,7 +372,7 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
     loseFromDoor43: (repo, segment) => {
       if (!/^teammate-\d+$/.test(segment)) throw new Error(`${segment} is not a teammate's change of teammatesChangeOneVerse`);
       // With `realSync`, Door43's branch goes back to before that teammate pushed.
-      if (realSync) return door43.branch(DOOR43_TEAM, door43Repo(repo), 'master', before.get(segment));
+      if (realSync) return door43.branch(DOOR43_OWNER, door43Repo(repo), 'master', before.get(segment));
       return scriptSync(repo, synced({ restored: 1 }));
     },
     // With `realSync`, nothing to do: the fake holds no such repository, so the open fails.
@@ -455,7 +455,7 @@ export async function saveTitus(call, project, chapter, verse, words) {
  */
 export async function startTeammate({ tc4, ui, door43, name = 'teammate' }) {
   const password = `${name}-password`;
-  await door43.addUser(name, password, DOOR43_TEAM);
+  await door43.addUser(name, password, DOOR43_OWNER);
   const env = await startRustEnv({
     scenario: 'store', tc4, ui, door43, realSync: true,
     runDir: path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}-${name}`),
@@ -477,7 +477,7 @@ export async function startTeammate({ tc4, ui, door43, name = 'teammate' }) {
     env,
     /** Door43's `repo` of the fake's user, opened as the project `folder`. */
     async join(repo, folder) {
-      const outcome = await ended(await call('door43/open', { request: newRequestId(), repo: `${DOOR43_TEAM}/${repo}`, name: folder }));
+      const outcome = await ended(await call('door43/open', { request: newRequestId(), repo: `${DOOR43_OWNER}/${repo}`, name: folder }));
       return outcome.value.project;
     },
     /** Saves Titus `chapter`:`verse` as `words` over the version this computer shows. */
