@@ -14,9 +14,11 @@ use crate::atomic::{HeldRetry, Removed, SyncDir, atomic_remove_checked};
 use crate::classify::Next;
 use crate::error::StoreError;
 use crate::handle::Resolver;
+use crate::layout::EXTERNAL;
 use crate::ledger::{self, Event, HeldCause, Stat, State};
 use crate::materialize::is_text_path;
 use crate::outside::Examined;
+use crate::vfs::{EntryKind, is_not_found};
 use crate::writer::Writer;
 use serde::{Deserialize, Serialize};
 use tc_journal::fold::DerivedFile;
@@ -160,6 +162,21 @@ pub(crate) fn asks(rel: &str) -> bool {
     )
 }
 
+/// The book file or story a copy in `.tc/external/` was made of, from the name
+/// `copy_external` gives it: `<utc stamp>-<escaped path>`, with `-2`, `-3`, … after a second
+/// copy in the same second.
+fn source_of_copy(name: &str) -> Option<String> {
+    let (_stamp, escaped) = name.split_once('-')?;
+    let unescaped = |s: &str| s.replace("%2F", "/").replace("%25", "%");
+    let whole = unescaped(escaped);
+    if asks(&whole) {
+        return Some(whole);
+    }
+    let (stem, n) = escaped.rsplit_once('-')?;
+    let rel = unescaped(stem);
+    (n.parse::<u16>().is_ok() && asks(&rel)).then_some(rel)
+}
+
 impl Writer {
     /// Every live entry, and one for a held book file or story a manifest of an earlier build
     /// held with no entry (no base).
@@ -180,6 +197,56 @@ impl Writer {
             }
         }
         out
+    }
+
+    /// At an open that found no manifest: every copy in `.tc/external/` of a book file or
+    /// story that no entry names is listed again with no base, since its entry may have been
+    /// in the lost manifest. An open that has the manifest never calls this, so a copy whose
+    /// entry ended by *Import* or *Dismiss* stays unlisted.
+    pub(crate) fn relist_unnamed_copies(&mut self) -> Result<(), StoreError> {
+        let dir = self.folder.path(EXTERNAL);
+        let mut names: Vec<String> = match self.vfs.read_dir(&dir) {
+            Ok(entries) => entries
+                .into_iter()
+                .filter(|e| e.kind == EntryKind::File)
+                .filter_map(|e| e.name.into_string().ok())
+                .collect(),
+            Err(e) if is_not_found(&e) => return Ok(()),
+            Err(e) => return Err(StoreError::io("list", &dir, e)),
+        };
+        names.sort();
+        let named = self.kept_entries();
+        for name in names {
+            let Some(rel) = source_of_copy(&name) else {
+                continue;
+            };
+            let copy = format!("{EXTERNAL}/{name}");
+            let path = self.folder.path(&copy);
+            let bytes = self
+                .vfs
+                .read(&path)
+                .map_err(|e| StoreError::io("read the kept copy", &path, e))?;
+            let md5 = Md5::of(&bytes).to_hex();
+            // A copy of bytes already listed for its file (a hold the open made again).
+            if named
+                .iter()
+                .chain(&self.manifest.kept)
+                .any(|k| k.copy == copy || (k.path == rel && k.md5 == md5))
+            {
+                continue;
+            }
+            self.manifest.kept.push(Kept {
+                path: rel,
+                copy,
+                md5,
+                size: bytes.len() as u64,
+                base: KeptBase::None,
+                why: KeptWhy::Changed,
+                unreadable: None,
+            });
+            self.manifest_changed = true;
+        }
+        Ok(())
     }
 
     /// The bases the live entries of `rel` name: their heads stay in the path's heads file.
@@ -687,5 +754,29 @@ impl crate::project::Project {
                 )),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_of_copy;
+
+    #[test]
+    fn a_copys_name_gives_its_book_file_and_nothing_else() {
+        let tit = Some("ingredients/TIT.usfm".to_owned());
+        assert_eq!(
+            source_of_copy("20261017T000000Z-ingredients%2FTIT.usfm"),
+            tit
+        );
+        assert_eq!(
+            source_of_copy("20261017T000000Z-ingredients%2FTIT.usfm-3"),
+            tit
+        );
+        assert_eq!(source_of_copy("20261017T000000Z-metadata.json-2"), None);
+        assert_eq!(source_of_copy("20261017T000000Z-not-saved-x.tmp"), None);
+        assert_eq!(
+            source_of_copy("20261017T000000Z-ingredients%2FTIT.usfm-x"),
+            None
+        );
     }
 }
