@@ -119,6 +119,8 @@ fn control_router(fake: Arc<FakeDoor43>) -> Router {
         .route("/release", post(release))
         .route("/tokens", post(issue_token))
         .route("/repos", post(add_repo))
+        .route("/users", post(add_user))
+        .route("/branch", post(branch))
         .route("/tokens/{login}", get(tokens_of))
         .route("/secret/{login}/{name}", get(secret))
         .with_state(fake)
@@ -231,6 +233,60 @@ async fn issue_token(State(fake): Fake, body: axum::body::Bytes) -> Response {
     match fake.issue_token(&body.login, &body.name, &scopes) {
         Ok(secret) => axum::Json(json!({ "secret": secret })).into_response(),
         Err(error) => bad(error.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BranchBody {
+    owner: String,
+    name: String,
+    branch: String,
+    /// Moves the branch here when given; the answer is the branch's commit either way.
+    sha: Option<String>,
+}
+
+/// A branch's commit, read or moved (E1a: Door43 loses the newest pushes).
+async fn branch(State(fake): Fake, body: axum::body::Bytes) -> Response {
+    let body: BranchBody = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(error) => return bad(error.to_string()),
+    };
+    if let Some(sha) = &body.sha
+        && let Err(error) = fake.set_branch(&body.owner, &body.name, &body.branch, sha).await
+    {
+        return bad(error.to_string());
+    }
+    match fake.resolve(&body.owner, &body.name, &body.branch).await {
+        Ok(sha) => axum::Json(json!({ "sha": sha })).into_response(),
+        Err(error) => bad(error.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UserBody {
+    login: String,
+    password: String,
+    org: String,
+}
+
+/// A teammate: another user, a member of `org` who may push there (E1a step 6).
+async fn add_user(State(fake): Fake, body: axum::body::Bytes) -> Response {
+    let body: UserBody = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(error) => return bad(error.to_string()),
+    };
+    fake.add_user(tc_door43_fake::FakeUser {
+        email: format!("{}@example.org", body.login),
+        login: body.login.clone(),
+        password: body.password,
+        one_time_code: None,
+    });
+    if fake.add_member(&body.org, &body.login) {
+        axum::Json(json!({})).into_response()
+    } else {
+        bad(format!("no organization {}", body.org))
     }
 }
 

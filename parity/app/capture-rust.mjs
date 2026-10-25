@@ -5,7 +5,7 @@
 //   node parity/app/capture-rust.mjs --unit <A5|B2|...> (--only a,b,... | --all | --case c,d,...)
 //        [--layers pixels,dom,meaning] [--backend store|memory|memory+scripted]
 //        [--tc4 target/debug/tc4] [--ui target/tc-ui-app] [--out parity/app]
-//        [--door43-fake target/debug/tc-door43-fake]
+//        [--door43-fake target/debug/tc-door43-fake] [--real-sync]
 //
 // Needs `tc4` built with `--features test-hooks,fixture-backend` (each scenario's projects are
 // written with `--scenario` into the run's projects folder and opened through the store, the
@@ -21,7 +21,8 @@
 // Rust app reaches another way until its unit's trigger exists has a `rust` route, used only by
 // a capture that claims no pixels (`screenRoute`). `--door43-fake` (by default
 // target/debug/tc-door43-fake when it is there) gives each scenario's tc4 a fake Door43 on
-// loopback to sign in to (A8).
+// loopback to sign in to (A8); with `--real-sync` its syncs and opens from Door43 go to it for
+// real, and the Door43 steps act on it (E1a), instead of ending as `test/script` set them.
 //
 // Writes into `--out`: screens/<name>.png, dom/<name>.json and captures.json, whose entries are
 // merged by name, screens in the order of the screen list and then cases in the order of
@@ -108,11 +109,11 @@ export function caseRoute(c, state) {
   return null;
 }
 
-async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit, layers, backend, masks, door43Fake }) {
+async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit, layers, backend, masks, door43Fake, realSync }) {
   const door43 = door43Fake ? await startDoor43Fake(door43Fake) : undefined;
   let env;
   try {
-    env = await startRustEnv({ scenario, tc4, ui, door43, backend: backend === 'memory' ? 'memory' : 'store' });
+    env = await startRustEnv({ scenario, tc4, ui, door43, realSync, backend: backend === 'memory' ? 'memory' : 'store' });
   } catch (error) {
     await door43?.close();
     throw error;
@@ -194,6 +195,8 @@ async function main() {
   const out = path.resolve(argValue('--out') ?? path.join(REPO, 'parity', 'app'));
   const defaultFake = path.join(REPO, 'target', 'debug', 'tc-door43-fake');
   const door43Fake = argValue('--door43-fake') ?? (fs.existsSync(defaultFake) ? defaultFake : undefined);
+  const realSync = process.argv.includes('--real-sync');
+  if (realSync && !door43Fake) throw new Error('--real-sync needs the fake Door43 (--door43-fake)');
   const unknown = (only ?? []).filter((name) => !SCREEN_LIST.some((s) => s.name === name));
   if (unknown.length) throw new Error(`no such screens: ${unknown.join(', ')}`);
   const unknownCases = (caseNames ?? []).filter((name) => !CASES.some((c) => c.name === name));
@@ -230,7 +233,7 @@ async function main() {
   try {
     for (const scenario of [...new Set(selected.map((s) => s.scenario))]) {
       console.log(`scenario ${scenario}`);
-      const run = await captureScenario(browser, scenario, selected.filter((s) => s.scenario === scenario), { tc4, ui, out, unit, layers, backend, masks, door43Fake });
+      const run = await captureScenario(browser, scenario, selected.filter((s) => s.scenario === scenario), { tc4, ui, out, unit, layers, backend, masks, door43Fake, realSync });
       captured.push(...run.entries);
       projects[scenario] = run.projects;
       build = run.build;
