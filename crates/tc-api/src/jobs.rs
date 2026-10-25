@@ -176,8 +176,8 @@ pub struct SyncResultView {
     pub received: u32,
     /// Who sent them, each person once, named as the conflict review names them (#680).
     pub from: Vec<PersonLabel>,
-    /// Versions a newer one replaced with no question (owner ruling H5), the sum of
-    /// `replaced`'s counts: tC4's "{n} conflicts kept the newest version".
+    /// Records that held two versions and kept the newest with no question (owner ruling H5),
+    /// one per record as tC4 counts them: tC4's "{n} conflicts kept the newest version".
     pub kept_newest: u32,
     /// Open verse conflicts.
     pub verse_conflicts: u32,

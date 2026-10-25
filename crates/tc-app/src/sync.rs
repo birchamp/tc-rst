@@ -87,13 +87,13 @@ pub fn synced_view(
             from.push(label);
         }
     }
-    let replaced = replaced(snapshot, received, &labels);
+    let (replaced, records) = replaced(snapshot, received, &labels);
     SyncResultView {
         received: u32::try_from(received.len()).unwrap_or(u32::MAX),
         from,
-        // tC4's "{n} conflicts kept the newest version": under H5 every version a newer one
-        // replaced with no question.
-        kept_newest: replaced.iter().map(|r| r.count).sum(),
+        // tC4's "{n} conflicts kept the newest version", one per record that held two
+        // versions (tC4 sync.mjs): under H5, each such record a newer version settled.
+        kept_newest: records,
         verse_conflicts: tally.verse,
         alignments: tally.alignments,
         restored,
@@ -109,12 +109,13 @@ fn replaced(
     snapshot: &CountingSnapshot,
     received: &[ChangeId],
     labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
-) -> Vec<tc_api::jobs::ReplacedView> {
+) -> (Vec<tc_api::jobs::ReplacedView>, u32) {
     use tc_api::jobs::ReplacedKind;
     use tc_journal::RecordKey;
     use tc_journal::fold::{AutoRule, Resolved};
     let mut rows: Vec<((DeviceId, DeviceId), tc_api::jobs::ReplacedView)> = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
+    let mut records = 0u32;
     for id in received {
         let Some(body) = snapshot.body(id) else {
             continue;
@@ -154,6 +155,9 @@ fn replaced(
         let Some(by) = labels.get(&winner_device) else {
             continue;
         };
+        if state.heads.len() > 1 {
+            records += 1;
+        }
         for h in state.heads.iter().filter(|h| **h != winner) {
             let Some(loser) = snapshot.body(h).map(|b| b.device) else {
                 continue;
@@ -179,7 +183,7 @@ fn replaced(
             }
         }
     }
-    rows.into_iter().map(|(_, row)| row).collect()
+    (rows.into_iter().map(|(_, row)| row).collect(), records)
 }
 
 /// tC4's `missingPinsAfterSync`: 0 when the pins cannot be read.
