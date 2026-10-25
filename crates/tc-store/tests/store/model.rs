@@ -652,6 +652,17 @@ impl Run {
         }
     }
 
+    fn in_lost_copy(&self, fs: &FaultFs, save: &Save) -> bool {
+        self.handle.as_ref().is_some_and(|handle| {
+            handle.kept_copies().into_iter().any(|kept| {
+                kept.why == tc_store::KeptWhy::Lost
+                    && fs
+                        .peek(&self.path(&kept.copy))
+                        .is_some_and(|b| contains(&b, &save.text))
+            })
+        })
+    }
+
     fn save_in_notified_copy(&self, save: &Save) -> bool {
         let source = match save.target {
             Target::Verse(_) => USFM,
@@ -1807,6 +1818,11 @@ impl Run {
                 continue;
             }
             if save.fate == Fate::InMemory && !settled {
+                continue;
+            }
+            // Work the journal lost that a file the app wrote still shows: it is kept in a copy
+            // listed with *Bring it back* until the person answers (H22 part 1, row N4).
+            if self.in_lost_copy(&fs, save) {
                 continue;
             }
             lost.push(format!(

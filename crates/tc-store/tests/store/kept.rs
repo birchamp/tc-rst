@@ -407,7 +407,8 @@ fn a_second_save_of_a_held_file_keeps_the_first_copy_listed() {
     handle.close().unwrap();
 }
 
-/// Line ends and blanks at line ends only: nothing is asked, and the file is written again.
+/// Line ends and blanks at line ends only: nothing is asked, the file is written again, a copy
+/// is kept and the whitespace notice is shown.
 #[test]
 fn a_line_ends_only_change_asks_nothing() {
     let (rig, folder, written) = saved_and_closed();
@@ -419,6 +420,21 @@ fn a_line_ends_only_change_asks_nothing() {
     assert!(waiting(&handle).is_empty());
     assert!(handle.kept_copies().is_empty());
     assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(written));
+    // H22 part 4: a copy is kept, and the notice is shown.
+    let copies: Vec<Vec<u8>> = files(&rig.fs, &folder)
+        .into_iter()
+        .filter(|(p, _)| p.starts_with(".tc/external/"))
+        .map(|(_, b)| b)
+        .collect();
+    assert_eq!(copies, vec![crlf.clone().into_bytes()]);
+    assert!(
+        handle
+            .notices()
+            .iter()
+            .any(|n| matches!(n.notice, Notice::WhitespaceOnlyEdit { .. })),
+        "{:?}",
+        handle.notices()
+    );
     handle.close().unwrap();
 }
 
@@ -1129,4 +1145,121 @@ proptest! {
     ) {
         run_ops(&ops);
     }
+}
+
+/// H22 part 1, row N4: a save the journal lost (its pending file deleted before a crash) that
+/// the book file the app wrote still shows. The text is kept in a copy listed with
+/// `why: lost`; nothing is asked and nothing comes back on its own; the file is written from
+/// the project. *Bring it back* (the copy's *Import*) restores the save, and the entry ends.
+#[test]
+fn a_lost_work_copy_offers_bring_it_back() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved before the file was deleted").unwrap();
+    leave(&handle);
+    let pending = pending_files(&rig.fs, &folder);
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    rig.fs.delete(&folder.join(&pending[0])).unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    let kept = handle.kept_copies();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert_eq!(kept[0].why, tc_store::KeptWhy::Lost);
+    assert!(matches!(kept[0].base, KeptBase::Placed(_)), "{kept:?}");
+    let copy = rig.fs.peek(&folder.join(&kept[0].copy)).unwrap();
+    assert!(String::from_utf8_lossy(&copy).contains("saved before the file was deleted"));
+    assert!(waiting(&handle).is_empty(), "nothing is asked");
+    assert_ne!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was deleted"),
+        "nothing comes back on its own"
+    );
+    let file = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
+    assert!(
+        !file.contains("saved before the file was deleted"),
+        "written from the project"
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+
+    let handle = open(&rig, &folder);
+    assert_eq!(handle.kept_copies(), kept, "listed again after a reopen");
+    let report = handle.import_kept(&kept[0].copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was deleted")
+    );
+    assert!(handle.kept_copies().is_empty());
+    let file = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
+    assert!(file.contains("saved before the file was deleted"), "{file}");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// H22 part 4: a project opened read-only (here a full disk) keeps no copy, asks nothing and
+/// writes nothing; it shows a notice that names the changed book file. Opened normally, the
+/// book is asked about.
+#[test]
+fn a_read_only_open_asks_nothing_and_shows_a_notice() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let before = files(&rig.fs, &folder);
+    rig.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+    let handle = open(&rig, &folder);
+    assert!(
+        matches!(handle.facts().mode, tc_store::Mode::ReadOnly(_)),
+        "{:?}",
+        handle.facts().mode
+    );
+    assert!(waiting(&handle).is_empty());
+    assert!(handle.kept_copies().is_empty());
+    let told: Vec<String> = handle
+        .notices()
+        .into_iter()
+        .filter_map(|n| match n.notice {
+            Notice::ChangedWhileReadOnly { path } => Some(path.as_str().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(told, vec![USFM.to_owned()], "{:?}", handle.notices());
+    handle.close().unwrap();
+    assert_eq!(files(&rig.fs, &folder), before, "nothing was written");
+    rig.fs.fail_writes(None);
+    let handle = open(&rig, &folder);
+    assert_eq!(waiting(&handle), vec![USFM.to_owned()]);
+    handle.close().unwrap();
+}
+
+/// H22 part 4: with a full disk the copy cannot be made, so a changed book file is left exactly
+/// as it is and nothing is listed; once there is space, the next look keeps and asks.
+#[test]
+fn a_full_disk_leaves_a_changed_book_file_as_it_is_until_the_copy_can_be_made() {
+    let (rig, folder, written) = saved_and_closed();
+    let handle = open(&rig, &folder);
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    rig.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+    let _ = handle.focus().wait();
+    handle.wait_idle();
+    assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(edited.clone()));
+    assert!(
+        handle.kept_copies().is_empty(),
+        "{:?}",
+        handle.kept_copies()
+    );
+    assert_eq!(words(&handle, 1, 2).as_deref(), Some("in hope"));
+    rig.fs.fail_writes(None);
+    handle.close().unwrap();
+    assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(edited.clone()));
+    let handle = open(&rig, &folder);
+    let books = handle.waiting_books();
+    assert_eq!(books.len(), 1, "{books:?}");
+    assert_copy(&rig, &folder, &books[0].kept, &edited);
+    assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(edited));
+    handle.close().unwrap();
 }

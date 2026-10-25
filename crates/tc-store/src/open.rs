@@ -686,6 +686,9 @@ fn open_inner(
         }
     } else {
         writer.renew_hold_notices();
+        if !manifest_lost {
+            writer.notice_changed_while_read_only();
+        }
     }
     writer.publish_kept();
     // A project that cannot be written holds no lock: it writes nothing, so there is

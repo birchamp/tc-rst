@@ -1115,27 +1115,53 @@ fn recorded_edits_of_titus(handle: &ProjectHandle) -> Vec<(u32, bool, Option<Str
 
 /// §6.2: the book file is the only copy of a save whose pending file lost it. The open must not
 /// take it for the app's own stale bytes: its heads file names the save, which the fold no longer
-/// holds, so it is recorded as an outside edit (a copy kept, the person told), and the save is a
-/// version of its verse again. The base is what the fold holds of the heads the file stood for,
-/// so a version the project holds and the file does not show is in conflict with the save, never
-/// replaced by it.
+/// holds, so a copy is kept with `why: lost` and nothing comes back on its own (H22 part 1).
+/// *Bring it back* imports the copy, and the save is a version of its verse again. The base is
+/// what the fold holds of the heads the file stood for, so a version the project holds and the
+/// file does not show is in conflict with the save, never replaced by it.
 fn assert_the_book_file_gave_the_save_back(
     rig: &Rig,
     folder: &Path,
     handle: &ProjectHandle,
     text: &str,
 ) {
+    handle.wait_idle();
+    let lost: Vec<tc_store::Kept> = handle
+        .kept_copies()
+        .into_iter()
+        .filter(|k| k.why == tc_store::KeptWhy::Lost)
+        .collect();
+    assert_eq!(
+        lost.len(),
+        1,
+        "{:?} {:?}",
+        handle.kept_copies(),
+        notices(handle)
+    );
+    let kept = rig
+        .fs
+        .peek(&folder.join(&lost[0].copy))
+        .expect("the copy is there");
+    assert!(String::from_utf8_lossy(&kept).contains(text));
+    assert!(
+        recorded_edits_of_titus(handle).is_empty(),
+        "nothing comes back on its own: {:?}",
+        notices(handle)
+    );
+    // *Bring it back* (H22 part 1): the normal import of the copy.
+    handle.import_kept(&lost[0].copy).wait().unwrap();
+    handle.wait_idle();
     assert!(
         a_version_holds(handle, 1, 1, text),
         "the save is lost: {:?}, {:?}",
         words(handle, 1, 1),
         notices(handle)
     );
-    let told = recorded_edits_of_titus(handle);
-    assert_eq!(told.len(), 1, "{:?}", notices(handle));
-    let copy = told[0].2.clone().expect("the notice keeps the copy");
-    let kept = rig.fs.peek(&folder.join(&copy)).expect("the copy is there");
-    assert!(String::from_utf8_lossy(&kept).contains(text));
+    assert!(
+        handle.kept_copies().is_empty(),
+        "{:?}",
+        handle.kept_copies()
+    );
 }
 
 fn verse_text_conflicts(handle: &ProjectHandle) -> usize {
@@ -1150,7 +1176,8 @@ fn verse_text_conflicts(handle: &ProjectHandle) -> usize {
 /// §6.2, §5.11 K1: a pending file the open read, cut short in place by another program, so that
 /// the save it held is in neither the file nor the fold's bytes. The seal leaves it unsealed and
 /// the close goes through; the next open finds the book file showing the save, which no journal
-/// file holds any more, and records it instead of writing the book over without it.
+/// file holds any more, and keeps a copy to bring back instead of writing the book over
+/// without it.
 #[test]
 fn a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_next_open() {
     let (rig, folder) = titus();
@@ -1190,7 +1217,8 @@ fn a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_
 
 /// §6.2: a save is written to the book file, another program deletes its pending file, and the
 /// process is killed before any seal. The next open finds the book file showing a save no journal
-/// file holds, and records it instead of writing the book over without it.
+/// file holds, and keeps a copy to bring back instead of writing the book over without
+/// it.
 #[test]
 fn a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded() {
     let (rig, folder) = titus();
@@ -1339,7 +1367,7 @@ fn metadata_json_holding_a_project_detail_whose_pending_file_was_deleted_is_reco
 
 /// The same loss, and the book file cannot be read when the open classifies it (a program holds
 /// it): the compare-and-swap that reads it later asks what the open would have asked, and
-/// records it instead of writing the book over without the save.
+/// keeps a copy to bring back instead of writing the book over without the save.
 #[test]
 fn a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap() {
     let (rig, folder) = titus();
@@ -1366,10 +1394,10 @@ fn a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap
     );
     rig.fs.set_unreadable(&usfm, false);
     let started = std::time::Instant::now();
-    while recorded_edits_of_titus(&handle).is_empty() {
+    while handle.kept_copies().is_empty() {
         assert!(
             started.elapsed() < Duration::from_secs(20),
-            "the writer's retry never recorded the book file: {:?} {:?}",
+            "the writer's retry never kept the book file: {:?} {:?}",
             words(&handle, 1, 1),
             notices(&handle)
         );

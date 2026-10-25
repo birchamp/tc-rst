@@ -21,7 +21,7 @@ use crate::outside::Examined;
 use crate::vfs::{EntryKind, is_not_found};
 use crate::writer::Writer;
 use serde::{Deserialize, Serialize};
-use tc_journal::fold::DerivedFile;
+use tc_journal::fold::{DerivedFile, Notice};
 use tc_journal::outside::{Base as PlanBase, OutsideFile, OutsidePlan};
 use tc_journal::{BookId, Md5, RepoPath};
 
@@ -105,6 +105,9 @@ impl KeptBase {
 pub enum KeptWhy {
     /// Another program changed the file.
     Changed,
+    /// The app's own bytes show work the journal lost (row N4, H22 part 1): *Bring it back*
+    /// (an *Import* of the copy) and *Dismiss*.
+    Lost,
 }
 
 /// One kept copy that still has a notice (`.tc/materialized.json` `kept`, delta §2.3).
@@ -437,6 +440,68 @@ impl Writer {
         self.shared.remove_notices_of(rel);
         self.hold_notice(rel, HeldCause::Edit, copy);
         Ok(Next::Held)
+    }
+
+    /// *Keep and write, lost* (delta §2.4, row N4) for a book file or story the app wrote that
+    /// shows work the journal lost: the copy, then its `kept` entry with `why: lost` and the
+    /// R4 base in one manifest write; then the file is written from the project. Nothing comes
+    /// back until the person chooses *Bring it back* (H22 part 1).
+    pub(crate) fn keep_lost(
+        &mut self,
+        rel: &str,
+        bytes: &[u8],
+        base: &ledger::Base,
+    ) -> Result<Next, StoreError> {
+        let copy = self.copy_external(rel, bytes)?;
+        let md5 = Md5::of(bytes).to_hex();
+        if !self
+            .manifest
+            .kept
+            .iter()
+            .any(|k| k.path == rel && k.md5 == md5)
+        {
+            self.manifest.kept.push(Kept {
+                path: rel.to_owned(),
+                copy,
+                md5,
+                size: bytes.len() as u64,
+                base: KeptBase::of(base, None),
+                why: KeptWhy::Lost,
+                unreadable: None,
+            });
+        }
+        self.manifest_changed = true;
+        self.write_manifest()?;
+        Ok(Next::Write)
+    }
+
+    /// At a read-only open, which keeps no copy and asks nothing: a notice for each book file
+    /// or story whose bytes are not the ones the app placed (H22 part 4).
+    pub(crate) fn notice_changed_while_read_only(&self) {
+        for (rel, entry) in &self.manifest.paths {
+            let Some(placed) = entry.placement() else {
+                continue;
+            };
+            let Ok(path) = RepoPath::parse(rel) else {
+                continue;
+            };
+            if !asks(rel) {
+                continue;
+            }
+            let file = self.folder.path(rel);
+            let same_stat = self.vfs.metadata(&file).is_ok_and(|m| {
+                placed.settled && m.len == placed.size && Some(m.mtime_ns) == placed.mtime_ns
+            });
+            if same_stat {
+                continue;
+            }
+            match self.vfs.read(&file) {
+                Ok(bytes) if Md5::of(&bytes).to_hex() != placed.md5 => {
+                    self.notice(Notice::ChangedWhileReadOnly { path }, None);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// The examination's state for the recording that a held file never gets.

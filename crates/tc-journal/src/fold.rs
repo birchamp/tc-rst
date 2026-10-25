@@ -719,6 +719,12 @@ pub enum Notice {
     ImportUnfinished {
         source: Box<str>,
     },
+    /// A book file or story changed outside the app while the project is open read-only:
+    /// nothing is kept and nothing is asked ("Titus was changed outside translationCore. Open
+    /// the project normally to import it.", delta §2.11, H22 part 4).
+    ChangedWhileReadOnly {
+        path: RepoPath,
+    },
 }
 
 #[cfg(test)]

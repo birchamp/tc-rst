@@ -299,12 +299,16 @@ impl Writer {
                     }
                     Next::Converged
                 }
-                Action::Record(base) => {
-                    if let Some(bytes) = bytes {
+                Action::Record(base) => match bytes {
+                    // R4 for a book file or story: the work comes back only by *Bring it
+                    // back* (H22 part 1).
+                    Some(bytes) if crate::kept::asks(rel) => self.keep_lost(rel, bytes, &base)?,
+                    Some(bytes) => {
                         self.found_outside(rel, bytes, base)?;
+                        Next::Recorded
                     }
-                    Next::Recorded
-                }
+                    None => Next::Recorded,
+                },
                 Action::Keep(base) => match bytes {
                     Some(bytes) if crate::kept::asks(rel) => {
                         self.keep_and_hold(rel, bytes, base)?
