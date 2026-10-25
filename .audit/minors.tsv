@@ -199,3 +199,6 @@ I	Add a book answers addBook.usfmExists ("use Import"), which points nowhere whi
 G3	Every build leg gets id-token: write, not only the Windows leg that signs	.github/workflows/release.yml
 G3	The installed-manifest smoke step compares the commit and the file count, not each file's hash	scripts/release/smoke.mjs
 G3	Branch-run artifacts hold help-desk.key for 14 days in a public repository; stage it only on default-branch runs	scripts/release/stage.sh
+G3	The publish guard checks installer names for -unsigned, not the Authenticode signature	release.yml publish
+G3	from_export (a burrito zip from a USB drive) has no Finder-litter filter; aquifer.rs and dcs.rs each carry their own copy of the rule	crates/tc-resources/src
+G3	Nothing tests the publish guard's refusal	release.yml publish

@@ -67,7 +67,10 @@ What must be set up once in the GitHub repository, by someone with admin rights 
 
 - An environment named **`windows-signing`**, with deployment rules (*Selected branches and
   tags*) that allow only the default branch and tags matching `v*`. tC4 allows its `release/*`
-  branches the same way.
+  branches the same way. Give the environment a **required reviewer** (the person who cuts
+  releases), so no tag pushed from an unreviewed commit is signed without their yes.
+- A tag ruleset (Settings, Rules, Rulesets, *Tag*) for `v*` that only release managers may
+  create, update or delete.
 - Five repository variables (Settings, Secrets and variables, Actions, **Variables**; they are not
   secret): `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE`,
   `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` — the same values tC4's repository uses.
