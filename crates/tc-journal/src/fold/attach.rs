@@ -1072,6 +1072,8 @@ impl FoldState {
             for c in moves.iter().filter(|c| self.meta(**c).active()) {
                 if let RecordKey::Check(from) = &self.entry(self.meta(*c).key).key
                     && from != check
+                    // Only while the move is still in force: else its versions are its own.
+                    && follow_moves(self, from) == *check
                     && seen.insert(from.clone())
                 {
                     queue.push(from.clone());

@@ -208,6 +208,12 @@ fn loss_conflict_copy_edit_kept() {
         .into_iter()
         .find(|p| p.path != SONG)
         .expect("a copy of the other version");
+    // A checkpoint commits the copy under the name it has now.
+    handle
+        .checkpoint(CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    handle.wait_idle();
     let edited = b"the copy, trimmed by hand".to_vec();
     arrive(&rig, &handle, &folder, &copy.path, &edited);
     let fold = handle.snapshot().fold().clone();
@@ -241,6 +247,26 @@ fn loss_conflict_copy_edit_kept() {
         .expect("the edit is placed");
     assert_eq!(rig.fs.peek(&folder.join(&now.path)), Some(edited));
     assert_valid_burrito(&rig.fs, &folder);
+    // The commit holds the files where they are placed now, and no copy at a name the app
+    // gave out earlier and no longer places (H5).
+    handle
+        .checkpoint(CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    handle.wait_idle();
+    let repo = repo_of(&rig.fs, &folder);
+    let head = commits_of(&repo)[0];
+    let committed: Vec<String> = commit_files(&repo, head)
+        .into_keys()
+        .filter(|p| p.starts_with("ingredients/audio/"))
+        .collect();
+    let mut placed: Vec<String> = placements(&handle).into_iter().map(|p| p.path).collect();
+    placed.sort();
+    assert_eq!(
+        committed, placed,
+        "the copy's earlier name {} is not committed",
+        copy.path
+    );
     handle.close().unwrap();
 }
 

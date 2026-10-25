@@ -9,9 +9,7 @@ mod support;
 use support::*;
 use tc_journal::change::ExternalSource;
 use tc_journal::command::OutsideKeep;
-use tc_journal::fold::{
-    AutoRule, ConflictKind, DerivedFile, FoldInput, FoldState, ProjectKind, Resolved,
-};
+use tc_journal::fold::{ConflictKind, DerivedFile, FoldInput, FoldState, ProjectKind};
 use tc_journal::outside::{Base, OutsideFile, OutsidePlan, base_records, decode_file};
 use tc_journal::record::VerseValue;
 use tc_journal::{Cause, Change, Md5, Record, RepoPath};
@@ -399,7 +397,7 @@ fn a_book_file_of_an_absent_book_adds_the_book() {
 }
 
 #[test]
-fn an_outside_comment_edit_with_no_known_base_never_wins_and_stays_in_history() {
+fn an_outside_comment_edit_with_no_known_base_is_asked_never_dropped() {
     let mut world = World::new(&[3]);
     let note = world
         .dev
@@ -434,17 +432,12 @@ fn an_outside_comment_edit_with_no_known_base_never_wins_and_stays_in_history() 
     let written = outside.apply(plan.changes);
     all.extend(written.clone());
     let after = fold(&all);
-    // Ruling H5: the newest wins, but a version from outside with no known base ranks
-    // below every other (F7), so the app's own note stays shown; the other is in History.
+    // A version from outside with no known base never wins by itself (F7), and the person's
+    // edit in the file is never dropped unasked: it stays a conflict for the outside edit's
+    // review, with the app's note shown meanwhile and the edit in History.
     let key = note.body().record.key();
-    assert_eq!(after.conflict_count(), 0);
-    assert_eq!(
-        after.key_state(&key).map(|k| k.state),
-        Some(Resolved::SettledByRule {
-            head: note.id(),
-            rule: AutoRule::Newest
-        })
-    );
+    assert_eq!(after.conflict_count(), 1);
+    assert_eq!(after.projected(&key), Some(note.body().record.clone()));
     assert!(after.history(&key).contains(&written[0].id()));
 }
 

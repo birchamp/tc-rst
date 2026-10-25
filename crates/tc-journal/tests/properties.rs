@@ -301,6 +301,22 @@ fn restore_race(state: &FoldState, key: &RecordKey) -> bool {
     how(PresentHow::RestoredText) && how(PresentHow::StartedEmpty)
 }
 
+/// A head recorded from outside without a known base meets another head: the outside edit's
+/// review decides, so the record stays a conflict.
+fn outside_without_base(state: &FoldState, key: &RecordKey) -> bool {
+    let unknown = |h: &ChangeId| {
+        matches!(
+            body_of(state, h).map(|b| b.cause),
+            Some(Cause::External {
+                unknown_base: true,
+                ..
+            })
+        )
+    };
+    let heads = state.heads(key);
+    heads.iter().any(unknown) && !heads.iter().all(unknown)
+}
+
 /// The census name of a record settled by the newest-wins rule: the kind it would have
 /// been listed as before ruling H5.
 fn newest_name(state: &FoldState, key: &RecordKey) -> &'static str {
@@ -498,7 +514,26 @@ fn newest_wins_converges() {
         let first = folds[0];
         for key in first.record_keys().into_iter().filter(newest_kind) {
             let heads = first.heads(&key);
-            let newest = heads
+            // A move wins at a check's old place over any decision (H5, so it is shown once).
+            let moves: Vec<ChangeId> = heads
+                .iter()
+                .copied()
+                .filter(|h| {
+                    matches!(
+                        body_of(first, h).map(|b| b.record),
+                        Some(Record::Check {
+                            value: CheckValue::MovedTo { .. },
+                            ..
+                        })
+                    )
+                })
+                .collect();
+            let candidates = if moves.is_empty() {
+                heads.clone()
+            } else {
+                moves
+            };
+            let newest = candidates
                 .iter()
                 .copied()
                 .max_by_key(|h| newest_order(first, h))
@@ -641,7 +676,8 @@ fn only_text_conflicts() {
                         | ConflictKind::StoryRef
                         | ConflictKind::Unknown
                 ) || (conflict.kind == ConflictKind::BookPresence
-                    && restore_race(view.state, &conflict.key)),
+                    && restore_race(view.state, &conflict.key))
+                    || outside_without_base(view.state, &conflict.key),
                 "{:?} listed at {:?}",
                 conflict.kind,
                 conflict.key

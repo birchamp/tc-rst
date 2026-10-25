@@ -460,7 +460,16 @@ impl Writer {
         {
             return true;
         }
-        // A carried file the project has a record of, or the other version of one.
+        // A carried file the app placed there (a kept copy no longer placed included, H5), a
+        // carried file the project has a record of, or the other version of one.
+        if self
+            .manifest
+            .paths
+            .get(path)
+            .is_some_and(|e| e.oid.is_some())
+        {
+            return true;
+        }
         let original = conflict_original(path);
         [Some(path.to_owned()), original]
             .into_iter()
@@ -667,10 +676,13 @@ impl Writer {
             }
         }
 
-        // Foreign entries stay as they are (§9.4).
+        // Foreign entries stay as they are (§9.4). An entry whose bytes are a version the
+        // project records is a copy the app placed under a name it no longer gives (H5's kept
+        // copies move when a version becomes the newest); the version stays in History.
+        let versions: BTreeSet<GitOid> = self.fold.carried_versions().into_iter().collect();
         let mut moved: Vec<(String, String)> = Vec::new();
         for (path, entry) in &head_entries {
-            if desired.contains_key(path) || self.app_owned(path) {
+            if desired.contains_key(path) || self.app_owned(path) || versions.contains(&entry.oid) {
                 continue;
             }
             let ingredient_like = path.starts_with("ingredients/")

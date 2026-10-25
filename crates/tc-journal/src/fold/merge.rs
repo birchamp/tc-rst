@@ -301,12 +301,31 @@ fn conflict(
     unreadable: bool,
 ) -> (Local, SmallVec<[BatchIdx; 1]>) {
     let provisional = provisional(state, heads);
-    if newest_wins(key)
-        || (matches!(key, RecordKey::BookPresence(_)) && !restore_race(state, heads))
+    // An outside edit recorded without a known base (every comment edited in a file, §11.1)
+    // never wins by itself, and the person's own edit is never dropped unasked: the outside
+    // edit's review (*Accept all from the file*) decides, so it stays a conflict.
+    let ranks: BTreeSet<u8> = heads.iter().map(|h| state.meta(*h).rank()).collect();
+    let outside_without_base = ranks.len() > 1;
+    if !outside_without_base
+        && (newest_wins(key)
+            || (matches!(key, RecordKey::BookPresence(_)) && !restore_race(state, heads)))
     {
+        // A check that moved holds no decision at its old place: a move there wins over a
+        // decision, newer or not, so the decision a teammate saved meanwhile is listed in the
+        // History of the check it moved to (moved_into) and never shown as a second copy.
+        let moves: Vec<ChangeIdx> = heads
+            .iter()
+            .copied()
+            .filter(|h| matches!(state.shape(*h), Shape::MovedTo { .. }))
+            .collect();
+        let head = if matches!(key, RecordKey::Check(_)) && !moves.is_empty() {
+            self::provisional(state, &moves)
+        } else {
+            provisional
+        };
         return (
             Local::ByRule {
-                head: provisional,
+                head,
                 rule: super::AutoRule::Newest,
                 unreadable,
             },

@@ -1017,9 +1017,9 @@ fn carry_over() -> (Vec<Change>, tc_journal::CheckKey, tc_journal::CheckKey) {
     (all_of(&[&[base], &upgrade, &[offline]]), old, new)
 }
 
-/// L35, ruling H5: a carry-over against an offline check is settled by the newest, and
-/// Pedro's verdict is in the History of the check it moved to, where Restore brings it
-/// back.
+/// L35, ruling H5: a carry-over against an offline check needs no question. The move wins at
+/// the old place, newer or not, so the check is never shown twice, and Pedro's verdict is in
+/// the History of the check it moved to, where Restore brings it back.
 #[test]
 fn loss_carryover_move_vs_offline_check() {
     let (mut all, old, new) = carry_over();
@@ -1028,9 +1028,76 @@ fn loss_carryover_move_vs_offline_check() {
     all.extend(imported_book(&mut maria, &[3]));
     let state = assert_converges(&all);
     assert_eq!(state.conflict_count(), 0);
-    the_newest(&state, &RecordKey::Check(old.clone()));
+    assert!(matches!(
+        state.projected(&RecordKey::Check(old.clone())),
+        Some(Record::Check {
+            value: CheckValue::MovedTo { .. },
+            ..
+        })
+    ));
     assert_eq!(state.moved_into(&new), vec![old]);
     assert!(state.history(&RecordKey::Check(new)).contains(&offline));
+}
+
+/// H5, the race the storage review found: a decision saved at a check's old place after the
+/// move still loses there to the move, so the moved check is shown once, and the decision is
+/// in its History.
+#[test]
+fn a_decision_newer_than_a_move_is_listed_with_the_moved_check() {
+    let mut ana = Dev::new(1);
+    let mut pedro = Dev::new(2);
+    let book = imported_book(&mut ana, &[3]);
+    let old = check_key("abcd", 1, 1);
+    let new = check_key("efgh", 1, 1);
+    let base = ana.one(
+        check(&old, decision(Some(UserStatus::Valid), true, None)),
+        vec![],
+    );
+    let upgrade = ana.batch(
+        vec![
+            (moved(&old, &new), vec![base.id()]),
+            (
+                check(&new, decision(Some(UserStatus::Valid), true, None)),
+                vec![],
+            ),
+        ],
+        Cause::Edit,
+    );
+    pedro.at = ana.at + 3_600_000;
+    let later = pedro.one(
+        check(
+            &old,
+            decision(Some(UserStatus::Invalid), true, Some("Pedro's")),
+        ),
+        vec![base.id()],
+    );
+    let state = assert_converges(&all_of(&[
+        &book,
+        &[base],
+        &upgrade,
+        std::slice::from_ref(&later),
+    ]));
+    assert_eq!(state.conflict_count(), 0);
+    assert!(matches!(
+        state.projected(&RecordKey::Check(old.clone())),
+        Some(Record::Check {
+            value: CheckValue::MovedTo { .. },
+            ..
+        })
+    ));
+    assert!(
+        state
+            .history(&RecordKey::Check(new.clone()))
+            .contains(&later.id())
+    );
+    let file = DerivedFile::Decisions(ToolId::TranslationNotes, BOOK);
+    let decoded = decode_decisions(
+        ToolId::TranslationNotes,
+        Some(BOOK),
+        &state.render(&file).expect("decisions"),
+    )
+    .expect("decodes");
+    assert_eq!(decoded.len(), 1, "the check is shown once: {decoded:?}");
 }
 
 /// L36: a re-key moves the whole decision, comment and bookmark included, and a comment
@@ -2446,7 +2513,14 @@ fn loss_carryover_two_offline_editors() {
         let (all, state, new) = carry_over_two_editors(pedros, juans);
         assert_eq!(state.conflict_count(), 0);
         let old = check_key("abcd", 1, 1);
-        the_newest(&state, &RecordKey::Check(old.clone()));
+        // The move wins at the old place, newer or not (H5).
+        assert!(matches!(
+            state.projected(&RecordKey::Check(old.clone())),
+            Some(Record::Check {
+                value: CheckValue::MovedTo { .. },
+                ..
+            })
+        ));
         assert_eq!(state.moved_into(&new), vec![old.clone()]);
         let history = state.history(&RecordKey::Check(new));
         for change in all
