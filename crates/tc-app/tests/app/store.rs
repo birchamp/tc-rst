@@ -946,7 +946,15 @@ mod outside {
         let (_dir, t, at) = opened(&world).await;
         let outside = hello_outside(&t, &at).await;
         world.fs.fail_writes(None);
-        assert_eq!(outside, OutsideEdits::default());
+        // Asked nothing and kept nowhere, but listed, so the toolbar's way into the review
+        // shows and the notice is on a screen.
+        assert_eq!(
+            outside,
+            OutsideEdits {
+                read_only_changed: vec![TIT.to_owned()],
+                ..OutsideEdits::default()
+            }
+        );
         let review = post(
             &t.app,
             &tc_api::conflicts::List {

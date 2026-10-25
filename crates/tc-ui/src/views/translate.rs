@@ -1333,10 +1333,9 @@ pub(super) fn review_entry_button(
     let sessions = s.server.sessions.clone();
     let entry = Memo::new(move |_| {
         let kept = sessions.with(|sessions| {
-            sessions
-                .iter()
-                .find(|s| s.at == at)
-                .map_or(0, |s| s.outside.kept.len())
+            sessions.iter().find(|s| s.at == at).map_or(0, |s| {
+                s.outside.kept.len() + s.outside.read_only_changed.len()
+            })
         });
         crate::app::outside::review_entry(conflicts.get(), kept)
     });

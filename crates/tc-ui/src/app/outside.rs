@@ -153,7 +153,8 @@ pub fn with_kept(tabs: &[TabCount], kept: usize) -> Vec<TabCount> {
 
 /// The toolbar's way into the conflict review (INV-A-KEPT-COPY-STAYS-ON-A-SCREEN): tC4's button
 /// counts the open verse conflicts; here it counts the kept copies too, so a copy left by *Not
-/// now* stays one click away. It opens at the conflicts, else at the notices that list the
+/// now* stays one click away, and the books a read-only open found changed, whose notice is
+/// the only place it says so. It opens at the conflicts, else at the notices that list the
 /// copies. `None` when there is neither.
 pub fn review_entry(conflicts: u32, kept: usize) -> Option<(u32, ReviewTab)> {
     let kept = u32::try_from(kept).unwrap_or(u32::MAX);

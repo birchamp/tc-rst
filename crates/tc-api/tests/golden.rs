@@ -1745,6 +1745,8 @@ fn outside_edits() -> tc_api::session::OutsideEdits {
                 why: KeptWhy::Lost,
             },
         ],
+        // A read-only open asks nothing, so no example holds both.
+        read_only_changed: Vec::new(),
     }
 }
 

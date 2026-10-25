@@ -5,6 +5,8 @@
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/community-checking.test.mjs
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { newRequestId } from '../env-rust.mjs';
 import { browserTest, recordRequests, until, withApp } from './kit.mjs';
 
@@ -43,8 +45,10 @@ const printedText = (page) => page.locator('[data-testid="cc-flow"]').evaluateAl
 const chip = (page, group, name) => page.getByRole('group', { name: group }).getByRole('button', { name, exact: true });
 
 browserTest('cc_titus_prints_its_drafted_chapter_and_reading_it_writes_nothing', async () => {
-  await withApp(async ({ page }) => {
+  await withApp(async ({ page, env }) => {
     await openTitusCheck(page);
+    const commits = () => Number(execFileSync('git', ['-C', path.join(env.projectsDir, BIBLE), 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).trim());
+    const before = commits();
     const requests = recordRequests(page);
     const mark = requests.mark();
     await page.getByTestId('open-community-checking').click();
@@ -59,7 +63,10 @@ browserTest('cc_titus_prints_its_drafted_chapter_and_reading_it_writes_nothing',
     assert.equal(await page.locator('[data-testid="cc-chapter"] .print-verse-number').count(), 16);
     assert.ok((await printedText(page)).startsWith('Pablo, siervo de Dios'));
     assert.equal(await page.getByText('Incomplete draft.').count(), 1, 'the notice explains the undrafted lines');
-    assert.deepEqual([...new Set(requests.api(mark))], ['/api/v1/export/book'], 'the preview reads its print and writes nothing');
+    // Opening the preview is a mode switch, which tC4 checkpoints too (state.jsx MODE_NAME.publish,
+    // D1's session/leave); with nothing pending it commits nothing.
+    assert.deepEqual([...new Set(requests.api(mark))].filter((p) => p !== '/api/v1/session/leave'), ['/api/v1/export/book'], 'the preview reads its print');
+    assert.equal(commits(), before, 'and writes nothing');
   });
 });
 

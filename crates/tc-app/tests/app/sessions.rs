@@ -868,6 +868,7 @@ async fn lost_work_kept_at_a_look_reaches_the_pages_without_a_reload() {
             copy: ".tc/external/20261025T120000Z-ingredients%2FTIT.usfm".into(),
             why: KeptWhy::Lost,
         }],
+        read_only_changed: Vec::new(),
     };
     let written = tc_app::backend::StoreEvent::Materialized {
         paths: vec!["ingredients/TIT.usfm".into()],

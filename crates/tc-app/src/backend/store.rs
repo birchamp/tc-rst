@@ -1406,6 +1406,7 @@ fn other(error: tc_store::StoreError) -> StoreError {
 pub fn outside_edits(
     waiting: Vec<tc_store::WaitingBook>,
     kept: Vec<tc_store::Kept>,
+    notices: &[StoreNotice],
 ) -> tc_api::session::OutsideEdits {
     use tc_api::session::{KeptCopy, OutsideEdits, WaitingBook};
     use tc_journal::fold::DerivedFile;
@@ -1430,6 +1431,15 @@ pub fn outside_edits(
                 file: k.path,
                 copy: k.copy,
                 why: kept_why(k.why),
+            })
+            .collect(),
+        read_only_changed: notices
+            .iter()
+            .filter_map(|n| match &n.notice {
+                tc_journal::fold::Notice::ChangedWhileReadOnly { path } => {
+                    Some(path.as_str().to_owned())
+                }
+                _ => None,
             })
             .collect(),
     }
@@ -1582,7 +1592,13 @@ impl ProjectHandle for StoreHandle {
     fn outside_edits(&self) -> tc_api::session::OutsideEdits {
         self.inner()
             .as_ref()
-            .map(|handle| outside_edits(handle.waiting_books(), handle.kept_copies()))
+            .map(|handle| {
+                outside_edits(
+                    handle.waiting_books(),
+                    handle.kept_copies(),
+                    &handle.notices(),
+                )
+            })
             .unwrap_or_default()
     }
 

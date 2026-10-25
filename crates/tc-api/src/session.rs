@@ -196,6 +196,10 @@ pub struct KeptCopy {
 pub struct OutsideEdits {
     pub waiting: Vec<WaitingBook>,
     pub kept: Vec<KeptCopy>,
+    /// Book files and stories another program changed while the project is open read-only
+    /// (H22 part 4): asked nothing and kept nowhere, shown only as a notice of the review.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read_only_changed: Vec<String>,
 }
 
 /// `session/focus` (D1): the window got focus. The store looks for files another program
