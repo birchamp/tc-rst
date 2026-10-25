@@ -17,7 +17,7 @@ use tc_api::model::section::{ParaFormat, SectionBuffer};
 use tc_api::write::SaveRefusal;
 use tc_api::{ApiError, NotSaved};
 use tc_journal::record::{ChapterVerse, MarkerWs, VerseValue};
-use tc_journal::{Record, RecordKey, VerseNo};
+use tc_journal::{ChangeId, Record, RecordKey, VerseNo};
 
 use crate::app::App;
 use crate::backend::{EditToken, StoreCommand};
@@ -98,6 +98,20 @@ pub fn splice_gap(layout: &str, marker: Option<ParaFormat>) -> String {
 
 /// The verse a token displayed and the value it showed, for `book`: the one head's value, or
 /// the projected value where the token has several (a conflict, a merge). A token of anything
+/// The value a screen showed at `heads`, as the store reads it for a save over that screen's
+/// token (`Fold::merged_at`), so a sync that moved the heads since does not change it. Heads
+/// in conflict show no one value; the save is refused there, and the projection stands in.
+pub fn shown_record(
+    read: &CountingSnapshot,
+    key: &RecordKey,
+    heads: &[ChangeId],
+) -> Option<Record> {
+    match heads {
+        [head] => read.body(head).map(|body| body.record),
+        _ => read.merged_at(key, heads).or_else(|| read.projected(key)),
+    }
+}
+
 /// but a verse of `book` is a forged or misrouted one.
 pub fn displayed(
     read: &CountingSnapshot,
@@ -110,10 +124,7 @@ pub fn displayed(
     if *of != book {
         return Err(ApiError::NotSaved(NotSaved::BadToken));
     }
-    let record = match token.heads() {
-        [head] => read.body(head).map(|body| body.record),
-        _ => read.projected(token.key()),
-    };
+    let record = shown_record(read, token.key(), token.heads());
     match record {
         Some(Record::Verse { value, .. }) => Ok((verse.get(), value)),
         _ => Err(ApiError::NotSaved(NotSaved::Refused(

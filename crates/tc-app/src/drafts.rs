@@ -709,9 +709,8 @@ impl App {
                 // A verse draft holds the card's text (poem lines as tabs, tC4 #810): it goes
                 // back to the words by the version it was typed over, as a save does (REF1b).
                 let read = session.read();
-                let opened = shown.first().and_then(|token| match token.heads() {
-                    [head] => read.body(head).map(|body| body.record),
-                    _ => read.projected(token.key()),
+                let opened = shown.first().and_then(|token| {
+                    crate::section::shown_record(&read, token.key(), token.heads())
                 });
                 let opened = match opened {
                     Some(Record::Verse {

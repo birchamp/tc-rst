@@ -915,6 +915,55 @@ async fn tabs_saved_from_a_card_are_written_as_q_markers() {
     );
 }
 
+/// REF1b (the races review): a card over a verse with two heads that agree converts its text by
+/// the version it showed, not by a teammate's newer one, so a break the card showed keeps its
+/// own marker.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_card_over_two_heads_saves_by_the_version_it_showed() {
+    let rig = Rig::sample().await;
+    let save = async |n: u8, shown: ShownToken, words: &str| {
+        post(
+            &rig.t.app,
+            &SaveVerse {
+                at: rig.at.clone(),
+                request: rid(n),
+                shown,
+                words: words.to_owned(),
+            },
+        )
+        .await
+        .unwrap()
+    };
+    let first = rig.chapters().await;
+    save(
+        80,
+        row(&first, 1, "4").words.token.clone(),
+        "a\n\\q1 b\n\\ts\\*\n\\q2 c",
+    )
+    .await;
+    // Two saves of the same words from one token: two heads that agree.
+    let one = rig.chapters().await;
+    let token = row(&one, 1, "4").words.token.clone();
+    save(81, token.clone(), "a\n\\q1 b\n\\ts\\*\n\\q2 c!").await;
+    save(82, token, "a\n\\q1 b\n\\ts\\*\n\\q2 c!").await;
+    let card = rig.chapters().await;
+    let shown = row(&card, 1, "4").words.clone();
+    assert_eq!(shown.value, "a\n\tb\n\n\t\tc!");
+    // A teammate turns the break into a paragraph meanwhile.
+    save(83, shown.token.clone(), "a\n\\q1 b\n\\p\n\\q2 c!").await;
+    // The card saves over the version it showed.
+    save(84, shown.token, "a\n\tb\n\n\t\tc!!").await;
+    rig.finish().await;
+    let book = rig
+        .fs
+        .files_under(&Path::new(PROJECTS).join(SAMPLE))
+        .into_iter()
+        .find(|(path, _)| path.ends_with("ingredients/TIT.usfm"))
+        .map(|(_, bytes)| String::from_utf8(bytes).unwrap())
+        .expect("the book is written");
+    assert!(book.contains("\\q1 b\n\\ts\\*\n\\q2 c!!"), "{book}");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_change_section_save_on_psalm_3_writes_nothing() {
     a_poem_comes_back_byte_for_byte(&psalm_3()).await;
