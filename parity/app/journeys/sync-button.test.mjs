@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { FAKE_USER } from '../../tc4-baseline/mock-server/fake-door43.mjs';
-import { REPO, newRequestId } from '../env-rust.mjs';
+import { DOOR43_TEAM, REPO, newRequestId } from '../env-rust.mjs';
 import { BIBLE } from '../screens.mjs';
 import { browserTest, catalog, sleep, until, withApp } from './kit.mjs';
 
@@ -132,7 +132,7 @@ browserTest('E1a. A real sync pushes the project to Door43; a cut connection fai
     await toast(page).waitFor();
     assert.equal(await toast(page).getAttribute('data-ok'), '1', 'a second sync with nothing new');
     await dismiss(page);
-    await env.door43.fault({ method: 'GET', path: `/${FAKE_USER.username}/${FOLDER}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } });
+    await env.door43.fault({ method: 'GET', path: `/${DOOR43_TEAM}/${FOLDER}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } });
     await button(page).click();
     await toast(page).waitFor();
     assert.equal(await toast(page).getAttribute('data-ok'), '0', 'the cut sync failed');

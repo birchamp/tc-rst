@@ -566,6 +566,24 @@ impl FakeDoor43 {
         });
     }
 
+    /// `login` joins the organization `org`, able to create and push there; `false` when there
+    /// is no such organization.
+    pub fn add_member(&self, org: &str, login: &str) -> bool {
+        let mut state = self.shared.state();
+        let Some(rec) = state
+            .orgs
+            .iter_mut()
+            .find(|o| o.org.name.eq_ignore_ascii_case(org))
+        else {
+            return false;
+        };
+        rec.org.members.push(OrgMember {
+            login: login.to_owned(),
+            can_create_repository: true,
+        });
+        true
+    }
+
     pub fn add_org(&self, org: FakeOrg) {
         let mut state = self.shared.state();
         let id = state.next_id();

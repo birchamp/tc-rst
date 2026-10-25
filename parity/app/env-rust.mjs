@@ -69,6 +69,9 @@ export function scenarioArgs(scenario, dir, backend = 'store') {
 const DEAD_DOOR43 = 'http://127.0.0.1:9/';
 /** The fake Door43's seeded user, whom the journeys sign in as. */
 const DOOR43_USER = 'facilitator-zq';
+/** The team organization that holds the projects a real sync shares (E1a); the seeded user and
+ * each teammate may push there. */
+export const DOOR43_TEAM = 'Equipo-Ejemplo';
 
 /** A plain HTTP request to the fake Door43's control port; answers the parsed JSON body. */
 function controlCall(base, method, route, body) {
@@ -125,6 +128,8 @@ export async function startDoor43Fake(bin) {
     secret: async (login, name) => (await control('GET', `/secret/${encodeURIComponent(login)}/${encodeURIComponent(name)}`)).secret,
     /** An empty repository of `owner`, which a first real sync fills (E1a). */
     addRepo: (owner, name) => control('POST', '/repos', { owner, name }),
+    /** A teammate: another user, a member of `org` who may push there (E1a). */
+    addUser: (login, password, org) => control('POST', '/users', { login, password, org }),
     async close() {
       if (child.exitCode !== null || child.signalCode !== null) return;
       child.stdin.write('{"quit":true}\n');
@@ -238,8 +243,8 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
     if (!door43) throw new Error('realSync needs the fake Door43 (door43: true)');
     if (connected.has(repo)) return;
     const project = projects[repo];
-    await door43.addRepo(DOOR43_USER, project);
-    await call('test/connectDoor43', { request: newRequestId(), project, owner: DOOR43_USER, name: project, branch: 'master' });
+    await door43.addRepo(DOOR43_TEAM, project);
+    await call('test/connectDoor43', { request: newRequestId(), project, owner: DOOR43_TEAM, name: project, branch: 'master' });
     connected.add(repo);
   };
   const scriptSync = (repo, outcome) => {
@@ -347,5 +352,99 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
         // another scenario of the run still has its folder there
       }
     },
+  };
+}
+
+/** `job` to its end through `call` (`jobs/get`): its outcome, or an error that names how it ended. */
+export async function jobEnd(call, job) {
+  for (;;) {
+    const view = await call('jobs/get', { job });
+    const type = view?.state?.type;
+    if (type === 'done') return view.state.value;
+    if (type === 'failed' || type === 'cancelled' || !view) throw new Error(`job ${job} ended ${JSON.stringify(view?.state)}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+/** Titus `chapter`:`verse`'s words in `project`, read through an open of its own, then closed. */
+export async function titusWords(call, project, chapter, verse) {
+  const opened = await jobEnd(call, await call('session/open', { request: newRequestId(), project, unit: null }));
+  const at = opened.value.session.at;
+  try {
+    const view = await call('editor/chapters', { at, book: 'TIT' });
+    return view.chapters.find((c) => c.chapter === chapter)?.verses.find((v) => v.key === String(verse))?.words.value ?? null;
+  } finally {
+    await call('session/close', { at, request: newRequestId() });
+  }
+}
+
+/** Saves Titus `chapter`:`verse` of `project` as `words`, over the version shown, through an
+ * open of its own, then closed. */
+export async function saveTitus(call, project, chapter, verse, words) {
+  const opened = await jobEnd(call, await call('session/open', { request: newRequestId(), project, unit: null }));
+  const at = opened.value.session.at;
+  try {
+    const view = await call('editor/chapters', { at, book: 'TIT' });
+    const row = view.chapters.find((c) => c.chapter === chapter).verses.find((v) => v.key === String(verse));
+    await call('editor/saveVerse', { at, request: newRequestId(), shown: row.words.token, words });
+  } finally {
+    await call('session/close', { at, request: newRequestId() });
+  }
+}
+
+/**
+ * A teammate on another computer (E1a step 6): a second `tc4` with its own app data and an
+ * empty projects folder, on the same fake Door43, signed in as the fake's user. Everything goes
+ * through the API, as a person's own app would: open the project from Door43, save a verse,
+ * sync. No browser.
+ */
+export async function startTeammate({ tc4, ui, door43, name = 'teammate' }) {
+  const password = `${name}-password`;
+  await door43.addUser(name, password, DOOR43_TEAM);
+  const env = await startRustEnv({
+    scenario: 'store', tc4, ui, door43, realSync: true,
+    runDir: path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}-${name}`),
+  });
+  const { call } = env;
+  const ended = (job) => jobEnd(call, job);
+  /** The project's open scope, opened once for the screens. */
+  const scopes = new Map();
+  const scopeOf = async (project) => {
+    if (!scopes.has(project)) {
+      const opened = await ended(await call('session/open', { request: newRequestId(), project, unit: null }));
+      scopes.set(project, opened.value.session.at);
+    }
+    return scopes.get(project);
+  };
+  await call('net/set', { request: newRequestId(), on: true });
+  await call('account/signIn', { request: newRequestId(), login: name, password, stay: false });
+  return {
+    env,
+    /** Door43's `repo` of the fake's user, opened as the project `folder`. */
+    async join(repo, folder) {
+      const outcome = await ended(await call('door43/open', { request: newRequestId(), repo: `${DOOR43_TEAM}/${repo}`, name: folder }));
+      return outcome.value.project;
+    },
+    /** Saves Titus `chapter`:`verse` as `words` over the version this computer shows. */
+    async saveVerse(project, chapter, verse, words) {
+      const at = await scopeOf(project);
+      const view = await call('editor/chapters', { at, book: 'TIT' });
+      const row = view.chapters.find((c) => c.chapter === chapter).verses.find((v) => v.key === String(verse));
+      await call('editor/saveVerse', { at, request: newRequestId(), shown: row.words.token, words });
+    },
+    /** One sync; its toast's view. */
+    async sync(project) {
+      for (const at of scopes.values()) await call('session/close', { at, request: newRequestId() });
+      scopes.clear();
+      const outcome = await ended(await call('door43/sync', { request: newRequestId(), project }));
+      return outcome.value;
+    },
+    /** Titus `chapter`:`verse` as this computer holds it. */
+    async words(project, chapter, verse) {
+      for (const at of scopes.values()) await call('session/close', { at, request: newRequestId() });
+      scopes.clear();
+      return titusWords(call, project, chapter, verse);
+    },
+    close: () => env.close(),
   };
 }

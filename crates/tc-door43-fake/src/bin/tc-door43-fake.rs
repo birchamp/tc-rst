@@ -119,6 +119,7 @@ fn control_router(fake: Arc<FakeDoor43>) -> Router {
         .route("/release", post(release))
         .route("/tokens", post(issue_token))
         .route("/repos", post(add_repo))
+        .route("/users", post(add_user))
         .route("/tokens/{login}", get(tokens_of))
         .route("/secret/{login}/{name}", get(secret))
         .with_state(fake)
@@ -231,6 +232,33 @@ async fn issue_token(State(fake): Fake, body: axum::body::Bytes) -> Response {
     match fake.issue_token(&body.login, &body.name, &scopes) {
         Ok(secret) => axum::Json(json!({ "secret": secret })).into_response(),
         Err(error) => bad(error.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UserBody {
+    login: String,
+    password: String,
+    org: String,
+}
+
+/// A teammate: another user, a member of `org` who may push there (E1a step 6).
+async fn add_user(State(fake): Fake, body: axum::body::Bytes) -> Response {
+    let body: UserBody = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(error) => return bad(error.to_string()),
+    };
+    fake.add_user(tc_door43_fake::FakeUser {
+        email: format!("{}@example.org", body.login),
+        login: body.login.clone(),
+        password: body.password,
+        one_time_code: None,
+    });
+    if fake.add_member(&body.org, &body.login) {
+        axum::Json(json!({})).into_response()
+    } else {
+        bad(format!("no organization {}", body.org))
     }
 }
 
