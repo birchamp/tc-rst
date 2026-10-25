@@ -278,6 +278,8 @@ pub(crate) fn newest_wins(key: &RecordKey) -> bool {
             | RecordKey::Versification
             | RecordKey::DeviceProfile(_)
             | RecordKey::BookLayout(_)
+            // The newest keeps the name; the other versions stay beside it (carried_files).
+            | RecordKey::CarriedFile(_)
     )
 }
 

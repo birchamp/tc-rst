@@ -8,13 +8,13 @@ mod support;
 
 use support::*;
 use tc_journal::change::ExternalSource;
-use tc_journal::command::{Choice, OutsideKeep};
+use tc_journal::command::OutsideKeep;
 use tc_journal::fold::{
     AutoRule, ConflictKind, DerivedFile, FoldInput, FoldState, ProjectKind, Resolved,
 };
 use tc_journal::outside::{Base, OutsideFile, OutsidePlan, base_records, decode_file};
-use tc_journal::record::{CarriedValue, VerseValue};
-use tc_journal::{Cause, Change, Md5, Record, RecordKey, RepoPath};
+use tc_journal::record::VerseValue;
+use tc_journal::{Cause, Change, Md5, Record, RepoPath};
 
 fn path() -> RepoPath {
     RepoPath::parse("ingredients/TIT.usfm").unwrap()
@@ -572,91 +572,37 @@ fn delta_flags_name_what_changed() {
     assert!(delta.conflicts_changed, "{delta:?}");
 }
 
-// ---------------------------------------------------------------------------------------
-// Choices
-// ---------------------------------------------------------------------------------------
-
-fn two_versions_of_a_file() -> (
-    Vec<Change>,
-    FoldState,
-    tc_journal::fold::ConflictId,
-    Change,
-    Change,
-) {
+// H5: two versions of a carried file are both kept with no question, the newest at the name.
+#[test]
+fn two_versions_of_a_file_are_both_kept_with_no_question() {
     let mut a = Dev::new(1);
     let mut b = Dev::new(2);
     let mut changes = imported_book(&mut a, &[2]);
     let v1 = a.one(carried("ingredients/audio/a.mp3", 1), vec![]);
     let v2 = b.one(carried("ingredients/audio/a.mp3", 2), vec![]);
-    changes.extend([v1.clone(), v2.clone()]);
+    changes.extend([v1, v2]);
     let state = fold(&changes);
-    let conflict = state
-        .conflicts_of(ConflictKind::CarriedFile)
-        .next()
-        .expect("two versions of a file")
-        .id;
-    (changes, state, conflict, v1, v2)
-}
-
-#[test]
-fn keep_both_gives_the_other_version_its_own_path() {
-    let (changes, state, id, v1, v2) = two_versions_of_a_file();
-    let to = RepoPath::parse("ingredients/audio/a-second.mp3").unwrap();
-    let planned = state
-        .resolution(
-            &id,
-            &Choice::KeepBothCarried {
-                keep: v1.id(),
-                other: v2.id(),
-                to: to.clone(),
-            },
-        )
-        .unwrap();
-    assert_eq!(planned.len(), 2);
-    let mut all = changes;
-    let mut dev = Dev::new(3);
-    all.extend(dev.apply(planned));
-    let after = fold(&all);
     assert!(
-        after
+        state
             .conflicts_of(ConflictKind::CarriedFile)
             .next()
             .is_none()
     );
-    let at = |p: &RepoPath| after.projected(&RecordKey::CarriedFile(p.clone()));
-    let original = RepoPath::parse("ingredients/audio/a.mp3").unwrap();
-    assert_eq!(at(&original), Some(carried("ingredients/audio/a.mp3", 1)));
-    match at(&to) {
-        Some(Record::CarriedFile {
-            value: CarriedValue::Present { oid, .. },
-            ..
-        }) => assert_eq!(oid, oid_of(2)),
-        other => panic!("{other:?}"),
-    }
-    // Not a candidate, the same version twice, or a target something holds: refused.
+    let placed: Vec<(String, tc_journal::GitOid)> = state
+        .carried_files()
+        .into_iter()
+        .map(|p| (p.path, p.oid))
+        .collect();
+    assert_eq!(placed.len(), 2, "{placed:?}");
     assert!(
-        state
-            .resolution(
-                &id,
-                &Choice::KeepBothCarried {
-                    keep: v1.id(),
-                    other: v1.id(),
-                    to: to.clone()
-                }
-            )
-            .is_err()
+        placed.contains(&("ingredients/audio/a.mp3".to_owned(), oid_of(1))),
+        "{placed:?}"
     );
     assert!(
-        state
-            .resolution(
-                &id,
-                &Choice::KeepBothCarried {
-                    keep: v1.id(),
-                    other: v2.id(),
-                    to: original
-                }
-            )
-            .is_err()
+        placed
+            .iter()
+            .any(|(path, oid)| path.starts_with("ingredients/audio/a-") && *oid == oid_of(2)),
+        "{placed:?}"
     );
 }
 

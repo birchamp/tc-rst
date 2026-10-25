@@ -123,7 +123,8 @@ const SYNCED_STATES: &[&str] = &[
     "StructureIssue",
     "BookHeader",
     "ChapterFront",
-    "BookPresence",
+    // The presence race of *Restore the text* against *Start empty*, the one book conflict
+    // H5 keeps, is built by hand in loss.rs: the generator does not reach it.
     "newest BookPresence",
     "newest Alignment",
     "newest Check",
@@ -133,8 +134,7 @@ const SYNCED_STATES: &[&str] = &[
     "newest Setting",
     "newest ProjectMeta",
     "newest Versification",
-    "CarriedFile",
-    "PathCase",
+    "newest CarriedFile",
     "Unknown",
     "newest BookLayout",
     "newest DeviceProfile",
@@ -283,6 +283,7 @@ fn newest_kind(key: &RecordKey) -> bool {
             | RecordKey::BookLayout(_)
             // A presence race of *Restore the text* against *Start empty* still conflicts.
             | RecordKey::BookPresence(_)
+            | RecordKey::CarriedFile(_)
     )
 }
 
@@ -329,6 +330,7 @@ fn newest_name(state: &FoldState, key: &RecordKey) -> &'static str {
         RecordKey::DeviceProfile(_) => "newest DeviceProfile",
         RecordKey::BookLayout(_) => "newest BookLayout",
         RecordKey::BookPresence(_) => "newest BookPresence",
+        RecordKey::CarriedFile(_) => "newest CarriedFile",
         _ => "newest of another kind",
     }
 }
@@ -526,6 +528,50 @@ fn newest_wins_converges() {
 
 /// Fails if the newest-wins rule loses the older version: every head of a record settled
 /// by the newest is in its History, and a Restore of an older one is accepted and shown.
+// INV-A-CARRIED-FILE-KEEPS-BOTH: every present version of a carried file has one placement,
+// and no two placements share a path, letters' case ignored (H5: newest wins, both kept).
+#[test]
+fn carried_keeps_both() {
+    team_synced(CASES, &[], |sim, _| {
+        for device in &sim.devices {
+            let state = &device.state;
+            let placements = state.carried_files();
+            let mut paths = BTreeSet::new();
+            for p in &placements {
+                prop_assert!(
+                    paths.insert(tc_burrito::collision_form(&p.path)),
+                    "{} is placed twice",
+                    p.path
+                );
+            }
+            for key in state.record_keys() {
+                if !matches!(key, RecordKey::CarriedFile(_)) {
+                    continue;
+                }
+                for h in state.heads(&key) {
+                    let present = matches!(
+                        body_of(state, &h).map(|b| b.record),
+                        Some(Record::CarriedFile {
+                            value: tc_journal::record::CarriedValue::Present { .. },
+                            ..
+                        })
+                    );
+                    if present {
+                        prop_assert_eq!(
+                            placements.iter().filter(|p| p.head == h).count(),
+                            1,
+                            "{:?}: {:?} is not placed once",
+                            key,
+                            h
+                        );
+                    }
+                }
+            }
+        }
+        Ok(())
+    });
+}
+
 #[test]
 fn the_loser_stays_in_history() {
     team_synced(CASES, &[], |mut sim, _| {
@@ -542,6 +588,10 @@ fn the_loser_stays_in_history() {
             let heads = state.heads(&key);
             for h in &heads {
                 prop_assert!(history.contains(h), "{key:?}: head {h:?} not in History");
+            }
+            // A carried file's other versions are files beside it, not versions to restore.
+            if matches!(key, RecordKey::CarriedFile(_)) {
+                continue;
             }
             let Some(loser) = heads.iter().copied().find(|h| *h != head) else {
                 continue;
@@ -590,12 +640,8 @@ fn only_text_conflicts() {
                         | ConflictKind::StoryBase
                         | ConflictKind::StoryRef
                         | ConflictKind::Unknown
-                        | ConflictKind::BookPresence
-                        | ConflictKind::BookRemovedWhileEdited { .. }
-                        | ConflictKind::LastBookRemoved
-                        | ConflictKind::CarriedFile
-                        | ConflictKind::PathCase
-                ),
+                ) || (conflict.kind == ConflictKind::BookPresence
+                    && restore_race(view.state, &conflict.key)),
                 "{:?} listed at {:?}",
                 conflict.kind,
                 conflict.key

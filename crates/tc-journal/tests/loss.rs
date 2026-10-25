@@ -1248,21 +1248,75 @@ fn loss_carried_file_two_versions_both_kept() {
     let mut maria = Dev::new(1);
     let mut juan = Dev::new(2);
     let book = imported_book(&mut maria, &[1]);
+    let profile = juan.one(
+        Record::DeviceProfile {
+            device: juan.id,
+            value: tc_journal::record::DeviceProfileValue {
+                display_name: None,
+                door43_username: Some(tc_journal::record::Door43Username::parse("Juan").unwrap()),
+                legacy: None,
+            },
+        },
+        vec![],
+    );
     let base = maria.one(carried("audio/01.mp3", 1), vec![]);
     let a = maria.one(carried("audio/01.mp3", 2), vec![base.id()]);
     let b = juan.one(carried("audio/01.mp3", 3), vec![base.id()]);
-    let state = assert_converges(&all_of(&[&book, &[base, a, b]]));
-    assert_eq!(the_conflict(&state).kind, ConflictKind::CarriedFile);
-    let placed = state.carried_files();
-    let oids: BTreeSet<_> = placed.iter().map(|p| p.oid).collect();
-    assert_eq!(oids, [oid(2), oid(3)].into());
-    let paths: BTreeSet<_> = placed.iter().map(|p| p.path.clone()).collect();
-    assert!(paths.contains("audio/01.mp3"));
-    assert!(
-        paths
-            .iter()
-            .any(|p| p.starts_with("audio/01.conflict-") && p.ends_with(".mp3")),
-        "{paths:?}"
+    assert!(juan.at < maria.at, "Maria's version is the newest");
+    let state = assert_converges(&all_of(&[&book, &[profile, base, a, b]]));
+    // H5: the newest keeps the name with no question; the other is kept beside it under its
+    // author's name.
+    assert_eq!(state.conflict_count(), 0);
+    let placed: BTreeMap<String, _> = state
+        .carried_files()
+        .into_iter()
+        .map(|p| (p.path.clone(), p.oid))
+        .collect();
+    assert_eq!(
+        placed,
+        [
+            ("audio/01.mp3".to_owned(), oid(2)),
+            ("audio/01-Juan.mp3".to_owned(), oid(3))
+        ]
+        .into()
+    );
+}
+
+/// H5: the copy of the other version never takes a name the project already holds.
+#[test]
+fn a_kept_copy_never_takes_a_held_name() {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = imported_book(&mut maria, &[1]);
+    let profile = juan.one(
+        Record::DeviceProfile {
+            device: juan.id,
+            value: tc_journal::record::DeviceProfileValue {
+                display_name: None,
+                door43_username: Some(tc_journal::record::Door43Username::parse("Juan").unwrap()),
+                legacy: None,
+            },
+        },
+        vec![],
+    );
+    let held = maria.one(carried("audio/01-Juan.mp3", 9), vec![]);
+    let base = maria.one(carried("audio/01.mp3", 1), vec![]);
+    let a = maria.one(carried("audio/01.mp3", 2), vec![base.id()]);
+    let b = juan.one(carried("audio/01.mp3", 3), vec![base.id()]);
+    let state = assert_converges(&all_of(&[&book, &[profile, held, base, a, b]]));
+    let placed: BTreeMap<String, _> = state
+        .carried_files()
+        .into_iter()
+        .map(|p| (p.path.clone(), p.oid))
+        .collect();
+    assert_eq!(
+        placed,
+        [
+            ("audio/01-Juan-2.mp3".to_owned(), oid(3)),
+            ("audio/01-Juan.mp3".to_owned(), oid(9)),
+            ("audio/01.mp3".to_owned(), oid(2)),
+        ]
+        .into()
     );
 }
 
@@ -2020,14 +2074,24 @@ fn loss_case_colliding_carried_paths_kept() {
     let book = imported_book(&mut maria, &[1]);
     let a = maria.one(carried("audio/Intro.mp3", 1), vec![]);
     let b = juan.one(carried("audio/intro.mp3", 2), vec![]);
+    assert!(juan.at < maria.at, "Maria's file is the newest");
     let state = assert_converges(&all_of(&[&book, &[a, b]]));
-    let conflict = the_conflict(&state);
-    assert_eq!(conflict.kind, ConflictKind::PathCase);
+    // H5: the newest keeps its name with no question; the other moves beside it.
+    assert_eq!(state.conflict_count(), 0);
     let placed = state.carried_files();
     assert_eq!(placed.len(), 2);
     let folded: BTreeSet<String> = placed.iter().map(|p| p.path.to_lowercase()).collect();
     assert_eq!(folded.len(), 2, "no two paths collide: {placed:?}");
-    assert!(placed.iter().any(|p| p.path.contains(".case-")));
+    assert!(
+        placed
+            .iter()
+            .any(|p| p.path == "audio/Intro.mp3" && p.oid == oid(1))
+    );
+    assert!(
+        placed
+            .iter()
+            .any(|p| p.path.starts_with("audio/intro.case-") && p.oid == oid(2))
+    );
 }
 
 /// L81: a metadata value valid as JSON but invalid in a burrito never blocks a commit:

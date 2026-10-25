@@ -324,6 +324,17 @@ impl FoldState {
             if shown.is_some_and(|c| !self.readable(c)) {
                 return Vec::new();
             }
+            // The other versions of a carried file are files of their own beside it: an edit
+            // or a removal of the shown one leaves them (H5 keeps both).
+            if matches!(key, RecordKey::CarriedFile(_))
+                && let Local::ByRule {
+                    head,
+                    rule: super::AutoRule::Newest,
+                    ..
+                } = &entry.local
+            {
+                return vec![self.meta(*head).id];
+            }
             let some_unreadable = matches!(
                 entry.local,
                 Local::ByRule {
