@@ -122,10 +122,10 @@ impl Actions {
                 continue;
             }
             let keys = crate::app::translate::section_keys_of(&range, chapter_keys);
-            if section_key(&project.at.project, &project.id, book, chapter, &keys).as_ref()
-                == Some(&key)
-            {
-                self.start_section(chapter, &keys);
+            // The stored key, not one rebuilt from today's verses: a span a teammate joined
+            // since can widen the rebuilt place, and the draft would stay hidden.
+            if !keys.is_empty() && saves.write_cap(&project.at).is_some() {
+                s.editing.try_set(Editing::Section { key, keys });
                 return;
             }
         }
