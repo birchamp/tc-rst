@@ -236,6 +236,12 @@ impl Store {
         &self.env.hooks
     }
 
+    /// The filesystem this store writes through: a join writes a staging folder with it
+    /// before [`Store::place`] (§9.6).
+    pub fn vfs(&self) -> &Arc<dyn crate::vfs::Vfs> {
+        &self.env.vfs
+    }
+
     /// Waits until the start cleanup is over.
     pub fn wait_cleanup(&self) {
         self.cleanup.wait();

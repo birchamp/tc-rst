@@ -581,6 +581,7 @@ fn open_inner(
             (None, Some(reason)) => Mode::ReadOnly(ReadOnlyReason::WriteFailed(reason.clone())),
             (None, None) => Mode::Writable,
         },
+        git_dir: git.as_ref().map(|g| g.git_dir().to_path_buf()),
     };
     let shared = Arc::new(Shared::new(
         fold.clone(),

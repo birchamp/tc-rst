@@ -219,6 +219,9 @@ fn an_open_after_one_save_projects_only_that_books_files() {
             .leave(tc_store::Leave::Book(tc_journal::BookId::Psalms))
             .wait()
             .unwrap();
+        // The leave's reply comes before the writer's materialization ends: wait for the
+        // event, so the power cut below drops nothing of it (the speed ruling).
+        handle.wait_idle();
         let closed = fs.crash(false);
         closed.advance(std::time::Duration::from_secs(5));
         let (after_materialized, _) = open_once(&closed, &corpus.folder);
