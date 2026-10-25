@@ -1,0 +1,35 @@
+[package]
+name = "tc-sync"
+description = "Door43 sync and USB exchange: one typed state machine over tc-store and tc-door43 (STORAGE §9, §10)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+git2.workspace = true
+serde_json.workspace = true
+tc-api = { path = "../tc-api" }
+tc-burrito = { path = "../tc-burrito" }
+tc-door43 = { path = "../tc-door43" }
+tc-journal = { path = "../tc-journal" }
+tc-store = { path = "../tc-store" }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "time"] }
+url.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tc-door43-fake = { path = "../tc-door43-fake" }
+tc-store = { path = "../tc-store", features = ["test-hooks"] }
+tempfile.workspace = true
+tc-api = { path = "../tc-api" }
+tc-burrito = { path = "../tc-burrito" }
+tc-versification = { path = "../tc-versification" }
+zip.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "test-util"] }
+
+[lints]
+workspace = true

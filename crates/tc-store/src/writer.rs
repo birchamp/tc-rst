@@ -82,6 +82,7 @@ pub(crate) struct MaterializeJob {
 /// What the writer does for a checkpoint after the seal and the files (§5.13 C3 to C5).
 pub(crate) struct CheckpointJob {
     pub reason: CheckpointReason,
+    pub intake: crate::handle::IntakeReport,
     /// The seal's result, which comes before the files' in the reply.
     pub sealed: Result<crate::seal::SealReport, StoreError>,
     pub device: tc_journal::DeviceId,
@@ -730,6 +731,7 @@ mod tests {
             device: DeviceId::local([9; 15]),
             folder: "/p".into(),
             mode: Mode::Writable,
+            git_dir: None,
         };
         let shared = Arc::new(Shared::new(
             fold.clone(),
