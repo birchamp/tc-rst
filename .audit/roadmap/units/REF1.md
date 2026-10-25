@@ -4,7 +4,7 @@ title: Move the tC4 reference and port its changes
 track: A
 lane: app
 milestone: M3
-state: gating
+state: done
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-REF1
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1, P7]
 no_loss: false
 size: 3-5 sessions (estimate)
-merged: none
+merged: 1ad7e1f8
 updated: 2026-10-24
-next: The integration lane merges track-REF1 in a batch after SWEEP (depends); this session then claims REF1b.
+next: none
 blocked_by: none
 ---
 
@@ -65,7 +65,7 @@ pages, and the newest interface words in all ten languages.
     `crates/tc-ui/vendored-from-tc4.txt`, and the help pin (`crates/tc-ui/help-pages.txt`
     equal to tC4's `TC_WEBSITE_REV` at that commit, recorded in the baseline README) agree.
   - INV-NO-ROW-WAITS-FOR-A-PAST-MOVE: after the move, no row of `docs/TC4-ISSUES.md` says
-    "reference change" for a change the new reference holds.
+    "reference change" for a change the new reference holds (not in code: a read of the rows after the move, done in step 4).
 - **Wrong states**:
   - PLAN names one tC4 commit while the screens, catalogs or help pages come from another.
   - Rows wait for "the reference move" that has happened (#769, #763 and others).
@@ -259,6 +259,7 @@ machine fingerprint in `manifest.json`).
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-coverage.md
 - 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
+- 2026-10-24 17:43 EDT | integration lane (Claude Code 3d07d5f8) | note | none | step 2 vendors tC4 release/4.0 d25b7871 instead of rc.2 a5ce0307, so the About screen's licence line and dialog say MIT (LIC-1 moved that part here; the orchestrator agreed 2026-10-24); added the about check | .audit/roadmap/units/LIC-1.md
 - 2026-10-24 15:00 EDT | REF1 session (Claude Code 56b3f56d) | ruling | none | H7, the owner on 2026-10-24: "match tC4 4.0 rc.2 now" (rulings/2026-10-24-H3-H4-H7-fast-release.md, on track-PLAN-FAST until batch 1 lands). The orchestrator names the commit: tC4 release/4.0 tip d25b7871904228a342c0d80280136d8636833653 (rc.2 a5ce0307 plus later fixes, #838 among them, so About shows MIT); its fetch-help.mjs pins tc-website dbb7cd03 as rc.2 does | git -C ~/unfoldingword/tc4-sweep show d25b7871:scripts/fetch-help.mjs
 - 2026-10-24 15:00 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed on track-REF1 in .worktrees/track-REF1 from main 0189cee4, on the orchestrator's assignment. SWEEP is not done (batch 2): the merge waits for it, and this branch leaves docs/TC4-ISSUES.md alone until SWEEP lands, since SWEEP rewrites its rows. Asked the orchestrator whether #810 (poem lines as tabs) is built here or on its own card | python3 -I -B .audit/tools/board.py
 - 2026-10-24 15:01 EDT | REF1 session (Claude Code 56b3f56d) | step 1 | none | PLAN "The reference version" names tC4 release/4.0 d25b7871 (rc.2 plus picks, #838). the_reference_is_one_commit_everywhere extends CHK-6's "PLAN's reference commit is the baseline's" (both now read a branch name, and a line break before the sha); it passes on d310bf3, fails with vendored-from-tc4.txt's commit changed by one character ("INV-THE-REFERENCE-IS-ONE-COMMIT: crates/tc-ui/vendored-from-tc4.txt names tC4 e310bf30…; PLAN names d310bf3"), and now fails as it must: "parity/tc4-baseline/manifest.json names tC4 d310bf30…; PLAN names d25b7871". No tc4-rc2 clone yet: vendor-tc4.sh reads blobs from ~/unfoldingword/tc4-sweep, so the clone waits for step 3's capture | node --test parity/tc4-baseline/baseline.test.mjs
@@ -274,3 +275,4 @@ machine fingerprint in `manifest.json`).
 - 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | note | none | REQUEST to G3, widened: crates/tc-ui/help/ts-platform.html (its Linux row names ./start-tc4.sh) also describes tC4's package, beside gs-install.html:129 | crates/tc-ui/help/ts-platform.html:128
 - 2026-10-24 18:07 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | CI run 40136396243's parity-baseline failed INV-P1-COVERED ("the reference is the baseline's": coverage.json still named d310bf3). parity/app/journeys/coverage.json moves to d25b7871 with its 39 tC4 specs (37 before): compare-card.spec.ts maps to check-detail.test.mjs compare_card_columns_fit_the_width; sync-refusal.spec.ts (#801) is pending on FIX-R, which builds it; bundled-upgrade.spec.ts, which pended on REF1 (card step 2.6), maps to the Rust tests bundled_upgrade_leaves_the_pinned_release_and_the_projects_pins_as_they_were (tc-app upgrades.rs) and a_bundled_store_seeds_a_first_run_that_is_offline (tc-resources dcs_install.rs) instead of a duplicate journey (decision: the behaviour is the store's, and both tests drive it through the public API). scripts/gates.sh --step node: 352 tests, 0 fail | node --test parity/app/journeys/coverage.test.mjs
 - 2026-10-24 19:04 EDT | REF1 session (Claude Code 56b3f56d) | gate | 811a6385 | GitHub runs green on 811a6385: ci 40137210125 (every gate step, the cargo workspace tests included) and app-e2e 40137210117 (every journey, none skipped); scripts/gates.sh --check-receipt accepts it. Handed to the integration lane for a batch. The merge still waits for SWEEP (depends) | scripts/gates.sh --check-receipt
+- 2026-10-24 20:08 EDT | integration lane (Claude Code 3d07d5f8) | merge | 1ad7e1f8 | merged into main in batch 3 (UI-3a 51e5edbc, REF1 1ad7e1f8, G4 578dd3f0, PROCESS-6 f0e0c399, shell.yml's cancel rule), gated by scripts/gates.sh --wait-ci batch-3 on the batch's last commit. REF1's own CI: ci 40137210125, app-e2e 40137210117 on 811a6385. In the batch TC4-ISSUES #838 is covered (About says MIT). | scripts/gates.sh --wait-ci batch-3

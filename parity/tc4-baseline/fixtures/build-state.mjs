@@ -51,6 +51,7 @@ const SHA = {
   en_ust_v91: '85f274a74245cb418f85266e1a5b524bc3e91e9c',
   en_ta_v91: 'ce9a1bb9431317ca888e8c1f9620caa7f5fe45fd',
   ugnt_v0_34: 'fc95b2b8aad08bb65ab54628ab685413a1139e97',
+  uhb_v3_0_0: '74022f0fed012a3ef169886f595dd98e7b200543',
   en_obs_v9: 'd39a1dc7a7557ac54e4a8fecc3462147fe7eec3b',
 };
 
@@ -196,6 +197,25 @@ export const RESOURCES = [
     files: { 'ingredients/OBS.tsv': `${RES}/en_obs-tq@v10/OBS.tsv` },
   },
 ];
+
+/** The Hebrew original of Jonah, served in scenario `en-pins` only, so the other scenarios keep
+ * the state their captures were taken from (ABSENT still describes them). */
+export const HEBREW = {
+  dir: 'hbo_uhb',
+  record: { repoPath: 'git.door43.org/unfoldingWord/hbo_uhb', version: 'v3.0.0' },
+  metadata: `${RES}/en_ult@v89/metadata.json`,
+  rename: {
+    dcsKey: 'unfoldingWord/hbo_uhb',
+    name: 'unfoldingWord® Hebrew Bible',
+    abbreviation: 'UHB',
+    language: { tag: 'hbo', name: { en: 'Ancient Hebrew' }, scriptDirection: 'rtl' },
+  },
+  files: { 'ingredients/JON.usfm': 'test/fixtures/hbo_uhb/JON.usfm' },
+  substitute: {
+    revision: SHA.uhb_v3_0_0,
+    why: 'the pinned release\'s Jonah (test/fixtures/hbo_uhb/JON.usfm, raw 32-JON.usfm at the v3.0.0 tag); the metadata is the en_ult v89 export metadata renamed',
+  },
+};
 
 /** Pinned by the sample projects, but no copy was found (README "Incomplete screens"). */
 export const ABSENT = [
@@ -389,7 +409,7 @@ export function buildState({ tc4 = DEFAULT_TC4, scenario = 'sample', out = state
   }
   const installed = {};
   const provenance = [];
-  for (const spec of RESOURCES) {
+  for (const spec of scenario === 'en-pins' ? [...RESOURCES, HEBREW] : RESOURCES) {
     const built = buildResource(tc4, repos, spec);
     installed[built.localPath] = built.pin;
     provenance.push(built.provenance);

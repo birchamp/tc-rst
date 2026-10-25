@@ -14,7 +14,6 @@
 use std::sync::Arc;
 
 use leptos::prelude::*;
-use tc_api::refusal::Message;
 
 use crate::app::account::{SignInFlow, SignInProblem, sign_in_rows};
 use crate::app::web::{AppCtx, use_app};
@@ -37,14 +36,7 @@ fn note() -> String {
 /// another failure.
 fn sentence(problem: &SignInProblem) -> String {
     match problem {
-        SignInProblem::Refused(refusal) => {
-            let vars = refusal.vars();
-            let vars: Vec<(&str, &dyn std::fmt::Display)> = vars
-                .iter()
-                .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
-                .collect();
-            t_dyn(refusal.key(), &vars, None)
-        }
+        SignInProblem::Refused(refusal) => crate::i18n::refusal_text(refusal),
         SignInProblem::Other(text) => text.clone(),
     }
 }

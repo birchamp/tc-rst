@@ -99,7 +99,7 @@ ci_receipt() {
   tree="$(tree_now)"; sha="$(git rev-parse HEAD)"
   command -v gh > /dev/null || return 1
   runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
-    --jq '.workflow_runs[] | select(.event == "push" and .status == "completed" and .conclusion == "success") | "\(.name) \(.id) \(.head_sha)"' 2> /dev/null)" || return 1
+    --jq '.workflow_runs[] | select(.event == "push" and .status == "completed" and .conclusion == "success") | "\(.name) \(.id) \(.head_sha) \(.head_branch)"' 2> /dev/null)" || return 1
   ci_run="$(green_run_for ci "$runs" "$tree")"
   e2e_run="$(green_run_for app-e2e "$runs" "$tree")"
   [[ -n "$ci_run" && -n "$e2e_run" ]] || return 1
@@ -107,9 +107,12 @@ ci_receipt() {
 }
 
 # The id of a green run of workflow $1 among the lines $2 whose commit has the tree $3.
+# Only a run on gate/* or main ran the full tests: a track push of the same commit runs only the
+# lints (rulings/2026-10-24-test-process.md), and its green run is no receipt.
 green_run_for() {
-  local name id run_sha
-  while read -r name id run_sha; do
+  local name id run_sha branch
+  while read -r name id run_sha branch; do
+    [[ "$branch" == gate/* || "$branch" == claude/focused-ride-5uzj7p ]] || continue
     [[ "$name" == "$1" && "$(git rev-parse "$run_sha^{tree}" 2> /dev/null)" == "$3" ]] && { echo "$id"; return; }
   done <<< "$2"
 }
@@ -119,13 +122,17 @@ wait_ci() {
   local card="$1" sha deadline done_runs
   [[ -z "$(git status --porcelain)" ]] || { echo "gates: --wait-ci needs a clean tree" >&2; return 1; }
   command -v gh > /dev/null || { echo "gates: --wait-ci needs gh on PATH" >&2; return 1; }
+  # Seconds here, before thirty minutes of CI: the cards, the claimed tests and the journey map.
+  python3 -I -B .audit/tools/board.py --check > /dev/null \
+    && node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs > /dev/null \
+    || { echo "gates: --wait-ci stops before pushing: board.py --check or the claims and coverage checks fail; run them to see why" >&2; return 1; }
   sha="$(git rev-parse HEAD)"
   git push origin "+$sha:refs/heads/gate/$card"
   echo "gates: pushed ${sha:0:8} to gate/$card; waiting for the ci and app-e2e runs"
   deadline=$((SECONDS + 5400))
   while (( SECONDS < deadline )); do
     done_runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
-      --jq '[.workflow_runs[] | select(.event == "push" and .status == "completed") | .name] | unique | join(" ")' 2> /dev/null || true)"
+      --jq '[.workflow_runs[] | select(.event == "push" and .status == "completed" and .head_branch == "gate/'"$card"'") | .name] | unique | join(" ")' 2> /dev/null || true)"
     if [[ " $done_runs " == *" ci "* && " $done_runs " == *" app-e2e "* ]]; then
       check_receipt
       return

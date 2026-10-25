@@ -537,17 +537,18 @@ pub enum ImportStep {
 pub struct ImportForm {
     pub step: ImportStep,
     pub kind: Option<ImportKind>,
-    pub busy: bool,
+    /// The import's attempt: one request per attempt (UI-3).
+    pub submit: crate::app::submit::Submit,
     pub error: Option<String>,
 }
 
 impl ImportForm {
-    /// `openImport`.
-    pub fn open() -> Self {
+    /// `openImport`, with the request of its first attempt.
+    pub fn open(request: RequestId) -> Self {
         Self {
             step: ImportStep::Kind,
             kind: None,
-            busy: false,
+            submit: crate::app::submit::Submit::new(request),
             error: None,
         }
     }

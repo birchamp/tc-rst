@@ -250,8 +250,9 @@ pub fn shown_words(text: &str) -> Vec<&str> {
         .collect()
 }
 
-/// What the verse box shows of a verse's words: all of them, every poem line with its markers
-/// (#786, Q-20); the stub `___` of an undrafted verse shows as an empty box.
+/// What the verse box shows of a verse's words: all of them, as the server sends them (poem
+/// lines as tabs since tC4 rc.2, #786, #810, Q-20); the stub `___` of an undrafted verse shows as
+/// an empty box.
 pub fn box_text(words: &str) -> &str {
     if js_trim(words) == "___" { "" } else { words }
 }
@@ -320,6 +321,20 @@ pub fn section_place(book: BookId, chapter: u16, keys: &[String]) -> String {
         .map(|k| k.rsplit('-').next().unwrap_or(k))
         .unwrap_or_default();
     format!("{} {chapter}:{first}-{last}", book.code())
+}
+
+/// The verse keys of `chapter_keys` that a section place's range `first-last` covers, in
+/// order: the verses its card was opened over.
+pub fn section_keys_of(range: &str, chapter_keys: &[String]) -> Vec<String> {
+    let (first, last) = range.split_once('-').unwrap_or((range, range));
+    let (Some(first), Ok(last)) = (leading_num(first), last.parse::<u32>()) else {
+        return Vec::new();
+    };
+    chapter_keys
+        .iter()
+        .filter(|k| leading_num(k).is_some_and(|n| n >= first && n <= last))
+        .cloned()
+        .collect()
 }
 
 /// The buffer key of the section card over `keys` of the open project.
