@@ -109,6 +109,7 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | FIX-J | Finish the partial P1 journeys J3, J12 and J13 | app | INT-4 | 1-1.5 d |
 | SWEEP | Sweep tC4 again (b86270f and release/4.0), then every week | integration | INT-4 | 0.5 d |
 | LIC-1 | Move the rebuild to the MIT licence, as tC4 did | integration | SWEEP | 0.5 d |
+| CHK-7 | CI runs the full tests only on gates and main; fast checks before a gate; nightly failures become cards | integration | | 0.5 d |
 
 **Exit:** the checks in `FUNNEL.md` §"Checks the repository must have" all run in CI; the shared
 structures exist and the remaining units' cards point at them; S3's core slices are merged.
