@@ -83,6 +83,89 @@ pub enum KeychainError {
     Failed(String),
 }
 
+/// The computer's own credential store (ruling H11): Windows Credential Manager, the macOS
+/// Keychain or the Secret Service, through `keyring`. One entry holds the token's secret.
+pub struct OsKeychain {
+    service: String,
+    user: String,
+    /// Install `keyring`'s platform store before the first call; `false` for a test's mock.
+    platform: bool,
+}
+
+impl OsKeychain {
+    /// The production keychain: `keyring`'s store for this platform, installed once. A computer
+    /// whose store cannot start answers `NoKeychain` on every call.
+    pub fn platform() -> Self {
+        Self {
+            platform: true,
+            ..Self::over_default_store()
+        }
+    }
+
+    /// Over whatever store `keyring_core` has as its default (a test's mock).
+    pub fn over_default_store() -> Self {
+        Self {
+            service: "translationCore 4".to_owned(),
+            user: "Door43".to_owned(),
+            platform: false,
+        }
+    }
+
+    fn entry(&self) -> Result<keyring_core::Entry, KeychainError> {
+        // The platform store starts at the first use, so a launch that never keeps a token
+        // never touches it; `keyring` installs it once and remembers how that went.
+        if self.platform && keyring::Entry::store_status().is_err() {
+            return Err(KeychainError::NoKeychain);
+        }
+        keyring_core::Entry::new(&self.service, &self.user).map_err(keychain_error)
+    }
+}
+
+fn keychain_error(error: keyring_core::Error) -> KeychainError {
+    use keyring_core::Error as E;
+    match error {
+        E::NoDefaultStore | E::NoStorageAccess(_) => KeychainError::NoKeychain,
+        E::BadEncoding(_) | E::BadDataFormat(..) => {
+            KeychainError::Unreadable("the kept bytes are not a token".to_owned())
+        }
+        other => KeychainError::Failed(other.to_string()),
+    }
+}
+
+impl Keychain for OsKeychain {
+    fn keep(&self, token: &Token) -> Result<(), KeychainError> {
+        self.entry()?
+            .set_password(token.expose_secret())
+            .map_err(keychain_error)
+    }
+
+    fn read(&self) -> Result<Option<Token>, KeychainError> {
+        let entry = self.entry()?;
+        let unreadable = |entry: &keyring_core::Entry, why: String| {
+            // As tC4's `readToken`: bytes that cannot be opened are no use to anyone.
+            let _ = entry.delete_credential();
+            KeychainError::Unreadable(why)
+        };
+        match entry.get_password() {
+            Ok(secret) => Token::new(secret)
+                .map(Some)
+                .map_err(|e| unreadable(&entry, e.to_string())),
+            Err(keyring_core::Error::NoEntry) => Ok(None),
+            Err(error) => match keychain_error(error) {
+                KeychainError::Unreadable(why) => Err(unreadable(&entry, why)),
+                other => Err(other),
+            },
+        }
+    }
+
+    fn forget(&self) -> Result<(), KeychainError> {
+        match self.entry()?.delete_credential() {
+            Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
+            Err(error) => Err(keychain_error(error)),
+        }
+    }
+}
+
 /// How a [`MemKeychain`] behaves, for tests of what the app does when the keychain does not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemKeychainMode {
@@ -106,8 +189,7 @@ pub struct KeychainCalls {
     pub forgets: u32,
 }
 
-/// A keychain in memory: the test keychain, and phase 0's "no keychain" product
-/// ([`MemKeychainMode::NoKeychain`]) until unit E1a adds the operating system's.
+/// A keychain in memory: the tests' keychain. The product uses [`OsKeychain`].
 pub struct MemKeychain {
     token: Mutex<Option<Token>>,
     mode: Mutex<MemKeychainMode>,
