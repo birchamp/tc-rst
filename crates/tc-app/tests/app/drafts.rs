@@ -65,10 +65,13 @@ impl Rig {
             world.bible.clone()
         };
         let dir = tempfile::tempdir().unwrap();
-        let t = start(&dir, world.store()).await;
+        let mut t = start(&dir, world.store()).await;
+        let fs = world.fs.clone();
+        let hooks = world.hooks.clone();
+        t.watch = Some(world.watch);
         Rig {
-            fs: world.fs.clone(),
-            hooks: world.hooks.clone(),
+            fs,
+            hooks,
             t,
             dir,
             bible: project,
@@ -88,8 +91,9 @@ impl Rig {
 
     async fn start_over(&mut self, fs: FaultFs, platform: FakePlatform) {
         let hooks = Arc::new(tc_store::Hooks::default());
-        let backend = Arc::new(backend_over(&fs, APP, platform, hooks.clone()));
-        self.t = start(&self.dir, backend).await;
+        let (backend, watch) = backend_over(&fs, APP, platform, hooks.clone());
+        self.t = start(&self.dir, Arc::new(backend)).await;
+        self.t.watch = Some(watch);
         self.fs = fs;
         self.hooks = hooks;
     }
@@ -563,7 +567,7 @@ async fn a_second_writer_makes_the_project_read_only_and_the_copy_carries_its_dr
     page::write_entry(&mut storage, &key_of(&session, "TIT 1:14"), &typed);
 
     // The other computer is told this one is closed, and saves.
-    let theirs = backend_over(
+    let (theirs, _theirs_watch) = backend_over(
         &rig.fs.other_machine(),
         "/app-desktop",
         FakePlatform {

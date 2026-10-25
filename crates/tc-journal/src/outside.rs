@@ -918,3 +918,245 @@ pub fn meta_field_of(record: &Record) -> Option<&MetaField> {
         _ => None,
     }
 }
+
+/// What "Update a book from USFM" does with a file chosen from anywhere (§13.6 with no base,
+/// `rulings/2026-10-22-H20.md`). Nothing is removed and nothing newer is overwritten.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UpdatePlan {
+    /// What comes in with no question: the book, the verses empty in the project and their
+    /// alignments. One batch, cause `Import(Usfm { file_name, .. })`, written first.
+    pub changes: Vec<PlannedChange>,
+    /// The changes to review, each with no parents: a batch of its own, planned again after
+    /// `changes` land. The fold makes one passage conflict of a batch's verse changes, so in
+    /// one batch a verse to review would take the filled verses into its conflict.
+    pub review: Vec<PlannedChange>,
+    /// Verses empty in the project that the file's text filled, with no question.
+    pub imported: Vec<RecordKey>,
+    /// Records whose file value differs from the project's: each a change with no parents,
+    /// so a conflict to review, and never the text shown until the person chooses.
+    pub to_review: Vec<RecordKey>,
+    /// Verses with text in the project and empty in the file ("left as it was: empty in the
+    /// file"), and verses the file lacks or holds inside a span ("left as it was: not in the
+    /// file"): never removed or restructured.
+    pub left_as_it_was: Vec<RecordKey>,
+    /// Verses whose alignment markup does not read apart: imported as text with the markup.
+    pub markup_kept: Vec<RecordKey>,
+    /// The project did not show the book, and the file adds it.
+    pub book_added: bool,
+}
+
+/// A verse with words in it: Home's drafted test (`tc-app` `words_drafted`): words that are
+/// not blank and not the stub `___`. Formatting or markers with no words are empty.
+fn verse_has_words(record: Option<&Record>) -> bool {
+    match record {
+        Some(Record::Verse {
+            value: VerseValue::Text { words, .. },
+            ..
+        }) => {
+            let words = tc_core::js::trim(words);
+            !words.is_empty() && words != "___"
+        }
+        _ => false,
+    }
+}
+
+impl FoldState {
+    /// Plans "Update a book from USFM" for `book` from `bytes`, the file `file_name` chosen
+    /// from anywhere, so with no base (§13.6 U1-U5, H20). The file is read as the book's
+    /// own USFM would be (U1), its aligned verses taken apart as an import takes them
+    /// (`split_aligned`), and compared with the project by the outside-edit planner with an
+    /// unknown base (U3). Then H20's rules:
+    /// - a verse empty in the project and with words in the file is imported, its parents
+    ///   the verse's heads, so no conflict;
+    /// - a verse with words in the project and empty in the file is left as it was, and so is
+    ///   a verse the file lacks or holds inside a span: never removed or restructured;
+    /// - any other difference is a change with no parents, marked `unknown_base`, so a
+    ///   conflict that never shows the file's text first; a record other than a verse
+    ///   equal to any version in its History imports nothing;
+    /// - an alignment is written only for a verse imported without a conflict, or when its
+    ///   verse's text is unchanged (U4); a verse in conflict gets none.
+    pub fn plan_update_book(
+        &self,
+        book: BookId,
+        bytes: &[u8],
+        file_name: &str,
+    ) -> Result<UpdatePlan, String> {
+        let mut plan = UpdatePlan::default();
+        let mut parts = tc_usfm::codec::decompose_bytes(bytes)
+            .map_err(|e| format!("the file does not read: {e}"))?;
+        if let Some(named) = tc_usfm::seed::id_book(&parts.header)
+            && named != book
+        {
+            return Err(format!(
+                "the file is {}, not {}",
+                named.english_name(),
+                book.english_name()
+            ));
+        }
+        let mut alignments = Vec::new();
+        for (&c, chapter) in parts.chapters.iter_mut() {
+            let Some(chapter_no) = ChapterNo::new(c) else {
+                continue;
+            };
+            for (&v, part) in chapter.verses.iter_mut() {
+                let VersePart::Text(verse) = part else {
+                    continue;
+                };
+                let (Some(verse_no), Some(last)) = (VerseNo::new(v), VerseNo::new(verse.last))
+                else {
+                    continue;
+                };
+                let content = tc_usfm::codec::join_verse(&verse.words, &verse.layout);
+                if !content.contains("\\zaln-s") {
+                    continue;
+                }
+                match crate::alignment::split_aligned(&content, last) {
+                    Some((plain, value)) => {
+                        let (words, layout) = tc_usfm::codec::split_verse(&plain);
+                        verse.words = words.to_owned();
+                        verse.layout = layout.to_owned();
+                        alignments.push(Record::Alignment {
+                            book,
+                            chapter: chapter_no,
+                            verse: verse_no,
+                            value,
+                        });
+                    }
+                    None => plan
+                        .markup_kept
+                        .push(RecordKey::Verse(book, chapter_no, verse_no)),
+                }
+            }
+        }
+        let mut records = records_from_usfm(book, &parts);
+        records.extend(alignments);
+        let decoded = Decoded {
+            records,
+            ..Decoded::default()
+        };
+        let file = OutsideFile::Derived(DerivedFile::Usfm(book));
+        // The planner's own cause is replaced below; the source only has to be well formed.
+        let source = ExternalSource::LocalFile {
+            path: RepoPath::parse(&file.path()).map_err(|e| e.to_string())?,
+            seen_md5: Md5::of(bytes),
+        };
+        let outside = self.plan_outside_edit(&file, &decoded, &Base::Unknown, source, true);
+        plan.book_added = outside.book_added.is_some();
+        let cause = |unknown_base| {
+            Cause::Import(crate::change::ImportSource::Usfm {
+                file_name: file_name.into(),
+                unknown_base,
+            })
+        };
+        let mut verse_imported: BTreeSet<(ChapterNo, VerseNo)> = BTreeSet::new();
+        let mut verse_review: BTreeSet<(ChapterNo, VerseNo)> = BTreeSet::new();
+        let mut later = Vec::new();
+        for change in outside.changes {
+            let key = change.record.key();
+            match &key {
+                RecordKey::BookPresence(_) => plan.changes.push(PlannedChange {
+                    cause: cause(false),
+                    ..change
+                }),
+                RecordKey::Verse(_, c, v) => {
+                    let project = self.projected(&key);
+                    let heads = self.heads(&key);
+                    let project_has = verse_has_words(project.as_ref());
+                    let file_has = verse_has_words(Some(&change.record));
+                    let shape = |r: Option<&Record>| match r {
+                        Some(Record::Verse {
+                            value: VerseValue::Text { last, .. },
+                            ..
+                        }) => Some(*last),
+                        _ => None,
+                    };
+                    let (file_shape, project_shape) =
+                        (shape(Some(&change.record)), shape(project.as_ref()));
+                    // Filled with no question only when the project holds one version of
+                    // the verse, an empty stub of the same shape: a verse in conflict keeps
+                    // every side (§7.3), and a span, a covered or a removed verse is the
+                    // translator's structure.
+                    let fillable = !project_has && heads.len() == 1 && project_shape.is_some();
+                    let wanted = compare_key(&change.record, true);
+                    // Only the verse's current versions: a file that sets an older text
+                    // back on purpose is a conflict (§13.6 U3), while a rerun or a
+                    // replayed review finds its version already a head.
+                    let is_a_head = heads.iter().any(|id| {
+                        self.body(id)
+                            .is_some_and(|b| compare_key(&b.record, true) == wanted)
+                    });
+                    if file_shape.is_none() || file_shape != project_shape {
+                        // A verse the file lacks, or holds in another structure (a span, a
+                        // covered verse): never a removal or a change of structure. A removal
+                        // would win over an empty stub (§7.3), and as a conflict a change of
+                        // structure takes the verses around it into one passage, so the
+                        // file's other verses would not show. It is listed instead.
+                        plan.left_as_it_was.push(key);
+                    } else if project_has && !file_has {
+                        plan.left_as_it_was.push(key);
+                    } else if fillable && file_has {
+                        verse_imported.insert((*c, *v));
+                        plan.imported.push(key.clone());
+                        plan.changes.push(PlannedChange {
+                            parents: heads,
+                            cause: cause(false),
+                            record: change.record,
+                        });
+                    } else if is_a_head {
+                    } else {
+                        verse_review.insert((*c, *v));
+                        plan.to_review.push(key);
+                        plan.review.push(PlannedChange {
+                            parents: Vec::new(),
+                            cause: cause(true),
+                            record: change.record,
+                        });
+                    }
+                }
+                _ => later.push(change),
+            }
+        }
+        for change in later {
+            let key = change.record.key();
+            if let RecordKey::Alignment(_, c, v) = &key {
+                if verse_review.contains(&(*c, *v)) {
+                    continue;
+                }
+                if verse_imported.contains(&(*c, *v)) {
+                    plan.changes.push(PlannedChange {
+                        parents: self.heads(&key),
+                        cause: cause(false),
+                        record: change.record,
+                    });
+                    continue;
+                }
+            }
+            let wanted = compare_key(&change.record, true);
+            let in_history = self.history(&key).into_iter().any(|id| {
+                self.body(&id)
+                    .is_some_and(|b| compare_key(&b.record, true) == wanted)
+            });
+            if in_history {
+                continue;
+            }
+            plan.to_review.push(key);
+            plan.review.push(PlannedChange {
+                parents: Vec::new(),
+                cause: cause(true),
+                record: change.record,
+            });
+        }
+        plan.changes.sort_by_key(|c| c.record.key());
+        plan.review.sort_by_key(|c| c.record.key());
+        Ok(plan)
+    }
+}
+
+/// Which batch of "Update a book" to write ([`UpdatePlan`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdatePart {
+    /// What comes in with no question.
+    Fill,
+    /// The changes to review, planned after the first part landed.
+    Review,
+}

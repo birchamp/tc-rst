@@ -39,6 +39,7 @@ fn import(dev: &mut Dev, book: BookId, usfm: &str) -> Vec<tc_journal::Change> {
         items,
         Cause::Import(ImportSource::Usfm {
             file_name: "book.usfm".into(),
+            unknown_base: false,
         }),
     )
 }

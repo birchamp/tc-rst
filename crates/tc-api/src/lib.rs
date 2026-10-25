@@ -231,6 +231,7 @@ macro_rules! test_hook_table {
             command "test/reset": $crate::test::Reset => ();
             command "test/lastEdit": $crate::test::LastEdit => ();
             command "test/script": $crate::test::Script => ();
+            query "test/validate": $crate::test::Validate => $crate::test::ValidateView;
         }
     };
 }

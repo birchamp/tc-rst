@@ -1,18 +1,28 @@
 // The change of checking language (J13) and the release upgrade offers (J12) through the app on
 // the store with the fake Door43 (unit C8): the plan is made from the project, shown, and
-// confirmed by its id; the pins move only at the accept; Keep changes nothing. The upgrade of a
-// set itself, with its download, is tested in tc-app against the seeded fake
-// (crates/tc-app/tests/app/upgrades.rs): the parity account's fake publishes no resources.
+// confirmed by its id; the pins move only at the accept; Keep changes nothing. J12 upgrades a
+// scripture text through the screens from the fake's unfoldingWord releases and reads the moved
+// pin from the project's pin file; J13 reads the primary set from it after Change.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
 //     node --test parity/app/journeys/upgrades.test.mjs
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { browserTest, catalog, sleep, until, withApp } from './kit.mjs';
 
 const en = catalog('en');
 const BIBLE = 'sample_burrito';
 const settings = (page) => page.getByTestId(`project-${BIBLE}`).getByRole('button', { name: en['home.settings'], exact: true });
 const english = (page) => page.getByTestId('settings-gateway-en::unfoldingWord');
+
+/** The project's pin file as it is on disk now (INV-PINS-ON-DISK). */
+const pinFile = (env) => JSON.parse(fs.readFileSync(
+  path.join(env.projectsDir, BIBLE, 'ingredients', 'checking', 'resources.json'), 'utf8'));
+
+/** The release the fake's catalog publishes for unfoldingWord's `repo`. */
+const published = async (env, repo) => (await (await fetch(`${env.door43.url}/api/v1/catalog/search?owner=unfoldingWord`)).json())
+  .data.find((entry) => entry.name === repo);
 
 browserTest('Keep leaves the checking language as it was; Change moves the primary set to English', async () => {
   await withApp(async ({ page }) => {
@@ -43,8 +53,9 @@ browserTest('Keep leaves the checking language as it was; Change moves the prima
   });
 });
 
-browserTest('Change writes the new checking language, and Settings names it by its own name afterwards', async () => {
-  await withApp(async ({ page }) => {
+browserTest('j13_change_writes_the_primary_set_to_disk', async () => {
+  await withApp(async ({ page, env }) => {
+    assert.deepEqual(pinFile(env).languageSets.primary.gatewayLanguage, { languageId: 'es-419', owner: 'es-419_gl' });
     await settings(page).click();
     await english(page).click();
     await page.getByTestId('gateway-change').waitFor();
@@ -59,10 +70,16 @@ browserTest('Change writes the new checking language, and Settings names it by i
     await current.waitFor();
     await until('the card names English', async () => (await current.textContent()).includes('English'));
     assert.equal(await english(page).getAttribute('data-current'), '1');
-  });
+    // The pin file on disk says the same: the primary set is English now.
+    await until('the pin file names English', () => pinFile(env).languageSets.primary.gatewayLanguage.languageId === 'en', 30_000);
+    assert.deepEqual(pinFile(env).languageSets.primary.gatewayLanguage, { languageId: 'en', owner: 'unfoldingWord' });
+  }, { door43: true });
 });
 
-browserTest('Check for updates asks the internet question first, and Not now sends nothing to Door43', async () => {
+// J12 (P1). The sample pins Door43's own commits, which the fake cannot serve; the fake's
+// releases have other commits, so it offers them, as tC4 does (D58: the commit is a release's
+// identity, its label only display), even where the label reads lower.
+browserTest('j12_an_upgrade_through_the_screens_moves_the_pin_on_disk', async () => {
   await withApp(async ({ page, env }) => {
     await settings(page).click();
     await page.getByTestId('settings-manage-sources').click();
@@ -77,14 +94,26 @@ browserTest('Check for updates asks the internet question first, and Not now sen
     const sent = (await env.door43.requests()).filter((r) => r.path.startsWith('/api/'));
     assert.deepEqual(sent, [], 'Not now sends nothing');
     assert.equal(await page.getByTestId('upgrade-offer-primary').count(), 0, 'nothing is offered');
-    // Asking again and turning the internet on reads what Door43 has: this account publishes
-    // nothing for the sample's resources, so each set is as current as Door43 can say.
+    // Asking again and turning the internet on reads what Door43 has: the primary set is
+    // es-419_gl's, which the fake does not publish, so it is as current as Door43 can say; the
+    // scripture text is offered at the fake's release.
     await page.getByTestId('check-updates').click();
     await ask.waitFor();
     await page.getByTestId('net-confirm').click();
     await page.getByTestId('upgrade-offer-primary').waitFor();
     assert.equal(await page.getByTestId('upgrade-offer-primary').getAttribute('data-upgrades'), '0');
     assert.equal(await page.getByTestId('upgrade-current-primary').count(), 1);
-    assert.equal(await page.getByTestId('upgrade-texts-current').count(), 1);
+    const ult = await published(env, 'en_ult');
+    const before = pinFile(env).extraScripture.find((p) => p.repoPath.endsWith('unfoldingWord/en_ult'));
+    assert.notEqual(before.sha, ult.commit_sha);
+    await page.getByTestId('upgrade-text-apply-en_ult').click();
+    const confirm = page.getByTestId('upgrade-confirm');
+    await confirm.waitFor();
+    await confirm.getByTestId('upgrade-apply').click();
+    await confirm.waitFor({ state: 'detached', timeout: 60_000 });
+    // The pin file on disk names the release the screen offered.
+    const moved = () => pinFile(env).extraScripture.find((p) => p.repoPath.endsWith('unfoldingWord/en_ult'));
+    await until('the pin moved on disk', () => moved().sha === ult.commit_sha, 30_000);
+    assert.equal(moved().version, ult.branch_or_tag_name);
   }, { door43: true });
 });

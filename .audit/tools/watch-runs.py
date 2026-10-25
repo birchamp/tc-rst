@@ -46,33 +46,9 @@ def busy_paths():
             pass
     return busy
 
-def du(path):
-    total = 0
-    for d, _, fs in os.walk(path):
-        for f in fs:
-            try: total += os.lstat(os.path.join(d, f)).st_size
-            except OSError: pass
-    return total
-
-def relocate_idle(free):
-    """Move idle build folders (over 5 GB, not yet links) to the root drive, where /var/tmp has room."""
-    import glob, shutil
-    busy = busy_paths()
-    base = "/var/tmp/tc-rst-target"
-    os.makedirs(base, mode=0o700, exist_ok=True)
-    moved = []
-    for t in [REPO + "/target"] + glob.glob(REPO + "/.claude/worktrees/*/target"):
-        root = os.path.dirname(t)
-        if os.path.islink(t) or not os.path.isdir(t): continue
-        if any(b == root or b.startswith(root + '/') for b in busy): continue
-        size = du(t)
-        if size < 5 * 2**30: continue
-        name = "main" if root == REPO else os.path.basename(root)
-        shutil.rmtree(t, ignore_errors=True)
-        os.makedirs(os.path.join(base, name), exist_ok=True)
-        os.symlink(os.path.join(base, name), t)
-        moved.append(f"{name} ({size // 2**30} GB)")
-    return moved
+def free_gb(path):
+    st = os.statvfs(path)
+    return st.f_bavail * st.f_frsize // 2**30
 
 WIN_DIR = CACHE
 WIN_STATE = os.path.join(WIN_DIR, "win-tested.txt")
@@ -169,29 +145,15 @@ while True:
                 if rseen.get(ref) != sha:
                     print(f"REMOTE {ref} {sha}", flush=True)
             rseen = r
-        st = os.statvfs("/home")
-        free = st.f_bavail * st.f_frsize // 2**30
-        if free < 100:
-            moved = relocate_idle(free)
-            if moved:
-                st = os.statvfs('/home'); now_free = st.f_bavail * st.f_frsize // 2**30
-                print(f"DISK {free}G free on /home: moved idle build folders to /var/tmp: {', '.join(moved)}; now {now_free}G", flush=True)
-                free = now_free
+        # Builds live on /home, but the root drive filled once (2026-10-21), so watch both.
+        drive = "/" if free_gb("/") < free_gb("/home") else "/home"
+        free = free_gb(drive)
         if free < 60 and time.time() - last_prune > 1800:
             last_prune = time.time()
             import glob
-            targets = [REPO + "/target"] + glob.glob(REPO + "/.claude/worktrees/*/target")
+            targets = [REPO + "/target"] + glob.glob(REPO + "/.claude/worktrees/*/target") + glob.glob(REPO + "/.worktrees/*/target")
             freed = []
-            busy = set()
-            for pid in os.listdir('/proc'):
-                if not pid.isdigit(): continue
-                try:
-                    exe = os.path.basename(os.readlink(f'/proc/{pid}/exe'))
-                    if not exe.startswith(('cargo', 'rustc', 'rustdoc', 'cc', 'ld', 'node')): continue
-                    busy.add(os.readlink(f'/proc/{pid}/cwd'))
-                    busy.update(a for a in open(f'/proc/{pid}/cmdline').read().split('\0') if '/target' in a)
-                except OSError:
-                    pass
+            busy = busy_paths()
             for t in targets:
                 root = os.path.dirname(t)
                 if any(b == root or b.startswith(root + '/') for b in busy):
@@ -201,10 +163,9 @@ while True:
                     if out: freed.append(os.path.basename(os.path.dirname(t)) + ": " + out[-1])
                 except Exception as e:
                     freed.append(f"{t}: {e}")
-            st = os.statvfs("/home")
-            after = st.f_bavail * st.f_frsize // 2**30
-            print(f"DISK was {free}G free; pruned ({'; '.join(freed)}); now {after}G", flush=True)
+            after = free_gb(drive)
+            print(f"DISK {drive} was {free}G free; pruned ({'; '.join(freed)}); now {after}G", flush=True)
             if after < 40:
-                print(f"DISK still only {after}G free after pruning: act", flush=True)
+                print(f"DISK {drive} still only {after}G free after pruning: act", flush=True)
     i += 1
     time.sleep(20)

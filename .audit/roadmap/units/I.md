@@ -4,19 +4,19 @@ title: Import tC3 projects and update a book from USFM (tc-import)
 track: A
 lane: storage
 milestone: M2
-state: todo
-owner: none
-branch: none
-worktree: none
+state: done
+owner: domain lane (Claude Code 9f599c21)
+branch: track-I
+worktree: .worktrees/track-I
 depends: [S2, DOM-2]
 needs_owner: []
-later: ["S3 from step 7"]
+later: []
 proves: [P4, P5, P9]
 no_loss: true
 size: 4-7 d (basis: B1a's seed took about 2 h; §13.1 is the bulk; +1 to +2 d for Update a book, docs/STORAGE-DELTA-2026-10-21.md §6)
-merged: none
+merged: 22f77f0d
 updated: 2026-10-24
-next: Claim this card after DOM-2 merges. Scope cut (rulings/2026-10-24-H3-H4-H7-fast-release.md): tC3 import and Update a book only; tC4 4.0, outside USFM and outside Burrito import wait.
+next: none
 blocked_by: none
 ---
 
@@ -49,6 +49,8 @@ project: edit, update, then sync. If it overwrote a teammate's newer verse, or d
 file lacks, outside work would cost the team its own.
 
 ## Before you start
+
+- Every store your tests build goes through `backend_over` and its `BurritoWatch` (CHK-2); a journey ends with `test/validate`. Do not validate by hand only.
 
 Run these from the repository root on your branch:
 
@@ -101,12 +103,12 @@ and `2026-10-21-carried-files.md`; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.1
     `vrs.json`; tC3 through the usfm-js-compatible writer; aligned USFM as the woven projection),
     and every non-derived field of the source's `metadata.json` is kept; else the import refuses
     and creates nothing.
-  - INV-HIDDEN-WORK-SHOWS-AS-CONFLICT: every change of a tC4 journal that tC4's rules hid
+  - (retired: tC4 4.0 import cut, rulings/2026-10-24-H3-H4-H7-fast-release.md) INV-HIDDEN-WORK-SHOWS-AS-CONFLICT: every change of a tC4 journal that tC4's rules hid
     (experiments E1–E6, L2, L9–L11, L16) is a head in the imported fold: a listed conflict or in
     History, never dropped.
-  - INV-NO-PARTIAL-PROJECT-AFTER-CANCEL: once a cancel returns, no project folder and no staging
+  - (retired: no job machine for the cut scope; a tC3 import is one create) INV-NO-PARTIAL-PROJECT-AFTER-CANCEL: once a cancel returns, no project folder and no staging
     folder of that import remain, whatever the progress point.
-  - INV-IMPORT-IS-DETERMINISTIC: two imports of one tC4 project give the same project id and change
+  - (retired: tC4 4.0 team import cut) INV-IMPORT-IS-DETERMINISTIC: two imports of one tC4 project give the same project id and change
     ids (STORAGE §13.1 T4, T6), so teammates' imports merge.
   - INV-UPDATE-NEVER-OVERWRITES-NEWER-WORK: Update a book gives each change the base's heads as
     parents, so a verse changed in the project since the base is a conflict, never replaced
@@ -162,31 +164,35 @@ and `2026-10-21-carried-files.md`; `docs/STORAGE-DELTA-2026-10-21.md` §1, §2.1
     it writes no reader or planner of its own.
   - Left to checks: byte equality with a source and tC4's hidden work are facts about each source;
     `verify` checks them at run time (the oracle), and per-fixture tests prove it refuses.
-- **Checks** (to create unless marked; CI `rust` job via `cargo test --workspace`):
-  - `import_next_is_total_over_every_state_and_event` (unit, exhaustive matrix).
-  - `every_manifest_case_imports_or_refuses_as_tc4_does` in `crates/tc-import/tests/manifest.rs`
-    (table-driven over the 16 MANIFEST entries; the `fake` entry, tC4's stand-in parser, skipped).
-  - The 32 tests of `crates/tc-app/tests/app/state_seed.rs` (exist) copied to
-    `crates/tc-import/tests/seed.rs`, and `memory_seed_equals_tc_import_seed` (unit, property).
-  - `import_tc4_hidden_work_surfaces` (STORAGE §15) and `tc4_replay_<id>_shows_the_hidden_work` for
-    E1–E6, L2, L9, L10, L11, L16; `two_teammates_importing_one_tc4_project_get_identical_changes`.
-  - The four P9 tC4 4.0 cases (step 5) and `tc4_project_with_a_6_8_mib_book_add_segment_imports_whole`.
-  - `crash_import_leaves_no_project_or_a_whole_one` (crash, `crates/tc-store/tests/store/crash.rs`)
-    and `a_cancel_at_every_progress_point_leaves_no_folder`.
-  - Update a book (step 7a): `update_a_book_conflicts_a_verse_changed_on_both_sides` (L145),
-    `update_a_book_keeps_alignments_of_unchanged_words_and_reflows_changed_ones` (L149),
-    `update_a_book_conserves` (property; replaces `outside_edit_reconcile_conserves`, delta §5.2),
-    `updating_a_book_costs_what_it_changed` (op count on the Psalms corpus and ten times larger),
-    `an_aligned_usfm_file_updates_its_alignments_and_lists_unreadable_markup`,
+- **Checks** (as built for the first release; CI `rust` job via `cargo test --workspace`):
+  - `every_tc3_manifest_case_imports_or_refuses_as_tc4_does` in `crates/tc-import/tests/tc3.rs`
+    (the 5 tC3 entries of the MANIFEST), `a_tc3_project_reads_its_alignments_and_decisions`,
+    `a_tc3_alignment_whose_words_do_not_fit_the_verse_is_marked_invalid` (#796),
+    `a_tc3_project_imports_with_its_text_unchanged_into_a_valid_project` (P9, P5) and
+    `crash_import_leaves_no_project_or_a_whole_one` (a kill at every write point).
+  - `tc3_usfm` in `crates/tc-usfm/tests/tc3_usfm.rs`: tC3's book text byte for byte against
+    usfm-js 3.4.3 (`fixtures/usfm/tc3-usfm-vectors.json`).
+  - Update a book (`crates/tc-store/tests/store/update.rs`):
+    `update_a_book_conflicts_a_verse_changed_on_both_sides` (L145),
+    `a_verse_the_file_lacks_is_never_removed` (I11, L41, L42),
     `update_a_book_from_an_unreadable_file_writes_nothing_and_names_the_line`,
-    `update_a_story_from_markdown_imports_its_frames`. Step 7b (H20):
-    `updating_from_an_old_export_reverts_nothing` (L148) and
-    `a_no_base_import_never_becomes_the_provisional_text`. L150's test
-    (`an_import_interrupted_after_its_batch_is_not_imported_twice`) is S3's: it needs a kept copy.
-  - Proof each can fail (quote the failure in the log): `recompose` turning CRLF into LF fails the
-    MANIFEST test; replaying tC4's same-actor rule fails the E-replays; skipping the staging delete
-    on cancel fails the cancel test; giving an update's changes the project's current heads as
-    parents fails the L145 test.
+    `an_aligned_usfm_file_updates_its_alignments` (U4), `a_no_base_import_never_becomes_the_provisional_text`,
+    `updating_from_an_old_export_reverts_nothing` (L148) and the property
+    `update_a_book_conserves` (no head lost, no verse removed, an empty verse filled).
+  - Proof each can fail (quoted in the log): without the #796 word check, without the update's
+    missing parents, and with a marked import ranked like any other change.
+  - (retired: cut by rulings/2026-10-24-H3-H4-H7-fast-release.md, tC4 4.0, raw USFM and burrito
+    imports, the job machine and the store's kept copies wait) the tC4 and seed checks
+    `import_next_is_total_over_every_state_and_event`, `memory_seed_equals_tc_import_seed`,
+    `import_tc4_hidden_work_surfaces`, `tc4_replay_<id>_shows_the_hidden_work`,
+    `two_teammates_importing_one_tc4_project_get_identical_changes`,
+    `tc4_project_with_a_6_8_mib_book_add_segment_imports_whole`,
+    `a_cancel_at_every_progress_point_leaves_no_folder`; Update a story
+    `update_a_story_from_markdown_imports_its_frames`; the kept-copy base's
+    `update_a_book_keeps_alignments_of_unchanged_words_and_reflows_changed_ones` (with no
+    base a changed verse is a conflict, so nothing reflows) and S3's
+    `an_import_interrupted_after_its_batch_is_not_imported_twice`; the scale run
+    `updating_a_book_costs_what_it_changed` (P is parked; the planner reads one book).
 - **Prose**: `docs/STORAGE.md` §13, in the commit that changes the behavior: §13.1 T2 segments up to
   8 MiB (C38); §13.5 nested alignments at any depth (C45) and the rule for a burrito with no
   `vrs.json`; §13.3 `moved.json` (step 8). §13.6 is written by S2 from the delta; change it only
@@ -545,3 +551,18 @@ features, `--features gallery`, `--features app` and `--features test-hooks`;
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
 - 2026-10-23 23:49 EDT | checks lane (Claude Code 2198ee19) | note | none | From CHK-3: your rows in docs/TC4-ISSUES.md and docs/P-LEDGER.md are (pending: I); when you write a test, replace the marker with its name in the same commit. .audit/tools/claims.test.mjs fails once this card is done while a marker remains | node --test .audit/tools/claims.test.mjs
 - 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
+- 2026-10-24 14:27 EDT | domain lane (Claude Code 9f599c21) | claim | none | Claimed on the orchestrator's word in .worktrees/track-I, cut from track-DOM-2 5ee8859d (DOM-2 is with the integration lane for batch 1; S2 is done on main). Scope by rulings/2026-10-24-H3-H4-H7-fast-release.md: kept steps 1 (only #796, the tC3 row), 2 (crate and machine), 6 (tC3 import), 7 (create_imported, on the current store: S3 is parked), 7a (Update a book; its store half is built here as Store::update_book, since S3 step 9 is parked) and 7b (no base, H20 ruled A). Cut until after the first release: steps 3 (raw USFM and burrito import; the MANIFEST test covers only the tC3 cases), 4 and 5 (tC4 4.0 seed and conversion), 8 (team move) and 9 (whole-Bible tC4 import). Before you start: STORAGE §13.6 present; plan_outside_edit at crates/tc-journal/src/outside.rs:676; H18 and H20 ruled, H13 not (it only concerned tC4 4.0 and USFM imports, both cut); no crates/tc-import yet | python3 -I .audit/tools/board.py
+- 2026-10-24 14:30 EDT | domain lane (Claude Code 9f599c21) | step 1 | none | Only the tC3 item is in scope: docs/TC4-ISSUES.md gets `#796 (tC3 import)` (unit I, test a_tc3_alignment_whose_words_do_not_fit_the_verse_is_marked_invalid, pending: I), read from ~/unfoldingword/tc4-sweep, which holds b86270f: `git log --oneline 9ad4d5c..b86270f -- src/data/import` lists 0b4cb270 (#813, burrito: cut), e17fce08 and e79a2795 (#796, tC3). #813, D110, #821, #822 and #835 concern the cut tC4 4.0, USFM and burrito imports and are left for later | git -C ~/unfoldingword/tc4-sweep log --oneline 9ad4d5c..b86270f -- src/data/import
+- 2026-10-24 14:43 EDT | domain lane (Claude Code 9f599c21) | step 7a | none | Update a book from USFM, no base (7a with 7b, H20 A; the kept-copy base waits with S3). Planner `FoldState::plan_update_book(book, bytes, file_name) -> UpdatePlan` in tc-journal/src/outside.rs, beside plan_outside_edit, whose private helpers it needs (the card put the pure half in tc-import; it is the same planner, not a second one): decodes with the codec, takes aligned verses apart with split_aligned, compares through plan_outside_edit with Base::Unknown, then H20: a verse empty in the project and with words in the file is imported (parents = heads); words in the project and an empty verse in the file is left as it was (the reply's `kept`); any other difference is a change with no parents; a verse the file lacks is a conflict, never a removal; an alignment is written only for a verse imported directly or whose text is unchanged; a record other than a verse equal to a version in its History imports nothing; a file whose \id names another book is refused ("the file is Philemon, not Titus"). Store: Command::UpdateBook { book, bytes, file_name } plans it in the actor. Format (delta §2.15, before the freeze): ImportSource::Usfm gains `unknown_base` (`"unknownBase": true`, written only when set, so every journal so far reads and encodes unchanged; tC-journal canonical and properties pass, the generator now draws it), CauseClass::Import { unknown_base } ranked 0 like an unknown-base outside change, fold-cache cause code 11. Markdown story update not built (cut with the scope: the ruling keeps Update a book from USFM). Tests crates/tc-store/tests/store/update.rs: update_a_book_conflicts_a_verse_changed_on_both_sides, a_verse_the_file_lacks_is_a_conflict_never_a_removal, update_a_book_from_an_unreadable_file_writes_nothing_and_names_the_line, an_aligned_usfm_file_updates_its_alignments, all pass. Proof: giving a differing verse the current heads as parents fails the first, `assertion failed: conflicted(&handle, &verse(1, 1))` (update.rs:54). V's owner must know the new optional field | cargo test -p tc-store --test store update::
+- 2026-10-24 15:00 EDT | domain lane (Claude Code 9f599c21) | step 2 | none | crates/tc-import created (tc-core, tc-usfm, tc-journal, serde_json, thiserror, unicode-normalization, zip; never tc-store). Kept lean for the cut scope: SourceFile and ImportRefusal (tC4's import.damaged.* codes through code()); no ImportJob state machine, no VerifiedPlan type: a tC3 import is read in one pass and written by one Store::create_imported, which is whole or absent through its staging folder, and a cancel before the write leaves nothing. TRACK-B §8's identify/review/convert signatures are not written (no B′). tc-arch's edge table has a tc-import row (tc-core, tc-usfm, tc-journal); not on the pure list, as it reads zips | cargo test -p tc-arch
+- 2026-10-24 15:00 EDT | domain lane (Claude Code 9f599c21) | step 6 | none | tc_import::tc3::read(&[SourceFile]) -> Tc3Import (language, name, licenses, contributors, gateway, versions, books) and Tc3Import::records(&DecisionPins) -> Vec<Record>, as STORAGE §13.4 now says: text through tc_usfm::tc3_book_usfm (74a08561, byte for byte with usfm-js on all four fixture books and 47 edge cases), alignments through decode_alignment_record (Writer::Tc4) with #796, decisions through decode_decisions. tC4 imports the current state; so does this (STORAGE §13.4 updated: its chains of tC3 history were never in tC4). Found: en_kjv Luke holds one tN decision with occurrence -1 (every occurrence), which no check list of the rebuild holds; it is listed in Tc3Book::not_kept and not imported (the source zip keeps it), a declared difference to tell the owner. Tests crates/tc-import/tests/tc3.rs: every_tc3_manifest_case_imports_or_refuses_as_tc4_does (5 cases: 2 accept, 3 refuse with tC4's codes), a_tc3_project_reads_its_alignments_and_decisions (46 records, 5 decisions), a_tc3_alignment_whose_words_do_not_fit_the_verse_is_marked_invalid, a_tc3_project_imports_with_its_text_unchanged_into_a_valid_project. Proof: without the #796 word check the third fails, `left: [] right: ["1:1"]`. Not done: imported() in tc-align/tests/tc3_import.rs keeps its own model of tC4's records (it tests tc-align on them; pointing it at tc-import would compare values, not tC4's JSON) | cargo test -p tc-import
+- 2026-10-24 15:00 EDT | domain lane (Claude Code 9f599c21) | step 7 | none | Store::create_imported(&NewProject, Cause): Store::create's path (staging folder, build, place without replacing, removed at next start if killed), with the given cause on every record instead of Seed, staging kind Import. S3 is parked, so it is built on the current store. The end-to-end test writes the Titus import and checks the book file is tC3's text byte for byte, a valid Scripture Burrito, and every change Import(Tc3). Not written: a crash or cancel test of its own (create's crash test covers the same path), the .bak copy (tC4 4.0 only) | cargo test -p tc-import --test tc3
+- 2026-10-24 15:08 EDT | domain lane (Claude Code 9f599c21) | step 7b | none | No-loss checks added and two findings fixed. update_a_book_conserves (property, 24 cases of six verses: project empty or with words, file empty, missing or with words) found (1) a verse the file lacks and the project holds as an empty stub was removed: the removal wins over a seed stub (§7.3); and (2) one conflicting verse took the batch's filled verses into its passage conflict, so they did not show. Fixed: a verse the file lacks, or holds inside a span, is left as it was and listed (the reply's `kept`), never removed or restructured; and Update a book is two batches, `UpdatePart::Fill` (book, empty verses filled, their alignments) then `UpdatePart::Review` (the no-parent changes, planned again on the new fold). STORAGE §13.6 U3 and U5 say so. a_verse_the_file_lacks_is_a_conflict_never_a_removal became a_verse_the_file_lacks_is_never_removed. Added a_no_base_import_never_becomes_the_provisional_text (proof: ranking a marked import like any other fails it, `left: Some("Paul, a slave of God") right: Some("Paul, a servant of God")`), updating_from_an_old_export_reverts_nothing (L148) and crash_import_leaves_no_project_or_a_whole_one in tc-import (a kill at every write point of create_imported). The funnel card's Checks and Invariants now name what exists, the cut items marked retired with the ruling; docs/TC4-ISSUES.md #796 (tC3) covered, #553 covered by the Add-a-book and Update tests, #529 pending DONE (tC4 4.0); docs/P-LEDGER.md P9 names the tC3 tests. The claims check passes with this card marked done | cargo test -p tc-store --test store update::
+- 2026-10-24 15:18 EDT | domain lane (Claude Code 9f599c21) | verify | 1c034eaf | One review, loss lens (fresh subagent; ran tc-import and update:: tests, probed scenarios in a scratch copy). 1 Code: missing a structural "fillable" test. 2 Checks: no test of an existing conflict, a span, a removed verse or a rerun. 3 Reach: all reachable (sync or a stale save, span projects, rerunning Update). 4 Siblings: plan_outside_edit treats conflicts as unknown-base; plan_update_book's fill path did not. 5 No loss: BLOCKER, a verse in conflict whose shown side is empty was filled with every head as parents, merging the conflict away (the other side only in History); MAJOR, covered and removed verses counted as empty, so a file's separate verse could restructure a span or restore a removed verse; minors: a rerun added the same conflict side again; a bridge in the file on an empty project made a passage conflict; tC3 decisions on a covered verse got the md5 of ""; no carry-over port for an unresolved tC3 version (F1). 6 Prose: one comment contradicted the code. Wire format, rank 0, rule 8, NFC, #796 and P9 checked fine | review report quoted in this line
+- 2026-10-24 15:18 EDT | domain lane (Claude Code 9f599c21) | fix | none | Blocker and major: a verse is filled only when the project holds one version of it (one head), an empty Text of the same shape; a verse the file lacks or holds in another structure than the project (a span, covered, removed) is left as it was and listed. Minors: a verse whose file version is already in its History is skipped (a rerun or a replayed review batch adds nothing); a bridge in the file is a structure difference, left as it was; a tC3 decision on a covered verse takes the covering span's text. The carry-over port for an unresolved tC3 version is F1's (minors.tsv). Tests a_verse_in_conflict_is_never_filled (proof: dropping the one-head rule fails it, `a side of the conflict was merged away`), a_bridge_in_the_file_restructures_nothing, updating_twice_with_one_file_adds_nothing; update:: 10 pass, tc-import 5 pass | cargo test -p tc-store --test store update::
+- 2026-10-24 15:19 EDT | domain lane (Claude Code 9f599c21) | note | none | later: ["S3 from step 7"] removed: S3 is parked by rulings/2026-10-24-H3-H4-H7-fast-release.md, and steps 7 and 7a are built on the current store (as the ruling says for X). State stays verifying until DOM-2 is done, then gating for the batch | python3 -I .audit/tools/board.py --check
+- 2026-10-24 16:20 EDT | domain lane (Claude Code 9f599c21) | fix | none | CI on c1b37878 failed one test: the fold lint did not name plan_update_book. It plans an outside edit of a whole book, so it joins plan_outside_edit in the lint list and in tc-app's clippy.toml | cargo test -p tc-app --test op_counts op_counts::lint::; cargo clippy -p tc-app --lib -- -D warnings
+- 2026-10-24 19:05 EDT | domain lane (Claude Code 9f599c21) | verify | 18947b1f | Races and protocol lens (fresh subagent, code read, no edits). No blocker or major. Plan and commit of each part run together on the actor thread (actor.rs:160), so no plan goes stale; a crash or retry after only Fill is safe (Fill is one batch, a rerun fills nothing, Review re-plans); a replayed Review or two tabs with one file add nothing; two tabs with different files make a visible conflict; create_imported builds in a staging folder and renames with no replace, so a double click gives NameExists. Minors: the History skip in plan_update_book hides a verse the file deliberately sets back to an older text, where STORAGE 13.6 U3 asks for a conflict (fixed next, heads only); F1 must send Review right after Fill (minors.tsv) | review report quoted in this line
+- 2026-10-24 19:40 EDT | domain lane (Claude Code 9f599c21) | verify | 18947b1f | Browser and parity lens (fresh subagent; built tc4 with test-hooks and fixture-backend and the UI, drove Chromium with a throwaway journey, read tC4 at tc4-ref). Verdict merge, no blocker or major. Reach: neither tC3 import (Home, Add a project, Import, translationCore 3 project does nothing, app_ctx.rs:823) nor Update a book (nothing sends UpdateBook) is on screen yet; F1 wires both, as the ruling splits it. Same as tC4: no tC3 check history; tC3 text through the usfm-js writer; the #796 rule. Minors: three differences undeclared in APP-DESIGN (every-occurrence decisions, Update a book itself, tC3 decision times), declared next; refusal words and addBook.usfmExists for F1 (minors.tsv) | review report quoted in this line
+- 2026-10-24 19:45 EDT | domain lane (Claude Code 9f599c21) | fix | none | Races-lens minor: plan_update_book skipped a verse whose file text was anywhere in its History, so a file setting an older text back on purpose vanished from the report; it now compares with the verse's heads only, as STORAGE 13.6 U3 says, and makes a conflict. updating_from_an_old_export_reverts_nothing asserts the conflict and fails on the old rule (update.rs:206). Parity-lens minors: I's tC4 differences declared in APP-DESIGN's F1 Import row | cargo test -p tc-store --test store update::; cargo test -p tc-journal; cargo clippy -p tc-journal -p tc-store --all-targets -- -D warnings
+- 2026-10-24 18:35 EDT | integration lane (Claude Code 3d07d5f8) | merge | 22f77f0d | merged into main in batch 2b (INT-6 a4dc42af, FIX-J f1b865b9, G1 137164e8, LIC-1 819efb32, CHK-2 a9c3710f, CHK-1 64ad5158, I 22f77f0d, RULING-H5 8bd03b4b), gated by scripts/gates.sh --wait-ci batch-2b on the batch's last commit. In the batch, TC4-ISSUES #813 (Burrito import) waits with V under the 2026-10-24 scope ruling. | scripts/gates.sh --wait-ci batch-2b
