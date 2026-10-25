@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use sha1::{Digest, Sha1};
 
-/// The pin of tC4's `scripts/fetch-help.mjs` at d310bf3, the rebuild's reference.
-const HELP_PIN: &str = "cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7";
+/// The pin of tC4's `scripts/fetch-help.mjs` at d25b7871, the rebuild's reference.
+const HELP_PIN: &str = "dbb7cd03c657637ec97ee4c0f00ed7bae44698d9";
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -95,7 +95,7 @@ fn every_help_page_has_the_bytes_tc_website_has_at_the_pin() {
         unlisted.is_empty(),
         "files under help/ that help-pages.txt does not list: {unlisted:?}"
     );
-    assert_eq!(list.files.len(), 180, "tc-help/ at the pin holds 180 files");
+    assert_eq!(list.files.len(), 189, "tc-help/ at the pin holds 189 files");
 }
 
 #[test]

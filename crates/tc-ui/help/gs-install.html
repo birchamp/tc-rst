@@ -107,16 +107,16 @@
 <li><a href="ts-team-sync.html">Working as a team on several computers</a></li>
 <li><a href="ts-not-yet.html">Features not built yet</a></li>
 </ul></details>
-<details class="nav-group"><summary><a href="section-whats-new.html">What&#x27;s new</a></summary><ul>
+<details class="nav-group"><summary><a href="section-whats-new.html">Release notes</a></summary><ul>
 <li><a href="wn-alpha1.html">alpha.1 — First public build</a></li>
 <li><a href="wn-alpha2.html">alpha.2 — Check and align</a></li>
 <li><a href="wn-alpha4.html">alpha.4 — Open and resume</a></li>
 <li><a href="wn-alpha5.html">alpha.5 — Drafting for real</a></li>
 <li><a href="wn-alpha6.html">alpha.6 — Suggestions and resources</a></li>
 <li><a href="wn-alpha7.html">alpha.7 — Open Bible Stories</a></li>
-
 <li><a href="wn-add-a-project.html">Sep 27, 2026 — one + Add a project button on Home</a></li>
 <li><a href="wn-rc1.html">What&#x27;s new in 4.0 rc.1</a></li>
+<li><a href="wn-rc2.html">What&#x27;s new in 4.0 rc.2</a></li>
 </ul></details>
 </nav>
 <main id="main" class="content">
@@ -126,17 +126,19 @@
 <p class="lede">Download translationCore 4 for your computer, install or unpack it, and start it. It opens on the Home screen.</p>
 <p>The download already has the source texts, the translation helps and the story pictures, so you can start without the internet.</p>
 <h2 id="steps">Steps</h2>
-<ol><li>Get the file for your computer from the <a href="https://github.com/unfoldingWord/translationCore4/releases">tC4 releases page</a>: the <code>.exe</code> for Windows, the <code>.pkg</code> for macOS (Apple silicon), or the <code>.zip</code> for Linux.</li><li>Install it:<ul><li><strong>Windows:</strong> run the <code>.exe</code>. If Windows warns about an unknown app, choose <strong>More info</strong>, then <strong>Run anyway</strong>. Start tC4 from the Start menu.</li><li><strong>macOS:</strong> open the <code>.pkg</code>. If macOS blocks it, open System Settings › Privacy &amp; Security and choose <strong>Open Anyway</strong>. Then start translationCore 4 from Applications.</li><li><strong>Linux:</strong> unpack the zip, open a terminal in the <code>translationCore4</code> folder and run <code>./start-tc4.sh</code>.</li></ul></li><li>Wait for the window. tC4 opens on Home with the heading <span class="ui">Your projects</span>.</li></ol>
+<ol><li>Get the file for your computer from the <a href="https://github.com/unfoldingWord/translationCore4/releases">tC4 releases page</a>: the <code>.exe</code> for Windows, the <code>.pkg</code> for macOS (Apple silicon), or the <code>.zip</code> for Linux.</li><li>Install it:<ul><li><strong>Windows:</strong> run the <code>.exe</code>. If Windows warns about an unknown app, choose <strong>More info</strong>, then <strong>Run anyway</strong>. Start tC4 from the Start menu.</li><li><strong>macOS:</strong> open the <code>.pkg</code>. If macOS blocks it, open System Settings › Privacy &amp; Security and choose <strong>Open Anyway</strong>. Then start translationCore 4 from Applications.</li><li><strong>Linux:</strong> unpack the zip, open a terminal in the <code>translationCore4</code> folder and run <code>./start-tc4.sh</code>.</li></ul></li><li>The first time, a small window says "Preparing translationCore4" and counts the resources, for example "Preparing resources: 2 of 16". Wait until it finishes. This can take a minute on a slow computer. Later starts are fast; the window shows only for a moment.</li></ol>
+<figure class="shot-inline" id="shot-2"><a href="img/gs-install-2.png"><img src="img/gs-install-2.png" alt="The small window Preparing translationCore4 on the first start: Getting resources ready for offline use. Preparing resources: 2 of 16." width="260" height="120" loading="lazy"></a></figure>
+<ol start="4"><li>tC4 opens on Home with the heading <span class="ui">Your projects</span>.</li></ol>
 <figure class="shot-inline overview" id="shot-1"><a href="img/gs-install-1.png"><img src="img/gs-install-1.png" alt="Home the first time tC4 starts: the heading Your projects, the + Add a project button, and the message No projects yet. Select + Add a project to start." width="828" height="216" loading="lazy"></a></figure>
-<ol start="4"><li>Click <span class="ui">+ Add a project</span> to start your first project. See <a href="gs-home.html">The Home screen</a>.</li></ol>
+<ol start="5"><li>Click <span class="ui">+ Add a project</span> to start your first project. See <a href="gs-home.html">The Home screen</a>.</li></ol>
 <p>The warnings in step 2 appear because the installers are not signed yet. They only appear the first time.</p>
 <h2 id="if-it-doesn-t-start">If it doesn't start</h2>
-<ul><li><strong>Windows says "The backend could not be started":</strong> install the Microsoft Visual C++ Redistributable (x64), then start tC4 again.</li><li><strong>Nothing new opens:</strong> only one copy of tC4 runs at a time. Starting it again brings back the window that is already open.</li><li><strong>Linux prints a line about "--no-sandbox":</strong> that is normal for the zip.</li></ul>
+<ul><li><strong>Windows says "The backend could not be started":</strong> install the Microsoft Visual C++ Redistributable (x64), then start tC4 again.</li><li><strong>Nothing new opens:</strong> only one copy of tC4 runs at a time. Starting it again brings back the window that is already open.</li><li><strong>"translationCore4 could not start … Bundled archive checksum mismatch":</strong> the download is damaged. Click OK, download it again and start the new copy.</li><li><strong>You closed tC4 while it was preparing:</strong> start it again. It continues and cleans up.</li><li><strong>Linux prints a line about "--no-sandbox":</strong> that is normal for the zip.</li></ul>
 <p>tC4 is still a pre-release. Keep a copy of important work elsewhere.</p>
 <h2 id="related">Related topics</h2><ul class="related"><li><a href="gs-home.html">The Home screen</a></li><li><a href="bp-import.html">Import a project (translationCore 3, USFM or Scripture Burrito)</a></li><li><a href="st-where-projects-live.html">Where your projects are stored</a></li><li><a href="ts-platform.html">Windows, macOS and Linux notes</a></li></ul>
 </main>
 </div>
-<footer class="sitefoot">Documented from translationCore 4 build <code>b04c70f</code>, which includes v4.0.0-rc.1 plus later fixes. The app is the source of truth: if this page and the app disagree, the app is right — please tell us.</footer>
+<footer class="sitefoot">The app is the source of truth: if this page and the app disagree, the app is right — please tell us. <a href="section-whats-new.html">Release notes</a></footer>
 <script src="search-index.js"></script>
 <script src="assets/search.js"></script>
 </body>

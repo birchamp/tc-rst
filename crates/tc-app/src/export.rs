@@ -38,7 +38,7 @@ use crate::dispatch::Handle;
 use crate::jobs::{JobEnd, JobSpec};
 use crate::reports::{ReportOp, ReportOutcome};
 use crate::session::ProjectSession;
-use crate::story::{MediaFile, journal_story, read_story, story_numbers};
+use crate::story::{MediaFile, read_story, story_numbers};
 
 /// A verse's label as the book writes it: `4`, or `4-5` for a span.
 fn label(verse: u16, last: u16) -> String {
@@ -115,10 +115,10 @@ impl Handle<Book> for App {
 
 /// A story number tc-obs printed, as the wire's: every story the project holds is 1 to 50.
 fn story_no(app: &App, number: u8) -> Result<StoryNo, ApiError> {
-    StoryNo::new(number).map_err(|e| {
+    StoryNo::new(number).ok_or_else(|| {
         app.internal(
             "a story's number could not be written",
-            crate::reports::facts(serde_json::json!({"story": number, "reason": e.to_string()})),
+            crate::reports::facts(serde_json::json!({"story": number, "reason": "not 1 to 50"})),
         )
     })
 }
@@ -135,13 +135,10 @@ fn project_stories(
 ) -> Result<Vec<ObsStory>, ApiError> {
     let mut stories: Vec<ObsStory> = Vec::new();
     for number in story_numbers() {
-        let Ok(story) = StoryNo::new(number) else {
+        let Some(story) = StoryNo::new(number) else {
             continue;
         };
-        if read
-            .key_state(&RecordKey::StoryBase(journal_story(story)?))
-            .is_none()
-        {
+        if read.key_state(&RecordKey::StoryBase(story)).is_none() {
             continue;
         }
         stories.push(read_story(read, story)?);
@@ -317,9 +314,9 @@ fn wire_facts(facts: &tc_export::ExportFacts) -> ExportFacts {
             .iter()
             .filter_map(|skipped| {
                 Some(SkippedVerse {
-                    chapter: skipped.reference.chapter,
+                    chapter: skipped.reference.chapter().get(),
                     // A span is `4` or `4-5`: never empty, never a `:`.
-                    verse: RefPart::parse(&skipped.reference.verses.to_string()).ok()?,
+                    verse: RefPart::parse(&skipped.reference.verses().to_string()).ok()?,
                     why: match skipped.why {
                         tc_export::SkipReason::NeedsReview => SkipReason::NeedsReview,
                         tc_export::SkipReason::InlineAlignment => SkipReason::InlineAlignment,
@@ -342,13 +339,10 @@ async fn story_files(session: &ProjectSession) -> Result<Vec<(String, Vec<u8>)>,
         let read = session.read();
         let mut files = Vec::new();
         for number in story_numbers() {
-            let Ok(story) = StoryNo::new(number) else {
+            let Some(story) = StoryNo::new(number) else {
                 continue;
             };
-            let Some(number) = tc_journal::StoryNo::new(story.get()) else {
-                continue;
-            };
-            let file = DerivedFile::Story(number);
+            let file = DerivedFile::Story(story);
             if let Some(bytes) = read.render(&file) {
                 files.push((file.path(), bytes));
             }
@@ -599,7 +593,7 @@ impl App {
             .and_then(Result::ok)
             .map(|p| p.metadata)
             .unwrap_or_else(|| Err("the project's metadata could not be read".to_owned()));
-        crate::home::card_facts(&metadata, &folder, kind).name
+        crate::home::card_facts(&metadata, None, &folder, kind).name
     }
 
     /// tC4's `export.read-failed`, its diagnosis the reason, reported.

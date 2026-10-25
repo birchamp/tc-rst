@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0f44b3c719197650de910cc1d0c76146915c88977fe2e98629aa41bfe7d4da6f # shrinks to project = [Empty, Empty, Words("grace and peace"), Empty, Empty, Empty], file = [Empty, Empty, Missing, Missing, Empty, Empty]

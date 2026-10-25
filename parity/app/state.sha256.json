@@ -1,5 +1,5 @@
 {
-  "tc4": "d310bf304cfee784f4ca45dee474a3faf0d5616e",
+  "tc4": "d25b7871904228a342c0d80280136d8636833653",
   "scenarios": {
     "sample": {
       "client_settings/uw-tc4.json": "2aab2433aad8374eab8868bba2ad5e4f789ba43a4ac228756787d91375c7eef6",
@@ -259,8 +259,8 @@
       "vrs/vul.json": "e09ea002e89aa86cdfbdd4cb69b1ff2c75070801e0648c37aef580d4fc8d06a0"
     },
     "en-pins": {
-      "client_settings/uw-tc4.json": "2aab2433aad8374eab8868bba2ad5e4f789ba43a4ac228756787d91375c7eef6",
-      "provenance.json": "2ffd728351765a5f287ccbaa2d77300657531a7c03f3acdbd7abe23b8dbdd20b",
+      "client_settings/uw-tc4.json": "1edbbbe1b546812695b42c06233b256fd883432c46c2b13512a150de6a572996",
+      "provenance.json": "76d87795465aad6c19cd578647248dad7f92bbd385da18b46c5066b95114ff82",
       "repos/_local_/_local_/sample_burrito/.gitignore": "ec7b0eeb8a6f76397ee4d8da863accd05d51dafef886b1532335c18caec8d41b",
       "repos/_local_/_local_/sample_burrito/ingredients/JON.usfm": "f747d801348434b17709d3203a139c2930ca5f41d8a1cd5cbaab1cc3b13a7224",
       "repos/_local_/_local_/sample_burrito/ingredients/TIT.usfm": "f0ac0e7e3fa26d703e8e509b8a8b48540656ad51fec533c05595faa294792f51",
@@ -508,6 +508,8 @@
       "repos/_local_/_sideloaded_/en_ust/metadata.json": "80195fc6098f00d6077ec2172ed5eafedbc5697d74e8d3ee9b0a0ef3690de314",
       "repos/_local_/_sideloaded_/es-419_tn/ingredients/TIT.tsv": "f8a4cd2ab6b9c21ed98783ac719667716b5c4fe75917325fdd14c67bc7ca6ed0",
       "repos/_local_/_sideloaded_/es-419_tn/metadata.json": "23e4347348279ac8cd7dcbdcd3e536c114705db11819b521a5c186be514fcfd7",
+      "repos/_local_/_sideloaded_/hbo_uhb/ingredients/JON.usfm": "55a36ef7ab573305e6281d5ae28223fe525e478f7e12e946b64099f6b646ca7b",
+      "repos/_local_/_sideloaded_/hbo_uhb/metadata.json": "9d8494cbb4370970b3e2553a57a81ba1d4678639f5a670863fcad6e5a22d7b8b",
       "vrs/eng.json": "5162023f8e0604fce96a49d7fb8cea73ef699928846d10d62210bd4882e81338",
       "vrs/lxx.json": "90d980f784512aea00af48646c337b1f7cb97bae3023a9223155369034e466f2",
       "vrs/org.json": "3b8e065fb592100265ff9ebcea71f5376927fa03c085844f3058d463a2e9cac7",

@@ -307,7 +307,7 @@ fn every_record_kind_maps_to_its_change_part() {
         ToolId::TranslationWords,
         CheckTarget::Frame {
             story: story(3),
-            frame: FrameNo(4),
+            frame: FrameNo::new(4),
         },
     ))]);
     assert_eq!(
@@ -319,7 +319,7 @@ fn every_record_kind_maps_to_its_change_part() {
     );
     assert_eq!(tw_story.stories, [wire_story(3)]);
     // A frame's text names both of its story's lists, as a verse's does its book's.
-    let frame_text = parts(vec![RecordKey::Frame(story(3), FrameNo(4))]);
+    let frame_text = parts(vec![RecordKey::Frame(story(3), FrameNo::new(4))]);
     assert_eq!(
         frame_text.checks,
         [Tool::TranslationNotes, Tool::TranslationWords].map(|tool| CheckListRef {
@@ -352,7 +352,7 @@ fn every_record_kind_maps_to_its_change_part() {
     let stories = |key| parts(vec![key]).stories;
     assert_eq!(stories(RecordKey::StoryBase(story(7))), [wire_story(7)]);
     assert_eq!(
-        stories(RecordKey::Frame(story(7), FrameNo(2))),
+        stories(RecordKey::Frame(story(7), FrameNo::new(2))),
         [wire_story(7)]
     );
     assert_eq!(stories(RecordKey::StoryRef(story(8))), [wire_story(8)]);
@@ -411,7 +411,7 @@ fn a_comment_marks_where_it_is() {
     );
     let on_frame = on(CommentTarget::Frame {
         story: story(5),
-        frame: FrameNo(1),
+        frame: FrameNo::new(1),
     });
     assert_eq!(on_frame.stories, [wire_story(5)]);
     // A comment whose place cannot be read is a refresh of everything, never a scope that
@@ -737,7 +737,7 @@ fn a_record_key_survives_the_round_trip() {
         RecordKey::ProjectMeta(MetaField::Languages),
         RecordKey::Versification,
         RecordKey::StoryBase(story(50)),
-        RecordKey::Frame(story(1), FrameNo(0)),
+        RecordKey::Frame(story(1), FrameNo::TITLE),
     ];
     for key in keys {
         let record = record_ref(&key).unwrap();

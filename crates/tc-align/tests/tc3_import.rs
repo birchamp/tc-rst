@@ -6,108 +6,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
-use tc_align::Alignment;
 
 use common::*;
-use serde_json::{Map, Value};
-use std::io::Read;
-use tc_align::{Aligner, TargetVerse, record};
-
-const ZIP: &str = "fixtures/tc4/conformance-fixtures/import/tc3/cfm_fbt_tit_book.zip";
-const APP: &str = "apps/translationCore";
-
-fn entry(archive: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Value {
-    let mut text = String::new();
-    archive
-        .by_name(name)
-        .unwrap()
-        .read_to_string(&mut text)
-        .unwrap();
-    serde_json::from_str(&text).unwrap()
-}
-
-/// tC4's `normalizeOccurrences`: occurrences as integers, every other field kept.
-fn normalized(word: &Value) -> Value {
-    let mut word = word.clone();
-    for key in ["occurrence", "occurrences"] {
-        if let Some(Value::String(s)) = word.get(key) {
-            word[key] = Value::from(s.parse::<u64>().unwrap());
-        }
-    }
-    word
-}
-
-/// tC4's `unmergeWord`: a placed word without tC3's `type`.
-fn unmerged(word: &Value) -> Value {
-    let mut word = normalized(word);
-    word.as_object_mut().unwrap().remove("type");
-    word
-}
-
-/// One TIT verse of the fixture: its record as tC4's `alignmentFile` makes it, and its
-/// text.
-struct Imported {
-    reference: String,
-    record: Value,
-    verse: TargetVerse,
-}
-
-fn imported() -> Vec<Imported> {
-    let mut archive = zip::ZipArchive::new(std::fs::File::open(fixture(ZIP)).unwrap()).unwrap();
-    let mut out = Vec::new();
-    for chapter in 1..=3 {
-        let alignments = entry(
-            &mut archive,
-            &format!("{APP}/alignmentData/tit/{chapter}.json"),
-        );
-        let texts = entry(&mut archive, &format!("tit/{chapter}.json"));
-        // tC3's `front` holds no verse, and tC4 keys no record to it.
-        let mut verses: Vec<_> = alignments
-            .as_object()
-            .unwrap()
-            .iter()
-            .filter_map(|(v, data)| Some((v.parse::<u16>().ok()?, v, data)))
-            .collect();
-        verses.sort_by_key(|(n, _, _)| *n);
-        for (_, verse, data) in verses {
-            let text = texts[verse.as_str()].as_str().unwrap();
-            let target = TargetVerse::new(text);
-            let words = |list: &Value, f: fn(&Value) -> Value| {
-                Value::Array(list.as_array().unwrap().iter().map(f).collect())
-            };
-            let mut record = Map::new();
-            record.insert(
-                "alignments".into(),
-                Value::Array(
-                    data["alignments"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|a| {
-                            serde_json::json!({
-                                "topWords": words(&a["topWords"], normalized),
-                                "bottomWords": words(&a["bottomWords"], unmerged),
-                            })
-                        })
-                        .collect(),
-                ),
-            );
-            record.insert("wordBank".into(), words(&data["wordBank"], normalized));
-            record.insert("invalid".into(), Value::Bool(false));
-            record.insert(
-                "targetVerseMd5".into(),
-                Value::from(target.md5().to_string()),
-            );
-            record.insert("sourceVersion".into(), Value::from(SOURCE_NT));
-            out.push(Imported {
-                reference: format!("{chapter}:{verse}"),
-                record: Value::Object(record),
-                verse: target,
-            });
-        }
-    }
-    out
-}
+use serde_json::Value;
+use tc_align::Aligner;
 
 fn typed_words(list: &Value) -> usize {
     list.as_array()
@@ -124,8 +26,7 @@ fn every_record_of_a_tc3_project_reads_and_writes_back_with_tc3s_word_type() {
     let (mut with_type, mut typed_total) = (0, 0);
     for verse in &imported {
         let at = &verse.reference;
-        let value =
-            record::from_record(&verse.record, basis(1)).unwrap_or_else(|e| panic!("{at}: {e}"));
+        let value = tc4_record(&verse.record).unwrap_or_else(|e| panic!("{at}: {e}"));
         let typed = typed_words(&verse.record["wordBank"]);
         assert_eq!(
             value.all_target_words().filter(|w| typed_word(w)).count(),
@@ -144,7 +45,7 @@ fn every_record_of_a_tc3_project_reads_and_writes_back_with_tc3s_word_type() {
 fn a_tc3_record_opens_as_it_is_and_tc3s_word_type_goes_with_the_word() {
     let imported = imported();
     let verse = imported.iter().find(|v| v.reference == "1:1").unwrap();
-    let stored = record::from_record(&verse.record, basis(1)).unwrap();
+    let stored = tc4_record(&verse.record).unwrap();
     assert!(typed_words(&verse.record["wordBank"]) > 0);
     let mut aligner = Aligner::open(
         Some(&stored),

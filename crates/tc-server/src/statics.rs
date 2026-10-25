@@ -49,9 +49,50 @@ pub(crate) async fn ui(State(shared): State<Arc<Shared>>, Path(path): Path<Strin
 /// would send the help window to a URL the page-swap shim does not know (DELTA §3.15.8).
 pub(crate) async fn help(State(shared): State<Arc<Shared>>, Path(path): Path<String>) -> Response {
     match under(&shared.ui_dir.join("help"), &path) {
-        Some(file) => serve(&file, "no-cache").await,
+        Some(file) => serve_as(&file, "no-cache", |bytes| help_overlay(&path, bytes)).await,
         None => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+/// Where a help page describes tC4 4.0 and not this app (H16 parts 2 and 3): `(page, tC4's
+/// words, this app's)`. The vendored pages stay tc-website's bytes (`help-pages.txt`), so the
+/// change is made as they are served.
+pub const HELP_OVERLAY: &[(&str, &str, &str)] = &[
+    (
+        "st-where-projects-live.html",
+        "pankosmia",
+        "translationCore4",
+    ),
+    ("st-where-projects-live.html", "tc4-projects", "projects"),
+    ("search-index.json", "pankosmia", "translationCore4"),
+    ("search-index.json", "tc4-projects", "projects"),
+    ("search-index.js", "pankosmia", "translationCore4"),
+    ("search-index.js", "tc4-projects", "projects"),
+    (
+        "gs-install.html",
+        "https://github.com/unfoldingWord/translationCore4/releases\">tC4 releases page",
+        "https://translationcore.com/tc4\">translationCore download page",
+    ),
+];
+
+/// A help file as this app serves it: tc-website's bytes with [`HELP_OVERLAY`] applied.
+pub fn help_overlay(path: &str, bytes: Vec<u8>) -> Vec<u8> {
+    let rules: Vec<_> = HELP_OVERLAY
+        .iter()
+        .filter(|(page, _, _)| *page == path)
+        .collect();
+    if rules.is_empty() {
+        return bytes;
+    }
+    // Help pages and their index are UTF-8 text; a file that is not is served as it is.
+    let mut text = match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(not_text) => return not_text.into_bytes(),
+    };
+    for (_, from, to) in rules {
+        text = text.replace(from, to);
+    }
+    text.into_bytes()
 }
 
 /// `path` below `root`, or `None` for a path that could leave it. An empty segment, `.`,
@@ -76,6 +117,14 @@ fn under(root: &FsPath, path: &str) -> Option<PathBuf> {
 }
 
 async fn serve(file: &FsPath, cache_control: &'static str) -> Response {
+    serve_as(file, cache_control, |bytes| bytes).await
+}
+
+async fn serve_as(
+    file: &FsPath,
+    cache_control: &'static str,
+    change: impl FnOnce(Vec<u8>) -> Vec<u8>,
+) -> Response {
     // Only a regular file: a directory is a 404, never a redirect or a listing.
     match tokio::fs::metadata(file).await {
         Ok(meta) if meta.is_file() => {}
@@ -84,7 +133,7 @@ async fn serve(file: &FsPath, cache_control: &'static str) -> Response {
     let Ok(bytes) = tokio::fs::read(file).await else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let mut response = bytes.into_response();
+    let mut response = change(bytes).into_response();
     let headers = response.headers_mut();
     headers.insert(
         header::CONTENT_TYPE,

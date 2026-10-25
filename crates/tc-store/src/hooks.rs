@@ -164,19 +164,31 @@ mod imp {
                 .is_some()
         }
 
-        pub(crate) fn probe_burrito(&self, folder: &Path) {
+        /// Looks at the folder and keeps what the probe named, unless `still_outside` says a
+        /// write group began while it looked: then the look saw a group's middle (I7), and
+        /// it answers false so the writer looks again later.
+        pub(crate) fn probe_burrito(
+            &self,
+            folder: &Path,
+            still_outside: impl Fn() -> bool,
+        ) -> bool {
             let probe = self
                 .burrito_probe
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .clone();
-            if let Some(probe) = probe {
-                let found = (probe.0)(folder);
-                self.burrito_problems
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .extend(found);
+            let Some(probe) = probe else {
+                return true;
+            };
+            let found = (probe.0)(folder);
+            if !still_outside() {
+                return false;
             }
+            self.burrito_problems
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .extend(found);
+            true
         }
 
         /// A repack is due when the repository holds more than `objects` loose objects or
@@ -286,7 +298,13 @@ mod imp {
             false
         }
 
-        pub(crate) fn probe_burrito(&self, _folder: &std::path::Path) {}
+        pub(crate) fn probe_burrito(
+            &self,
+            _folder: &std::path::Path,
+            _still_outside: impl Fn() -> bool,
+        ) -> bool {
+            true
+        }
 
         pub(crate) fn repack_threshold(&self) -> (u64, u64) {
             (crate::repack::REPACK_OBJECTS, crate::repack::REPACK_BYTES)

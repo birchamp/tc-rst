@@ -76,6 +76,12 @@ pub struct AppDeps {
     /// The projects: tc-store on disk; the memory backend in tests and parity captures
     /// (feature `fixture-backend`).
     pub store: StoreChoice,
+    /// Sync, share and open from Door43 (UI-2): unavailable until E1a; scripted in tests.
+    pub sync: Arc<dyn crate::ports::SyncPort>,
+    /// USB exchange: unavailable until E2.
+    pub exchange: Arc<dyn crate::ports::ExchangePort>,
+    /// Import of other projects: unavailable until F1.
+    pub import: Arc<dyn crate::ports::ImportPort>,
     /// What ends the process at a test crash point.
     #[cfg(feature = "test-hooks")]
     pub ender: Arc<dyn Ender>,
@@ -101,6 +107,9 @@ impl AppDeps {
             host,
             files: FilesChoice::OnDisk,
             store: StoreChoice::OnDisk,
+            sync: Arc::new(crate::ports::UnavailableSync),
+            exchange: Arc::new(crate::ports::UnavailableExchange),
+            import: Arc::new(crate::ports::UnavailableImport),
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),
             #[cfg(feature = "test-hooks")]
@@ -190,11 +199,14 @@ pub(crate) struct Inner {
     pub(crate) seed_job: Mutex<Option<JobId>>,
     /// Home's summaries (B2).
     pub(crate) home: crate::home::SummaryCache,
-    /// The open from Door43 until unit X (B9b).
-    pub(crate) open_door43: crate::share::ScriptedOpenDoor43,
-    /// The sync with Door43 until unit X (B10): only a test scripts it.
-    #[cfg(feature = "test-hooks")]
-    pub(crate) sync: crate::sync::ScriptedSync,
+    /// Sync, share and open from Door43 (UI-2).
+    pub(crate) sync: Arc<dyn crate::ports::SyncPort>,
+    /// USB exchange (E2 adds its use).
+    #[allow(dead_code)]
+    pub(crate) exchange: Arc<dyn crate::ports::ExchangePort>,
+    /// Import (F1 adds its use).
+    #[allow(dead_code)]
+    pub(crate) import: Arc<dyn crate::ports::ImportPort>,
     /// The client resources are read and downloaded with, on the production server whatever
     /// the account's server is (tC4 #120, B9a).
     pub(crate) resources_door43: Result<Door43Client, String>,
@@ -257,6 +269,9 @@ impl App {
             host,
             files,
             store,
+            sync,
+            exchange,
+            import,
             #[cfg(feature = "test-hooks")]
             ender,
             #[cfg(feature = "test-hooks")]
@@ -469,9 +484,9 @@ impl App {
             resources,
             seed_job: Mutex::new(None),
             home: crate::home::SummaryCache::default(),
-            open_door43: crate::share::ScriptedOpenDoor43::default(),
-            #[cfg(feature = "test-hooks")]
-            sync: crate::sync::ScriptedSync::default(),
+            sync,
+            exchange,
+            import,
             resources_door43,
             downloaded: Mutex::new(std::collections::BTreeSet::new()),
             plans: crate::upgrades::KeptPlans::default(),

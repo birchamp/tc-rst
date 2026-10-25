@@ -905,13 +905,17 @@ impl FoldState {
                     // The alignment covers as many verses as it did where it was made: a
                     // text that moved keeps its alignment valid at its new number.
                     let label_end = value.moved_span_end(v, rv).unwrap_or(rv);
-                    let valid = value.is_valid(&AlignedRun {
-                        anchor: v,
-                        run_start: rv,
-                        run_end: end,
-                        text_md5: text.facts(content).md5(),
-                        source_sha: ol_sha,
-                    });
+                    let words = crate::alignment::verse_words(&content);
+                    let valid = !value.needs_review(
+                        &AlignedRun {
+                            anchor: v,
+                            run_start: rv,
+                            run_end: end,
+                            text_md5: text.facts(content).md5(),
+                            source_sha: ol_sha,
+                        },
+                        &words,
+                    );
                     taken.insert((rc, rv));
                     plan.push((
                         value,
@@ -1261,7 +1265,7 @@ impl FoldState {
             return Some(value);
         }
         match self.projected_record(self.key_idx(&RecordKey::StoryBase(story))?)? {
-            Record::StoryBase { value, .. } => template_frame(&value, frame.0),
+            Record::StoryBase { value, .. } => template_frame(&value, frame.get()),
             _ => None,
         }
     }
@@ -1356,7 +1360,7 @@ impl FoldState {
                 },
             };
             let meta = self.meta(head);
-            let order = place.map_or((0, 0), |(s, f)| (u16::from(s.get()), f.0));
+            let order = place.map_or((0, 0), |(s, f)| (u16::from(s.get()), f.get()));
             let mut out = Map::new();
             out.insert("id".into(), Value::from(id.to_hex()));
             out.insert(
@@ -1370,7 +1374,7 @@ impl FoldState {
                     if let Some(json) = on_check.as_ref().and_then(canon::check_key_json) {
                         p.insert("check".into(), value(&json));
                     }
-                    p.insert("frame".into(), Value::from(frame.0));
+                    p.insert("frame".into(), Value::from(frame.get()));
                     p.insert("story".into(), Value::from(story.get()));
                     Value::Object(p)
                 }),
@@ -1638,7 +1642,7 @@ impl FoldState {
             _ => return None,
         };
         let frame = |n: u16| -> Option<String> {
-            let k = self.key_idx(&RecordKey::Frame(story, crate::ids::FrameNo(n)))?;
+            let k = self.key_idx(&RecordKey::Frame(story, crate::ids::FrameNo::new(n)))?;
             match self.projected_record(k)? {
                 Record::Frame { value, .. } => Some(value),
                 _ => None,
@@ -2076,7 +2080,7 @@ pub(crate) fn derive_key(
     let target = if reference.contains_key("story") && !reference.contains_key("bookId") {
         CheckTarget::Frame {
             story: StoryNo::new(u8::try_from(number("story")?).ok()?)?,
-            frame: crate::ids::FrameNo(u16::try_from(number("frame")?).ok()?),
+            frame: crate::ids::FrameNo::new(u16::try_from(number("frame")?).ok()?),
         }
     } else {
         CheckTarget::Verse {
@@ -2168,8 +2172,9 @@ fn conflict_record(c: &Conflict) -> Value {
     Value::Object(m)
 }
 
-/// tC4's slot order in `resources.json`; slots it does not name come after, by name.
-fn slot_rank(name: &str) -> u8 {
+/// tC4's slot order in `resources.json` (`journal/checkpoint.mjs` `LS_SLOTS`, then `nt`,
+/// `ot`); slots it does not name come after, by name.
+pub(crate) fn slot_rank(name: &str) -> u8 {
     match name {
         "gatewayLanguage" => 0,
         "translationNotes" => 1,
@@ -2178,9 +2183,14 @@ fn slot_rank(name: &str) -> u8 {
         "translationAcademy" => 4,
         "translationQuestions" => 5,
         "simplifiedText" => 6,
-        "nt" => 7,
-        "ot" => 8,
-        _ => 9,
+        "obs" => 7,
+        "obs-tn" => 8,
+        "obs-twl" => 9,
+        "obs-tq" => 10,
+        "obs-images" => 11,
+        "nt" => 12,
+        "ot" => 13,
+        _ => 14,
     }
 }
 
@@ -2354,25 +2364,36 @@ pub(crate) fn splice_story(
         i += 1;
         if text.starts_with("![") {
             images += 1;
-            // Blank lines, then the frame's paragraph up to the next blank line.
-            while i < lines.len() && body(lines[i]).trim().is_empty() {
-                out.push_str(lines[i]);
-                i += 1;
-            }
+            // The frame's region runs to the next image or reference line (tC4 `writeFrame`).
             let start = i;
-            while i < lines.len()
-                && !body(lines[i]).trim().is_empty()
-                && Some(i) != reference_at
-                && !body(lines[i]).starts_with("![")
-            {
+            while i < lines.len() && Some(i) != reference_at && !body(lines[i]).starts_with("![") {
                 i += 1;
             }
             match frame(images) {
                 Some(text) => {
-                    let end = lines.get(i.saturating_sub(1)).copied().unwrap_or("");
-                    out.push_str(&text);
-                    let t = if i > start { terminator(end) } else { "\n" };
-                    out.push_str(t);
+                    let nl = match terminator(line) {
+                        "" => {
+                            out.push('\n');
+                            "\n"
+                        }
+                        t => t,
+                    };
+                    // tC4 joins the region's new lines with newlines: a blank line, the
+                    // text and a blank line, or the template's empty form, which is longer
+                    // when nothing follows.
+                    let followed = i < lines.len();
+                    let region: Vec<&str> = match (text.is_empty(), followed) {
+                        (true, true) => vec![""; 3],
+                        (true, false) => vec![""; 6],
+                        (false, _) => std::iter::once("")
+                            .chain(text.split('\n'))
+                            .chain(std::iter::once(""))
+                            .collect(),
+                    };
+                    out.push_str(&region.join(nl));
+                    if followed {
+                        out.push_str(nl);
+                    }
                 }
                 None => {
                     for l in &lines[start..i] {
@@ -2381,6 +2402,17 @@ pub(crate) fn splice_story(
                 }
             }
         }
+    }
+    // A base read back from a file lost its reference line to a record of its own (tC4
+    // `decodeStory`); tC4's `writeRef` then adds it after the last frame's paragraph, or
+    // after an empty last frame's spacing.
+    if let (None, Some(r), true) = (reference_at, reference, images > 0) {
+        let kept = out.trim_end_matches(['\n', '\r']).len();
+        out.truncate(kept);
+        let empty_last = out.rsplit('\n').next().is_some_and(|l| l.starts_with("!["));
+        out.push_str(if empty_last { "\n\n\n\n_" } else { "\n\n_" });
+        out.push_str(r);
+        out.push_str("_\n");
     }
     out
 }

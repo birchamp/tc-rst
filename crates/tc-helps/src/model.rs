@@ -168,7 +168,7 @@ impl Note {
                 chapter: match &r.locus {
                     BibleLocus::BookIntro => None,
                     BibleLocus::ChapterIntro(c) | BibleLocus::ChapterFront(c) => Some(*c),
-                    BibleLocus::Verses(list) => Some(list.start().chapter),
+                    BibleLocus::Verses(list) => Some(list.start().chapter().get()),
                     BibleLocus::AsWritten(text) => text.chapter(),
                 },
             },

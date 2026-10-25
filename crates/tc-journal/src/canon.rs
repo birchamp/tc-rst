@@ -513,11 +513,11 @@ impl Wire for StoryNo {
 
 impl Wire for FrameNo {
     fn to_json(&self) -> Json {
-        Json::from(self.0)
+        Json::from(self.get())
     }
 
     fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
-        u16::from_json(j, cx).map(FrameNo)
+        u16::from_json(j, cx).map(FrameNo::new)
     }
 }
 
@@ -1847,7 +1847,16 @@ impl Wire for ImportSource {
             ),
             Self::Tc4Reconcile => unit("tc4Reconcile"),
             Self::Tc3 { user } => variant("tc3", Out::new().o("user", user.as_ref()).done()),
-            Self::Usfm { file_name } => variant("usfm", Out::new().f("fileName", file_name).done()),
+            Self::Usfm {
+                file_name,
+                unknown_base,
+            } => variant(
+                "usfm",
+                Out::new()
+                    .f("fileName", file_name)
+                    .o("unknownBase", unknown_base.then_some(&true))
+                    .done(),
+            ),
             Self::Burrito { file_name } => {
                 variant("burrito", Out::new().f("fileName", file_name).done())
             }
@@ -1875,6 +1884,7 @@ impl Wire for ImportSource {
                 },
                 "usfm" => Self::Usfm {
                     file_name: o.req("fileName")?,
+                    unknown_base: o.opt::<bool>("unknownBase")?.unwrap_or(false),
                 },
                 "burrito" => Self::Burrito {
                     file_name: o.req("fileName")?,

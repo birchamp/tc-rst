@@ -480,3 +480,35 @@ fn new_project(scope: Scope) -> Metadata {
         created: Timestamp::now(),
     })
 }
+
+/// A value that parses prints a text that parses back to it (INV-IDS-ROUND-TRIP).
+fn round_trips<T: std::str::FromStr + std::fmt::Display + PartialEq + std::fmt::Debug>(
+    text: &str,
+) -> Result<(), TestCaseError> {
+    if let Ok(value) = text.parse::<T>() {
+        let printed = value.to_string();
+        prop_assert_eq!(
+            printed.parse::<T>().ok(),
+            Some(value),
+            "{:?} printed {:?}",
+            text,
+            printed
+        );
+    }
+    Ok(())
+}
+
+proptest! {
+    #[test]
+    fn ids_round_trip(
+        book in "[A-Za-z1-3]{3}",
+        range in "[0-9]{1,3}(:[0-9]{1,3})?(-[0-9]{1,3}(:[0-9]{1,3})?)?",
+        path in "[a-zA-Z0-9_ .-]{0,8}(/[a-zA-Z0-9_ .-]{0,8}){0,2}",
+        mime in "(text|application|image)/[a-z0-9.+-]{1,12}(; ?charset=[a-z0-9-]{1,6})?",
+    ) {
+        round_trips::<ScopeBook>(&book)?;
+        round_trips::<ScopeRange>(&range)?;
+        round_trips::<IngredientPath>(&path)?;
+        round_trips::<MimeType>(&mime)?;
+    }
+}

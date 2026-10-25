@@ -13,7 +13,7 @@ use tc_export::{BookInput, VerseAlignment};
 use tc_journal::record::VerseValue;
 use tc_journal::{Record, RecordKey};
 
-use super::open::{Original, anchor, original_language, project_dir};
+use super::open::{Original, anchor, original_language};
 use crate::app::App;
 use crate::session::ProjectSession;
 
@@ -66,11 +66,7 @@ pub(crate) async fn book_input(
                         .and_then(|verses| {
                             source_reference(
                                 loaded.numbering.project_scheme(),
-                                Reference {
-                                    book,
-                                    chapter: c.get(),
-                                    verses,
-                                },
+                                Reference::new(book, c, verses),
                             )
                             .ok()
                         })
@@ -98,7 +94,7 @@ pub(crate) async fn book_input(
 
 /// The direction a print is set in: the project language's (tC4 `scriptDirection`).
 pub(crate) fn print_dir(read: &crate::counters::CountingSnapshot) -> tc_export::Direction {
-    match project_dir(read) {
+    match crate::direction::of_fold(read) {
         tc_api::shown::Direction::Ltr => tc_export::Direction::Ltr,
         tc_api::shown::Direction::Rtl => tc_export::Direction::Rtl,
     }

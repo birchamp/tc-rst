@@ -1608,9 +1608,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:50:19.457Z#1",
+          "id": "2026-10-24T19:40:07.509Z#1",
           "op": "open",
-          "startedAt": "2026-10-19T02:50:19.457Z",
+          "startedAt": "2026-10-24T19:40:07.509Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -1642,13 +1642,13 @@
                       "checking/settings.json"
                     ]
                   },
-                  "startedAt": "2026-10-19T02:50:19.697Z",
-                  "endedAt": "2026-10-19T02:50:20.431Z"
+                  "startedAt": "2026-10-24T19:40:07.823Z",
+                  "endedAt": "2026-10-24T19:40:08.394Z"
                 }
               ]
             },
-            "startedAt": "2026-10-19T02:50:19.486Z",
-            "endedAt": "2026-10-19T02:50:20.432Z"
+            "startedAt": "2026-10-24T19:40:07.647Z",
+            "endedAt": "2026-10-24T19:40:08.394Z"
           }
         }
       ],
@@ -2030,7 +2030,7 @@
       "_local_/_local_/sample_burrito": {
         "names": {},
         "actors": [
-          "a0922751d760ba2f"
+          "aa3be7b8b2606e93"
         ]
       }
     },
@@ -2038,10 +2038,10 @@
     "syncResult": null,
     "verseConflicts": [],
     "team": {
-      "me": "a0922751d760ba2f",
+      "me": "aa3be7b8b2606e93",
       "names": {},
       "actors": [
-        "a0922751d760ba2f"
+        "aa3be7b8b2606e93"
       ]
     },
     "conflictReview": null,
@@ -2051,6 +2051,7 @@
     "storyFrame": null,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "testament": null,

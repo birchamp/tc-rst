@@ -16,6 +16,9 @@ pub mod selection;
 
 use serde::{Deserialize, Serialize};
 
+/// JavaScript's `\s` and `trim()`, as tC4's `split(/\s+/)` and `trim()` treat text.
+pub use tc_core::js::{is_space as js_space, trim as js_trim};
+
 pub mod rail;
 
 /// tC4's `t(key, vars)` substitution in a catalog `message`: each `{name}` of `vars` replaced,
@@ -103,27 +106,6 @@ impl ArticleBlock {
     pub fn text(&self) -> String {
         self.spans.iter().map(|s| s.text.as_str()).collect()
     }
-}
-
-/// JavaScript's `\s`: what tC4's `split(/\s+/)` and `trim()` treat as space. Rust's
-/// `char::is_whitespace` adds U+0085 and leaves out U+FEFF.
-pub fn js_space(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r' | ' ' | '\u{A0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200A}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202F}'
-                | '\u{205F}'
-                | '\u{3000}'
-                | '\u{FEFF}'
-    )
-}
-
-/// JavaScript's `trim()`.
-pub fn js_trim(text: &str) -> &str {
-    text.trim_matches(js_space)
 }
 
 /// The length of `text` as JavaScript counts it: UTF-16 code units, the unit tC4's preview

@@ -508,7 +508,7 @@ impl CheckTarget {
     pub fn parts(&self) -> (String, String) {
         match self {
             Self::Verse { chapter, verse, .. } => (chapter.to_string(), verse.to_string()),
-            Self::Frame { story, frame } => (story.get().to_string(), frame.0.to_string()),
+            Self::Frame { story, frame } => (story.get().to_string(), frame.get().to_string()),
         }
     }
 

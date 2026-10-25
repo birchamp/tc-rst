@@ -229,10 +229,10 @@ impl Writer {
         if let Some(title) = &records.title {
             let same = written.as_ref().and_then(|w| w.title.as_ref()) == Some(title);
             parts.push((
-                RecordKey::Frame(story, FrameNo(0)),
+                RecordKey::Frame(story, FrameNo::TITLE),
                 Record::Frame {
                     story,
-                    frame: FrameNo(0),
+                    frame: FrameNo::TITLE,
                     value: title.clone(),
                 },
                 same,
@@ -246,10 +246,10 @@ impl Writer {
                 .and_then(Option::as_ref)
                 == Some(text);
             parts.push((
-                RecordKey::Frame(story, FrameNo(n)),
+                RecordKey::Frame(story, FrameNo::new(n)),
                 Record::Frame {
                     story,
-                    frame: FrameNo(n),
+                    frame: FrameNo::new(n),
                     value: text.clone(),
                 },
                 same,
@@ -290,7 +290,10 @@ impl Writer {
             .records
             .frames
             .len();
-        let frame = |n: u16| match self.fold.projected(&RecordKey::Frame(story, FrameNo(n))) {
+        let frame = |n: u16| match self
+            .fold
+            .projected(&RecordKey::Frame(story, FrameNo::new(n)))
+        {
             Some(Record::Frame { value, .. }) => Some(value),
             _ => None,
         };

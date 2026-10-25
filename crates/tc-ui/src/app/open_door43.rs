@@ -4,7 +4,9 @@
 //! the rules of a repository and a name are `tc_api::door43`'s, which the server applies too.
 
 use tc_api::door43::{ProjectName, RepoSource, default_project_name};
+use tc_api::ids::RequestId;
 
+use crate::app::submit::Submit;
 use crate::i18n::{Key, keys};
 
 /// A refusal of the open: its code and the sentence the code has.
@@ -27,13 +29,14 @@ pub enum OpenProblem {
 pub const NAME_IN_USE: &str = "open-door43.name-exists";
 
 /// tC4's `od`.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenForm {
     pub repo: String,
     pub name: String,
     /// The person typed a name: it stops following the repository.
     pub named: bool,
-    pub busy: bool,
+    /// Open project's attempt: one request per attempt (UI-3).
+    pub submit: Submit,
     pub error: Option<OpenProblem>,
 }
 
@@ -54,6 +57,22 @@ pub enum NameError {
 }
 
 impl OpenForm {
+    /// The dialog as it opens, with the request of its first attempt.
+    pub fn new(request: RequestId) -> Self {
+        Self {
+            repo: String::new(),
+            name: String::new(),
+            named: false,
+            submit: Submit::new(request),
+            error: None,
+        }
+    }
+
+    /// An open runs: the dialog's controls are off.
+    pub fn busy(&self) -> bool {
+        self.submit.busy()
+    }
+
     /// The repository typed (tC4's `onRepo`): the name follows it until the person types one,
     /// and the last refusal goes.
     pub fn type_repo(&mut self, repo: String, host: &str) {
@@ -109,15 +128,23 @@ impl OpenForm {
         host: &str,
         listing: impl IntoIterator<Item = &'a str>,
     ) -> Option<(RepoSource, ProjectName)> {
-        if self.busy || self.name_error(listing).is_some() {
+        if self.busy() || self.name_error(listing).is_some() {
             return None;
         }
         Some((self.source(host)?, ProjectName::parse(&self.name).ok()?))
     }
 
-    /// The run ended in a refusal: the form takes it and can be changed again.
-    pub fn refused(&mut self, code: Option<&str>, reason: String) {
-        self.busy = false;
+    /// No usable answer from the app's server: the reason shows, and the next press sends the
+    /// same request again.
+    pub fn lost(&mut self, reason: String) {
+        self.submit.lost(reason.clone());
+        self.error = Some(OpenProblem::Refused(OpenRefusal { code: None, reason }));
+    }
+
+    /// The run ended in a refusal: the form takes it and can be changed again, and the next
+    /// press is a new attempt with `next`.
+    pub fn refused(&mut self, code: Option<&str>, reason: String, next: RequestId) {
+        self.submit.refused(reason.clone(), next);
         self.error = Some(if code == Some(NAME_IN_USE) {
             OpenProblem::NameInUse
         } else {

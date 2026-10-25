@@ -229,6 +229,8 @@ fn serve(args: &Args) -> ExitCode {
         AppDeps {
             keychain: keychain.clone(),
             test_keychain: Some(keychain),
+            // The journeys script how a sync or an open from Door43 ends (UI-2).
+            sync: Arc::new(tc_app::ports::scripted::ScriptedSyncPort::default()),
             ..deps
         }
     } else {

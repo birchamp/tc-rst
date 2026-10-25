@@ -73,8 +73,9 @@ pub enum SignInReason {
     PrivateRepository,
 }
 
-/// The flows that run one at a time (AD31). The first five run one at a time across the
-/// app; the exchange flows one at a time per project, and never beside its sync.
+/// The flows that run one at a time (AD31). The first four run one at a time across the
+/// app; the exchange flows one at a time per project, and never beside its sync. A sign-in is
+/// not one of them: sign-ins take turns in the account service (A8), never answering `Busy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +83,6 @@ pub enum Flow {
     Sync,
     GatewayChange,
     Share,
-    SignIn,
     Import,
     ExchangeExport,
     ExchangeReceive,

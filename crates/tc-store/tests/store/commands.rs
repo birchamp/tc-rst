@@ -1085,7 +1085,7 @@ fn aligned_titus_added_as_a_book_has_no_inline_zaln_and_46_records() {
     for id in &reply.changes {
         let body = fold.body(id).unwrap();
         assert!(
-            matches!(&body.cause, Cause::Import(ImportSource::Usfm { file_name }) if &**file_name == "2JN.usfm"),
+            matches!(&body.cause, Cause::Import(ImportSource::Usfm { file_name, unknown_base: false }) if &**file_name == "2JN.usfm"),
             "{:?}",
             body.cause
         );
@@ -1664,7 +1664,7 @@ pub(crate) fn stories() -> (FaultFs, PathBuf) {
 fn frame(story: u8, frame: u16) -> RecordKey {
     RecordKey::Frame(
         tc_journal::StoryNo::new(story).unwrap(),
-        tc_journal::FrameNo(frame),
+        tc_journal::FrameNo::new(frame),
     )
 }
 
@@ -1971,4 +1971,182 @@ fn adding_a_book_from_a_file_loses_no_byte_of_it() {
             Ok(())
         })
         .unwrap();
+}
+
+/// The ULT v91 book `code` as the app ships it.
+fn bundled_ult(code: &str) -> String {
+    use std::io::Read;
+    let file = std::fs::File::open(repo_root().join("bundle/en/en_ult_v91.sb.zip")).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut entry = archive
+        .by_name(&format!("en_ult/ingredients/{code}.usfm"))
+        .unwrap();
+    let mut text = String::new();
+    entry.read_to_string(&mut text).unwrap();
+    text
+}
+
+/// tC4 #812: a verse with a `\p`, `\ts\*`, `\b`, `\q3` or `\s` line inside shows every
+/// word, and a save of it keeps every word, on the screen and in the book file.
+#[test]
+fn verses_with_a_layout_line_inside_save_whole() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let books: BTreeMap<&str, String> = ["1SA", "REV", "MAT"]
+        .into_iter()
+        .map(|code| (code, bundled_ult(code)))
+        .collect();
+    for (code, usfm) in &books {
+        let book: BookId = code.parse().unwrap();
+        handle
+            .submit(Command::AddBookText {
+                book,
+                scope: Scope::Whole,
+                usfm: usfm.clone(),
+                file_name: format!("{code}.usfm"),
+            })
+            .wait()
+            .unwrap();
+    }
+    let verses = [("1SA", 2, 2), ("1SA", 4, 1), ("REV", 7, 12), ("MAT", 27, 9)];
+    let words_of = |text: &str, c: u16, v: u16| -> Vec<String> {
+        let parts = tc_usfm::codec::decompose(text).unwrap();
+        let Some(tc_usfm::codec::VersePart::Text(verse)) = parts.chapters[&c].verses.get(&v) else {
+            panic!("{c}:{v}");
+        };
+        tc_usfm::target_words(&format!("{}{}", verse.words, verse.layout))
+            .into_iter()
+            .map(|w| w.text)
+            .collect()
+    };
+    let mut want = BTreeMap::new();
+    for (code, c, v) in verses {
+        let book: BookId = code.parse().unwrap();
+        let all = words_of(&books[code], c, v);
+        let key = RecordKey::Verse(book, ChapterNo::new(c).unwrap(), VerseNo::new(v).unwrap());
+        let shown = |handle: &ProjectHandle| match handle.snapshot().fold().projected(&key) {
+            Some(Record::Verse {
+                value: VerseValue::Text { words, .. },
+                ..
+            }) => words,
+            other => panic!("{code} {c}:{v}: {other:?}"),
+        };
+        let before = shown(&handle);
+        let shown_words: Vec<String> = tc_usfm::target_words(&before)
+            .into_iter()
+            .map(|w| w.text)
+            .collect();
+        assert_eq!(shown_words, all, "{code} {c}:{v} shows every word");
+        let edited = format!("{before} Amén");
+        let token = handle.mint(&key, None).unwrap();
+        handle
+            .submit(Command::SaveVerse {
+                shown: token,
+                words: edited.clone(),
+            })
+            .wait()
+            .unwrap();
+        assert_eq!(shown(&handle), edited);
+        let mut all = all;
+        all.push("Amén".into());
+        want.insert((code, c, v), all);
+    }
+    handle.close().unwrap();
+    for ((code, c, v), all) in want {
+        let file = rig
+            .fs
+            .peek(&folder.join(format!("ingredients/{code}.usfm")))
+            .unwrap();
+        assert_eq!(
+            words_of(&String::from_utf8(file).unwrap(), c, v),
+            all,
+            "{code} {c}:{v} in the file"
+        );
+    }
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// A save from a screen that showed a merged verse is stored even when a sync moved the
+/// verse's heads since (no-loss; C7a's finding): the save continues the heads the screen
+/// showed, so it stands beside the newer text as a conflict, and both texts are kept.
+#[test]
+fn a_save_of_a_merged_verse_whose_heads_moved_is_stored_as_a_conflict() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let base = handle.snapshot().fold().heads(&verse(1, 1));
+    let Some(Record::Verse { value, .. }) = projected(&handle, &verse(1, 1)) else {
+        panic!("1:1");
+    };
+    handle.close().unwrap();
+    let with = |words: Option<&str>, layout: Option<&str>| {
+        let mut value = value.clone();
+        if let VerseValue::Text {
+            words: w,
+            layout: l,
+            ..
+        } = &mut value
+        {
+            if let Some(words) = words {
+                *w = words.into();
+            }
+            if let Some(layout) = layout {
+                *l = layout.into();
+            }
+        }
+        Record::Verse {
+            book: TIT,
+            chapter: ChapterNo::new(1).unwrap(),
+            verse: VerseNo::new(1).unwrap(),
+            value,
+        }
+    };
+    // Two teammates change different parts of 1:1: the fold merges them.
+    let a = teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([8u8; 15]),
+        1,
+        vec![(with(Some("Paul, a servant of God"), None), base.clone())],
+    );
+    teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([9u8; 15]),
+        1,
+        vec![(with(None, Some("\n\\p\n")), base)],
+    );
+    let (rig, handle) = open(&rig.fs, &folder);
+    let shown = token(&handle, &verse(1, 1));
+    assert_eq!(shown.heads().len(), 2, "a merged verse");
+    handle.close().unwrap();
+    // A third teammate continues the first: the heads move.
+    let moved = teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([7u8; 15]),
+        1,
+        vec![(with(Some("Paul, a slave of God"), None), a)],
+    );
+    let (_rig, handle) = open(&rig.fs, &folder);
+    assert_ne!(handle.snapshot().fold().heads(&verse(1, 1)), shown.heads());
+    let reply = submit(
+        &handle,
+        Command::SaveVerse {
+            shown: shown.clone(),
+            words: "Paul, a servant of God and an apostle".into(),
+        },
+    )
+    .expect("stored, not refused");
+    let mine = handle.snapshot().fold().body(&reply.changes[0]).unwrap();
+    assert_eq!(mine.parents, shown.heads());
+    let mut heads = handle.snapshot().fold().heads(&verse(1, 1));
+    heads.sort();
+    let mut want = vec![reply.changes[0], moved[0]];
+    want.sort();
+    assert_eq!(heads, want, "both texts are kept");
+    let conflict = conflict_of(handle.snapshot().fold(), &verse(1, 1));
+    assert_eq!(conflict.candidates.len(), 2);
+    handle.close().unwrap();
 }

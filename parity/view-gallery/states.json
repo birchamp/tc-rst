@@ -1,14 +1,14 @@
 {
   "about": "The recorded states of the tC4 view-state gallery (APP-DESIGN §7.4): the whole state of real tC4, read from its React tree after record-states.mjs drove it against the baseline's mock along each route of states.mjs. `real` is the sha256 of the PNG and of the DOM digest (lib.mjs domDigestInput) that real tC4 showed at that moment, which calibration.json compares the gallery's render with. A state that is a baseline screen (`baseline`) photographed exactly as the committed screen.",
   "tc4": {
-    "commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e"
+    "commit": "d25b7871904228a342c0d80280136d8636833653"
   },
   "machine": {
     "platform": "linux-x64",
     "chromium": "141.0.7390.37",
     "fonts": {
-      "count": 535,
-      "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+      "count": 543,
+      "sha256": "4bcf744c9986c6a703f27642acf47415d77165e153ca80190200ffcc648f5d72"
     }
   },
   "states": [
@@ -21,11 +21,11 @@
       "calls": [],
       "notes": "Home of the sample scenario: the baseline screen home.",
       "file": "states/home.json",
-      "sha256": "e8280d15622d28a7afdd407533f0994e4b67b0964cb415c899db958948009112",
+      "sha256": "4a1f6ae35602509377ff475b6ba30fea1dd75111190f49f47cb175c64bfcad82",
       "parts": [],
       "real": {
         "png": "32893eee72bafcd3fb29915193f83a3e2bab1c56102c470587744f47e9197793",
-        "dom": "d9448ce20f1c38fdf88854c6f2e7fedfb32b5fad8c91df2e89cd91926e919820"
+        "dom": "5aa8699edca2eb186b28b17c126aabf45a5296c97bbde253ff2a2495c9bc3d29"
       }
     },
     {
@@ -37,14 +37,14 @@
       "calls": [],
       "notes": "The Check tool picker for Titus: the baseline screen check-picker.",
       "file": "states/check-picker.json",
-      "sha256": "58ac9a83a6a6aaa59cdf37494dc04799658a42f076206fff5dbf244de2cc5c38",
+      "sha256": "f48b849a8f5fb03d69c5022c1b90d53a2618c1d7f1be287293a2dae55733da06",
       "parts": [
-        "2f9408587db2aa01",
-        "904e45d094447cd8"
+        "d6e9ce6e231f0a1b",
+        "3d7a69553ef8b81e"
       ],
       "real": {
         "png": "692ff5ca2aa65e5924045a7e8f9bb64ee1b534d3a99a2e8c29a3e53bcc177ebc",
-        "dom": "262c7f772afac27108275842d2aabe82c20682149ad011a64471a34c59312f3a"
+        "dom": "864a24a2869b33aff9fe6919b1735b33d11e966f58b1b172f84f56d769a38be0"
       }
     },
     {
@@ -56,15 +56,15 @@
       "calls": [],
       "notes": "The Translation Notes session at item 2: the baseline screen check-tn-session.",
       "file": "states/check-tn.json",
-      "sha256": "1f32d94de9c8da0ae42063eb56b35fff5d054a43102ba67b5f54225a79376660",
+      "sha256": "188d1546a54afda2ec797e51e82fcb8034b6706175c085967c88a1734edda856",
       "parts": [
         "d6e9ce6e231f0a1b",
-        "904e45d094447cd8",
+        "3d7a69553ef8b81e",
         "8c6f8ecf41441553"
       ],
       "real": {
-        "png": "07ad4e490db11161a113349fba1d84b62518c3a451286bb51b31b22f1f02a191",
-        "dom": "3c046819730ca12be0519bba7dd32439feb02ba105635a97527f18ea82eefa64"
+        "png": "75336321e43076b017c517cfe80e7b5d2bdcfdc82b6ff719bc9cd5d0dd2eb328",
+        "dom": "6d0070dc091ff34b376113e79a56c794eac06904dca56cdd559f7ee1afc62f89"
       }
     },
     {
@@ -76,14 +76,14 @@
       "calls": [],
       "notes": "Align at Titus 1:1: the baseline screen align-workspace.",
       "file": "states/align.json",
-      "sha256": "9ee35fe28e40ad8cc9150bdf6ac01f4bffd9dfc149360ffd0163b6d866d5203d",
+      "sha256": "31e7c40b90d589b4f4c357dfef31ea86e06581b872b7816959383da79fc16f48",
       "parts": [
-        "f2f032fe56084e8f",
-        "904e45d094447cd8"
+        "d6e9ce6e231f0a1b",
+        "3d7a69553ef8b81e"
       ],
       "real": {
-        "png": "4806f0b5818dfca6f5ff87043f71475e88fe43d4816564aafab68d96f8d610b0",
-        "dom": "c283ea26cf9b44c486ce97c6c1b4bcc658a7aa182c7fcea521db9d2933e612bc"
+        "png": "8f01c125790516aa98b1f9353809943bb3f415c6580e9ccfebdfb67a1be755d7",
+        "dom": "f253dd37e049db5cfbd4410b549a47a2eee2b7889397925aee016598cd189eed"
       }
     },
     {
@@ -97,11 +97,11 @@
       ],
       "notes": "OBS Community Checking of the sample story project. The view draws the reply of readPrintStories, which is recorded.",
       "file": "states/cc-obs.json",
-      "sha256": "21af5c1d6485ab59e025a8052c54e40da8b147d203c3c994d63528f6dfe5cbef",
+      "sha256": "1fc541972955575c319682eacabfb20fa424198be94f294c7a1dbcc2e3a1763c",
       "parts": [],
       "real": {
         "png": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
-        "dom": "9b4add0f176ed6b323cc8b6687fd212703c3b0132fd80fa285ce1a8bdc154159"
+        "dom": "a3179278af9c406304ce605ddf072e0b4205bb30936c3e5f7ea060f0cece593e"
       }
     },
     {
@@ -113,14 +113,14 @@
       "calls": [],
       "notes": "The verse conflict review after the sync of sync-ok-teammates: two teammates changed Titus 1:1 from one version. Not portable: the teammates write through the tC4 environment.",
       "file": "states/review.json",
-      "sha256": "00b34dc49e21a3e9f5b2b5f0439fd886c276d4e7fa1110d96b76b93b885eef83",
+      "sha256": "1a6b0cc71017cb3c4a8760ea02d26a046b40a8208ceca76f67d228707e03a833",
       "parts": [
         "d6e9ce6e231f0a1b",
         "3d7a69553ef8b81e"
       ],
       "real": {
-        "png": "4090f3c11bbb70bb1da30c8e218deef7b7833129ec66ad9bc4017695ccd208d8",
-        "dom": "f924356f683d6ffd0b0e271d2b2347205895d2d491d41a058f2acaa0cd0a4113"
+        "png": "24c9edcf8b41e202d00d487b920bd97bbff11cb8062d1c7eb035537762ea6ec1",
+        "dom": "5f9645a2ab68653284620e4c86a01eb7b4502b3dd3a40316fe7bac3fc48261b7"
       }
     },
     {
@@ -132,14 +132,14 @@
       "calls": [],
       "notes": "The conflict review with a version of mine: I saved Titus 1:1 while two teammates changed it on Door43, then synced.",
       "file": "states/review-mine.json",
-      "sha256": "b3d7ea28ed9f24d18a43da948aba13679b1be7d7b585a5ac501dba24cf557a8f",
+      "sha256": "3f143677dd7acd274ae3858df75bc69ab56287f8eebbe7844aaebc31046ebf25",
       "parts": [
         "d6e9ce6e231f0a1b",
         "3d7a69553ef8b81e"
       ],
       "real": {
-        "png": "3e9c18c848b1b2064acc593631ff8952832eb718fe58cd7e99226c440f2f82b4",
-        "dom": "213716a580d72803641c2ef79868fea4e61d42a8225ce6fd0f04318ee48442cc"
+        "png": "bd60db26f45aa7e12433ae8b27db65a5d02cf4910ced4042d41a5e1ec12f9ef7",
+        "dom": "638c49812424d16108d7d1ded52ff075ed1c1347f399431cf486fd14986fcd53"
       }
     },
     {
@@ -151,11 +151,11 @@
       "calls": [],
       "notes": "The gateway change dialog from Project settings: the English row of the checking language (it opens the project to compute what changes).",
       "file": "states/gateway.json",
-      "sha256": "24708ed66a516e18ce18730e1265de0c6b6ef087ea65976258c22bbedb962a20",
+      "sha256": "cc3d15fcec0c7d5d2e061579831a61b98bc53cd6715f4124dbbaade6e2d75a38",
       "parts": [],
       "real": {
         "png": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
-        "dom": "cf1b75a21f3051ae56a46f8526d987a743068d4b12843a31f9c54defaba0dea3"
+        "dom": "c4f9542386078308b487ac89a0de178719d0ca9f8bc4a0a617ce6c328cdbaf41"
       }
     },
     {
@@ -167,11 +167,11 @@
       "calls": [],
       "notes": "Get source texts over Project settings: the baseline screen source-texts.",
       "file": "states/sources.json",
-      "sha256": "7c8d447f1f71a7db9e36f9ab0f3e096a0ae9ba2c9fe6ea0fde0c21074445bce0",
+      "sha256": "db13d7dfab3af9a634a500d100e1fb1391120107ead41a91fa39e3c380e60a6b",
       "parts": [],
       "real": {
         "png": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
-        "dom": "f97d5bb0ce9eea6a2b59aec84f783db1d5c411a06cb1dffe315e2625e21627f7"
+        "dom": "a8ed25961cda96bef303d3aeedb9115f3f26da921ed063190f2fda073c1d6f60"
       }
     },
     {
@@ -183,14 +183,14 @@
       "calls": [],
       "notes": "The guided fix of Translation Words: the baseline screen guided-fix.",
       "file": "states/guided-fix.json",
-      "sha256": "d6279ae2ada466104defd077cfa71bfb52a69d529212e0b3c5936af61850e875",
+      "sha256": "b7703ddf81747adc42f194368bb3d0e5d372abbf859fab0b6b3d95128de3cc9f",
       "parts": [
-        "2f9408587db2aa01",
-        "904e45d094447cd8"
+        "d6e9ce6e231f0a1b",
+        "3d7a69553ef8b81e"
       ],
       "real": {
         "png": "496ab122c8706c18616e009bb96e8c106c52bf6e7fede22279bf6227d74afec2",
-        "dom": "4f3a9e5625d9a6f1b13a9f3187b22668b3196ab3961713a2231098aeffc60b4a"
+        "dom": "e6c4249acbfec7a8256f54e9513c0a4b512a1a5ea7cbd8c76e759c4c83fbacce"
       }
     },
     {
@@ -202,14 +202,14 @@
       "calls": [],
       "notes": "The section editor of Titus 1:1-3: the baseline screen en-translate-section-editor.",
       "file": "states/section-editor.json",
-      "sha256": "87acc844a3578023616ba8e0af7144fd4005aaf62199f6b7e9c8643ea4db85c0",
+      "sha256": "5b7279989e57e73a826ca85108dd7f37bce7b66115ca45488aab9e3094950df6",
       "parts": [
         "d6e9ce6e231f0a1b",
         "895c3bafa9389231"
       ],
       "real": {
         "png": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
-        "dom": "a4d62cef82b362cb9f1a522707790277b9e6428fdb34a7d5718c717694d230f9"
+        "dom": "c20c66a5d80c64bd25ec371344affe838509ce5bd67bc92e26ea5e8771064f4b"
       }
     },
     {
@@ -221,11 +221,11 @@
       "calls": [],
       "notes": "Feedback opened by \"Ask for help\" on Home's open error: tC4 fills a bug report with the refusal (state.jsx askForHelp). Not portable: the route writes a file into the project.",
       "file": "states/feedback-ask.json",
-      "sha256": "81599e08eb2dcc7aabd3e4c7e460ff2542579ddc813d5aa60a1e506569ba7915",
+      "sha256": "171bfc1f8f8153e1c0799fa20747ed1fa6701e21ce1b0b63841a274a58b01acb",
       "parts": [],
       "real": {
-        "png": "3c38a48c608cf14adca13929a049cb424bddff103bd632cd6c4a7f9e742ce8a4",
-        "dom": "4e59378987f5659ce54d5cce3c86bbb20cdee97e64d930537023817dda89f74b"
+        "png": "72545ad978727bb17332609f59da344e503b7b61a761d09d7c1a0a2f1bfe1bd1",
+        "dom": "153c9dcb0c31cfc1562791d18e448ca6682cfb87a01a8a384145311498974b8c"
       }
     },
     {
@@ -237,11 +237,11 @@
       "calls": [],
       "notes": "The sign-in step after Door43 refused a wrong password.",
       "file": "states/signin-error.json",
-      "sha256": "c5fd9dc8f73714a75a106af74cd000e35ad0040a4f42f79e2f45e32225f3e622",
+      "sha256": "c8d4ceb05ab53ba477587f48e988d9e33da2fb3962ae8672238b0fed43a2817b",
       "parts": [],
       "real": {
         "png": "e8f27e27c26ec3c7c381d498179cb5fdcd9114289c97da0d3e40ce5f0676a393",
-        "dom": "b73ad3e7fc24c4dab039909951020a73a67d13fe003663be38e3e45533bb8d47"
+        "dom": "e65c48e5ab8c65d409ef1bee4c55b5468bfb9d26ff316aadbd621ab82899e876"
       }
     },
     {
@@ -253,11 +253,11 @@
       "calls": [],
       "notes": "Share on Door43 at \"Check what will be shared\": the baseline screen share-dialog-check.",
       "file": "states/share-check.json",
-      "sha256": "1140f7a10426db2fa3e7cd409b4affce8ad5caaca406e08cf7be7717098d1749",
+      "sha256": "18eb3e38b728be4798e169b114520f12971f5fccf72e4b78c68a155a3dc5e812",
       "parts": [],
       "real": {
         "png": "47134d59f40f981739da209fcfb95bd56f6499cd8cbda1dbf49c7d061630ae32",
-        "dom": "9c3cb1bbdc17a8ac8a9f5f181d38e782b01595ef3a8c1afa93c19c0a52eb8606"
+        "dom": "20c224a772820546650abe6be67ecc925939939d9ba0f1da99a000acbb881dff"
       }
     },
     {
@@ -269,11 +269,11 @@
       "calls": [],
       "notes": "Import a project, USFM files, with 57-TIT.usfm chosen. Not portable: a file upload.",
       "file": "states/import-files.json",
-      "sha256": "4246d4638f733c9ccc09d49e81b2a39b71e2e3e6fcb02a55a045a2093cbf0094",
+      "sha256": "38c273eeb64906c160b3064fb9eff448241dac20fd8b7b179fe24ccd46ce3f8e",
       "parts": [],
       "real": {
         "png": "e8ca2bfae9565dc502eddcddbc32609dc565286832a1eef0455010d211d6aef1",
-        "dom": "24ddaf9be93ff64b9195c2730495325fad358a7538a70c206acbf8c935ad0102"
+        "dom": "80e0a55e648684cfbd3024afe21c15000284c96d05d6dd0133be99cf3ee685a5"
       }
     },
     {
@@ -285,11 +285,11 @@
       "calls": [],
       "notes": "The import review of 57-TIT.usfm.",
       "file": "states/import-review-usfm.json",
-      "sha256": "4b4943b6dc4b7411f58122f1fa04db05734ff0d7b6b1619a741dfe967e6d9f99",
+      "sha256": "d36323a5f7c21061b103e450e1b1dfca0a3af1ded5896fb35b1b0aa5ca01ce0a",
       "parts": [],
       "real": {
         "png": "08f5729ea4bed78555d5f7d8d73ffb8a7d5e3fadb973092f683fb2ce972752b6",
-        "dom": "33d4a4d4fdf171f53e89682e4da865dafb360c237273522368b9da582677e117"
+        "dom": "6aaa24d2969544bb7bc0bfd95de044cd7626bdbd11568195d5080dda831a969f"
       }
     },
     {
@@ -301,13 +301,13 @@
       "calls": [],
       "notes": "The import review of the tC3 project cfm_fbt_tit_book.zip.",
       "file": "states/import-review-tc3.json",
-      "sha256": "3178ca13bd48c676c6518e1e74d4e2fe5fda1e1c47237883be48849554adc229",
+      "sha256": "19751eede573767c5fb164fa263a1d6addfb8448ccd28f112eb7ece9429f77d8",
       "parts": [
         "95d2dd922c31b392"
       ],
       "real": {
         "png": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
-        "dom": "f6f2a7f39bcce79fab0b158202cbd0272972e8c13c4614bba1768e938ed89a58"
+        "dom": "761e3175bee7fbc4e3e4e00bd2d49205508ae3e2acda5b5fca4e6f5f4e0e36cd"
       }
     },
     {
@@ -319,11 +319,11 @@
       "calls": [],
       "notes": "Add a book, \"Start a blank book\": the book picker.",
       "file": "states/add-book-pick.json",
-      "sha256": "7ff0c447eda6e8b65a534d6a66cd3ca599af74c34ab8c224b135682c7d256596",
+      "sha256": "01d89d8461b387cc062da3ed58113ac281262213a77659893b58705026c6c2ab",
       "parts": [],
       "real": {
         "png": "1ffb2352f50c09d4669d64e9b2ee2b221c7bdb84783b11ed3efea1f92fb51495",
-        "dom": "2fe04528488c164291439b33345e698ed5f8e967075a503d7762ddceaec58c81"
+        "dom": "a8188823cf9911f9f05024a6f2d425d904d590eb8f66695634b6562c5f10e70f"
       }
     },
     {
@@ -335,11 +335,11 @@
       "calls": [],
       "notes": "Add a book, several at once, with Philemon and Hebrews chosen.",
       "file": "states/add-book-pick-multi.json",
-      "sha256": "4ed6c745d8d80b968da1d9242e675b12c319724cdb7587fbba1b7a91f253d3c6",
+      "sha256": "0e0898cb3d22b6e2afda20910b673f476408cb19c158e8c54d519e976268e14c",
       "parts": [],
       "real": {
         "png": "6aeda2a77ed618dab2cdcdd31cf1188713c7abfb5b9fcd8ad6d524ad0eab0d37",
-        "dom": "b728f3d57e26549f9c42904d584f76d1b552ac25547520951f0dba934dd4f3fb"
+        "dom": "689e6c1c3d91c3dab8d62d7dd2d48d96eab83e3e6919509963dc500c36c4cf05"
       }
     },
     {
@@ -351,11 +351,11 @@
       "calls": [],
       "notes": "Add a book from USFM files, no file chosen yet.",
       "file": "states/add-book-usfm.json",
-      "sha256": "3b254803cadfaa78f3d73add32ac7ecdee598f56c687241c806464ca0d5c9424",
+      "sha256": "0e601890b7901332d733cd7f6f1fcd72b8edec7743b5a64d41dadf88b0359190",
       "parts": [],
       "real": {
         "png": "6582ae7a035549d0e96ac1b1b07ca76b814df81e295e71238b3a1ec68059fa7f",
-        "dom": "01ed39d3b38954f668e12ca2b3414d90a5ca0dcff06386c64a2c5540a6e7252b"
+        "dom": "895a9e03b239f5c284cd04e47a7975b64e576c7b0de3e61a43b4a6fcbc1f2438"
       }
     },
     {
@@ -367,11 +367,11 @@
       "calls": [],
       "notes": "Add a book from USFM files with 57-TIT.usfm (refused: Titus is in the project) and 58-PHM.txt (valid) chosen. Not portable: a file upload.",
       "file": "states/add-book-usfm-files.json",
-      "sha256": "96ed1cf83a81106d92943c234708e6ee2b4aeec22ef834e41ccd6b6c71068994",
+      "sha256": "a0e74c1fbcd9d7688e09c136b1ff73741fbe4295d4ffb2a50c7549d399a2ea46",
       "parts": [],
       "real": {
         "png": "61d2576fef3b1d7b2c2b59e9595a4cf3f579292918bbc8a81f05e1515bab04f4",
-        "dom": "da4af995ce649fabf51220eae0db8dff259db45c22cbe22fd35d29d7f5096e2d"
+        "dom": "4b4cdcc5a4204b7bf21a84489d58d2a39d7446cc82cb0052cd1cc32fe1f06ca9"
       }
     },
     {
@@ -383,11 +383,11 @@
       "calls": [],
       "notes": "Home with the Resume card, after a section of Titus 1 was saved and the project left.",
       "file": "states/resume.json",
-      "sha256": "a08b72e7dac22870ca17185dff00bfc1d47eb2ff7e8d119eb974b08b648fc2b6",
+      "sha256": "564dade6b1eb38f49fb85f41b42592f18186be91156acffa15c88e673021d7b2",
       "parts": [],
       "real": {
         "png": "11b853096cdc40caef04764544faf31dcc34202a078d8f9b3d63bfcb902e1262",
-        "dom": "a6d148c709ad28c86794b66fad41545689d115a2352546d9b425e9136ca0a778"
+        "dom": "8a06357b8df56b9c2122440ceb6ad4de4c694efd227f15a99347158c8ee877d6"
       }
     },
     {
@@ -399,11 +399,11 @@
       "calls": [],
       "notes": "Home after an open refused a file written outside the app into the Bible sample. Not portable: the route writes into the project.",
       "file": "states/home-open-error.json",
-      "sha256": "f1f6377603ee0f404d8a0f4dca0bcaa0e8ece90c52f440a8ca47223a18f78c5b",
+      "sha256": "63d547234c0657aaf2c010ad3698387998c3db5e7825bf2dd2eaacdff1f4e6fa",
       "parts": [],
       "real": {
         "png": "4893cc88e387e04187eca84920deabb6c8d722629dd4509d08bf098acaf0080a",
-        "dom": "3b912139d78218746f79beafbaeda330c0d4eb5386c8abada7275c73dbc3fde0"
+        "dom": "9fef958aed1d6ceb985e954de52fe128b56bbb3c7926e086d36b2a458b622035"
       }
     }
   ]

@@ -1998,6 +1998,32 @@ fn incomplete_history_conflict_labelled() {
     assert!(conflict.incomplete_history);
 }
 
+/// tC4 #179: a teammate's verse edit whose parent never arrived does not replace the text
+/// that stands: the verse has two heads, the standing text shows, and the conflict says the
+/// history is incomplete.
+#[test]
+fn loss_unknown_parent_verse_edit_keeps_standing_text() {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = imported_book(&mut maria, &[2]);
+    let base = latest(&book, &verse_key(1, 1));
+    let lost = juan.one(verse(1, 1, text("Juan's first", 1)), vec![base.id()]);
+    let arrived = juan.one(verse(1, 1, text("Juan's second", 1)), vec![lost.id()]);
+    let state = assert_converges(&all_of(&[&book, &[arrived]]));
+    assert_eq!(state.heads(&verse_key(1, 1)).len(), 2);
+    assert_eq!(
+        state
+            .projected(&verse_key(1, 1))
+            .as_ref()
+            .and_then(words_of)
+            .as_deref(),
+        Some("words of 1:1")
+    );
+    let conflict = the_conflict(&state);
+    assert!(conflict.incomplete_history, "{conflict:?}");
+    every_text_once(&state);
+}
+
 /// L79: carried paths that differ only in letter case are both kept, one at a `.case-`
 /// path, and listed.
 #[test]

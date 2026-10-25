@@ -631,11 +631,25 @@ async fn settings_from_home_mints_only_for_shown_values() {
     let (_dir, t, world, _store) = app().await;
     let project = world.bible.clone();
     let view = settings_view(&t, &project).await;
-    // A change lands after the dialog read: the direction becomes rtl.
+    // A change lands after the dialog read: the direction becomes rtl, in the metadata field
+    // every reader reads first (`tc_app::direction`), as a teammate's Settings would write it.
     {
         let handle = world.open(&project);
+        let languages = RecordKey::ProjectMeta(tc_journal::keys::MetaField::Languages);
+        let Some(Record::ProjectMeta {
+            value: Some(Json::Arr(mut value)),
+            ..
+        }) = handle.snapshot().fold().projected(&languages)
+        else {
+            panic!("the sample names its language")
+        };
+        let Some(Json::Obj(first)) = value.first_mut() else {
+            panic!("{value:?}")
+        };
+        first.insert("scriptDirection".to_owned(), Json::Str("rtl".to_owned()));
+        let token = handle.snapshot().mint(&languages, None).unwrap();
         handle
-            .submit(setting(handle.as_ref(), "textDirection", "rtl"))
+            .submit(StoreCommand::set_meta(token, Some(Json::Arr(value))))
             .await
             .unwrap();
         handle.clone().close().await.unwrap();
@@ -792,7 +806,8 @@ fn synced_backend(world: &StoreWorld, local_synced: bool) -> tc_app::backend::st
             threads: 2,
             watch_debounce: std::time::Duration::from_millis(20),
         },
-        Arc::default(),
+        // The world's hooks, so the world's watch looks at what this store writes too.
+        world.hooks.clone(),
     )
     .unwrap();
     backend.store().wait_cleanup();

@@ -1,0 +1,82 @@
+{
+  "installedResources": {
+    "_local_/_sideloaded_/en_ult": {
+      "repoPath": "git.door43.org/unfoldingWord/en_ult",
+      "version": "v91",
+      "sha": "35d215957f3203fd2e2fac5702ce14902d417f9d",
+      "flavor": "scripture/textTranslation"
+    },
+    "_local_/_sideloaded_/en_ust": {
+      "repoPath": "git.door43.org/unfoldingWord/en_ust",
+      "version": "v91",
+      "sha": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+      "flavor": "scripture/textTranslation"
+    },
+    "_local_/_sideloaded_/el-x-koine_ugnt": {
+      "repoPath": "git.door43.org/unfoldingWord/el-x-koine_ugnt",
+      "version": "v0.34",
+      "sha": "fc95b2b8aad08bb65ab54628ab685413a1139e97",
+      "flavor": "scripture/textTranslation"
+    },
+    "_local_/_sideloaded_/en_tn": {
+      "repoPath": "git.door43.org/unfoldingWord/en_tn",
+      "version": "v91",
+      "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a",
+      "flavor": "parascriptural/x-bcvnotes"
+    },
+    "_local_/_sideloaded_/en_twl": {
+      "repoPath": "git.door43.org/unfoldingWord/en_twl",
+      "version": "v91",
+      "sha": "7cbb3419f79780ce84b92ad7d42bd476cc5d8a64",
+      "flavor": "parascriptural/x-bcvarticles"
+    },
+    "_local_/_sideloaded_/en_tw": {
+      "repoPath": "git.door43.org/unfoldingWord/en_tw",
+      "version": "v91",
+      "sha": "ff5b3852c27c3a0d01b109e482eb26047dcd20e2",
+      "flavor": "parascriptural/x-bcvarticles"
+    },
+    "_local_/_sideloaded_/en_ta": {
+      "repoPath": "git.door43.org/unfoldingWord/en_ta",
+      "version": "v91",
+      "sha": "ce9a1bb9431317ca888e8c1f9620caa7f5fe45fd",
+      "flavor": "peripheral/x-peripheralArticles"
+    },
+    "_local_/_sideloaded_/es-419_tn": {
+      "repoPath": "git.door43.org/es-419_gl/es-419_tn",
+      "version": "v66",
+      "sha": "22f3d0c61e2ab4701cb869547de9c3c43da07208",
+      "flavor": "parascriptural/x-bcvnotes"
+    },
+    "_local_/_sideloaded_/en_obs": {
+      "repoPath": "git.door43.org/unfoldingWord/en_obs",
+      "version": "v9",
+      "sha": "d39a1dc7a7557ac54e4a8fecc3462147fe7eec3b",
+      "flavor": "gloss/textStories"
+    },
+    "_local_/_sideloaded_/en_obs-tn": {
+      "repoPath": "git.door43.org/unfoldingWord/en_obs-tn",
+      "version": "v13",
+      "sha": "e86138ea13f619f09f7a6dcaa60592716d407fe4",
+      "flavor": "peripheral/x-obsnotes"
+    },
+    "_local_/_sideloaded_/en_obs-twl": {
+      "repoPath": "git.door43.org/unfoldingWord/en_obs-twl",
+      "version": "v3",
+      "sha": "44ebc9fafe8101665f985007d566f5036a2be85b",
+      "flavor": "parascriptural/x-bcvarticles"
+    },
+    "_local_/_sideloaded_/en_obs-tq": {
+      "repoPath": "git.door43.org/unfoldingWord/en_obs-tq",
+      "version": "v10",
+      "sha": "01b92fe8793d62cff3a2221f5174c768cbad3dc1",
+      "flavor": "peripheral/x-obsquestions"
+    },
+    "_local_/_sideloaded_/hbo_uhb": {
+      "repoPath": "git.door43.org/unfoldingWord/hbo_uhb",
+      "version": "v3.0.0",
+      "sha": "74022f0fed012a3ef169886f595dd98e7b200543",
+      "flavor": "scripture/textTranslation"
+    }
+  }
+}

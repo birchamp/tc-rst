@@ -321,6 +321,17 @@ pub fn t(key: Key, vars: Vars<'_>) -> String {
     lookup(key.as_str(), vars, None)
 }
 
+/// INV-EVERY-REFUSAL-RENDERS (UI-3): a refusal's sentence in the app language, with every
+/// placeholder filled from the refusal's own values. The one reader of `Message::vars`.
+pub fn refusal_text(message: &dyn tc_api::refusal::Message) -> String {
+    let owned = message.vars();
+    let vars: Vec<(&str, &dyn std::fmt::Display)> = owned
+        .iter()
+        .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
+        .collect();
+    t_dyn(message.key(), &vars, None)
+}
+
 /// tC4's `t(key, vars, fallback)` for a key that is not a constant: one a `tc-api` type names
 /// (`NetKind::ask_key`, `Message::key`) or one made at run time. A key that no catalog has gives
 /// `fallback` as it is, with no warning and no substitution, or the key after one warning when

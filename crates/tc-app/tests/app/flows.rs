@@ -149,7 +149,6 @@ fn each_app_wide_flow_runs_one_at_a_time() {
     for (request, flow) in [
         (FlowRequest::GatewayChange, Flow::GatewayChange),
         (FlowRequest::Share, Flow::Share),
-        (FlowRequest::SignIn, Flow::SignIn),
         (FlowRequest::Import, Flow::Import),
     ] {
         let gate = FlowGate::default();
@@ -166,12 +165,11 @@ fn different_app_wide_flows_run_together() {
     let _passes = [
         gate.enter(FlowRequest::GatewayChange).unwrap(),
         gate.enter(FlowRequest::Share).unwrap(),
-        gate.enter(FlowRequest::SignIn).unwrap(),
         gate.enter(FlowRequest::Import).unwrap(),
         gate.enter(FlowRequest::Sync(p("titus"))).unwrap(),
         gate.enter(FlowRequest::ExchangeExport(p("jonah"))).unwrap(),
     ];
-    assert_eq!(gate.running().len(), 6);
+    assert_eq!(gate.running().len(), 5);
 }
 
 #[test]
@@ -201,9 +199,9 @@ fn a_pass_frees_its_flow_when_the_thread_that_holds_it_panics() {
 #[test]
 fn the_rule_is_symmetric_and_matches_the_design() {
     let all = requests();
-    // Indexes into `all`: 0 and 1 are syncs of a and b; 2 to 5 the app-wide flows; 6 and 7
-    // exports of a and b; 8 and 9 receives of a and b.
-    let excluding: [(usize, usize); 17] = [
+    // Indexes into `all`: 0 and 1 are syncs of a and b; 2 to 4 the app-wide flows; 5 and 6
+    // exports of a and b; 7 and 8 receives of a and b.
+    let excluding: [(usize, usize); 16] = [
         // A request excludes itself: each flow runs one at a time.
         (0, 0),
         (1, 1),
@@ -214,17 +212,16 @@ fn the_rule_is_symmetric_and_matches_the_design() {
         (6, 6),
         (7, 7),
         (8, 8),
-        (9, 9),
         // Two syncs of different projects exclude each other, as in tC4.
         (0, 1),
         // One exchange per project, whichever kind.
+        (5, 7),
         (6, 8),
-        (7, 9),
         // A sync and an exchange of the same project.
-        (0, 6),
-        (0, 8),
-        (1, 7),
-        (1, 9),
+        (0, 5),
+        (0, 7),
+        (1, 6),
+        (1, 8),
     ];
     for (i, x) in all.iter().enumerate() {
         for (j, y) in all.iter().enumerate() {
@@ -247,7 +244,6 @@ fn requests() -> Vec<FlowRequest> {
         FlowRequest::Sync(b.clone()),
         FlowRequest::GatewayChange,
         FlowRequest::Share,
-        FlowRequest::SignIn,
         FlowRequest::Import,
         FlowRequest::ExchangeExport(a.clone()),
         FlowRequest::ExchangeExport(b.clone()),
@@ -262,7 +258,7 @@ proptest! {
     #[test]
     fn flow_gate_matches_its_model(
         steps in proptest::collection::vec(
-            prop_oneof![(0usize..10).prop_map(Step::Enter), (0usize..10).prop_map(Step::Drop)],
+            prop_oneof![(0usize..9).prop_map(Step::Enter), (0usize..9).prop_map(Step::Drop)],
             1..80,
         )
     ) {

@@ -8,7 +8,8 @@ import fs from 'node:fs';
 import http from 'node:http';
 import { browserTest, focused, openMenu, panel, recordRequests, sleep, trigger, until, withApp } from './kit.mjs';
 
-const RELEASES = 'https://github.com/unfoldingWord/translationCore4/releases';
+// The install page's download link, as this app serves it (H16 part 3; tc-server HELP_OVERLAY).
+const DOWNLOAD = 'https://translationcore.com/tc4';
 const helpPanel = (page) => page.getByTestId('help-panel');
 const frame = (page) => page.frameLocator('[data-testid="help-frame"]');
 const h1 = (page) => frame(page).getByRole('heading', { level: 1 });
@@ -78,14 +79,24 @@ browserTest('b. with every other origin refused, the pages, their images and the
   });
 });
 
-browserTest('c. with the internet off, the Releases link asks first; Not now opens nothing and sends nothing', async () => {
+// Q31 (b), #763: Help never names a tC4 build, so it cannot disagree with About's version.
+browserTest('help_home_shows_no_rc1_build_text_offline', async () => {
+  await withApp(async ({ page, env }) => {
+    await openHelp(page);
+    const text = await frame(page).locator('body').innerText();
+    assert.doesNotMatch(text, /Pre-release software|4\.0\.0-rc\.1|\bbuild [0-9a-f]{7}\b/);
+    assert.deepEqual(env.refused(), []);
+  });
+});
+
+browserTest('c. with the internet off, the download link asks first; Not now opens nothing and sends nothing', async () => {
   await withApp(async ({ page, context, env }) => {
     const requests = recordRequests(page);
     let pages = 0;
     context.on('page', () => { pages += 1; });
     await openHelp(page);
     await openInstallPage(page);
-    await frame(page).locator(`a[href="${RELEASES}"]`).click();
+    await frame(page).locator(`a[href="${DOWNLOAD}"]`).click();
     const ask = page.getByTestId('net-ask');
     await ask.waitFor();
     assert.equal(await ask.getAttribute('data-kind'), 'helpLink');
@@ -94,7 +105,7 @@ browserTest('c. with the internet off, the Releases link asks first; Not now ope
     await page.keyboard.press('Escape');
     await until('the question closes', async () => (await ask.count()) === 0);
     assert.equal(await helpPanel(page).count(), 1);
-    await frame(page).locator(`a[href="${RELEASES}"]`).click();
+    await frame(page).locator(`a[href="${DOWNLOAD}"]`).click();
     await ask.waitFor();
     await page.getByTestId('net-cancel').click();
     await until('the question closes', async () => (await ask.count()) === 0);
@@ -107,7 +118,7 @@ browserTest('c. with the internet off, the Releases link asks first; Not now ope
   });
 });
 
-browserTest('d. with the internet on, the Releases link opens a window at its address and asks nothing; the frame stays', async () => {
+browserTest('d. with the internet on, the download link opens a window at its address and asks nothing; the frame stays', async () => {
   await withApp(async ({ page }) => {
     await openMenu(page);
     await page.getByTestId('account-internet').click();
@@ -116,15 +127,15 @@ browserTest('d. with the internet on, the Releases link opens a window at its ad
     await openHelp(page);
     await openInstallPage(page);
     const opened = page.waitForEvent('popup');
-    await frame(page).locator(`a[href="${RELEASES}"]`).click();
+    await frame(page).locator(`a[href="${DOWNLOAD}"]`).click();
     const popup = await opened;
-    assert.equal(popup.url(), RELEASES);
+    assert.equal(popup.url(), DOWNLOAD);
     await popup.close();
     assert.equal(await page.getByTestId('net-ask').count(), 0);
     await expectPage(page, 'gs-install.html', 'Install and start tC4');
   }, {
-    // The window would load github.com: a stub answers it, so the run stays on this machine.
-    init: (context) => context.route(RELEASES, (route) => route.fulfill({ contentType: 'text/html', body: '<title>stub</title>' })),
+    // The window would load translationcore.com: a stub answers it, so the run stays on this machine.
+    init: (context) => context.route(DOWNLOAD, (route) => route.fulfill({ contentType: 'text/html', body: '<title>stub</title>' })),
   });
 });
 

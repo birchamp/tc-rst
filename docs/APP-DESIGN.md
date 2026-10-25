@@ -210,7 +210,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD28 | The port of `renderArticleBlocks` (`tC4:src/data/articles.ts:142`) lives in `tc-helps`. | Pure logic belongs in a pure crate. | tc-app. |
 | AD29 | Help pages are vendored from tc-website `cdfdf9b7…` with a per-file sha list and a licence record. *(A5, D3: the 180 files of `tc-help/` are in `crates/tc-ui/help/`, copied byte for byte by `crates/tc-ui/vendor-help.sh` (tC4's sparse fetch); `crates/tc-ui/help-pages.txt` lists each with its git blob id in tc-website, under the repository, the commit and the licence record, and `tests/help_pages.rs` checks every byte, that nothing is unlisted, and that no page loads anything from another origin. `build-app.sh` copies them to `<ui>/help/`, outside the hashed folder, where `tc4 serve` serves `/help/*`.)* | They are not in tC4's git (`parity/tc4-baseline/README.md:18-19, 41-46`); `vendor-tc4.sh` lists files with `git ls-tree` of a tC4 commit (`crates/tc-ui/vendor-tc4.sh:29-33`). | Extending `vendor-tc4.sh` with blob ids. |
 | AD30 | A panic hook stores a crash marker and reports the error; `boot.js`, not wasm, reloads the page and counts the page loads that ended in a panic in `sessionStorage`. Three within 10 s stop the reloads; `boot.js` then draws tC4's view-error callout as static DOM and posts each buffered entry that has a `DraftField` as a `Draft` with a plain `fetch` (none for an entry with a save in flight, §6.8, A4b second review). A capture listener in `boot.js` writes each keystroke to the buffer before wasm handles it. *(A-15)* | wasm aborts on panic (`Cargo.toml:28`), after which closures it registered trap again and a reload it scheduled may never run; tC4 shows `data-testid="view-error"` (`tC4:src/App.jsx:163-190`). *(A4b: and those closures can also panic again on the state the abort left, so the hook keeps the first panic; a listener the WebAssembly registered can hold the reload, so `boot.js` owns `beforeunload` too; §6.8.)* | Reload forever; no recovery; counting traps. |
-| AD31 | Sync, gateway change, share flow, sign-in and import each run one at a time across the app (`FlowGate`). USB export and receive run one at a time per project, never beside a sync of the same project. *(A-31)* *(A8: a second sign-in waits for the one in flight, as tC4's `signInFlight` makes it, instead of answering `Busy`: sign-ins and resumes take one lane in the account service, because each sign-in deletes and re-creates the token `translationCore` and two at once could delete each other's. `FlowRequest::SignIn` stays for the flows that must not run beside a sign-in.)* | DELTA:660-661; tC4's flags (`tC4:src/state.jsx:176-192`). STORAGE does not say that a receive and a sync of one project may run together. | — |
+| AD31 | Sync, gateway change, share flow, sign-in and import each run one at a time across the app (`FlowGate`; sign-in in the account service, A8). USB export and receive run one at a time per project, never beside a sync of the same project. *(A-31)* *(A8: a second sign-in waits for the one in flight, as tC4's `signInFlight` makes it, instead of answering `Busy`: sign-ins and resumes take one lane in the account service, because each sign-in deletes and re-creates the token `translationCore` and two at once could delete each other's. So the gate has no sign-in flow: the A8 lane run deleted `FlowRequest::SignIn` and `Flow::SignIn`, which nothing entered and which excluded only another sign-in; a later flow that must not run beside a sign-in says so in its own unit.)* | DELTA:660-661; tC4's flags (`tC4:src/state.jsx:176-192`). STORAGE does not say that a receive and a sync of one project may run together. | — |
 | AD32 | Operation-count tests start with the first data unit (B1b), on `MemoryBackend` folds of tc-corpus Psalms and ten times Psalms. | Count rows do not wait for S1 or P. | Counts only after P. |
 | AD33 | The app track builds `tc-export`: the print model early (B8), the producers after S2 (D2). | No storage unit owns it; the Community Checking baseline needs the print model. | Waiting for an owner. |
 | AD34 | Checkpoint on every mode switch, as tC4 does (`tC4:src/state.jsx:4031-4038`), until the owner and the storage team rule (Q-5). Before R17 is adopted, unit P measures save latency while a checkpoint runs (R9), and the storage team is asked to keep the long part of a checkpoint off the actor (R21). If the 25 ms save budget still fails, Q-5 offers one checkpoint per mode switch at most every two minutes. *(A-11)* | tC4's J8 asserts it (`tC4:e2e/j08-resume.spec.ts:194`); STORAGE lists only leaving Translate (STORAGE:1723). A checkpoint is an actor step with a 500 ms budget for a whole Bible (STORAGE:1725-1735, 2720; PERF:92), so a checker who switches after each decision would wait behind one each time. | Silently following either. |
@@ -1880,13 +1880,17 @@ in Chromium against the real `tc4`, with the request filter of AD11
    which forgets both copies of that token. Resume's outcomes are tC4's `ResumeOutcome`; a
    sign-out or sign-in that lands while a resume waits for Door43 wins. Cancel stops the sign-in
    wherever it is: `account/cancelSignIn { signIn }` names it, and a cancel that comes before its
-   sign-in makes it send nothing, one that comes while it waits for its turn or for Door43 drops
-   it there, and one that comes after it ended signs that session out and forgets the token it
-   kept. In every timing nobody is signed in by that sign-in and no token it minted is kept. tC4
-   lets a cancelled sign-in run to its end and then signs out, which also empties the keychain;
-   here the next sign-in does not wait for Door43's answer to the cancelled one, and a token an
-   earlier session kept survives a cancel: a declared difference, the person sees the same "not
-   signed in", sooner.)*
+   sign-in makes it send nothing, one that comes while it waits for its turn drops it there, one
+   that comes while Door43 answers its token calls drops it there and signs out, and one that
+   comes after it ended signs that session out and forgets the token it kept. In every timing
+   nobody is signed in by that sign-in and no token it minted is kept. tC4 lets a cancelled
+   sign-in run to its end and then signs out, which also empties the keychain; here the next
+   sign-in does not wait for Door43's answer to the cancelled one, and a token an earlier session
+   kept survives a cancel that comes before the token calls: a declared difference, the person
+   sees the same "not signed in", sooner. A cancel once the token calls started signs out as
+   tC4's does, because Door43 may already have replaced that token, and keeping it would show a
+   saved sign-in that the next check finds refused (the A8 lane run, minor 6 of A8's
+   verification).)*
 7. Private repositories (Q3, PLAN:51-54): `door43/open` fetches without credentials first; on 401
    or 404 with no session the job ends with `NeedsSignIn(PrivateRepository)`, the UI shows M12 and
    runs the open again.
@@ -2031,6 +2035,13 @@ show a 401 page.
   a fetch while a screen of the old run still holds the dead one, and the old screen's release
   cannot take a holder from the new read. A read of the app has no run: a restart does not end
   it.)*
+- A questions table (en_tq, en_obs-tq) is read as tC4's `deriveTqItems` reads it
+  (`tC4:src/data/derive.ts:323-348`): one bad row (an `Occurrence` of `x`) costs only its own
+  occurrence, not the table. Declared differences from tC4, each only for a damaged resource:
+  a row whose `ID` is not a row id is left out, where tC4 shows its question, because a
+  question here is keyed by a valid id; and an OBS row whose `Reference` has a third part
+  (`1:2:3`) is left out, where tC4 shows it on frame 2 of story 1, because an OBS address here
+  is a story and a frame only (`tc_helps::tsv::parse_questions_leniently`, DOM-2).
 - `window.__tcIdle` is true when no fetch, save or job is in flight. *(A4b: a save counts while it
   is in flight and while its timer is armed, so a test that waits for idle sees a save that is
   due; a section card's buffer, which saves only on Save, does not keep the page busy.)*
@@ -3056,7 +3067,7 @@ tC4's spec assertions are the reference.
 |---|---|---|---|
 | J1 create Bible (`e2e/j01-create-project.spec.ts:16`) | B2 (UI), C6 | store, R2 | valid Burrito; `project.json` |
 | J2 draft verse (`e2e/j02-draft-verse.spec.ts:96-1143`) | B4a, B4b (UI on scripted saves), C2 | store | one pending batch per save; "Saved" only after B3 (held save); the section steps write nothing before Save *(A-1)* |
-| J3 get resources, guided fix | B9a, C8 | store + fake with resources | receipts; pins with sha |
+| J3 get resources, guided fix | B9a, C8, FIX-J | store + fake with resources | receipts; pins with sha; journey `j3_a_download_from_the_seeded_fake_installs_the_pinned_version` reads the install from disk |
 | J4 check book | B5b, C4 | store | decision records; drag-select |
 | J5 align verse | B6, C5 | store | one `Alignment` change per save |
 | J6 edit invalidation | C2, C4 | store | nothing written on decisions (STORAGE §0 item 4) |
@@ -3064,7 +3075,7 @@ tC4's spec assertions are the reference.
 | J8 resume and checkpoints | C1a, D1 | store | one commit when leaving with changes, none without (STORAGE:3820-3821); the session closes at Home *(A-25)* |
 | J9a, J9c, J9d import | F1 | store + I | P9 byte equality |
 | J11, J24 share | B9b, E1b | store + X | Upload cases become sync cases on the OBS card (Q2) |
-| J12 upgrade, J13 gateway change | C8 | store | one `ApplyUpgrade` batch; look-again when heads moved |
+| J12 upgrade, J13 gateway change | C8, FIX-J | store | one `ApplyUpgrade` batch; look-again when heads moved; journeys `j12_an_upgrade_through_the_screens_moves_the_pin_on_disk` and `j13_change_writes_the_primary_set_to_disk` read the pin file from disk |
 | J15 slow open | B3 (UI with a held open), C1a | store with `FaultFs` delay | first report 300–400 ms (STORAGE:1883-1891) |
 | J16, J25 Understand | B3, B7, C3 | store | `Comment` records |
 | J17 open from Door43 | B9b, E1b | store + X | private repository through sign-in (Q3) |
@@ -3423,7 +3434,7 @@ cut from the integration branch `app` after unit C had merged, like every other 
 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
-| F1 Import | M5 all steps with uploads; tC3 version lookup; name clash; working state with progress and cancel; toast and badge; an import the start cleanup removed (C0's `import` report refused with `import.write-failed`): Home says the import did not finish and asks the person to import again | I, C1a | — | J9a, J9c, J9d; language-suggestions; an import cut short by an ended `tc4` is removed at the next start and Home says so | `memory_seed_equals_tc_import_seed` passes and the local seed is deleted |
+| F1 Import | M5 all steps with uploads; tC3 version lookup; name clash; working state with progress and cancel; toast and badge; an import the start cleanup removed (C0's `import` report refused with `import.write-failed`): Home says the import did not finish and asks the person to import again *(I, built below the screens, which F1 wires: tC3 import in `tc-import` and `Store::create_imported`; Update a book from USFM in `FoldState::plan_update_book` and `Command::UpdateBook`, rules in STORAGE §13.4 and §13.6. Declared differences from tC4: a tC3 decision tied to "every occurrence" (occurrence below 1) is listed in the import's report and not imported, where tC4 imports it into its decision file, because no check of the rebuild can stand on it; the zip keeps it. tC3 decisions take the moment of import as their time, where tC4 writes the newest tC3 `checkData` time, since the rebuild keeps no tC3 check history (as tC4) and a decision's time is when it entered the project. Update a book is new: tC4 has none (Add a book answers `addBook.usfmExists`, and an opened project fixes changed book files). It fills empty verses, makes a conflict of a verse both sides changed, leaves a verse the file lacks or holds in another structure as it was and lists it, goes in two batches with no Undo, and a file that sets a verse back to an older text makes a conflict, so a translator's file is never imported silently over their work nor skipped without a word. Left for F1: the refusal words follow tC4's `importer.tc3.*` keys; `addBook.usfmExists` points to Update a book once it is on screen (a declared difference then).)* | I, C1a | — | J9a, J9c, J9d; language-suggestions; an import cut short by an ended `tc4` is removed at the next start and Home says so | `memory_seed_equals_tc_import_seed` passes and the local seed is deleted |
 
 ### Phase 6: shell and performance
 

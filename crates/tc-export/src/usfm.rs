@@ -76,11 +76,11 @@ fn aligned_parts(input: &BookInput) -> (BookParts, ExportFacts) {
             match weave(&stored, v, last, alignment, input.source_sha) {
                 Woven::Unchanged => {}
                 Woven::Skipped(why) => facts.skip(SkippedVerse {
-                    reference: Reference {
-                        book: input.book,
-                        chapter: c,
-                        verses: VerseSpan::range(v, last).unwrap_or(VerseSpan::single(v)),
-                    },
+                    reference: Reference::new(
+                        input.book,
+                        chapter_no,
+                        VerseSpan::range(v, last).unwrap_or(VerseSpan::single(verse_no)),
+                    ),
                     why,
                 }),
                 Woven::Aligned(woven) => {
@@ -121,13 +121,17 @@ pub fn plain(input: &BookInput) -> (String, ExportFacts) {
                     text.layout.clear();
                 }
                 Err(_) => {
+                    let (Some(chapter_no), Some(verse_no)) = (ChapterNo::new(c), VerseNo::new(v))
+                    else {
+                        continue;
+                    };
                     let last = text.last.max(v);
                     facts.skip(SkippedVerse {
-                        reference: Reference {
-                            book: input.book,
-                            chapter: c,
-                            verses: VerseSpan::range(v, last).unwrap_or(VerseSpan::single(v)),
-                        },
+                        reference: Reference::new(
+                            input.book,
+                            chapter_no,
+                            VerseSpan::range(v, last).unwrap_or(VerseSpan::single(verse_no)),
+                        ),
                         why: SkipReason::MarkupKept,
                     });
                 }

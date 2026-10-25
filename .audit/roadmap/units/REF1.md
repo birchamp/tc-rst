@@ -4,18 +4,18 @@ title: Move the tC4 reference and port its changes
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: done
+owner: REF1 session (Claude Code 56b3f56d)
+branch: track-REF1
+worktree: /home/bot/tc-rst/.worktrees/track-REF1
 depends: [SWEEP]
 needs_owner: []
 proves: [P1, P7]
 no_loss: false
 size: 3-5 sessions (estimate)
-merged: none
+merged: 1ad7e1f8
 updated: 2026-10-24
-next: Claim this card now: H7 is answered, match tC4 4.0 rc.2 (rulings/2026-10-24-H3-H4-H7-fast-release.md).
+next: none
 blocked_by: none
 ---
 
@@ -65,7 +65,7 @@ pages, and the newest interface words in all ten languages.
     `crates/tc-ui/vendored-from-tc4.txt`, and the help pin (`crates/tc-ui/help-pages.txt`
     equal to tC4's `TC_WEBSITE_REV` at that commit, recorded in the baseline README) agree.
   - INV-NO-ROW-WAITS-FOR-A-PAST-MOVE: after the move, no row of `docs/TC4-ISSUES.md` says
-    "reference change" for a change the new reference holds.
+    "reference change" for a change the new reference holds (not in code: a read of the rows after the move, done in step 4).
 - **Wrong states**:
   - PLAN names one tC4 commit while the screens, catalogs or help pages come from another.
   - Rows wait for "the reference move" that has happened (#769, #763 and others).
@@ -80,6 +80,8 @@ pages, and the newest interface words in all ten languages.
     (`crates/tc-ui/tests/vendored_assets.rs`, `crates/tc-ui/tests/help_pages.rs`); only the
     agreement between the records is new.
 - **Checks**:
+  - `parity/app/journeys/about.test.mjs` asserts "License: MIT" and the recaptured about and license
+    screens pass `screen_record` (INV-ONE-LICENCE, card LIC-1); journey and parity gate.
   - `the_reference_is_one_commit_everywhere` (to create) in
     `parity/tc4-baseline/baseline.test.mjs`; kind: ledger; runs in CI's `parity-baseline` job.
     If CHK-6 already added a PLAN-and-manifest test, extend that one instead.
@@ -120,7 +122,11 @@ pages, and the newest interface words in all ten languages.
 ### Step 2: Vendor the catalogs, CSS and help pages from the new reference
 
 - Do:
-  1. `crates/tc-ui/vendor-tc4.sh ~/unfoldingword/tc4-rc2 a5ce0307df90b558f5dc584d6591b3dc57f62fce`.
+  1. `crates/tc-ui/vendor-tc4.sh ~/unfoldingword/tc4-rc2 d25b7871904228a342c0d80280136d8636833653`
+     (tC4 `release/4.0`: rc.2 plus the fixes toward 4.0, among them #838's MIT `LICENSE` and
+     `about.licenseName`, so About says MIT as the rebuild is since LIC-1; decided 2026-10-24).
+     `COPYING` is gone at that commit: drop `GPL_TEXT` and the `license-gpl` block from
+     `crates/tc-ui/src/views/account_menu.rs`, as tC4's dialog shows only `LICENSE` (D111).
   2. `crates/tc-ui/vendor-help.sh dbb7cd03c657637ec97ee4c0f00ed7bae44698d9` (it needs the
      network; tests never run it).
   3. Build. If a key the rebuild uses was removed or renamed, the `keys::` constant fails to
@@ -253,3 +259,19 @@ machine fingerprint in `manifest.json`).
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/tc4-coverage.md
 - 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
+- 2026-10-24 17:43 EDT | integration lane (Claude Code 3d07d5f8) | note | none | step 2 vendors tC4 release/4.0 d25b7871 instead of rc.2 a5ce0307, so the About screen's licence line and dialog say MIT (LIC-1 moved that part here; the orchestrator agreed 2026-10-24); added the about check | .audit/roadmap/units/LIC-1.md
+- 2026-10-24 15:00 EDT | REF1 session (Claude Code 56b3f56d) | ruling | none | H7, the owner on 2026-10-24: "match tC4 4.0 rc.2 now" (rulings/2026-10-24-H3-H4-H7-fast-release.md, on track-PLAN-FAST until batch 1 lands). The orchestrator names the commit: tC4 release/4.0 tip d25b7871904228a342c0d80280136d8636833653 (rc.2 a5ce0307 plus later fixes, #838 among them, so About shows MIT); its fetch-help.mjs pins tc-website dbb7cd03 as rc.2 does | git -C ~/unfoldingword/tc4-sweep show d25b7871:scripts/fetch-help.mjs
+- 2026-10-24 15:00 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed on track-REF1 in .worktrees/track-REF1 from main 0189cee4, on the orchestrator's assignment. SWEEP is not done (batch 2): the merge waits for it, and this branch leaves docs/TC4-ISSUES.md alone until SWEEP lands, since SWEEP rewrites its rows. Asked the orchestrator whether #810 (poem lines as tabs) is built here or on its own card | python3 -I -B .audit/tools/board.py
+- 2026-10-24 15:01 EDT | REF1 session (Claude Code 56b3f56d) | step 1 | none | PLAN "The reference version" names tC4 release/4.0 d25b7871 (rc.2 plus picks, #838). the_reference_is_one_commit_everywhere extends CHK-6's "PLAN's reference commit is the baseline's" (both now read a branch name, and a line break before the sha); it passes on d310bf3, fails with vendored-from-tc4.txt's commit changed by one character ("INV-THE-REFERENCE-IS-ONE-COMMIT: crates/tc-ui/vendored-from-tc4.txt names tC4 e310bf30…; PLAN names d310bf3"), and now fails as it must: "parity/tc4-baseline/manifest.json names tC4 d310bf30…; PLAN names d25b7871". No tc4-rc2 clone yet: vendor-tc4.sh reads blobs from ~/unfoldingword/tc4-sweep, so the clone waits for step 3's capture | node --test parity/tc4-baseline/baseline.test.mjs
+- 2026-10-24 15:13 EDT | REF1 session (Claude Code 56b3f56d) | step 2 | none | vendor-tc4.sh from ~/unfoldingword/tc4-sweep d25b7871 (83 files): catalogs in all ten languages add addBook.usfmTooLarge, check.sort.byFigure, check.foldAll, check.unfoldAll, check.group.other, cc.exportSkipped, align.unavailable.inline-alignment.title/body, align.unavailable.no-slot.title/body, syncResult.alignReplaced, and remove check.sort.byCategory; about.licenseName reads "License: MIT"; LICENSE is MIT and COPYING is gone (#838). About finds its copyright line as tC4 does (the line starting "Copyright") and License shows the notice alone; about.test.mjs follows tC4's spec. "By category" keeps its words in all ten languages through i18n-rebuild (tC4's d310bf3 strings) until REF1c builds #769. vendor-help.sh dbb7cd03 (189 files, was 180): the pages no longer carry the pre-release banner or the "Documented from build" footer, so Q31 (b) needs no overlay; help_home_shows_no_rc1_build_text_offline added. H16 parts 2 and 3: tc-server serves help with HELP_OVERLAY (projects folder ~/translationCore4/projects in st-where-projects-live.html and the search index; the install page's download link to https://translationcore.com/tc4), vendored bytes unchanged; tests help_pages_name_the_real_projects_folder, every_help_overlay_rule_finds_its_words_in_the_vendored_page, a_help_page_without_a_rule_is_served_as_it_is (crates/tc-server/tests/help_overlay.rs; in tc-server, not tc-ui as the card said, since the change is made where pages are served), and routes.rs serves the overlay. Help journeys c and d follow the download link. Tests: tc-ui vendored_assets, help_pages, i18n_keys, i18n_catalogs, i18n_runtime; tc-api refusals; tc-server help_overlay and routes all pass; clippy wasm app and tc-server clean | cargo test -p tc-server --test help_overlay
+- 2026-10-24 15:13 EDT | REF1 session (Claude Code 56b3f56d) | note | none | REQUEST to G3: the install page's per-system steps (gs-install.html: .exe, .pkg, the Linux zip and ./start-tc4.sh) still describe tC4's packages; only the download link is this app's. Add HELP_OVERLAY rules in crates/tc-server/src/statics.rs once G3 fixes the packages | crates/tc-ui/help/gs-install.html:129
+- 2026-10-24 15:15 EDT | REF1 session (Claude Code 56b3f56d) | note | none | Merged origin/track-PLAN-FAST (batch 1; brings REL-1). On the orchestrator's word: #810 (poem lines as tabs, step 4.6) moves to new card REF1b, which this session builds after REF1 lands; #769 (step 4.1) moves to new card REF1c for the next free lane. Both depend on REF1 and are in REL-1's and DONE's depends and ROADMAP.md. REF1 step 5 adds no #810 markers bullet to PLAN | .audit/roadmap/units/REF1b.md, REF1c.md
+- 2026-10-24 15:30 EDT | REF1 session (Claude Code 56b3f56d) | note | none | Step 2 journeys on this PC: about, help (with help_home_shows_no_rc1_build_text_offline and the download-link cases c and d), check-picker, check-keyboard: # tests 21, # pass 21, # fail 0, # skipped 0 | TC4_BIN=… node --test parity/app/journeys/{about,help,check-picker,check-keyboard}.test.mjs
+- 2026-10-24 16:46 EDT | REF1 session (Claude Code 56b3f56d) | interrupt | none | Usage limit. Done in step 3: tC4 baseline and view gallery recaptured at d25b7871 (committed); this PC's font list changed (543 lines, 4bcf744c9986), so all 112 Rust screens and cases were recaptured on it (script: one capture-rust.mjs run per unit/layers/backend group from captures.json, with --out target/ref1-app, then copied into parity/app). Ported tC4's top-bar 'position: relative' (#801's anchor; tc-ui shell.rs). report.json now: 35 same, 77 differs, 18 unported (main had 33/79/18). The gate still fails on 12 rows: MaskMoved about; ResidualLayers align-original, align-workspace, align-workspace-620, align-workspace-row, ar-align-workspace-620, ar-align-workspace-row, en-obs-check-tn-session, license, open-progress-state; StaleResidual translate-tit1, en-translate-tit1 | cargo test -p tc-ui --test screen_record
+- 2026-10-24 17:50 EDT | REF1 session (Claude Code 56b3f56d) | step 3 | none | Rebuild side recaptured on this PC (font list 543 lines). The screen-record gate passes: 130 rows, 36 same (main: 33), 76 differ and explained, 18 unported. Ported from tC4 rc.2 on the way: the top bar's right group position: relative (#801's anchor); the OBS story check uses the compare card like a Bible check (#762; tc-ui check/detail.rs and story.rs lose their story-only branches); the License dialog is 720 px (#838). residuals.json: translate-tit1, en-translate-tit1 and license now Same, entries removed; the six Align rows differ only in the DOM (tabindex, #568) since tC4 #816 draws every source card too; en-obs-check-tn-session explains "By category" until REF1c. masks.json about-build re-measured (y 324, width 127). License and open-progress-state recaptured one at a time (harness minor logged) | cargo test -p tc-ui --test screen_record
+- 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | verify | 694f0f95 | Independent read-only reviewer (subagent of this session, did not write the code), FUNNEL §8 in order: 1 Code yes (HELP_OVERLAY one table at the only /help/ route, non-UTF-8 served as is, rules match exact page names; one reference test; About copyright as tC4 about.ts:16, LICENSE bytes pinned); 2 Checks mostly (reference test with its failure logged, overlay tests, routes test, gates.sh runs baseline.test.mjs; gap: the help pin is compared only with a hand-written README line); 3 Reach yes; 4 Siblings partly (ts-platform.html also names start-tc4.sh); 5 No loss n/a; 6 Prose: PLAN lacked a bullet for the help overlay; vendor-tc4.sh:3 comment wrong. Findings: one major (residuals.json's 13 Check rows claimed the d310bf3 stacked card and #773 as differences and did not name the visible "By category" / folding difference), four minors. Clean: story check vs tC4 Check.jsx:508-536 and CompareCard.jsx (dir, highlight, missing-source and not-drafted lines kept); catalogs remove only check.sort.byCategory, kept in all ten i18n-rebuild files; License 720 px, no GPL; card wiring | this log
+- 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | Major fixed: the 13 Check rows of parity/app/residuals.json now say the compare card, the note box and the #773 titles are tC4 rc.2's, and name the visible difference, tC4 #769 (folding groups, Fold all, "By figure" against "By category"), which REF1c builds; the true #764 and Invalid-count sentences kept; no row names d310bf3 any more. Minors: PLAN "differs on purpose" lists the help overlay (H16); vendor-tc4.sh:3 comment corrected; the help-pin check gap logged in .audit/minors.tsv | grep -c d310bf3 parity/app/residuals.json prints 0
+- 2026-10-24 18:01 EDT | REF1 session (Claude Code 56b3f56d) | note | none | REQUEST to G3, widened: crates/tc-ui/help/ts-platform.html (its Linux row names ./start-tc4.sh) also describes tC4's package, beside gs-install.html:129 | crates/tc-ui/help/ts-platform.html:128
+- 2026-10-24 18:07 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | CI run 40136396243's parity-baseline failed INV-P1-COVERED ("the reference is the baseline's": coverage.json still named d310bf3). parity/app/journeys/coverage.json moves to d25b7871 with its 39 tC4 specs (37 before): compare-card.spec.ts maps to check-detail.test.mjs compare_card_columns_fit_the_width; sync-refusal.spec.ts (#801) is pending on FIX-R, which builds it; bundled-upgrade.spec.ts, which pended on REF1 (card step 2.6), maps to the Rust tests bundled_upgrade_leaves_the_pinned_release_and_the_projects_pins_as_they_were (tc-app upgrades.rs) and a_bundled_store_seeds_a_first_run_that_is_offline (tc-resources dcs_install.rs) instead of a duplicate journey (decision: the behaviour is the store's, and both tests drive it through the public API). scripts/gates.sh --step node: 352 tests, 0 fail | node --test parity/app/journeys/coverage.test.mjs
+- 2026-10-24 19:04 EDT | REF1 session (Claude Code 56b3f56d) | gate | 811a6385 | GitHub runs green on 811a6385: ci 40137210125 (every gate step, the cargo workspace tests included) and app-e2e 40137210117 (every journey, none skipped); scripts/gates.sh --check-receipt accepts it. Handed to the integration lane for a batch. The merge still waits for SWEEP (depends) | scripts/gates.sh --check-receipt
+- 2026-10-24 20:08 EDT | integration lane (Claude Code 3d07d5f8) | merge | 1ad7e1f8 | merged into main in batch 3 (UI-3a 51e5edbc, REF1 1ad7e1f8, G4 578dd3f0, PROCESS-6 f0e0c399, shell.yml's cancel rule), gated by scripts/gates.sh --wait-ci batch-3 on the batch's last commit. REF1's own CI: ci 40137210125, app-e2e 40137210117 on 811a6385. In the batch TC4-ISSUES #838 is covered (About says MIT). | scripts/gates.sh --wait-ci batch-3

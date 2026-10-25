@@ -9,12 +9,13 @@ mod common;
 
 use std::collections::BTreeMap;
 
-use tc_align::{Basis, SourceBook, SourceVerse, record::from_record};
+use tc_align::{SourceBook, SourceVerse};
 use tc_core::{BookId, Reference, VerseSpan};
 use tc_export::{
     BookInput, ExportFacts, ExportInput, Produced, Producer, SkipReason, SkippedVerse,
     VerseAlignment, produce,
 };
+use tc_journal::fold::{Writer, decode_alignment_record};
 use tc_journal::ids::{ChapterNo, VerseNo};
 use tc_journal::record::AlignmentValue;
 use tc_usfm::codec::{BookParts, VersePart, decompose, recompose};
@@ -31,17 +32,14 @@ fn record_1_1() -> AlignmentValue {
         "tc4/sample-burrito/ingredients/checking/alignments/TIT.json",
     ))
     .unwrap();
-    let one = VerseNo::new(1).unwrap();
-    from_record(
-        &file["chapters"]["1"]["1"],
-        Basis::run(one, one, String::new(), None),
-    )
-    .unwrap()
+    decode_alignment_record(&file["chapters"]["1"]["1"], "TIT 1:1", 1, 1, 1, Writer::Tc4)
+        .unwrap()
+        .2
 }
 
 fn pin_1_1() -> SourceVerse {
     SourceBook::parse(&fixture("align/el-x-koine_ugnt-TIT.usfm"))
-        .verse(1, VerseSpan::single(1))
+        .verse(1, VerseSpan::single(VerseNo::new(1).unwrap()))
         .unwrap()
 }
 
@@ -81,11 +79,11 @@ fn export(input: &ExportInput<'_>) -> (String, ExportFacts) {
 }
 
 fn reference(chapter: u16, verse: u16) -> Reference {
-    Reference {
-        book: BookId::Titus,
-        chapter,
-        verses: VerseSpan::single(verse),
-    }
+    Reference::new(
+        BookId::Titus,
+        ChapterNo::new(chapter).unwrap(),
+        VerseSpan::single(VerseNo::new(verse).unwrap()),
+    )
 }
 
 fn verse_text(parts: &mut BookParts, chapter: u16, verse: u16) -> &mut String {
@@ -191,6 +189,24 @@ fn export_judges_validity_with_needs_review() {
             why: SkipReason::NeedsReview,
         }]
     );
+}
+
+#[test]
+fn the_export_weaves_no_link_to_a_source_word_the_pin_lacks() {
+    // tC4 #816 fits the cards to the pin and weaves the rest; the rebuild weaves none of the
+    // verse and names it, so no link leaves the app without a word (docs/PLAN.md, D2).
+    let pin = pin_1_1();
+    let missing = pin.words()[0].word.clone();
+    let without_first = SourceVerse::new(pin.words()[1..].to_vec());
+    let (out, facts) = export(&input(
+        stored_book(),
+        vec![((1, 1), aligned(record_1_1(), 1, Some(without_first)))],
+    ));
+    assert!(
+        !out.contains(&format!("x-content=\"{missing}\"")),
+        "a link to {missing} was woven: {out}"
+    );
+    assert_eq!(facts.skipped_total, 1, "the verse is named");
 }
 
 #[test]

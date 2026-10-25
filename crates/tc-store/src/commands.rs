@@ -6,7 +6,7 @@
 //! from the record's current heads (I4): a teammate's version that arrived after the screen
 //! was drawn stays a head beside the new change, and the record is a visible conflict.
 
-use crate::reply::{CommandError, Refusal};
+use crate::reply::{CommandError, DroppedLinks, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
 use tc_align::TargetVerse;
 use tc_journal::command::{
@@ -33,6 +33,8 @@ pub(crate) struct Plan {
     pub skipped: Vec<ConflictId>,
     /// Records an undo left as they are.
     pub kept: Vec<RecordKey>,
+    /// The links a verse or section save sent back to the bank.
+    pub dropped_links: Vec<DroppedLinks>,
 }
 
 /// What the planner reads.
@@ -122,7 +124,11 @@ impl Ctx<'_> {
                     .ok_or(CommandError::Refused(Refusal::Unreadable)),
                 Resolved::Conflict(_) => Err(CommandError::LookAgain),
             },
-            _ => Err(CommandError::LookAgain),
+            _ => self
+                .fold
+                .merged_at(token.key(), heads)
+                .map(Some)
+                .ok_or(CommandError::LookAgain),
         }
     }
 
@@ -135,15 +141,46 @@ impl Ctx<'_> {
     }
 }
 
+/// One part of "Update a book from USFM" (§13.6, H20). The verses left as they were are
+/// the `Fill` reply's `kept`.
+fn update_book(
+    ctx: &Ctx<'_>,
+    book: BookId,
+    bytes: &[u8],
+    file_name: &str,
+    part: tc_journal::outside::UpdatePart,
+) -> R<Plan> {
+    ctx.require_kind(ProjectKind::Bible)?;
+    let plan = ctx
+        .fold
+        .plan_update_book(book, bytes, file_name)
+        .map_err(|e| refused(Refusal::Book(e)))?;
+    Ok(match part {
+        tc_journal::outside::UpdatePart::Fill => Plan {
+            changes: plan.changes,
+            skipped: Vec::new(),
+            kept: plan.left_as_it_was,
+            dropped_links: Vec::new(),
+        },
+        tc_journal::outside::UpdatePart::Review => Plan {
+            changes: plan.review,
+            skipped: Vec::new(),
+            kept: Vec::new(),
+            dropped_links: Vec::new(),
+        },
+    })
+}
+
 /// B1 for one command.
 pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
+    let mut dropped = Vec::new();
     let changes = match command {
-        Command::SaveVerse { shown, words } => save_verse(ctx, shown, |v| {
+        Command::SaveVerse { shown, words } => save_verse(ctx, shown, &mut dropped, |v| {
             if let VerseValue::Text { words: w, .. } = v {
                 *w = nfc(words);
             }
         })?,
-        Command::SaveLayout { shown, layout } => save_verse(ctx, shown, |v| {
+        Command::SaveLayout { shown, layout } => save_verse(ctx, shown, &mut dropped, |v| {
             if let VerseValue::Text { layout: l, .. } = v {
                 *l = nfc(layout);
             }
@@ -152,7 +189,7 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             book,
             shown,
             layout,
-        } => save_section(ctx, *book, shown, layout.as_ref(), false)?,
+        } => save_section(ctx, *book, shown, layout.as_ref(), false, &mut dropped)?,
         Command::SaveAlignment {
             shown,
             verse_shown,
@@ -210,6 +247,12 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
             plan,
         } => resolve_pins(ctx, conflict, shown, plan)?,
         Command::UndoOutsideEdit { batch } => return undo_outside_edit(ctx, *batch),
+        Command::UpdateBook {
+            book,
+            bytes,
+            file_name,
+            part,
+        } => return update_book(ctx, *book, bytes, file_name, *part),
         Command::ResolveOutsideEdit {
             batch,
             keep,
@@ -238,13 +281,14 @@ pub(crate) fn plan(ctx: &Ctx<'_>, command: &Command) -> R<Plan> {
         } => set_book_scope(ctx, presence_shown, scope)?,
         Command::ReleaseBatch { batch } => release_batch(ctx, *batch)?,
         Command::Dismiss { shown } => dismiss(ctx, shown)?,
-        Command::KeepDraft { draft, section } => keep_draft(ctx, draft, section)?,
+        Command::KeepDraft { draft, section } => keep_draft(ctx, draft, section, &mut dropped)?,
         Command::Draft { .. } => Vec::new(),
     };
     Ok(Plan {
         changes,
         skipped: Vec::new(),
         kept: Vec::new(),
+        dropped_links: dropped,
     })
 }
 
@@ -269,6 +313,7 @@ fn unchanged_or(
 fn save_verse(
     ctx: &Ctx<'_>,
     shown: &ShownToken,
+    dropped: &mut Vec<DroppedLinks>,
     edit: impl FnOnce(&mut VerseValue),
 ) -> R<Vec<PlannedChange>> {
     let shown = ctx.edit(shown)?;
@@ -296,7 +341,15 @@ fn save_verse(
         shown.heads(),
         Cause::Edit,
     )];
-    out.extend(reflow(ctx, book, chapter, verse, &old, &new));
+    out.extend(reflow(
+        ctx,
+        book,
+        chapter,
+        verse,
+        (&old, shown.heads()),
+        &new,
+        dropped,
+    ));
     Ok(out)
 }
 
@@ -315,17 +368,29 @@ fn anchor_of(chapter: ChapterNo, verse: VerseNo, value: &VerseValue) -> ChapterV
 /// updated, the others go back to the bank, and the value is stamped for the new text (tC4
 /// #213, #789, `tc_align::reflow_edit` from the old text). Its parents are the alignment's heads the actor holds, so an
 /// alignment edit made elsewhere at the same time is a visible conflict with the reflow. No
-/// reflow when the alignment is in conflict, when its span is not the verse's span any more
-/// (a span was made or broken: a person aligns again), or when `tc_align::reflow_edit` leaves
-/// the value as it is.
+/// reflow when the verse's heads moved since the screen showed it, when the alignment is in
+/// conflict, when its span is not the verse's span any more (a span was made or broken: a
+/// person aligns again), or when `tc_align::reflow_edit` leaves the value as it is.
 fn reflow(
     ctx: &Ctx<'_>,
     book: BookId,
     chapter: ChapterNo,
     verse: VerseNo,
-    old: &VerseValue,
+    (old, shown): (&VerseValue, &[ChangeId]),
     new: &VerseValue,
+    dropped: &mut Vec<DroppedLinks>,
 ) -> Option<PlannedChange> {
+    // The alignment was made against the verse's current text. A save from a screen whose
+    // verse moved since (a sync) knows only the text it showed, so reflowing the current
+    // alignment from it could rewrite a teammate's alignment for text it never matched; the
+    // alignment is left as it is, and its hash then marks it for review.
+    let mut current = ctx.fold.heads(&RecordKey::Verse(book, chapter, verse));
+    let mut shown = shown.to_vec();
+    current.sort();
+    shown.sort();
+    if current != shown {
+        return None;
+    }
     let VerseValue::Text {
         words,
         layout,
@@ -366,6 +431,14 @@ fn reflow(
     let before = TargetVerse::new(&format!("{old_words}{old_layout}"));
     let target = TargetVerse::new(&format!("{words}{layout}"));
     let reflowed = tc_align::reflow_edit(&value, &before, &target).ok()?;
+    if !reflowed.dropped.is_empty() {
+        dropped.push(DroppedLinks {
+            book,
+            chapter,
+            verse,
+            links: reflowed.dropped,
+        });
+    }
     Some(change(
         Record::Alignment {
             book,
@@ -409,6 +482,7 @@ fn save_section(
     shown: &[(ShownToken, Option<SectionValue>)],
     layout: Option<&ShownToken>,
     unverified: bool,
+    dropped: &mut Vec<DroppedLinks>,
 ) -> R<Vec<PlannedChange>> {
     ctx.require_kind(ProjectKind::Bible)?;
     let mut verses: BTreeMap<(u16, u16), Displayed<VerseValue>> = BTreeMap::new();
@@ -543,7 +617,15 @@ fn save_section(
         if let Some(old) = old
             && !unverified
         {
-            out.extend(reflow(ctx, book, chapter, verse, old, new));
+            out.extend(reflow(
+                ctx,
+                book,
+                chapter,
+                verse,
+                (old, token.heads()),
+                new,
+                dropped,
+            ));
         }
     }
     if !added.is_empty()
@@ -973,7 +1055,7 @@ fn add_book(ctx: &Ctx<'_>, book: BookId, scope: &Scope, source: &str) -> R<Vec<P
         ))));
     }
     check_scope(ctx, book, scope)?;
-    let seeded = crate::seed::seed_book(
+    let seeded = tc_usfm::seed::seed_book(
         source,
         book.code(),
         book.english_name(),
@@ -1030,6 +1112,7 @@ fn add_book_text(
         .map_err(|e| refused(Refusal::Book(format!("the file does not read: {e}"))))?;
     let cause = Cause::Import(ImportSource::Usfm {
         file_name: file_name.into(),
+        unknown_base: false,
     });
     if parts.chapters.is_empty() {
         return Err(refused(Refusal::Book(
@@ -1233,7 +1316,7 @@ fn save_frame(ctx: &Ctx<'_>, shown: &ShownToken, text: &str) -> R<Vec<PlannedCha
     let text = nfc(text);
     let record = match shown.key().clone() {
         RecordKey::Frame(story, frame) => {
-            let problem = if frame.0 == 0 {
+            let problem = if frame.get() == 0 {
                 tc_obs::story::title_text_problem(&text)
             } else {
                 tc_obs::story::frame_text_problem(&text)
@@ -1364,6 +1447,7 @@ fn resolve_bulk(
         changes,
         skipped,
         kept: Vec::new(),
+        dropped_links: Vec::new(),
     })
 }
 
@@ -1413,6 +1497,7 @@ fn undo_outside_edit(ctx: &Ctx<'_>, batch: tc_journal::BatchId) -> R<Plan> {
         changes,
         skipped: Vec::new(),
         kept,
+        dropped_links: Vec::new(),
     })
 }
 
@@ -1452,6 +1537,7 @@ fn resolve_outside_edit(
         changes,
         skipped,
         kept: Vec::new(),
+        dropped_links: Vec::new(),
     })
 }
 
@@ -1582,12 +1668,13 @@ fn keep_draft(
     ctx: &Ctx<'_>,
     draft: &Draft,
     section: &[(ShownToken, Option<SectionValue>)],
+    dropped: &mut Vec<DroppedLinks>,
 ) -> R<Vec<PlannedChange>> {
     let verifies = |t: &ShownToken| ShownToken::parse(ctx.signing, &t.to_text()).is_ok();
     let verified = draft.shown.iter().all(verifies);
     if let DraftField::Section { book } = &draft.field {
         let verified = verified && section.iter().all(|(t, _)| verifies(t));
-        return save_section(ctx, *book, section, None, !verified);
+        return save_section(ctx, *book, section, None, !verified, dropped);
     }
     if verified {
         let token = draft.shown.first();
@@ -1620,7 +1707,9 @@ fn keep_draft(
             }
             _ => return Err(refused(Refusal::WrongRecord("a draft with its token"))),
         };
-        return Ok(plan(ctx, &command)?.changes);
+        let plan = plan(ctx, &command)?;
+        dropped.extend(plan.dropped_links);
+        return Ok(plan.changes);
     }
     // R20: unverifiable. What the token says is read, never trusted as a base.
     let token = draft

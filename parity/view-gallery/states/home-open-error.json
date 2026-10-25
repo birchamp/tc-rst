@@ -51,8 +51,8 @@
             ]
           }
         },
-        "startedAt": "2026-10-19T02:51:31.604Z",
-        "endedAt": "2026-10-19T02:51:32.121Z",
+        "startedAt": "2026-10-24T19:41:01.231Z",
+        "endedAt": "2026-10-24T19:41:01.311Z",
         "code": "open.unexplained-divergence",
         "rule": "R-8.7.5"
       }
@@ -146,9 +146,9 @@
     "ops": {
       "entries": [
         {
-          "id": "2026-10-19T02:51:28.411Z#1",
+          "id": "2026-10-24T19:41:00.733Z#1",
           "op": "open",
-          "startedAt": "2026-10-19T02:51:28.411Z",
+          "startedAt": "2026-10-24T19:41:00.733Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -180,19 +180,19 @@
                       "checking/settings.json"
                     ]
                   },
-                  "startedAt": "2026-10-19T02:51:28.856Z",
-                  "endedAt": "2026-10-19T02:51:30.061Z"
+                  "startedAt": "2026-10-24T19:41:00.781Z",
+                  "endedAt": "2026-10-24T19:41:00.924Z"
                 }
               ]
             },
-            "startedAt": "2026-10-19T02:51:28.504Z",
-            "endedAt": "2026-10-19T02:51:30.061Z"
+            "startedAt": "2026-10-24T19:41:00.750Z",
+            "endedAt": "2026-10-24T19:41:00.925Z"
           }
         },
         {
-          "id": "2026-10-19T02:51:31.310Z#2",
+          "id": "2026-10-24T19:41:01.115Z#2",
           "op": "checkpoint",
-          "startedAt": "2026-10-19T02:51:31.310Z",
+          "startedAt": "2026-10-24T19:41:01.115Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito",
             "message": "Checkpoint, leaving the project: TIT checks, settings, sources (tC4)"
@@ -210,16 +210,16 @@
                 ]
               }
             },
-            "startedAt": "2026-10-19T02:51:31.278Z",
-            "endedAt": "2026-10-19T02:51:31.533Z",
+            "startedAt": "2026-10-24T19:41:01.104Z",
+            "endedAt": "2026-10-24T19:41:01.158Z",
             "code": "checkpoint.divergence",
             "rule": "R-8.7.5"
           }
         },
         {
-          "id": "2026-10-19T02:51:31.563Z#3",
+          "id": "2026-10-24T19:41:01.214Z#3",
           "op": "open",
-          "startedAt": "2026-10-19T02:51:31.563Z",
+          "startedAt": "2026-10-24T19:41:01.214Z",
           "facts": {
             "repoPath": "_local_/_local_/sample_burrito"
           },
@@ -240,8 +240,8 @@
                 ]
               }
             },
-            "startedAt": "2026-10-19T02:51:31.604Z",
-            "endedAt": "2026-10-19T02:51:32.121Z",
+            "startedAt": "2026-10-24T19:41:01.231Z",
+            "endedAt": "2026-10-24T19:41:01.311Z",
             "code": "open.unexplained-divergence",
             "rule": "R-8.7.5"
           }
@@ -625,7 +625,7 @@
       "_local_/_local_/sample_burrito": {
         "names": {},
         "actors": [
-          "a0e525f3ae050bfa"
+          "af78a52056779fa2"
         ]
       }
     },
@@ -640,6 +640,7 @@
     "storyFrame": null,
     "draftUnits": {},
     "alignSuggestions": {},
+    "railFolded": {},
     "alignSuggest": {
       "status": "off",
       "verses": 0,

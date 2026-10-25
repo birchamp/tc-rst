@@ -37,10 +37,12 @@ user-visible outcome binds it. The tC4 user interface and design system are kept
 
 ### The reference version
 
-tC4 4.0 has no tag yet. Until it has one, the reference is tC4 `main` at commit `d310bf3`
-(2026-10-16). When the v4.0.0 tag exists on `release/4.0`, the reference moves to that tag.
-`parity/tc4-baseline/README.md` records the commit that its screens show.
-`docs/TC4-DELTA-2026-10-16.md` lists every tC4 change from `d494a9d` to `d310bf3`.
+The owner chose tC4 4.0 rc.2 (H7, 2026-10-24): the reference is tC4 `release/4.0` at commit
+`d25b7871` (2026-10-22, version 4.0.0-rc.2), the tag `v4.0.0-rc.2` (`a5ce0307`) plus the fixes
+picked onto `release/4.0` after it, among them the MIT licence (#838). When the v4.0.0 tag
+exists on `release/4.0`, the reference moves to that tag. `parity/tc4-baseline/README.md`
+records the commit that its screens show. `docs/TC4-DELTA-2026-10-16.md` lists every tC4 change
+from `d494a9d` to `d310bf3`, and `docs/TC4-DELTA-2026-10-23.md` (SWEEP) the changes after it.
 
 ### Where the rebuild differs from tC4 4.0 on purpose
 
@@ -55,9 +57,6 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 - A sync checks write access before it fetches. One API call reads `permissions.push`.
   Without write access the sync refuses, and nothing changes, as in tC4. Other refusals
   after the received work arrived keep that work and say so (Q8).
-- The aligner shows the word bank and the words of each card in verse order everywhere:
-  from the first view of a verse, after an edit, and after Clear. tC4 at `d310bf3` still
-  opens a verse with no saved alignment in word-aligner order (Q15).
 - A conflict between two check decisions is shown and can be resolved. tC4 keeps the
   newest decision and shows only a count (Q1, AGENTS.md).
 - One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
@@ -65,13 +64,16 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 
 Under AGENTS.md "Matching tC4" (2026-10-19):
 
-- Words inside nested alignments show in Translate, Check, Align and print, such as Genesis
-  1:1 "the heavens" and a Psalm's "Selah" aligned inside `\qs` (tC4 #782, on tC4 main at
-  9ad4d5c). The reference d310bf3 drops them (Q32 of `docs/TC4-DELTA-2026-10-19.md`).
+- The help pages name this app's projects folder, `~/translationCore4/projects`, and its
+  download page, https://translationcore.com/tc4, where tC4's pages name
+  `~/pankosmia/tc4-projects` and tC4's GitHub releases (H16 parts 2 and 3). The vendored pages
+  stay tc-website's bytes; `tc4 serve` makes the change as it serves them (tc-server
+  `HELP_OVERLAY`, REF1).
+
 - A footnote, cross reference, figure or any other marker the shown text leaves out (`\va`,
   `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …) between two words keeps the space after it, so the
-  words never join and can be checked, aligned and exported. tC4's open PR #800 does this for
-  notes, cross references and figures only (C46). Where the marker is followed by a letter
+  words never join and can be checked, aligned and exported. tC4 PR #800 (merged, in rc.2) does
+  this for notes, cross references and figures only (C46). Where the marker is followed by a letter
   with no space (`siervo\f + \ft o esclavo\f*de`), the shown text puts a space between the
   two words, as the export splits them; tC4 shows "siervode". So it does where a letter
   follows the start or end of a character span or a paragraph marker directly:
@@ -91,26 +93,43 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
 - Align, across a verse edit, moves each link with its own word, by position: deleting or
   adding an earlier copy of a repeated word leaves the link on the word it was on. A link
   whose word cannot be followed for sure goes back to the word bank and is listed, and the
-  verse is not marked for review (#789, Q30 (a)). tC4 4.0 moves the link to another copy of
-  the word, unannounced (#789 is open in tC4).
+  verse is not marked for review (#789, Q30 (a)); so when one copy of a repeated linked word
+  is replaced, both links go back (#820). The reference d310bf3 moves the link to another copy
+  of the word, unannounced. Since #815 (D106, in rc.2) tC4 also follows a link by position, but
+  where an edit before a linked repeated word is not clear it marks the verse for review
+  instead of listing the link (#789, #820).
 - Align opens a verse with a card for every word of the pinned original-language verse,
   comparing words in NFC; a link to a word the pin lacks goes back to the word bank and is
-  listed, and the verse needs review on the rail and when it opens (#790). tC4 shows the stored cards as they are, so the sample's TIT 1:1 offers 11
-  of UGNT's 17 Greek words. Suggestions compare original-language words in NFC (#793), so
+  listed, and the verse needs review on the rail and when it opens (#790). The reference
+  d310bf3 shows the stored cards as they are, so the sample's TIT 1:1 offers 11 of UGNT's 17
+  Greek words. Since #816 (D107, in rc.2) tC4 also repairs the cards from the pinned verse; it
+  also marks for review a done alignment that only gains empty cards, which the rebuild does not. Suggestions compare original-language words in NFC (#793), so
   Hebrew alignments imported from tC4 4.0, which stores them in NFC, train suggestions for
   the pinned UHB.
 - Align's "The draft changed" notice and the rail's Invalid follow one rule: the text, the
   words, the span or the original-language text changed, or the alignment is marked for
-  re-review (#787, #796). tC4 shows the notice only for a changed text or changed words, and
-  its rail calls an alignment valid when only its words are wrong.
+  re-review (#787, #796). The alignment files' `invalid` follows the same rule, so a teammate
+  on tC4 reads such an alignment as needing re-review too. The reference d310bf3 shows the
+  notice only for a changed text or changed words, its rail calls an alignment valid when only
+  its words are wrong, and its files write `invalid: false` there. Since #814 (D105, in rc.2)
+  tC4 uses one rule too. Only Mark valid clears "needs review", in tC4 and, by the owner's
+  ruling of 2026-10-23 (Q37), in the rebuild (FIX-R).
+- A note's quote is marked in the original-language text as well as in the gateway text: in
+  Draft's Greek or Hebrew tab and in the original row of the check card, at the note's
+  occurrence; a quote that does not match in full marks nothing. tC4 4.0 marks only the
+  gateway text (#840; owner ruling Q39, 2026-10-23). Understand shows no original-language
+  text, in tC4 or the rebuild, so it has nothing to mark.
 - A carry-over that loses no link is saved when the translator leaves the verse
   (APP-DESIGN AD19); tC4 writes nothing at open (#787).
 - Align's cards are a Tab stop while words are chosen, and Enter or Space places them, so a
   person who cannot drag or point can align (#568); tC4 4.0 has no key for it. Every card also
   shows the pinned verse's words (#790, above).
 - A verse that still holds the alignment markup of the file it was added from does not
-  open in Align, and no verse save writes an alignment over it (#794). This is tC4's open
-  PR #799.
+  open in Align, and no verse save writes an alignment over it (#794). This is tC4 PR #799
+  (merged, in rc.2); the rebuild still shows its own words for it until REF1 takes tC4's.
+- A verse whose text starts on the line after its verse number opens in Align and can be
+  aligned. Since #800 (in rc.2) tC4 refuses it with "tC4 cannot save an alignment for this
+  verse" and asks the translator to move the text onto the verse number's line.
 - The items of a `\li1` list, a `\qm1` line, a table cell and the text of a marker usfm-js
   does not know (a typo such as `\pp`, a custom `\zx`) show, where tC4 hides them (usfm-js
   keeps their text as `content`) while the export counts their words: UST EXO 15:21
@@ -145,6 +164,29 @@ Under the same rule, in the conflict review (B11 and C7a, 2026-10-23):
 - A refused choice says why in words ("Another version of this verse is kept.", the store's
   reason), never as an error code.
 
+Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-23):
+
+- A project's text direction has one source, the metadata's `scriptDirection`, else the
+  settings file's `textDirection` (tC4's own `projectPresentation` rule). Project settings
+  writes both, so a direction changed there shows on Home, in the open project and in Align,
+  also after a restart. tC4 writes only the settings file, so the change shows nowhere
+  (#832.1). As in tC4, a metadata value other than `ltr` or `rtl` does not count. Settings names the language from the metadata when the settings file names none,
+  where tC4 shows an empty field for a tC4 project (#832.2).
+- The words placed on an aligner card read in the translation's direction, even on an Old
+  Testament verse; tC4 lays them out in the original's direction, so a Hebrew verse's
+  placed words read backwards (#830).
+- Each note, word and question text reads in its own direction under its pane's layout, so
+  an English question in an Arabic set is not laid out right to left (#836).
+- A save refused for a reason no retry in this open can fix (a bad token, a newer change)
+  keeps its text for the next open's offer and does not block going Home; tC4 keeps Home
+  blocked (#801). A text refused for its content still shows why beside the field.
+- A failed check for updates says one plain sentence by cause; tC4 shows the browser's
+  "Failed to fetch" (#833.1).
+- Dropbox's own settings folder (`~/.dropbox`) never marks a project as synced, so having
+  Dropbox installed on Linux or macOS no longer makes every project read-only.
+- Align lists the links its open sent back to the word bank (owner answer Q30 (a)); the list
+  after a verse save in Translate waits for the storage unit S2.
+
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:
 
@@ -178,9 +220,11 @@ rule that no one's work disappears without a word add these (unit B2):
 And these (unit B10):
 
 - After a sync, the result names the verses that teammates aligned differently ("1 verse has
-  two alignments to review."), and Review opens them. tC4 4.0 keeps the newest alignment and
-  counts it among the conflicts that kept the newest version, so a teammate's alignment can
-  disappear unannounced (#791).
+  two alignments to review."), and Review opens them. The reference d310bf3 keeps the newest
+  alignment and counts it among the conflicts that kept the newest version, so a teammate's
+  alignment can disappear unannounced (#791). Since #806 (D108, in rc.2) tC4 names each such
+  verse in its own row ("{book} {ref}: {name}'s alignment replaced yours."), but still keeps
+  only the newest alignment; the rebuild keeps both.
 - A sync that stops for a reason no sentence names says so in one fixed sentence. Door43's
   words and the reason, which can name a file on the translator's computer, stay in the
   problem report. tC4 4.0 shows "The sync stopped: {reason}" (#724, Q36).
@@ -273,6 +317,11 @@ And these (unit D2):
   whether to review them, with Review and Export anyway (STORAGE §8.5). tC4 exports the
   version shown without a word, so the person cannot know the file holds only one of two
   versions. The question is inline, never modal.
+- A verse whose cards stand on a source word the pinned verse lacks keeps its stored text,
+  and the export names it. tC4 #816 (D107, newer than d310bf3) fits the cards to the pin and
+  weaves the rest, so a link leaves the file without a word to the person; the rebuild weaves
+  none of that verse until it is aligned again
+  (`the_export_weaves_no_link_to_a_source_word_the_pin_lacks`).
 - The file name's date is today's date in UTC. tC4 writes the local date. The two differ only
   near midnight; the server has no time zone to read, so it waits until the app carries one.
 

@@ -17,7 +17,7 @@ use tc_api::refusal::Message as _;
 use tc_api::shown::Direction;
 
 use crate::css::Css;
-use crate::i18n::{Key, keys, t, t_dyn};
+use crate::i18n::{Key, keys, refusal_text, t};
 use crate::tokens::ToastTone;
 
 /// React's escaping of text and attribute values.
@@ -373,12 +373,7 @@ pub fn failure_text(error: &ApiError) -> String {
     let ApiError::Refused(refusal) = error else {
         return error.to_string();
     };
-    let owned = refusal.vars();
-    let vars: Vec<(&str, &dyn std::fmt::Display)> = owned
-        .iter()
-        .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
-        .collect();
-    let recovery = t_dyn(refusal.key(), &vars, None);
+    let recovery = refusal_text(refusal);
     match refusal.detail() {
         Some(diagnosis) => format!("{diagnosis} {recovery}"),
         None => recovery,

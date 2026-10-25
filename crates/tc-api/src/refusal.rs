@@ -712,8 +712,10 @@ pub enum ResourceRefusal {
     FixFailed {
         reason: String,
     },
+    /// The check for updates could not be made (tC4 #833.1): one fixed sentence per cause,
+    /// never the client's own text.
     UpdateCheckFailed {
-        reason: String,
+        why: UpdateCheckFailure,
     },
     UpgradeFailed {
         reason: String,
@@ -733,6 +735,29 @@ pub enum ResourceRefusal {
     },
 }
 
+/// Why a check for updates could not be made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateCheckFailure {
+    /// No answer from Door43: the connection failed, timed out or broke off.
+    Unreachable,
+    /// Door43 answered but refused the request (a sign-in, a missing repository, a limit).
+    Refused,
+    /// Door43 answered with an error, or something this app cannot read.
+    Server,
+}
+
+impl UpdateCheckFailure {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Unreachable => "upgrade.checkFailedUnreachable",
+            Self::Refused => "upgrade.checkFailedRefused",
+            Self::Server => "upgrade.checkFailedServer",
+        }
+    }
+}
+
 impl Message for ResourceRefusal {
     fn code(&self) -> Option<&'static str> {
         None
@@ -742,7 +767,7 @@ impl Message for ResourceRefusal {
             Self::CatalogUnreadable { .. } => "sources.catalogError",
             Self::SomeFailed { .. } => "sources.someFailed",
             Self::FixFailed { .. } => "fix.failed",
-            Self::UpdateCheckFailed { .. } => "upgrade.checkFailed",
+            Self::UpdateCheckFailed { why } => why.key(),
             Self::UpgradeFailed { .. } => "upgrade.failed",
             Self::GatewayFailed { .. } => "gateway.failed",
             Self::GatewayBlocked { .. } => "gateway.blockedError",
@@ -753,8 +778,8 @@ impl Message for ResourceRefusal {
         match self {
             Self::CatalogUnreadable { reason }
             | Self::FixFailed { reason }
-            | Self::UpdateCheckFailed { reason }
             | Self::UpgradeFailed { reason } => vec![("reason", reason.clone())],
+            Self::UpdateCheckFailed { .. } => Vec::new(),
             Self::SomeFailed { list } => vec![("list", list.clone())],
             Self::GatewayBlocked { books } => vec![("books", books.clone())],
             Self::AdoptFailed { error } => vec![("error", error.clone())],

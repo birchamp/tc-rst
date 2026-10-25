@@ -8,8 +8,8 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
 use super::app_ctx::Actions;
-use super::sources::api_error;
 use super::{bridge, js};
+use crate::app::client::CallError;
 use crate::app::jobs::JobEnd;
 use crate::app::print::{
     ExportOf, ExportPanel, conflict_question, delivered_panel, failure_text, pdf_panel,
@@ -110,5 +110,15 @@ impl Actions {
             };
             panel.try_set(shown);
         });
+    }
+}
+
+fn api_error(error: CallError) -> tc_api::ApiError {
+    match error {
+        CallError::Api(error) => error,
+        other => tc_api::ApiError::BadRequest {
+            field: "call".into(),
+            reason: other.to_string(),
+        },
     }
 }

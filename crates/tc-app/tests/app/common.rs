@@ -287,6 +287,9 @@ pub struct TestApp {
     pub store: Arc<MemoryBackend>,
     pub clock: Arc<ManualClock>,
     pub ender: Arc<RecordingEnder>,
+    /// P5/INV-VALID-BURRITO: the watch of the store this app was given, if any; declared last so
+    /// the app is gone before the watch looks at what the store wrote.
+    pub watch: Option<crate::store_world::BurritoWatch>,
 }
 
 impl TestApp {
@@ -317,6 +320,7 @@ impl TestApp {
             store: parts.store.clone(),
             clock: parts.clock.clone(),
             ender: parts.ender.clone(),
+            watch: None,
         }
     }
 }
@@ -498,6 +502,9 @@ pub async fn try_start(
         host,
         files: tc_app::FilesChoice::Given(parts.files.clone()),
         store: tc_app::StoreChoice::Given(parts.store.clone()),
+        sync: Arc::new(tc_app::ports::scripted::ScriptedSyncPort::default()),
+        exchange: Arc::new(tc_app::ports::UnavailableExchange),
+        import: Arc::new(tc_app::ports::UnavailableImport),
         ender: parts.ender.clone(),
         test_keychain: Some(parts.keychain.clone()),
     };

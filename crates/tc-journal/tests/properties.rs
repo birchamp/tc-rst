@@ -11,7 +11,7 @@ mod support;
 
 use common::{Census, run_with_census};
 use proptest::prelude::*;
-use sim::{Forge, Kept, Mint, Sim, arb_script, choose, mint};
+use sim::{Forge, Kept, Mint, Op, Script, Sim, arb_script, choose, mint};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use support::{derived_bytes, same_fold};
 use tc_journal::change::{Verified, parse_change};
@@ -1680,71 +1680,185 @@ fn every_head_reachable_from_a_screen() {
 fn book_removal_hides_nothing_unseen() {
     team(
         &["removed with unseen work", "removed, all seen"],
-        |view, census| {
-            let (sim, state) = (view.sim, view.state);
-            // A Bible project keeps a book projected, so the burrito stays valid (§7.6).
-            prop_assert!(
-                state.books().is_empty() || !state.projected_books().is_empty(),
-                "no book projects: {:?}",
-                state.books()
-            );
-            for book in [BookId::Titus, BookId::Ruth] {
-                let presence = RecordKey::BookPresence(book);
-                let heads = state.heads(&presence);
-                let removals: Vec<Vec<tc_journal::ShortId>> = heads
-                    .iter()
-                    .filter_map(|h| match body_of(state, h).map(|b| b.record) {
-                        Some(Record::BookPresence {
-                            value: BookPresence::Removed { seen },
-                            ..
-                        }) => Some(seen),
-                        _ => None,
-                    })
-                    .collect();
-                if removals.is_empty() || removals.len() != heads.len() {
-                    continue;
-                }
-                let mut unseen = 0u32;
-                for (label, line) in view.lines() {
-                    let Verified::Change(change) = line else {
-                        continue;
-                    };
-                    if !sim::belongs_to(&sim.recipes[label], book) {
-                        continue;
-                    }
-                    if !state.change(&change.id()).is_some_and(|v| v.folded) {
-                        continue;
-                    }
-                    let closure_has = |seen: &Vec<tc_journal::ShortId>| {
-                        state
-                            .history(&change.body().record.key())
-                            .iter()
-                            .filter(|c| seen.contains(&c.short()))
-                            .any(|c| ancestors(state, *c).contains(&change.id()))
-                    };
-                    if !removals.iter().any(closure_has) {
-                        unseen += 1;
-                    }
-                }
-                if unseen == 0 {
-                    census.saw("removed, all seen");
-                    if !matches!(state.book(book), BookView::KeptAsLast { .. }) {
-                        prop_assert_eq!(state.book(book), BookView::Removed);
-                    }
-                } else {
-                    census.saw("removed with unseen work");
-                    prop_assert!(
-                        matches!(state.book(book), BookView::RemovedWhileEdited { unseen: n, .. } if n == unseen),
-                        "{:?}: {} unseen, {:?}",
-                        book,
-                        unseen,
-                        state.book(book)
-                    );
-                }
-            }
-            Ok(())
-        },
+        removal_hides_nothing_unseen,
     );
+}
+
+fn removal_hides_nothing_unseen(view: &View, census: &Census) -> Result<(), TestCaseError> {
+    let (sim, state) = (view.sim, view.state);
+    // A Bible project keeps a book projected, so the burrito stays valid (§7.6).
+    prop_assert!(
+        state.books().is_empty() || !state.projected_books().is_empty(),
+        "no book projects: {:?}",
+        state.books()
+    );
+    for book in [BookId::Titus, BookId::Ruth] {
+        let presence = RecordKey::BookPresence(book);
+        let heads = state.heads(&presence);
+        let removals: Vec<Vec<tc_journal::ShortId>> = heads
+            .iter()
+            .filter_map(|h| match body_of(state, h).map(|b| b.record) {
+                Some(Record::BookPresence {
+                    value: BookPresence::Removed { seen },
+                    ..
+                }) => Some(seen),
+                _ => None,
+            })
+            .collect();
+        if removals.is_empty() || removals.len() != heads.len() {
+            continue;
+        }
+        let mut unseen = 0u32;
+        for (label, line) in view.lines() {
+            let Verified::Change(change) = line else {
+                continue;
+            };
+            if !sim::belongs_to(&sim.recipes[label], book) {
+                continue;
+            }
+            if !state.change(&change.id()).is_some_and(|v| v.folded) {
+                continue;
+            }
+            let closure_has = |seen: &Vec<tc_journal::ShortId>| {
+                state
+                    .history(&change.body().record.key())
+                    .iter()
+                    .filter(|c| seen.contains(&c.short()))
+                    .any(|c| ancestors(state, *c).contains(&change.id()))
+            };
+            if !removals.iter().any(closure_has) {
+                unseen += 1;
+            }
+        }
+        if unseen == 0 {
+            census.saw("removed, all seen");
+            if !matches!(state.book(book), BookView::KeptAsLast { .. }) {
+                prop_assert_eq!(state.book(book), BookView::Removed);
+            }
+        } else {
+            census.saw("removed with unseen work");
+            prop_assert!(
+                matches!(state.book(book), BookView::RemovedWhileEdited { unseen: n, .. } if n == unseen),
+                "{:?}: {} unseen, {:?}",
+                book,
+                unseen,
+                state.book(book)
+            );
+        }
+    }
+    Ok(())
+}
+
+/// The case CI found on f9b3d22f: a remover saw a comment change that merged a Titus
+/// comment with a Ruth one under one id and now targets Ruth, so the Titus comment it
+/// continues was seen. The fold counted it as unseen (2, not 1), because it built what the
+/// remover saw from the Titus changes of the comment only.
+#[test]
+fn a_comment_change_seen_under_another_book_counts_as_seen() {
+    let script = Script {
+        devices: 3,
+        ops: vec![
+            Op::Fork {
+                a: 25,
+                b: 21,
+                what: 158,
+                at: 0,
+            },
+            Op::Fork {
+                a: 8,
+                b: 10,
+                what: 205,
+                at: 248,
+            },
+            Op::Fork {
+                a: 31,
+                b: 80,
+                what: 104,
+                at: 0,
+            },
+            Op::Restore {
+                dev: 0,
+                ruth: false,
+                text: false,
+            },
+            Op::Restore {
+                dev: 54,
+                ruth: false,
+                text: false,
+            },
+            Op::Release { dev: 0 },
+            Op::Resolve {
+                dev: 4,
+                pick: 47,
+                how: 0,
+            },
+            Op::Fork {
+                a: 221,
+                b: 88,
+                what: 83,
+                at: 0,
+            },
+            Op::Edit {
+                dev: 0,
+                at: 0,
+                stale: false,
+                newer: false,
+            },
+            Op::Restore {
+                dev: 66,
+                ruth: false,
+                text: false,
+            },
+            Op::Twin { dev: 0, at: 0 },
+            Op::Edit {
+                dev: 0,
+                at: 0,
+                stale: false,
+                newer: false,
+            },
+            Op::Resolve {
+                dev: 1,
+                pick: 83,
+                how: 85,
+            },
+            Op::Align {
+                dev: 84,
+                at: 89,
+                current: false,
+                newer: false,
+            },
+            Op::Remove {
+                dev: 123,
+                ruth: true,
+            },
+            Op::CarryOver {
+                dev: 231,
+                check: 255,
+            },
+            Op::Poison { dev: 196, at: 136 },
+            Op::Align {
+                dev: 87,
+                at: 150,
+                current: false,
+                newer: false,
+            },
+            Op::Header {
+                dev: 208,
+                front: true,
+            },
+            Op::Stray {
+                dev: 230,
+                at: 23,
+                covered: false,
+            },
+        ],
+        last_books_removed: false,
+    };
+    let census = Census::new(&["removed with unseen work", "removed, all seen"]);
+    let mut sim = Sim::run(&script, false);
+    removal_hides_nothing_unseen(&View::of(&sim, most_defects(&sim)), &census).unwrap();
+    sim.sync_all();
+    removal_hides_nothing_unseen(&View::of(&sim, 0), &census).unwrap();
 }
 
 // ---------------------------------------------------------------------------------------
