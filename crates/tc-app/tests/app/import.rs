@@ -493,6 +493,8 @@ async fn update_a_book_refusal_names_the_line_and_writes_nothing() {
     let (dir, t, world) = app().await;
     let at = open_sample(&t).await;
     let project_files = || files(&world.fs, &world.folder(&folder("sample_burrito")));
+    // Opening writes its own files (metadata, resources) in the background; compare after them.
+    t.app.read(&at).unwrap().handle().wait_idle();
     let before = project_files();
     let keys = || {
         t.app
@@ -533,7 +535,16 @@ async fn update_a_book_refusal_names_the_line_and_writes_nothing() {
         )))
     );
     assert_eq!(keys(), records, "no record was written");
-    assert_eq!(project_files(), before, "no file was written");
+    {
+        let after = project_files();
+        let changed: Vec<_> = after
+            .iter()
+            .filter(|(k, v)| before.get(*k) != Some(v))
+            .map(|(k, _)| k.clone())
+            .chain(before.keys().filter(|k| !after.contains_key(*k)).cloned())
+            .collect();
+        assert!(changed.is_empty(), "no file was written: {changed:?}");
+    }
 }
 
 /// #409: an aligned USFM verse whose source word carries `x-ref` keeps it in the stored
