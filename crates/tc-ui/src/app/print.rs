@@ -9,6 +9,7 @@
 use tc_api::ApiError;
 use tc_api::export::{
     Exported, ExportedFile, PrintRequest, PrintWords, Producer, Run, RunExport, StoryRun, Subject,
+    UtcOffset,
 };
 use tc_api::home::ProjectKind;
 use tc_api::ids::{RequestId, Scope};
@@ -297,8 +298,15 @@ pub struct ExportOf {
 
 impl ExportOf {
     /// The request of one press; a print carries the preview's page setup and words.
-    pub fn run(&self, request: RequestId, producer: Producer, setup: PageSetup) -> RunExport {
+    pub fn run(
+        &self,
+        request: RequestId,
+        producer: Producer,
+        setup: PageSetup,
+        utc_offset: UtcOffset,
+    ) -> RunExport {
         RunExport {
+            utc_offset,
             request,
             at: self.at.clone(),
             producer,

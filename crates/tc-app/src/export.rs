@@ -291,8 +291,6 @@ fn failed(why: ExportRefusal) -> JobEnd {
 }
 
 /// tC4's `exportFilename`: `<subject>-<YYYY-MM-DD>.<ext>`.
-// shortcut: the date is UTC where tC4 writes the local date; they differ only near midnight,
-// and the app has no time zone to read until it carries one.
 fn file_name(subject: &str, today: tc_api::ids::WallMs, ext: &str) -> String {
     let date = crate::feedback::iso_utc_millis(today);
     format!("{subject}-{}.{ext}", &date[..10])
@@ -423,8 +421,12 @@ impl App {
         producer: Producer,
         subject: Subject,
         print: Option<PrintRequest>,
+        utc_offset: tc_api::export::UtcOffset,
     ) -> Result<Made, JobEnd> {
-        let today = self.inner.clock.now();
+        // The translator's own day, as tC4 dates a file in its window.
+        let today = tc_api::ids::WallMs(
+            self.inner.clock.now().0 + i64::from(utc_offset.minutes()) * 60_000,
+        );
         let title = print.as_ref().map(|p| p.title.clone()).unwrap_or_default();
         let made = |produced: Result<(Produced, tc_export::ExportFacts), ExportError>,
                     name: String,
@@ -719,7 +721,13 @@ impl Handle<RunExport> for App {
                     file_name,
                     facts,
                 } = app
-                    .make_export(&session, req.producer, req.subject, req.print)
+                    .make_export(
+                        &session,
+                        req.producer,
+                        req.subject,
+                        req.print,
+                        req.utc_offset,
+                    )
                     .await?;
                 let facts = wire_facts(&facts);
                 let Some(downloads) = downloads else {

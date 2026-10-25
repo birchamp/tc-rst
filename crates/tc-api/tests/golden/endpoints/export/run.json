@@ -39,7 +39,8 @@
         "imageAlt": "Cuadro de la historia {n}",
         "nothingDraftedObs": "Nada tiene borrador en este proyecto."
       }
-    }
+    },
+    "utcOffset": 180
   },
   "reply": {
     "type": "ok",

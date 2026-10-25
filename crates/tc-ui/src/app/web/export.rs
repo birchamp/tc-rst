@@ -50,7 +50,11 @@ impl Actions {
         if panel.get_untracked() == ExportPanel::Running {
             return;
         }
-        let run = of.run(js::random_request_id(), producer, setup);
+        // JavaScript counts the offset west of UTC.
+        let west = js_sys::Date::new_0().get_timezone_offset() as i16;
+        let offset =
+            tc_api::export::UtcOffset::new(-west).unwrap_or(tc_api::export::UtcOffset::UTC);
+        let run = of.run(js::random_request_id(), producer, setup, offset);
         panel.set(ExportPanel::Running);
         let this = self.clone();
         spawn_local(async move {

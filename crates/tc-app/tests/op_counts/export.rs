@@ -126,6 +126,7 @@ async fn export_psalms(s: &Scale) {
         let Reply::Ok(job) = s
             .app
             .request(&RunExport {
+                utc_offset: tc_api::export::UtcOffset::UTC,
                 request: RequestId::from_bytes([n; 16]),
                 at: s.scope(),
                 producer,

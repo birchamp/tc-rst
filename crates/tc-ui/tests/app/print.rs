@@ -8,7 +8,7 @@ use serde_json::Value;
 use tc_api::export::{
     ExportFacts, Exported, ExportedFile, PrintWords, Producer, SkipReason, SkippedVerse, Subject,
 };
-use tc_api::export::{PrintVerse, Run};
+use tc_api::export::{PrintVerse, Run, UtcOffset};
 use tc_api::home::ProjectKind;
 use tc_api::ids::RefPart;
 use tc_api::ids::{DownloadId, Epoch, ProjectRef, RequestId, Scope};
@@ -295,10 +295,13 @@ fn a_press_sends_one_request_and_only_a_print_carries_the_page_setup() {
         paper: Paper::Letter,
         ..PageSetup::default()
     };
-    let usfm = of.run(request, Producer::AlignedUsfm, setup);
+    let usfm = of.run(request, Producer::AlignedUsfm, setup, UtcOffset::UTC);
     assert_eq!(usfm.request, request);
     assert_eq!(usfm.print, None);
-    let print = of.run(request, Producer::PrintHtml, setup).print.unwrap();
+    let print = of
+        .run(request, Producer::PrintHtml, setup, UtcOffset::UTC)
+        .print
+        .unwrap();
     assert_eq!((print.setup, print.title.as_str()), (setup, "Titus"));
     // The words are the catalog's, placeholders and all, so the server words the PDF as the
     // preview does.
@@ -331,7 +334,12 @@ fn only_a_stories_print_says_to_set_pictures_off() {
     };
     // tC4's `pdf.ts` passes false for a book: a Bible has no Pictures control to set off.
     let run = |subject, pictures| {
-        prints_pictures(&of(subject).run(request, Producer::PrintHtml, setup(pictures)))
+        prints_pictures(&of(subject).run(
+            request,
+            Producer::PrintHtml,
+            setup(pictures),
+            UtcOffset::UTC,
+        ))
     };
     assert!(!run(book, Pictures::Shown));
     assert!(!run(book, Pictures::Hidden));

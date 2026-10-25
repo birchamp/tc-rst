@@ -325,8 +325,6 @@ And these (unit D2):
   weaves the rest, so a link leaves the file without a word to the person; the rebuild weaves
   none of that verse until it is aligned again
   (`the_export_weaves_no_link_to_a_source_word_the_pin_lacks`).
-- The file name's date is today's date in UTC. tC4 writes the local date. The two differ only
-  near midnight; the server has no time zone to read, so it waits until the app carries one.
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

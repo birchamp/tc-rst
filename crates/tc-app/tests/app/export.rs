@@ -517,6 +517,7 @@ async fn a_story_export_zips_the_stories_and_the_front_and_back_matter() {
     let (_, state) = run(
         &t.app,
         &export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
             request: rid(70),
             at,
             producer: export::Producer::StoryMarkdown,
@@ -595,6 +596,7 @@ async fn the_print_page_is_a_finished_print_exports_and_no_other_jobs() {
     let missing = post(
         &t.app,
         &export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
             request: rid(71),
             at: at.clone(),
             producer: export::Producer::PrintHtml,
@@ -611,6 +613,7 @@ async fn the_print_page_is_a_finished_print_exports_and_no_other_jobs() {
     let (job, state) = run(
         &t.app,
         &export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
             request: rid(72),
             at: at.clone(),
             producer: export::Producer::PrintHtml,
@@ -651,6 +654,7 @@ async fn the_print_page_is_a_finished_print_exports_and_no_other_jobs() {
     let (usfm, _) = run(
         &t.app,
         &export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
             request: rid(73),
             at,
             producer: export::Producer::PlainUsfm,
@@ -806,6 +810,7 @@ async fn run_exports(
             words: english_words(),
         });
         let req = export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
             request: rid(request),
             at: at.clone(),
             producer,
@@ -935,6 +940,7 @@ async fn a_story_export_without_a_carried_files_bytes_fails() {
     let (_, state) = run(
         &t.app,
         &export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
             request: rid(71),
             at,
             producer: export::Producer::StoryMarkdown,
@@ -961,6 +967,7 @@ async fn an_export_commits_the_book_it_exports() {
     let w = on_disk_exports().await;
     let at = w.bible.clone();
     let req = export::RunExport {
+        utc_offset: tc_api::export::UtcOffset::UTC,
         request: rid(130),
         at,
         producer: export::Producer::PlainUsfm,
@@ -1023,6 +1030,7 @@ async fn a_pdf_of_a_book_with_nothing_drafted_names_the_book() {
     let (_, state) = run(
         &t.app,
         &export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
             request: rid(150),
             at,
             producer: export::Producer::PrintHtml,
@@ -1071,6 +1079,7 @@ async fn an_export_that_cannot_write_its_file_leaves_nothing() {
     let (_, state) = run(
         &t.app,
         &export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
             request: rid(72),
             at,
             producer: export::Producer::PlainUsfm,
@@ -1094,4 +1103,45 @@ async fn an_export_that_cannot_write_its_file_leaves_nothing() {
         .map(|e| e.unwrap().file_name())
         .collect();
     assert!(left.is_empty(), "{left:?}");
+}
+
+/// A file is dated by the translator's own day (tC4 dates it in its window), so an evening
+/// export in Nairobi is not dated tomorrow: 28 hours apart, the two dates always differ.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_export_is_dated_by_the_translators_own_day() {
+    let (_dir, t) = start("sample").await;
+    give_downloads(&t.app);
+    let at = opened(&t.app).await.session.at;
+    let mut dates = Vec::new();
+    for (request, minutes) in [(80, -14 * 60), (81, 14 * 60)] {
+        let (_, state) = run(
+            &t.app,
+            &export::RunExport {
+                utc_offset: tc_api::export::UtcOffset::new(minutes).unwrap(),
+                request: rid(request),
+                at: at.clone(),
+                producer: export::Producer::PlainUsfm,
+                subject: export::Subject::Book {
+                    book: BookId::Titus,
+                },
+                print: None,
+            },
+        )
+        .await;
+        let export::ExportedFile::Download { file_name, .. } = exported(state).file else {
+            panic!("a download");
+        };
+        let date = file_name
+            .strip_prefix("TIT-")
+            .and_then(|rest| rest.strip_suffix(".usfm"))
+            .unwrap()
+            .to_owned();
+        dates.push(date);
+    }
+    assert!(
+        dates[0] < dates[1],
+        "west {} and east {}",
+        dates[0],
+        dates[1]
+    );
 }
