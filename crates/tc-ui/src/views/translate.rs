@@ -310,7 +310,9 @@ fn chapter_view(
         let editing = s.editing.clone();
         Effect::new(move |_| {
             changes.track();
-            editing.track();
+            if editing.with(Editing::is_open) {
+                return;
+            }
             let keys: Vec<String> = chapter_text.with(|c| {
                 c.as_ref().map_or_else(Vec::new, |c| {
                     c.verses.iter().map(|v| v.key.as_str().to_owned()).collect()

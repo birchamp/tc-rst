@@ -623,7 +623,7 @@ browserTest('a_section_draft_restored_after_a_reload_is_on_the_page', async () =
       const inCard = (await typing(page, '9–10').count()) > 0 && (await typing(page, '9–10').inputValue()).includes(NINE);
       return inCard || (await page.locator('main').innerText()).includes(NINE);
     }, 20_000);
-    assert.ok((await typing(page, '9–10').count()) > 0, 'the section card is open for Save');
+    assert.ok((await typing(page, '9–10').inputValue()).includes(NINE), 'the section card is open with the draft, for Save');
   });
 });
 
