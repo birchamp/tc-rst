@@ -4,18 +4,18 @@ title: Notes by figure, with groups that fold (tC4 #769)
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: REF1 session (Claude Code 56b3f56d)
+branch: track-REF1c
+worktree: /home/bot/tc-rst/.worktrees/track-REF1
 depends: [REF1]
 needs_owner: []
 proves: [P1, P7]
 no_loss: false
 size: 2-3 sessions (basis: tC4's state.jsx and Check.jsx changed by about 800 lines)
 merged: none
-updated: 2026-10-24
-next: Claim this card after REF1 merges, then do step 1.
+updated: 2026-10-25
+next: Step 1: By figure in tc-check and tc-helps, red first.
 blocked_by: none
 ---
 
@@ -107,3 +107,4 @@ line, and a `fix` line for every blocker and every major that harms a translator
 ## Log
 
 - 2026-10-24 15:15 EDT | REF1 session (Claude Code 56b3f56d) | created | none | split from REF1 step 4.1 on the orchestrator's word: the next free lane builds it; REF1 keeps "By category" until it lands | .audit/roadmap/units/REF1.md
+- 2026-10-25 08:56 EDT | REF1 session (Claude Code 56b3f56d) | claim | none | Claimed on the orchestrator's word (the domain lane skips it), on track-REF1c cut from track-REF1 1ad7e1f8 with main c45091d1 merged in, so it depends on REF1 alone. Note: REF1 is not done (queued for batch 3), so the merge waits for it. In REF1's worktree to spare the disk | python3 -I -B .audit/tools/board.py
