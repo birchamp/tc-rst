@@ -721,6 +721,8 @@ pub struct CheckSessionView { pub session: CheckSessionId, pub tool: Tool, pub u
                               pub view: ViewSeq,                 // `check/rows { since: view }` patches from here *(A-12)*
                               pub rows: RailRows,                // Full(Vec<RailRow>) | Since(Vec<RailRowPatch>) *(A-12)*
                               pub terms: Vec<String>,            // tW terms in locale order (ByWord)
+                              pub group_titles: Vec<String>,      // a By figure heading's tA title *(REF1c)*
+                              pub folded: Vec<String>,            // this computer's folded groups *(REF1c)*
                               pub progress: RailProgress, pub citation: Option<ResourceCitation>,  // *(B5a D5)*
                               pub dropped: u32, pub empty: Option<CheckEmpty>, pub start: u32 }
 pub struct RailRow { pub index: u32, pub check_id: String, pub place: CheckPlace, pub title: String,   // *(A1, B5a D5)*
@@ -803,7 +805,8 @@ has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible 
 | `SectionBuffer`: parse, serialize, can drop, drop pin | `tC4:src/views/sectionDraft.js:147,244,263,282` | `tc-app` turns the buffer into `SectionValue`s with the same code; proptest `parse(serialize(b)) == b` |
 | `drag_range(base, from, to)` | `tC4:src/views/Check.jsx:567-666` (#737) | `tc_check::selection::from_indices` on the saved indices |
 | `ArticleBlock::take_spans` | `tC4:src/data/articles.ts:127-136` | tc-helps' block renderer |
-| `rail::mask` and `rail::groups` | `tC4:src/views/checkFilters.js:15-28`, `Check.jsx:889-905`, with the same output but not the same algorithm: rows go into buckets by `term` index (or category) in one pass over the masked rows, which already arrive in verse order *(A-13)* | `tc_check::rail::groups` for every filter and mode on Titus and Psalms tN and tW; `rail_groups_visit_each_row_once` counts rows visited on Psalms TWL (7,683 rows, 485 terms) |
+| `rail::mask` and `rail::groups` | `tC4:src/views/checkFilters.js:15-28`, `Check.jsx:889-905`, with the same output but not the same algorithm: rows go into buckets by `term` index (By word), or by figure, the term of a tN row, in order of first appearance (By figure, tC4 #769), in one pass over the masked rows, which already arrive in verse order *(A-13)* | `tc_check::rail::groups` for every filter and mode on Titus and Psalms tN and tW; `rail_groups_visit_each_row_once` counts rows visited on Psalms TWL (7,683 rows, 485 terms) |
+| `rail::folds`, `rail::open_groups`, `rail::fold_all`, `rail::term_progress` | `tC4:src/views/Check.jsx` `FOLDING_SORTS`, `isOpen`, `foldAll`, `groupStatsOf` (#769): By word and By figure groups fold, the active check's group stays open, Fold all leaves it open, a heading counts every check of its group | `the_active_group_is_open_whatever_was_folded`, `fold_all_keeps_the_active_group_open`, `term_counts_cover_every_row_whatever_the_filter`; journeys `tn_by_figure_headings_fold_and_count`, `j22_a_storys_notes_by_figure_head_other_notes_and_fold` |
 | `rail::patch` | — | applying `RailRowPatch`es equals a fresh rail, as a proptest over random decisions *(A-12)* |
 | `print_parts`: a page's print parts under the page setup (drop cap or heading, verse numbers, a verse split by a page break) | `tC4:src/views/print/PrintBook.jsx:44-58`; the preview splits the pages in the UI (`PrintPages.jsx`) | `tc_export::book::print_parts` on every preview page of `fixtures/export/print-vectors.json` (B8) |
 | `QueryKey::depends_on` | — | the server's own invalidation tests |
@@ -1557,7 +1560,7 @@ The shell's `drafts-buffer.log` is not among them: the shell writes it (AD21).
 
 | File | Content |
 |---|---|
-| `prefs/app.json` (not in STORAGE §3.7, STORAGE:1093-1103) | `schemaVersion`, `appLocale`, `lastUsed`, `lastEdit`, `alignSuggestions` |
+| `prefs/app.json` (not in STORAGE §3.7, STORAGE:1093-1103) | `schemaVersion`, `appLocale`, `lastUsed`, `lastEdit`, `alignSuggestions`, `railFolded` (`"<tool>\|<groupId>": bool`, a Check rail's folded groups, tC4 #769) |
 | `prefs/<projectId>.json` | place per book or story, `draftUnit`, OBS story and recency |
 | `summaries/<folder hash>.json` | §4.5 |
 | `reports.json` | the last 50 operation reports, for Feedback and the dev Inspector, kept across launches *(C1a, D5: read before the launch's first report, so ids go on from the highest one the file named; written a second after the first change and at once at quit, leave and `test/reset`. Declared difference from tC4, which keeps its reports in memory only, so after a crash and a relaunch its "Ask for help" attaches nothing of what went wrong)* |
